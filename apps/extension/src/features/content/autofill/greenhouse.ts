@@ -1,5 +1,6 @@
 import type { DetectedField } from './detector';
 import { matchesAtsHostRules, type AtsHostRule } from './hosts';
+import { resolveAutofillSelector } from '../../../jobAutofill.runtime.js';
 
 const GREENHOUSE_HOST_RULES: AtsHostRule[] = [
   { host: 'boards.greenhouse.io' },
@@ -107,12 +108,7 @@ export const GREENHOUSE_SELECTORS: Record<string, string[]> = {
 export function resolveGreenhouseSelector(
   key: string,
 ): { element: HTMLElement; selector: string } | null {
-  const selectors = GREENHOUSE_SELECTORS[key] ?? [];
-  for (const sel of selectors) {
-    const el = document.querySelector<HTMLElement>(sel);
-    if (el) return { element: el, selector: sel };
-  }
-  return null;
+  return resolveAutofillSelector(key, GREENHOUSE_SELECTORS[key] ?? []);
 }
 
 export function collectResolvableGreenhouseFields(): DetectedField[] {

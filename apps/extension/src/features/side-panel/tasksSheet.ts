@@ -14,8 +14,11 @@ import { wireSheetKeyboard } from './sheet';
 const TASKS_PAGE_SIZE = 20;
 
 export interface TasksSheetDependencies {
-  listRuns: (limit: number) => Promise<ChromeManagedRunListResult>;
-  cancelRun: (run: ManagedCloudAgentRunReference) => Promise<ChromeManagedRunCancellationResult>;
+  listRuns: (limit: number, signal?: AbortSignal) => Promise<ChromeManagedRunListResult>;
+  cancelRun: (
+    run: ManagedCloudAgentRunReference,
+    signal?: AbortSignal,
+  ) => Promise<ChromeManagedRunCancellationResult>;
   openWeb: (path: string) => void;
   formatTime: (iso: string) => string;
 }
@@ -24,6 +27,7 @@ export interface TasksSheet {
   element: HTMLElement;
   open: (trigger: HTMLElement) => void;
   close: () => void;
+  reset: () => void;
 }
 
 function runTitle(run: CloudAgentRun): string {
@@ -59,6 +63,8 @@ export function buildTasksSheet(dependencies: TasksSheetDependencies): TasksShee
 
   let returnFocus: HTMLElement | null = null;
   let generation = 0;
+  let viewGeneration = 0;
+  let viewController = new AbortController();
 
   function renderRun(run: CloudAgentRun): HTMLElement {
     const item = el('li', { class: 'sp-memory-item sp-task-item' });
@@ -99,14 +105,19 @@ export function buildTasksSheet(dependencies: TasksSheetDependencies): TasksShee
           stop.focus();
         });
         confirmStop.addEventListener('click', () => {
+          const view = viewGeneration;
           confirmStop.disabled = true;
           void dependencies
-            .cancelRun({
-              runId: run.id,
-              runPath: managedCloudAgentRunPath(run.id),
-              lastSequence: run.lastEventSequence,
-            })
+            .cancelRun(
+              {
+                runId: run.id,
+                runPath: managedCloudAgentRunPath(run.id),
+                lastSequence: run.lastEventSequence,
+              },
+              viewController.signal,
+            )
             .then((result) => {
+              if (view !== viewGeneration || sheet.hidden) return;
               status.textContent =
                 result.status === 'success' ? t('spTasksStopped') : result.message;
               return refresh();
@@ -121,8 +132,8 @@ export function buildTasksSheet(dependencies: TasksSheetDependencies): TasksShee
 
   async function refresh(): Promise<void> {
     const current = ++generation;
-    const result = await dependencies.listRuns(TASKS_PAGE_SIZE);
-    if (current !== generation) return;
+    const result = await dependencies.listRuns(TASKS_PAGE_SIZE, viewController.signal);
+    if (current !== generation || sheet.hidden) return;
     list.replaceChildren();
     if (result.status !== 'success') {
       status.textContent = result.message;
@@ -136,8 +147,9 @@ export function buildTasksSheet(dependencies: TasksSheetDependencies): TasksShee
   }
 
   function closeSheet(): void {
-    if (sheet.hidden) return;
     generation += 1;
+    viewGeneration += 1;
+    viewController.abort();
     sheet.hidden = true;
     returnFocus?.focus();
     returnFocus = null;
@@ -148,6 +160,9 @@ export function buildTasksSheet(dependencies: TasksSheetDependencies): TasksShee
   return {
     element: sheet,
     open(trigger) {
+      viewController.abort();
+      viewController = new AbortController();
+      viewGeneration += 1;
       returnFocus = trigger;
       sheet.hidden = false;
       status.textContent = '';
@@ -156,5 +171,10 @@ export function buildTasksSheet(dependencies: TasksSheetDependencies): TasksShee
       void refresh();
     },
     close: closeSheet,
+    reset() {
+      closeSheet();
+      list.replaceChildren();
+      status.textContent = '';
+    },
   };
 }

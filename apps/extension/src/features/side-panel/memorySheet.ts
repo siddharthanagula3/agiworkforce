@@ -1,4 +1,5 @@
 import { X, renderIcon } from '../../assets/icons';
+import { MANAGED_MEMORY_MAX_CONTENT_CHARS } from '@agiworkforce/types';
 import type { AccountMemory } from '../cloud-bridge/memoryClient';
 import { t } from '../../i18n';
 import { el } from './dom';
@@ -27,6 +28,7 @@ export interface MemorySheet {
   element: HTMLElement;
   open: (trigger: HTMLElement) => void;
   close: () => void;
+  reset: () => void;
 }
 
 const MEMORY_SETTINGS_PATH = '/settings/memory?from=chrome-extension';
@@ -61,7 +63,7 @@ export function buildMemorySheet(dependencies: MemorySheetDependencies): MemoryS
   const addForm = el('form', { class: 'sp-memory-add' }) as HTMLFormElement;
   const addInput = el('input', {
     type: 'text',
-    maxlength: '2000',
+    maxlength: String(MANAGED_MEMORY_MAX_CONTENT_CHARS),
     autocomplete: 'off',
     placeholder: t('spMemoryAddPlaceholder'),
     'aria-label': t('spMemoryAddLabel'),
@@ -80,19 +82,23 @@ export function buildMemorySheet(dependencies: MemorySheetDependencies): MemoryS
 
   let returnFocus: HTMLElement | null = null;
   let generation = 0;
+  let viewGeneration = 0;
 
   const setStatus = (text: string): void => {
     status.textContent = text;
   };
 
   async function write(message: Record<string, unknown>, done: string): Promise<boolean> {
+    const view = viewGeneration;
+    if (sheet.hidden) return false;
     const response = (await dependencies
       .send(message)
       .catch(() => null)) as MemoryWriteResponse | null;
+    if (view !== viewGeneration || sheet.hidden) return false;
     if (response?.success === true) {
       setStatus(done);
-      await refresh();
-      return true;
+      await refresh(done);
+      return view === viewGeneration && !sheet.hidden;
     }
     setStatus(
       response?.status === 'signed-out'
@@ -118,12 +124,13 @@ export function buildMemorySheet(dependencies: MemorySheetDependencies): MemoryS
 
     edit.addEventListener('click', () => {
       const form = el('form', { class: 'sp-memory-edit' }) as HTMLFormElement;
-      const input = el('input', {
-        type: 'text',
-        maxlength: '2000',
+      const input = el('textarea', {
+        rows: '3',
+        maxlength: String(MANAGED_MEMORY_MAX_CONTENT_CHARS),
         'aria-label': t('spMemoryEditLabel'),
-      }) as HTMLInputElement;
+      });
       input.value = memory.content;
+      const initialValue = input.value.trim();
       const save = el('button', { type: 'submit' }, t('spMemorySave'));
       const cancel = el('button', { type: 'button' }, t('spMemoryCancel'));
       form.append(input, save, cancel);
@@ -133,7 +140,7 @@ export function buildMemorySheet(dependencies: MemorySheetDependencies): MemoryS
       form.addEventListener('submit', (event) => {
         event.preventDefault();
         const content = input.value.trim();
-        if (!content || content === memory.content) {
+        if (!content || content === initialValue) {
           void refresh();
           return;
         }
@@ -173,12 +180,13 @@ export function buildMemorySheet(dependencies: MemorySheetDependencies): MemoryS
     return item;
   }
 
-  async function refresh(): Promise<void> {
+  async function refresh(done = ''): Promise<void> {
     const current = ++generation;
+    const view = viewGeneration;
     const response = (await dependencies
       .send({ type: 'LIST_MEMORIES' })
       .catch(() => null)) as MemoryListResponse | null;
-    if (current !== generation) return;
+    if (current !== generation || view !== viewGeneration || sheet.hidden) return;
     list.replaceChildren();
     if (!response || response.success !== true) {
       setStatus(
@@ -188,6 +196,7 @@ export function buildMemorySheet(dependencies: MemorySheetDependencies): MemoryS
       );
       return;
     }
+    setStatus(response.error ?? done);
     const memories = response.memories ?? [];
     if (memories.length === 0) {
       list.appendChild(el('li', { class: 'sp-memory-empty' }, t('spMemoryEmpty')));
@@ -202,19 +211,21 @@ export function buildMemorySheet(dependencies: MemorySheetDependencies): MemoryS
     event.preventDefault();
     const content = addInput.value.trim();
     if (!content) return;
+    const view = viewGeneration;
     addButton.disabled = true;
     void write({ type: 'ADD_MEMORY', content }, t('spMemoryAdded'))
       .then((saved) => {
-        if (saved) addInput.value = '';
+        if (saved && view === viewGeneration) addInput.value = '';
       })
       .finally(() => {
-        addButton.disabled = false;
+        if (view === viewGeneration) addButton.disabled = false;
       });
   });
 
   function closeSheet(): void {
-    if (sheet.hidden) return;
     generation += 1;
+    viewGeneration += 1;
+    if (sheet.hidden) return;
     sheet.hidden = true;
     returnFocus?.focus();
     returnFocus = null;
@@ -226,13 +237,22 @@ export function buildMemorySheet(dependencies: MemorySheetDependencies): MemoryS
   return {
     element: sheet,
     open(trigger) {
+      viewGeneration += 1;
       returnFocus = trigger;
       sheet.hidden = false;
+      addButton.disabled = false;
       setStatus('');
       list.replaceChildren(el('li', { class: 'sp-memory-empty' }, t('spMemoryLoading')));
       addInput.focus();
       void refresh();
     },
     close: closeSheet,
+    reset() {
+      closeSheet();
+      addInput.value = '';
+      addButton.disabled = false;
+      list.replaceChildren();
+      setStatus('');
+    },
   };
 }

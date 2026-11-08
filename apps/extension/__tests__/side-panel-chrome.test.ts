@@ -220,10 +220,14 @@ function panelMenuLabels(menu: HTMLElement): string[] {
     .filter((label) => label !== logOut);
 }
 
-async function openSavedConversation(content: string): Promise<string> {
+async function openSavedConversation(
+  content: string,
+  cloudSync?: Parameters<typeof recordCloudSyncState>[2],
+): Promise<string> {
   const conversationId = await saveConversation(account.owner, [
     { role: 'user', content, timestamp: Date.now(), runtime: 'managed-cloud' },
   ]);
+  if (cloudSync) await recordCloudSyncState(account.owner, conversationId, cloudSync);
   byId('sp-history-btn')!.click();
   let restore!: HTMLButtonElement;
   await vi.waitFor(() => {
@@ -296,16 +300,22 @@ describe('side panel presence', () => {
 });
 
 describe('More popover', () => {
-  it('is a small role=menu with three or four panel rows and the version footer', () => {
+  it('has the panel actions, optional web link and version footer', () => {
     byId('sp-menu-btn')!.click();
     const menu = moreMenu();
     expect(menu.hidden).toBe(false);
     expect(menu.getAttribute('role')).toBe('menu');
     expect(byId('sp-menu-btn')!.getAttribute('aria-expanded')).toBe('true');
     const labels = panelMenuLabels(menu);
-    expect(labels.length).toBeGreaterThanOrEqual(3);
-    expect(labels.length).toBeLessThanOrEqual(4);
-    expect(labels).toContain(catalogMessage('spExtensionSettings', []));
+    expect(labels.filter((label) => label !== catalogMessage('spHistoryOpenInWeb', []))).toEqual(
+      ['spCloseTabs', 'spExtensionSettings', 'spMoreShortcuts', 'spMoreHelp'].map((key) =>
+        catalogMessage(key, []),
+      ),
+    );
+    const cleanup = Array.from(menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')).find(
+      (item) => item.textContent?.trim() === catalogMessage('spCloseTabs', []),
+    );
+    expect(cleanup?.querySelector('.sp-external-mark')).toBeNull();
     expect(menu.querySelector('.sp-more-footer')?.textContent).toContain('v1.2.0');
   });
 
@@ -378,6 +388,55 @@ describe('More popover', () => {
   });
 });
 
+describe('cached recent chat activation', () => {
+  it('acknowledges a cached row after a new chat while its refresh is pending', async () => {
+    const content = 'Cached history generation fixture';
+    const conversationId = await openSavedConversation(content);
+    byId('sp-history-btn')!.click();
+    await vi.waitFor(() =>
+      expect(document.querySelector('[data-conversation-restore]')).not.toBeNull(),
+    );
+    byId('sp-recents-close')!.click();
+    byId('sp-new-chat-btn')!.click();
+    const original = chromeMock.storage.local.get.getMockImplementation();
+    if (!original) throw new Error('Storage fixture has no implementation');
+    let blocked = true;
+    const waiting: Array<() => Promise<void>> = [];
+    chromeMock.storage.local.get.mockImplementation((...args) => {
+      if (!blocked) return original(...args);
+      return new Promise<Record<string, unknown>>((resolve) => {
+        waiting.push(async () => {
+          resolve(await original(...args));
+        });
+      });
+    });
+    let acknowledged = false;
+    try {
+      byId('sp-history-btn')!.click();
+      const row = Array.from(
+        document.querySelectorAll<HTMLButtonElement>('[data-conversation-restore]'),
+      ).find((button) => button.textContent?.includes(content));
+      expect(row).toBeDefined();
+      expect(row!.disabled).toBe(false);
+      row!.click();
+      expect(document.querySelector('.sp-drawer-history-error')?.textContent).toBe(
+        catalogMessage('spHistoryOpening', []),
+      );
+      expect((document.querySelector('.sp-drawer-history-error') as HTMLElement).hidden).toBe(
+        false,
+      );
+      acknowledged = true;
+    } finally {
+      blocked = false;
+      await Promise.all(waiting.map((release) => release()));
+      chromeMock.storage.local.get.mockImplementation(original);
+      if (acknowledged)
+        await vi.waitFor(() => expect(byId('sp-messages')?.textContent).toContain(content));
+      await deleteConversation(account.owner, conversationId);
+    }
+  });
+});
+
 describe('More popover Open in web', () => {
   it('opens the current account chat on the web and is absent for a device-only chat', async () => {
     const content = 'Open in web fixture question';
@@ -409,7 +468,8 @@ describe('More popover Open in web', () => {
         moreMenu().querySelectorAll<HTMLButtonElement>('[role="menuitem"]'),
       ).find((item) => item.textContent?.trim() === catalogMessage('spHistoryOpenInWeb', []))!;
       expect(open).toBeDefined();
-      expect(panelMenuLabels(moreMenu()).length).toBeLessThanOrEqual(4);
+      expect(panelMenuLabels(moreMenu())).toHaveLength(5);
+      expect(panelMenuLabels(moreMenu())).toContain(catalogMessage('spCloseTabs', []));
       open.click();
       expect((chromeMock.tabs.create.mock.calls[0]![0] as { url: string }).url).toContain(
         `/chat/${cloudId}`,
@@ -581,6 +641,71 @@ describe('conversation title row', () => {
       await deleteConversation(account.owner, conversationId);
     }
   });
+
+  it('reads the acknowledged workspace before deleting a chat whose title holds an older sync snapshot', async () => {
+    const cloudConversationId = '7b933526-16bd-49ef-b804-976bb2c4a725';
+    const conversationId = await openSavedConversation('Delete late workspace fixture', {
+      conversationId: cloudConversationId,
+    });
+    try {
+      await recordCloudSyncState(account.owner, conversationId, {
+        organizationId: null,
+        createAcknowledged: true,
+      });
+      openTitleMenu();
+      titleMenuItem(catalogMessage('spHistoryDelete', [])).click();
+      document.querySelector<HTMLElement>('#sp-title-row [role="alertdialog"] .is-danger')!.click();
+      await vi.waitFor(() =>
+        expect(chromeMock.runtime.sendMessage).toHaveBeenCalledWith({
+          type: 'DELETE_CLOUD_CONVERSATION',
+          owner: account.owner,
+          cloudConversationId,
+          organizationId: null,
+        }),
+      );
+      await vi.waitFor(async () =>
+        expect(await getConversation(account.owner, conversationId)).toBeUndefined(),
+      );
+    } finally {
+      await deleteConversation(account.owner, conversationId);
+    }
+  });
+
+  it.each(['unresolved', 'changed'] as const)(
+    'refuses deletion when the fresh account scope is %s',
+    async (scope) => {
+      const cloudConversationId = 'b1d44962-a86d-4912-a476-9051e384977d';
+      const conversationId = await openSavedConversation(`Delete ${scope} workspace fixture`, {
+        conversationId: cloudConversationId,
+      });
+      try {
+        openTitleMenu();
+        titleMenuItem(catalogMessage('spHistoryDelete', [])).click();
+        if (scope === 'changed')
+          await recordCloudSyncState(account.owner, conversationId, {
+            conversationId: '37804380-6aae-4bbe-9dd0-287f24b30c14',
+            organizationId: null,
+          });
+        const before = chromeMock.runtime.sendMessage.mock.calls.length;
+        document
+          .querySelector<HTMLElement>('#sp-title-row [role="alertdialog"] .is-danger')!
+          .click();
+        await vi.waitFor(() =>
+          expect(byId('sp-title-status')!.textContent).toBe(
+            catalogMessage('spHistoryDeleteFailed', []),
+          ),
+        );
+        expect(
+          chromeMock.runtime.sendMessage.mock.calls
+            .slice(before)
+            .some(([message]) => message.type === 'DELETE_CLOUD_CONVERSATION'),
+        ).toBe(false);
+        expect(await getConversation(account.owner, conversationId)).toBeDefined();
+      } finally {
+        await deleteConversation(account.owner, conversationId);
+      }
+    },
+  );
 
   it('asks before archiving an account chat and archives only after confirmation', async () => {
     const content = 'Archive fixture question';

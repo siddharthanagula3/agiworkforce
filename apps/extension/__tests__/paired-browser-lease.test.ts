@@ -288,7 +288,12 @@ const harness = vi.hoisted(() => {
       open: vi.fn(() => Promise.resolve()),
     },
     commands: { onCommand: event() },
-    action: { setBadgeText: vi.fn(), setBadgeBackgroundColor: vi.fn(), setTitle: vi.fn() },
+    action: {
+      onClicked: event(),
+      setBadgeText: vi.fn(),
+      setBadgeBackgroundColor: vi.fn(),
+      setTitle: vi.fn(),
+    },
     scripting: { executeScript: vi.fn(() => Promise.resolve([])) },
     permissions: {
       contains: vi.fn(() => Promise.resolve(true)),

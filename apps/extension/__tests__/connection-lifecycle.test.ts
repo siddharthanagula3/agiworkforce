@@ -321,6 +321,16 @@ describe('the worker connects to AGI Desktop only once pairing has succeeded', (
     expect(background).toMatch(
       /async function shouldAutoConnectToDesktop\(\)[\s\S]*?storageUtils\.getItem<boolean>\(DESKTOP_PAIRED_KEY, false\)\)? === true/,
     );
+    const autoConnect = background.slice(
+      background.indexOf('async function shouldAutoConnectToDesktop()'),
+      background.indexOf('function clearNativeReconnectTimer()'),
+    );
+    expect(autoConnect.indexOf('await revokeMismatchedDesktopPairing()')).toBeGreaterThanOrEqual(0);
+    expect(autoConnect.indexOf('await revokeMismatchedDesktopPairing()')).toBeLessThan(
+      autoConnect.indexOf('storageUtils.getItem<boolean>(DESKTOP_PAIRED_KEY, false)'),
+    );
+    expect(initialize).toContain('watchSyncHostSession(');
+    expect(background).toContain('await revokeMismatchedDesktopPairing();');
   });
 
   it('stops the maintenance pass re-arming its alarm for an unpaired profile', () => {

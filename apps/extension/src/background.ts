@@ -11,6 +11,7 @@ import {
   type ScheduledTaskTransport,
   type ScheduledTaskFetch,
 } from './features/background/scheduled-task-transport';
+import { renderShortcutPrompt } from './features/side-panel/pageCommands';
 import type { ChatChunkMessage, WebMCPToolInfo } from './types';
 import type {
   ConnectionStatus,
@@ -39,7 +40,10 @@ import {
   handleUpdateShortcut,
   planShortcutReplay,
 } from './features/background/shortcuts';
-import { validateShortcutReplayTarget } from './features/shortcuts/origin';
+import {
+  normalizeShortcutStartUrl,
+  validateShortcutReplayTarget,
+} from './features/shortcuts/origin';
 import { initializeSyncedPreferences } from './features/background/synced-preferences';
 import {
   loadScheduledTasks,
@@ -243,6 +247,12 @@ import {
   resumeChromeManagedRun,
 } from './features/cloud-bridge/managedRunControl';
 import {
+  getFreshClerkAuthContext,
+  isClerkExtensionAuthConfigured,
+  syncHostSessionCookieState,
+  watchSyncHostSession,
+} from './features/cloud-bridge/clerkAuth';
+import {
   getManagedCloudAuthContext,
   getManagedModelAccess,
   streamFreeChat,
@@ -277,7 +287,18 @@ import {
   suspendPageWatchForNavigation,
 } from './features/browser-tools/pageWatch';
 import { readConsoleEntries } from './features/browser-tools/consoleCapture';
-import { authorizeBrowserToolTab } from './features/browser-tools/tabAuthority';
+import {
+  authorizeBrowserToolTab,
+  readAuthorizedBrowserTab,
+} from './features/browser-tools/tabAuthority';
+import { parseContactAutofillProfile } from './features/content/autofill/contactProfile';
+import { parseFormFillPlan } from './features/content/formFillPlan';
+import { UUID_PATTERN } from './lib/uuid';
+import { MAX_VALUE_LENGTH } from './background/policy';
+import {
+  captureEditableTarget,
+  executeEditableTarget,
+} from './features/background/editable-selection';
 import { readNetworkEntries } from './features/browser-tools/networkCapture';
 import { sendChromeHeartbeatIfDue } from './features/cloud-bridge/deviceHeartbeat';
 import { WELCOME_PAGE_PATH } from './features/onboarding/paths';
@@ -296,7 +317,10 @@ import {
   sameManagedCloudOwner,
   type ManagedCloudOwner,
 } from './features/cloud-bridge/managedCloudAuthority';
-import { releaseStoredDesktopPairing } from './features/native-bridge/pairing';
+import {
+  desktopPairingRejectsAccount,
+  releaseStoredDesktopPairing,
+} from './features/native-bridge/pairing';
 
 interface BackgroundState {
   isNativeConnected: boolean;
@@ -1059,9 +1083,36 @@ function setDesktopPaired(paired: boolean): void {
  * and a warning. Pairing, manual reconnect and any request that needs the host
  * still connect directly.
  */
+/**
+ * A pairing is a credential of one account. Drop it when this worker can
+ * read a different signed-in account, or a real sign-out. A Clerk read that
+ * throws is not a sign-out: the native session stays until the account is known.
+ * Returns true when the pairing was released.
+ */
+async function revokeMismatchedDesktopPairing(): Promise<boolean> {
+  if (!isClerkExtensionAuthConfigured()) return false;
+  let signedInAccountId: string | null;
+  try {
+    const context = await getFreshClerkAuthContext();
+    signedInAccountId = context?.owner.accountId ?? null;
+  } catch {
+    return false;
+  }
+  // A missing Clerk session while the sync cookie is still there is hydration,
+  // not a sign-out. A different account id is never ambiguous.
+  if (signedInAccountId === null && (await syncHostSessionCookieState()) !== 'absent') {
+    return false;
+  }
+  if (!(await desktopPairingRejectsAccount(signedInAccountId))) return false;
+  await disconnectPairedNativeHost('The signed-in account changed.');
+  await releaseStoredDesktopPairing();
+  return true;
+}
+
 async function shouldAutoConnectToDesktop(): Promise<boolean> {
   await nativeReconnectGaveUpRestored;
   if (_bgCtx.nativeReconnectGaveUp) return false;
+  if (await revokeMismatchedDesktopPairing()) return false;
   return (await storageUtils.getItem<boolean>(DESKTOP_PAIRED_KEY, false)) === true;
 }
 
@@ -1212,10 +1263,13 @@ function initialize(): void {
     }
   });
   if (sidePanelAvailable()) {
-    chrome.sidePanel.setPanelBehavior?.({ openPanelOnActionClick: true }).catch((err) => {
+    chrome.sidePanel.setPanelBehavior?.({ openPanelOnActionClick: false }).catch((err) => {
       logger.warn('setPanelBehavior(openPanelOnActionClick) failed', err);
     });
   }
+  watchSyncHostSession(() => {
+    void revokeMismatchedDesktopPairing();
+  });
   void shouldAutoConnectToDesktop().then((autoConnect) => {
     if (!autoConnect) return;
     connectToNativeHost();
@@ -1275,7 +1329,7 @@ function handleSidePanelPresencePort(port: chrome.runtime.Port): void {
     if (remaining > 0) openSidePanelWindows.set(registeredWindow, remaining);
     else openSidePanelWindows.delete(registeredWindow);
     publishSidePanelPresence(registeredWindow);
-    if (openSidePanelWindows.size === 0) void sweepTransientHostPermissions(false);
+    if (openSidePanelWindows.size === 0) void revokeAllOneTimeSiteGrants();
   });
 }
 
@@ -1886,6 +1940,15 @@ async function handleReplayShortcut(
   expectedOwner?: ManagedCloudOwner,
   notify = true,
 ): Promise<ExtensionResponse> {
+  if (
+    message.modelSelection !== undefined &&
+    (typeof message.modelSelection !== 'string' || !message.modelSelection.trim())
+  ) {
+    return {
+      success: false,
+      error: 'The shortcut model selection is invalid.',
+    } as ExtensionResponse;
+  }
   const shortcuts = await loadShortcuts();
   const shortcut = shortcuts.find((s) => s.id === message.shortcutId);
   if (!shortcut) {
@@ -1917,7 +1980,7 @@ async function handleReplayShortcut(
     } as ExtensionResponse;
   }
   if (plan.kind === 'prompt') {
-    const safePrompt = plan.prompt.slice(0, TASK_PROMPT_MAX_CHARS);
+    const safePrompt = renderShortcutPrompt(plan.prompt).slice(0, TASK_PROMPT_MAX_CHARS);
     const chatMsg: Omit<import('./types').ChatMessageMessage, 'owner'> & {
       owner?: ManagedCloudOwner;
     } = {
@@ -1926,7 +1989,7 @@ async function handleReplayShortcut(
       id: `shortcut_${shortcut.id}_${crypto.randomUUID()}`,
       text: safePrompt,
       timestamp: Date.now(),
-      modelSelection: 'auto',
+      modelSelection: message.modelSelection ?? 'auto',
       ...(expectedOwner ? { owner: expectedOwner } : {}),
     };
     let deliveredAnswer = '';
@@ -1963,20 +2026,34 @@ async function handleReplayShortcut(
       error: chatResult.message || 'Shortcut prompt failed to run.',
     } as ExtensionResponse;
   }
-  const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!activeTab?.id) {
-    return { success: false, error: 'No active tab' } as ExtensionResponse;
+  if (message.tabId !== undefined && (!Number.isSafeInteger(message.tabId) || message.tabId < 0))
+    return { success: false, error: 'The replay tab is invalid.' } as ExtensionResponse;
+  let targetTab: chrome.tabs.Tab | undefined;
+  try {
+    targetTab =
+      message.tabId === undefined
+        ? (await chrome.tabs.query({ active: true, currentWindow: true }))[0]
+        : await chrome.tabs.get(message.tabId);
+  } catch {
+    return {
+      success: false,
+      error: 'The recorded website tab is no longer open.',
+    } as ExtensionResponse;
   }
-  const replayTarget = validateShortcutReplayTarget(shortcut, activeTab.url);
+  if (!targetTab?.id) {
+    return { success: false, error: 'No replay tab' } as ExtensionResponse;
+  }
+  const replayTarget = validateShortcutReplayTarget(shortcut, targetTab.url);
   if (!replayTarget.ok) {
     return { success: false, error: replayTarget.error } as ExtensionResponse;
   }
   const taskId = `replay_${Date.now()}`;
-  const result = await forwardToContentScript(activeTab.id, {
+  const result = await forwardToContentScript(targetTab.id, {
     type: 'RUN_PAGE_ACTIONS',
-    tabId: activeTab.id,
+    tabId: targetTab.id,
     taskId,
     actions: shortcut.actions,
+    expectedOrigin: normalizeShortcutStartUrl(shortcut.startUrl)!,
   } as ExtensionMessage);
   if (result.success && notify) {
     showNotification(
@@ -2139,7 +2216,7 @@ async function requireScheduledTaskCredential(
   return credential;
 }
 
-async function getExactScheduledMutationCredential(
+async function getExactManagedMutationCredential(
   requestedOwnerValue: unknown,
 ): Promise<NonNullable<Awaited<ReturnType<typeof getManagedCloudAuthContext>>> | null> {
   const requestedOwner = normalizeManagedCloudOwner(requestedOwnerValue);
@@ -3506,7 +3583,7 @@ function rejectComputerUseOwnership(
   throw new Error(`Computer-use ownership lost: ${reason}`);
 }
 
-async function assertComputerUseOwnership(lease: ComputerUseRunLease): Promise<string> {
+async function readComputerUseAuthContext(lease: ComputerUseRunLease) {
   computerUseRuns.assertCurrent(lease);
 
   const context = await getManagedCloudAuthContext();
@@ -3519,17 +3596,28 @@ async function assertComputerUseOwnership(lease: ComputerUseRunLease): Promise<s
     rejectComputerUseOwnership(lease, 'account_changed');
   }
 
+  return context;
+}
+
+async function assertComputerUseOwnership(lease: ComputerUseRunLease): Promise<string> {
+  let context = await readComputerUseAuthContext(lease);
+  const targetTabId = lease.tabId;
   let tab: chrome.tabs.Tab;
   try {
-    const targetTabId = lease.tabId;
-    const authorized = await authorizeBrowserToolTab(targetTabId);
-    computerUseRuns.assertCurrent(lease);
-    if (lease.tabId !== targetTabId) rejectComputerUseOwnership(lease, 'tab_intent_changed');
-    tab = await chrome.tabs.get(targetTabId);
-    computerUseRuns.assertCurrent(lease);
-    if (lease.tabId !== targetTabId || tab.url !== authorized.url)
-      rejectComputerUseOwnership(lease, 'tab_intent_changed');
+    const snapshot = await readAuthorizedBrowserTab(targetTabId, {
+      assertCurrent: () => {
+        computerUseRuns.assertCurrent(lease);
+        if (lease.tabId !== targetTabId) rejectComputerUseOwnership(lease, 'tab_intent_changed');
+      },
+      reauthorizeNavigation: async () => {
+        if (!lease.actionInFlight) return false;
+        context = await readComputerUseAuthContext(lease);
+        return true;
+      },
+    });
+    tab = snapshot.tab;
   } catch {
+    computerUseRuns.assertCurrent(lease);
     rejectComputerUseOwnership(lease, 'tab_intent_changed');
   }
   computerUseRuns.assertCurrent(lease);
@@ -4082,6 +4170,7 @@ async function pollDesktopBrowserCommands(): Promise<void> {
             return response as unknown as Record<string, unknown>;
           },
           navigate: (tabId, url) => driver.navigate(tabId, url),
+          stop: (tabId) => driver.stop(tabId),
           capture: (tabId) => driver.capture(tabId),
           click: (tabId, selector) => driver.click(tabId, selector),
           type: (tabId, selector, text, clear) => driver.type(tabId, selector, text, clear),
@@ -4152,7 +4241,78 @@ async function handleMessageAsync(
   }
 
   switch (message.type) {
+    case 'APPLY_EDITABLE_SELECTION':
+    case 'UNDO_EDITABLE_SELECTION': {
+      const credential = await getExactManagedMutationCredential(message.owner);
+      if (!credential) return { success: false, error: 'The selected-text account changed.' };
+      return executeEditableTarget(
+        { ...message, owner: credential.owner },
+        () => !isRetiredManagedCloudOwner(credential.owner),
+      );
+    }
+    case 'FILL_APPLICATION_CONTACT':
+    case 'FILL_OBSERVED_FORM': {
+      const profile =
+        message.type === 'FILL_APPLICATION_CONTACT'
+          ? parseContactAutofillProfile(message.profile)
+          : null;
+      const plan = message.type === 'FILL_OBSERVED_FORM' ? parseFormFillPlan(message.plan) : null;
+      const owner = normalizeManagedCloudOwner(message.owner);
+      if (
+        (message.type === 'FILL_APPLICATION_CONTACT' &&
+          message.replaceExisting !== undefined &&
+          typeof message.replaceExisting !== 'boolean') ||
+        (!profile && !plan) ||
+        !Number.isSafeInteger(message.tabId) ||
+        message.tabId < 0
+      )
+        return { success: false, error: 'Invalid application autofill request.' };
+      const credential = await getManagedCloudAuthContext();
+      if (
+        !owner ||
+        !sameManagedCloudOwner(owner, credential?.owner) ||
+        isRetiredManagedCloudOwner(owner)
+      )
+        return { success: false, error: 'The application autofill account changed.' };
+      const target = await authorizeBrowserToolTab(message.tabId);
+      if (target.url !== message.pageUrl)
+        return { success: false, error: 'The application page changed before autofill.' };
+      if (isRetiredManagedCloudOwner(owner))
+        return { success: false, error: 'The application autofill account changed.' };
+      if (message.type === 'FILL_OBSERVED_FORM') {
+        const [document] = await chrome.scripting.executeScript({
+          target: { tabId: target.tabId },
+          func: () => location.href,
+        });
+        if (
+          !document?.documentId ||
+          document.documentId !== message.documentId ||
+          document.result !== target.url ||
+          typeof message.formSnapshotId !== 'string' ||
+          !UUID_PATTERN.test(message.formSnapshotId)
+        )
+          return { success: false, error: 'The form document changed. Read the page again.' };
+        if (isRetiredManagedCloudOwner(owner))
+          return { success: false, error: 'The form filling account changed.' };
+        return chrome.tabs.sendMessage(
+          target.tabId,
+          { ...message, plan, pageUrl: target.url },
+          { documentId: document.documentId },
+        );
+      }
+      return chrome.tabs.sendMessage(target.tabId, {
+        type: 'FILL_APPLICATION_CONTACT',
+        tabId: target.tabId,
+        pageUrl: target.url,
+        profile,
+        ...(message.replaceExisting !== undefined
+          ? { replaceExisting: message.replaceExisting }
+          : {}),
+        owner,
+      });
+    }
     case 'GET_CLOUD_AUTH_TOKEN': {
+      await revokeMismatchedDesktopPairing();
       const candidate = await getManagedCloudAuthContext(message.refresh);
       const context = candidate && !isRetiredManagedCloudOwner(candidate.owner) ? candidate : null;
       cancelComputerUseIfAuthChanged(context?.owner ?? null);
@@ -4499,6 +4659,18 @@ async function handleMessageAsync(
       return { success: true } as ExtensionResponse;
     }
 
+    case 'CHECK_SITE_ONCE': {
+      const grant = listOneTimeSiteGrants().find(
+        (entry) =>
+          entry.grantId === message.grantId &&
+          entry.origin === message.origin &&
+          entry.expiresAtMs > Date.now(),
+      );
+      return grant
+        ? { success: true }
+        : { success: false, error: 'The task site grant is no longer active.' };
+    }
+
     case 'CANCEL_STREAM': {
       const cancelMsg = message as import('./types').CancelStreamMessage;
       const owner = normalizeManagedCloudOwner(cancelMsg.owner);
@@ -4526,16 +4698,16 @@ async function handleMessageAsync(
           error: 'Cancellation could not be confirmed before the cloud run was saved.',
         };
       }
-      const currentCredential = active ? null : await getManagedCloudAuthContext();
-      const credential = selectManagedCloudCancellationCredential(
-        owner,
-        active ? { token: active.token, owner: active.owner } : null,
-        currentCredential,
-      );
-      if (!credential || isRetiredManagedCloudOwner(owner)) {
-        return { success: false, error: 'Managed Cloud stream owner changed' };
-      }
       const cancellationAttempt = (async (): Promise<ExtensionResponse> => {
+        const currentCredential = await getManagedCloudAuthContext().catch(() => null);
+        const credential = selectManagedCloudCancellationCredential(
+          owner,
+          active ? { token: active.token, owner: active.owner } : null,
+          currentCredential,
+        );
+        if (!credential || isRetiredManagedCloudOwner(owner)) {
+          return { success: false, error: 'Managed Cloud stream owner changed' };
+        }
         const controller = new AbortController();
         try {
           const cancellation = await withTimeout(
@@ -4679,9 +4851,12 @@ async function handleMessageAsync(
           timestamp: Date.now(),
         } as ExtensionResponse;
       } catch (error) {
+        const reason = error instanceof Error ? error.message : 'Screenshot failed';
         return {
           success: false,
-          error: error instanceof Error ? error.message : 'Screenshot failed',
+          error: /(?:<all_urls>|activeTab).*permission/i.test(reason)
+            ? t('spScreenshotTabAccessRequired')
+            : reason,
         } as ExtensionResponse;
       }
     }
@@ -4902,7 +5077,7 @@ async function handleMessageAsync(
         ? normalizeManagedCloudOwner(createMessage.owner)
         : null;
       const credential = requiresManagedCloud
-        ? await getExactScheduledMutationCredential(requestedOwner)
+        ? await getExactManagedMutationCredential(requestedOwner)
         : null;
       if (requiresManagedCloud && (!requestedOwner || !credential)) {
         return {
@@ -4922,7 +5097,7 @@ async function handleMessageAsync(
       const listMessage = message as import('./types').ListScheduledTasksMessage;
       const requestedOwner = normalizeManagedCloudOwner(listMessage.owner);
       const credential = requestedOwner
-        ? await getExactScheduledMutationCredential(requestedOwner)
+        ? await getExactManagedMutationCredential(requestedOwner)
         : null;
       return handleListScheduledTasks(
         credential && requestedOwner ? requestedOwner.accountId : undefined,
@@ -4951,7 +5126,7 @@ async function handleMessageAsync(
         ? normalizeManagedCloudOwner(updateMessage.owner)
         : null;
       const credential = touchesManagedCloud
-        ? await getExactScheduledMutationCredential(requestedOwner)
+        ? await getExactManagedMutationCredential(requestedOwner)
         : null;
       if (touchesManagedCloud && (!requestedOwner || !credential)) {
         return {
@@ -5008,7 +5183,7 @@ async function handleMessageAsync(
         ? normalizeManagedCloudOwner(deleteMessage.owner)
         : null;
       const credential = touchesManagedCloud
-        ? await getExactScheduledMutationCredential(requestedOwner)
+        ? await getExactManagedMutationCredential(requestedOwner)
         : null;
       if (touchesManagedCloud && (!requestedOwner || !credential)) {
         return {
@@ -5055,12 +5230,18 @@ async function handleMessageAsync(
     }
 
     case 'LIST_MEMORIES': {
+      const owner = normalizeManagedCloudOwner(message.owner);
+      if (!owner || isRetiredManagedCloudOwner(owner))
+        return { success: false, status: 'signed-out' } as ExtensionResponse;
       const listOffset = message.offset;
       const listed = await memoryList(
+        owner,
         typeof listOffset === 'number' && Number.isInteger(listOffset) && listOffset > 0
           ? listOffset
           : 0,
       );
+      if (isRetiredManagedCloudOwner(owner))
+        return { success: false, status: 'signed-out' } as ExtensionResponse;
       return {
         success: listed.status === 'ready',
         status: listed.status,
@@ -5072,14 +5253,23 @@ async function handleMessageAsync(
     }
 
     case 'ADD_MEMORY': {
+      const owner = normalizeManagedCloudOwner(message.owner);
+      if (!owner || isRetiredManagedCloudOwner(owner))
+        return { success: false, status: 'signed-out' } as ExtensionResponse;
       const addContent = typeof message.content === 'string' ? message.content : '';
       if (!addContent.trim()) {
         return { success: false, error: 'Memory content is required' } as ExtensionResponse;
       }
-      return memoryWriteResponse(await memoryAdd(addContent));
+      const result = await memoryAdd(owner, addContent);
+      return memoryWriteResponse(
+        isRetiredManagedCloudOwner(owner) ? { status: 'signed-out' } : result,
+      );
     }
 
     case 'UPDATE_MEMORY': {
+      const owner = normalizeManagedCloudOwner(message.owner);
+      if (!owner || isRetiredManagedCloudOwner(owner))
+        return { success: false, status: 'signed-out' } as ExtensionResponse;
       const upId = typeof message.id === 'string' ? message.id : '';
       const upContent = typeof message.content === 'string' ? message.content : '';
       if (!upId || !upContent.trim()) {
@@ -5088,15 +5278,24 @@ async function handleMessageAsync(
           error: 'Memory id and content are required',
         } as ExtensionResponse;
       }
-      return memoryWriteResponse(await memoryUpdate(upId, upContent));
+      const result = await memoryUpdate(owner, upId, upContent);
+      return memoryWriteResponse(
+        isRetiredManagedCloudOwner(owner) ? { status: 'signed-out' } : result,
+      );
     }
 
     case 'DELETE_MEMORY': {
+      const owner = normalizeManagedCloudOwner(message.owner);
+      if (!owner || isRetiredManagedCloudOwner(owner))
+        return { success: false, status: 'signed-out' } as ExtensionResponse;
       const delId = typeof message.id === 'string' ? message.id : '';
       if (!delId) {
         return { success: false, error: 'Memory id is required' } as ExtensionResponse;
       }
-      return memoryWriteResponse(await memoryDelete(delId));
+      const result = await memoryDelete(owner, delId);
+      return memoryWriteResponse(
+        isRetiredManagedCloudOwner(owner) ? { status: 'signed-out' } : result,
+      );
     }
 
     case 'GET_QUICK_MODE': {
@@ -6154,12 +6353,15 @@ async function notifyConnectionStatusChange(): Promise<void> {
 
 const CONTEXT_MENU_ITEMS: ReadonlyArray<chrome.contextMenus.CreateProperties> = [
   { id: 'ask-agi-workforce', title: t('menuAskAgi'), contexts: ['selection'] },
+  { id: 'send-selection-local', title: t('menuSendSelectionLocal'), contexts: ['selection'] },
   { id: 'explain-selection', title: t('menuExplainSelection'), contexts: ['selection'] },
   { id: 'translate-selection', title: t('menuTranslateSelection'), contexts: ['selection'] },
+  { id: 'rewrite-selection', title: t('menuRewriteSelection'), contexts: ['editable'] },
   { id: 'ask-page', title: t('menuAskAboutPage'), contexts: ['page'] },
   { id: 'summarize-page', title: t('menuSummarizePage'), contexts: ['page'] },
   { id: 'add-to-tab-group', title: t('menuAddToTabGroup'), contexts: ['page'] },
 ];
+const pendingEditableCaptures = new Map<number, string>();
 
 /**
  * Chrome keeps context menus across worker restarts, so rebuilding them on
@@ -6197,7 +6399,76 @@ function handleContextMenuClick(
 ): void {
   if (!tab?.id) return;
 
-  if (info.menuItemId === 'ask-agi-workforce' && info.selectionText && tab.id) {
+  if (info.menuItemId === 'rewrite-selection') {
+    const captureId = crypto.randomUUID();
+    pendingEditableCaptures.set(tab.id, captureId);
+    void openAssistantPanel({ tabId: tab.id, windowId: tab.windowId }).catch(() => {});
+    void (async () => {
+      try {
+        if ((info.frameId ?? 0) !== 0) throw new Error(t('spRewriteFrameUnsupported'));
+        const credential = await getManagedCloudAuthContext();
+        if (!credential || isRetiredManagedCloudOwner(credential.owner))
+          throw new Error(t('spRewriteSignIn'));
+        const target = await captureEditableTarget(
+          tab,
+          info.selectionText ?? '',
+          credential.owner,
+          () => !isRetiredManagedCloudOwner(credential.owner),
+        );
+        if (pendingEditableCaptures.get(tab.id!) !== captureId) return;
+        await chrome.storage.session.set({
+          agi_pending_chat: {
+            type: 'rewrite-selection',
+            text: target.selectedText,
+            url: target.url,
+            tabId: target.tabId,
+            target,
+            windowId: tab.windowId,
+            timestamp: Date.now(),
+          },
+        });
+      } catch (error) {
+        if (pendingEditableCaptures.get(tab.id!) !== captureId) return;
+        const reason = sanitizePageText(
+          error instanceof Error ? error.message : t('spRewriteSelectAgain'),
+        ).slice(0, MAX_VALUE_LENGTH);
+        showNotification(t('spRewriteUnavailable'), reason);
+        void chrome.storage.session
+          .set({
+            agi_pending_chat: {
+              type: 'rewrite-error',
+              text: reason,
+              url: tab.url ?? '',
+              windowId: tab.windowId,
+              timestamp: Date.now(),
+            },
+          })
+          .catch(() => {});
+      } finally {
+        if (pendingEditableCaptures.get(tab.id!) === captureId)
+          pendingEditableCaptures.delete(tab.id!);
+      }
+    })();
+  } else if (info.menuItemId === 'ask-agi-workforce' && info.selectionText && tab.id) {
+    void chrome.storage.session
+      .set({
+        agi_pending_chat: {
+          type: 'ask-selection',
+          text: info.selectionText,
+          url: info.pageUrl ?? tab.url ?? '',
+          tabId: tab.id,
+          timestamp: Date.now(),
+        },
+      })
+      .catch((error: unknown) => {
+        logger.warn('Failed to prepare selected browser context', error);
+        showNotification(
+          'Context unavailable',
+          'The selected context was not attached. Try again.',
+        );
+      });
+    void openAssistantPanel({ tabId: tab.id, windowId: tab.windowId }).catch(() => {});
+  } else if (info.menuItemId === 'send-selection-local' && info.selectionText && tab.id) {
     try {
       const pending = createSelectionContextHandoff({
         selectedText: info.selectionText,
@@ -6293,9 +6564,8 @@ function handleContextMenuClick(
 chrome.contextMenus?.onClicked?.addListener(handleContextMenuClick);
 
 chrome.action?.onClicked?.addListener((tab) => {
-  if (sidePanelAvailable()) return;
-  void openAssistantPanel({ windowId: tab.windowId }).catch((error: unknown) => {
-    logger.warn('Opening the assistant window failed', error);
+  void openAssistantPanel({ tabId: tab.id, windowId: tab.windowId }).catch((error: unknown) => {
+    logger.warn('Opening the assistant from the toolbar failed', error);
   });
 });
 
@@ -6583,8 +6853,14 @@ async function handleChatMessage(
         delivery,
         owner,
         answer,
-        routing ? { selectedModel: 'auto', currentModelKey: routing.modelKey } : undefined,
-        routing?.answeredModel,
+        routing
+          ? {
+              selectedModel:
+                delivery.kind === 'shortcut' ? (message.modelSelection ?? 'auto') : 'auto',
+              currentModelKey: routing.modelKey,
+            }
+          : undefined,
+        routing?.answeredModel ?? routing?.modelKey,
       );
       if (!stored) {
         const message = 'The background answer could not be proven durable.';

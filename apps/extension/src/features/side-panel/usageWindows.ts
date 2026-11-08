@@ -98,7 +98,7 @@ export function usageWindowViews(usage: ManagedUsageSummaryResponse): UsageWindo
   const credits = usage.credits;
   if (credits) {
     return [
-      creditWindowView('session', credits.five_hour),
+      ...(credits.five_hour ? [creditWindowView('session', credits.five_hour)] : []),
       creditWindowView('weekly', credits.weekly),
       ...(credits.flagship_weekly
         ? [creditWindowView('weeklyFlagship', credits.flagship_weekly)]

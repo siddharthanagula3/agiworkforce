@@ -133,6 +133,14 @@ export function matchSlashCommands(
   return [...Object.entries(SLASH_COMMANDS), ...saved].filter(([name]) => name.startsWith(q));
 }
 
+export function renderShortcutPrompt(prompt: string, input = ''): string {
+  return (
+    prompt.includes(SHORTCUT_INPUT_PLACEHOLDER)
+      ? prompt.split(SHORTCUT_INPUT_PLACEHOLDER).join(input)
+      : [prompt, input].filter(Boolean).join('\n\n')
+  ).trim();
+}
+
 export function expandPromptShortcut(text: string, shortcuts: readonly PromptShortcut[]): string {
   const match = /^(\/\S+)(?:\s+([\s\S]*))?$/.exec(text.trim());
   if (!match) return text;
@@ -140,10 +148,7 @@ export function expandPromptShortcut(text: string, shortcuts: readonly PromptSho
   const shortcut = shortcutCommands(shortcuts).find(([candidate]) => candidate === command)?.[1];
   if (!shortcut) return text;
   const input = match[2]?.trim() ?? '';
-  const expanded = shortcut.prompt.includes(SHORTCUT_INPUT_PLACEHOLDER)
-    ? shortcut.prompt.split(SHORTCUT_INPUT_PLACEHOLDER).join(input)
-    : [shortcut.prompt, input].filter(Boolean).join('\n\n');
-  return expanded.trim() || text;
+  return renderShortcutPrompt(shortcut.prompt, input) || text;
 }
 
 export function expandSlashCommand(

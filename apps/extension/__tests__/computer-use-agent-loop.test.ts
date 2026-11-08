@@ -309,13 +309,24 @@ function makeFindToolCallSseStream(): ReadableStream<Uint8Array> {
   return makeSseStream([`data: ${chunk}\n\n`, 'data: [DONE]\n\n']);
 }
 
-import { InjectionDetectedError, runAgentLoop } from '../src/features/computer-use/agentLoop';
+import {
+  InjectionDetectedError,
+  runAgentLoop,
+  type AgentLoopStep,
+} from '../src/features/computer-use/agentLoop';
 import {
   COMPUTER_USE_MODEL,
   DEFAULT_GATEWAY_BASE,
 } from '../src/features/computer-use/cloudAgentClient';
 import { getRoutingSlotModel } from '@agiworkforce/types';
 import { OpenAIWireAssembler } from '@agiworkforce/provider-protocol';
+import { DOM_SUMMARY_HEADING } from '../src/features/computer-use/historyBudget';
+import { createDomElementReader } from '../src/features/content/elementReader';
+import { ELEMENT_LABEL_MAX_CHARS } from '../src/features/computer-use/cdpDriver';
+import {
+  BROWSER_CONTROL_CONSENT_STORAGE_KEY,
+  grantBrowserControlConsent,
+} from '../src/features/computer-use/browserControlConsent';
 
 describe('computer-use agent loop, one round-trip', () => {
   beforeEach(() => {
@@ -341,11 +352,13 @@ describe('computer-use agent loop, one round-trip', () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
+        headers: new Headers(),
         body: makeToolCallSseStream(),
       })
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
+        headers: new Headers(),
         body: makeFinalSseStream(),
       });
   });
@@ -354,10 +367,114 @@ describe('computer-use agent loop, one round-trip', () => {
     vi.clearAllMocks();
   });
 
+  it.each([true, false])('reports the observed clicked checkbox state: %s', async (checked) => {
+    const driver = await import('../src/features/computer-use/cdpDriver');
+    const signature = 'input||checkbox|checky||First';
+    const spies = [
+      vi.spyOn(driver, 'click').mockResolvedValue({ x: 10, y: 10 }),
+      vi.spyOn(driver, 'getTargetSignature').mockResolvedValue(signature),
+      vi
+        .spyOn(driver, 'getTargetControlState')
+        .mockResolvedValue({ signature, state: { checked } }),
+    ];
+    const previous = await chromeMock.storage.local.get(BROWSER_CONTROL_CONSENT_STORAGE_KEY);
+    Object.assign(chromeMock, { permissions: { contains: vi.fn().mockResolvedValue(true) } });
+    await grantBrowserControlConsent('https://example.com');
+    try {
+      fetchMock
+        .mockReset()
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          headers: new Headers(),
+          body: makeNamedToolCallSseStream('click', { index: 1 }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          headers: new Headers(),
+          body: makeFinalSseStream(),
+        });
+      const result = await runAgentLoop('Check the first box', 42, {
+        maxSteps: 2,
+        onBeforeAction: async () => true,
+      });
+      const receipt = result.history.find((message) => message.role === 'tool')!;
+      expect(receipt.content).toContain(`Observed clicked control state: {"checked":${checked}}`);
+      expect(driver.getTargetControlState).toHaveBeenCalledWith(
+        42,
+        { index: 1 },
+        signature,
+        undefined,
+      );
+    } finally {
+      spies.forEach((spy) => spy.mockRestore());
+      await chromeMock.storage.local.set({
+        [BROWSER_CONTROL_CONSENT_STORAGE_KEY]: previous[BROWSER_CONTROL_CONSENT_STORAGE_KEY] ?? [],
+      });
+      Reflect.deleteProperty(chromeMock, 'permissions');
+    }
+  });
+
+  it.each([
+    { text: '73', actual: '73', verified: true },
+    { text: '73', actual: '7342', verified: false },
+    { text: '', actual: '', verified: true },
+  ])(
+    'verifies an indexed replacement by exact retained value: %j',
+    async ({ text, actual, verified }) => {
+      const driver = await import('../src/features/computer-use/cdpDriver');
+      const signature = 'input||number|number_input||Number';
+      const spies = [
+        vi.spyOn(driver, 'type').mockResolvedValue(null),
+        vi.spyOn(driver, 'getTargetSignature').mockResolvedValue(signature),
+        vi.spyOn(driver, 'getElementIndexMap').mockReturnValue(new Map([[1, '#number']])),
+        vi.spyOn(driver, 'getFieldValue').mockResolvedValue(actual),
+      ];
+      try {
+        fetchMock
+          .mockReset()
+          .mockResolvedValueOnce({
+            ok: true,
+            status: 200,
+            headers: new Headers(),
+            body: makeNamedToolCallSseStream('type', { index: 1, text, replace: true }),
+          })
+          .mockResolvedValueOnce({
+            ok: true,
+            status: 200,
+            headers: new Headers(),
+            body: makeFinalSseStream(),
+          });
+        const steps: AgentLoopStep[] = [];
+        await runAgentLoop('Replace the number', 42, {
+          maxSteps: 2,
+          onBeforeAction: async () => true,
+          onProgress: (step) => steps.push(step),
+        });
+        expect(driver.type).toHaveBeenCalledWith(
+          42,
+          text,
+          1,
+          undefined,
+          signature,
+          expect.any(Function),
+          true,
+        );
+        expect(steps.find((step) => step.kind === 'tool_result')?.actionOutcome).toMatchObject({
+          verification: { passed: verified },
+        });
+      } finally {
+        spies.forEach((spy) => spy.mockRestore());
+      }
+    },
+  );
+
   it('does not publish a successful final step when the HTTP 200 provider stream fails', async () => {
     fetchMock.mockReset().mockResolvedValueOnce({
       ok: true,
       status: 200,
+      headers: new Headers(),
       body: makeSseStream([
         `data: ${JSON.stringify({
           choices: [
@@ -409,12 +526,18 @@ describe('computer-use agent loop, one round-trip', () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
+        headers: new Headers(),
         body: makeSseStream([
           ...frames.map((frame) => `data: ${JSON.stringify(frame)}\n\n`),
           'data: [DONE]\n\n',
         ]),
       })
-      .mockResolvedValueOnce({ ok: true, status: 200, body: makeFinalSseStream() });
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        body: makeFinalSseStream(),
+      });
     const onProgress = vi.fn();
     const result = await runAgentLoop('Read this page', 42, { maxSteps: 3, onProgress });
     expect(result.finalMessage).toContain('Task complete');
@@ -427,7 +550,106 @@ describe('computer-use agent loop, one round-trip', () => {
     });
   });
 
-  it('keeps the selected model on the initial screenshot and every tool continuation', async () => {
+  it('starts from the current DOM without taking a screenshot unless requested', async () => {
+    await runAgentLoop('Read the page', 42, { maxSteps: 10 });
+    expect(
+      chromeMock.debugger.sendCommand.mock.calls.some(
+        ([, method]) => method === 'Page.captureScreenshot',
+      ),
+    ).toBe(false);
+    const first = JSON.parse((fetchMock.mock.calls[0] as [string, RequestInit])[1].body as string);
+    expect(JSON.stringify(first.messages)).toContain(DOM_SUMMARY_HEADING);
+    expect(JSON.stringify(first.messages)).not.toContain('image_url');
+  });
+
+  it('returns fresh DOM as action evidence without creating a new user request', async () => {
+    stubDomResponses([
+      { summary: CLEAN_DOM_SUMMARY.replace('Hello World', 'INITIAL_NATIVE_STATE') },
+      { summary: CLEAN_DOM_SUMMARY.replace('Hello World', 'AFTER_NATIVE_NAVIGATION') },
+    ]);
+    fetchMock
+      .mockReset()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        body: makeNamedToolCallSseStream('navigate', { url: 'https://example.com/page' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        body: makeFinalSseStream(),
+      });
+    const previous = await chromeMock.storage.local.get(BROWSER_CONTROL_CONSENT_STORAGE_KEY);
+    Object.assign(chromeMock, { permissions: { contains: vi.fn().mockResolvedValue(true) } });
+    await grantBrowserControlConsent('https://example.com');
+    try {
+      await runAgentLoop('Navigate to the page', 42, { maxSteps: 10 });
+    } finally {
+      await chromeMock.storage.local.set({
+        [BROWSER_CONTROL_CONSENT_STORAGE_KEY]: previous[BROWSER_CONTROL_CONSENT_STORAGE_KEY] ?? [],
+      });
+      Reflect.deleteProperty(chromeMock, 'permissions');
+    }
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const second = JSON.parse((fetchMock.mock.calls[1] as [string, RequestInit])[1].body as string);
+    expect(second.messages.at(-1)).toMatchObject({
+      role: 'tool',
+      content: expect.stringContaining('AFTER_NATIVE_NAVIGATION'),
+    });
+    expect(
+      second.messages.filter((message: { role: string }) => message.role === 'user'),
+    ).toHaveLength(1);
+  });
+
+  it('keeps explicit screenshot fallback and places all tool results before the image observation', async () => {
+    const calls = ['screenshot', 'read_dom'].map((name, index) => ({
+      index,
+      id: `visual-${index}`,
+      type: 'function',
+      function: { name, arguments: '{}' },
+    }));
+    fetchMock
+      .mockReset()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        body: makeSseStream([
+          `data: ${JSON.stringify({ choices: [{ finish_reason: 'tool_calls', delta: { tool_calls: calls } }] })}\n\n`,
+          'data: [DONE]\n\n',
+        ]),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        body: makeFinalSseStream(),
+      });
+    await runAgentLoop('Capture the visual information', 42, { maxSteps: 10 });
+    const captures = chromeMock.debugger.sendCommand.mock.calls.filter(
+      ([, method]) => method === 'Page.captureScreenshot',
+    );
+    expect(captures).toHaveLength(1);
+    expect(captures[0]?.[2]).toMatchObject({ format: 'jpeg', quality: 80 });
+    const first = JSON.parse((fetchMock.mock.calls[0] as [string, RequestInit])[1].body as string);
+    const second = JSON.parse((fetchMock.mock.calls[1] as [string, RequestInit])[1].body as string);
+    expect(JSON.stringify(first.messages)).not.toContain('image_url');
+    const assistantAt = second.messages.findIndex(
+      (message: { role: string }) => message.role === 'assistant',
+    );
+    expect(
+      second.messages
+        .slice(assistantAt + 1, assistantAt + 3)
+        .map((message: { role: string }) => message.role),
+    ).toEqual(['tool', 'tool']);
+    expect(JSON.stringify(second.messages.at(-1))).toContain(
+      'data:image/jpeg;base64,FAKE_BASE64_PNG',
+    );
+  });
+
+  it('keeps the selected model on the initial observation and every tool continuation', async () => {
     const model = getRoutingSlotModel('computer_use_premium');
     expect(model).not.toBe(COMPUTER_USE_MODEL);
 
@@ -464,16 +686,14 @@ describe('computer-use agent loop, one round-trip', () => {
     expect(firstBody.tools.map((t) => t.function.name)).toContain('click');
 
     expect(chromeMock.debugger.attach).toHaveBeenCalled();
-    expect(chromeMock.debugger.sendCommand).toHaveBeenCalledWith(
-      { tabId: 42 },
-      'Page.captureScreenshot',
-      expect.objectContaining({ format: 'jpeg', quality: 80 }),
-      expect.any(Function),
-    );
+    expect(
+      chromeMock.debugger.sendCommand.mock.calls.some(
+        ([, method]) => method === 'Page.captureScreenshot',
+      ),
+    ).toBe(false);
     const firstMessages = (firstBody as unknown as { messages: Array<{ content: unknown }> })
       .messages;
-    expect(JSON.stringify(firstMessages)).toContain('data:image/jpeg;base64,FAKE_BASE64_PNG');
-    expect(JSON.stringify(firstMessages)).not.toContain('data:image/png');
+    expect(JSON.stringify(firstMessages)).not.toContain('image_url');
 
     expect(chromeMock.debugger.sendCommand).toHaveBeenCalledWith(
       { tabId: 42 },
@@ -524,9 +744,15 @@ describe('computer-use agent loop, one round-trip', () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
+        headers: new Headers(),
         body: makeNamedToolCallSseStream('download_file', { url: 'https://x.test/a.zip' }),
       })
-      .mockResolvedValueOnce({ ok: true, status: 200, body: makeFinalSseStream() });
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        body: makeFinalSseStream(),
+      });
 
     await runAgentLoop('Grab that file', 42, { maxSteps: 10 });
 
@@ -544,9 +770,15 @@ describe('computer-use agent loop, one round-trip', () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
+        headers: new Headers(),
         body: makeNamedToolCallSseStream('download_file', { url: 'https://x.test/a.zip' }),
       })
-      .mockResolvedValueOnce({ ok: true, status: 200, body: makeFinalSseStream() });
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        body: makeFinalSseStream(),
+      });
     const onBeforeAction = vi.fn().mockResolvedValue(false);
 
     await runAgentLoop('Grab that file', 42, { maxSteps: 10, onBeforeAction });
@@ -565,8 +797,18 @@ describe('computer-use agent loop, one round-trip', () => {
     );
     fetchMock.mockReset();
     fetchMock
-      .mockResolvedValueOnce({ ok: true, status: 200, body: makeToolCallSseStream() })
-      .mockResolvedValueOnce({ ok: true, status: 200, body: makeFinalSseStream() });
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        body: makeToolCallSseStream(),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        body: makeFinalSseStream(),
+      });
 
     try {
       await runAgentLoop('Read my balance', 42, { maxSteps: 10 });
@@ -593,7 +835,13 @@ describe('computer-use agent loop, one round-trip', () => {
         summary: JSON.stringify({
           summary: CLEAN_DOM_SUMMARY,
           indexMap: {
-            '1': { selector: 'html > body > input', signature: 'input||file|resume|Upload resume' },
+            '1': {
+              selector: 'html > body > input',
+              signature: createDomElementReader().signatureFor(
+                document.querySelector('input')!,
+                ELEMENT_LABEL_MAX_CHARS,
+              ),
+            },
           },
         }),
       },
@@ -603,9 +851,15 @@ describe('computer-use agent loop, one round-trip', () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
+        headers: new Headers(),
         body: makeNamedToolCallSseStream('click', { index: 1 }),
       })
-      .mockResolvedValueOnce({ ok: true, status: 200, body: makeFinalSseStream() });
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        body: makeFinalSseStream(),
+      });
     const onBeforeAction = vi.fn().mockResolvedValue(false);
 
     await runAgentLoop('Attach my resume', 42, { maxSteps: 10, onBeforeAction });
@@ -630,7 +884,13 @@ describe('computer-use agent loop, one round-trip', () => {
         summary: JSON.stringify({
           summary: CLEAN_DOM_SUMMARY,
           indexMap: {
-            '1': { selector: 'html > body > input', signature: 'input||file|resume|Upload resume' },
+            '1': {
+              selector: 'html > body > input',
+              signature: createDomElementReader().signatureFor(
+                document.querySelector('input')!,
+                ELEMENT_LABEL_MAX_CHARS,
+              ),
+            },
           },
         }),
       },
@@ -640,9 +900,15 @@ describe('computer-use agent loop, one round-trip', () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
+        headers: new Headers(),
         body: makeNamedToolCallSseStream('click', { index: 1 }),
       })
-      .mockResolvedValueOnce({ ok: true, status: 200, body: makeFinalSseStream() });
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        body: makeFinalSseStream(),
+      });
     const onBeforeAction = vi.fn().mockResolvedValue(true);
 
     try {
@@ -800,8 +1066,18 @@ describe('computer-use agent loop, prompt-injection abort covers every page-cont
   it('aborts the run when the find tool reads injected page content', async () => {
     stubDomResponses([{ summary: CLEAN_DOM_SUMMARY }, { summary: POISONED_DOM_SUMMARY }]);
     fetchMock
-      .mockResolvedValueOnce({ ok: true, status: 200, body: makeFindToolCallSseStream() })
-      .mockResolvedValueOnce({ ok: true, status: 200, body: makeFinalSseStream() });
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        body: makeFindToolCallSseStream(),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        body: makeFinalSseStream(),
+      });
     const steps: string[] = [];
 
     await expect(
@@ -836,8 +1112,18 @@ describe('computer-use agent loop, prompt-injection abort covers every page-cont
       { summary: `not-json ${INJECTION_TEXT}`, raw: true },
     ]);
     fetchMock
-      .mockResolvedValueOnce({ ok: true, status: 200, body: makeToolCallSseStream() })
-      .mockResolvedValueOnce({ ok: true, status: 200, body: makeFinalSseStream() });
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        body: makeToolCallSseStream(),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        body: makeFinalSseStream(),
+      });
 
     await expect(runAgentLoop('Read the page', 42, { maxSteps: 10 })).rejects.toBeInstanceOf(
       InjectionDetectedError,
@@ -882,8 +1168,18 @@ describe('the trail a run leaves behind', () => {
       Promise.resolve({ id: tabId, url: 'https://example.com/page?thread=private-subject' }),
     );
     fetchMock
-      .mockResolvedValueOnce({ ok: true, status: 200, body: makeToolCallSseStream() })
-      .mockResolvedValueOnce({ ok: true, status: 200, body: makeFinalSseStream() });
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        body: makeToolCallSseStream(),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        body: makeFinalSseStream(),
+      });
   });
 
   async function receipts(): Promise<

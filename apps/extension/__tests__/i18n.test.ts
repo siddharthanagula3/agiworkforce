@@ -24,6 +24,7 @@ const LOCALIZED_SOURCES = [
   'src/features/side-panel/voice.ts',
   'src/features/side-panel/chat-state.ts',
   'src/features/side-panel/bubbles.ts',
+  'src/features/side-panel/editableRewrite.ts',
   'src/features/side-panel/sources.ts',
   'src/features/side-panel/generatedFiles.ts',
   'src/features/side-panel/mapPreview.ts',

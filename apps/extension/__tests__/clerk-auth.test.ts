@@ -568,6 +568,59 @@ describe('Clerk Chrome Extension auth', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('revokes the captured retiring session after background auth has been retired', async () => {
+    vi.stubEnv('VITE_AGI_WEB_API_BASE_URL', 'http://localhost:3000');
+    process.env['CLERK_PUBLISHABLE_KEY'] = 'pk_test_repo_contract';
+    process.env['CLERK_SYNC_HOST'] = 'http://localhost:3000';
+    vi.mocked(chrome.runtime.sendMessage).mockResolvedValue({ success: true, token: null });
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ token: 'csrf-token' }) })
+      .mockResolvedValueOnce({ ok: true, status: 200 });
+    const auth = await importClerkAuth();
+    const token = sessionToken('user-a', 'sess_captured');
+    await auth.revokeSyncedWebSession({
+      token,
+      owner: { accountId: 'user-a', authIncarnation: 'sess_captured' },
+    });
+    expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'http://localhost:3000/api/settings/sessions/sess_captured',
+      expect.objectContaining({
+        method: 'DELETE',
+        credentials: 'include',
+        headers: expect.objectContaining({ authorization: `Bearer ${token}` }),
+      }),
+    );
+  });
+
+  it('does not replace an absent captured session with a newly signed-in account', async () => {
+    process.env['CLERK_PUBLISHABLE_KEY'] = 'pk_test_repo_contract';
+    process.env['CLERK_SYNC_HOST'] = 'http://localhost:3000';
+    const auth = await importClerkAuth();
+    await auth.revokeSyncedWebSession(null);
+    expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['expired', { exp: 1 }],
+    ['foreign origin', { azp: 'https://unrelated.example' }],
+    ['different account', { sub: 'user-other' }],
+    ['different session', { sid: 'sess_other' }],
+  ])('refuses a captured %s credential before network access', async (_name, claims) => {
+    process.env['CLERK_PUBLISHABLE_KEY'] = 'pk_test_repo_contract';
+    process.env['CLERK_SYNC_HOST'] = 'http://localhost:3000';
+    const auth = await importClerkAuth();
+    await expect(
+      auth.revokeSyncedWebSession({
+        token: sessionToken('user-a', 'sess_captured', claims),
+        owner: { accountId: 'user-a', authIncarnation: 'sess_captured' },
+      }),
+    ).rejects.toThrow(/Invalid retiring session credential/);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('fetches a CSRF token then deletes the current session on the sync host, reading the session id from the same background relay the rest of the panel trusts', async () => {
     process.env['CLERK_PUBLISHABLE_KEY'] = 'pk_test_repo_contract';
     process.env['CLERK_SYNC_HOST'] = 'https://clerk.agiworkforce.com';
@@ -599,6 +652,7 @@ describe('Clerk Chrome Extension auth', () => {
         method: 'DELETE',
         credentials: 'include',
         headers: expect.objectContaining({
+          authorization: `Bearer ${sessionToken('user-ada', 'sess_current')}`,
           'x-csrf-token': 'csrf-test-token',
           'x-requested-with': 'agiworkforce-chrome-extension',
         }),
@@ -627,6 +681,70 @@ describe('Clerk Chrome Extension auth', () => {
 
     await expect(auth.revokeSyncedWebSession()).rejects.toThrow(/403/);
   });
+
+  it.each(['sign-in', 'sign-out'] as const)(
+    'invalidates the cached client on web %s',
+    async (change) => {
+      vi.useFakeTimers();
+      let stop: () => void = () => undefined;
+      try {
+        process.env['CLERK_PUBLISHABLE_KEY'] = 'pk_test_repo_contract';
+        process.env['CLERK_SYNC_HOST'] = 'http://localhost';
+        vi.stubGlobal('document', undefined);
+        let listener: ((change: chrome.cookies.CookieChangeInfo) => void) | undefined;
+        const cookies = {
+          getAll: vi
+            .fn()
+            .mockResolvedValue(
+              change === 'sign-in'
+                ? []
+                : [{ name: '__client_uat', value: '1', domain: 'localhost' }],
+            ),
+          onChanged: {
+            addListener: vi.fn((fn: typeof listener) => {
+              listener = fn;
+            }),
+            removeListener: vi.fn(),
+          },
+        };
+        Object.assign(chrome, { cookies });
+        const signedIn = {
+          session: {
+            id: 'session-synced',
+            user: { id: 'user-synced' },
+            getToken: vi.fn().mockResolvedValue(sessionToken('user-synced', 'session-synced')),
+          },
+          user: { id: 'user-synced' },
+        };
+        const token = sessionToken('user-synced', 'session-synced');
+        createClerkClient
+          .mockResolvedValueOnce(change === 'sign-in' ? { session: null } : signedIn)
+          .mockResolvedValueOnce(change === 'sign-in' ? signedIn : { session: null });
+        const auth = await importClerkAuth();
+        const onChange = vi.fn();
+        stop = auth.watchSyncHostSession(onChange);
+        await expect(auth.getFreshClerkToken()).resolves.toBe(change === 'sign-in' ? null : token);
+
+        listener!({
+          cookie: {
+            name: '__client_uat',
+            value: change === 'sign-in' ? '1' : '0',
+            domain: 'localhost',
+          } as chrome.cookies.Cookie,
+          removed: false,
+          cause: 'explicit',
+        });
+        await vi.advanceTimersByTimeAsync(301);
+
+        expect(onChange).toHaveBeenCalledOnce();
+        await expect(auth.getFreshClerkToken()).resolves.toBe(change === 'sign-in' ? token : null);
+        expect(createClerkClient).toHaveBeenCalledTimes(2);
+      } finally {
+        stop();
+        vi.useRealTimers();
+      }
+    },
+  );
 
   it('refreshes once per real sign-in change, not on same-value cookie rewrites', async () => {
     vi.useFakeTimers();

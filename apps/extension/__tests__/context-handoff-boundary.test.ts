@@ -8,7 +8,7 @@ const contentSource = readFileSync(resolve(process.cwd(), 'src/content.ts'), 'ut
 describe('Chrome explicit context-handoff boundary', () => {
   it('never transfers selected context directly from a context-menu click', () => {
     const askBranch = backgroundSource.slice(
-      backgroundSource.indexOf("info.menuItemId === 'ask-agi-workforce'"),
+      backgroundSource.indexOf("info.menuItemId === 'send-selection-local'"),
       backgroundSource.indexOf("info.menuItemId === 'explain-selection'"),
     );
 

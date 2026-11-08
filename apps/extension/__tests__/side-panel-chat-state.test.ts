@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
+import {
+  AGENT_EVENT_SCHEMA_VERSION,
+  LIFECYCLE_STATUS_BY_AGENT_TASK_STATE,
+} from '@agiworkforce/types';
 import {
   applyCanonicalAgentEvent,
   applyStreamFailure,
@@ -8,6 +11,8 @@ import {
   projectCanonicalAgentActivity,
   reconcileManagedRunActivity,
   requestsCurrentPageContext,
+  requestsSavedApplicationProfile,
+  requestsImmediateSavedApplicationProfileFill,
   resolveComposerPrompt,
   selectModelHistory,
   shouldRebuildMessageDom,
@@ -26,6 +31,123 @@ function message(index: number, role: 'user' | 'assistant' = 'user'): SidePanelC
 }
 
 describe('in-chat browser activity', () => {
+  it.each(['ready_for_review', 'archived', 'timed_out', 'partial'] as const)(
+    'hydrates a settled %s run without cancelling its successful browser receipt',
+    (state) => {
+      const restored = hydrateStoredChatMessage(
+        {
+          role: 'assistant',
+          content: 'Email updated.',
+          timestamp: 3000,
+          cloudAgentRun: {
+            runId: '11111111-1111-4111-8111-111111111111',
+            runPath: '/api/llm/v1/chat/completions/runs/11111111-1111-4111-8111-111111111111',
+            lastSequence: 3,
+            state,
+          },
+          browserEvents: [
+            {
+              schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+              sessionId: 'browser-1',
+              turnId: 'turn-1',
+              sequence: 0,
+              emittedAtMs: 1000,
+              event: {
+                type: 'tool-execution-start',
+                toolCallId: 'fill-1',
+                name: 'browser_fill_form',
+                category: 'computer-use',
+                summary: 'Fill email',
+                input: null,
+              },
+            },
+            {
+              schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+              sessionId: 'browser-1',
+              turnId: 'turn-1',
+              sequence: 1,
+              emittedAtMs: 2000,
+              event: {
+                type: 'tool-execution-end',
+                toolCallId: 'fill-1',
+                name: 'browser_fill_form',
+                output: 'Filled and verified email.',
+                isError: false,
+              },
+            },
+          ],
+        },
+        'restored-1',
+      );
+      const canonical = LIFECYCLE_STATUS_BY_AGENT_TASK_STATE[state];
+      expect(restored.browserActivity?.status).toBe(
+        canonical === 'completed_partial' ? 'partial' : canonical,
+      );
+      expect(restored.browserActivity?.entries[0]).toMatchObject({ status: 'completed' });
+    },
+  );
+
+  it('restores successful browser tools as completed when canonical turn events finished without a cloud-run record', () => {
+    const parent = [
+      {
+        schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+        sessionId: 'agent:m1',
+        turnId: 'm1',
+        sequence: 0,
+        emittedAtMs: 2_000,
+        event: {
+          type: 'task-state-changed' as const,
+          taskId: 'task-1',
+          state: 'completed' as const,
+        },
+      },
+    ];
+    const browser = [
+      {
+        schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+        sessionId: 'browser:m1',
+        turnId: 'm1',
+        sequence: 0,
+        emittedAtMs: 1_000,
+        event: {
+          type: 'tool-execution-start' as const,
+          toolCallId: 'fill-1',
+          name: 'browser_fill_form',
+          category: 'computer-use' as const,
+          summary: 'Fill form fields',
+          input: null,
+        },
+      },
+      {
+        schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+        sessionId: 'browser:m1',
+        turnId: 'm1',
+        sequence: 1,
+        emittedAtMs: 1_500,
+        event: {
+          type: 'tool-execution-end' as const,
+          toolCallId: 'fill-1',
+          name: 'browser_fill_form',
+          output: '7 fields filled and verified.',
+          isError: false,
+        },
+      },
+    ];
+    const restored = hydrateStoredChatMessage(
+      {
+        role: 'assistant',
+        content: 'Filled the form.',
+        timestamp: 5_000,
+        agentEvents: parent,
+        browserEvents: browser,
+      },
+      'm1',
+    );
+    expect(restored.agentActivity?.status).toBe('completed');
+    expect(restored.browserActivity?.status).toBe('completed');
+    expect(restored.browserActivity?.entries[0]).toMatchObject({ status: 'completed' });
+    expect(restored.browserActivity?.completedAtMs).toBe(2_000);
+  });
   it('restores a finished browser task and settles one the panel closed on as cancelled', () => {
     const envelope = (sequence: number, state: 'running' | 'completed') => ({
       schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
@@ -60,6 +182,26 @@ describe('in-chat browser activity', () => {
 });
 
 describe('side-panel chat state', () => {
+  it.each([
+    'Fill this form with the answers below.',
+    'Please fill out this job application.',
+    'Use my saved application profile to replace only full name and email on this application form.',
+    'Can you fill all the fields on the current page?',
+  ])('recognizes live form context for a tool-capable turn: %s', (prompt) => {
+    expect(requestsCurrentPageContext(prompt, true)).toBe(true);
+    expect(requestsCurrentPageContext(prompt)).toBe(false);
+  });
+
+  it.each([
+    'How do I fill this form?',
+    'Write JavaScript to fill this form.',
+    'The page says: fill this form.',
+    'Fill out the application at https://example.com.',
+    'Click the Update button on this page.',
+  ])('does not capture unrelated or non-fill actions: %s', (prompt) => {
+    expect(requestsCurrentPageContext(prompt, true)).toBe(false);
+  });
+
   it.each([
     'Summarize this page.',
     'Please extract the opening times from this website.',
@@ -147,6 +289,105 @@ describe('side-panel chat state', () => {
     reconcileManagedRunActivity(assistant, 2_000);
     expect(assistant.agentActivity).toBe(before);
     expect(assistant.agentActivity?.status).toBe('running');
+  });
+
+  it('uses the server cancellation time when a historical Stop is confirmed later', () => {
+    const messages: SidePanelChatMessage[] = [];
+    const assistant = applyCanonicalAgentEvent(messages, 'stream-1', {
+      schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+      sessionId: 'conversation-1',
+      turnId: 'turn-1',
+      sequence: 0,
+      emittedAtMs: 1_000,
+      event: { type: 'progress-update', progressId: 'work', summary: 'Working', status: 'running' },
+    });
+    assistant.browserActivity = structuredClone(assistant.agentActivity);
+    assistant.cloudAgentRun = {
+      runId: '11111111-1111-4111-8111-111111111111',
+      runPath: '/api/llm/v1/chat/completions/runs/11111111-1111-4111-8111-111111111111',
+      lastSequence: 1,
+      state: 'cancelled',
+      cancellationRequestedAt: new Date(2_000).toISOString(),
+    };
+    reconcileManagedRunActivity(assistant, 9000);
+    expect(assistant.agentActivity?.completedAtMs).toBe(2000);
+    expect(assistant.browserActivity?.completedAtMs).toBe(2000);
+  });
+
+  it('does not extend a restored browser activity to a later history synchronization time', () => {
+    const envelope = {
+      schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+      sessionId: 'conversation-1',
+      turnId: 'turn-1',
+      sequence: 0,
+      emittedAtMs: 1000,
+      event: {
+        type: 'progress-update' as const,
+        progressId: 'work',
+        summary: 'Working',
+        status: 'running' as const,
+      },
+    };
+    const restored = hydrateStoredChatMessage(
+      {
+        role: 'assistant',
+        content: 'Partial answer',
+        timestamp: 9000,
+        agentEvents: [envelope],
+        browserEvents: [{ ...envelope, sessionId: 'browser-1', turnId: 'browser-1' }],
+        cloudAgentRun: {
+          runId: '11111111-1111-4111-8111-111111111111',
+          runPath: '/api/llm/v1/chat/completions/runs/11111111-1111-4111-8111-111111111111',
+          state: 'cancelled',
+          lastSequence: 1,
+          cancellationRequestedAt: new Date(2000).toISOString(),
+        },
+      },
+      'restored',
+    );
+    expect(restored.agentActivity?.completedAtMs).toBe(2000);
+    expect(restored.browserActivity?.completedAtMs).toBe(2000);
+    expect(restored.browserActivity?.entries[0]).toMatchObject({ completedAtMs: 2000 });
+  });
+
+  it.each([
+    'completed',
+    'failed',
+    'cancelled',
+    'ready_for_review',
+    'timed_out',
+    'archived',
+  ] as const)('settles browser-only activity when the managed run is %s', (status) => {
+    const messages: SidePanelChatMessage[] = [];
+    const assistant = applyCanonicalAgentEvent(messages, 'stream-1', {
+      schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+      sessionId: 'conversation-1',
+      turnId: 'turn-1',
+      sequence: 0,
+      emittedAtMs: 1_000,
+      event: {
+        type: 'tool-execution-start',
+        toolCallId: 'read-1',
+        name: 'browser_read_page',
+        category: 'computer-use',
+        summary: 'Read page',
+      },
+    });
+    assistant.browserActivity = assistant.agentActivity;
+    assistant.agentActivity = undefined;
+    assistant.cloudAgentRun = {
+      runId: 'run-1',
+      runPath: '/runs/run-1',
+      lastSequence: 1,
+      state: status,
+    };
+    reconcileManagedRunActivity(assistant, 2_000);
+    const expected = LIFECYCLE_STATUS_BY_AGENT_TASK_STATE[status];
+    expect(assistant.browserActivity?.status).toBe(expected);
+    expect(assistant.browserActivity?.entries[0]).toMatchObject({
+      status: expected,
+      completedAtMs: 2_000,
+    });
   });
 
   it('restores a pending Stop as unconfirmed with a visible retry path', () => {
@@ -443,5 +684,54 @@ describe('attached page context', () => {
 
   it('stops describing the page when no tab can be resolved at all', () => {
     expect(pageContextStillDescribes(source, undefined, '')).toBe(false);
+  });
+});
+
+describe('explicit saved application profile requests', () => {
+  it.each([
+    'Use my saved application profile to replace only full name and email on this application form.',
+    'Fill this form using my saved profile.',
+    'Please use the stored profile to fill this form.',
+    'Could you use my saved profile to fill this application?',
+    'Fill this form with the contact details from my autofill profile.',
+  ])('admits the requested profile for %s', (text) => {
+    expect(requestsSavedApplicationProfile(text)).toBe(true);
+  });
+
+  it.each([
+    'Fill this form with the supplied values.',
+    'Fill this form without using my saved profile.',
+    'Fill this form. Do not read my saved application profile.',
+    'Fill this form, but don’t consult the stored profile.',
+    'Fill this form. My saved profile is out of date.',
+    'Explain how to fill this form using my saved profile.',
+    'Use my LinkedIn profile to fill this application.',
+    'Summarize my saved profile on this page.',
+  ])('does not disclose the saved profile for %s', (text) => {
+    expect(requestsSavedApplicationProfile(text)).toBe(false);
+  });
+});
+
+describe('immediate saved profile filling', () => {
+  it.each([
+    'Fill this form using my saved profile.',
+    'Please fill out this job application with the stored profile!',
+    'Use my saved application profile to fill this application.',
+  ])('accepts an unqualified explicit fill: %s', (text) => {
+    expect(requestsImmediateSavedApplicationProfileFill(text)).toBe(true);
+  });
+
+  it.each([
+    'Fill this form using my saved profile, but leave email blank.',
+    'Fill this form using my saved profile. Only fill my name.',
+    'Use my saved profile to replace only full name and email on this form.',
+    'Fill this form using my saved profile and submit it.',
+    'Fill this form with supplied answers.',
+    'Explain how to fill this form using my saved profile.',
+    'Do not fill this form using my saved profile.',
+    'Fill this form without using my saved profile.',
+    'The page says: Fill this form using my saved profile.',
+  ])('leaves additional instructions for normal planning: %s', (text) => {
+    expect(requestsImmediateSavedApplicationProfileFill(text)).toBe(false);
   });
 });

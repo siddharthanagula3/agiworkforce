@@ -1,5 +1,6 @@
 import {
   describeScheduleRunTiming,
+  getScheduleActionAvailability,
   MANAGED_CLOUD_DEFAULT_MODEL_SELECTION,
   MANAGED_CLOUD_SCHEDULE_TEMPLATES,
   ManagedCloudScheduleMutationSchema,
@@ -10,14 +11,17 @@ import {
   type ManagedCloudScheduleSources,
   type ManagedCloudScheduleTask,
   type ManagedCloudScheduleTemplate,
+  type ScheduleModelOption,
 } from '@agiworkforce/cloud-contracts';
 import type { LifecycleStatus } from '@agiworkforce/types';
+import { zonedLocalInputToIso } from '@agiworkforce/utils/scheduling/local-input';
 import { openClerkSignIn } from '../cloud-bridge/clerkAuth';
 import {
   createChromeSchedule,
   deleteChromeSchedule,
   listChromeScheduleRuns,
   listChromeSchedules,
+  listChromeScheduleModels,
   readChromeScheduleApproval,
   resolveChromeScheduleApproval,
   runChromeScheduleNow,
@@ -295,6 +299,7 @@ export interface SchedulesSectionDependencies {
   updateScheduleDetails: typeof updateChromeScheduleDetails;
   deleteSchedule: typeof deleteChromeSchedule;
   listSchedules: typeof listChromeSchedules;
+  listModels: typeof listChromeScheduleModels;
   listRuns: typeof listChromeScheduleRuns;
   setScheduleEnabled: typeof setChromeScheduleEnabled;
   runScheduleNow: typeof runChromeScheduleNow;
@@ -328,6 +333,7 @@ const DEFAULT_DEPENDENCIES: SchedulesSectionDependencies = {
   updateScheduleDetails: updateChromeScheduleDetails,
   deleteSchedule: deleteChromeSchedule,
   listSchedules: listChromeSchedules,
+  listModels: listChromeScheduleModels,
   listRuns: listChromeScheduleRuns,
   setScheduleEnabled: setChromeScheduleEnabled,
   runScheduleNow: runChromeScheduleNow,
@@ -358,7 +364,7 @@ function formatRelative(iso: string | null, now: number): string {
   return '';
 }
 
-type ScheduleFormRecurrence = 'daily' | 'weekly' | 'monthly';
+type ScheduleFormRecurrence = 'once' | 'daily' | 'weekly' | 'monthly';
 
 const SCHEDULE_FIELDS = ManagedCloudScheduleMutationSchema.shape;
 
@@ -479,6 +485,7 @@ export function buildSchedulesSection(
   });
   const repeatSelect = el('select', { class: 'sp-schedule-input' });
   for (const [value, label] of [
+    ['once', t('spSchedulesRepeatOnce')],
     ['daily', t('spSchedulesRepeatDaily')],
     ['weekly', t('spSchedulesRepeatWeekly')],
     ['monthly', t('spSchedulesRepeatMonthly')],
@@ -506,11 +513,21 @@ export function buildSchedulesSection(
   });
   const dayOfMonthField = field(t('spSchedulesDayOfMonthLabel'), dayOfMonthInput);
   const timeInput = el('input', { type: 'time', class: 'sp-schedule-input', required: '' });
+  const scheduledInput = el('input', { type: 'datetime-local', class: 'sp-schedule-input' });
+  const scheduledField = field(t('spSchedulesDateLabel'), scheduledInput);
+  const modelSelect = el('select', { class: 'sp-schedule-input' });
+  const modelField = field(t('spSchedulesModelLabel'), modelSelect);
   const zoneSelect = el('select', { class: 'sp-schedule-input' });
   const whenRow = el('div', { class: 'sp-schedule-row-fields' });
-  whenRow.appendChild(field(t('spSchedulesTimeLabel'), timeInput));
+  const timeField = field(t('spSchedulesTimeLabel'), timeInput);
+  whenRow.appendChild(timeField);
   whenRow.appendChild(field(t('spSchedulesTimeZoneLabel'), zoneSelect));
   const formError = el('div', { class: 'sp-schedule-form-error', role: 'alert' });
+  const retryModels = el(
+    'button',
+    { type: 'button', class: 'sp-schedule-btn', hidden: '' },
+    t('spSchedulesModelsRetry'),
+  );
   const formActions = el('div', { class: 'sp-schedule-actions' });
   const createBtn = el(
     'button',
@@ -528,28 +545,91 @@ export function buildSchedulesSection(
     field(t('spSchedulesNameLabel'), nameInput),
     field(t('spSchedulesDescriptionLabel'), descriptionInput),
     field(t('spSchedulesPromptLabel'), promptInput),
+    modelField,
     repeatField,
+    scheduledField,
     daysField,
     dayOfMonthField,
     whenRow,
     formError,
+    retryModels,
     formActions,
   );
   sectionEl.appendChild(form);
 
   let templateSources: ManagedCloudScheduleSources | undefined;
   let editingSchedule: ManagedCloudScheduleTask | null = null;
+  let modelChoices: ScheduleModelOption[] = [];
+  let desiredModel: ManagedCloudScheduleMutation['model'] = MANAGED_CLOUD_DEFAULT_MODEL_SELECTION;
+  let modelsReady = false;
+  let modelGeneration = 0;
+  let modelController: AbortController | null = null;
+
+  function invalidateModels(): void {
+    modelGeneration += 1;
+    modelController?.abort();
+    modelController = null;
+  }
+
+  async function loadModels(): Promise<void> {
+    invalidateModels();
+    const generation = modelGeneration;
+    const controller = new AbortController();
+    modelController = controller;
+    modelsReady = false;
+    modelChoices = [];
+    modelSelect.disabled = true;
+    modelSelect.replaceChildren(el('option', { value: '' }, t('spSchedulesModelsLoading')));
+    createBtn.disabled = true;
+    retryModels.hidden = true;
+    const result = await deps.listModels({ signal: controller.signal });
+    if (
+      generation !== modelGeneration ||
+      controller.signal.aborted ||
+      form.hidden ||
+      editingSchedule
+    )
+      return;
+    if (result.status === 'error') {
+      modelSelect.replaceChildren(el('option', { value: '' }, t('spSchedulesModelsUnavailable')));
+      formError.textContent = result.message;
+      retryModels.hidden = false;
+      return;
+    }
+    modelChoices = result.options;
+    modelSelect.replaceChildren(
+      ...modelChoices.map((option) => {
+        const node = el('option', { value: option.value }, option.label);
+        node.disabled = option.disabled === true;
+        return node;
+      }),
+    );
+    modelSelect.value = desiredModel;
+    modelSelect.disabled = false;
+    modelsReady = true;
+    createBtn.disabled = false;
+  }
+  retryModels.addEventListener('click', () => {
+    formError.textContent = '';
+    void loadModels();
+  });
+  modelSelect.addEventListener('change', () => {
+    desiredModel = modelSelect.value;
+  });
 
   function syncRepeatFields(): void {
     const editing = editingSchedule !== null;
     daysField.hidden = editing || repeatSelect.value !== 'weekly';
     dayOfMonthField.hidden = editing || repeatSelect.value !== 'monthly';
+    scheduledField.hidden = editing || repeatSelect.value !== 'once';
+    timeField.hidden = repeatSelect.value === 'once';
   }
 
   function syncFormMode(): void {
     const editing = editingSchedule !== null;
     templateRow.hidden = editing;
     repeatField.hidden = editing;
+    modelField.hidden = editing;
     whenRow.hidden = editing;
     createBtn.textContent = editing ? t('spSchedulesSave') : t('spSchedulesCreate');
     form.setAttribute(
@@ -562,11 +642,15 @@ export function buildSchedulesSection(
   }
 
   function resetForm(): void {
+    invalidateModels();
+    modelsReady = false;
+    desiredModel = MANAGED_CLOUD_DEFAULT_MODEL_SELECTION;
     templateSources = undefined;
     editingSchedule = null;
     nameInput.value = '';
     descriptionInput.value = '';
     promptInput.value = '';
+    scheduledInput.value = '';
     repeatSelect.value = 'daily';
     for (const box of dayBoxes) box.checked = Number(box.value) >= 1 && Number(box.value) <= 5;
     dayOfMonthInput.value = '1';
@@ -577,7 +661,8 @@ export function buildSchedulesSection(
     );
     zoneSelect.value = zone;
     formError.replaceChildren();
-    createBtn.disabled = false;
+    createBtn.disabled = true;
+    retryModels.hidden = true;
     syncFormMode();
   }
 
@@ -612,19 +697,24 @@ export function buildSchedulesSection(
     newBtn.setAttribute('aria-expanded', String(open));
     if (open) {
       resetForm();
+      void loadModels();
       nameInput.focus();
     } else {
+      invalidateModels();
       editingSchedule = null;
     }
   }
 
   function openEditForm(schedule: ManagedCloudScheduleTask): void {
+    if (!getScheduleActionAvailability(schedule).canEdit) return;
     resetForm();
     editingSchedule = schedule;
     nameInput.value = schedule.name;
     descriptionInput.value = schedule.description ?? '';
     promptInput.value = schedule.prompt ?? '';
     syncFormMode();
+    createBtn.disabled = false;
+    retryModels.hidden = true;
     form.hidden = false;
     newBtn.setAttribute('aria-expanded', 'true');
     form.scrollIntoView?.({ block: 'nearest' });
@@ -639,6 +729,11 @@ export function buildSchedulesSection(
     const dayOfMonth = Number(dayOfMonthInput.value);
     if (!name) return t('spSchedulesNameRequired');
     if (!prompt) return t('spSchedulesPromptRequired');
+    if (
+      !modelsReady ||
+      !modelChoices.some((option) => option.value === modelSelect.value && !option.disabled)
+    )
+      return t('spSchedulesModelRequired');
     if (recurrence === 'weekly' && daysOfWeek.length === 0) return t('spSchedulesDaysRequired');
     if (
       recurrence === 'monthly' &&
@@ -646,15 +741,24 @@ export function buildSchedulesSection(
     ) {
       return t('spSchedulesDayOfMonthRequired');
     }
-    if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(timeInput.value)) return t('spSchedulesTimeRequired');
+    let scheduledAt: string | null = null;
+    if (recurrence === 'once') {
+      try {
+        scheduledAt = zonedLocalInputToIso(scheduledInput.value, zoneSelect.value);
+      } catch (error) {
+        return error instanceof Error ? error.message : t('spSchedulesDateFuture');
+      }
+      if (Date.parse(scheduledAt) <= deps.now()) return t('spSchedulesDateFuture');
+    } else if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(timeInput.value))
+      return t('spSchedulesTimeRequired');
     return {
       name,
       description: descriptionInput.value.trim() || null,
       prompt,
-      model: MANAGED_CLOUD_DEFAULT_MODEL_SELECTION,
+      model: modelSelect.value,
       recurrence,
       cronExpression: null,
-      scheduledAt: null,
+      scheduledAt,
       intervalMs: null,
       timeOfDay: timeInput.value,
       daysOfWeek: recurrence === 'weekly' ? daysOfWeek : [],
@@ -662,7 +766,7 @@ export function buildSchedulesSection(
       timezone: zoneSelect.value || browserTimeZone(),
       isActive: true,
       expiresAt: null,
-      maxExecutions: null,
+      maxExecutions: recurrence === 'once' ? 1 : null,
       ...(templateSources ? { sources: templateSources } : {}),
     };
   }
@@ -670,6 +774,11 @@ export function buildSchedulesSection(
   newBtn.addEventListener('click', () => setFormOpen(form.hidden || editingSchedule !== null));
   cancelBtn.addEventListener('click', () => setFormOpen(false));
   repeatSelect.addEventListener('change', syncRepeatFields);
+  const clearEditedError = (): void => {
+    if (retryModels.hidden) formError.textContent = '';
+  };
+  form.addEventListener('input', clearEditedError);
+  form.addEventListener('change', clearEditedError);
   form.addEventListener('submit', (event) => {
     event.preventDefault();
     if (editingSchedule) {
@@ -782,13 +891,14 @@ export function buildSchedulesSection(
 
     const actions = el('div', { class: 'sp-schedule-actions' });
     const busy = pendingScheduleId === schedule.id;
+    const availability = getScheduleActionAvailability(schedule);
 
     const toggleBtn = el(
       'button',
       { type: 'button', class: 'sp-schedule-btn' },
       schedule.isEnabled ? t('spSchedulesPause') : t('spSchedulesResume'),
     );
-    toggleBtn.disabled = busy;
+    toggleBtn.disabled = busy || !availability.canToggle;
     toggleBtn.addEventListener('click', () => {
       void toggleSchedule(schedule);
     });
@@ -799,7 +909,7 @@ export function buildSchedulesSection(
       { type: 'button', class: 'sp-schedule-btn' },
       t('spSchedulesRunNow'),
     );
-    runBtn.disabled = busy;
+    runBtn.disabled = busy || !availability.canRun;
     runBtn.addEventListener('click', () => {
       void runSchedule(schedule);
     });
@@ -832,7 +942,7 @@ export function buildSchedulesSection(
       },
       t('spSchedulesEdit'),
     );
-    editBtn.disabled = busy;
+    editBtn.disabled = busy || !availability.canEdit;
     editBtn.addEventListener('click', () => openEditForm(schedule));
     actions.appendChild(editBtn);
 
@@ -1072,6 +1182,7 @@ export function buildSchedulesSection(
   }
 
   async function toggleSchedule(schedule: ManagedCloudScheduleTask): Promise<void> {
+    if (!getScheduleActionAvailability(schedule).canToggle) return;
     if (pendingScheduleId !== null) return;
     pendingScheduleId = schedule.id;
     render();
@@ -1143,6 +1254,7 @@ export function buildSchedulesSection(
   }
 
   async function runSchedule(schedule: ManagedCloudScheduleTask): Promise<void> {
+    if (!getScheduleActionAvailability(schedule).canRun) return;
     if (pendingScheduleId !== null) return;
     pendingScheduleId = schedule.id;
     render();
@@ -1231,9 +1343,11 @@ export function buildSchedulesSection(
     active = next;
     if (active) {
       void refresh();
+      if (!form.hidden && !editingSchedule) void loadModels();
       return;
     }
     inFlight?.abort();
+    invalidateModels();
     inFlight = null;
     schedules = [];
     approvals = new Map();

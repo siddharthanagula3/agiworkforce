@@ -1,5 +1,6 @@
 import type { FillResult } from '../content/autofill/filler';
 import type { DetectedField } from '../content/autofill/detector';
+import { isAutocompleteField, autocompleteSelectionCommitted } from '../content/pageElements';
 import {
   credentialFieldKind,
   isMfaChallenge,
@@ -40,6 +41,7 @@ export function verifyReadback(selector: string, intendedValue: string): boolean
     if (!el) return false;
 
     if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+      if (isAutocompleteField(el) && autocompleteSelectionCommitted(el) !== true) return false;
       const committed = el.value ?? '';
       return committed.trim() === intendedValue.trim();
     }
@@ -172,6 +174,14 @@ export function detectFieldTriggers(
   const triggers: EscalationTrigger[] = [];
 
   for (const result of fillResults) {
+    if (result.selectionRequired) {
+      triggers.push({
+        reason: 'typeahead_dropdown',
+        fieldKey: result.key,
+        description: `Field "${result.key}" requires a real suggestion selection and verification after blur.`,
+      });
+      continue;
+    }
     if (alwaysEscalateKeys.has(result.key)) {
       triggers.push({
         reason: 'platform_always_escalate',
@@ -273,7 +283,7 @@ export function makeEscalationDecision(
     `Escalation triggers:\n${triggerSummary}\n\n` +
     `Instructions:\n` +
     `1. Do NOT re-fill fields that were already successfully filled.\n` +
-    `2. Handle each blocked field: for file uploads, look for a visible upload button and interact with it; the user is asked to approve every upload. For typeaheads, click the input and type slowly then select from the dropdown. For login walls, stop and report, do not attempt to log in.\n` +
+    `2. Handle each blocked field: uploads require the user's approval. For typeaheads, use indexed keyboard-backed bulk entry, choose an actual matching suggestion and verify after blur. Query text alone is not a completed selection. For login walls, stop and report, do not attempt to log in.\n` +
     `3. NEVER fill a password, one-time code or security-key field, and never dismiss a second-factor prompt. Leave it to the person and their password manager, then carry on from where they left it.\n` +
     `4. A redirect to an identity provider and back is part of the same sign-in, not a new site: wait for it rather than reporting the page as broken.\n` +
     `5. NEVER click Submit or any form submission button.\n` +

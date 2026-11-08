@@ -244,25 +244,33 @@ async function fetchSyncHostCsrfToken(baseUrl: string): Promise<string> {
   return data.token;
 }
 
-export async function revokeSyncedWebSession(): Promise<void> {
+export async function revokeSyncedWebSession(
+  capturedContext?: ClerkAuthContext | null,
+): Promise<void> {
   if (!isClerkExtensionAuthConfigured()) return;
   const baseUrl = configuredAgiWebOrigin();
   if (!baseUrl) return;
 
-  const authContext = await getFreshClerkAuthContext();
-  const sessionId = authContext?.owner.authIncarnation;
-  if (!sessionId) return;
+  const context =
+    capturedContext === undefined ? await getFreshClerkAuthContext() : capturedContext;
+  if (!context) return;
+  if (!validExtensionCredential(context)) throw new Error('Invalid retiring session credential');
+  const sessionId = context.owner.authIncarnation;
 
   const csrfToken = await fetchSyncHostCsrfToken(baseUrl);
-  const response = await fetch(`${baseUrl}/api/settings/sessions/${sessionId}`, {
-    method: 'DELETE',
-    credentials: 'include',
-    headers: {
-      'content-type': 'application/json',
-      'x-csrf-token': csrfToken,
-      'x-requested-with': 'agiworkforce-chrome-extension',
+  const response = await fetch(
+    `${baseUrl}/api/settings/sessions/${encodeURIComponent(sessionId)}`,
+    {
+      method: 'DELETE',
+      credentials: 'include',
+      headers: {
+        authorization: `Bearer ${context.token}`,
+        'content-type': 'application/json',
+        'x-csrf-token': csrfToken,
+        'x-requested-with': 'agiworkforce-chrome-extension',
+      },
     },
-  });
+  );
   if (!response.ok) {
     throw new Error(`Failed to revoke the synced session: ${response.status}`);
   }
@@ -272,6 +280,18 @@ function isSyncHostSessionCookie(cookie: chrome.cookies.Cookie, host: string): b
   if (!cookie.name.startsWith('__client_uat')) return false;
   const domain = cookie.domain.replace(/^\./u, '');
   return host === domain || host.endsWith(`.${domain}`);
+}
+
+/** Whether the sync host still has a Clerk session cookie. `unknown` is not a sign-out. */
+export async function syncHostSessionCookieState(): Promise<'present' | 'absent' | 'unknown'> {
+  if (!syncHost.origin || !chrome.cookies?.getAll) return 'unknown';
+  try {
+    const cookies = await chrome.cookies.getAll({ url: syncHost.origin });
+    const host = new URL(syncHost.origin).hostname;
+    return cookies.some((cookie) => isSyncHostSessionCookie(cookie, host)) ? 'present' : 'absent';
+  } catch {
+    return 'unknown';
+  }
 }
 
 export function watchSyncHostSession(onChange: () => void): () => void {
@@ -294,6 +314,7 @@ export function watchSyncHostSession(onChange: () => void): () => void {
     const value = removed ? '0' : cookie.value;
     if ((seen.get(cookie.name) ?? '0') === value) return;
     seen.set(cookie.name, value);
+    nativeClient = null;
     if (pending) clearTimeout(pending);
     pending = setTimeout(() => {
       pending = null;

@@ -1,4 +1,6 @@
 import type { JobApplicationProfile } from '../../../types';
+import { isAutocompleteField } from '../pageElements';
+import { MAX_AUTOFILL_PROFILE_FIELD_CHARS } from './contactProfile';
 import { resolveLinkedInSelector, LINKEDIN_SELECTORS } from './linkedin';
 import { resolveLeverSelector, detectLeverCustomFields, LEVER_SELECTORS } from './lever';
 import {
@@ -22,6 +24,7 @@ export interface FillResult {
   success: boolean;
   skipped: boolean;
   reason?: string;
+  selectionRequired?: true;
 }
 
 export interface AutofillResult {
@@ -32,8 +35,6 @@ export interface AutofillResult {
   errors: string[];
 }
 
-const MAX_PROFILE_FIELD_LENGTH = 2000;
-
 function sanitizeProfileValue(value: string): string {
   // eslint-disable-next-line no-control-regex
   let sanitized = value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
@@ -42,7 +43,7 @@ function sanitizeProfileValue(value: string): string {
     previous = sanitized;
     sanitized = sanitized.replace(/<[^>]*>/g, '');
   } while (sanitized !== previous);
-  return sanitized.trim().substring(0, MAX_PROFILE_FIELD_LENGTH);
+  return sanitized.trim().substring(0, MAX_AUTOFILL_PROFILE_FIELD_CHARS);
 }
 
 function setNativeValue(el: HTMLInputElement | HTMLTextAreaElement, value: string): void {
@@ -72,6 +73,7 @@ interface FillOutcome {
   success: boolean;
   skipped: boolean;
   reason?: string;
+  selectionRequired?: true;
 }
 
 function fillTextField(el: HTMLInputElement | HTMLTextAreaElement, value: string): FillOutcome {
@@ -79,6 +81,13 @@ function fillTextField(el: HTMLInputElement | HTMLTextAreaElement, value: string
   if (existing.trim().length > 0 && existing !== value) {
     return { success: false, skipped: true, reason: USER_TEXT_SKIP_REASON };
   }
+  if (isAutocompleteField(el))
+    return {
+      success: false,
+      skipped: true,
+      selectionRequired: true,
+      reason: 'Requires browser suggestion selection',
+    };
   try {
     setNativeValue(el, value);
     dispatchFillEvents(el);

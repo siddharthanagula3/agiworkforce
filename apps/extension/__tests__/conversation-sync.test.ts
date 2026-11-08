@@ -65,6 +65,7 @@ vi.mock('../src/features/cloud-bridge/freeTrialClient', () => ({
 import {
   drainCloudDeletionTombstones,
   flushConversation,
+  ensureCloudConversation,
   flushQuestionBeforeTurn,
   queueCloudConversationDeletion,
   scheduleConversationSync,
@@ -73,6 +74,7 @@ import {
 } from '../src/features/cloud-bridge/conversationSync';
 import {
   getConversation,
+  pendingCloudMessages,
   upsertConversation,
   type HistoryMessage,
 } from '../src/features/background/conversation-history';
@@ -163,6 +165,44 @@ describe('conversation cloud sync', () => {
         return respond(request);
       }),
     );
+  });
+
+  it('uploads a plan cancellation once under its existing assistant message identity', async () => {
+    const id = 'plan-cancel-sync';
+    await upsertConversation(OWNER, id, cloudMessages(Date.now()));
+    await flushConversation(OWNER, id);
+    const first = messagePosts().find((post) => post.body['role'] === 'assistant')!;
+    const entry = (await getConversation(OWNER, id))!;
+    await upsertConversation(
+      OWNER,
+      id,
+      entry.messages.map((message) =>
+        message.role === 'assistant' ? { ...message, agiWorkPlanDeclined: true } : message,
+      ),
+    );
+    await flushConversation(OWNER, id);
+    const posts = messagePosts().filter((post) => post.body['role'] === 'assistant');
+    expect(posts).toHaveLength(2);
+    expect(posts[1]?.body['id']).toBe(first.body['id']);
+    expect(posts[1]?.body['metadata']).toMatchObject({ agiWorkPlanDeclined: true });
+    expect(pendingCloudMessages((await getConversation(OWNER, id))!)).toEqual([]);
+    await flushConversation(OWNER, id);
+    expect(messagePosts().filter((post) => post.body['role'] === 'assistant')).toHaveLength(2);
+  });
+
+  it('sends the durable attachment descriptor with the actual user message POST', async () => {
+    const at = Date.now();
+    const messages = cloudMessages(at);
+    const assetId = '77777777-7777-4777-8777-777777777777';
+    messages[0]!.attachments = [
+      { kind: 'file', name: 'handoff.txt', mimeType: 'text/plain', assetId },
+    ];
+    await upsertConversation(OWNER, 'file-sync-case', messages);
+    await flushConversation(OWNER, 'file-sync-case');
+    const sent = messagePosts().find((request) => request.body['role'] === 'user');
+    expect((sent?.body['metadata'] as Record<string, unknown>)['attachments']).toEqual([
+      expect.objectContaining({ assetId, name: 'handoff.txt', type: 'file' }),
+    ]);
   });
 
   it('creates the conversation with the minted uuid and sends every message with an id', async () => {
@@ -797,5 +837,53 @@ describe('conversation cloud sync', () => {
     // The server's answer is what the chat is filed under, so an accepted
     // binding must not be re-asserted on every later flush.
     expect(requests.filter((request) => 'projectId' in request.body)).toHaveLength(1);
+  });
+
+  it('does not acknowledge an existing chat while its new project binding failed to sync', async () => {
+    const messages = cloudMessages(5000);
+    await upsertConversation(OWNER, 'conv-project-refusal', messages);
+    await flushConversation(OWNER, 'conv-project-refusal');
+    const original = await getConversation(OWNER, 'conv-project-refusal');
+    expect(original?.cloudSync?.createAcknowledged).toBe(true);
+    await upsertConversation(
+      OWNER,
+      'conv-project-refusal',
+      messages,
+      undefined,
+      'selected-project',
+    );
+    respond = (request) =>
+      request.method === 'PUT'
+        ? jsonResponse({ error: 'Project update refused' }, 503)
+        : defaultResponder(request);
+    expect(await ensureCloudConversation(OWNER, 'conv-project-refusal')).toBeNull();
+  });
+
+  it('acknowledges both changing and clearing the project on an existing account chat', async () => {
+    const messages = cloudMessages(6000);
+    let serverId = CONVERSATION_WIRE.id;
+    let serverProject: string | null = null;
+    respond = (request) => {
+      if (request.url.endsWith('/messages')) return defaultResponder(request);
+      if (request.method === 'POST') serverId = String(request.body.id);
+      if ('projectId' in request.body) serverProject = request.body.projectId as string | null;
+      return jsonResponse({
+        conversation: { ...CONVERSATION_WIRE, id: serverId, project_id: serverProject },
+      });
+    };
+    await upsertConversation(OWNER, 'conv-project-change', messages);
+    await flushConversation(OWNER, 'conv-project-change');
+    await upsertConversation(OWNER, 'conv-project-change', messages, undefined, 'selected-project');
+    expect(await ensureCloudConversation(OWNER, 'conv-project-change')).toBe(serverId);
+    expect((await getConversation(OWNER, 'conv-project-change'))?.cloudSync?.syncedProjectId).toBe(
+      'selected-project',
+    );
+    await upsertConversation(OWNER, 'conv-project-change', messages, undefined, null);
+    expect(await ensureCloudConversation(OWNER, 'conv-project-change')).toBe(serverId);
+    expect(serverProject).toBeNull();
+    expect(
+      (await getConversation(OWNER, 'conv-project-change'))?.cloudSync?.syncedProjectId,
+    ).toBeNull();
+    expect(conversationPosts()).toHaveLength(1);
   });
 });

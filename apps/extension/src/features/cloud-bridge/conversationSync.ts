@@ -18,6 +18,7 @@ import {
   cloudMessageSyncFingerprint,
   conversationFlagsNeedSync,
   conversationMetadataNeedsSync,
+  conversationProjectNeedsSync,
   deleteConversation,
   getConversation,
   isCloudMetadataPersistenceEligible,
@@ -164,12 +165,14 @@ export async function ensureCloudConversation(
   }
   await flushConversation(owner, conversationId);
   let entry = await getConversation(owner, conversationId);
-  if (entry?.cloudSync?.createAcknowledged !== true) {
+  if (entry?.cloudSync?.createAcknowledged !== true || conversationProjectNeedsSync(entry)) {
     await flushConversation(owner, conversationId);
     entry = await getConversation(owner, conversationId);
   }
   const cloudConversationId = entry?.cloudSync?.conversationId;
-  return entry?.cloudSync?.createAcknowledged === true && cloudConversationId
+  return entry?.cloudSync?.createAcknowledged === true &&
+    cloudConversationId &&
+    !conversationProjectNeedsSync(entry)
     ? cloudConversationId
     : null;
 }
@@ -418,7 +421,13 @@ async function flushEligibleConversation(
             localConversationId: conversationId,
             runtime: 'managed-cloud',
             ...(message.error ? { error: true } : {}),
+            ...(message.role === 'user' && message.attachments
+              ? { attachments: message.attachments }
+              : {}),
             ...(message.managedQuickMode ? { managedQuickMode: true } : {}),
+            ...(message.role === 'assistant' && message.agiWorkPlanDeclined
+              ? { agiWorkPlanDeclined: true }
+              : {}),
             ...(message.cloudAgentRun?.runId
               ? { cloudAgentRunId: message.cloudAgentRun.runId }
               : {}),

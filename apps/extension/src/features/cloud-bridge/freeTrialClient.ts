@@ -366,13 +366,14 @@ export async function clearAuthToken(): Promise<void> {
   await clearLocalAuth(false);
 }
 
-async function clearLocalAuth(endClerkSession: boolean): Promise<void> {
-  let previousOwner: ManagedCloudOwner | undefined;
+async function clearLocalAuth(endClerkSession: boolean): Promise<{ webSessionEnded: boolean }> {
+  let previousContext: ManagedCloudAuthContext | null = null;
   try {
-    previousOwner = (await getManagedCloudAuthContext())?.owner;
+    previousContext = await getManagedCloudAuthContext();
   } catch {
     // Fall through to the ownerless computer-use cancellation below.
   }
+  const previousOwner = previousContext?.owner;
   try {
     if (typeof document !== 'undefined' && chrome.runtime?.sendMessage) {
       await chrome.runtime.sendMessage(
@@ -384,7 +385,14 @@ async function clearLocalAuth(endClerkSession: boolean): Promise<void> {
   } catch {
     // A restarting worker has no surviving in-memory computer-use run.
   }
+  let webSessionEnded = true;
   if (endClerkSession) {
+    try {
+      await revokeSyncedWebSession(previousContext);
+    } catch (error) {
+      console.warn('[AGI] Ending the web session failed:', error);
+      webSessionEnded = false;
+    }
     try {
       await signOutClerk();
     } catch {
@@ -415,21 +423,15 @@ async function clearLocalAuth(endClerkSession: boolean): Promise<void> {
     // ignore
   }
   await clearAutofillProfile();
+  return { webSessionEnded };
 }
 
 const LEGACY_ACCOUNT_STORAGE_KEYS = ['agi_api_key', 'agi_user_id', 'agi_user_tier', 'agi_session'];
 
 export async function signOutOfAccount(): Promise<{ webSessionEnded: boolean }> {
-  let webSessionEnded = true;
-  try {
-    await revokeSyncedWebSession();
-  } catch (error) {
-    console.warn('[AGI] Ending the web session failed:', error);
-    webSessionEnded = false;
-  }
-  await clearLocalAuth(true);
+  const result = await clearLocalAuth(true);
   await chrome.storage.local.remove(LEGACY_ACCOUNT_STORAGE_KEYS);
-  return { webSessionEnded };
+  return result;
 }
 
 export type FreeTrialContentPart =
@@ -773,6 +775,7 @@ interface ParsedSseFrame {
   sources?: ManagedChatSourcesDelta;
   toolHandoff?: ToolCall[];
   terminal?: boolean;
+  providerFinished?: boolean;
   recognized?: boolean;
   error?: Extract<FreeTrialChunk, { type: 'error' }>;
 }
@@ -1121,11 +1124,9 @@ function parseSseData(dataPayload: string, tools: readonly ToolDefinition[] = []
       ? { sources: { citations, results: searchResults } }
       : {}),
     ...(toolHandoff ? { toolHandoff } : {}),
-    terminal:
-      done === true ||
-      (typeof finishReason === 'string' &&
-        finishReason.length > 0 &&
-        finishReason !== 'tool_calls'),
+    terminal: done === true,
+    providerFinished:
+      typeof finishReason === 'string' && finishReason.length > 0 && finishReason !== 'tool_calls',
     recognized: true,
   };
 }
@@ -1544,7 +1545,12 @@ export async function* streamFreeChat(
             ).pending;
           }
           chunks.push({ type: 'agent-event', envelope: frame.agentEvent });
-          const runChunk = publishRunReference({ lastSequence: frame.agentEvent.sequence });
+          const runChunk = publishRunReference({
+            lastSequence: frame.agentEvent.sequence,
+            ...(frame.agentEvent.event.type === 'task-state-changed'
+              ? { state: frame.agentEvent.event.state }
+              : {}),
+          });
           if (runChunk) chunks.push(runChunk);
         }
         if (frame.codeExecution) {
@@ -1573,7 +1579,7 @@ export async function* streamFreeChat(
           chunks.push(...publicTextChunks(contentSplitter.flush(true)));
           chunks.push({ type: 'tool-handoff', calls: frame.toolHandoff });
         }
-        if (frame.terminal) {
+        if (frame.terminal || (frame.providerFinished && !runReference)) {
           chunks.push(...publicTextChunks(contentSplitter.flush(true)));
           contentSplitter.closeThinking();
           if (!sawVisibleText && !sawAgentActivity && !sawRichOutput && !handedOff) {

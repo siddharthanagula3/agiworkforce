@@ -1565,6 +1565,42 @@ export interface ManagedCloudHistoryImport {
   messagesOffset?: number;
 }
 
+function retainDeviceActivity(
+  message: HistoryMessage,
+  previous: readonly HistoryMessage[],
+): HistoryMessage {
+  if (!message || message.runtime !== 'managed-cloud' || !message.cloudMessageId) return message;
+  const matches = previous.filter(
+    (candidate) => candidate.cloudMessageId === message.cloudMessageId,
+  );
+  const local = matches.length === 1 ? matches[0] : undefined;
+  if (
+    !local ||
+    local.runtime !== 'managed-cloud' ||
+    local.role !== message.role ||
+    local.content !== message.content
+  )
+    return message;
+  return {
+    ...message,
+    ...(message.agentEvents === undefined && local.agentEvents
+      ? { agentEvents: local.agentEvents }
+      : {}),
+    ...(message.browserEvents === undefined && local.browserEvents
+      ? { browserEvents: local.browserEvents }
+      : {}),
+    ...(message.cloudAgentRun === undefined && local.cloudAgentRun
+      ? { cloudAgentRun: local.cloudAgentRun }
+      : {}),
+    ...(message.cloudApprovalDecisions === undefined && local.cloudApprovalDecisions
+      ? { cloudApprovalDecisions: local.cloudApprovalDecisions }
+      : {}),
+    ...(message.durationMs === undefined && local.durationMs !== undefined
+      ? { durationMs: local.durationMs }
+      : {}),
+  };
+}
+
 export async function importManagedCloudConversationHistory(
   owner: ManagedCloudOwner,
   organizationId: string | null,
@@ -1628,7 +1664,11 @@ export async function importManagedCloudConversationHistory(
       const messages =
         incoming.messages === undefined
           ? (existing?.messages ?? [])
-          : normalizeMessages(incoming.messages);
+          : normalizeMessages(
+              incoming.messages.map((message) =>
+                retainDeviceActivity(message, existing?.messages ?? []),
+              ),
+            );
       if (incoming.messages !== undefined && incoming.messages.length > 0 && messages.length === 0)
         continue;
       const markedMessages =
@@ -1813,12 +1853,14 @@ export function cloudMessageSyncFingerprint(message: HistoryMessage): string {
   const serialized = JSON.stringify({
     role: message.role,
     content: message.content,
+    attachments: message.attachments,
     managedQuickMode: message.managedQuickMode === true,
     cloudAgentRunId: message.cloudAgentRun?.runId,
     model: message.model,
     provider: message.provider,
     generatedFiles: message.generatedFiles,
     interactiveCards: message.interactiveCards,
+    ...(message.agiWorkPlanDeclined ? { agiWorkPlanDeclined: true } : {}),
   });
   let first = 0x811c9dc5;
   let second = 0x9e3779b9;
@@ -1846,6 +1888,15 @@ export function conversationProjectNeedsSync(entry: ConversationEntry): boolean 
   if (entry.cloudSync?.conversationId === undefined) return false;
   const synced = entry.cloudSync.syncedProjectId;
   return (entry.projectId ?? null) !== (synced === undefined ? null : synced);
+}
+
+export function conversationAwaitsProjectBinding(
+  entry: ConversationEntry | undefined,
+  pendingProjectBinding: string | null | undefined,
+): boolean {
+  if (pendingProjectBinding !== undefined) return true;
+  if (!entry || (!entry.projectId && !entry.cloudSync?.syncedProjectId)) return false;
+  return entry.cloudSync?.createAcknowledged !== true || conversationProjectNeedsSync(entry);
 }
 
 export function conversationFlagsNeedSync(entry: ConversationEntry): boolean {

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { getPickerModels } from '@agiworkforce/types';
+import { getModelMetadataById, getPickerModels, getRoutingSlotModel } from '@agiworkforce/types';
 import { estimateTokens } from '@agiworkforce/routing';
 import {
   streamFreeChat,
@@ -15,18 +15,23 @@ import {
 } from '../src/features/cloud-bridge/managedChatHandler';
 import {
   CHAT_BROWSER_TASK_TOOL,
+  CHAT_AUTOFILL_TOOL,
   CHAT_READ_PAGE_TOOL,
   chatBrowserToolDefinitions,
   parseChatBrowserToolCall,
 } from '../src/features/computer-use/chatBrowserTools';
 import { getBrowserToolDefinitions } from '../src/features/computer-use/browserToolDefinitions';
+import { RESOLVED_MODEL_HEADER } from '../src/features/cloud-bridge/answeredModel';
 
 const ADMITTED = getPickerModels().map((model) => model.id);
 
-function sseResponse(frames: unknown[]): Response {
+function sseResponse(frames: unknown[], headers: Record<string, string> = {}): Response {
   const body =
     frames.map((frame) => `data: ${JSON.stringify(frame)}\n\n`).join('') + 'data: [DONE]\n\n';
-  return new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream' } });
+  return new Response(body, {
+    status: 200,
+    headers: { 'content-type': 'text/event-stream', ...headers },
+  });
 }
 
 function handoffFrame(name: string, args: Record<string, unknown>, id = 'call_1') {
@@ -97,7 +102,17 @@ describe('chat browser tool declaration cost', () => {
     expect(chatBrowserToolDefinitions('act').map((tool) => tool.function.name)).toEqual([
       CHAT_READ_PAGE_TOOL,
       CHAT_BROWSER_TASK_TOOL,
+      CHAT_AUTOFILL_TOOL,
     ]);
+  });
+
+  it('advertises browser diagnostics without replacing native field batching', () => {
+    const tools = chatBrowserToolDefinitions('act');
+    const task = tools.find((tool) => tool.function.name === CHAT_BROWSER_TASK_TOOL)!;
+    expect(task.function.description).toMatch(/console.*network/i);
+    expect(task.function.description).toContain(CHAT_AUTOFILL_TOOL);
+    expect(task.function.description).toMatch(/first.*routine fields|routine fields.*first/i);
+    expect(chatBrowserToolDefinitions('read').some((tool) => tool === task)).toBe(false);
   });
 
   it('accepts only exact arguments for each chat browser tool', () => {
@@ -212,7 +227,58 @@ describe('streamFreeChat caller-declared browser tools', () => {
 describe('executeChromeManagedChat tool continuation', () => {
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllGlobals();
   });
+
+  it.each(['auto', 'auto-economy', getRoutingSlotModel('workhorse_general')])(
+    'sends %s unchanged to server routing on every browser-tool leg',
+    async (selection) => {
+      const automatic = selection.startsWith('auto');
+      const firstModel = automatic ? getRoutingSlotModel('workhorse_general') : selection;
+      const finalModel = automatic
+        ? ADMITTED.find((id) => id !== firstModel && getModelMetadataById(id)?.capabilities.tools)!
+        : selection;
+      expect(finalModel).toBeTruthy();
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(
+          sseResponse([handoffFrame(CHAT_READ_PAGE_TOOL, {})], {
+            [RESOLVED_MODEL_HEADER]: firstModel,
+          }),
+        )
+        .mockResolvedValueOnce(
+          sseResponse([{ choices: [{ index: 0, delta: { content: 'Page nonce R7F4.' } }] }], {
+            [RESOLVED_MODEL_HEADER]: finalModel,
+          }),
+        );
+      vi.stubGlobal('fetch', fetchMock);
+      const handoff = vi.fn(async () => ({
+        status: 'resolved' as const,
+        results: [{ toolCallId: readCall.id, content: 'Page nonce R7F4.' }],
+      }));
+      const result = await executeChromeManagedChat(
+        {
+          id: `stream-routing-${selection}`,
+          text: 'What does this page say?',
+          modelSelection: selection,
+          tools: chatBrowserToolDefinitions('read'),
+        },
+        dependencies({ streamChat: streamFreeChat, onToolHandoff: handoff }),
+      );
+      expect(result.status).toBe('success');
+      expect(handoff).toHaveBeenCalledOnce();
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      const bodies = fetchMock.mock.calls.map((call) => JSON.parse(String(call[1].body)));
+      expect(bodies.map((body) => body.model)).toEqual([selection, selection]);
+      expect(bodies[1].messages.at(-1)).toEqual({
+        role: 'tool',
+        tool_call_id: readCall.id,
+        content: 'Page nonce R7F4.',
+      });
+      if (result.status === 'success')
+        expect(result.routing.answeredModel ?? result.routing.modelKey).toBe(finalModel);
+    },
+  );
 
   it('continues a long tool leg with a fresh session token, not the one the turn began with', async () => {
     const streamChat = vi
@@ -294,6 +360,7 @@ describe('executeChromeManagedChat tool continuation', () => {
     expect(secondOptions?.tools?.map((tool) => tool.function.name)).toEqual([
       CHAT_READ_PAGE_TOOL,
       CHAT_BROWSER_TASK_TOOL,
+      CHAT_AUTOFILL_TOOL,
     ]);
     expect(secondOptions?.idempotencyKey).not.toBe(firstOptions?.idempotencyKey);
     expect(secondMessages.slice(-2)).toEqual([

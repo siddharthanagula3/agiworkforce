@@ -164,6 +164,36 @@ describe('content-script initialization', () => {
 });
 
 describe('handleMessage, invalid messages are rejected', () => {
+  it('refuses page-observation requests from another content tab', () => {
+    const respond = vi.fn();
+    expect(
+      handleMessage(
+        { type: 'GET_PAGE_OBSERVATION', pageUrl: location.href },
+        { tab: { id: 4 } } as chrome.runtime.MessageSender,
+        respond,
+      ),
+    ).toBe(false);
+    expect(respond).toHaveBeenCalledWith({
+      success: false,
+      error: 'This operation requires the extension controller.',
+    });
+  });
+
+  it('dispatches a controller observation and rejects the wrong source URL', async () => {
+    document.body.innerHTML = '<p>OBSERVED_PAGE</p>';
+    Object.defineProperty(document.body, 'innerText', {
+      configurable: true,
+      value: 'OBSERVED_PAGE',
+    });
+    await expect(
+      dispatchMessage({ type: 'GET_PAGE_OBSERVATION', pageUrl: location.href }),
+    ).resolves.toMatchObject({ success: true, text: 'OBSERVED_PAGE' });
+    await expect(
+      dispatchMessage({ type: 'GET_PAGE_OBSERVATION', pageUrl: 'https://changed.example/' }),
+    ).resolves.toMatchObject({ success: false });
+    Reflect.deleteProperty(document.body, 'innerText');
+  });
+
   it('rejects null messages', async () => {
     const response = await dispatchMessage(null as unknown as Record<string, unknown>);
     expect(response).toMatchObject({ success: false, error: 'Invalid message' });
@@ -436,6 +466,103 @@ describe('checkConnectionStatus', () => {
 });
 
 describe('handleMessage, RUN_PAGE_ACTIONS', () => {
+  it.each(['input', 'textarea'])(
+    'restores a recorded %s value with one input event',
+    async (tag) => {
+      document.body.innerHTML = `<${tag} id="recorded"></${tag}>`;
+      const field = document.getElementById('recorded') as HTMLInputElement | HTMLTextAreaElement;
+      field.value = 'existing text';
+      vi.spyOn(field, 'getBoundingClientRect').mockReturnValue({
+        width: 100,
+        height: 20,
+      } as DOMRect);
+      const input = vi.fn();
+      const keydown = vi.fn();
+      field.addEventListener('input', input);
+      field.addEventListener('keydown', keydown);
+      const value = tag === 'input' ? 'Saved 東京notes' : 'Saved 東京\nnotes';
+      const response = await dispatchMessage({
+        type: 'RUN_PAGE_ACTIONS',
+        actions: [{ type: 'input', selector: '#recorded', value }],
+      });
+      expect(field.value).toBe(value);
+      expect(response).toMatchObject({ success: true, actionsPerformed: 1 });
+      expect(input).toHaveBeenCalledTimes(1);
+      expect(keydown).not.toHaveBeenCalled();
+    },
+  );
+
+  it('refuses recorded steps when the target site changed before execution', async () => {
+    document.body.innerHTML = '<button id="next">Next</button>';
+    const { domUtils } = await import('../src/utils');
+    const response = await dispatchMessage({
+      type: 'RUN_PAGE_ACTIONS',
+      expectedOrigin: 'https://different.example',
+      actions: [{ type: 'click', selector: '#next' }],
+    });
+    expect(response).toMatchObject({ success: false, actionsPerformed: 0 });
+    expect(domUtils.safeClick).not.toHaveBeenCalled();
+  });
+
+  it('keeps uncaptured recorded input untouched without emitting change', async () => {
+    document.body.innerHTML =
+      '<input id="recorded" value="keep"><button id="focused">Other</button>';
+    const field = document.getElementById('recorded') as HTMLInputElement;
+    const change = vi.fn();
+    field.addEventListener('change', change);
+    document.getElementById('focused')!.focus();
+    const response = await dispatchMessage({
+      type: 'RUN_PAGE_ACTIONS',
+      actions: [{ type: 'input', selector: '#recorded' }],
+    });
+    expect(field.value).toBe('keep');
+    expect(document.activeElement?.id).toBe('focused');
+    expect(change).not.toHaveBeenCalled();
+    expect(response).toMatchObject({ success: true, actionsPerformed: 0, actionsSkipped: 1 });
+  });
+
+  it('restores an explicitly recorded empty value', async () => {
+    document.body.innerHTML = '<input id="recorded" value="old">';
+    const field = document.getElementById('recorded') as HTMLInputElement;
+    vi.spyOn(field, 'getBoundingClientRect').mockReturnValue({ width: 100, height: 20 } as DOMRect);
+    const response = await dispatchMessage({
+      type: 'RUN_PAGE_ACTIONS',
+      actions: [{ type: 'input', selector: '#recorded', value: '' }],
+    });
+    expect(field.value).toBe('');
+    expect(response).toMatchObject({ success: true, actionsPerformed: 1 });
+  });
+
+  it('stops a recorded plan before later clicks when a field is protected', async () => {
+    document.body.innerHTML =
+      '<input id="secret" type="password" value="keep"><button id="next">Next</button>';
+    const { domUtils } = await import('../src/utils');
+    const response = await dispatchMessage({
+      type: 'RUN_PAGE_ACTIONS',
+      actions: [
+        { type: 'input', selector: '#secret', value: 'recorded text' },
+        { type: 'click', selector: '#next' },
+      ],
+    });
+    expect((document.getElementById('secret') as HTMLInputElement).value).toBe('keep');
+    expect(domUtils.safeClick).not.toHaveBeenCalled();
+    expect(response).toMatchObject({ success: false, actionsPerformed: 0 });
+  });
+
+  it('records checked state instead of a checkbox label when value capture is enabled', async () => {
+    document.body.innerHTML = '<input id="toggle" type="checkbox" value="Checkbox">';
+    await dispatchMessage({ type: 'SET_RECORDING_VALUE_CAPTURE', enabled: true });
+    await dispatchMessage({ type: 'START_RECORDING' });
+    const field = document.getElementById('toggle') as HTMLInputElement;
+    field.checked = true;
+    field.dispatchEvent(new Event('change', { bubbles: true }));
+    const response = await dispatchMessage({ type: 'STOP_RECORDING' });
+    expect(response).toMatchObject({
+      actions: [{ type: 'input', selector: '#toggle', value: 'true' }],
+    });
+    await dispatchMessage({ type: 'SET_RECORDING_VALUE_CAPTURE', enabled: false });
+  });
+
   it('returns success=true with result summary when all actions succeed', async () => {
     const response = (await dispatchMessage({
       type: 'RUN_PAGE_ACTIONS',

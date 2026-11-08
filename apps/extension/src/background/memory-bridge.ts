@@ -69,15 +69,6 @@ async function readCache(owner: ManagedCloudOwner): Promise<MemoryCache | null> 
 
 async function writeCache(owner: ManagedCloudOwner, items: MemoryItem[]): Promise<void> {
   try {
-    const stored = await chrome.storage.local.get(ACCOUNT_MEMORY_CACHE_KEY);
-    const previous = (stored as Record<string, unknown>)[ACCOUNT_MEMORY_CACHE_KEY];
-    if (
-      isMemoryCache(previous) &&
-      sameManagedCloudOwner(previous.owner, owner) &&
-      JSON.stringify(previous.items) === JSON.stringify(items)
-    ) {
-      return;
-    }
     await chrome.storage.local.set({
       [ACCOUNT_MEMORY_CACHE_KEY]: { owner, fetchedAtMs: Date.now(), items } satisfies MemoryCache,
     });
@@ -138,23 +129,31 @@ function failureMessage(error: unknown): string {
   return 'Memory could not be reached. Check your connection and try again.';
 }
 
-export async function memoryList(offset = 0): Promise<MemoryListResult> {
+async function isCurrentMemoryOwner(owner: ManagedCloudOwner): Promise<boolean> {
+  return sameManagedCloudOwner(owner, (await getManagedCloudAuthContext())?.owner);
+}
+
+export async function memoryList(owner: ManagedCloudOwner, offset = 0): Promise<MemoryListResult> {
   const auth = await getManagedCloudAuthContext();
   if (!auth) {
     await clearCache();
     return signedOut();
   }
+  if (!sameManagedCloudOwner(owner, auth.owner)) return signedOut();
 
   try {
     if (offset > 0) {
       const page = await fetchAccountMemories(auth.token, offset);
+      if (!(await isCurrentMemoryOwner(owner))) return signedOut();
       return { status: 'ready', memories: page.memories, fromCache: false, hasMore: page.hasMore };
     }
     await migrateLegacyMemories(auth.token);
     const page = await fetchAccountMemories(auth.token);
+    if (!(await isCurrentMemoryOwner(owner))) return signedOut();
     await writeCache(auth.owner, page.memories);
     return { status: 'ready', memories: page.memories, fromCache: false, hasMore: page.hasMore };
   } catch (error) {
+    if (!(await isCurrentMemoryOwner(owner))) return signedOut();
     if (error instanceof AccountMemoryHttpError && error.status === 401) {
       await clearCache();
       return signedOut();
@@ -173,6 +172,7 @@ export async function memoryList(offset = 0): Promise<MemoryListResult> {
 }
 
 async function withAuthorizedWrite(
+  owner: ManagedCloudOwner,
   write: (token: string) => Promise<MemoryItem | undefined>,
 ): Promise<MemoryWriteResult> {
   const auth = await getManagedCloudAuthContext();
@@ -180,11 +180,14 @@ async function withAuthorizedWrite(
     await clearCache();
     return { status: 'signed-out' };
   }
+  if (!sameManagedCloudOwner(owner, auth.owner)) return { status: 'signed-out' };
   try {
     const memory = await write(auth.token);
+    if (!(await isCurrentMemoryOwner(owner))) return { status: 'signed-out' };
     await clearCache();
     return memory ? { status: 'ready', memory } : { status: 'ready' };
   } catch (error) {
+    if (!(await isCurrentMemoryOwner(owner))) return { status: 'signed-out' };
     if (error instanceof AccountMemoryHttpError && error.status === 401) {
       await clearCache();
       return { status: 'signed-out' };
@@ -201,22 +204,32 @@ function contentRefusal(content: string): string | null {
   return null;
 }
 
-export async function memoryAdd(content: string): Promise<MemoryWriteResult> {
+export async function memoryAdd(
+  owner: ManagedCloudOwner,
+  content: string,
+): Promise<MemoryWriteResult> {
   const trimmed = content.trim();
   const refusal = contentRefusal(trimmed);
   if (refusal) return { status: 'unavailable', error: refusal };
-  return withAuthorizedWrite((token) => createAccountMemory(token, trimmed));
+  return withAuthorizedWrite(owner, (token) => createAccountMemory(token, trimmed));
 }
 
-export async function memoryUpdate(id: string, content: string): Promise<MemoryWriteResult> {
+export async function memoryUpdate(
+  owner: ManagedCloudOwner,
+  id: string,
+  content: string,
+): Promise<MemoryWriteResult> {
   const trimmed = content.trim();
   const refusal = contentRefusal(trimmed);
   if (refusal) return { status: 'unavailable', error: refusal };
-  return withAuthorizedWrite((token) => updateAccountMemory(token, id, trimmed));
+  return withAuthorizedWrite(owner, (token) => updateAccountMemory(token, id, trimmed));
 }
 
-export async function memoryDelete(id: string): Promise<MemoryWriteResult> {
-  return withAuthorizedWrite(async (token) => {
+export async function memoryDelete(
+  owner: ManagedCloudOwner,
+  id: string,
+): Promise<MemoryWriteResult> {
+  return withAuthorizedWrite(owner, async (token) => {
     await deleteAccountMemory(token, id);
     return undefined;
   });

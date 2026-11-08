@@ -1,3 +1,5 @@
+import { resolveAutofillSelector } from '../../../jobAutofill.runtime.js';
+
 export const LINKEDIN_SELECTORS: Record<string, string[]> = {
   firstName: [
     'input[name="firstName"]',
@@ -126,10 +128,5 @@ export const LINKEDIN_SELECTORS: Record<string, string[]> = {
 export function resolveLinkedInSelector(
   key: string,
 ): { element: HTMLElement; selector: string } | null {
-  const selectors = LINKEDIN_SELECTORS[key] ?? [];
-  for (const sel of selectors) {
-    const el = document.querySelector<HTMLElement>(sel);
-    if (el) return { element: el, selector: sel };
-  }
-  return null;
+  return resolveAutofillSelector(key, LINKEDIN_SELECTORS[key] ?? []);
 }

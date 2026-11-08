@@ -1,5 +1,7 @@
 import {
   applyAgentActivityEvent,
+  agentActivityStatusForTaskState,
+  isAgentActivityTerminal,
   finishAgentActivityLocally,
   type AgentActivityState,
 } from '@agiworkforce/client-runtime';
@@ -7,7 +9,7 @@ import type {
   GeneratedFileWire,
   ManagedCloudAgentRunReference,
 } from '@agiworkforce/cloud-contracts';
-import type { AgentEventSource, InteractiveCard } from '@agiworkforce/types';
+import { type AgentEventSource, type InteractiveCard } from '@agiworkforce/types';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import { normalizeSourceUrlKey } from '@agiworkforce/utils/source-url';
 import type { ManagedCodeExecution, ManagedQuotaRecovery } from '../cloud-bridge/freeTrialClient';
@@ -51,6 +53,7 @@ export interface SidePanelChatMessage {
   agentActivity?: AgentActivityState;
   agentEvents?: AgentEventEnvelope[];
   browserActivity?: AgentActivityState;
+  browserObservation?: { tabId: number; url: string; documentId: string; formSnapshotId: string };
   browserEvents?: AgentEventEnvelope[];
   cloudAgentRun?: ManagedCloudAgentRunReference;
   cloudApprovalDecisions?: Record<string, 'approved' | 'rejected'>;
@@ -167,17 +170,11 @@ export function projectCanonicalAgentActivity(
 function settledBrowserActivity(
   activity: AgentActivityState | undefined,
   fallbackCompletedAtMs: number,
+  managedStatus?: AgentActivityState['status'],
 ): AgentActivityState | undefined {
-  if (
-    !activity ||
-    activity.status === 'completed' ||
-    activity.status === 'failed' ||
-    activity.status === 'cancelled' ||
-    activity.status === 'partial'
-  )
-    return activity;
+  if (!activity || isAgentActivityTerminal(activity.status)) return activity;
   return finishAgentActivityLocally(activity, {
-    status: 'cancelled',
+    status: isAgentActivityTerminal(managedStatus) ? managedStatus : 'cancelled',
     completedAtMs: Math.max(activity.updatedAtMs, fallbackCompletedAtMs),
   });
 }
@@ -199,16 +196,20 @@ export function reconcileManagedRunActivity(
   message: SidePanelChatMessage,
   completedAtMs = Date.now(),
 ): void {
-  const status = message.cloudAgentRun?.state;
-  if (
-    !message.agentActivity ||
-    (status !== 'completed' && status !== 'failed' && status !== 'cancelled')
-  )
-    return;
-  message.agentActivity = finishAgentActivityLocally(message.agentActivity, {
-    status,
-    completedAtMs,
-  });
+  const status = message.cloudAgentRun?.state
+    ? agentActivityStatusForTaskState(message.cloudAgentRun.state)
+    : message.agentActivity?.status;
+  if (!isAgentActivityTerminal(status)) return;
+  const cancellationRequestedAt = Date.parse(message.cloudAgentRun?.cancellationRequestedAt ?? '');
+  const hasCancellationTime = status === 'cancelled' && Number.isFinite(cancellationRequestedAt);
+  const settledAtMs = hasCancellationTime ? cancellationRequestedAt : completedAtMs;
+  if (message.agentActivity)
+    message.agentActivity = finishAgentActivityLocally(message.agentActivity, {
+      status,
+      completedAtMs: settledAtMs,
+    });
+  if (message.browserActivity)
+    message.browserActivity = settledBrowserActivity(message.browserActivity, settledAtMs, status);
 }
 
 export function hydrateStoredChatMessage(
@@ -219,6 +220,7 @@ export function hydrateStoredChatMessage(
     ...event,
     event: { ...event.event },
   })) as AgentEventEnvelope[] | undefined;
+  const agentActivity = projectCanonicalAgentActivity(agentEvents);
 
   const hydrated: SidePanelChatMessage = {
     id,
@@ -228,7 +230,7 @@ export function hydrateStoredChatMessage(
     ...(agentEvents
       ? {
           agentEvents,
-          agentActivity: projectCanonicalAgentActivity(agentEvents),
+          agentActivity,
         }
       : {}),
     ...(message.browserEvents?.length
@@ -237,10 +239,7 @@ export function hydrateStoredChatMessage(
             ...event,
             event: { ...event.event },
           })) as AgentEventEnvelope[],
-          browserActivity: settledBrowserActivity(
-            projectCanonicalAgentActivity(message.browserEvents),
-            message.timestamp,
-          ),
+          browserActivity: projectCanonicalAgentActivity(message.browserEvents),
         }
       : {}),
     ...(message.cloudAgentRun ? { cloudAgentRun: { ...message.cloudAgentRun } } : {}),
@@ -288,11 +287,13 @@ export function hydrateStoredChatMessage(
     ...(message.streaming ? { interrupted: true } : {}),
     ...(message.cloudMessageId ? { cloudMessageId: message.cloudMessageId } : {}),
   };
-  const cancellationRequestedAt = Date.parse(message.cloudAgentRun?.cancellationRequestedAt ?? '');
-  reconcileManagedRunActivity(
-    hydrated,
-    Number.isFinite(cancellationRequestedAt) ? cancellationRequestedAt : message.timestamp,
-  );
+  reconcileManagedRunActivity(hydrated, hydrated.agentActivity?.completedAtMs ?? message.timestamp);
+  if (!hydrated.cloudAgentRun)
+    hydrated.browserActivity = settledBrowserActivity(
+      hydrated.browserActivity,
+      hydrated.agentActivity?.completedAtMs ?? message.timestamp,
+      hydrated.agentActivity?.status,
+    );
   return hydrated;
 }
 
@@ -406,7 +407,52 @@ export function resolveComposerPrompt(
     : `Please analyze the attached ${attachmentKind}s.`;
 }
 
-export function requestsCurrentPageContext(text: string): boolean {
+const SAVED_APPLICATION_PROFILE_REFERENCE = String.raw`(?:(?:my|the)\s+)?(?:(?:saved|stored|autofill|application)\s+)+profile\b`;
+
+function namesSavedApplicationProfile(text: string): boolean {
+  return new RegExp(String.raw`\b${SAVED_APPLICATION_PROFILE_REFERENCE}`, 'i').test(text);
+}
+
+export function requestsCurrentFormFill(text: string): boolean {
+  const request = text.trim();
+  const fill =
+    /^(?:(?:please\s+)?fill(?:\s+(?:in|out))?\b|(?:can|could|would)\s+you\s+fill(?:\s+(?:in|out))?\b)/i.test(
+      request,
+    );
+  const useProfile =
+    /^(?:(?:please\s+)?use\b|(?:can|could|would)\s+you\s+use\b)/i.test(request) &&
+    namesSavedApplicationProfile(request) &&
+    /\b(?:fill|populate|replace|complete)\b/i.test(request);
+  return (
+    (fill || useProfile) &&
+    /\b(?:this|current|active)\s+(?:(?:job|web|browser)\s+)?(?:form|application|page|tab)\b/i.test(
+      request,
+    )
+  );
+}
+
+export function requestsSavedApplicationProfile(text: string): boolean {
+  return (
+    requestsCurrentFormFill(text) &&
+    new RegExp(
+      String.raw`\b(?:use|using|with|from)\s+${SAVED_APPLICATION_PROFILE_REFERENCE}`,
+      'i',
+    ).test(text) &&
+    !/\b(?:do\s+not|don['’]t|never|without)\b[^.;:\n]*\bprofile\b/i.test(text)
+  );
+}
+
+export function requestsImmediateSavedApplicationProfileFill(text: string): boolean {
+  const form = String.raw`(?:this|current|active)\s+(?:(?:job|web|browser)\s+)?(?:form|application)`;
+  const fill = String.raw`fill(?:\s+(?:in|out))?`;
+  return new RegExp(
+    String.raw`^(?:please\s+)?(?:${fill}\s+${form}\s+(?:using|with|from)\s+${SAVED_APPLICATION_PROFILE_REFERENCE}|use\s+${SAVED_APPLICATION_PROFILE_REFERENCE}\s+to\s+${fill}\s+${form})[.!]?$`,
+    'i',
+  ).test(text.trim());
+}
+
+export function requestsCurrentPageContext(text: string, includeFormFill = false): boolean {
+  if (includeFormFill && requestsCurrentFormFill(text)) return true;
   return (
     /\b(?:this|current|active)\s+(?:(?:web|browser)\s+)?(?:page|tab|website|site)\b/i.test(text) &&
     /^(?:(?:please\s+)?(?:summari[sz]e|explain|describe|analy[sz]e|read|review|extract|list|find|compare|tell\s+me|give\s+me)\b|(?:can|could|would)\s+you\s+(?:summari[sz]e|explain|describe|analy[sz]e|read|review|extract|list|find|compare)\b|what(?:'s|\s+is|\s+are|\s+does)\b)/i.test(

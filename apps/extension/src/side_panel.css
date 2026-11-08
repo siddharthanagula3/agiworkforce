@@ -37,6 +37,7 @@ body {
   --control-sm: 30px;
   --control-md: 32px;
   --control-lg: 34px;
+  --control-touch: 44px;
   --sp-reading-column: 768px;
   --pressed: color-mix(in srgb, var(--agi-ext-text) 12%, transparent);
   --paragraph-gap: 0.75em;

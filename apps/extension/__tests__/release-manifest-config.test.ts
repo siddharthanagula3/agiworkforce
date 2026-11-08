@@ -15,6 +15,40 @@ const VALID_CHROME_EXTENSION_PUBLIC_KEY =
 const VALID_CLERK_PUBLISHABLE_KEY = 'pk_live_Y2xlcmsuYWdpd29ya2ZvcmNlLmNvbSQ';
 
 describe('Chrome release manifest configuration', () => {
+  it('allows one exact isolated local renderer while retaining packaged-script policy', () => {
+    const manifest = configureChromeManifest(sourceManifest, {
+      artifactSandboxOrigin: 'http://127.0.0.1:3002/',
+      apiBaseUrl: 'http://localhost:3000',
+    });
+    expect(manifest.content_security_policy.extension_pages).toContain(
+      "frame-src 'self' http://127.0.0.1:3002;",
+    );
+    expect(manifest.content_security_policy.extension_pages).toContain("script-src 'self';");
+    expect(manifest.content_security_policy.extension_pages).not.toContain('frame-src http:');
+    expect(manifest.sandbox).toBeUndefined();
+  });
+
+  it.each([
+    ['http://localhost:3000', 'http://localhost:3000'],
+    ['http://localhost:3002', 'http://localhost:3000'],
+    ['http://127.0.0.1:3002', 'http://127.0.0.1:3000'],
+    ['http://localhost:3002', 'https://agiworkforce.com'],
+    ['https://attacker.invalid', 'http://localhost:3000'],
+    ['http://attacker.invalid', 'http://localhost:3000'],
+    ['http://localhost:3002/path', 'http://localhost:3000'],
+    ['http://localhost:3002?value=x', 'http://localhost:3000'],
+  ])('refuses unsafe renderer %s with API %s', (artifactSandboxOrigin, apiBaseUrl) => {
+    expect(() =>
+      configureChromeManifest(sourceManifest, { artifactSandboxOrigin, apiBaseUrl }),
+    ).toThrow();
+  });
+
+  it('refuses a local artifact renderer in a release package', () => {
+    expect(() =>
+      validateReleaseManifest(sourceManifest, { artifactSandboxOrigin: 'http://localhost:3002' }),
+    ).toThrow(/HTTPS/);
+  });
+
   it('lets explicit workflow configuration override empty Vite env values', () => {
     expect(
       resolveChromeBuildConfiguration(

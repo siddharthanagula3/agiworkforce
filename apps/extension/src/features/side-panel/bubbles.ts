@@ -108,6 +108,7 @@ export interface BubbleInteractionOptions {
   onRespondToCard?: (cardId: string, payload: InteractiveCardResponsePayload) => void;
   artifacts?: MessageArtifactsBinding;
   browserControls?: HTMLElement | null;
+  editableAction?: HTMLElement | null;
 }
 
 export interface MessageArtifactsBinding {
@@ -497,6 +498,7 @@ function buildCopyButton(label: string, text: () => string): HTMLElement {
 }
 
 let speakingButton: HTMLButtonElement | null = null;
+let readAloudGeneration = 0;
 
 function setReadAloudState(button: HTMLButtonElement, speaking: boolean): void {
   const label = speaking ? t('spReadAloudStop') : t('spReadAloud');
@@ -506,28 +508,38 @@ function setReadAloudState(button: HTMLButtonElement, speaking: boolean): void {
   button.classList.toggle('speaking', speaking);
 }
 
+export function resetReadAloud(): void {
+  readAloudGeneration += 1;
+  const button = speakingButton;
+  speakingButton = null;
+  if (!button) return;
+  stopSpeaking();
+  setReadAloudState(button, false);
+}
+
 function buildReadAloudButton(text: () => string): HTMLButtonElement {
   const button = el('button', { class: 'sp-copy-btn sp-read-aloud-btn', type: 'button' });
   button.appendChild(renderIcon(Volume2, 11));
   setReadAloudState(button, false);
   button.addEventListener('click', () => {
     if (speakingButton === button) {
-      stopSpeaking();
-      setReadAloudState(button, false);
-      speakingButton = null;
+      resetReadAloud();
       return;
     }
-    if (speakingButton) setReadAloudState(speakingButton, false);
+    resetReadAloud();
+    const generation = readAloudGeneration;
     speakingButton = button;
+    const isCurrent = (): boolean =>
+      generation === readAloudGeneration && speakingButton === button;
     setReadAloudState(button, true);
     void loadReadAloudSettings().then((settings) => {
-      if (speakingButton !== button) return;
+      if (!isCurrent()) return;
       const started = speakAloud(text(), settings, globalThis.speechSynthesis, () => {
-        if (speakingButton !== button) return;
+        if (!isCurrent()) return;
         speakingButton = null;
         setReadAloudState(button, false);
       });
-      if (!started) {
+      if (!started && isCurrent()) {
         speakingButton = null;
         setReadAloudState(button, false);
       }
@@ -692,6 +704,8 @@ function appendAnswerExtras(
   sources: readonly SidePanelSource[],
 ): void {
   if (msg.role !== 'assistant') return;
+  if (!msg.streaming && !msg.error && !msg.interrupted && options.editableAction)
+    wrapper.appendChild(options.editableAction);
   const transient = buildTransientStatus(msg);
   if (transient) wrapper.appendChild(transient);
   const codeRun = buildCodeExecution(msg);
@@ -711,7 +725,7 @@ function appendAnswerExtras(
   }
   const cards = buildInteractiveCardStack(msg, options, false);
   if (cards) wrapper.appendChild(cards);
-  if (msg.streaming) {
+  if (msg.streaming && !msg.agentActivity && !msg.browserActivity) {
     try {
       const mark = el('img', {
         class: 'sp-thinking-mark',
@@ -789,7 +803,8 @@ function toolIcon(name: string): string {
     return Folder;
   if (n.includes('mcp') || n.includes('plug') || n.includes('tool')) return Plug;
   if (n.includes('done') || n.includes('check') || n.includes('success')) return CircleCheck;
-  if (n.includes('load') || n.includes('pending') || n.includes('running')) return Loader2;
+  if (n.includes('load')) return FileText;
+  if (n.includes('pending')) return Clock;
   return Plug;
 }
 
@@ -1136,11 +1151,27 @@ function activityStatusIcon(activity: AgentActivityState, needsUser: boolean): s
   return Loader2;
 }
 
+const activityClocks = new WeakMap<HTMLElement, { activity: AgentActivityState; steps: string }>();
+
+export function refreshAgentActivityClocks(root: ParentNode, now = Date.now()): void {
+  for (const label of root.querySelectorAll<HTMLElement>('.sp-agent-activity__label')) {
+    const clock = activityClocks.get(label);
+    if (!clock || clock.activity.status !== 'running') continue;
+    label.textContent =
+      activityStatusLabel(
+        clock.activity,
+        formatElapsed(Math.max(0, now - clock.activity.startedAtMs)),
+      ) + clock.steps;
+  }
+}
+
 function buildAgentActivityEl(
   storedActivity: AgentActivityState,
   options: BubbleInteractionOptions,
+  browserActivity?: AgentActivityState,
+  messageStartedAtMs?: number,
 ): HTMLElement {
-  const activity =
+  const settledActivity =
     storedActivity.status === 'completed' ||
     storedActivity.status === 'failed' ||
     storedActivity.status === 'cancelled'
@@ -1150,11 +1181,44 @@ function buildAgentActivityEl(
           overrideTerminal: true,
         })
       : storedActivity;
+  const primary = {
+    ...settledActivity,
+    startedAtMs: Math.min(
+      settledActivity.startedAtMs,
+      messageStartedAtMs ?? settledActivity.startedAtMs,
+    ),
+  };
+  const browserEntries = new Set(browserActivity?.entries ?? []);
+  const activity: AgentActivityState = browserActivity
+    ? {
+        ...primary,
+        startedAtMs: Math.min(primary.startedAtMs, browserActivity.startedAtMs),
+        updatedAtMs: Math.max(primary.updatedAtMs, browserActivity.updatedAtMs),
+        ...(primary.completedAtMs !== undefined
+          ? {
+              completedAtMs: Math.max(
+                primary.completedAtMs,
+                browserActivity.completedAtMs ?? browserActivity.updatedAtMs,
+              ),
+            }
+          : {}),
+        ...(primary.status === 'completed' &&
+        ['failed', 'cancelled', 'partial'].includes(browserActivity.status)
+          ? { status: 'partial' }
+          : {}),
+        entries: [...primary.entries, ...browserActivity.entries].sort(
+          (a, b) =>
+            ('startedAtMs' in a ? a.startedAtMs : a.emittedAtMs) -
+            ('startedAtMs' in b ? b.startedAtMs : b.emittedAtMs),
+        ),
+      }
+    : primary;
   const details = el('details', { class: 'sp-agent-activity', 'data-status': activity.status });
   const summary = document.createElement('summary');
   const elapsed = Math.max(
     0,
-    (activity.completedAtMs ?? activity.updatedAtMs) - activity.startedAtMs,
+    (activity.completedAtMs ??
+      (activity.status === 'running' ? Date.now() : activity.updatedAtMs)) - activity.startedAtMs,
   );
   const needsUser =
     activity.status === 'awaiting-approval' ||
@@ -1168,15 +1232,24 @@ function buildAgentActivityEl(
   const stepCount = activity.entries.length
     ? ` · ${tPlural('spActivitySteps', activity.entries.length)}`
     : '';
-  summary.appendChild(
-    document.createTextNode(`${activityStatusLabel(activity, formatElapsed(elapsed))}${stepCount}`),
+  const label = el(
+    'span',
+    { class: 'sp-agent-activity__label' },
+    `${activityStatusLabel(activity, formatElapsed(elapsed))}${stepCount}`,
   );
+  if (activity.status === 'running') activityClocks.set(label, { activity, steps: stepCount });
+  summary.appendChild(label);
   summary.appendChild(renderIcon(ChevronRight, 12, 'sp-agent-activity__chevron'));
   details.appendChild(summary);
 
   const timeline = el('div', { class: 'sp-agent-activity__timeline' });
   for (const entry of activity.entries) {
-    timeline.appendChild(buildAgentActivityStep(entry, options));
+    timeline.appendChild(
+      buildAgentActivityStep(
+        entry,
+        browserEntries.has(entry) ? { ...options, onResolveApproval: undefined } : options,
+      ),
+    );
   }
   details.appendChild(timeline);
   return details;
@@ -1208,18 +1281,33 @@ export function buildBubbleWithTools(
   wrapper.className = `sp-msg sp-msg-${msg.role}`;
   wrapper.setAttribute('data-id', msg.id);
   wrapper.appendChild(buildAuthorLabel(msg.role));
+  const activityStarts = [
+    msg.timestamp,
+    ...(msg.agentEvents ?? []).map((event) => event.emittedAtMs),
+    ...(msg.browserEvents ?? []).map((event) => event.emittedAtMs),
+  ].filter((timestamp) => Number.isFinite(timestamp) && timestamp > 0);
+  const messageStartedAtMs = activityStarts.length ? Math.min(...activityStarts) : undefined;
 
-  if (msg.browserActivity)
+  if (msg.browserActivity && !msg.agentActivity)
     wrapper.appendChild(
-      buildAgentActivityEl(msg.browserActivity, {
-        ...activityOptions,
-        onResolveApproval: undefined,
-      }),
+      buildAgentActivityEl(
+        msg.browserActivity,
+        { ...activityOptions, onResolveApproval: undefined },
+        undefined,
+        messageStartedAtMs,
+      ),
+    );
+  if (msg.agentActivity)
+    wrapper.appendChild(
+      buildAgentActivityEl(
+        msg.agentActivity,
+        activityOptions,
+        msg.browserActivity,
+        messageStartedAtMs,
+      ),
     );
   if (msg.role === 'assistant' && options.browserControls)
     wrapper.appendChild(options.browserControls);
-  if (msg.agentActivity)
-    wrapper.appendChild(buildAgentActivityEl(msg.agentActivity, activityOptions));
   const leadingCards = buildInteractiveCardStack(msg, options, true);
   if (leadingCards) wrapper.appendChild(leadingCards);
   const { markers, all } = answerSourceLists(msg);

@@ -8,7 +8,7 @@ import {
 export type ApprovedSiteDefault = BrowserPermissionMode;
 
 export const UNAPPROVED_SITE_DEFAULT_HINT =
-  'Auto is the default: AGI acts on the sites a task needs and asks before it buys or pays, sends or posts, submits personal details, deletes, enters credentials, accepts terms, grants access or downloads. Sites you have not approved are blocked until you allow one for a task, and the in-page assistant and page tools run on approved sites only. Full access runs every action on approved sites without asking.';
+  'Auto is the default: AGI acts on the sites a task needs and asks before it buys or pays, sends or posts, submits personal details, deletes, enters credentials, accepts terms, grants access or downloads. Sites you have not approved are blocked until you allow one for a task, and the in-page assistant and page tools run on approved sites only. Full access skips routine confirmations on approved sites and still asks before protected actions.';
 
 export function readApprovedSiteDefault(stored: unknown): ApprovedSiteDefault {
   return readBrowserPermissionMode(stored);
@@ -24,7 +24,8 @@ export function parseApprovedSiteDefault(value: unknown): ApprovedSiteDefault {
 
 export function describeApprovedSiteDefault(value: ApprovedSiteDefault): string {
   if (value === 'ask') return 'AGI asks before each action.';
-  if (value === 'full') return 'Approved sites run without asking.';
+  if (value === 'full')
+    return 'AGI skips routine confirmations and still asks before protected actions.';
   return 'AGI acts and asks only before crucial actions.';
 }
 

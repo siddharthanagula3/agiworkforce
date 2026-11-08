@@ -8,6 +8,7 @@ import type { ManagedCloudAgentRunReference } from '@agiworkforce/cloud-contract
 import { MANAGED_RUN_CANCELLATION_TIMEOUT_MS } from '../src/features/cloud-bridge/managedRunControl';
 import { withTimeout } from '../src/utils';
 import { sameManagedCloudOwner } from '../src/features/cloud-bridge/managedCloudAuthority';
+import { BrowserTaskSiteGrants } from '../src/features/computer-use/taskSiteGrants';
 import {
   applyStreamFailure,
   hydrateStoredChatMessage,
@@ -29,6 +30,7 @@ const names = [
   'canAdmitComposerMessage',
   'retryFailedMessage',
   'serializeMessagesForHistory',
+  'resetConversationView',
 ];
 const functions = program.statements
   .filter((node) => ts.isFunctionDeclaration(node) && names.includes(node.name?.text ?? ''))
@@ -77,9 +79,12 @@ function harness() {
     renderMessages = vi.fn(),
     sendPrompt = vi.fn();
   const dependencies = {
+    taskSiteGrants: new BrowserTaskSiteGrants(),
+    editableRewrites: { isApplying: () => false, reset: vi.fn() },
     _ctx: context,
     ownerByStreamId: new Map([[assistant.id, owner]]),
     cloudRunsByStreamId: new Map([[assistant.id, assistant.cloudAgentRun]]),
+    pendingManagedAdmissions: new Set<string>(),
     sameManagedCloudOwner,
     applyStreamFailure,
     reconcileManagedRunActivity,
@@ -99,6 +104,7 @@ function harness() {
     cancelComposerBrowserTask: vi.fn(),
     dismissPendingSiteGrants: vi.fn(),
     stopManagedChatKeepalive: vi.fn(),
+    startManagedChatKeepalive: vi.fn(),
     removeThinking: vi.fn(),
     resolvedRouteByStreamId: new Map(),
     quickModeByStreamId: new Map(),
@@ -111,26 +117,145 @@ function harness() {
     pendingAttachments: [],
     resolveComposerPrompt,
     sendMessage: sendPrompt,
+    returnFollowUpsToComposer: vi.fn(),
+    sendNextFollowUp: vi.fn(),
+    armManagedStreamInactivityWatchdog: vi.fn(),
+    trackProductEvent: vi.fn(),
+    t: (key: string) => key,
+    turnPayloadByMessageId: new Map(),
+    refreshRecentProjects: vi.fn(async () => undefined),
+    clearPendingPageContext: vi.fn(),
+    clearStoredMessages: vi.fn(),
+    updateContextButton: vi.fn(),
   };
   const compiled = ts.transpileModule(
-    `${source.slice(start, end)}\n${functions.join('\n')}\nreturn { stop: () => cancelCurrentManagedStream(false), canAdmitComposerMessage, retryFailedMessage, serializeMessagesForHistory };`,
+    `let composerContextNotice = null;\n${source.slice(start, end)}\n${functions.join('\n')}\nreturn { stop: (preserve = false) => cancelCurrentManagedStream(preserve), canAdmitComposerMessage, retryFailedMessage, serializeMessagesForHistory, resetConversationView, notice: () => composerContextNotice, setNotice: value => { composerContextNotice = value; } };`,
     { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } },
   );
   // llm-guardrail-allow: executes repository-owned browser code inside this isolated test fixture.
   const api = new Function(...Object.keys(dependencies), compiled.outputText)(
     ...Object.values(dependencies),
   ) as {
-    stop(): void;
+    stop(preserve?: boolean): void;
+    resetConversationView(): void;
+    notice(): string | null;
+    setNotice(value: string): void;
     canAdmitComposerMessage(text: string): boolean;
     retryFailedMessage(id: string): void;
     serializeMessagesForHistory(): Array<SidePanelChatMessage>;
   };
-  return { assistant, context, responses, saveMessages, renderMessages, send, sendPrompt, ...api };
+  return {
+    assistant,
+    context,
+    responses,
+    saveMessages,
+    renderMessages,
+    send,
+    sendPrompt,
+    updateAttachmentPreview: dependencies.updateAttachmentPreview,
+    returnFollowUpsToComposer: dependencies.returnFollowUpsToComposer,
+    taskSiteGrants: dependencies.taskSiteGrants,
+    admissions: dependencies.pendingManagedAdmissions,
+    runs: dependencies.cloudRunsByStreamId,
+    ...api,
+  };
 }
 
 afterEach(() => vi.useRealTimers());
 
 describe('side panel Stop admission and recovery', () => {
+  it('stops a known undispatched admission locally without a server cancellation', () => {
+    vi.useFakeTimers();
+    const test = harness();
+    test.admissions.add(test.assistant.id);
+    test.runs.clear();
+    delete test.assistant.cloudAgentRun;
+    test.stop(true);
+    expect(test.send).not.toHaveBeenCalled();
+    expect(test.context.currentStreamId).toBeNull();
+    expect(test.context.isStreaming).toBe(false);
+    expect(test.assistant.interrupted).toBe(true);
+    expect(test.assistant.streamCancellation).toBeUndefined();
+    expect(test.canAdmitComposerMessage('Next')).toBe(true);
+  });
+
+  it('clears the owned warning after Retry confirms the run stopped', async () => {
+    const test = harness();
+    test.stop(true);
+    test.responses[0]!.settle({ success: false, error: 'Stop unavailable' });
+    await vi.waitFor(() => expect(test.notice()).toBe('spCancellationUnconfirmed'));
+    expect(test.canAdmitComposerMessage('Next')).toBe(false);
+    test.retryFailedMessage(test.assistant.id);
+    test.responses[1]!.settle({ success: true, cancellationConfirmed: true, cloudRun: cancelled });
+    await vi.waitFor(() => expect(test.assistant.streamCancellation).toBeUndefined());
+    expect(test.notice()).toBeNull();
+    expect(test.canAdmitComposerMessage('Next')).toBe(true);
+  });
+
+  it('clears cancellation and retired context notices on New chat', async () => {
+    const test = harness();
+    test.stop(true);
+    test.responses[0]!.settle({ success: false, error: 'Stop unavailable' });
+    await vi.waitFor(() => expect(test.notice()).toBe('spCancellationUnconfirmed'));
+    test.resetConversationView();
+    expect(test.notice()).toBeNull();
+    test.setNotice('The attached page changed.');
+    test.resetConversationView();
+    expect(test.notice()).toBeNull();
+    expect(test.updateAttachmentPreview).toHaveBeenCalled();
+  });
+
+  it('clears an attached snapshot status and rerenders the composer on New chat', () => {
+    const test = harness();
+    test.setNotice('1 tab snapshot attached.');
+    test.resetConversationView();
+    expect(test.notice()).toBeNull();
+    expect(test.updateAttachmentPreview).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the notice for queued drafts returned during New chat', () => {
+    const test = harness();
+    test.setNotice('1 tab snapshot attached.');
+    test.returnFollowUpsToComposer.mockImplementation(() => test.setNotice('spQueuedReturned'));
+    test.resetConversationView();
+    expect(test.notice()).toBe('spQueuedReturned');
+    expect(test.updateAttachmentPreview).toHaveBeenCalledOnce();
+  });
+
+  it('preserves a replacement context notice when cancellation is confirmed', async () => {
+    const test = harness();
+    test.stop(true);
+    test.responses[0]!.settle({ success: false, error: 'Stop unavailable' });
+    await vi.waitFor(() => expect(test.notice()).toBe('spCancellationUnconfirmed'));
+    test.setNotice('The attached page changed.');
+    test.retryFailedMessage(test.assistant.id);
+    test.responses[1]!.settle({
+      success: true,
+      cancellationConfirmed: true,
+      cloudRun: cancelled,
+    });
+    await vi.waitFor(() => expect(test.assistant.streamCancellation).toBeUndefined());
+    expect(test.notice()).toBe('The attached page changed.');
+  });
+  it('releases task site access immediately while remote cancellation is still pending', async () => {
+    const test = harness();
+    const release = vi.fn(async () => undefined);
+    test.taskSiteGrants.retain(
+      { streamId: test.assistant.id, generation: 1, owner: test.context.managedCloudOwner },
+      {
+        origin: 'https://example.com',
+        tabId: 7,
+        scope: 'act',
+        release,
+      },
+    );
+    test.stop();
+    await test.taskSiteGrants.settled();
+    expect(release).toHaveBeenCalledOnce();
+    expect(test.assistant.streamCancellation).toBe('pending');
+    test.responses[0]!.settle({ success: true, cancellationConfirmed: true, cloudRun: cancelled });
+    await vi.waitFor(() => expect(test.assistant.streamCancellation).toBeUndefined());
+  });
   it('stops local output immediately and blocks the dependent next turn until terminal confirmation', async () => {
     const test = harness();
     test.stop();

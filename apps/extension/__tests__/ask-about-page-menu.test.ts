@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import ts from 'typescript';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { sameManagedCloudOwner } from '../src/features/cloud-bridge/managedCloudAuthority';
+import { prepareSelectionContext } from '../src/features/side-panel/tabContext';
 
 const backgroundSource = readFileSync(resolve(process.cwd(), 'src/background.ts'), 'utf8');
 const panelSource = readFileSync(resolve(process.cwd(), 'src/side_panel.ts'), 'utf8');
@@ -112,6 +113,8 @@ describe('right-click Ask AGI about this page', () => {
       {
         _ctx: ctx,
         document,
+        editableRewrites: { cancel: vi.fn() },
+        activePageQuery: async () => ({ active: true, currentWindow: true }),
         chrome: {
           runtime: {},
           storage: {
@@ -129,8 +132,7 @@ describe('right-click Ask AGI about this page', () => {
         SLASH_COMMANDS: { '/summarize': { prompt: 'Summarize' } },
         sameManagedCloudOwner,
         pendingBrowserContextTabs: [],
-        pendingAttachments: images,
-        pendingDocuments: [],
+        pendingDocuments: images,
         composerAttachmentIntakes: new Set(),
         composerVideoMode: false,
         composerSkill: null,
@@ -307,5 +309,131 @@ describe('right-click Ask AGI about this page', () => {
     await vi.waitFor(() => expect(h.active()).toBe(0));
     expect(h.sendMessage).toHaveBeenCalledExactlyOnceWith('Summarize');
     expect(h.remove).toHaveBeenCalledWith('agi_pending_chat');
+  });
+});
+
+describe('selected-text Ask in the browser', () => {
+  it('stages a browser selection without preparing a native handoff', () => {
+    const set = vi.fn(async () => undefined);
+    const handoff = vi.fn();
+    const open = vi.fn(async () => undefined);
+    const handle = run<(info: Record<string, unknown>, tab: Record<string, unknown>) => void>(
+      slice(backgroundSource, 'function handleContextMenuClick', 'chrome.contextMenus?.onClicked'),
+      'handleContextMenuClick',
+      {
+        chrome: { storage: { session: { set } } },
+        openAssistantPanel: open,
+        logger: { warn: vi.fn() },
+        createSelectionContextHandoff: handoff,
+        CONTEXT_HANDOFF_STORAGE_KEY: 'handoff',
+        showNotification: vi.fn(),
+        ensureTabGroup: vi.fn(),
+      },
+    );
+    handle(
+      {
+        menuItemId: 'ask-agi-workforce',
+        selectionText: 'Selected phrase',
+        pageUrl: 'https://example.com/a',
+      },
+      { id: 4, windowId: 2 },
+    );
+    expect(set).toHaveBeenCalledWith({
+      agi_pending_chat: expect.objectContaining({
+        type: 'ask-selection',
+        text: 'Selected phrase',
+        tabId: 4,
+        url: 'https://example.com/a',
+      }),
+    });
+    expect(handoff).not.toHaveBeenCalled();
+    expect(open).toHaveBeenCalledWith({ tabId: 4, windowId: 2 });
+  });
+
+  function selectionHarness(url = 'https://example.com/a', blocked = false) {
+    const input = document.createElement('textarea');
+    input.id = 'sp-input';
+    input.value = 'Keep my unsent question';
+    document.body.appendChild(input);
+    const pending = {
+      type: 'ask-selection',
+      text: `Selected phrase sk-ant-${'A'.repeat(60)}`,
+      url: 'https://example.com/a',
+      tabId: 4,
+      timestamp: Date.now(),
+    };
+    const ctx = {
+      managedCloudOwner: null,
+      pendingPageContext: null as string | null,
+      pendingPageContextSource: null,
+      conversationGeneration: 1,
+    };
+    const sendMessage = vi.fn();
+    const remove = vi.fn(async () => undefined);
+    const api = run<{ check: () => void }>(
+      `let composerContextNotice = null; let composerDraftRevision = 0; let pendingSelectionText = null; let pendingBrowserContextTabs = [];\n${slice(panelSource, 'interface PendingComposerChat', 'async function checkPendingContextHandoff')}`,
+      '{ check: checkPendingChat }',
+      {
+        _ctx: ctx,
+        document,
+        sameManagedCloudOwner,
+        pendingDocuments: [],
+        composerAttachmentIntakes: new Set(),
+        composerVideoMode: false,
+        composerSkill: null,
+        editableRewrites: { cancel: vi.fn() },
+        chrome: {
+          runtime: {},
+          tabs: { get: async () => ({ id: 4, url }) },
+          storage: {
+            session: {
+              get: (_key: string, callback: (result: unknown) => void) =>
+                callback({ agi_pending_chat: pending }),
+              remove,
+            },
+          },
+        },
+        prepareSelectionContext,
+        isUserBlockedSite: async () => blocked,
+        PENDING_CHAT_TTL_MS: 60_000,
+        canAdmitComposerMessage: () => false,
+        PAGE_CONTEXT_CHANGED_REASON: 'The page changed.',
+        t: (_key: string, values: string[]) => values.join(' '),
+        pageChipLabel: (value: string) => value,
+        updateAttachmentPreview: vi.fn(),
+        updateContextButton: vi.fn(),
+        sendMessage,
+      },
+    );
+    return { ...api, ctx, input, sendMessage, remove };
+  }
+
+  it('attaches redacted selection, preserves the draft and waits for Send even before message admission', async () => {
+    const h = selectionHarness();
+    h.check();
+    await vi.waitFor(() => expect(h.ctx.pendingPageContext).toContain('Selected phrase'));
+    expect(h.ctx.pendingPageContext).toContain('[REDACTED_ANTHROPIC_KEY]');
+    expect(h.ctx.pendingPageContext).not.toContain('sk-ant-');
+    expect(h.ctx.pendingPageContextSource).toMatchObject({
+      tabId: 4,
+      url: 'https://example.com/a',
+    });
+    expect(h.input.value).toBe('Keep my unsent question');
+    expect(h.sendMessage).not.toHaveBeenCalled();
+    expect(h.remove).toHaveBeenCalledWith('agi_pending_chat');
+    h.input.remove();
+  });
+
+  it.each([
+    ['https://different.example/', false],
+    ['https://example.com/a', true],
+  ])('refuses changed or blocked selection sources', async (url, blocked) => {
+    const h = selectionHarness(url as string, blocked as boolean);
+    h.check();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(h.ctx.pendingPageContext).toBeNull();
+    expect(h.sendMessage).not.toHaveBeenCalled();
+    h.input.remove();
   });
 });

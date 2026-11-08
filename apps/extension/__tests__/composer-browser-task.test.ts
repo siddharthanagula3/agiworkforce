@@ -7,12 +7,16 @@ import { classifyTaskLocally } from '@agiworkforce/routing';
 import type { ComputerUseCommandResponse } from '../src/types';
 import { isTrustedExtensionPageSender } from '../src/background/policy';
 import { sameManagedCloudOwner } from '../src/features/cloud-bridge/managedCloudAuthority';
+import type { EditableSelectionTarget } from '../src/features/browser-tools/editableTarget';
 import { getModelMetadataById, isAutoModeModelId, modelsCatalog } from '@agiworkforce/types';
 import {
   applyBrowserActivityEvent,
   pageContextStillDescribes,
   resolveComposerPrompt,
   requestsCurrentPageContext,
+  requestsCurrentFormFill,
+  requestsSavedApplicationProfile,
+  requestsImmediateSavedApplicationProfileFill,
   type SidePanelChatMessage,
 } from '../src/features/side-panel/chat-state';
 import {
@@ -22,6 +26,8 @@ import {
 import { buildBrowserApprovalCard } from '../src/features/side-panel/computerUsePanel';
 import { buildBrowserTurnControls } from '../src/features/side-panel/bubbles';
 import { parseBrowserUploadBinding } from '../src/features/computer-use/userFileUpload';
+import { formObservationReference } from '../src/features/side-panel/pageObservation';
+import { UUID_PATTERN } from '../src/lib/uuid';
 
 const catalog = JSON.parse(
   readFileSync(
@@ -72,8 +78,6 @@ const sendSource = program.statements
   .map((node) => node.getText(program))
   .join('\n');
 
-const IMAGE_DATA_URL = 'data:image/png;base64,AA==';
-
 function deferred<T>() {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((settle) => {
@@ -98,7 +102,11 @@ interface HarnessAPI {
   getRun(): RunSnapshot | null;
 }
 
-function harness() {
+function harness(activePersistenceEntry?: {
+  id: string;
+  owner: { accountId: string; authIncarnation: string };
+  cloudSync?: { conversationId?: string; createAcknowledged?: boolean };
+}) {
   let panelRun: string | null = null;
   const panelEl = document.createElement('div');
   const stopButton = document.createElement('button');
@@ -117,12 +125,17 @@ function harness() {
     isStreaming: false,
     currentStreamId: null as string | null,
     quickMode: false,
+    workMode: 'chat' as 'chat' | 'agiwork',
+    temporaryChat: false,
     pendingPageContext: null,
     needsMessageRebuild: false,
   };
   const query = vi.fn(async () => [{ id: 7, url: 'https://example.com/form' }]);
+  const admissions = new Set<string>();
+  const admissionAtSend: boolean[] = [];
   const send = vi.fn(
     async (message: Record<string, unknown>): Promise<ComputerUseCommandResponse> => {
+      if (message.type === 'CHAT_MESSAGE') admissionAtSend.push(admissions.has(String(message.id)));
       if (message.type === 'AGI_START_COMPUTER_USE') {
         return { success: true, runId: String(message.runId), runGeneration: 2 };
       }
@@ -140,9 +153,18 @@ function harness() {
     showHandoffBanner: vi.fn(),
   };
   const saveMessages = vi.fn();
-  const pendingAttachments: { dataUrl: string; mimeType: string }[] = [];
+  const pendingDocuments: { assetId: string; mimeType: string; name: string }[] = [];
   const dependencies = {
     _ctx: context,
+    fencedToolResult: (label: string, text: string) => `<${label}>${text}</${label}>`,
+    editableRewrites: {
+      current: (): EditableSelectionTarget | null => null,
+      isApplying: () => false,
+      bind: vi.fn(),
+      prune: vi.fn(),
+      reset: vi.fn(),
+      cancel: vi.fn(),
+    },
     chrome: { tabs: { query }, runtime: { sendMessage: send } },
     cuPanel: panel,
     BrowserRunActivityTranslator,
@@ -173,10 +195,27 @@ function harness() {
     classifyTaskLocally,
     resolveComposerPrompt,
     requestsCurrentPageContext,
+    requestsCurrentFormFill,
+    requestsSavedApplicationProfile,
+    requestsImmediateSavedApplicationProfileFill,
+    loadContactAutofillProfile: vi.fn(async () => null),
+    formObservationReference,
+    ensureStreamingAssistant: vi.fn((id: string) => {
+      let message = context.messages.find((message) => message.id === id);
+      if (!message) {
+        message = { id, role: 'assistant', content: '', timestamp: 1, streaming: true };
+        context.messages.push(message);
+      }
+      return message;
+    }),
     managedCloudChatState: 'ready',
     stoppingStreamId: null,
     projectChatAwaitsAccountCopy: () => false,
-    ensureProjectChatInAccount: vi.fn(async () => true),
+    ensureChatInAccount: vi.fn(async () => true),
+    activePersistenceEntry,
+    cloudMirroringEnabledSnapshot: vi.fn(() => true),
+    UUID_PATTERN,
+    pendingManagedAdmissions: admissions,
     ensureTemporaryConversation: vi.fn(async () => 'temporary-conversation'),
     renderMemoryNotice: vi.fn(),
     MEMORY_COMMAND_HINT: /(?!)/u,
@@ -187,14 +226,15 @@ function harness() {
     capabilityAllowed: () => true,
     capabilityDocument: {},
     selectedModelImageLimitNotice: () => null,
-    composerImageCount: () => pendingAttachments.length,
-    pendingDocuments: [] as unknown[],
+    composerImageCount: () =>
+      pendingDocuments.filter((file) => file.mimeType.startsWith('image/')).length,
+    pendingDocuments,
     pendingBrowserContextTabs: [] as unknown[],
     promptShortcuts: [],
     expandPromptShortcut: (prompt: string) => prompt,
     advanceConversationGeneration: vi.fn(),
     renderModelNotice: vi.fn(),
-    takeComposerDocuments: () => [],
+    takeComposerDocuments: () => pendingDocuments.splice(0),
     turnAttachmentDescriptors: () => [],
     pageReference: (source: unknown) => source,
     turnPayloadByMessageId: new Map(),
@@ -203,12 +243,11 @@ function harness() {
     historyRestoreInProgress: false,
     composerAttachmentIntakes: new Set(),
     composerDocumentsSettled: () => true,
-    pendingAttachmentCount: () => pendingAttachments.length,
+    pendingAttachmentCount: () => pendingDocuments.length,
     composerVideoMode: false,
     composerSkill: null as string | null,
     canCreateVideos: () => false,
     startVideoTurn: vi.fn(),
-    pendingAttachments,
     extensionSendQueue: { enqueue: vi.fn(), dequeue: vi.fn() },
     QueueFullError: Error,
     expandSlashCommand: (prompt: string) =>
@@ -225,6 +264,7 @@ function harness() {
     handleStreamError: vi.fn(),
     updateAttachmentPreview: vi.fn(),
     beginManagedStream: vi.fn(() => {
+      admissions.add('chat-stream');
       context.isStreaming = true;
       context.currentStreamId = 'chat-stream';
       return 'chat-stream';
@@ -254,10 +294,11 @@ function harness() {
     context,
     query,
     send,
+    admissionAtSend,
     panel,
     saveMessages,
     dependencies,
-    pendingAttachments,
+    pendingDocuments,
     stopButton,
     clearButton,
     defaultStop,
@@ -279,6 +320,92 @@ describe('browser tasks from the real composer functions', () => {
     vi.clearAllTimers();
     vi.useRealTimers();
     vi.unstubAllGlobals();
+  });
+
+  it('waits for an account chat before sending the first AGI Work turn', async () => {
+    const h = harness();
+    h.context.workMode = 'agiwork';
+    const pending = deferred<boolean>();
+    h.dependencies.ensureChatInAccount.mockReturnValue(pending.promise);
+    h.api.sendMessage('Return the QA token.');
+    await settle();
+    expect(h.dependencies.ensureChatInAccount).toHaveBeenCalledOnce();
+    expect(h.dependencies.pendingManagedAdmissions.has('chat-stream')).toBe(true);
+    expect(h.send.mock.calls.some(([m]) => m.type === 'CHAT_MESSAGE')).toBe(false);
+    pending.resolve(true);
+    await vi.waitFor(() =>
+      expect(h.send).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'CHAT_MESSAGE', workMode: 'agiwork' }),
+        expect.any(Function),
+      ),
+    );
+    expect(h.admissionAtSend).toEqual([false]);
+  });
+
+  it('does not send AGI Work when the account chat could not be acknowledged', async () => {
+    const h = harness();
+    h.context.workMode = 'agiwork';
+    h.dependencies.ensureChatInAccount.mockResolvedValue(false);
+    h.api.sendMessage('Return the QA token.');
+    await settle();
+    expect(h.dependencies.handleStreamError).toHaveBeenCalled();
+    expect(h.send.mock.calls.some(([m]) => m.type === 'CHAT_MESSAGE')).toBe(false);
+  });
+
+  it.each(['stop', 'owner', 'generation'] as const)(
+    'rejects a delayed account acknowledgement after %s',
+    async (change) => {
+      const h = harness();
+      h.context.workMode = 'agiwork';
+      const pending = deferred<boolean>();
+      h.dependencies.ensureChatInAccount.mockReturnValue(pending.promise);
+      h.api.sendMessage('Return the QA token.');
+      await settle();
+      if (change === 'stop') h.context.currentStreamId = null;
+      if (change === 'owner')
+        h.context.managedCloudOwner = { accountId: 'other', authIncarnation: 'other-session' };
+      if (change === 'generation') h.context.conversationGeneration += 1;
+      pending.resolve(true);
+      await settle();
+      expect(h.send.mock.calls.some(([m]) => m.type === 'CHAT_MESSAGE')).toBe(false);
+      expect(h.dependencies.handleStreamError).not.toHaveBeenCalled();
+    },
+  );
+
+  it('reuses an acknowledged AGI Work chat without another admission wait', async () => {
+    const h = harness({
+      id: 'conversation-a',
+      owner: { accountId: 'user-a', authIncarnation: 'session-a' },
+      cloudSync: {
+        createAcknowledged: true,
+        conversationId: '90cba7de-526e-43d8-b448-82986d6707ec',
+      },
+    });
+    h.context.workMode = 'agiwork';
+    h.api.sendMessage('Return the QA token.');
+    await settle();
+    expect(h.dependencies.ensureChatInAccount).not.toHaveBeenCalled();
+    expect(h.send.mock.calls.some(([m]) => m.type === 'CHAT_MESSAGE')).toBe(true);
+  });
+
+  it('preserves disabled conversation mirroring for AGI Work', async () => {
+    const h = harness();
+    h.context.workMode = 'agiwork';
+    h.dependencies.cloudMirroringEnabledSnapshot.mockReturnValue(false);
+    h.api.sendMessage('Return the QA token.');
+    await settle();
+    expect(h.dependencies.ensureChatInAccount).not.toHaveBeenCalled();
+    expect(h.send.mock.calls.some(([m]) => m.type === 'CHAT_MESSAGE')).toBe(true);
+  });
+
+  it('keeps temporary AGI Work on the temporary conversation path', async () => {
+    const h = harness();
+    h.context.workMode = 'agiwork';
+    h.context.temporaryChat = true;
+    h.api.sendMessage('Return the QA token.');
+    await settle();
+    expect(h.dependencies.ensureTemporaryConversation).toHaveBeenCalledOnce();
+    expect(h.dependencies.ensureChatInAccount).not.toHaveBeenCalled();
   });
 
   it('accepts background lifecycle events and rejects content-script or foreign sender claims', () => {
@@ -401,12 +528,22 @@ describe('browser tasks from the real composer functions', () => {
     expect(h.dependencies.capturePageContext).toHaveBeenCalledOnce();
     expect(h.send).not.toHaveBeenCalled();
     const attached = harness();
-    attached.pendingAttachments.push({ dataUrl: IMAGE_DATA_URL, mimeType: 'image/png' });
+    attached.pendingDocuments.push({
+      assetId: '11111111-1111-4111-8111-111111111111',
+      mimeType: 'image/png',
+      name: 'fixture.png',
+    });
     attached.api.sendMessage('Click the Update preview button');
     await settle();
     expect(attached.api.getRun()).toBeNull();
     expect(attached.send).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'CHAT_MESSAGE', attachments: [IMAGE_DATA_URL] }),
+      expect.objectContaining({
+        type: 'CHAT_MESSAGE',
+        fileAttachments: [
+          { assetId: '11111111-1111-4111-8111-111111111111', mimeType: 'image/png' },
+        ],
+        attachments: undefined,
+      }),
       expect.any(Function),
     );
   });
@@ -846,5 +983,35 @@ describe('browser tasks from the real composer functions', () => {
       expect.objectContaining({ type: 'CHAT_MESSAGE', browserHistory: true }),
       expect.any(Function),
     );
+  });
+
+  it('keeps selected-text drafting out of browser and history tools', async () => {
+    const h = harness();
+    h.context.selectedModel = 'auto';
+    const target = {
+      id: 'selection-a',
+      tabId: 7,
+      url: 'https://example.com/form',
+      documentId: 'document-a',
+      label: 'Message',
+      selectedText: 'rough words',
+      owner: h.context.managedCloudOwner,
+    };
+    h.dependencies.editableRewrites.current = () => target;
+    vi.mocked(h.dependencies.hasHistoryPermission).mockResolvedValue(true);
+    h.api.sendMessage('Make this more concise.');
+    await settle();
+    expect(h.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'CHAT_MESSAGE',
+        pageContext: expect.stringContaining('rough words'),
+      }),
+      expect.any(Function),
+    );
+    const request = h.send.mock.calls.find(([message]) => message.type === 'CHAT_MESSAGE')?.[0];
+    expect(request).not.toHaveProperty('browserToolTier');
+    expect(request).not.toHaveProperty('browserHistory');
+    expect(h.dependencies.editableRewrites.bind).toHaveBeenCalled();
+    expect(h.api.getRun()).toBeNull();
   });
 });

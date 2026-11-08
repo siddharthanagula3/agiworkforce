@@ -54,7 +54,9 @@ describe('options default site permission', () => {
     );
     await section.loaded;
     expect(section.select.value).toBe('full');
-    expect(section.status.textContent).toBe('Approved sites run without asking.');
+    expect(section.status.textContent).toBe(
+      'AGI skips routine confirmations and still asks before protected actions.',
+    );
   });
 
   it('persists a change to the preference the background enforces', async () => {

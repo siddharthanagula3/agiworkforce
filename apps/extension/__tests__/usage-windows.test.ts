@@ -37,7 +37,7 @@ function creditWindow(allowance: number, used: number, resetAt: string | null): 
 
 function summary(
   overrides: {
-    fiveHour?: WindowFixture;
+    fiveHour?: WindowFixture | null;
     weekly?: WindowFixture;
     monthly?: WindowFixture;
     flagshipWeekly?: WindowFixture | null;
@@ -65,7 +65,10 @@ function summary(
       ? {}
       : {
           credits: {
-            five_hour: overrides.fiveHour ?? creditWindow(50, 6, FIVE_HOUR_RESET),
+            five_hour:
+              overrides.fiveHour === undefined
+                ? creditWindow(50, 6, FIVE_HOUR_RESET)
+                : overrides.fiveHour,
             weekly: overrides.weekly ?? creditWindow(500, 150, WEEKLY_RESET),
             monthly: overrides.monthly ?? creditWindow(2_000, 400, PERIOD_RESET),
             flagship_weekly:
@@ -114,6 +117,13 @@ describe('usage windows in credits', () => {
     const views = usageWindowViews(summary({ flagshipWeekly: null }));
 
     expect(views.map((view) => view.bucket)).toEqual(['session', 'weekly', 'period']);
+  });
+
+  it('omits a session window when the server states there is no five-hour allowance', () => {
+    const views = usageWindowViews(summary({ fiveHour: null }));
+
+    expect(views.map((view) => view.bucket)).toEqual(['weekly', 'weeklyFlagship', 'period']);
+    expect(views[0]?.detail).toBe('Used 150 of 500 credits · 350 left');
   });
 
   it('marks a window exhausted only when a real allowance is used up', () => {

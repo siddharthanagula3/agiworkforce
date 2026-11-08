@@ -185,7 +185,7 @@ describe('the index map addresses exactly one element per index', () => {
       value: () => document.querySelector('#icon'),
     });
     await expect(getTargetSignature(EVAL_TAB_ID, { x: 10, y: 10 })).resolves.toBe(
-      'button||||Pay now',
+      'button||||Pay now|Pay now',
     );
   });
 

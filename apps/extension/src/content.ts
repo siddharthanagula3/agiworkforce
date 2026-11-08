@@ -21,6 +21,16 @@ import { getExtensionTokensCssAuto } from './tokens';
 import { redactSecrets } from '@agiworkforce/utils/logger';
 import { runPlatformJobAutofill } from './jobAutofill';
 import { detectJobApplication } from './features/content/autofill/detector';
+import { fillApplicationContactBatch } from './features/content/autofill/contactBatch';
+import { capturePageObservation, fillObservedForm } from './features/content/pageObservation';
+import { fillNativeFormBatch } from './features/content/formBatch';
+import { normalizeShortcutStartUrl } from './features/shortcuts/origin';
+import {
+  captureEditableSelection,
+  applyEditableSelection,
+  undoEditableSelection,
+  initializeEditableSelection,
+} from './features/content/editableSelection';
 import {
   autofillGreenhouse,
   autofillLever,
@@ -39,6 +49,7 @@ import {
   fillPageFields,
   findPageElements,
   watchPasswordFields,
+  pageElementSignature,
 } from './features/content/pageElements';
 import {
   validateShortcutActions,
@@ -72,6 +83,7 @@ function extractPageHtmlSafely(): string {
 
 interface ActionExecutionResult {
   success?: boolean;
+  skipped?: boolean;
   error?: string;
   type?: string;
   [key: string]: unknown;
@@ -118,6 +130,7 @@ function initialize(): void {
   scope.__agiWorkforceContentScriptReady = true;
 
   watchPasswordFields();
+  initializeEditableSelection();
   void setupInPagePanel(originApproved, logger);
 
   chrome.runtime.onMessage.addListener(handleMessage);
@@ -147,6 +160,22 @@ function handleMessage(
   }
 
   const msg = message as ExtensionMessage;
+
+  if (
+    (msg?.type === 'FILL_APPLICATION_CONTACT' ||
+      msg?.type === 'GET_PAGE_OBSERVATION' ||
+      msg?.type === 'FILL_OBSERVED_FORM' ||
+      msg?.type === 'CAPTURE_EDITABLE_SELECTION' ||
+      msg?.type === 'APPLY_EDITABLE_SELECTION' ||
+      msg?.type === 'UNDO_EDITABLE_SELECTION') &&
+    sender.tab
+  ) {
+    sendResponse({
+      success: false,
+      error: 'This operation requires the extension controller.',
+    });
+    return false;
+  }
 
   if (!isValidMessage(msg)) {
     sendResponse({ success: false, error: 'Invalid message' } as ExtensionResponse);
@@ -201,6 +230,24 @@ async function handleMessageAsync(message: ExtensionMessage): Promise<ExtensionR
     case 'GET_PAGE_INFO':
       return handleGetPageInfo();
 
+    case 'GET_PAGE_OBSERVATION':
+      return capturePageObservation(message.pageUrl);
+
+    case 'FILL_OBSERVED_FORM':
+      return fillObservedForm(message.plan, message.pageUrl, message.formSnapshotId);
+
+    case 'CAPTURE_EDITABLE_SELECTION':
+      return captureEditableSelection(message.pageUrl, message.selectedText, message.owner);
+    case 'APPLY_EDITABLE_SELECTION':
+      return applyEditableSelection(
+        message.selectionId,
+        message.pageUrl,
+        message.text,
+        message.owner,
+      );
+    case 'UNDO_EDITABLE_SELECTION':
+      return undoEditableSelection(message.selectionId, message.pageUrl, message.owner);
+
     case 'RUN_PAGE_ACTIONS':
       return handleRunPageActions(message as RunPageActionsMessage);
     case 'AUTO_FILL_JOB_APPLICATION':
@@ -246,6 +293,9 @@ async function handleMessageAsync(message: ExtensionMessage): Promise<ExtensionR
 
     case 'AGI_RUN_AUTOFILL':
       return handleRunAutofill();
+
+    case 'FILL_APPLICATION_CONTACT':
+      return fillApplicationContactBatch(message.profile, message.pageUrl, message.replaceExisting);
 
     case 'AGI_CU_SHOW_ACTION': {
       if (typeof message.x === 'number' && typeof message.y === 'number') {
@@ -340,8 +390,50 @@ async function executePlannedAction(action: RunPageAction): Promise<ActionExecut
       })) as unknown as ActionExecutionResult;
       return { type: actionType, ...response };
     }
-    case 'type':
     case 'input': {
+      if (typeof action.value !== 'string')
+        return { type: actionType, success: true, skipped: true };
+      const selector = action.selector ?? '';
+      if (!validators.isValidSelector(selector))
+        return { type: actionType, success: false, error: 'Invalid selector for recorded input' };
+      const element = domUtils.querySelector(selector);
+      if (!(
+        element instanceof HTMLInputElement ||
+        element instanceof HTMLTextAreaElement ||
+        element instanceof HTMLSelectElement
+      ))
+        return { type: actionType, success: false, error: 'Recorded input field not found' };
+      const toggle =
+        element instanceof HTMLInputElement &&
+        (element.type === 'checkbox' || element.type === 'radio');
+      if (toggle && action.value !== 'true' && action.value !== 'false')
+        return {
+          type: actionType,
+          success: false,
+          error: 'Re-record this checkbox or radio to save its checked state.',
+        };
+      const outcome = await fillNativeFormBatch(
+        [
+          {
+            key: selector,
+            selector,
+            element,
+            signature: pageElementSignature(element),
+            value: toggle ? action.value === 'true' : action.value,
+          },
+        ],
+        location.href,
+        true,
+      );
+      return {
+        type: actionType,
+        success: outcome.verified,
+        ...(outcome.verified
+          ? {}
+          : { error: outcome.fields[0]?.reason ?? 'The recorded input was not retained.' }),
+      };
+    }
+    case 'type': {
       const response = (await handleType({
         type: 'TYPE',
         selector: action.selector ?? '',
@@ -511,6 +603,17 @@ async function executePlannedAction(action: RunPageAction): Promise<ActionExecut
 async function handleRunPageActions(message: RunPageActionsMessage): Promise<ExtensionResponse> {
   const taskId = message.taskId || `task_${Date.now()}`;
   const actions = Array.isArray(message.actions) ? message.actions : [];
+  const originMatches = (): boolean =>
+    message.expectedOrigin === undefined ||
+    (normalizeShortcutStartUrl(message.expectedOrigin) === message.expectedOrigin &&
+      location.origin === message.expectedOrigin);
+  if (!originMatches())
+    return {
+      success: false,
+      taskId,
+      error: 'The recorded website changed before replay.',
+      actionsPerformed: 0,
+    } as ExtensionResponse;
   if (actions.length > 0 && !validateShortcutActions(actions)) {
     return {
       success: false,
@@ -523,9 +626,14 @@ async function handleRunPageActions(message: RunPageActionsMessage): Promise<Ext
   const startedAt = Date.now();
   const results: ActionExecutionResult[] = [];
   let actionsPerformed = 0;
+  let actionsSkipped = 0;
   let firstError: string | undefined;
 
   for (const action of actions) {
+    if (!originMatches()) {
+      firstError = 'The recorded website changed during replay.';
+      break;
+    }
     const result = await executePlannedAction(action);
     results.push({
       id: action.id,
@@ -533,12 +641,14 @@ async function handleRunPageActions(message: RunPageActionsMessage): Promise<Ext
     });
     const success = result.success === true;
     if (success) {
-      actionsPerformed += 1;
+      if (result.skipped === true) actionsSkipped += 1;
+      else actionsPerformed += 1;
     } else if (!firstError) {
       firstError =
         typeof result.error === 'string'
           ? result.error
           : `Action '${action.type}' failed without details`;
+      break;
     }
   }
 
@@ -564,6 +674,7 @@ async function handleRunPageActions(message: RunPageActionsMessage): Promise<Ext
       title: document.title,
     },
     actionsPerformed,
+    actionsSkipped,
     duration: Date.now() - startedAt,
     screenshot,
     error: firstError,
@@ -1118,7 +1229,11 @@ function attachRecordingListeners(): void {
     if (automationState.captureValues) {
       const sanitizedValue = sanitizeRecordedValue(target);
       if (sanitizedValue !== null) {
-        action.value = sanitizedValue;
+        action.value =
+          target instanceof HTMLInputElement &&
+          (target.type === 'checkbox' || target.type === 'radio')
+            ? String(target.checked)
+            : sanitizedValue;
       }
     }
     _userRecordedActions.push(action);
@@ -1368,6 +1483,11 @@ const VALID_MESSAGE_TYPES = new Set([
   'GET_TEXT',
   'WAIT_FOR_SELECTOR',
   'GET_PAGE_INFO',
+  'GET_PAGE_OBSERVATION',
+  'FILL_OBSERVED_FORM',
+  'CAPTURE_EDITABLE_SELECTION',
+  'APPLY_EDITABLE_SELECTION',
+  'UNDO_EDITABLE_SELECTION',
   'RUN_PAGE_ACTIONS',
   'AUTO_FILL_JOB_APPLICATION',
   'GET_CONNECTION_STATUS',
@@ -1386,6 +1506,7 @@ const VALID_MESSAGE_TYPES = new Set([
   'WEBMCP_CALL_TOOL',
   'WEBMCP_CANCEL_TOOL',
   'AGI_RUN_AUTOFILL',
+  'FILL_APPLICATION_CONTACT',
   'AGI_CU_WATCH_INPUT',
   'AGI_CU_SHOW_ACTION',
 ]);

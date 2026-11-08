@@ -1,3 +1,5 @@
+import { URL } from 'node:url';
+import { TextDecoder } from 'node:util';
 import { Buffer } from 'node:buffer';
 import { createPublicKey } from 'node:crypto';
 
@@ -106,8 +108,41 @@ function appendConnectSource(policy, origin) {
   return policy.replace(/connect-src ([^;]+)/, `connect-src $1 ${origin}`);
 }
 
+function artifactSandboxOrigin(configuration, sourceManifest) {
+  const origin = normalizeOrigin(
+    configuration.artifactSandboxOrigin,
+    'VITE_ARTIFACT_SANDBOX_ORIGIN',
+    { allowLocalhost: true },
+  );
+  if (!origin) return undefined;
+  const apiOrigin = normalizeOrigin(configuration.apiBaseUrl, 'VITE_AGI_WEB_API_BASE_URL', {
+    allowLocalhost: true,
+  });
+  if (origin === apiOrigin)
+    throw new Error('The artifact sandbox must use a separate origin from the account API.');
+  const url = new URL(origin);
+  if (url.protocol === 'http:') {
+    if (!apiOrigin || !['localhost', '127.0.0.1'].includes(new URL(apiOrigin).hostname)) {
+      throw new Error('A loopback artifact sandbox requires a loopback development account API.');
+    }
+    if (url.hostname === new URL(apiOrigin).hostname) {
+      throw new Error(
+        'The local artifact sandbox must use a different hostname from account cookies.',
+      );
+    }
+  } else {
+    const sources =
+      /frame-src ([^;]+)/u
+        .exec(sourceManifest.content_security_policy?.extension_pages ?? '')?.[1]
+        .split(/\s+/u) ?? [];
+    if (!sources.includes(origin))
+      throw new Error('The artifact sandbox must be an existing trusted renderer origin.');
+  }
+  return origin;
+}
+
 export function configureChromeManifest(sourceManifest, configuration) {
-  const manifest = structuredClone(sourceManifest);
+  const manifest = globalThis.structuredClone(sourceManifest);
   const frontendApi = normalizeOrigin(configuration.clerkFrontendApi, 'CLERK_FRONTEND_API', {
     allowLocalhost: true,
   });
@@ -122,6 +157,15 @@ export function configureChromeManifest(sourceManifest, configuration) {
   let extensionPages = manifest.content_security_policy?.extension_pages ?? '';
   extensionPages = appendConnectSource(extensionPages, frontendApi);
   extensionPages = appendConnectSource(extensionPages, syncHost);
+  const sandboxOrigin = artifactSandboxOrigin(configuration, sourceManifest);
+  if (sandboxOrigin && !/frame-src [^;]+/u.test(extensionPages))
+    throw new Error('The extension must declare its artifact frame policy.');
+  if (sandboxOrigin)
+    extensionPages = extensionPages.replace(
+      /frame-src [^;]+/u,
+      `frame-src 'self' ${sandboxOrigin}`,
+    );
+
   manifest.content_security_policy = {
     ...manifest.content_security_policy,
     extension_pages: extensionPages,
@@ -131,7 +175,7 @@ export function configureChromeManifest(sourceManifest, configuration) {
   if (publicKey) manifest.key = publicKey;
 
   if (!publicKey && syncHost) {
-    console.warn(
+    globalThis.console.warn(
       [
         '',
         'WARNING: CHROME_EXTENSION_PUBLIC_KEY is not set, so the extension ID depends on the unpacked build path.',
@@ -146,6 +190,9 @@ export function configureChromeManifest(sourceManifest, configuration) {
 }
 
 export function validateReleaseManifest(manifest, configuration) {
+  if (configuration.artifactSandboxOrigin)
+    normalizeOrigin(configuration.artifactSandboxOrigin, 'VITE_ARTIFACT_SANDBOX_ORIGIN');
+
   const frontendApi = normalizeOrigin(configuration.clerkFrontendApi, 'CLERK_FRONTEND_API');
   const syncHost = normalizeOrigin(configuration.clerkSyncHost, 'CLERK_SYNC_HOST');
   if (!frontendApi) throw new Error('CLERK_FRONTEND_API is required for a production package.');
@@ -173,6 +220,12 @@ export function readChromeBuildConfiguration(env) {
     clerkFrontendApi: env.CLERK_FRONTEND_API,
     clerkSyncHost: env.CLERK_SYNC_HOST,
     chromeExtensionPublicKey: env.CHROME_EXTENSION_PUBLIC_KEY,
+    artifactSandboxOrigin: normalizeOrigin(
+      env.VITE_ARTIFACT_SANDBOX_ORIGIN,
+      'VITE_ARTIFACT_SANDBOX_ORIGIN',
+      { allowLocalhost: true },
+    ),
+    apiBaseUrl: env.VITE_AGI_WEB_API_BASE_URL || env.VITE_API_BASE_URL,
   };
 }
 

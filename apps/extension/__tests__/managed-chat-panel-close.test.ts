@@ -93,7 +93,12 @@ const harness = vi.hoisted(() => {
     },
     sidePanel: { setPanelBehavior: vi.fn(() => Promise.resolve()) },
     commands: { onCommand: event() },
-    action: { setBadgeText: vi.fn(), setBadgeBackgroundColor: vi.fn(), setTitle: vi.fn() },
+    action: {
+      onClicked: event(),
+      setBadgeText: vi.fn(),
+      setBadgeBackgroundColor: vi.fn(),
+      setTitle: vi.fn(),
+    },
     debugger: { onDetach: event() },
     i18n: { getMessage: (key: string) => key },
   };

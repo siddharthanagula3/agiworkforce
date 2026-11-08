@@ -81,15 +81,18 @@ describe('page context is never silently missing', () => {
   const sidePanel = readFileSync(resolve(here, '..', 'src/side_panel.ts'), 'utf8');
 
   it('resolves a reason instead of null so a caller can say what went wrong', () => {
-    expect(sidePanel).toMatch(
-      /export type PageContextCapture =\s*\|?\s*\{ ok: true; text: string;[\s\S]{0,80}?\}\s*\|\s*\{ ok: false; reason: string \}/,
+    const resultType = sidePanel.slice(
+      sidePanel.indexOf('export type PageContextCapture'),
+      sidePanel.indexOf('function describePageContextFailure'),
     );
+    expect(resultType).toMatch(/ok: true;\s*text: string;/);
+    expect(resultType).toMatch(/\|\s*\{ ok: false; reason: string \}/);
     const capture = sidePanel.slice(
       sidePanel.indexOf('async function capturePageContext('),
       sidePanel.indexOf('function requestStreamCancellation('),
     );
     expect(capture).not.toMatch(/resolve\(null\)/);
-    expect(capture).toContain('describePageContextFailure(scriptFailure)');
+    expect(capture).toContain('describePageContextFailure(');
   });
 
   it('names a denied executeScript as a page Chrome blocks, not as a site-approval problem', () => {
@@ -130,17 +133,14 @@ describe('page context is never silently missing', () => {
       sidePanel.indexOf('function readTabText('),
     );
     expect(helper).toContain('capture.reason !== PAGE_CONTEXT_DENIED_REASON');
-    expect(helper).toContain("requestBrowserSiteAccess(streamId, 'read')");
+    expect(helper).toContain("scope: SiteGrantScope = 'read'");
+    expect(helper).toContain('requestBrowserSiteAccess(streamId, scope)');
     expect(helper).toContain('await access.release?.()');
   });
 
   it('refuses a context-requiring slash command rather than answering about nothing', () => {
-    const slashSend = sidePanel.slice(
-      sidePanel.indexOf(
-        'capturePageContextWithSiteAccess(streamId, quickMode)\n    .then((capture)',
-      ),
-      sidePanel.indexOf('function postTurn('),
-    );
+    const start = sidePanel.indexOf('function dispatchTurn(');
+    const slashSend = sidePanel.slice(start, sidePanel.indexOf('function postTurn(', start));
     expect(slashSend).toContain('if (!pageText)');
     expect(slashSend).toContain(
       'handleStreamError(streamId, capture.ok ? PAGE_CONTEXT_EMPTY_REASON : capture.reason)',

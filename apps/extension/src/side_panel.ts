@@ -1,3 +1,4 @@
+import { loadContactAutofillProfile } from './features/content/autofill/profile-storage';
 import {
   createMessageQueue,
   LANE_CAP,
@@ -34,11 +35,24 @@ import { agiWebUrl, ARTIFACT_SANDBOX_ORIGIN } from './lib/webOrigin';
 import { classifyTaskLocally } from '@agiworkforce/routing';
 import {
   chooseBrowserContextTabs,
+  chooseTabsToClose,
   prepareSelectionContext,
   readVisibleSelection,
   TAB_CONTEXT_PICKER_CSS,
   type PageSelection,
 } from './features/side-panel/tabContext';
+import { closeSelectedBrowserTabs } from './features/browser-tools/tabCleanup';
+import {
+  formObservationReference,
+  readTabObservation,
+} from './features/side-panel/pageObservation';
+import { BrowserTaskSiteGrants } from './features/computer-use/taskSiteGrants';
+import { EditableRewriteController } from './features/side-panel/editableRewrite';
+import {
+  parseEditableSelectionTarget,
+  type EditableSelectionTarget,
+} from './features/browser-tools/editableTarget';
+import { readPageDocument } from './features/browser-tools/documentBridge';
 import type { AdoptChatTurnResponse, BrowserContextTabReference } from './types';
 import { followThemePreference } from './features/appearance/themePreference';
 import { t, tPlural } from './i18n';
@@ -88,6 +102,7 @@ import { getExtensionSendQueue } from './features/native-bridge/sendQueue';
 import { clearChildren, setText, createElementWith } from './dom-helpers';
 import {
   createBrowserConversationId,
+  conversationAwaitsProjectBinding,
   filterConversations,
   rebindAuthenticatedConversationHistory,
   getActiveConversation,
@@ -117,8 +132,8 @@ import {
 import { UUID_PATTERN } from './lib/uuid';
 import { wireMenuArrowKeys, wirePopupMenu } from './features/side-panel/menu';
 import { fetchOwnSkills, type AccountSkill } from './features/cloud-bridge/skillsClient';
-import { buildMemorySheet } from './features/side-panel/memorySheet';
-import { buildTasksSheet } from './features/side-panel/tasksSheet';
+import { buildMemorySheet, type MemorySheet } from './features/side-panel/memorySheet';
+import { buildTasksSheet, type TasksSheet } from './features/side-panel/tasksSheet';
 import { buildPhoneSheet } from './features/side-panel/phoneSheet';
 import { SIDE_PANEL_PORT_NAME } from './features/side-panel/panelPresence';
 import { OPTIONS_DESTINATION, openOptionsDestination } from './features/side-panel/optionsLinks';
@@ -154,6 +169,7 @@ import {
 import { loadSitePolicyInput, readUserSiteAllowlist } from './features/site-policy/store';
 import { isUserBlockedSite, readUserSiteBlocklist } from './features/site-policy/userBlocklist';
 import { requestReadGrant, type ReadGrant } from './features/side-panel/readGrant';
+import { readChromeLinkedPage } from './features/cloud-bridge/pageContextClient';
 import {
   activePageQuery,
   assistantHostWindowId,
@@ -165,10 +181,12 @@ import {
 } from './features/computer-use/transientHostPermissions';
 import {
   CHAT_READ_PAGE_TOOL,
+  CHAT_AUTOFILL_TOOL,
   CHAT_TOOL_FENCE_RESERVE_CHARS,
   CHAT_TOOL_HANDOFF_TIMEOUT_MS,
   MAX_CHAT_TOOL_CALLS_PER_HANDOFF,
   MAX_CHAT_TOOL_RESULT_CHARS,
+  browserTaskGoalWithUserRequest,
   parseChatBrowserToolCall,
   type ChatBrowserToolTier,
 } from './features/computer-use/chatBrowserTools';
@@ -196,6 +214,8 @@ import { setAnswerFollowUpSender } from './features/side-panel/markdown';
 import {
   buildBrowserTurnControls,
   buildBubbleWithTools,
+  refreshAgentActivityClocks,
+  resetReadAloud,
   buildBrowserTaskStartCard,
   buildHistorySearchCard,
   buildSiteGrantCard,
@@ -223,6 +243,9 @@ import {
   type StreamFailureDetail,
   hydrateStoredChatMessage,
   reconcileManagedRunActivity,
+  requestsCurrentFormFill,
+  requestsSavedApplicationProfile,
+  requestsImmediateSavedApplicationProfileFill,
   requestsCurrentPageContext,
   pageContextStillDescribes,
   resolveComposerPrompt,
@@ -234,7 +257,11 @@ import {
   type SidePanelMessageAttachment,
   type SidePanelPageReference,
 } from './features/side-panel/chat-state';
-import { buildMicrophoneNotice, setupVoiceInput } from './features/side-panel/voice';
+import {
+  buildMicrophoneNotice,
+  setupVoiceInput,
+  type VoiceInputAPI,
+} from './features/side-panel/voice';
 import {
   applyResolvedRoute,
   resolvedRouteFrom,
@@ -302,7 +329,10 @@ import {
   describeCancellationReason,
   type ComputerUsePanelAPI,
 } from './features/side-panel/computerUsePanel';
-import type { ActiveProjectSelection } from './features/side-panel/activeProject';
+import {
+  readStoredActiveProject,
+  type ActiveProjectSelection,
+} from './features/side-panel/activeProject';
 import { listChromeProjects } from './features/cloud-bridge/projectsClient';
 import {
   ARTIFACT_PANEL_CSS,
@@ -319,6 +349,7 @@ import {
 } from './features/cloud-bridge/videoGenerationClient';
 import {
   buildCommandPalette,
+  type CommandPaletteAPI,
   COMMAND_PALETTE_CSS,
   type PaletteCommand,
 } from './features/side-panel/commandPalette';
@@ -360,7 +391,6 @@ import {
   AccountUnavailableError,
   clearAuthToken,
   MANAGED_CHAT_MAX_ATTACHMENTS,
-  MANAGED_CHAT_MAX_ATTACHMENT_BYTES,
   MANAGED_CHAT_MAX_ATTACHMENT_FILE_BYTES,
   FREE_TRIAL_GATEWAY,
   signOutOfAccount,
@@ -413,6 +443,7 @@ import {
   sameManagedCloudOwner,
   type ManagedCloudOwner,
 } from './features/cloud-bridge/managedCloudAuthority';
+import { normalizeAnsweredModel } from './features/cloud-bridge/answeredModel';
 import { logger, withTimeout } from './utils';
 import {
   cancelChromeManagedRun,
@@ -472,13 +503,7 @@ function hydrateProjectNameCache(value: unknown): void {
   }
 }
 
-function readStoredActiveProject(value: unknown): ActiveProjectSelection | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const record = value as Record<string, unknown>;
-  const id = record['id'];
-  const name = record['name'];
-  return typeof id === 'string' && id && typeof name === 'string' && name ? { id, name } : null;
-}
+let projectSelectionGeneration = 0;
 let historyRestoreInProgress = false;
 let historyRestoreToken = 0;
 let invalidateConversationHistoryUI: () => void = () => {};
@@ -843,6 +868,19 @@ function createSharedSidePanelContext(): SharedSidePanelContext {
 }
 
 const _ctx: SharedSidePanelContext = createSharedSidePanelContext();
+const editableRewrites = new EditableRewriteController({
+  context: () => ({
+    owner: _ctx.managedCloudOwner,
+    conversationId: _ctx.conversationId,
+    streaming: _ctx.isStreaming,
+  }),
+  send: (message) => chrome.runtime.sendMessage(message),
+  changed: () => {
+    _ctx.needsMessageRebuild = true;
+    updateAttachmentPreview();
+    renderMessages();
+  },
+});
 const SIDE_PANEL_CLIENT_INSTANCE_ID = crypto.randomUUID();
 let managedChatKeepalivePort: chrome.runtime.Port | null = null;
 let managedChatKeepaliveTimer: ReturnType<typeof setInterval> | null = null;
@@ -891,19 +929,29 @@ function applyRoutingContinuation(routing: ChatChunk['routing']): boolean {
     console.warn('[SidePanel] Ignored malformed Managed Cloud routing metadata');
     return false;
   }
-  const nextEffort = resolveModelEffort(routing.modelKey, routing.effort);
-  if (routing.effort !== undefined && nextEffort !== routing.effort) {
+  const routedModelKey = normalizeAnsweredModel(routing.modelKey);
+  const continuationModelKey =
+    routing.answeredModel === undefined
+      ? routedModelKey
+      : normalizeAnsweredModel(routing.answeredModel);
+  if (!routedModelKey || !continuationModelKey) {
+    console.warn('[SidePanel] Ignored unavailable Managed Cloud routing metadata');
+    return false;
+  }
+  const routedEffort = resolveModelEffort(routedModelKey, routing.effort);
+  if (routing.effort !== undefined && routedEffort !== routing.effort) {
     console.warn('[SidePanel] Ignored unsupported Managed Cloud effort metadata');
     return false;
   }
+  const nextEffort = resolveModelEffort(continuationModelKey, routing.effort);
   const changed =
-    _ctx.currentModelKey !== routing.modelKey ||
+    _ctx.currentModelKey !== continuationModelKey ||
     _ctx.previousTaskType !== routing.taskType ||
     _ctx.reasoningEffort !== nextEffort;
-  _ctx.currentModelKey = routing.modelKey;
+  _ctx.currentModelKey = continuationModelKey;
   _ctx.previousTaskType = routing.taskType;
   _ctx.reasoningEffort = nextEffort;
-  refreshEffortUI();
+  if (changed) refreshEffortUI();
   return changed;
 }
 
@@ -921,13 +969,12 @@ function captureResolvedRoute(streamId: string, routing: ChatChunk['routing']): 
   resolvedRouteByStreamId.set(streamId, route);
   const assistant = _ctx.messages.find((message) => message.id === streamId);
   if (!assistant) return false;
-  stampResolvedRoute(streamId, assistant);
-  return true;
+  return stampResolvedRoute(streamId, assistant);
 }
 
-function stampResolvedRoute(streamId: string, assistant: ChatMessage): void {
+function stampResolvedRoute(streamId: string, assistant: ChatMessage): boolean {
   const route = resolvedRouteByStreamId.get(streamId);
-  if (route) applyResolvedRoute(assistant, route);
+  return route ? applyResolvedRoute(assistant, route) : false;
 }
 
 function managedQuickModeActive(): boolean {
@@ -1036,19 +1083,21 @@ interface TurnPayload {
   prompt: string;
   pageText: string | null;
   capturePage: boolean;
+  prefetchPage?: boolean;
   images: ComposerImage[];
   files: ComposerFile[];
   agiWorkPlan?: string[];
   skillName?: string;
+  editableTarget?: EditableSelectionTarget;
 }
 
-const pendingAttachments: ComposerImage[] = [];
 const turnPayloadByMessageId = new Map<string, TurnPayload>();
 const streamStartedAtById = new Map<string, number>();
 interface ComposerDocument {
   key: string;
   file: File;
   mimeType: string;
+  previewDataUrl?: string;
   phase: ManagedCloudChatAttachmentUploadPhase;
   error?: string;
   attachment?: ManagedCloudChatAttachment;
@@ -1066,6 +1115,7 @@ const cloudRunsByStreamId = new Map<string, ManagedCloudAgentRunReference>();
 const resolvedRouteByStreamId = new Map<string, ResolvedRoute>();
 const quickModeByStreamId = new Map<string, boolean>();
 const ownerByStreamId = new Map<string, ManagedCloudOwner>();
+const pendingManagedAdmissions = new Set<string>();
 const assistantCloudIdByStreamId = new Map<string, string>();
 
 /**
@@ -1087,6 +1137,7 @@ const MAX_STORED_GENERATED_FILES_PER_MESSAGE = 20;
 
 function pruneTurnPayloads(): void {
   const live = new Set(_ctx.messages.map((message) => message.id));
+  editableRewrites.prune(live);
   for (const messageId of turnPayloadByMessageId.keys()) {
     if (!live.has(messageId)) turnPayloadByMessageId.delete(messageId);
   }
@@ -1178,7 +1229,13 @@ function persistMessages(): Promise<void> {
     },
     projectBinding,
   ).then((entry) => {
-    if (entry && _ctx.pendingProjectBinding === projectBinding) {
+    if (
+      entry &&
+      projectBinding !== undefined &&
+      _ctx.pendingProjectBinding === projectBinding &&
+      entry.cloudSync?.createAcknowledged === true &&
+      entry.cloudSync.syncedProjectId === projectBinding
+    ) {
       delete _ctx.pendingProjectBinding;
     }
     if (
@@ -1205,6 +1262,31 @@ function saveMessagesNow(): Promise<void> {
 
 function saveMessages(): void {
   void saveMessagesNow();
+}
+
+function saveStreamCheckpoint(): void {
+  const now = Date.now();
+  if (now - lastStreamPersistAtMs < STREAM_TEXT_PERSIST_INTERVAL_MS) return;
+  lastStreamPersistAtMs = now;
+  saveMessages();
+}
+
+function activityRequiresRender(
+  previous: ChatMessage['agentActivity'],
+  next: ChatMessage['agentActivity'],
+): boolean {
+  if (!previous || !next) return previous !== next;
+  return (
+    previous.sessionId !== next.sessionId ||
+    previous.turnId !== next.turnId ||
+    previous.status !== next.status ||
+    previous.stopReason !== next.stopReason ||
+    previous.startedAtMs !== next.startedAtMs ||
+    previous.completedAtMs !== next.completedAtMs ||
+    previous.turnDiff !== next.turnDiff ||
+    previous.entries.length !== next.entries.length ||
+    next.entries.some((entry, index) => entry !== previous.entries[index])
+  );
 }
 
 function requestCloudConversationSync(conversationId = _ctx.conversationId): void {
@@ -1375,6 +1457,7 @@ async function loadMessages(): Promise<void> {
     if (persistedSeed) active = persistedSeed;
   }
   activePersistenceEntry = active;
+  adoptChatProject(active.projectId);
   _ctx.selectedModel = normalizeModelId(active.routing.selectedModel) ?? 'auto';
   _ctx.currentModelKey = active.routing.currentModelKey;
   _ctx.previousTaskType = active.routing.previousTaskType;
@@ -1507,6 +1590,7 @@ async function adoptClosedPanelTurn(
 
 let newChatModelSelection = 'auto';
 let newChatEffortSelection: Effort | undefined;
+let composerVoiceInput: VoiceInputAPI | undefined;
 
 function effortForNewChat(): Effort | undefined {
   const model = _ctx.selectedModel;
@@ -1518,6 +1602,10 @@ function effortForNewChat(): Effort | undefined {
 
 function advanceConversationGeneration(): void {
   _ctx.conversationGeneration += 1;
+  composerVoiceInput?.reset();
+  resetReadAloud();
+  clearVoiceInputComposerNotice();
+  void taskSiteGrants.releaseTask();
   cancelComposerImageIntake();
   renderMemoryNotice(null);
 }
@@ -1528,7 +1616,7 @@ function clearStoredMessages(): void {
   advanceConversationGeneration();
   _ctx.conversationId = createBrowserConversationId();
   leaveTemporaryChat();
-  _ctx.pendingProjectBinding = _ctx.activeProject?.id ?? null;
+  _ctx.pendingProjectBinding = _ctx.activeProject?.id;
   clearActivePersistenceState();
   persistCurrentConversationOwner();
   _ctx.selectedModel = newChatModelSelection;
@@ -1557,6 +1645,9 @@ function clearPendingPageContext(): void {
 }
 
 function resetConversationView(): void {
+  clearStreamCancellationComposerNotice();
+  composerContextNotice = null;
+  editableRewrites.reset();
   returnFollowUpsToComposer();
   _ctx.messages.length = 0;
   turnPayloadByMessageId.clear();
@@ -1566,9 +1657,15 @@ function resetConversationView(): void {
   clearPendingPageContext();
   clearStoredMessages();
   updateContextButton();
+  updateAttachmentPreview();
   updateSendButton();
   renderMessages();
 }
+
+let accountMemorySheet: MemorySheet | undefined;
+let accountTasksSheet: TasksSheet | undefined;
+let accountCommandPalette: CommandPaletteAPI | undefined;
+let resetAccountSkillMenu: () => void = () => {};
 
 async function transitionManagedCloudOwner(nextOwner: ManagedCloudOwner | null): Promise<boolean> {
   const previousOwner = _ctx.managedCloudOwner;
@@ -1579,6 +1676,10 @@ async function transitionManagedCloudOwner(nextOwner: ManagedCloudOwner | null):
     return false;
   }
 
+  accountMemorySheet?.reset();
+  accountTasksSheet?.reset();
+  accountCommandPalette?.close();
+  resetAccountSkillMenu();
   historyRestoreToken += 1;
   historyRestoreInProgress = false;
   clearActivePersistenceState();
@@ -1591,6 +1692,7 @@ async function transitionManagedCloudOwner(nextOwner: ManagedCloudOwner | null):
     _ctx.streamTimeoutHandle = null;
   }
   _ctx.managedCloudOwner = nextOwner ? { ...nextOwner } : null;
+  editableRewrites.reset();
   capabilityDocument = null;
   accountIdentity = null;
   renderEmptyGreeting();
@@ -1617,13 +1719,13 @@ async function transitionManagedCloudOwner(nextOwner: ManagedCloudOwner | null):
   _ctx.isStreaming = false;
   _ctx.currentStreamId = null;
   clearPendingPageContext();
-  pendingAttachments.length = 0;
   composerAttachmentNotices = [];
   composerContextNotice = null;
   updateAttachmentPreview();
   discardComposerDocuments();
   _ctx.conversationId = createBrowserConversationId();
   _ctx.activeProject = null;
+  projectSelectionGeneration += 1;
   delete _ctx.pendingProjectBinding;
   refreshProjectChip();
   recentProjects = [];
@@ -1643,8 +1745,14 @@ async function transitionManagedCloudOwner(nextOwner: ManagedCloudOwner | null):
   resolvedRouteByStreamId.clear();
   quickModeByStreamId.clear();
   ownerByStreamId.clear();
+  pendingManagedAdmissions.clear();
   refreshModelPickerUI();
   refreshEffortUI();
+  const composer = document.getElementById('sp-input') as HTMLTextAreaElement | null;
+  if (composer) {
+    composer.value = '';
+    composer.dispatchEvent(new Event('input', { bubbles: true }));
+  }
   updateContextButton();
   updateSendButton();
   removeThinking();
@@ -1793,6 +1901,19 @@ function injectStyles(): void {
       background: var(--agi-ext-primary);
       color: var(--agi-ext-on-primary);
       font-weight: 600;
+    }
+
+    .sp-editable-preview { margin: auto; }
+    .sp-editable-preview::backdrop { background: var(--agi-ext-scrim); }
+    .sp-editable-preview__original { max-height: 6lh; font: inherit; }
+    .sp-editable-preview__replacement { min-height: 8lh; font-size: var(--type-body-size); line-height: var(--type-body-height); }
+    .sp-editable-preview .sp-context-handoff-actions { flex-wrap: wrap; }
+    .sp-editable-action { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-block: 8px; }
+    .sp-editable-action > span, .sp-editable-preview p, .sp-editable-preview label { min-width: 0; overflow-wrap: anywhere; }
+    .sp-editable-target > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sp-editable-action button { min-height: var(--control-lg); }
+    @media (pointer: coarse) {
+      .sp-editable-action button, .sp-editable-preview button { min-height: var(--control-touch); }
     }
 
     /* ── Project chip ── */
@@ -4867,7 +4988,8 @@ function injectStyles(): void {
     .sp-sheet-close:hover { background: var(--agi-ext-hover); color: var(--agi-ext-text); }
     .sp-sheet-intro { margin: 0; color: var(--agi-ext-text-muted); font-size: var(--type-body-size); line-height: var(--type-body-height); }
     .sp-memory-add, .sp-memory-edit { display: flex; gap: 6px; }
-    .sp-memory-add input, .sp-memory-edit input {
+    .sp-memory-edit { align-items: flex-start; }
+    .sp-memory-add input, .sp-memory-edit textarea {
       flex: 1;
       min-width: 0;
       min-height: var(--control-md);
@@ -4878,6 +5000,7 @@ function injectStyles(): void {
       color: var(--agi-ext-text);
       font: inherit;
     }
+    .sp-memory-edit textarea { resize: vertical; }
     .sp-memory-status { min-height: 1em; color: var(--agi-ext-text-muted); font-size: var(--type-caption-size); }
     .sp-memory-list { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
     .sp-memory-item {
@@ -4888,7 +5011,7 @@ function injectStyles(): void {
       border: 1px solid var(--agi-ext-border);
       border-radius: var(--corner-field);
     }
-    .sp-memory-text { margin: 0; color: var(--agi-ext-text); font-size: var(--type-body-size); line-height: var(--type-body-height); overflow-wrap: anywhere; }
+    .sp-memory-text { margin: 0; color: var(--agi-ext-text); font-size: var(--type-body-size); line-height: var(--type-body-height); overflow-wrap: anywhere; white-space: pre-wrap; }
     .sp-memory-source { color: var(--agi-ext-text-muted); font-size: var(--type-caption-size); }
     .sp-memory-actions, .sp-memory-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
     .sp-memory-confirm p { flex-basis: 100%; margin: 0; color: var(--agi-ext-text); font-size: var(--type-body-size); }
@@ -5676,7 +5799,13 @@ function renderMessages(): void {
                 artifacts: messageArtifactsBinding(msg),
               }),
           ...(msg.role === 'assistant'
-            ? { browserControls: browserControlsByMessageId.get(msg.id)?.element ?? null }
+            ? {
+                browserControls: browserControlsByMessageId.get(msg.id)?.element ?? null,
+                editableAction:
+                  i === _ctx.messages.length - 1
+                    ? editableRewrites.renderAction(msg.id, msg.content)
+                    : null,
+              }
             : {}),
           ...(msg.role === 'assistant' && i === _ctx.messages.length - 1 && !_ctx.isStreaming
             ? {
@@ -6008,12 +6137,21 @@ const PAGE_CONTEXT_BLOCKED_REASON =
   'Web Store, and pages an administrator has restricted. Open an ordinary site and try again.';
 
 const PAGE_CONTEXT_EMPTY_REASON = 'This page had no readable text to attach.';
+const PAGE_CONTEXT_LOADING_REASON =
+  'This page is still loading. Wait for it to finish and try again.';
 
 const PAGE_CONTEXT_CHANGED_REASON =
   'The active page changed before it could be read. Go back to the page you asked about and try again.';
 
 export type PageContextCapture =
-  | { ok: true; text: string; source: PageContextSource; truncated?: boolean; documentId?: string }
+  | {
+      ok: true;
+      text: string;
+      source: PageContextSource;
+      truncated?: boolean;
+      documentId?: string;
+      formSnapshotId?: string;
+    }
   | { ok: false; reason: string };
 
 function describePageContextFailure(message: string): string {
@@ -6024,6 +6162,50 @@ function describePageContextFailure(message: string): string {
     return PAGE_CONTEXT_DENIED_REASON;
   }
   return `The page could not be read: ${message}`;
+}
+
+let tabCleanupInProgress = false;
+
+function renderTabCleanupNotice(message: string): void {
+  const notice = document.getElementById('sp-tab-cleanup-notice');
+  const text = document.getElementById('sp-tab-cleanup-notice-text');
+  if (!notice || !text) return;
+  text.textContent = message;
+  notice.classList.toggle('visible', message.length > 0);
+}
+
+async function closeUnusedBrowserTabs(): Promise<void> {
+  if (tabCleanupInProgress) return;
+  if (_ctx.isStreaming || stoppingStreamId !== null || hasUnconfirmedStreamCancellation()) {
+    renderTabCleanupNotice(t('spTabCleanupBusy'));
+    return;
+  }
+  tabCleanupInProgress = true;
+  const owner = _ctx.managedCloudOwner;
+  const generation = _ctx.conversationGeneration;
+  const isCurrent = (): boolean =>
+    !_ctx.isStreaming &&
+    stoppingStreamId === null &&
+    generation === _ctx.conversationGeneration &&
+    ((owner === null && _ctx.managedCloudOwner === null) ||
+      sameManagedCloudOwner(owner, _ctx.managedCloudOwner));
+  try {
+    const selection = await chooseTabsToClose(isCurrent);
+    if (!selection || !isCurrent()) return;
+    const result = await closeSelectedBrowserTabs(selection, isCurrent);
+    if (isCurrent())
+      renderTabCleanupNotice(
+        [
+          tPlural('spTabCleanupClosed', result.closed.length),
+          ...(result.skipped.length ? [tPlural('spTabCleanupSkipped', result.skipped.length)] : []),
+          ...(result.failed.length ? [tPlural('spTabCleanupFailed', result.failed.length)] : []),
+        ].join(' '),
+      );
+  } catch {
+    if (isCurrent()) renderTabCleanupNotice(t('spTabCleanupError'));
+  } finally {
+    tabCleanupInProgress = false;
+  }
 }
 
 /**
@@ -6052,7 +6234,7 @@ async function capturePageContext(
     if (tab.status === 'loading')
       return {
         ok: false,
-        reason: 'This page is still loading. Wait for it to finish and try again.',
+        reason: PAGE_CONTEXT_LOADING_REASON,
       };
     if (selected && (tab.url !== selected.url || tab.windowId !== selected.windowId))
       return { ok: false, reason: PAGE_CONTEXT_CHANGED_REASON };
@@ -6083,13 +6265,14 @@ async function capturePageContext(
 async function capturePageContextWithSiteAccess(
   streamId: string,
   quickMode: boolean,
+  scope: SiteGrantScope = 'read',
 ): Promise<PageContextCapture> {
   const capture = await capturePageContext();
   if (capture.ok || capture.reason !== PAGE_CONTEXT_DENIED_REASON) return capture;
   if (_ctx.currentStreamId !== streamId) return capture;
   ensureStreamingAssistant(streamId, quickMode);
   renderMessages();
-  const access = await requestBrowserSiteAccess(streamId, 'read');
+  const access = await requestBrowserSiteAccess(streamId, scope);
   if (access.status !== 'granted') {
     return { ok: false, reason: access.reason ?? PAGE_CONTEXT_DENIED_REASON };
   }
@@ -6100,93 +6283,81 @@ async function capturePageContextWithSiteAccess(
   }
 }
 
-function readTabText(tab: chrome.tabs.Tab, chosen = false): Promise<PageContextCapture> {
-  return new Promise((resolve) => {
-    if (!tab.id) {
-      resolve({ ok: false, reason: 'That tab has no page to read.' });
-      return;
-    }
-    chrome.scripting.executeScript(
-      {
-        target: { tabId: tab.id },
-        args: [MAX_PAGE_TEXT_CHARACTERS],
-        func: (maxCharacters: number) => {
-          const main = document.querySelector('main, article, [role="main"]');
-          const mainText = main instanceof HTMLElement ? main.innerText.trim() : '';
-          const text = mainText.length >= 200 ? mainText : (document.body?.innerText ?? '');
-          return { text: text.slice(0, maxCharacters + 1), truncated: text.length > maxCharacters };
-        },
-      },
-      (results) => {
-        const scriptFailure = chrome.runtime.lastError?.message;
-        if (scriptFailure) {
-          resolve({ ok: false, reason: describePageContextFailure(scriptFailure) });
-          return;
-        }
-        const result = results?.[0]?.result;
-        const raw = typeof result?.text === 'string' ? result.text : '';
-        const { text, truncated } = boundPageText(
-          sanitizePageText(raw),
-          result?.truncated === true,
-        );
-        resolve(
-          text.trim()
-            ? {
-                ok: true,
-                text,
-                truncated,
-                ...(typeof results?.[0]?.documentId === 'string'
-                  ? { documentId: results[0].documentId }
-                  : {}),
-                source: {
-                  tabId: tab.id!,
-                  url: tab.url ?? '',
-                  ...(tab.title ? { title: tab.title } : {}),
-                  ...(chosen ? { chosen: true } : {}),
-                },
-              }
-            : { ok: false, reason: PAGE_CONTEXT_EMPTY_REASON },
-        );
-      },
+async function readTabText(tab: chrome.tabs.Tab, chosen = false): Promise<PageContextCapture> {
+  if (!tab.id || !tab.url) return { ok: false, reason: 'That tab has no page to read.' };
+  try {
+    const observation = await readTabObservation(tab.id, tab.url);
+    const { text, truncated } = boundPageText(
+      sanitizePageText(observation.text),
+      observation.truncated,
     );
-  });
+    return text.trim()
+      ? {
+          ok: true,
+          text,
+          truncated,
+          documentId: observation.documentId,
+          ...(observation.formSnapshotId ? { formSnapshotId: observation.formSnapshotId } : {}),
+          source: {
+            tabId: tab.id,
+            url: tab.url,
+            ...(tab.title ? { title: tab.title } : {}),
+            ...(chosen ? { chosen: true } : {}),
+          },
+        }
+      : { ok: false, reason: PAGE_CONTEXT_EMPTY_REASON };
+  } catch (error) {
+    return {
+      ok: false,
+      reason: describePageContextFailure(
+        error instanceof Error ? error.message : 'Page access is unavailable.',
+      ),
+    };
+  }
 }
 
-async function readLinkedPage(url: string): Promise<PageContextCapture> {
+async function readLinkedPage(
+  url: string,
+  owner: ManagedCloudOwner,
+  signal: AbortSignal,
+): Promise<PageContextCapture> {
   if (await isUserBlockedSite(url))
     return { ok: false, reason: t('spSiteBlockedByYou', [pageChipLabel(url)]) };
-  let response: Response;
   try {
-    response = await fetch(url, { credentials: 'omit', redirect: 'follow' });
-  } catch {
-    return { ok: false, reason: t('spLinkUnreachable', [pageChipLabel(url)]) };
+    const outcome = await readChromeLinkedPage(url, { owner, signal });
+    if (!outcome.ok)
+      return {
+        ok: false,
+        reason:
+          outcome.errorCode === 'unsupported_content_type'
+            ? t('spLinkNotText', [pageChipLabel(url)])
+            : outcome.error,
+      };
+    if (await isUserBlockedSite(outcome.url))
+      return { ok: false, reason: t('spSiteBlockedByYou', [pageChipLabel(outcome.url)]) };
+    const content = sanitizePageText(outcome.content);
+    if (!content.trim()) return { ok: false, reason: PAGE_CONTEXT_EMPTY_REASON };
+    const title = sanitizePageText(outcome.title).trim();
+    const bounded = boundPageText(
+      title ? `Title: ${title}\n\n${content}` : content,
+      outcome.truncated,
+    );
+    return {
+      ok: true,
+      text: bounded.text,
+      truncated: bounded.truncated,
+      source: { url: outcome.url, title, chosen: true },
+    };
+  } catch (error) {
+    if (signal.aborted) throw error;
+    return {
+      ok: false,
+      reason:
+        error instanceof Error
+          ? sanitizePageText(error.message)
+          : t('spLinkUnreachable', [pageChipLabel(url)]),
+    };
   }
-  if (!response.ok) {
-    return { ok: false, reason: t('spLinkStatus', [pageChipLabel(url), String(response.status)]) };
-  }
-  const contentType = response.headers.get('content-type') ?? '';
-  if (!/^text\/(html|plain)|application\/xhtml\+xml/i.test(contentType)) {
-    return { ok: false, reason: t('spLinkNotText', [pageChipLabel(url)]) };
-  }
-  const body = await response.text();
-  const page = /^text\/plain/i.test(contentType)
-    ? null
-    : new DOMParser().parseFromString(body, 'text/html');
-  page?.querySelectorAll('script, style, noscript, template, svg').forEach((node) => node.remove());
-  const main = page?.querySelector('main, article, [role="main"]');
-  const mainText = main?.textContent?.trim() ?? '';
-  const raw = page ? (mainText.length >= 200 ? mainText : (page.body?.textContent ?? '')) : body;
-  const text = sanitizePageText(raw.replace(/\s+\n/g, '\n').replace(/[ \t]{2,}/g, ' ')).slice(
-    0,
-    MAX_PAGE_TEXT_CHARACTERS,
-  );
-  if (!text.trim()) return { ok: false, reason: PAGE_CONTEXT_EMPTY_REASON };
-  const title = page?.title.trim();
-  return {
-    ok: true,
-    text,
-    source: { url: response.url || url, ...(title ? { title } : {}), chosen: true },
-  };
 }
 
 interface PendingStreamCancellation {
@@ -6201,6 +6372,16 @@ interface PendingStreamCancellation {
 
 const pendingStreamCancellations = new Map<string, PendingStreamCancellation>();
 const STREAM_CANCELLATION_TIMEOUT_MS = MANAGED_RUN_CANCELLATION_TIMEOUT_MS;
+let streamCancellationComposerNotice: { streamId: string; text: string } | null = null;
+
+function clearStreamCancellationComposerNotice(streamId?: string): void {
+  const notice = streamCancellationComposerNotice;
+  if (!notice || (streamId !== undefined && notice.streamId !== streamId)) return;
+  streamCancellationComposerNotice = null;
+  if (composerContextNotice !== notice.text) return;
+  composerContextNotice = null;
+  updateAttachmentPreview();
+}
 
 function ownsStreamCancellation(cancellation: PendingStreamCancellation): boolean {
   return (
@@ -6225,9 +6406,24 @@ function settleObservedStreamCancellation(streamId: string): void {
   pendingStreamCancellations.delete(streamId);
   const assistant = _ctx.messages.find((message) => message.id === streamId);
   if (!assistant?.streamCancellation) return;
+  clearStreamCancellationComposerNotice(streamId);
   delete assistant.streamCancellation;
   delete assistant.errorText;
   delete assistant.error;
+  if (_ctx.currentStreamId === streamId) {
+    _ctx.currentStreamId = null;
+    _ctx.isStreaming = false;
+    if (_ctx.streamTimeoutHandle) {
+      clearTimeout(_ctx.streamTimeoutHandle);
+      _ctx.streamTimeoutHandle = null;
+    }
+    stopManagedChatKeepalive();
+    removeThinking();
+    resolvedRouteByStreamId.delete(streamId);
+    quickModeByStreamId.delete(streamId);
+    ownerByStreamId.delete(streamId);
+    streamStartedAtById.delete(streamId);
+  }
 }
 
 async function requestStreamCancellation(streamId: string): Promise<void> {
@@ -6342,10 +6538,7 @@ async function requestStreamCancellation(streamId: string): Promise<void> {
           cloudRunsByStreamId.set(streamId, { ...response.cloudRun });
         }
         reconcileManagedRunActivity(assistant);
-        delete assistant.streamCancellation;
-        delete assistant.errorText;
-        delete assistant.error;
-        pendingStreamCancellations.delete(streamId);
+        settleObservedStreamCancellation(streamId);
         _ctx.needsMessageRebuild = true;
         saveMessages();
         renderMessages();
@@ -6421,8 +6614,9 @@ function beginManagedStream(quickMode: boolean): string {
   const owner = _ctx.managedCloudOwner;
   if (!owner) throw new Error('Managed Cloud authority is unavailable.');
   const streamId = `stream-${crypto.randomUUID()}`;
-  turnGrantedOrigins.clear();
+  void taskSiteGrants.releaseTask();
   ownerByStreamId.set(streamId, { ...owner });
+  pendingManagedAdmissions.add(streamId);
   quickModeByStreamId.set(streamId, quickMode);
   assistantCloudIdByStreamId.set(streamId, crypto.randomUUID());
   streamStartedAtById.set(streamId, Date.now());
@@ -6976,6 +7170,7 @@ function applyComposerBrowserMessage(message: Record<string, unknown>): void {
 
 function cancelCurrentManagedStream(preservePartialOutput: boolean): void {
   dismissPendingSiteGrants();
+  void taskSiteGrants.releaseTask(_ctx.currentStreamId ?? undefined);
   if (composerBrowserRun) {
     const nested = composerBrowserRun.nested;
     cancelComposerBrowserTask();
@@ -7006,6 +7201,20 @@ function cancelCurrentManagedStream(preservePartialOutput: boolean): void {
   if (_ctx.streamTimeoutHandle) {
     clearTimeout(_ctx.streamTimeoutHandle);
     _ctx.streamTimeoutHandle = null;
+  }
+  if (!expectedRun && pendingManagedAdmissions.delete(streamId)) {
+    if (preservePartialOutput) {
+      const cancelled =
+        stopped ?? ensureStreamingAssistant(streamId, quickModeByStreamId.get(streamId) === true);
+      cancelled.streaming = false;
+      cancelled.interrupted = true;
+    }
+    clearStoppedStream();
+    _ctx.needsMessageRebuild = true;
+    saveMessages();
+    renderMessages();
+    if (preservePartialOutput) sendNextFollowUp();
+    return;
   }
   if (!preservePartialOutput) {
     composerContextNotice = null;
@@ -7070,6 +7279,7 @@ function cancelCurrentManagedStream(preservePartialOutput: boolean): void {
       stoppingStreamId = null;
       returnFollowUpsToComposer();
       composerContextNotice = t('spCancellationUnconfirmed');
+      streamCancellationComposerNotice = { streamId, text: composerContextNotice };
       updateAttachmentPreview();
       if (_ctx.currentStreamId === streamId && _ctx.isStreaming) {
         armManagedStreamInactivityWatchdog(streamId);
@@ -7096,9 +7306,10 @@ interface BrowserSiteAccess {
   tabId?: number;
   reason?: string;
   release?: () => Promise<void>;
+  grantId?: string;
 }
 
-const turnGrantedOrigins = new Map<string, Set<string>>();
+const taskSiteGrants = new BrowserTaskSiteGrants();
 const pendingSiteGrants = new Set<() => void>();
 
 function webTabOrigin(tab: chrome.tabs.Tab | undefined): string | null {
@@ -7111,6 +7322,7 @@ async function originHasHostPermission(origin: string): Promise<boolean> {
 }
 
 async function activeBrowserToolTier(streamId: string): Promise<ChatBrowserToolTier | undefined> {
+  if (_ctx.currentStreamId !== streamId) return undefined;
   let tab: chrome.tabs.Tab | undefined;
   try {
     [tab] = await chrome.tabs.query(await activePageQuery());
@@ -7119,7 +7331,6 @@ async function activeBrowserToolTier(streamId: string): Promise<ChatBrowserToolT
   }
   const origin = webTabOrigin(tab);
   if (!origin || (await isUserBlockedSite(origin))) return undefined;
-  if (turnGrantedOrigins.get(streamId)?.has(origin)) return 'act';
   if (await originApprovedForBrowserControl(origin)) return 'act';
   const policy = await loadSitePolicyInput();
   return evaluateSitePolicy(
@@ -7151,6 +7362,15 @@ async function requestBrowserSiteAccess(
   streamId: string,
   scope: SiteGrantScope,
 ): Promise<BrowserSiteAccess> {
+  const owner = _ctx.managedCloudOwner;
+  const context = { streamId, generation: _ctx.conversationGeneration, owner: owner! };
+  const stillCurrent = (): boolean =>
+    _ctx.currentStreamId === streamId &&
+    _ctx.conversationGeneration === context.generation &&
+    sameManagedCloudOwner(owner, _ctx.managedCloudOwner);
+  if (!owner || !stillCurrent())
+    return { status: 'unavailable', reason: 'The browser task is no longer active.' };
+  await taskSiteGrants.settled();
   let tab: chrome.tabs.Tab | undefined;
   try {
     [tab] = await chrome.tabs.query(await activePageQuery());
@@ -7175,8 +7395,34 @@ async function requestBrowserSiteAccess(
     if (!permitted.allowed) {
       return { status: 'unavailable', reason: sitePolicyDenialMessage(permitted, '') };
     }
-    if (await originApprovedForBrowserControl(origin)) return { status: 'granted', origin, tabId };
+    if (await originApprovedForBrowserControl(origin))
+      return stillCurrent()
+        ? { status: 'granted', origin, tabId }
+        : { status: 'unavailable', reason: 'The browser task is no longer active.' };
   }
+  const cached = await taskSiteGrants.get(context, origin, tabId, 'read');
+  if (cached) {
+    let active = await originHasHostPermission(origin);
+    if (!active) {
+      await taskSiteGrants.releaseGrant(cached);
+      return {
+        status: 'declined',
+        origin,
+        reason: 'Chrome site access was revoked during this task.',
+      };
+    }
+    if (active && cached.scope === 'act') {
+      const checked = await chrome.runtime
+        .sendMessage({ type: 'CHECK_SITE_ONCE', grantId: cached.grantId, origin })
+        .catch(() => undefined);
+      active = checked?.success === true;
+    }
+    if (active && (scope === 'read' || cached.scope === 'act') && stillCurrent())
+      return { status: 'granted', origin, tabId };
+    await taskSiteGrants.releaseGrant(cached);
+  }
+  if (!stillCurrent())
+    return { status: 'unavailable', reason: 'The browser task is no longer active.' };
   const hadHostPermission = await originHasHostPermission(origin);
   const transientId = `site_once_${crypto.randomUUID()}`;
 
@@ -7218,10 +7464,18 @@ async function requestBrowserSiteAccess(
             : Promise.resolve();
         void requested.then(async (granted) => {
           await transientRecorded;
-          if (!pendingSiteGrants.has(dismiss)) {
-            if (granted && !hadHostPermission && !(await originApprovedForBrowserControl(origin)))
-              await removeBrowserControlHostPermission(origin);
-            await forgetTransientHostPermissions([transientId]).catch(() => []);
+          const currentTab = await chrome.tabs.get(tabId).catch(() => undefined);
+          if (
+            !pendingSiteGrants.has(dismiss) ||
+            !stillCurrent() ||
+            webTabOrigin(currentTab) !== origin
+          ) {
+            if (pendingSiteGrants.has(dismiss)) dismiss();
+            await taskSiteGrants.discard(async () => {
+              if (granted && !hadHostPermission && !(await originApprovedForBrowserControl(origin)))
+                await removeBrowserControlHostPermission(origin);
+              await forgetTransientHostPermissions([transientId]).catch(() => []);
+            });
             return;
           }
           if (!granted) {
@@ -7248,15 +7502,11 @@ async function requestBrowserSiteAccess(
                 origin,
                 tabId,
                 reason: t('spBrowserAccessAllowedOnce', [host]),
-                ...(hostPermissionAdded
-                  ? {
-                      release: async () => {
-                        if (!(await originApprovedForBrowserControl(origin)))
-                          await removeBrowserControlHostPermission(origin);
-                        await forgetTransientHostPermissions([transientId]).catch(() => []);
-                      },
-                    }
-                  : {}),
+                release: async () => {
+                  if (hostPermissionAdded && !(await originApprovedForBrowserControl(origin)))
+                    await removeBrowserControlHostPermission(origin);
+                  await forgetTransientHostPermissions([transientId]).catch(() => []);
+                },
               });
               return;
             }
@@ -7272,6 +7522,7 @@ async function requestBrowserSiteAccess(
               status: 'granted',
               origin,
               tabId,
+              grantId,
               reason: t('spBrowserAccessAllowedOnce', [host]),
               release: async () => {
                 await chrome.runtime
@@ -7296,9 +7547,20 @@ async function requestBrowserSiteAccess(
   });
   releaseBrowserTurnControls(streamId);
   if (access.status === 'granted') {
-    const granted = turnGrantedOrigins.get(streamId) ?? new Set<string>();
-    granted.add(origin);
-    turnGrantedOrigins.set(streamId, granted);
+    if (!stillCurrent()) {
+      if (access.release) await taskSiteGrants.discard(access.release);
+      return { status: 'declined', origin, reason: t('spBrowserAccessDeclined', [host]) };
+    }
+    if (access.release) {
+      taskSiteGrants.retain(context, {
+        origin,
+        tabId,
+        scope,
+        grantId: access.grantId,
+        release: access.release,
+      });
+      delete access.release;
+    }
   }
   recordBrowserActivity(streamId, [
     {
@@ -7372,6 +7634,7 @@ async function runReadPageTool(streamId: string, toolCallId: string): Promise<st
     if (capture.ok) {
       const assistant = browserTurnMessage(streamId);
       if (assistant) {
+        assistant.browserObservation = formObservationReference(capture);
         assistant.pages = [
           ...(assistant.pages ?? []).filter((page) => page.url !== capture.source.url),
           pageReference(capture.source),
@@ -7482,12 +7745,17 @@ async function runHistorySearchTool(
 }
 
 async function runBrowserTaskTool(streamId: string, goal: string): Promise<string> {
+  const userRequest = _ctx.messages
+    .slice()
+    .reverse()
+    .find((message) => message.role === 'user')?.content;
+  const taskGoal = browserTaskGoalWithUserRequest(goal, userRequest);
   if ((await currentPermissionMode()) === 'ask' && !(await confirmBrowserTaskStart(streamId, goal)))
     return t('spBrowserTaskStartDeclined');
   const access = await requestBrowserSiteAccess(streamId, 'act');
   if (access.status !== 'granted') return siteAccessRefusal(access);
   try {
-    const outcome = await startComposerBrowserTask(goal, { messageId: streamId });
+    const outcome = await startComposerBrowserTask(taskGoal, { messageId: streamId });
     const summary =
       outcome.status === 'completed'
         ? 'The browser task finished. Its report, written from untrusted page content:'
@@ -7495,6 +7763,123 @@ async function runBrowserTaskTool(streamId: string, goal: string): Promise<strin
           ? 'The browser task was stopped before it finished:'
           : 'The browser task failed:';
     return `${summary}\n${fencedToolResult('browser_task', outcome.message)}`;
+  } finally {
+    await access.release?.();
+  }
+}
+
+async function runFormFillTool(
+  streamId: string,
+  toolCallId: string,
+  profile: import('./features/content/autofill/contactProfile').ContactAutofillProfile,
+  fieldPlan?: import('./features/content/formFillPlan').FormFillPlan,
+  replaceExisting?: boolean,
+  onVerified?: () => void,
+): Promise<string> {
+  const owner = _ctx.managedCloudOwner;
+  const generation = _ctx.conversationGeneration;
+  const assertCurrent = (): void => {
+    if (
+      !owner ||
+      _ctx.currentStreamId !== streamId ||
+      _ctx.conversationGeneration !== generation ||
+      !sameManagedCloudOwner(owner, _ctx.managedCloudOwner)
+    )
+      throw new Error('The form filling task stopped or changed accounts.');
+  };
+  assertCurrent();
+  const observation = browserTurnMessage(streamId)?.browserObservation;
+  if (fieldPlan && !observation) return 'Read the current page before filling fields.';
+  if (
+    (await currentPermissionMode()) === 'ask' &&
+    !(await confirmBrowserTaskStart(
+      streamId,
+      `Fill these form fields without submitting:\n${JSON.stringify(fieldPlan ?? profile)}`,
+    ))
+  )
+    return t('spBrowserTaskStartDeclined');
+  const access = await requestBrowserSiteAccess(streamId, 'act');
+  if (access.status !== 'granted' || access.tabId === undefined) return siteAccessRefusal(access);
+  recordBrowserActivity(streamId, [
+    {
+      type: 'tool-execution-start',
+      toolCallId,
+      name: CHAT_AUTOFILL_TOOL,
+      category: 'computer-use',
+      summary: 'Fill form fields',
+      input: null,
+    },
+  ]);
+  try {
+    assertCurrent();
+    const tab = await chrome.tabs.get(access.tabId);
+    if (!tab.url || new URL(tab.url).origin !== access.origin)
+      throw new Error('The application page changed before autofill.');
+    assertCurrent();
+    if (fieldPlan && (observation!.tabId !== access.tabId || observation!.url !== tab.url))
+      throw new Error('The form source changed. Read the current page again.');
+    const request = fieldPlan
+      ? {
+          type: 'FILL_OBSERVED_FORM' as const,
+          tabId: access.tabId,
+          pageUrl: tab.url,
+          documentId: observation!.documentId,
+          formSnapshotId: observation!.formSnapshotId,
+          plan: fieldPlan,
+          owner,
+        }
+      : {
+          type: 'FILL_APPLICATION_CONTACT',
+          tabId: access.tabId,
+          pageUrl: tab.url,
+          profile,
+          ...(replaceExisting !== undefined ? { replaceExisting } : {}),
+          owner,
+        };
+    if (fieldPlan) delete browserTurnMessage(streamId)?.browserObservation;
+    const response = (await chrome.runtime.sendMessage(request)) as {
+      success?: boolean;
+      error?: string;
+      filledCount?: number;
+      elapsedMs?: number;
+      verified?: boolean;
+    };
+    if (response?.success !== true) throw new Error(response?.error ?? 'Form filling failed.');
+    if (
+      response.verified === true &&
+      typeof response.filledCount === 'number' &&
+      Number.isSafeInteger(response.filledCount) &&
+      response.filledCount > 0
+    )
+      onVerified?.();
+    const elapsedMs =
+      typeof response.elapsedMs === 'number' &&
+      Number.isSafeInteger(response.elapsedMs) &&
+      response.elapsedMs >= 0
+        ? response.elapsedMs
+        : undefined;
+    recordBrowserActivity(streamId, [
+      {
+        type: 'tool-execution-end',
+        toolCallId,
+        name: CHAT_AUTOFILL_TOOL,
+        output: `${response.filledCount ?? 0} fields filled and verified${elapsedMs !== undefined ? ` in ${elapsedMs} ms` : ''}.`,
+        isError: false,
+        ...(elapsedMs !== undefined ? { elapsedMs } : {}),
+      },
+    ]);
+    return fencedToolResult('form_fill', JSON.stringify(response));
+  } catch (error) {
+    recordBrowserActivity(streamId, [
+      {
+        type: 'tool-execution-end',
+        toolCallId,
+        name: CHAT_AUTOFILL_TOOL,
+        output: 'Form filling failed.',
+        isError: true,
+      },
+    ]);
+    throw error;
   } finally {
     await access.release?.();
   }
@@ -7519,6 +7904,9 @@ async function handleChatToolHandoff(message: ChatToolHandoffMessage): Promise<v
   const stillCurrent = (): boolean =>
     _ctx.currentStreamId === streamId &&
     _ctx.conversationGeneration === generation &&
+    !_ctx.messages.some(
+      (candidate) => candidate.id === streamId && candidate.streamCancellation !== undefined,
+    ) &&
     sameManagedCloudOwner(owner, _ctx.managedCloudOwner);
   if (_ctx.streamTimeoutHandle) {
     clearTimeout(_ctx.streamTimeoutHandle);
@@ -7529,6 +7917,7 @@ async function handleChatToolHandoff(message: ChatToolHandoffMessage): Promise<v
   const results: Array<{ toolCallId: string; content: string }> = [];
   const deadline = setTimeout(() => {
     dismissPendingSiteGrants();
+    void taskSiteGrants.releaseTask(streamId);
     if (composerBrowserRun?.nested && composerBrowserRun.messageId === streamId)
       cancelComposerBrowserTask();
   }, CHAT_TOOL_HANDOFF_TIMEOUT_MS);
@@ -7552,9 +7941,19 @@ async function handleChatToolHandoff(message: ChatToolHandoffMessage): Promise<v
         content:
           parsed.kind === 'read_page'
             ? await runReadPageTool(streamId, parsed.toolCallId)
-            : parsed.kind === 'search_history'
-              ? await runHistorySearchTool(streamId, parsed.toolCallId, parsed)
-              : await runBrowserTaskTool(streamId, parsed.goal),
+            : parsed.kind === 'fill_fields'
+              ? await runFormFillTool(streamId, parsed.toolCallId, {}, parsed.plan)
+              : parsed.kind === 'autofill'
+                ? await runFormFillTool(
+                    streamId,
+                    parsed.toolCallId,
+                    parsed.profile,
+                    undefined,
+                    parsed.replaceExisting,
+                  )
+                : parsed.kind === 'search_history'
+                  ? await runHistorySearchTool(streamId, parsed.toolCallId, parsed)
+                  : await runBrowserTaskTool(streamId, parsed.goal),
       });
     } catch (error) {
       results.push({
@@ -7614,7 +8013,7 @@ function turnAttachmentDescriptors(payload: TurnPayload): SidePanelMessageAttach
       mimeType: mimeTypeOfDataUrl(image.dataUrl),
     })),
     ...payload.files.map((file): SidePanelMessageAttachment => ({
-      kind: 'file',
+      kind: file.mimeType.startsWith('image/') ? 'image' : 'file',
       name: file.name,
       mimeType: file.mimeType,
       assetId: file.assetId,
@@ -7746,15 +8145,21 @@ function sendMessage(text: string, displayText?: string): boolean {
   extensionSendQueue.dequeue();
 
   const modelChoosesBrowserTools = selectedModelSupportsChatTools();
+  const explicitSlashCommand = expandSlashCommand(prompt);
   const slashCmd =
-    expandSlashCommand(prompt) ??
-    (!modelChoosesBrowserTools && requestsCurrentPageContext(prompt)
+    explicitSlashCommand ??
+    ((!modelChoosesBrowserTools ||
+      requestsSavedApplicationProfile(prompt) ||
+      (!editableRewrites.current() &&
+        !_ctx.pendingPageContext &&
+        pendingBrowserContextTabs.length === 0)) &&
+    requestsCurrentPageContext(prompt, modelChoosesBrowserTools)
       ? { display: prompt, prompt, captureContext: true }
       : null);
   if (
     !slashCmd &&
+    !editableRewrites.current() &&
     !modelChoosesBrowserTools &&
-    pendingAttachments.length === 0 &&
     pendingDocuments.length === 0 &&
     !_ctx.pendingPageContext &&
     pendingBrowserContextTabs.length === 0 &&
@@ -7763,16 +8168,28 @@ function sendMessage(text: string, displayText?: string): boolean {
     void startComposerBrowserTask(prompt);
     return true;
   }
+  if (slashCmd?.captureContext === true && editableRewrites.current()) editableRewrites.cancel();
   const capturePage = slashCmd?.captureContext === true;
   const pageSource = _ctx.pendingPageContextSource;
   const payload: TurnPayload = {
     prompt: capturePage && slashCmd ? slashCmd.prompt : prompt,
     pageText: _ctx.pendingPageContext,
     capturePage,
-    images: pendingAttachments.splice(0),
+    ...(modelChoosesBrowserTools && capturePage && !explicitSlashCommand
+      ? { prefetchPage: true }
+      : {}),
+    images: [],
     files: takeComposerDocuments(),
     ...(composerSkill ? { skillName: composerSkill } : {}),
+    ...(editableRewrites.current() ? { editableTarget: editableRewrites.current()! } : {}),
   };
+  if (payload.editableTarget)
+    payload.pageText = [
+      payload.pageText,
+      fencedToolResult('selected_text', payload.editableTarget.selectedText),
+    ]
+      .filter(Boolean)
+      .join('\n\n');
   composerSkill = null;
   clearPendingPageContext();
   composerAttachmentNotices = [];
@@ -7978,35 +8395,71 @@ async function ensureTemporaryConversation(owner: ManagedCloudOwner): Promise<st
 }
 
 function projectChatAwaitsAccountCopy(): boolean {
-  const projectId = activePersistenceEntry?.projectId ?? _ctx.pendingProjectBinding;
-  return Boolean(projectId) && activePersistenceEntry?.cloudSync?.createAcknowledged !== true;
+  return conversationAwaitsProjectBinding(activePersistenceEntry, _ctx.pendingProjectBinding);
 }
 
-async function ensureProjectChatInAccount(owner: ManagedCloudOwner): Promise<boolean> {
+async function ensureChatInAccount(owner: ManagedCloudOwner): Promise<boolean> {
   const conversationId = _ctx.conversationId;
+  const generation = _ctx.conversationGeneration;
+  const projectId =
+    (_ctx.pendingProjectBinding === undefined
+      ? activePersistenceEntry?.projectId
+      : _ctx.pendingProjectBinding) ?? null;
+  const isCurrent = (): boolean =>
+    conversationId === _ctx.conversationId &&
+    generation === _ctx.conversationGeneration &&
+    sameManagedCloudOwner(owner, _ctx.managedCloudOwner);
   await persistMessages();
+  if (!isCurrent()) return false;
   const response = (await chrome.runtime.sendMessage({
     type: 'ENSURE_CLOUD_CONVERSATION',
     owner,
     conversationId,
   })) as { success?: boolean } | undefined;
   const entry = await getConversation(owner, conversationId);
-  if (entry && conversationId === _ctx.conversationId) activePersistenceEntry = entry;
-  return response?.success === true;
+  if (!isCurrent()) return false;
+  if (entry) activePersistenceEntry = entry;
+  const acknowledged =
+    response?.success === true &&
+    entry?.cloudSync?.createAcknowledged === true &&
+    entry.cloudSync.syncedProjectId === projectId &&
+    (entry.projectId ?? null) === projectId;
+  if (acknowledged && _ctx.pendingProjectBinding === projectId) delete _ctx.pendingProjectBinding;
+  return acknowledged;
 }
 
 function dispatchTurn(userMsg: ChatMessage, payload: TurnPayload, quickMode: boolean): void {
   const owner = _ctx.managedCloudOwner!;
   const streamId = beginManagedStream(quickMode);
+  const generation = _ctx.conversationGeneration;
+  const isCurrent = (): boolean =>
+    _ctx.currentStreamId === streamId &&
+    _ctx.conversationGeneration === generation &&
+    sameManagedCloudOwner(owner, _ctx.managedCloudOwner);
+  if (payload.editableTarget) editableRewrites.bind(streamId, payload.editableTarget);
   renderMemoryNotice(null);
-  if (!_ctx.temporaryChat && projectChatAwaitsAccountCopy()) {
-    void ensureProjectChatInAccount(owner)
+  const projectBindingPending = projectChatAwaitsAccountCopy();
+  const saved = activePersistenceEntry;
+  const workBindingPending =
+    cloudMirroringEnabledSnapshot() &&
+    (_ctx.workMode === 'agiwork' || payload.agiWorkPlan !== undefined) &&
+    !(
+      saved?.id === _ctx.conversationId &&
+      sameManagedCloudOwner(saved.owner, owner) &&
+      saved.cloudSync?.createAcknowledged === true &&
+      UUID_PATTERN.test(saved.cloudSync.conversationId ?? '')
+    );
+  if (!_ctx.temporaryChat && (projectBindingPending || workBindingPending)) {
+    void ensureChatInAccount(owner)
       .catch(() => false)
       .then((saved) => {
-        if (_ctx.currentStreamId !== streamId) return;
+        if (!isCurrent()) return;
         if (!saved) {
-          composerContextNotice = t('spProjectChatNotSaved');
-          updateAttachmentPreview();
+          handleStreamError(
+            streamId,
+            t(projectBindingPending ? 'spProjectChatNotSaved' : 'spWorkChatNotSaved'),
+          );
+          return;
         }
         continueTurnWithMemory(userMsg, payload, streamId, owner, quickMode);
       });
@@ -8016,7 +8469,7 @@ function dispatchTurn(userMsg: ChatMessage, payload: TurnPayload, quickMode: boo
     void ensureTemporaryConversation(owner)
       .catch(() => null)
       .then((conversationId) => {
-        if (_ctx.currentStreamId !== streamId) return;
+        if (!isCurrent()) return;
         if (!conversationId) {
           handleStreamError(streamId, t('spTemporaryChatUnavailable'));
           return;
@@ -8060,9 +8513,17 @@ function continueTurn(
   }
   const pageAtAdmission = activePageSource;
   setThinkingLabel(t('spThinkingReadingPage'));
-  capturePageContextWithSiteAccess(streamId, quickMode)
+  capturePageContextWithSiteAccess(
+    streamId,
+    quickMode,
+    payload.prefetchPage && requestsCurrentFormFill(payload.prompt) ? 'act' : 'read',
+  )
     .then((capture) => {
-      if (_ctx.currentStreamId !== streamId) return;
+      if (
+        _ctx.currentStreamId !== streamId ||
+        !sameManagedCloudOwner(owner, _ctx.managedCloudOwner)
+      )
+        return;
       if (
         capture.ok &&
         !pageContextStillDescribes(pageAtAdmission, capture.source.tabId, capture.source.url)
@@ -8070,16 +8531,26 @@ function continueTurn(
         handleStreamError(streamId, PAGE_CONTEXT_CHANGED_REASON);
         return;
       }
-      const pageText = capture.ok ? capture.text : payload.pageText;
+      const pageText = capture.ok ? capture.text : null;
       if (!pageText) {
-        // This command is about the page. Answering without it would be an
-        // answer about nothing, dressed as an answer about this page.
+        if (
+          payload.prefetchPage &&
+          (capture.ok ||
+            capture.reason === PAGE_CONTEXT_EMPTY_REASON ||
+            capture.reason === PAGE_CONTEXT_LOADING_REASON)
+        ) {
+          payload.pageText = null;
+          delete userMsg.pages;
+          postTurn(userMsg, payload, streamId, owner, quickMode, memoryCommand);
+          return;
+        }
         handleStreamError(streamId, capture.ok ? PAGE_CONTEXT_EMPTY_REASON : capture.reason);
         return;
       }
       payload.pageText = pageText;
-      payload.capturePage = false;
       if (capture.ok) {
+        const assistant = ensureStreamingAssistant(streamId, quickMode);
+        assistant.browserObservation = formObservationReference(capture);
         userMsg.pages = [pageReference(capture.source)];
         _ctx.needsMessageRebuild = true;
         renderMessages();
@@ -8102,7 +8573,13 @@ function postTurn(
   owner: ManagedCloudOwner,
   quickMode: boolean,
   memoryCommand?: ManagedMemoryCommandTurn,
-): void {
+): Promise<void> {
+  const generation = _ctx.conversationGeneration;
+  const pageAtAdmission = activePageSource;
+  const isCurrent = (): boolean =>
+    _ctx.currentStreamId === streamId &&
+    _ctx.conversationGeneration === generation &&
+    sameManagedCloudOwner(owner, _ctx.managedCloudOwner);
   const history = selectModelHistory(
     _ctx.messages.filter((message) => message.id !== streamId),
     userMsg.id,
@@ -8118,23 +8595,133 @@ function postTurn(
     });
   }
   lastStreamPersistAtMs = Date.now();
-  void Promise.all([
+  return Promise.all([
     saveMessagesNow(),
-    selectedModelSupportsChatTools() ? activeBrowserToolTier(streamId) : Promise.resolve(undefined),
-    selectedModelSupportsChatTools() ? hasHistoryPermission() : Promise.resolve(false),
-  ]).then(([, browserToolTier, browserHistory]) => {
-    if (_ctx.currentStreamId !== streamId) return;
-    sendChatTurn(
-      streamId,
-      owner,
-      payload,
-      history,
-      quickMode,
-      memoryCommand,
-      browserToolTier,
-      browserHistory,
-    );
-  });
+    !payload.editableTarget && selectedModelSupportsChatTools()
+      ? activeBrowserToolTier(streamId)
+      : Promise.resolve(undefined),
+    !payload.editableTarget && selectedModelSupportsChatTools()
+      ? hasHistoryPermission()
+      : Promise.resolve(false),
+  ])
+    .then(async ([, browserToolTier, browserHistory]) => {
+      if (!isCurrent()) return;
+      let requestPayload = payload;
+      let browserConfirmationOnly = false;
+      if (browserToolTier === 'act' && requestsSavedApplicationProfile(payload.prompt)) {
+        const profile = await loadContactAutofillProfile();
+        if (!isCurrent()) return;
+        if (
+          !pageAtAdmission ||
+          !activePageSource ||
+          !pageContextStillDescribes(pageAtAdmission, activePageSource.tabId, activePageSource.url)
+        ) {
+          handleStreamError(streamId, PAGE_CONTEXT_CHANGED_REASON);
+          return;
+        }
+        if (profile) {
+          const contextParts = [
+            payload.pageText,
+            fencedToolResult('saved_application_profile', JSON.stringify(profile)),
+          ];
+          const observation = browserTurnMessage(streamId)?.browserObservation;
+          if (
+            requestsImmediateSavedApplicationProfileFill(payload.prompt) &&
+            observation?.tabId === pageAtAdmission.tabId &&
+            observation?.url === pageAtAdmission.url &&
+            (await currentPermissionMode()) === 'full' &&
+            (await originApprovedForBrowserControl(new URL(pageAtAdmission.url).origin))
+          ) {
+            if (!isCurrent()) return;
+            if (
+              !activePageSource ||
+              !pageContextStillDescribes(
+                pageAtAdmission,
+                activePageSource.tabId,
+                activePageSource.url,
+              )
+            ) {
+              handleStreamError(streamId, PAGE_CONTEXT_CHANGED_REASON);
+              return;
+            }
+            let result: string;
+            try {
+              result = await runFormFillTool(
+                streamId,
+                `native_profile_${crypto.randomUUID()}`,
+                profile,
+                undefined,
+                false,
+                () => {
+                  browserConfirmationOnly = true;
+                },
+              );
+            } catch (error) {
+              result = fencedToolResult(
+                'form_fill_error',
+                error instanceof Error ? error.message : String(error),
+              );
+            }
+            if (!isCurrent()) return;
+            if (
+              !activePageSource ||
+              !pageContextStillDescribes(
+                pageAtAdmission,
+                activePageSource.tabId,
+                activePageSource.url,
+              )
+            ) {
+              handleStreamError(streamId, PAGE_CONTEXT_CHANGED_REASON);
+              return;
+            }
+            delete browserTurnMessage(streamId)?.browserObservation;
+            const refreshed = await readTabObservation(observation.tabId, observation.url);
+            if (!isCurrent()) return;
+            if (
+              !activePageSource ||
+              !pageContextStillDescribes(
+                pageAtAdmission,
+                activePageSource.tabId,
+                activePageSource.url,
+              ) ||
+              refreshed.documentId !== observation.documentId
+            ) {
+              handleStreamError(streamId, PAGE_CONTEXT_CHANGED_REASON);
+              return;
+            }
+            const current = boundPageText(sanitizePageText(refreshed.text), refreshed.truncated);
+            contextParts[0] = current.text;
+            const message = browserTurnMessage(streamId);
+            if (message) {
+              message.browserObservation = formObservationReference({
+                source: { tabId: observation.tabId, url: observation.url },
+                ...refreshed,
+              });
+            }
+            contextParts.push(result);
+          }
+          requestPayload = {
+            ...payload,
+            pageText: contextParts.filter(Boolean).join('\n\n'),
+          };
+        }
+      }
+      sendChatTurn(
+        streamId,
+        owner,
+        requestPayload,
+        history,
+        quickMode,
+        memoryCommand,
+        browserConfirmationOnly ? undefined : browserToolTier,
+        browserConfirmationOnly ? false : browserHistory,
+      );
+    })
+    .catch((error) => {
+      console.error('[SidePanel] Failed to prepare browser context:', error);
+      if (isCurrent())
+        handleStreamError(streamId, 'Unable to prepare this browser request. Please try again.');
+    });
 }
 
 function sendChatTurn(
@@ -8147,6 +8734,7 @@ function sendChatTurn(
   browserToolTier: ChatBrowserToolTier | undefined,
   browserHistory: boolean,
 ): void {
+  pendingManagedAdmissions.delete(streamId);
   chrome.runtime.sendMessage(
     {
       type: 'CHAT_MESSAGE',
@@ -8191,7 +8779,7 @@ function replayableTurnPayload(userMsg: ChatMessage): TurnPayload | null {
   if (live) return live;
   const attachments = userMsg.attachments ?? [];
   if ((userMsg.pages?.length ?? 0) > 0) return null;
-  if (attachments.some((attachment) => attachment.kind === 'image' || !attachment.assetId)) {
+  if (attachments.some((attachment) => !attachment.assetId)) {
     return null;
   }
   const slashCmd = expandSlashCommand(userMsg.content);
@@ -8331,6 +8919,8 @@ function handleStreamError(
   quota?: ManagedQuotaBlock,
 ): void {
   if (_ctx.currentStreamId !== id) return;
+  pendingManagedAdmissions.delete(id);
+  void taskSiteGrants.releaseTask(id);
   const quotaPresentation = classifyManagedQuotaErrorCode(quota?.code);
   const resetLabel = quota && quotaPresentation?.showResetTime ? quotaResetLabel(quota.code) : null;
   const errorText = streamFailureText(rawErrorText, {
@@ -8525,6 +9115,7 @@ function canAdmitComposerMessage(text: string): boolean {
     managedCloudChatState === 'ready' &&
     _ctx.managedCloudOwner !== null &&
     !_ctx.isStreaming &&
+    !editableRewrites.isApplying() &&
     stoppingStreamId === null &&
     composerBrowserRun === null &&
     !hasUnconfirmedStreamCancellation() &&
@@ -8655,14 +9246,8 @@ function composerAttachmentBytes(dataUrl: string): number {
   return Math.floor((base64.length * 3) / 4) - padding;
 }
 
-function pendingAttachmentBytes(): number {
-  let total = 0;
-  for (const image of pendingAttachments) total += composerAttachmentBytes(image.dataUrl);
-  return total;
-}
-
 function pendingAttachmentCount(): number {
-  return pendingAttachments.length + pendingDocuments.length;
+  return pendingDocuments.length;
 }
 
 function composerDocumentsSettled(): boolean {
@@ -8673,16 +9258,22 @@ let composerAttachmentNotices: string[] = [];
 /** Why the last page-context capture produced nothing. Rendered in the same composer strip. */
 let composerContextNotice: string | null = null;
 let composerDraftRevision = 0;
+let voiceInputComposerNotice: string | null = null;
+
+function clearVoiceInputComposerNotice(): void {
+  if (voiceInputComposerNotice && composerContextNotice === voiceInputComposerNotice) {
+    composerContextNotice = null;
+    updateAttachmentPreview();
+  }
+  voiceInputComposerNotice = null;
+}
 
 function attachmentBudgetLabel(bytes: number): string {
   return `${Math.round((bytes / (1024 * 1024)) * 10) / 10} MB`;
 }
 
 function composerImageCount(): number {
-  return (
-    pendingAttachments.length +
-    pendingDocuments.filter((entry) => entry.mimeType.startsWith('image/')).length
-  );
+  return pendingDocuments.filter((entry) => entry.mimeType.startsWith('image/')).length;
 }
 
 function selectedModelImageLimitNotice(images: number): string | null {
@@ -8698,28 +9289,19 @@ function admitComposerAttachment(dataUrl: string, name: string): boolean {
     composerAttachmentNotices.push(t('spAttachmentUnsupported', [name]));
     return false;
   }
-  const imageLimitNotice = selectedModelImageLimitNotice(composerImageCount() + 1);
-  if (imageLimitNotice) {
-    composerAttachmentNotices.push(imageLimitNotice);
-    return false;
-  }
-  if (pendingAttachmentCount() >= MANAGED_CHAT_MAX_ATTACHMENTS) {
+  if (composerAttachmentBytes(dataUrl) > MANAGED_CHAT_MAX_ATTACHMENT_FILE_BYTES) {
     composerAttachmentNotices.push(
-      t('spAttachmentTooMany', [name, String(MANAGED_CHAT_MAX_ATTACHMENTS)]),
+      t('spAttachmentFileTooLarge', [
+        name,
+        attachmentBudgetLabel(MANAGED_CHAT_MAX_ATTACHMENT_FILE_BYTES),
+      ]),
     );
     return false;
   }
-  if (
-    pendingAttachmentBytes() + composerAttachmentBytes(dataUrl) >
-    MANAGED_CHAT_MAX_ATTACHMENT_BYTES
-  ) {
-    composerAttachmentNotices.push(
-      t('spAttachmentOverBudget', [name, attachmentBudgetLabel(MANAGED_CHAT_MAX_ATTACHMENT_BYTES)]),
-    );
-    return false;
-  }
-  pendingAttachments.push({ dataUrl, name });
-  return true;
+  const mimeType = mimeTypeOfDataUrl(dataUrl);
+  const decoded = atob(dataUrl.slice(dataUrl.indexOf(',') + 1));
+  const bytes = Uint8Array.from(decoded, (char) => char.charCodeAt(0));
+  return admitComposerDocument(new File([bytes], name, { type: mimeType }), mimeType, dataUrl);
 }
 
 function composerDocumentMimeType(file: File): string | null {
@@ -8727,7 +9309,14 @@ function composerDocumentMimeType(file: File): string | null {
   return mimeType && COMPOSER_DOCUMENT_MIME_TYPES.has(mimeType) ? mimeType : null;
 }
 
-function admitComposerDocument(file: File, mimeType: string): boolean {
+function admitComposerDocument(file: File, mimeType: string, previewDataUrl?: string): boolean {
+  if (mimeType.startsWith('image/')) {
+    const imageLimitNotice = selectedModelImageLimitNotice(composerImageCount() + 1);
+    if (imageLimitNotice) {
+      composerAttachmentNotices.push(imageLimitNotice);
+      return false;
+    }
+  }
   if (file.size === 0) {
     composerAttachmentNotices.push(t('spAttachmentEmpty', [file.name]));
     return false;
@@ -8752,6 +9341,7 @@ function admitComposerDocument(file: File, mimeType: string): boolean {
     key: crypto.randomUUID(),
     file,
     mimeType,
+    ...(previewDataUrl ? { previewDataUrl } : {}),
     phase: 'preparing',
     controller: new AbortController(),
   };
@@ -8932,9 +9522,21 @@ function renderComposerDocumentChip(entry: ComposerDocument): HTMLElement {
     'data-phase': entry.phase,
     'aria-busy': String(busy),
   });
-  const icon = el('span', { class: 'sp-attachment-doc-icon', 'aria-hidden': 'true' });
-  icon.appendChild(renderIcon(busy ? Loader2 : FileText, 16));
-  chip.appendChild(icon);
+  if (entry.previewDataUrl) {
+    chip.appendChild(
+      el('img', {
+        class: 'sp-attachment-thumb',
+        src: entry.previewDataUrl,
+        alt: entry.file.name,
+        width: '48',
+        height: '48',
+      }),
+    );
+  } else {
+    const icon = el('span', { class: 'sp-attachment-doc-icon', 'aria-hidden': 'true' });
+    icon.appendChild(renderIcon(busy ? Loader2 : FileText, 16));
+    chip.appendChild(icon);
+  }
   const copy = el('div', { class: 'sp-attachment-doc-copy' });
   copy.appendChild(
     el('span', { class: 'sp-attachment-doc-name', title: entry.file.name }, entry.file.name),
@@ -9045,6 +9647,7 @@ function pendingSelectionAttached(): boolean {
 }
 
 async function offerPageSelection(): Promise<void> {
+  if (editableRewrites.current()) return;
   if (managedCloudChatState !== 'ready' || _ctx.isStreaming) return;
   if (pendingBrowserContextTabs.length > 0) return;
   if (_ctx.pendingPageContext !== null && !pendingSelectionAttached()) return;
@@ -9138,14 +9741,15 @@ function updateAttachmentPreview(): void {
   const bar = document.getElementById('sp-attachment-bar');
   if (!bar) return;
   clearChildren(bar);
+  const editableChip = editableRewrites.renderChip();
   const pageAttached = _ctx.pendingPageContext !== null && _ctx.pendingPageContextSource !== null;
   renderVideoModeItem();
   if (
-    pendingAttachments.length === 0 &&
     pendingDocuments.length === 0 &&
     composerAttachmentNotices.length === 0 &&
     !composerContextNotice &&
     !pageAttached &&
+    !editableChip &&
     !composerVideoMode &&
     !composerSkill &&
     composerAttachmentIntakes.size === 0
@@ -9154,38 +9758,11 @@ function updateAttachmentPreview(): void {
     updateSendButton();
     return;
   }
+  if (editableChip) bar.appendChild(editableChip);
   bar.style.display = 'flex';
   renderVideoModeChip(bar);
   renderSkillChip(bar);
   renderPendingPageChip(bar);
-  pendingAttachments.forEach((image, index) => {
-    const chip = el('div', { class: 'sp-attachment-chip', title: image.name });
-    const thumb = el('img', {
-      class: 'sp-attachment-thumb',
-      src: image.dataUrl,
-      alt: image.name,
-      width: '48',
-      height: '48',
-    }) as HTMLImageElement;
-    const removeBtn = el(
-      'button',
-      {
-        class: 'sp-attachment-remove',
-        type: 'button',
-        title: t('spDocumentRemove', [image.name]),
-        'aria-label': t('spDocumentRemove', [image.name]),
-      },
-      '×',
-    );
-    removeBtn.addEventListener('click', () => {
-      pendingAttachments.splice(index, 1);
-      composerAttachmentNotices = [];
-      updateAttachmentPreview();
-    });
-    chip.appendChild(thumb);
-    chip.appendChild(removeBtn);
-    bar.appendChild(chip);
-  });
   for (const entry of pendingDocuments) bar.appendChild(renderComposerDocumentChip(entry));
   if (composerContextNotice) {
     bar.appendChild(
@@ -9267,7 +9844,6 @@ function setBlockedState(blocked: boolean): void {
 
   if (blocked) {
     blockedEl.classList.add('visible');
-    clearPendingPageContext();
   } else {
     blockedEl.classList.remove('visible');
   }
@@ -10026,15 +10602,22 @@ function buildUI(): void {
   }
 
   function selectActiveProject(project: ActiveProjectSelection | null): void {
+    projectSelectionGeneration += 1;
     _ctx.activeProject = project;
     _ctx.pendingProjectBinding = project?.id ?? null;
     if (project) rememberProjectName(project);
-    void chrome.storage.local.set({ [ACTIVE_PROJECT_KEY]: project }).catch(() => undefined);
+    const owner = _ctx.managedCloudOwner;
+    if (owner)
+      void chrome.storage.local
+        .set({ [ACTIVE_PROJECT_KEY]: { owner: { ...owner }, project } })
+        .catch(() => undefined);
     renderProjectChip();
-    void persistMessages().catch(() => undefined);
+    if (_ctx.messages.length > 0) saveMessages();
   }
 
   function adoptConversationProject(projectId: string | undefined): void {
+    projectSelectionGeneration += 1;
+    delete _ctx.pendingProjectBinding;
     if (!projectId) {
       _ctx.activeProject = null;
       renderProjectChip();
@@ -10048,14 +10631,24 @@ function buildUI(): void {
   projectChipClear.addEventListener('click', () => selectActiveProject(null));
   refreshProjectChip = renderProjectChip;
   adoptChatProject = adoptConversationProject;
-  chrome.storage.local.get([ACTIVE_PROJECT_KEY, PROJECT_NAME_CACHE_KEY], (stored) => {
-    if (chrome.runtime.lastError) return;
+  async function restoreProjectPreference(owner: ManagedCloudOwner): Promise<void> {
+    const generation = _ctx.conversationGeneration;
+    const selectionGeneration = projectSelectionGeneration;
+    const stored = await chrome.storage.local.get([ACTIVE_PROJECT_KEY, PROJECT_NAME_CACHE_KEY]);
+    if (
+      !sameManagedCloudOwner(owner, _ctx.managedCloudOwner) ||
+      generation !== _ctx.conversationGeneration ||
+      selectionGeneration !== projectSelectionGeneration
+    )
+      return;
     hydrateProjectNameCache(stored[PROJECT_NAME_CACHE_KEY]);
-    const restored = readStoredActiveProject(stored[ACTIVE_PROJECT_KEY]);
+    const restored = readStoredActiveProject(stored[ACTIVE_PROJECT_KEY], owner);
     if (!restored) return;
     _ctx.activeProject = restored;
+    _ctx.pendingProjectBinding = restored.id;
+    projectSelectionGeneration += 1;
     renderProjectChip();
-  });
+  }
 
   function formatHistoryDate(ts: number): string {
     const elapsedMs = ts - Date.now();
@@ -10162,6 +10755,7 @@ function buildUI(): void {
       _ctx.workMode = 'chat';
       _ctx.messages.length = 0;
       turnPayloadByMessageId.clear();
+      editableRewrites.reset();
       _ctx.lastRenderedCount = 0;
       _ctx.needsMessageRebuild = true;
       _ctx.isStreaming = false;
@@ -10261,9 +10855,16 @@ function buildUI(): void {
   interface MoreDestination {
     id: string;
     label: string;
+    external?: boolean;
     run: () => void;
   }
   const moreMenuDestinations: MoreDestination[] = [
+    {
+      id: 'close-tabs',
+      label: t('spCloseTabs'),
+      external: false,
+      run: () => void closeUnusedBrowserTabs(),
+    },
     {
       id: 'settings',
       label: t('spExtensionSettings'),
@@ -10290,16 +10891,22 @@ function buildUI(): void {
     );
   const openChatInWebItem = buildExternalMenuRow(t('spHistoryOpenInWeb'));
   const memorySheet = buildMemorySheet({
-    send: (message) => chrome.runtime.sendMessage(message),
+    send: (message) => {
+      const owner = _ctx.managedCloudOwner;
+      if (!owner) return Promise.resolve({ success: false, status: 'signed-out' });
+      return chrome.runtime.sendMessage({ ...message, owner: { ...owner } });
+    },
     openWeb: (path) => void chrome.tabs.create({ url: agiWebUrl(path) }),
   });
+  accountMemorySheet = memorySheet;
   document.body.appendChild(memorySheet.element);
   const tasksSheet = buildTasksSheet({
-    listRuns: (limit) => listChromeManagedRuns(limit),
-    cancelRun: (run) => cancelChromeManagedRun(run),
+    listRuns: (limit, signal) => listChromeManagedRuns(limit, {}, signal),
+    cancelRun: (run, signal) => cancelChromeManagedRun(run, {}, signal),
     openWeb: (path) => void chrome.tabs.create({ url: agiWebUrl(path) }),
     formatTime: (iso) => formatHistoryDate(Date.parse(iso)),
   });
+  accountTasksSheet = tasksSheet;
   document.body.appendChild(tasksSheet.element);
   const phoneSheet = buildPhoneSheet({ copy: (text) => navigator.clipboard.writeText(text) });
   document.body.appendChild(phoneSheet.element);
@@ -10409,9 +11016,20 @@ function buildUI(): void {
     t('spAccountLogOut'),
     () => {
       moreHandle.close();
-      void signOutOfAccount()
-        .then(({ webSessionEnded }) => {
-          if (!webSessionEnded) showTitleStatus(t('spAccountLogOutWebKept'));
+      const owner = _ctx.managedCloudOwner;
+      const streamId = _ctx.currentStreamId;
+      followUpQueue.clear();
+      cancelCurrentManagedStream(true);
+      void Promise.resolve(
+        streamId ? pendingStreamCancellations.get(streamId)?.completion : undefined,
+      )
+        .catch(() => undefined)
+        .then(() => {
+          if (!owner || !sameManagedCloudOwner(owner, _ctx.managedCloudOwner)) return;
+          return signOutOfAccount();
+        })
+        .then((result) => {
+          if (result && !result.webSessionEnded) showTitleStatus(t('spAccountLogOutWebKept'));
         })
         .catch(() => showTitleStatus(t('spAccountLogOutFailed')))
         .finally(() => void refreshCloudAccountUI(true));
@@ -10439,7 +11057,14 @@ function buildUI(): void {
     true,
   );
   for (const destination of moreMenuDestinations) {
-    const row = buildExternalMenuRow(destination.label);
+    const row =
+      destination.external === false
+        ? el(
+            'button',
+            { type: 'button', role: 'menuitem', class: 'sp-history-menu-item' },
+            destination.label,
+          )
+        : buildExternalMenuRow(destination.label);
     row.addEventListener('click', () => {
       moreHandle.close();
       destination.run();
@@ -10815,9 +11440,17 @@ function buildUI(): void {
     void (async () => {
       const context = await getFreshClerkAuthContext();
       if (!sameManagedCloudOwner(context?.owner, owner)) return;
-      const cloudConversationId = entry.cloudSync?.conversationId;
+      const currentEntry = await getConversation(owner, entry.id);
+      if (!sameManagedCloudOwner(_ctx.managedCloudOwner, owner)) return;
+      if (
+        !currentEntry ||
+        currentEntry.cloudSync?.conversationId !== entry.cloudSync?.conversationId
+      ) {
+        throw new Error('The confirmed chat changed before deletion');
+      }
+      const cloudConversationId = currentEntry.cloudSync?.conversationId;
       if (cloudConversationId) {
-        const organizationId = entry.cloudSync?.organizationId;
+        const organizationId = currentEntry.cloudSync?.organizationId;
         if (organizationId === undefined) {
           throw new Error('Could not prove the account workspace for this chat deletion');
         }
@@ -11183,6 +11816,7 @@ function buildUI(): void {
     recentsSheet.hidden = false;
     showingArchived = false;
     drawerHistoryError.setAttribute('hidden', '');
+    renderDrawerHistory(drawerHistoryEntries);
     void refreshDrawerHistory(true)
       .then(() => {
         if (revision !== recentsOpenRevision || recentsSheet.hidden) return;
@@ -11306,6 +11940,8 @@ function buildUI(): void {
       entry?.pinned === true,
       entry?.projectId ?? '',
       entry?.cloudSync?.conversationId ?? '',
+      String(entry?.cloudSync?.organizationId),
+      entry?.cloudSync?.createAcknowledged === true,
     ].join('|');
     if (key === renderedTitleKey) return;
     renderedTitleKey = key;
@@ -11411,6 +12047,10 @@ function buildUI(): void {
     if (refreshGeneration !== cloudAccountRefreshGeneration) return;
     const ownerChanged = await transitionManagedCloudOwner(authContext?.owner ?? null);
     if (refreshGeneration !== cloudAccountRefreshGeneration) return;
+    if (ownerChanged && authContext) {
+      await restoreProjectPreference(authContext.owner).catch(() => undefined);
+      if (refreshGeneration !== cloudAccountRefreshGeneration) return;
+    }
     const token = authContext?.token ?? null;
     if (ownerChanged || !token) void freePlanNotices?.update(null);
     if (!token) {
@@ -11724,6 +12364,7 @@ function buildUI(): void {
       })),
     ];
   });
+  accountCommandPalette = commandPalette;
   document.addEventListener('keydown', (event: KeyboardEvent) => {
     if (event.key.toLowerCase() !== 'k' || event.altKey || event.shiftKey) return;
     if (!(event.metaKey || event.ctrlKey)) return;
@@ -12396,8 +13037,11 @@ function buildUI(): void {
     tab: chrome.tabs.Tab,
     approval: Promise<ReadGrant>,
   ): Promise<void> {
-    const grant = await approval;
+    const intake = beginComposerAttachmentIntake('page');
+    let grant: ReadGrant | null = null;
     try {
+      grant = await approval;
+      if (!intake || !composerAttachmentIntakeCurrent(intake)) return;
       if (!grant.granted) {
         attachPageCapture({
           ok: false,
@@ -12405,9 +13049,17 @@ function buildUI(): void {
         });
         return;
       }
-      attachPageCapture(await readTabText(tab, true));
+      const capture = await readTabText(tab, true);
+      if (composerAttachmentIntakeCurrent(intake)) attachPageCapture(capture);
+    } catch {
+      if (intake && composerAttachmentIntakeCurrent(intake))
+        attachPageCapture({ ok: false, reason: PAGE_CONTEXT_BLOCKED_REASON });
     } finally {
-      await grant.release();
+      try {
+        await grant?.release();
+      } finally {
+        if (intake) finishComposerAttachmentIntake(intake);
+      }
     }
   }
 
@@ -12731,42 +13383,66 @@ function buildUI(): void {
     const chip = contextBtn!;
     if (_ctx.pendingPageContext) {
       clearPendingPageContext();
+      updateAttachmentPreview();
       updateContextButton();
       return;
     }
-    contextItemLabel.textContent = t('spContextChipCapturing');
-    chip.disabled = true;
-    let capture = await capturePageContext();
-    if (!capture.ok && capture.reason === PAGE_CONTEXT_DENIED_REASON) {
-      const [tab] = await chrome.tabs
-        .query(await activePageQuery())
-        .catch((): chrome.tabs.Tab[] => []);
-      const origin = webTabOrigin(tab);
-      if (origin) {
-        const transientId = `site_once_${crypto.randomUUID()}`;
-        await recordTransientHostPermission(transientId, origin).catch(() => undefined);
-        const granted = await requestBrowserControlHostPermission(origin).catch(() => false);
-        try {
-          if (granted) capture = await capturePageContext();
-        } finally {
-          if (granted && !(await originApprovedForBrowserControl(origin)))
-            await removeBrowserControlHostPermission(origin);
-          await forgetTransientHostPermissions([transientId]).catch(() => []);
-        }
-      }
-    }
-    chip.disabled = false;
-    if (capture.ok) {
-      _ctx.pendingPageContext = capture.text;
-      _ctx.pendingPageContextSource = capture.source;
-      composerContextNotice = null;
-    } else {
-      composerContextNotice = capture.reason;
-    }
+    const intake = beginComposerAttachmentIntake('page');
+    if (!intake) return;
     attachMenu.classList.remove('open');
     attachBtn.setAttribute('aria-expanded', 'false');
-    updateAttachmentPreview();
-    updateContextButton();
+    contextItemLabel.textContent = t('spContextChipCapturing');
+    chip.disabled = true;
+    try {
+      let capture = await capturePageContext();
+      if (!composerAttachmentIntakeCurrent(intake)) return;
+      if (!capture.ok && capture.reason === PAGE_CONTEXT_DENIED_REASON) {
+        const [tab] = await chrome.tabs
+          .query(await activePageQuery())
+          .catch((): chrome.tabs.Tab[] => []);
+        if (!composerAttachmentIntakeCurrent(intake)) return;
+        const origin = webTabOrigin(tab);
+        if (origin) {
+          const transientId = `site_once_${crypto.randomUUID()}`;
+          await recordTransientHostPermission(transientId, origin).catch(() => undefined);
+          let granted = false;
+          try {
+            if (!composerAttachmentIntakeCurrent(intake)) return;
+            granted = await requestBrowserControlHostPermission(origin).catch(() => false);
+            if (granted && composerAttachmentIntakeCurrent(intake))
+              capture = await capturePageContext();
+          } finally {
+            if (granted && !(await originApprovedForBrowserControl(origin)))
+              await removeBrowserControlHostPermission(origin);
+            await forgetTransientHostPermissions([transientId]).catch(() => []);
+          }
+        }
+      }
+      if (!composerAttachmentIntakeCurrent(intake)) return;
+      if (
+        capture.ok &&
+        !pageContextStillDescribes(
+          capture.source,
+          activePageSource?.tabId,
+          activePageSource?.url ?? '',
+        )
+      ) {
+        composerContextNotice = PAGE_CONTEXT_CHANGED_REASON;
+        return;
+      }
+      attachPageCapture(capture);
+    } catch {
+      if (composerAttachmentIntakeCurrent(intake))
+        attachPageCapture({ ok: false, reason: PAGE_CONTEXT_BLOCKED_REASON });
+    } finally {
+      finishComposerAttachmentIntake(intake);
+      chip.disabled =
+        managedCloudChatState !== 'ready' ||
+        isRestrictedPageUrl(activePageSource?.url ?? '') ||
+        composerAttachmentIntakes.size > 0;
+      updateAttachmentPreview();
+      updateContextButton();
+    }
   });
 
   const connectorsItem = el('button', {
@@ -12810,7 +13486,7 @@ function buildUI(): void {
     autocomplete: 'off',
     placeholder: 'https://',
     'aria-label': t('spLinkInputLabel'),
-    'aria-describedby': 'sp-link-error',
+    'aria-describedby': 'sp-link-error sp-link-account-read',
   }) as HTMLInputElement;
   const linkSubmit = el(
     'button',
@@ -12822,7 +13498,14 @@ function buildUI(): void {
   const linkRow = el('div', { class: 'sp-link-row' });
   linkRow.append(linkInput, linkSubmit, linkCancel);
   linkForm.append(linkRow, linkError);
+  linkForm.appendChild(
+    el('p', { class: 'sp-attachment-notice', id: 'sp-link-account-read' }, t('spLinkAccountRead')),
+  );
+  let linkRead: AbortController | null = null;
   const closeLinkForm = (): void => {
+    linkRead?.abort();
+    linkRead = null;
+    linkSubmit.disabled = false;
     linkForm.hidden = true;
     linkInput.value = '';
     linkError.textContent = '';
@@ -12843,30 +13526,41 @@ function buildUI(): void {
       linkInput.focus();
       return;
     }
-    const approval = approveSiteForReading(url);
+    const intake = beginComposerAttachmentIntake('page');
+    if (!intake) return;
+    const controller = new AbortController();
+    linkRead?.abort();
+    tabContextIntakeAbort?.abort();
+    linkRead = controller;
+    tabContextIntakeAbort = controller;
+    const current = (): boolean =>
+      linkRead === controller &&
+      !controller.signal.aborted &&
+      composerAttachmentIntakeCurrent(intake);
     linkSubmit.disabled = true;
     linkError.textContent = t('spLinkReading');
-    void approval
-      .then(async (grant) => {
-        try {
-          if (!grant.granted) {
-            linkError.textContent = t('spSiteAccessRefused', [pageChipLabel(url)]);
-            return;
-          }
-          const capture = await readLinkedPage(url);
-          if (!capture.ok) {
-            linkError.textContent = capture.reason;
-            return;
-          }
-          attachPageCapture(capture);
-          closeLinkForm();
-        } finally {
-          await grant.release();
+    void (async () => {
+      try {
+        const capture = await readLinkedPage(url, intake.owner, controller.signal);
+        if (!current()) return;
+        if (!capture.ok) {
+          linkError.textContent = capture.reason;
+          return;
         }
-      })
-      .finally(() => {
-        linkSubmit.disabled = false;
-      });
+        attachPageCapture(capture);
+        closeLinkForm();
+      } catch {
+        if (current()) linkError.textContent = t('spLinkUnreachable', [pageChipLabel(url)]);
+      } finally {
+        finishComposerAttachmentIntake(intake);
+        if (tabContextIntakeAbort === controller) tabContextIntakeAbort = null;
+        if (linkRead === controller) {
+          linkRead = null;
+          linkSubmit.disabled = false;
+          if (controller.signal.aborted) linkError.textContent = '';
+        }
+      }
+    })();
   });
 
   const temporaryItem = el('button', {
@@ -12930,7 +13624,7 @@ function buildUI(): void {
     try {
       const selection = await chooseBrowserContextTabs(
         isCurrent,
-        MANAGED_CHAT_MAX_ATTACHMENTS - pendingAttachments.length,
+        MANAGED_CHAT_MAX_ATTACHMENTS - pendingAttachmentCount(),
         async (urls) => {
           readGrant = await requestReadGrant(urls);
           return readGrant.granted;
@@ -13023,10 +13717,20 @@ function buildUI(): void {
   });
   wireMenuArrowKeys(skillMenu);
   let skillMenuGeneration = 0;
+  let skillMenuAbort: AbortController | null = null;
   const closeSkillMenu = (returnFocus: boolean): void => {
     skillMenuGeneration += 1;
+    skillMenuAbort?.abort();
+    skillMenuAbort = null;
     skillMenu.classList.remove('open');
     if (returnFocus) attachBtn.focus();
+  };
+  resetAccountSkillMenu = () => {
+    closeSkillMenu(false);
+    clearChildren(skillMenu);
+    composerSkill = null;
+    attachMenu.classList.remove('open');
+    attachBtn.setAttribute('aria-expanded', 'false');
   };
   const skillMenuRow = (label: string, run: () => void, checked?: boolean): HTMLElement => {
     const row = el(
@@ -13078,19 +13782,30 @@ function buildUI(): void {
   skillsItem.addEventListener('click', () => {
     attachMenu.classList.remove('open');
     attachBtn.setAttribute('aria-expanded', 'false');
+    skillMenuAbort?.abort();
+    const controller = new AbortController();
+    skillMenuAbort = controller;
     const generation = ++skillMenuGeneration;
+    const owner = _ctx.managedCloudOwner;
+    const isCurrent = (): boolean =>
+      generation === skillMenuGeneration &&
+      !controller.signal.aborted &&
+      owner !== null &&
+      sameManagedCloudOwner(owner, _ctx.managedCloudOwner);
     skillMenu.classList.add('open');
     renderSkillMenu(null, null);
     void (async () => {
       const auth = await getManagedCloudAuthContext();
-      if (!auth) throw new Error(t('spSkillsLoadFailed'));
-      return fetchOwnSkills(auth.token);
+      if (!auth || !sameManagedCloudOwner(auth.owner, owner))
+        throw new Error(t('spSkillsLoadFailed'));
+      if (!isCurrent()) return [];
+      return fetchOwnSkills(auth.token, controller.signal);
     })()
       .then((skills) => {
-        if (generation === skillMenuGeneration) renderSkillMenu(skills, null);
+        if (isCurrent()) renderSkillMenu(skills, null);
       })
       .catch(() => {
-        if (generation === skillMenuGeneration) renderSkillMenu(null, t('spSkillsLoadFailed'));
+        if (isCurrent()) renderSkillMenu(null, t('spSkillsLoadFailed'));
       });
   });
   skillMenu.addEventListener('keydown', (event: KeyboardEvent) => {
@@ -13621,6 +14336,22 @@ function buildUI(): void {
   const microphoneNotice = buildMicrophoneNotice();
   inputArea.appendChild(microphoneNotice.element);
   inputArea.appendChild(attachmentBar);
+  const tabCleanupNotice = el('div', {
+    id: 'sp-tab-cleanup-notice',
+    class: 'sp-composer-notice',
+    role: 'status',
+    'aria-live': 'polite',
+  });
+  tabCleanupNotice.appendChild(el('span', { id: 'sp-tab-cleanup-notice-text' }));
+  const tabCleanupDismiss = el('button', {
+    type: 'button',
+    class: 'sp-composer-notice-dismiss',
+    'aria-label': t('spTabCleanupDismiss'),
+  });
+  tabCleanupDismiss.appendChild(renderIcon(X, 12));
+  tabCleanupDismiss.addEventListener('click', () => renderTabCleanupNotice(''));
+  tabCleanupNotice.appendChild(tabCleanupDismiss);
+  inputArea.appendChild(tabCleanupNotice);
   inputArea.appendChild(composerShell);
   document.body.appendChild(inputArea);
   setManagedCloudChatState(managedCloudChatState, {
@@ -13650,11 +14381,13 @@ function buildUI(): void {
     acceptIncomingComposerFiles(filesFromDataTransfer(event.dataTransfer));
   });
 
-  setupVoiceInput(
+  micBtn.addEventListener('click', clearVoiceInputComposerNotice);
+  composerVoiceInput = setupVoiceInput(
     micBtn,
     inputEl,
     autoResizeInput,
     (message) => {
+      voiceInputComposerNotice = message;
       composerContextNotice = message;
       updateAttachmentPreview();
     },
@@ -13760,13 +14493,14 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
   }
 
   if (chunk.cloudRun) {
+    const previousRun = cloudRunsByStreamId.get(chunk.id);
     cloudRunsByStreamId.set(chunk.id, { ...chunk.cloudRun });
     const existing = _ctx.messages.find((message) => message.id === chunk.id);
     if (existing) {
       existing.cloudAgentRun = { ...chunk.cloudRun };
       const previousActivity = existing.agentActivity;
       reconcileManagedRunActivity(existing);
-      if (previousActivity !== existing.agentActivity) {
+      if (activityRequiresRender(previousActivity, existing.agentActivity)) {
         _ctx.needsMessageRebuild = true;
         renderMessages();
       }
@@ -13786,12 +14520,22 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
       });
       trimLiveMessages();
     }
-    saveMessages();
+    if (
+      !previousRun ||
+      previousRun.runId !== chunk.cloudRun.runId ||
+      previousRun.state !== chunk.cloudRun.state ||
+      previousRun.detachable !== chunk.cloudRun.detachable ||
+      previousRun.cancellationRequestedAt !== chunk.cloudRun.cancellationRequestedAt
+    )
+      saveMessages();
+    else saveStreamCheckpoint();
   }
 
   if (chunk.agentEvent) {
     removeThinking();
     const before = _ctx.messages.find((message) => message.id === chunk.id);
+    const previousActivity = before?.agentActivity;
+    const previousEvents = before?.agentEvents;
     const approvalEventType =
       messageKindForAgentEvent(chunk.agentEvent.event.type) === 'approval'
         ? chunk.agentEvent.event.type
@@ -13828,9 +14572,15 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
     if (cloudRun) assistant.cloudAgentRun = { ...cloudRun };
     reconcileManagedRunActivity(assistant);
     trimLiveMessages();
-    _ctx.needsMessageRebuild = true;
-    renderMessages();
-    saveMessages();
+    const activityChanged =
+      previousEvents !== assistant.agentEvents ||
+      activityRequiresRender(previousActivity, assistant.agentActivity);
+    if (activityChanged) {
+      _ctx.needsMessageRebuild = true;
+      renderMessages();
+    }
+    if (activityChanged) saveMessages();
+    else saveStreamCheckpoint();
   }
 
   if (chunk.codeExecution) {
@@ -13902,16 +14652,11 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
       removeThinking();
       renderMessages();
     }
-    if (!chunk.done) {
-      const now = Date.now();
-      if (now - lastStreamPersistAtMs >= STREAM_TEXT_PERSIST_INTERVAL_MS) {
-        lastStreamPersistAtMs = now;
-        saveMessages();
-      }
-    }
+    if (!chunk.done) saveStreamCheckpoint();
   }
 
   if (chunk.done) {
+    void taskSiteGrants.releaseTask(chunk.id);
     if (quotaWarnedStreamIds.has(chunk.id)) {
       quotaWarnedStreamIds.delete(chunk.id);
       void refreshCloudAccountUI();
@@ -13987,9 +14732,11 @@ function refreshOpenAccountChatOnReturn(): void {
   if (
     managedCloudChatState === 'signed_out' ||
     _ctx.isStreaming ||
+    tabCleanupInProgress ||
     _ctx.temporaryChat ||
     _ctx.messages.length === 0 ||
     _ctx.pendingPageContext ||
+    editableRewrites.hasActiveEdits() ||
     composer?.value.trim() ||
     !activePersistenceEntry?.cloudSync?.conversationId ||
     activePersistenceEntry.id !== _ctx.conversationId ||
@@ -14016,15 +14763,32 @@ function refreshAccountWhileOpen(): void {
   void refreshCloudAccountUI();
 }
 setInterval(refreshAccountWhileOpen, ACCOUNT_REFRESH_WHILE_OPEN_MS);
+setInterval(() => refreshAgentActivityClocks(document), 1000);
 subscribeBrowserActivity(refreshAccountOnReturn);
 window.addEventListener('pagehide', () => void flushProductEvents());
+window.addEventListener('pagehide', () => void taskSiteGrants.releaseTask());
+
+function attachedPageUsesTab(tabId: number): boolean {
+  return (
+    _ctx.pendingPageContextSource?.tabId === tabId ||
+    pendingBrowserContextTabs.some((tab) => tab.tabId === tabId)
+  );
+}
+
 chrome.tabs.onUpdated?.addListener((_tabId, changeInfo) => {
+  if (changeInfo.url !== undefined || changeInfo.status === 'loading')
+    editableRewrites.invalidateTab(_tabId);
+  if (changeInfo.url !== undefined) void taskSiteGrants.releaseTab(_tabId, changeInfo.url);
   if (
-    pendingBrowserContextTabs.some((tab) => tab.tabId === _tabId) &&
+    attachedPageUsesTab(_tabId) &&
     (changeInfo.url !== undefined || changeInfo.status === 'loading')
   ) {
+    const message =
+      pendingBrowserContextTabs.length > 0 || _ctx.pendingPageContextSource?.chosen
+        ? 'spAttachedTabChanged'
+        : 'spContextChipDropped';
     clearPendingPageContext();
-    composerContextNotice = t('spAttachedTabChanged');
+    composerContextNotice = t(message);
     updateContextButton();
     updateAttachmentPreview();
   }
@@ -14033,7 +14797,9 @@ chrome.tabs.onUpdated?.addListener((_tabId, changeInfo) => {
   }
 });
 chrome.tabs.onRemoved?.addListener((tabId) => {
-  if (!pendingBrowserContextTabs.some((tab) => tab.tabId === tabId)) return;
+  editableRewrites.invalidateTab(tabId);
+  void taskSiteGrants.releaseTab(tabId);
+  if (!attachedPageUsesTab(tabId)) return;
   clearPendingPageContext();
   composerContextNotice = t('spAttachedTabClosed');
   updateContextButton();
@@ -14111,6 +14877,9 @@ interface PendingComposerChat {
   text: string;
   url: string;
   timestamp: number;
+  tabId?: number;
+  target?: unknown;
+  windowId?: number;
 }
 
 const pendingChatCaptures = new Set<string>();
@@ -14129,7 +14898,6 @@ function pendingChatInvocationCurrent(): () => boolean {
   const context = _ctx.pendingPageContext;
   const source = _ctx.pendingPageContextSource;
   const tabs = pendingBrowserContextTabs;
-  const images = pendingAttachments.slice();
   const documents = pendingDocuments.map((entry) => ({
     entry,
     phase: entry.phase,
@@ -14153,8 +14921,6 @@ function pendingChatInvocationCurrent(): () => boolean {
     context === _ctx.pendingPageContext &&
     source === _ctx.pendingPageContextSource &&
     tabs === pendingBrowserContextTabs &&
-    images.length === pendingAttachments.length &&
-    images.every((entry, index) => entry === pendingAttachments[index]) &&
     documents.length === pendingDocuments.length &&
     documents.every(
       ({ entry, phase, attachment }, index) =>
@@ -14202,6 +14968,7 @@ async function attachPageForQuestion(
   const summarize = pending.type === 'summarize';
   const prompt = SLASH_COMMANDS['/summarize']!.prompt;
   if (!isCurrent()) return;
+  editableRewrites.cancel();
   if (!pendingPageComposerAvailable(summarize) || !canAdmitComposerMessage(prompt)) {
     composerContextNotice =
       'The page request was not applied. Finish your current draft or turn, then try again.';
@@ -14239,6 +15006,90 @@ async function attachPageForQuestion(
   await removeHandledPendingChat(pending);
 }
 
+async function attachSelectionForQuestion(pending: {
+  text: string;
+  url: string;
+  tabId?: number;
+}): Promise<void> {
+  editableRewrites.cancel();
+  if (!Number.isInteger(pending.tabId) || typeof pending.text !== 'string') return;
+  const generation = _ctx.conversationGeneration;
+  try {
+    const tab = await chrome.tabs.get(pending.tabId!);
+    if (tab.url !== pending.url) throw new Error(PAGE_CONTEXT_CHANGED_REASON);
+    if (await isUserBlockedSite(pending.url))
+      throw new Error(t('spSiteBlockedByYou', [pageChipLabel(pending.url)]));
+    const prepared = prepareSelectionContext({ text: pending.text, truncated: false }, pending.url);
+    if (!prepared || generation !== _ctx.conversationGeneration) return;
+    pendingSelectionText = prepared.text;
+    _ctx.pendingPageContext = prepared.text;
+    _ctx.pendingPageContextSource = {
+      tabId: pending.tabId!,
+      url: pending.url,
+      title: t('spSelectionChipTitle', [pageChipLabel(pending.url)]),
+    };
+    pendingBrowserContextTabs = [];
+    composerContextNotice = null;
+    updateAttachmentPreview();
+    updateContextButton();
+    document.getElementById('sp-input')?.focus();
+  } catch (error) {
+    console.error('[SidePanel] Failed to attach selected browser context:', error);
+    composerContextNotice = error instanceof Error ? error.message : PAGE_CONTEXT_CHANGED_REASON;
+    updateAttachmentPreview();
+  }
+}
+
+async function startSelectionRewrite(value: unknown): Promise<void> {
+  const generation = _ctx.conversationGeneration;
+  try {
+    const target = parseEditableSelectionTarget(value);
+    if (!target || !sameManagedCloudOwner(target.owner, _ctx.managedCloudOwner))
+      throw new Error(t('spRewriteAccountChanged'));
+    if (await isUserBlockedSite(target.url))
+      throw new Error(t('spSiteBlockedByYou', [pageChipLabel(target.url)]));
+    await readPageDocument(target.tabId, target.url, target.documentId);
+    if (generation !== _ctx.conversationGeneration) throw new Error(t('spRewriteSelectAgain'));
+    editableRewrites.stage(target);
+    if (!canAdmitComposerMessage(t('spRewritePrompt'))) {
+      composerContextNotice = t('spRewriteWaiting');
+      updateAttachmentPreview();
+      return;
+    }
+    advanceConversationGeneration();
+    const payload: TurnPayload = {
+      prompt: t('spRewritePrompt'),
+      pageText: fencedToolResult('selected_text', target.selectedText),
+      capturePage: false,
+      images: [],
+      files: [],
+      editableTarget: target,
+    };
+    const userMsg: ChatMessage = {
+      id: `u-${crypto.randomUUID()}`,
+      role: 'user',
+      content: t('spRewriteRequest'),
+      timestamp: Date.now(),
+      runtime: 'managed-cloud',
+      pages: [{ url: target.url, title: target.label }],
+    };
+    _ctx.messages.push(userMsg);
+    turnPayloadByMessageId.set(userMsg.id, payload);
+    trimLiveMessages();
+    composerContextNotice = null;
+    _ctx.needsMessageRebuild = true;
+    saveMessages();
+    renderMessages();
+    updateAttachmentPreview();
+    dispatchTurn(userMsg, payload, managedQuickModeActive());
+  } catch (error) {
+    composerContextNotice = error instanceof Error ? error.message : t('spRewriteUnavailable');
+    updateAttachmentPreview();
+  }
+}
+
+let consumedPendingRewriteKey: string | null = null;
+
 function checkPendingChat(): void {
   const isCurrent = pendingChatInvocationCurrent();
   chrome.storage.session.get('agi_pending_chat', (result) => {
@@ -14260,6 +15111,53 @@ function checkPendingChat(): void {
         .finally(() => pendingChatCaptures.delete(identity));
       return;
     }
+    if (pending.type === 'rewrite-selection' || pending.type === 'rewrite-error') {
+      void Promise.all([assistantHostWindowId(), initialCloudAccountRefresh])
+        .then(async ([windowId]) => {
+          if (!isCurrent()) return;
+          if (windowId !== pending.windowId || typeof windowId !== 'number') return;
+          if (pending.type === 'rewrite-selection' && managedCloudChatState !== 'ready') return;
+          if (Date.now() - pending.timestamp > PENDING_CHAT_TTL_MS) return;
+          const current = (await chrome.storage.session.get('agi_pending_chat'))[
+            'agi_pending_chat'
+          ] as typeof pending;
+          if (
+            current?.type !== pending.type ||
+            current.timestamp !== pending.timestamp ||
+            parseEditableSelectionTarget(current.target)?.id !==
+              parseEditableSelectionTarget(pending.target)?.id
+          )
+            return;
+          const key = `${pending.type}:${pending.timestamp}:${parseEditableSelectionTarget(pending.target)?.id ?? ''}`;
+          if (consumedPendingRewriteKey === key) return;
+          consumedPendingRewriteKey = key;
+          try {
+            await chrome.storage.session.remove('agi_pending_chat');
+          } catch (error) {
+            if (consumedPendingRewriteKey === key) consumedPendingRewriteKey = null;
+            throw error;
+          }
+          if (pending.type === 'rewrite-error') {
+            editableRewrites.cancel();
+            composerContextNotice = pending.text;
+            updateAttachmentPreview();
+          } else await startSelectionRewrite(pending.target);
+        })
+        .catch((error) => {
+          if (!isCurrent()) return;
+          composerContextNotice =
+            error instanceof Error ? error.message : t('spRewriteUnavailable');
+          updateAttachmentPreview();
+        });
+      return;
+    }
+
+    if (pending.type === 'ask-selection') {
+      chrome.storage.session.remove('agi_pending_chat').catch(() => {});
+      void attachSelectionForQuestion(pending);
+      return;
+    }
+
     if (!['ask', 'explain', 'translate'].includes(pending.type)) return;
     const prompt = pendingChatPrompt(pending);
     if (!canAdmitComposerMessage(prompt)) {

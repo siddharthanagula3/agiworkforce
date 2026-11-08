@@ -9,6 +9,9 @@
  * data, and neither is visible from a green build.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
+import { projectPublicHistoryMessage } from '../src/features/cloud-bridge/conversationHistoryPull';
+import { buildExtensionCloudMessageMetadata } from '../src/features/cloud-bridge/conversationSyncClient';
 import {
   blockCloudPersistence,
   claimCloudConversationBinding,
@@ -19,6 +22,8 @@ import {
   pendingCloudMessages,
   recordCloudMessagesSynced,
   recordCloudSyncState,
+  importManagedCloudConversationHistory,
+  cloudMessageSyncFingerprint,
   upsertConversation,
   type ConversationEntry,
   type HistoryMessage,
@@ -82,6 +87,264 @@ describe('conversation cloud-sync state', () => {
     for (const key of Object.keys(_store)) delete _store[key];
     chromeMock.runtime.lastError = undefined;
     vi.clearAllMocks();
+  });
+
+  it('protects an unsynced plan cancellation from a stale account refresh', async () => {
+    const { message, conversation, incoming } = await activityFixture();
+    const before = cloudMessageSyncFingerprint(message);
+    expect(cloudMessageSyncFingerprint({ ...message, agiWorkPlanDeclined: false })).toBe(before);
+    await upsertConversation(OWNER, CLOUD_CONVERSATION_ID, [
+      { ...message, agiWorkPlanDeclined: true },
+    ]);
+    const entry = (await getConversation(OWNER, CLOUD_CONVERSATION_ID))!;
+    expect(pendingCloudMessages(entry)).toHaveLength(1);
+    expect(
+      await importManagedCloudConversationHistory(
+        OWNER,
+        null,
+        [{ conversation, messages: [incoming] }],
+        () => true,
+        () => false,
+      ),
+    ).toBe(0);
+    expect(
+      (await getConversation(OWNER, CLOUD_CONVERSATION_ID))?.messages[0]?.agiWorkPlanDeclined,
+    ).toBe(true);
+  });
+
+  it.each([
+    ['assistant', true, true],
+    ['assistant', false, undefined],
+    ['assistant', 'true', undefined],
+    ['user', true, undefined],
+  ] as const)(
+    'projects only a valid assistant plan cancellation (%s, %s)',
+    (role, value, expected) => {
+      const message = projectPublicHistoryMessage({
+        id: '33333333-3333-4333-8333-333333333333',
+        conversationId: CLOUD_CONVERSATION_ID,
+        role,
+        content: 'Plan',
+        inputTokens: 0,
+        outputTokens: 0,
+        createdAt: '2026-11-07T00:00:00.000Z',
+        metadata: { agiWorkPlanDeclined: value },
+      });
+      expect(message?.agiWorkPlanDeclined).toBe(expected);
+    },
+  );
+
+  async function activityFixture() {
+    const cloudMessageId = '33333333-3333-4333-8333-333333333333';
+    const runId = '44444444-4444-4444-8444-444444444444';
+    const message: HistoryMessage = {
+      role: 'assistant',
+      content: 'The form is filled.',
+      timestamp: Date.now(),
+      runtime: 'managed-cloud',
+      cloudMessageId,
+      browserEvents: [
+        {
+          schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+          sessionId: 'browser-session',
+          turnId: 'browser-turn',
+          sequence: 0,
+          emittedAtMs: 1_000,
+          event: {
+            type: 'tool-execution-start',
+            toolCallId: 'read-1',
+            name: 'browser_read_page',
+            category: 'computer-use',
+            summary: 'Reading the page',
+            input: null,
+          },
+        },
+      ],
+      cloudAgentRun: {
+        runId,
+        runPath: `/api/llm/v1/chat/completions/runs/${runId}`,
+        lastSequence: 2,
+        state: 'completed',
+      },
+      durationMs: 2_000,
+    };
+    message.cloudSyncedAt = Date.now();
+    message.cloudSyncedChars = message.content.length;
+    message.cloudSyncedFingerprint = cloudMessageSyncFingerprint(message);
+    await upsertConversation(OWNER, CLOUD_CONVERSATION_ID, [message]);
+    expect(
+      (await getConversation(OWNER, CLOUD_CONVERSATION_ID))?.messages[0]?.browserEvents,
+    ).toEqual(message.browserEvents);
+    await recordCloudSyncState(OWNER, CLOUD_CONVERSATION_ID, {
+      conversationId: CLOUD_CONVERSATION_ID,
+      organizationId: null,
+      createAcknowledged: true,
+      state: 'idle',
+    });
+    const conversation = {
+      id: CLOUD_CONVERSATION_ID,
+      organizationId: null,
+      title: 'Account title',
+      projectId: null,
+      pinned: false,
+      starred: false,
+      archived: false,
+      isTemporary: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    const incoming: HistoryMessage = {
+      role: message.role,
+      content: message.content,
+      timestamp: message.timestamp,
+      runtime: 'managed-cloud',
+      cloudMessageId,
+    };
+    return { message, conversation, incoming };
+  }
+
+  it('restores the durable descriptor from an account history message without file bytes or URLs', () => {
+    const assetId = '77777777-7777-4777-8777-777777777777';
+    const message = {
+      id: '33333333-3333-4333-8333-333333333333',
+      conversationId: CLOUD_CONVERSATION_ID,
+      role: 'user' as const,
+      content: 'Read the file.',
+      inputTokens: 0,
+      outputTokens: 0,
+      createdAt: '2026-11-06T12:00:00.000Z',
+      metadata: {
+        runtime: 'managed-cloud',
+        attachments: [
+          {
+            id: assetId,
+            assetId,
+            type: 'file',
+            name: 'handoff.txt',
+            mimeType: 'text/plain',
+            content: 'DO_NOT_COPY_FILE_BYTES',
+            url: 'https://storage.example/private?signature=fixture',
+          },
+        ],
+      },
+    };
+    expect(projectPublicHistoryMessage(message)?.attachments).toEqual([
+      { kind: 'file', name: 'handoff.txt', mimeType: 'text/plain', assetId },
+    ]);
+    expect(
+      projectPublicHistoryMessage({ ...message, metadata: { attachments: [] } })?.attachments,
+    ).toEqual([]);
+    expect(projectPublicHistoryMessage({ ...message, metadata: {} })?.attachments).toBeUndefined();
+    expect(
+      projectPublicHistoryMessage({ ...message, role: 'assistant' })?.attachments,
+    ).toBeUndefined();
+  });
+
+  it('includes durable user file references in synchronized metadata', () => {
+    const assetId = '77777777-7777-4777-8777-777777777777';
+    const metadata = buildExtensionCloudMessageMetadata({
+      localConversationId: 'local-file-conversation',
+      runtime: 'managed-cloud',
+      attachments: [{ kind: 'file', name: 'handoff.txt', mimeType: 'text/plain', assetId }],
+    });
+    expect(metadata['attachments']).toEqual([
+      expect.objectContaining({
+        id: assetId,
+        assetId,
+        type: 'file',
+        name: 'handoff.txt',
+        mimeType: 'text/plain',
+      }),
+    ]);
+  });
+
+  it('detects a changed attachment without requiring the question text to change', () => {
+    const message: HistoryMessage = {
+      role: 'user',
+      content: 'Read this file.',
+      runtime: 'managed-cloud',
+      timestamp: 1,
+    };
+    const before = cloudMessageSyncFingerprint(message);
+    expect(
+      cloudMessageSyncFingerprint({
+        ...message,
+        attachments: [
+          {
+            kind: 'file',
+            name: 'handoff.txt',
+            mimeType: 'text/plain',
+            assetId: '77777777-7777-4777-8777-777777777777',
+          },
+        ],
+      }),
+    ).not.toBe(before);
+  });
+
+  it('retains device activity for the exact owned cloud message on refresh without making it pending for upload', async () => {
+    const { message, conversation, incoming } = await activityFixture();
+    expect(
+      await importManagedCloudConversationHistory(
+        OWNER,
+        null,
+        [{ conversation, messages: [incoming] }],
+        () => true,
+        () => false,
+      ),
+    ).toBe(1);
+    const entry = (await getConversation(OWNER, CLOUD_CONVERSATION_ID))!;
+    expect(entry.messages[0]?.browserEvents).toEqual(message.browserEvents);
+    expect(entry.messages[0]?.cloudAgentRun).toEqual(message.cloudAgentRun);
+    expect(entry.messages[0]?.durationMs).toBe(2_000);
+    expect(pendingCloudMessages(entry)).toEqual([]);
+    const metadata = buildExtensionCloudMessageMetadata({
+      ...entry.messages[0]!,
+      runtime: 'managed-cloud',
+      localConversationId: CLOUD_CONVERSATION_ID,
+    });
+    expect(metadata).not.toHaveProperty('browserEvents');
+    expect(metadata).not.toHaveProperty('agentEvents');
+  });
+
+  it.each(['content', 'role', 'cloudMessageId'] as const)(
+    'does not attach activity to changed %s',
+    async (field) => {
+      const { conversation, incoming } = await activityFixture();
+      const changed =
+        field === 'content'
+          ? { ...incoming, content: 'A different answer' }
+          : field === 'role'
+            ? { ...incoming, role: 'user' as const }
+            : { ...incoming, cloudMessageId: '55555555-5555-4555-8555-555555555555' };
+      await importManagedCloudConversationHistory(
+        OWNER,
+        null,
+        [{ conversation, messages: [changed] }],
+        () => true,
+        () => false,
+      );
+      expect(
+        (await getConversation(OWNER, CLOUD_CONVERSATION_ID))?.messages[0]?.browserEvents,
+      ).toBeUndefined();
+    },
+  );
+
+  it("does not carry another account's activity into an imported account chat", async () => {
+    const { conversation, incoming } = await activityFixture();
+    const other = { accountId: 'account-b', authIncarnation: 'session-b' };
+    await importManagedCloudConversationHistory(
+      other,
+      null,
+      [{ conversation, messages: [incoming] }],
+      () => true,
+      () => false,
+    );
+    expect(
+      (await getConversation(other, CLOUD_CONVERSATION_ID))?.messages[0]?.browserEvents,
+    ).toBeUndefined();
+    expect(
+      (await getConversation(OWNER, CLOUD_CONVERSATION_ID))?.messages[0]?.browserEvents,
+    ).toBeDefined();
   });
 
   it('round-trips the new cloud fields through normalization without dropping the entry', async () => {

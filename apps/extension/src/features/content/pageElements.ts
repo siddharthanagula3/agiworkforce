@@ -1,14 +1,29 @@
+import { createDomElementReader } from './elementReader';
+import { LEVER_DOM_CONTROL_RULES } from './autofill/lever';
+
+const {
+  labelFor,
+  isEditableText,
+  fieldValue,
+  isAutocomplete,
+  selectionCommitted,
+  isSensitiveField: isSensitiveNativeField,
+} = createDomElementReader(LEVER_DOM_CONTROL_RULES);
+
+export const isAutocompleteField = isAutocomplete;
+export const autocompleteSelectionCommitted = selectionCommitted;
+
 export const MAX_FOUND_ELEMENTS = 150;
 export const MAX_FILL_FIELDS = 50;
-const MAX_ELEMENT_NAME_CHARS = 160;
+export const MAX_ELEMENT_NAME_CHARS = 160;
+export const MAX_ELEMENT_OPTIONS = 50;
 const MAX_SELECTOR_DEPTH = 8;
 
+const NATIVE_FORM_SELECTOR = 'input:not([type="hidden"]), select, textarea';
 const INTERACTIVE_SELECTOR = [
   'a[href]',
   'button',
-  'input:not([type="hidden"])',
-  'select',
-  'textarea',
+  NATIVE_FORM_SELECTOR,
   '[role="button"]',
   '[role="link"]',
   '[role="searchbox"]',
@@ -20,8 +35,6 @@ const INTERACTIVE_SELECTOR = [
   '[contenteditable="true"]',
 ].join(',');
 
-const SENSITIVE_AUTOCOMPLETE = /^(cc-.+|current-password|new-password|one-time-code)$/u;
-
 export interface FoundPageElement {
   selector: string;
   role: string;
@@ -31,11 +44,14 @@ export interface FoundPageElement {
   search?: true;
   required?: true;
   options?: string[];
+  selectionRequired?: true;
+  selectionCommitted?: boolean;
 }
 
 export interface FillFieldRequest {
   selector: string;
   value: string;
+  expectedSignature?: string;
 }
 
 export interface FillFieldsOutcome {
@@ -96,59 +112,25 @@ export function uniqueSelector(el: Element): string {
   return path.join(' > ');
 }
 
-function isEditableText(el: Element): boolean {
-  if (el instanceof HTMLElement && el.isContentEditable) return true;
-  const editable = el.getAttribute('contenteditable');
-  return editable === '' || editable === 'true' || editable === 'plaintext-only';
+export function pageElementSignature(el: Element): string {
+  const legend = el.closest('fieldset')?.querySelector(':scope > legend')?.textContent ?? '';
+  return [
+    el.localName,
+    el.getAttribute('role') ?? '',
+    el.getAttribute('type') ?? '',
+    el.getAttribute('name') ?? el.id,
+    `${labelFor(el)} ${legend}`.trim(),
+  ].join('|');
 }
 
-function isTextEntry(el: Element): boolean {
-  if (el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) return true;
-  if (el instanceof HTMLInputElement) {
-    return !['submit', 'button', 'reset', 'image'].includes(el.type);
-  }
-  if (isEditableText(el)) return true;
-  const role = el.getAttribute('role');
-  return role === 'textbox' || role === 'searchbox' || role === 'combobox';
+export function pageElementLabel(el: Element): string {
+  return clip(labelFor(el));
 }
 
-function labelFor(el: Element): string {
-  const aria = el.getAttribute('aria-label');
-  if (aria) return aria;
-  const labelledBy = el.getAttribute('aria-labelledby');
-  if (labelledBy) {
-    const text = labelledBy
-      .split(/\s+/u)
-      .map((id) => document.getElementById(id))
-      .filter(
-        (labelEl): labelEl is HTMLElement =>
-          labelEl !== null && labelEl !== el && !labelEl.contains(el),
-      )
-      .map((labelEl) => labelEl.textContent ?? '')
-      .join(' ');
-    if (text.trim()) return text;
-  }
-  if (
-    el instanceof HTMLInputElement ||
-    el instanceof HTMLTextAreaElement ||
-    el instanceof HTMLSelectElement
-  ) {
-    const label = el.labels?.[0];
-    if (label) {
-      const clone = label.cloneNode(true) as HTMLElement;
-      clone
-        .querySelectorAll('input, textarea, select, [contenteditable]')
-        .forEach((field) => field.remove());
-      if (clone.textContent?.trim()) return clone.textContent;
-    }
-  }
-  const title = el.getAttribute('title');
-  if (title) return title;
-  if (isTextEntry(el)) {
-    return el.getAttribute('placeholder') ?? el.getAttribute('name') ?? '';
-  }
-  if (el instanceof HTMLInputElement) return el.value;
-  return el.textContent ?? '';
+export function nativeFieldValue(
+  element: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement,
+): string | boolean {
+  return fieldValue(element);
 }
 
 function roleOf(el: Element): string {
@@ -169,13 +151,17 @@ function roleOf(el: Element): string {
   return tag;
 }
 
-function isVisible(el: Element): boolean {
+export function isVisible(el: Element): boolean {
   if (!(el instanceof HTMLElement)) return true;
-  if (el.hidden || el.getAttribute('aria-hidden') === 'true') return false;
+  if (el.closest('[hidden], [aria-hidden="true"], [inert]')) return false;
   const rect = el.getBoundingClientRect();
   if (rect.width === 0 && rect.height === 0) return false;
-  const style = window.getComputedStyle(el);
-  return style.visibility !== 'hidden' && style.display !== 'none';
+  for (let current: Element | null = el; current; current = current.parentElement) {
+    const style = window.getComputedStyle(current);
+    if (style.visibility === 'hidden' || style.display === 'none' || style.opacity === '0')
+      return false;
+  }
+  return true;
 }
 
 function looksLikeSearch(el: Element, name: string, placeholder: string | undefined): boolean {
@@ -186,11 +172,13 @@ function looksLikeSearch(el: Element, name: string, placeholder: string | undefi
   return /\bsearch\b|\bfind\b|\bquery\b/u.test(haystack);
 }
 
-export function findPageElements(query?: string): FoundPageElement[] {
+export function findPageElements(query?: string, fieldsOnly = false): FoundPageElement[] {
   rememberPasswordFields();
   const needle = query?.trim().toLowerCase() ?? '';
   const found: FoundPageElement[] = [];
-  for (const el of Array.from(document.querySelectorAll(INTERACTIVE_SELECTOR))) {
+  for (const el of Array.from(
+    document.querySelectorAll(fieldsOnly ? NATIVE_FORM_SELECTOR : INTERACTIVE_SELECTOR),
+  )) {
     if (found.length >= MAX_FOUND_ELEMENTS) break;
     if (!isVisible(el)) continue;
     const name = clip(labelFor(el));
@@ -205,6 +193,9 @@ export function findPageElements(query?: string): FoundPageElement[] {
       continue;
     }
     const entry: FoundPageElement = { selector: uniqueSelector(el), role, name };
+    if (isAutocomplete(el)) entry.selectionRequired = true;
+    const committed = selectionCommitted(el);
+    if (committed !== undefined) entry.selectionCommitted = committed;
     if (el instanceof HTMLInputElement) entry.type = el.type;
     if (placeholder) entry.placeholder = clip(placeholder);
     if (role === 'textbox' || role === 'searchbox' || role === 'combobox') {
@@ -220,30 +211,13 @@ export function findPageElements(query?: string): FoundPageElement[] {
     }
     if (el instanceof HTMLSelectElement) {
       entry.options = Array.from(el.options)
-        .slice(0, 50)
+        .slice(0, MAX_ELEMENT_OPTIONS)
         .map((option) => clip(option.textContent ?? option.value));
     }
     found.push(entry);
   }
   return found;
 }
-
-const SENSITIVE_NAME_TOKENS = new Set([
-  'card',
-  'cc',
-  'ccnum',
-  'cardnumber',
-  'cvv',
-  'cvc',
-  'csc',
-  'otp',
-  'ssn',
-  'password',
-  'passwd',
-  'pwd',
-  'pin',
-  'passcode',
-]);
 
 const passwordFields = new WeakSet<Element>();
 
@@ -266,27 +240,8 @@ export function watchPasswordFields(): void {
   });
 }
 
-function autocompleteIsSensitive(el: Element): boolean {
-  return (el.getAttribute('autocomplete') ?? '')
-    .toLowerCase()
-    .split(/\s+/u)
-    .some((token) => SENSITIVE_AUTOCOMPLETE.test(token));
-}
-
-function nameIsSensitive(el: Element): boolean {
-  const text = ['name', 'id', 'aria-label', 'placeholder', 'data-testid']
-    .map((attribute) => el.getAttribute(attribute) ?? '')
-    .join(' ')
-    .replace(/([a-z])([A-Z])/gu, '$1 $2')
-    .toLowerCase();
-  return text
-    .split(/[^a-z0-9]+/u)
-    .some((token) => token !== '' && SENSITIVE_NAME_TOKENS.has(token));
-}
-
-function isSensitiveField(el: Element): boolean {
-  if (el instanceof HTMLInputElement && el.type === 'password') return true;
-  return passwordFields.has(el) || autocompleteIsSensitive(el) || nameIsSensitive(el);
+export function isSensitiveField(el: Element): boolean {
+  return passwordFields.has(el) || isSensitiveNativeField(el);
 }
 
 function dispatchValueEvents(el: Element): void {
@@ -294,7 +249,9 @@ function dispatchValueEvents(el: Element): void {
   el.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
 }
 
-function fillOne(el: Element, value: string): string | null {
+function fillOne(el: Element, value: string, expectedSignature?: string): string | null {
+  if (expectedSignature !== undefined && pageElementSignature(el) !== expectedSignature)
+    return 'The field changed before it could be filled.';
   if (isSensitiveField(el)) {
     return 'This is a password, payment or one-time code field; the user has to fill it in themselves.';
   }
@@ -321,18 +278,35 @@ function fillOne(el: Element, value: string): string | null {
         (candidate.textContent ?? '').trim().toLowerCase() === wanted,
     );
     if (!option) return 'No option in this list matches that value.';
-    el.value = option.value;
+    const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set;
+    if (setter) setter.call(el, option.value);
+    else el.value = option.value;
     dispatchValueEvents(el);
     return null;
   }
   if (el instanceof HTMLInputElement && (el.type === 'checkbox' || el.type === 'radio')) {
-    el.checked = /^(true|yes|on|1|checked)$/iu.test(value.trim());
-    dispatchValueEvents(el);
+    const checked = /^(true|yes|on|1|checked)$/iu.test(value.trim());
+    if (el.type === 'radio' && !checked)
+      return 'Select another radio option instead of clearing this one.';
+    if (el.checked !== checked) HTMLInputElement.prototype.click.call(el);
     return null;
   }
   if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
     el.focus();
-    el.value = value;
+    if (
+      !el.isConnected ||
+      isSensitiveField(el) ||
+      !isVisible(el) ||
+      el.disabled ||
+      el.readOnly ||
+      (expectedSignature !== undefined && pageElementSignature(el) !== expectedSignature)
+    )
+      return 'The field changed before it could be filled.';
+    const prototype =
+      el instanceof HTMLInputElement ? HTMLInputElement.prototype : HTMLTextAreaElement.prototype;
+    const setter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
+    if (setter) setter.call(el, value);
+    else el.value = value;
     dispatchValueEvents(el);
     return null;
   }
@@ -369,7 +343,7 @@ export function fillPageFields(fields: readonly FillFieldRequest[]): FillFieldsO
       outcome.failed.push({ selector: field.selector, reason: 'No element on the page matches.' });
       continue;
     }
-    const reason = fillOne(el, field.value);
+    const reason = fillOne(el, field.value, field.expectedSignature);
     if (reason === null) outcome.filled.push(field.selector);
     else outcome.failed.push({ selector: field.selector, reason });
   }

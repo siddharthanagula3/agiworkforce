@@ -159,3 +159,43 @@ describe('actual hydration to history-resume admission', () => {
     expect(state.resumeManagedCloudRun).not.toHaveBeenCalled();
   });
 });
+
+describe('stored attachment replay admission', () => {
+  function replay(attachments: Array<Record<string, unknown>>, pages?: unknown[]) {
+    const node = program.statements.find(
+      (node) => ts.isFunctionDeclaration(node) && node.name?.text === 'replayableTurnPayload',
+    );
+    if (!node) throw new Error('Production replay admission missing');
+    const compiled = ts.transpileModule(`${node.getText(program)};return replayableTurnPayload;`, {
+      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
+    }).outputText;
+    // llm-guardrail-allow: executes repository-owned browser code inside this isolated test fixture.
+    const run = new Function('turnPayloadByMessageId', 'expandSlashCommand', compiled)(
+      new Map(),
+      () => null,
+    );
+    return run({ id: 'saved-user', content: 'Describe this image', attachments, pages });
+  }
+
+  it('replays an uploaded image by its original durable asset without needing inline bytes', () => {
+    const image = {
+      kind: 'image',
+      name: 'saved.png',
+      mimeType: 'image/png',
+      assetId: '11111111-1111-4111-8111-111111111111',
+    };
+    expect(replay([image])).toMatchObject({
+      prompt: 'Describe this image',
+      images: [],
+      files: [{ name: image.name, mimeType: image.mimeType, assetId: image.assetId }],
+    });
+  });
+
+  it('requires reattachment when an old image has no durable asset', () => {
+    expect(replay([{ kind: 'image', name: 'old.png', mimeType: 'image/png' }])).toBeNull();
+  });
+
+  it('does not silently reuse a stale page attachment', () => {
+    expect(replay([], [{ url: 'https://example.com' }])).toBeNull();
+  });
+});

@@ -44,6 +44,85 @@ const button = (root: ParentNode, label: string) =>
   Array.from(root.querySelectorAll('button')).find((node) => node.textContent === label)!;
 
 describe('tasks sheet', () => {
+  it('aborts and rejects a delayed list after account reset', async () => {
+    let resolve!: (value: { status: 'success'; runs: CloudAgentRun[] }) => void;
+    let signal: AbortSignal | undefined;
+    const sheet = buildTasksSheet({
+      listRuns: (_limit, currentSignal) => {
+        signal = currentSignal;
+        return new Promise((done) => {
+          resolve = done;
+        });
+      },
+      cancelRun: vi.fn(),
+      openWeb: vi.fn(),
+      formatTime: () => 'now',
+    });
+    document.body.appendChild(sheet.element);
+    sheet.open(document.body);
+    sheet.reset();
+    resolve({ status: 'success', runs: [run({})] });
+    await Promise.resolve();
+    expect(signal?.aborted).toBe(true);
+    expect(sheet.element.hidden).toBe(true);
+    expect(sheet.element.querySelectorAll('.sp-task-item')).toHaveLength(0);
+    expect(sheet.element.querySelector('[role="status"]')?.textContent).toBe('');
+  });
+
+  it('clears rendered account rows on reset and reloads on reopen', async () => {
+    const listRuns = vi
+      .fn()
+      .mockResolvedValueOnce({ status: 'success', runs: [run({})] })
+      .mockResolvedValueOnce({ status: 'success', runs: [] });
+    const sheet = buildTasksSheet({
+      listRuns,
+      cancelRun: vi.fn(),
+      openWeb: vi.fn(),
+      formatTime: () => 'now',
+    });
+    document.body.appendChild(sheet.element);
+    sheet.open(document.body);
+    await vi.waitFor(() => expect(sheet.element.textContent).toContain('Weekly report'));
+    sheet.reset();
+    expect(sheet.element.textContent).not.toContain('Weekly report');
+    sheet.open(document.body);
+    await vi.waitFor(() => expect(sheet.element.textContent).toContain(message('spTasksEmpty')));
+    expect(listRuns).toHaveBeenCalledTimes(2);
+  });
+
+  it('ignores a retired cancellation when another task view is opened', async () => {
+    let resolve!: (value: { status: 'success'; run: CloudAgentRun }) => void;
+    const cancelRun = vi.fn(
+      () =>
+        new Promise<{ status: 'success'; run: CloudAgentRun }>((done) => {
+          resolve = done;
+        }),
+    );
+    const listRuns = vi
+      .fn()
+      .mockResolvedValueOnce({ status: 'success', runs: [run({})] })
+      .mockResolvedValue({ status: 'success', runs: [] });
+    const sheet = buildTasksSheet({
+      listRuns,
+      cancelRun,
+      openWeb: vi.fn(),
+      formatTime: () => 'now',
+    });
+    document.body.appendChild(sheet.element);
+    sheet.open(document.body);
+    await vi.waitFor(() => expect(button(sheet.element, message('spTasksStop'))).toBeDefined());
+    button(sheet.element, message('spTasksStop')).click();
+    button(sheet.element.querySelector('[role="alertdialog"]')!, message('spTasksStop')).click();
+    sheet.close();
+    sheet.open(document.body);
+    await vi.waitFor(() => expect(listRuns).toHaveBeenCalledTimes(2));
+    resolve({ status: 'success', run: run({ state: 'cancelled' }) });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(listRuns).toHaveBeenCalledTimes(2);
+    expect(sheet.element.querySelector('[role="status"]')?.textContent).toBe('');
+  });
+
   it('lists runs from every app and opens their chat on the web', async () => {
     const openWeb = vi.fn();
     const sheet = buildTasksSheet({

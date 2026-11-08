@@ -16,7 +16,7 @@ const file = {
   checksumSha256: createHash('sha256').update(bytes).digest('hex'),
   base64: bytes.toString('base64'),
 };
-const signature = 'input||file||';
+const signature = 'input||file|||';
 let dom: JSDOM;
 let input: HTMLInputElement;
 const nativeFiles = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'files');

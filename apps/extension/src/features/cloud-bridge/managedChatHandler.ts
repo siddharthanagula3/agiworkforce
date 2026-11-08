@@ -724,7 +724,7 @@ export async function executeChromeManagedChat(
     request.completionMode !== 'unattended' &&
     goal.length <= MAX_AGIWORK_GOAL_CHARS;
   const streamOptions: ManagedChatStreamOptions = {
-    model: routing.modelKey,
+    model: isAutoSelection(selection) ? selection : routing.modelKey,
     idempotencyKey: request.idempotencyKey ?? (await managedChatIdempotencyKey('send', request.id)),
     ...(effort ? { effort } : {}),
     extendedThinking: request.extendedThinking,

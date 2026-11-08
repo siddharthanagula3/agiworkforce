@@ -58,6 +58,21 @@ function approvalDependencies(
 }
 
 describe('executeChromeManagedChat', () => {
+  it('admits a named-model text-only shortcut that explicitly forbids tools', async () => {
+    const deps = dependencies();
+    const selected = getRoutingSlotModel('general_fast');
+    const result = await executeChromeManagedChat(
+      {
+        id: 'shortcut-no-tools',
+        text: 'Reply only with PINE-EDIT-4826. Do not browse or use tools.',
+        modelSelection: selected,
+      },
+      deps,
+    );
+    expect(result).toMatchObject({ status: 'success', routing: { modelKey: selected } });
+    expect(deps.streamChat).toHaveBeenCalledOnce();
+  });
+
   it('scopes identical stream ids to independent side-panel instances', () => {
     expect(createChromeManagedStreamKey('panel-a', 'stream-1')).not.toBe(
       createChromeManagedStreamKey('panel-b', 'stream-1'),
@@ -104,7 +119,7 @@ describe('executeChromeManagedChat', () => {
     expect(refused.streamChat).not.toHaveBeenCalled();
   });
 
-  it('passes the registry-routed concrete model and thinking flag to Managed Cloud', async () => {
+  it('preserves Auto and the thinking flag for server routing', async () => {
     const deps = dependencies();
     const result = await executeChromeManagedChat(
       {
@@ -119,8 +134,8 @@ describe('executeChromeManagedChat', () => {
     expect(result.status).toBe('success');
     expect(deps.streamChat).toHaveBeenCalledTimes(1);
     const [, , options] = vi.mocked(deps.streamChat).mock.calls[0]!;
-    expect(options.model).toBeTruthy();
-    expect(options.model).not.toMatch(/^auto/);
+    expect(options.model).toBe('auto');
+    if (result.status === 'success') expect(result.routing.modelKey).not.toMatch(/^auto/);
     expect(options.extendedThinking).toBe(true);
     expect(options.workMode).toBe('chat');
     expect(options.idempotencyKey).toMatch(/^agi\.chrome\.send\.[a-f0-9]{64}$/);
@@ -551,7 +566,8 @@ describe('executeChromeManagedChat', () => {
     expect(result.status).toBe('success');
     expect(deps.streamChat).toHaveBeenCalledTimes(1);
     const [, , options] = vi.mocked(deps.streamChat).mock.calls[0]!;
-    expect(options.model).toBe(PAID_ECONOMY_MODEL);
+    expect(options.model).toBe('auto-economy');
+    if (result.status === 'success') expect(result.routing.modelKey).toBe(PAID_ECONOMY_MODEL);
   });
 
   it('preserves a selected concrete model and route receipt even when an old Quick preference is on', async () => {

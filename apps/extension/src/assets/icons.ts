@@ -1,3 +1,5 @@
+import inlineLoadingMark from '../../icons/icon32.png?inline';
+
 const ATTRS =
   'xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"';
 
@@ -152,6 +154,21 @@ export function renderIcon(svgString: string, size: number, extraClass?: string)
   wrapper.className = `agi-icon${extraClass ? ' ' + extraClass : ''}`;
   wrapper.setAttribute('aria-hidden', 'true');
   wrapper.style.cssText = `display:inline-flex;align-items:center;justify-content:center;width:${size}px;height:${size}px;flex-shrink:0;`;
+
+  if (svgString === Loader2) {
+    const mark = document.createElement('img');
+    mark.src =
+      location.protocol === 'chrome-extension:'
+        ? chrome.runtime.getURL('icons/agi-symbol.png')
+        : inlineLoadingMark;
+    mark.alt = '';
+    mark.width = size;
+    mark.height = size;
+    mark.draggable = false;
+    mark.className = 'agi-loading-mark';
+    wrapper.appendChild(mark);
+    return wrapper;
+  }
 
   if (svgParser) {
     try {

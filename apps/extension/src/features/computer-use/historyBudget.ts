@@ -154,7 +154,10 @@ export function pruneObservationHistory(
   return history.map((message, index): AgentMessage => {
     const whole = replace.get(slotKey(index, WHOLE_CONTENT));
     if (whole) {
-      return { ...message, content: stubForSlot(whole.slot, whole.stale) } as AgentMessage;
+      return {
+        ...message,
+        content: stubbedText(message.content as string, whole.slot, whole.stale),
+      } as AgentMessage;
     }
 
     const content = message.content;

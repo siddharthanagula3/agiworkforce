@@ -124,6 +124,8 @@ import {
   EFFORT_DESCRIPTION,
   PRODUCT_BRAND,
   PRODUCT_NAMES,
+  readManagedMemoryCreateRequest,
+  readManagedMemoryUpdateRequest,
 } from '@agiworkforce/types';
 import {
   DEVELOPER_AGENT_MODE_LABELS,
@@ -1965,10 +1967,8 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         placeHolder: 'Example: I prefer Python over JavaScript for data work.',
         ignoreFocusOut: true,
         validateInput: (value) => {
-          const trimmed = value.trim();
-          if (!trimmed) return 'Fact cannot be empty.';
-          if (trimmed.length > 280) return 'Keep facts under 280 characters.';
-          return undefined;
+          const read = readManagedMemoryCreateRequest({ content: value });
+          return read.ok ? undefined : read.message;
         },
       });
       if (!text) return;
@@ -2003,10 +2003,8 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         prompt: 'Update this fact in your AGI Cloud account. The change reaches every AGI client.',
         ignoreFocusOut: true,
         validateInput: (value) => {
-          const trimmed = value.trim();
-          if (!trimmed) return 'Fact cannot be empty.';
-          if (trimmed.length > 280) return 'Keep facts under 280 characters.';
-          return undefined;
+          const read = readManagedMemoryUpdateRequest({ content: value });
+          return read.ok ? undefined : read.message;
         },
       });
       if (!newText || newText.trim() === item.fact.text) return;

@@ -70,11 +70,40 @@ describe('memory sheet', () => {
     );
     await vi.waitFor(() => expect(document.querySelector('.sp-memory-item')).toBeTruthy());
     button(document.querySelector('.sp-memory-item')!, message('spMemoryEdit')).click();
-    const edit = document.querySelector<HTMLInputElement>('.sp-memory-edit input')!;
+    const edit = document.querySelector<HTMLTextAreaElement>('.sp-memory-edit [aria-label]')!;
     edit.value = 'New';
     document.querySelector<HTMLFormElement>('.sp-memory-edit')!.requestSubmit();
     await vi.waitFor(() =>
       expect(sent).toContainEqual({ type: 'UPDATE_MEMORY', id: 'm1', content: 'New' }),
+    );
+  });
+
+  it.each(['\n', '\r\n'])('preserves stored lines on unchanged save (%j)', async (separator) => {
+    const content = ['First reference line.', 'Second reference line.'].join(separator);
+    const { sent } = setup([{ id: 'multiline', content }]);
+    await vi.waitFor(() => expect(document.querySelector('.sp-memory-item')).toBeTruthy());
+    button(document.querySelector('.sp-memory-item')!, message('spMemoryEdit')).click();
+    const edit = document.querySelector<HTMLTextAreaElement>('.sp-memory-edit [aria-label]')!;
+    expect(edit.value).toBe(content.replace(/\r\n/g, '\n'));
+    document.querySelector<HTMLFormElement>('.sp-memory-edit')!.requestSubmit();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(sent.some((request) => request['type'] === 'UPDATE_MEMORY')).toBe(false);
+  });
+
+  it('retains the existing lines when the user adds another line', async () => {
+    const content = 'First reference line.\nSecond reference line.';
+    const { sent } = setup([{ id: 'multiline', content }]);
+    await vi.waitFor(() => expect(document.querySelector('.sp-memory-item')).toBeTruthy());
+    button(document.querySelector('.sp-memory-item')!, message('spMemoryEdit')).click();
+    const edit = document.querySelector<HTMLTextAreaElement>('.sp-memory-edit [aria-label]')!;
+    edit.value += '\nThird reference line.';
+    document.querySelector<HTMLFormElement>('.sp-memory-edit')!.requestSubmit();
+    await vi.waitFor(() =>
+      expect(sent).toContainEqual({
+        type: 'UPDATE_MEMORY',
+        id: 'multiline',
+        content: content + '\nThird reference line.',
+      }),
     );
   });
 
@@ -84,4 +113,69 @@ describe('memory sheet', () => {
     expect(sheet.element.hidden).toBe(true);
     expect(document.activeElement).toBe(trigger);
   });
+
+  it('shows the connection warning while displaying cached memory', async () => {
+    const send = vi.fn(async (): Promise<unknown> => ({
+      success: true,
+      fromCache: true,
+      memories: [],
+      error: 'Memory could not be reached.',
+    }));
+    const sheet = buildMemorySheet({ send, openWeb: vi.fn() });
+    const trigger = document.createElement('button');
+    document.body.append(trigger, sheet.element);
+    sheet.open(trigger);
+    await vi.waitFor(() =>
+      expect(sheet.element.querySelector('.sp-memory-empty')?.textContent).toBe(
+        message('spMemoryEmpty'),
+      ),
+    );
+    expect(sheet.element.querySelector('.sp-memory-status')?.textContent).toBe(
+      'Memory could not be reached.',
+    );
+    sheet.close();
+    send.mockResolvedValueOnce({ success: true, memories: [] });
+    sheet.open(trigger);
+    await vi.waitFor(() =>
+      expect(sheet.element.querySelector('.sp-memory-empty')?.textContent).toBe(
+        message('spMemoryEmpty'),
+      ),
+    );
+    expect(sheet.element.querySelector('.sp-memory-status')?.textContent).toBe('');
+  });
+
+  it.each(['success', 'refused'] as const)(
+    'ignores a late %s write after the sheet is reopened',
+    async (outcome) => {
+      let finish!: (response: unknown) => void;
+      const send = vi.fn(async (request: Record<string, unknown>): Promise<unknown> =>
+        request.type === 'ADD_MEMORY'
+          ? new Promise((resolve) => (finish = resolve))
+          : { success: true, memories: [] },
+      );
+      const sheet = buildMemorySheet({ send, openWeb: vi.fn() });
+      const trigger = document.createElement('button');
+      document.body.append(trigger, sheet.element);
+      sheet.open(trigger);
+      await vi.waitFor(() =>
+        expect(sheet.element.querySelector('.sp-memory-empty')?.textContent).toBe(
+          message('spMemoryEmpty'),
+        ),
+      );
+      const input = sheet.element.querySelector<HTMLInputElement>('.sp-memory-add input')!;
+      input.value = 'Old view draft';
+      sheet.element.querySelector<HTMLFormElement>('.sp-memory-add')!.requestSubmit();
+      await vi.waitFor(() => expect(finish).toBeDefined());
+      sheet.close();
+      sheet.open(trigger);
+      input.value = 'New view draft';
+      finish({ success: outcome === 'success', error: 'Old view failure' });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(input.value).toBe('New view draft');
+      expect(sheet.element.querySelector('.sp-memory-status')?.textContent).toBe('');
+      expect(send.mock.calls.filter(([request]) => request.type === 'LIST_MEMORIES')).toHaveLength(
+        2,
+      );
+    },
+  );
 });

@@ -82,6 +82,26 @@ describe('Managed Cloud account/session authority', () => {
     expect(selectManagedCloudCancellationCredential(OWNER_B, null, ambientB)).toBe(ambientB);
   });
 
+  it('renews cancellation credentials only within the admitted account and session', () => {
+    const captured = { owner: OWNER_A, token: 'earlier-token' };
+    const renewed = { owner: OWNER_A, token: 'renewed-token' };
+    const anotherSession = {
+      owner: { ...OWNER_A, authIncarnation: 'another-session' },
+      token: 'another-session-token',
+    };
+    expect(selectManagedCloudCancellationCredential(OWNER_A, captured, renewed)).toBe(renewed);
+    expect(selectManagedCloudCancellationCredential(OWNER_A, captured, anotherSession)).toBe(
+      captured,
+    );
+    expect(
+      selectManagedCloudCancellationCredential(
+        OWNER_A,
+        { owner: OWNER_B, token: 'wrong-owner' },
+        renewed,
+      ),
+    ).toBeNull();
+  });
+
   it('wires owner invalidation to abort first and cancel with the admitted token', () => {
     const cancellationHelper = sourceBetween(
       backgroundSource,
@@ -252,13 +272,13 @@ describe('Managed Cloud account/session authority', () => {
     );
 
     expect(createCase).toContain('normalizeManagedCloudOwner(createMessage.owner)');
-    expect(createCase).toContain('getExactScheduledMutationCredential(requestedOwner)');
+    expect(createCase).toContain('getExactManagedMutationCredential(requestedOwner)');
     expect(listCase).toContain('normalizeManagedCloudOwner(listMessage.owner)');
-    expect(listCase).toContain('getExactScheduledMutationCredential(requestedOwner)');
+    expect(listCase).toContain('getExactManagedMutationCredential(requestedOwner)');
     expect(updateCase).toContain('normalizeManagedCloudOwner(updateMessage.owner)');
-    expect(updateCase).toContain('getExactScheduledMutationCredential(requestedOwner)');
+    expect(updateCase).toContain('getExactManagedMutationCredential(requestedOwner)');
     expect(deleteCase).toContain('normalizeManagedCloudOwner(deleteMessage.owner)');
-    expect(deleteCase).toContain('getExactScheduledMutationCredential(requestedOwner)');
+    expect(deleteCase).toContain('getExactManagedMutationCredential(requestedOwner)');
   });
 
   it('routes chat, resume, approval, and in-page auth failures through rejected-owner teardown', () => {
@@ -274,7 +294,7 @@ describe('Managed Cloud account/session authority', () => {
       "case 'CANCEL_STREAM':",
       "case 'OPEN_SIDE_PANEL':",
     );
-    expect(cancelCase).toContain('const currentCredential = active ? null');
+    expect(cancelCase).toContain('getManagedCloudAuthContext()');
     expect(cancelCase).toContain('active ? { token: active.token, owner: active.owner } : null');
     expect(cancelCase).toContain('selectManagedCloudCancellationCredential(');
     expect(cancelCase).toContain('getAuthToken: async () => credential.token');

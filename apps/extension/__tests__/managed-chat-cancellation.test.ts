@@ -55,13 +55,19 @@ const harness = vi.hoisted(() => {
   };
 
   const area = (store: Record<string, unknown>) => ({
-    get: vi.fn((keys?: unknown) => (store === localStore ? readStore(keys) : Promise.resolve({}))),
-    set: vi.fn((items: Record<string, unknown>) => {
+    get: vi.fn(async (keys?: unknown, callback?: (value: Record<string, unknown>) => void) => {
+      const value = store === localStore ? await readStore(keys) : {};
+      callback?.(value);
+      return value;
+    }),
+    set: vi.fn((items: Record<string, unknown>, callback?: () => void) => {
       Object.assign(store, items);
+      callback?.();
       return Promise.resolve();
     }),
-    remove: vi.fn((keys: string | string[]) => {
+    remove: vi.fn((keys: string | string[], callback?: () => void) => {
       for (const key of Array.isArray(keys) ? keys : [keys]) delete store[key];
+      callback?.();
       return Promise.resolve();
     }),
     clear: vi.fn(() => Promise.resolve()),
@@ -147,7 +153,12 @@ const harness = vi.hoisted(() => {
       open: vi.fn(() => Promise.resolve()),
     },
     commands: { onCommand: event() },
-    action: { setBadgeText: vi.fn(), setBadgeBackgroundColor: vi.fn(), setTitle: vi.fn() },
+    action: {
+      onClicked: event(),
+      setBadgeText: vi.fn(),
+      setBadgeBackgroundColor: vi.fn(),
+      setTitle: vi.fn(),
+    },
     scripting: { executeScript: vi.fn(() => Promise.resolve([])) },
     debugger: debuggerMock,
     permissions: {

@@ -1,7 +1,16 @@
 import { agiExtensionCssVars, cssVarsToString } from '@agiworkforce/design-tokens';
 
+const loadingMarkCss = `
+.agi-loading-mark {
+  object-fit: contain;
+  animation: agi-loading-rotation var(--duration-spin) linear infinite;
+}
+@keyframes agi-loading-rotation { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .agi-loading-mark { animation: none; } }
+`;
+
 export function getExtensionTokensCss(mode: 'dark' | 'light' = 'dark'): string {
-  return `:root {\n${cssVarsToString(agiExtensionCssVars[mode])}\n}`;
+  return `:root {\n${cssVarsToString(agiExtensionCssVars[mode])}\n}\n${loadingMarkCss}`;
 }
 
 function themed(selector: string, condition: string): string {
@@ -74,5 +83,6 @@ export function getExtensionTokensCssAuto(selector = ':root'): string {
     '    --agi-ext-elevation-4: none;',
     '  }',
     '}',
+    loadingMarkCss,
   ].join('\n');
 }

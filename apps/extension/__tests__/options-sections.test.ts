@@ -1,3 +1,5 @@
+import { getRoutingSlotModel } from '@agiworkforce/types';
+import { SELECTED_MODEL_STORAGE_KEY } from '../src/background/policy';
 // @vitest-environment jsdom
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -17,6 +19,7 @@ import { READ_ALOUD_STORAGE_KEY } from '../src/features/read-aloud';
 import { createKeyboardShortcutRows } from '../src/features/options/keyboard-shortcut-rows';
 import {
   createShortcutsSection,
+  browserShortcutsDependencies,
   pickRecordableTab,
   type ShortcutsSectionDependencies,
 } from '../src/features/options/shortcuts-section';
@@ -336,6 +339,47 @@ describe('shortcuts section', () => {
     return { section, send };
   }
 
+  it('passes the remembered model only to a prompt Run and keeps recorded replay local', async () => {
+    const selected = getRoutingSlotModel('general_fast');
+    const getModelSelection = vi.fn(async () => selected);
+    const { section, send } = build({
+      getModelSelection,
+      queryTabs: async () => [
+        { id: 12, url: 'https://unrelated.example.com', lastAccessed: 99 },
+        { id: 7, url: 'https://shop.example.com/cart', lastAccessed: 5 },
+      ],
+    });
+    section.setActive(true);
+    await flush();
+    const buttons = section.element.querySelectorAll<HTMLButtonElement>(
+      '[aria-label="optShortcutRunAria"]',
+    );
+    buttons[0]!.click();
+    await flush();
+    expect(send).toHaveBeenCalledWith({
+      type: 'REPLAY_SHORTCUT',
+      shortcutId: 'p1',
+      modelSelection: selected,
+    });
+    buttons[1]!.click();
+    await flush();
+    expect(send).toHaveBeenCalledWith({ type: 'REPLAY_SHORTCUT', shortcutId: 'r1', tabId: 7 });
+    expect(getModelSelection).toHaveBeenCalledOnce();
+  });
+
+  it('does not replay a recorded workflow when its site is not open', async () => {
+    const { section, send } = build({
+      queryTabs: async () => [{ id: 12, url: 'https://unrelated.example.com', lastAccessed: 99 }],
+    });
+    section.setActive(true);
+    await flush();
+    section.element
+      .querySelectorAll<HTMLButtonElement>('[aria-label="optShortcutRunAria"]')[1]!
+      .click();
+    await flush();
+    expect(send).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'REPLAY_SHORTCUT' }));
+  });
+
   it('lists prompt and recorded shortcuts when the section opens', async () => {
     const { section } = build();
     section.setActive(true);
@@ -484,5 +528,34 @@ describe('options page navigation', () => {
       source.indexOf('createSitePermissionPolicySection'),
     );
     expect(permissions).not.toContain('opt-notif-toggle');
+  });
+});
+
+describe('shortcut Run model preference adapter', () => {
+  it('reads the existing chat model preference through its canonical storage key', async () => {
+    const selection = getRoutingSlotModel('general_fast');
+    const get = vi.fn(async () => ({ [SELECTED_MODEL_STORAGE_KEY]: selection }));
+    vi.stubGlobal('chrome', { storage: { local: { get } } });
+    const adapter = browserShortcutsDependencies();
+    expect(adapter).toHaveProperty('getModelSelection');
+    const read = Reflect.get(adapter, 'getModelSelection') as () => Promise<string | undefined>;
+    await expect(read()).resolves.toBe(selection);
+    expect(get).toHaveBeenCalledWith(SELECTED_MODEL_STORAGE_KEY);
+  });
+  it('does not invent a preference when none was saved', async () => {
+    vi.stubGlobal('chrome', { storage: { local: { get: vi.fn(async () => ({})) } } });
+    const adapter = browserShortcutsDependencies();
+    expect(adapter).toHaveProperty('getModelSelection');
+    const read = Reflect.get(adapter, 'getModelSelection') as () => Promise<string | undefined>;
+    await expect(read()).resolves.toBeUndefined();
+  });
+  it.each([17, '', {}])('refuses malformed saved model preference %j', async (value) => {
+    vi.stubGlobal('chrome', {
+      storage: { local: { get: vi.fn(async () => ({ [SELECTED_MODEL_STORAGE_KEY]: value })) } },
+    });
+    const adapter = browserShortcutsDependencies();
+    expect(adapter).toHaveProperty('getModelSelection');
+    const read = Reflect.get(adapter, 'getModelSelection') as () => Promise<string | undefined>;
+    await expect(read()).rejects.toThrow();
   });
 });

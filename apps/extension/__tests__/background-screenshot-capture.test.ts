@@ -11,6 +11,7 @@ const harness = vi.hoisted(() => {
     agi_site_allowlist: [SITE],
     agi_cu_browser_control_consent: [SITE],
   };
+  const actionClicks: Array<(tab: chrome.tabs.Tab) => void> = [];
   const messageListeners: Array<
     (message: unknown, sender: unknown, sendResponse: (response?: unknown) => void) => unknown
   > = [];
@@ -122,7 +123,16 @@ const harness = vi.hoisted(() => {
       open: vi.fn(() => Promise.resolve()),
     },
     commands: { onCommand: event() },
-    action: { setBadgeText: vi.fn(), setBadgeBackgroundColor: vi.fn(), setTitle: vi.fn() },
+    action: {
+      onClicked: {
+        addListener: vi.fn((listener: (tab: chrome.tabs.Tab) => void) =>
+          actionClicks.push(listener),
+        ),
+      },
+      setBadgeText: vi.fn(),
+      setBadgeBackgroundColor: vi.fn(),
+      setTitle: vi.fn(),
+    },
     scripting: { executeScript: vi.fn(() => Promise.resolve([])) },
     debugger: {
       attach: vi.fn(),
@@ -152,6 +162,7 @@ const harness = vi.hoisted(() => {
     activate,
     activeAfterCapture,
     captureVisibleTab,
+    actionClicks,
   };
 });
 
@@ -214,6 +225,16 @@ describe('CAPTURE_SCREENSHOT names the tab it captured', () => {
     harness.captureVisibleTab.mockClear();
   });
 
+  it('opens through an explicit action handler instead of automatic panel behavior', () => {
+    expect(chrome.sidePanel.setPanelBehavior).toHaveBeenCalledWith({
+      openPanelOnActionClick: false,
+    });
+    expect(harness.actionClicks).toHaveLength(1);
+    vi.mocked(chrome.sidePanel.open).mockClear();
+    harness.actionClicks[0]!({ id: SENDER_TAB_ID, windowId: WINDOW_ID } as chrome.tabs.Tab);
+    expect(chrome.sidePanel.open).toHaveBeenCalledWith({ tabId: SENDER_TAB_ID });
+  });
+
   it('captures and labels the page that asked while it is showing', async () => {
     const response = await fromPage();
 
@@ -267,6 +288,15 @@ describe('CAPTURE_SCREENSHOT names the tab it captured', () => {
     expect(response['data']).toBeUndefined();
   });
 
+  it('retains other Chrome capture failures without suggesting a tab grant', async () => {
+    harness.captureVisibleTab.mockRejectedValueOnce(
+      new Error('Screenshot capture was interrupted'),
+    );
+    const response = await fromPage();
+    expect(response['success']).toBe(false);
+    expect(response['error']).toBe('Screenshot capture was interrupted');
+  });
+
   it('reports a capture Chrome refused instead of an image', async () => {
     harness.captureVisibleTab.mockRejectedValueOnce(
       new Error('Either the <all_urls> or activeTab permission is required.'),
@@ -275,6 +305,6 @@ describe('CAPTURE_SCREENSHOT names the tab it captured', () => {
     const response = await fromPage();
 
     expect(response['success']).toBe(false);
-    expect(response['error']).toContain('activeTab permission');
+    expect(response['error']).toBe('spScreenshotTabAccessRequired');
   });
 });

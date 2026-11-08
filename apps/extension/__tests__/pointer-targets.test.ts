@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as driver from '../src/features/computer-use/cdpDriver';
 import { createCdpInspectionFixture } from './fixtures/cdp-inspection';
+import { createDomElementReader } from '../src/features/content/elementReader';
 
 const inspection = createCdpInspectionFixture(document.location.href);
 
@@ -9,6 +10,12 @@ const rectangles = new Map<Element, DOMRect>();
 let objectSequence = 0;
 let afterReveal = (_element: HTMLElement) => {};
 let occluder: Element | null = null;
+let occlusionBoundary = Infinity;
+let afterCenterReveal = (_element: Element) => {};
+const originalScrollIntoView = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollIntoView');
+const centerReveal = vi.fn(function (this: Element, _options: ScrollIntoViewOptions) {
+  afterCenterReveal(this);
+});
 
 function rectangle(top: number): DOMRect {
   return {
@@ -41,8 +48,27 @@ const send = vi.fn(
               value: JSON.stringify({
                 summary: 'Synthetic pointer fixture',
                 indexMap: {
-                  1: { selector: '#upload', signature: 'button||||Submit test file locally' },
-                  2: { selector: '#destination', signature: 'div||||Destination' },
+                  1: {
+                    selector: '#upload',
+                    signature: createDomElementReader().signatureFor(
+                      document.getElementById('upload')!,
+                      driver.ELEMENT_LABEL_MAX_CHARS,
+                    ),
+                  },
+                  2: {
+                    selector: '#destination',
+                    signature: createDomElementReader().signatureFor(
+                      document.getElementById('destination')!,
+                      driver.ELEMENT_LABEL_MAX_CHARS,
+                    ),
+                  },
+                  3: {
+                    selector: '#location',
+                    signature: createDomElementReader().signatureFor(
+                      document.getElementById('location')!,
+                      driver.ELEMENT_LABEL_MAX_CHARS,
+                    ),
+                  },
                 },
               }),
             },
@@ -78,6 +104,9 @@ const send = vi.fn(
             ],
           },
         });
+      } else if (method === 'DOM.focus') {
+        objects.get(String(params['objectId']))!.focus();
+        callback({});
       } else if (method === 'Runtime.callFunctionOn') {
         // llm-guardrail-allow: executes repository-owned browser code inside this isolated test fixture.
         const fn = new Function(`return (${String(params['functionDeclaration'])});`)();
@@ -98,15 +127,23 @@ function commands(method: string) {
 beforeEach(async () => {
   inspection.reset();
   document.body.innerHTML =
-    '<button id="upload">Submit test file locally</button><div id="destination" draggable="true">Destination</div><div id="overlay"></div>';
+    '<button id="upload">Submit test file locally</button><div id="destination" draggable="true">Destination</div><input id="location" type="text" name="location" aria-label="Current location"><div id="overlay"></div>';
   objects.clear();
   rectangles.clear();
   objectSequence = 0;
   afterReveal = () => {};
+  afterCenterReveal = () => {};
   occluder = null;
+  occlusionBoundary = Infinity;
+  centerReveal.mockClear();
+  Object.defineProperty(Element.prototype, 'scrollIntoView', {
+    configurable: true,
+    value: centerReveal,
+  });
   for (const element of [
     document.getElementById('upload')!,
     document.getElementById('destination')!,
+    document.getElementById('location')!,
   ]) {
     rectangles.set(element, rectangle(10));
     element.getBoundingClientRect = () => rectangles.get(element)!;
@@ -116,7 +153,7 @@ beforeEach(async () => {
   Object.defineProperty(document, 'elementFromPoint', {
     configurable: true,
     value: (x: number, y: number) => {
-      if (occluder) return occluder;
+      if (occluder && y < occlusionBoundary) return occluder;
       return (
         [...rectangles].find(
           ([_element, rect]) =>
@@ -144,6 +181,9 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   delete (document as Partial<Document>).elementFromPoint;
+  if (originalScrollIntoView)
+    Object.defineProperty(Element.prototype, 'scrollIntoView', originalScrollIntoView);
+  else delete (Element.prototype as Partial<Element>).scrollIntoView;
   document.body.replaceChildren();
 });
 
@@ -166,6 +206,61 @@ describe('revealed, current, unobscured pointer targets', () => {
   it('refuses an occluded target before pressing the pointer', async () => {
     occluder = document.getElementById('overlay');
     await expect(driver.click(42, { index: 1 })).rejects.toThrow('covered');
+    expect(commands('Input.dispatchMouseEvent')).toEqual([]);
+  });
+
+  it('centers a target hidden behind a fixed header and verifies it before clicking', async () => {
+    const element = document.getElementById('upload')!;
+    occluder = document.getElementById('overlay');
+    occlusionBoundary = 90;
+    afterCenterReveal = (target) => rectangles.set(target, rectangle(300));
+
+    await driver.click(42, { index: 1 });
+
+    expect(centerReveal).toHaveBeenCalledExactlyOnceWith({
+      block: 'center',
+      inline: 'center',
+      behavior: 'instant',
+    });
+    expect(rectangles.get(element)?.top).toBe(300);
+    expect(
+      commands('Input.dispatchMouseEvent').filter((event) => event.type === 'mousePressed'),
+    ).toEqual([expect.objectContaining({ x: 60, y: 320 })]);
+  });
+
+  it('rejects replacement during centered reveal before any pointer input', async () => {
+    occluder = document.getElementById('overlay');
+    afterCenterReveal = (element) => element.replaceWith(element.cloneNode(true));
+
+    await expect(driver.click(42, { index: 1 })).rejects.toThrow('original pointer target changed');
+    expect(commands('Input.dispatchMouseEvent')).toEqual([]);
+  });
+
+  it('reveals and verifies a covered text field before sending native text input', async () => {
+    occluder = document.getElementById('overlay');
+    occlusionBoundary = 90;
+    afterCenterReveal = (element) => rectangles.set(element, rectangle(300));
+
+    await driver.type(42, 'Toronto, Ontario, Canada', 3);
+
+    expect(centerReveal).toHaveBeenCalledOnce();
+    expect(document.activeElement).toBe(document.getElementById('location'));
+    expect(commands('Input.insertText')).toEqual([{ text: 'Toronto, Ontario, Canada' }]);
+  });
+
+  it('does not type into a text field that remains covered after centering', async () => {
+    occluder = document.getElementById('overlay');
+
+    await expect(driver.type(42, 'Toronto', 3)).rejects.toThrow('covered');
+    expect(commands('Input.insertText')).toEqual([]);
+  });
+
+  it('sends no pointer input when Stop arrives during centered reveal', async () => {
+    const stop = new AbortController();
+    occluder = document.getElementById('overlay');
+    afterCenterReveal = () => stop.abort(new Error('Stopped'));
+
+    await expect(driver.click(42, { index: 1 }, stop.signal)).rejects.toThrow('Stopped');
     expect(commands('Input.dispatchMouseEvent')).toEqual([]);
   });
 

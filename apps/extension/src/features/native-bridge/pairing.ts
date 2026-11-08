@@ -225,6 +225,41 @@ export async function releaseStoredDesktopPairing(): Promise<void> {
   _state = { ...IDLE_STATE };
 }
 
+/**
+ * The account a stored desktop pairing is bound to.
+ * `undefined` means there is no pairing, or storage could not be read.
+ * `null` means a pairing exists and was issued with no account.
+ */
+async function readStoredPairingAccount(): Promise<string | null | undefined> {
+  let sessionData: Record<string, unknown>;
+  try {
+    sessionData = await readSession([STORAGE_KEY_PAIR_TOKEN, STORAGE_KEY_PAIR_ACCOUNT]);
+  } catch {
+    return undefined;
+  }
+  const token = sessionData[STORAGE_KEY_PAIR_TOKEN];
+  if (typeof token === 'string' && token !== '') {
+    const stored = sessionData[STORAGE_KEY_PAIR_ACCOUNT];
+    return typeof stored === 'string' && stored !== '' ? stored : null;
+  }
+  const durable = await readPairedDesktopRecord();
+  if (!durable) return undefined;
+  return durable.accountId;
+}
+
+/**
+ * True when a stored pairing must not stay attached to `signedInAccountId`.
+ * An unknown sign-in is the caller's problem: this only answers for an
+ * account id or a positive sign-out (`null`).
+ */
+export async function desktopPairingRejectsAccount(
+  signedInAccountId: string | null,
+): Promise<boolean> {
+  const boundAccountId = await readStoredPairingAccount();
+  if (boundAccountId === undefined) return false;
+  return !pairingBelongsTo(boundAccountId, signedInAccountId);
+}
+
 export async function loadPairingState(): Promise<PairingState> {
   try {
     const sessionData = await readSession([

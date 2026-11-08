@@ -199,6 +199,20 @@ describe('schedule actions', () => {
     vi.restoreAllMocks();
   });
 
+  it.each(['completed', 'expired'] as const)(
+    'refuses %s actions before a request or spending confirmation',
+    async (status) => {
+      const client = { setScheduleEnabled: vi.fn(), runNow: vi.fn() };
+      const task = makeSchedule({ status, isEnabled: false });
+      await setScheduleEnabledInteractively(client, task, true, host);
+      await runScheduleNowInteractively(client, task, host);
+      expect(client.setScheduleEnabled).not.toHaveBeenCalled();
+      expect(client.runNow).not.toHaveBeenCalled();
+      expect(vscode.window.showWarningMessage).not.toHaveBeenCalled();
+      expect(host.onChanged).toHaveBeenCalledTimes(2);
+    },
+  );
+
   it('pauses through the hosted endpoint and refreshes the view', async () => {
     const client = { setScheduleEnabled: vi.fn().mockResolvedValue(makeSchedule()) };
 

@@ -7,12 +7,24 @@ import { getManagedModelAccess } from '../src/features/cloud-bridge/freeTrialCli
 
 const panelSource = readFileSync(resolve(process.cwd(), 'src/side_panel.ts'), 'utf8');
 
-function slice(from: string, to: string): string {
-  const start = panelSource.indexOf(from);
-  const end = panelSource.indexOf(to, start);
-  if (start < 0 || end < start) throw new Error(`${from} was not found`);
-  return panelSource.slice(start, end);
-}
+const refreshProgram = ts.createSourceFile(
+  'side_panel.ts',
+  panelSource,
+  ts.ScriptTarget.Latest,
+  true,
+);
+const accountRefreshSource = refreshProgram.statements
+  .filter(
+    (node) =>
+      (ts.isFunctionDeclaration(node) &&
+        ['refreshAccountOnReturn', 'refreshAccountWhileOpen'].includes(node.name?.text ?? '')) ||
+      (ts.isExpressionStatement(node) &&
+        ts.isCallExpression(node.expression) &&
+        node.expression.expression.getText(refreshProgram) === 'setInterval' &&
+        node.expression.arguments[0]?.getText(refreshProgram) === 'refreshAccountWhileOpen'),
+  )
+  .map((node) => node.getText(refreshProgram))
+  .join('\n');
 
 type State = 'loading' | 'ready' | 'unavailable' | 'signed_out';
 
@@ -29,7 +41,7 @@ function accountRefresh(serverStates: State[]) {
   const compiled = ts.transpileModule(
     `let managedCloudChatState = 'loading';
 let lastAccountRefreshOnReturn = 0;
-${slice('function refreshAccountOnReturn', 'subscribeBrowserActivity(refreshAccountOnReturn)')}
+${accountRefreshSource}
 return {
   onReturn: refreshAccountOnReturn,
   setState: (value) => { managedCloudChatState = value; },

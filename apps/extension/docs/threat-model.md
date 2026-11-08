@@ -2,7 +2,7 @@
 
 Status: Current
 Owner role: Extension lead, with security/privacy review for boundary changes
-Last reviewed: 2026-08-13
+Last reviewed: 2026-11-06
 Applies to: `apps/extension` source and the configured Manifest V3 build
 
 This document describes the behavior implemented in this repository. It is not
@@ -120,13 +120,32 @@ bucket's CORS policy must admit for the extension origin. No cookie or bearer
 token is sent to the object store; the signature in the URL is the only
 credential, and it is scoped to one key and one content type.
 
+### Artifact renderer parent configuration
+
+Generated artifact scripts run at the dedicated renderer origin rather than the
+extension origin. The extension's packaged-script CSP and no-sandbox-page
+contract remain unchanged. Sandbox deployment configures its framing header and
+exact renderer parent allowlist together from the public `CWS_EXTENSION_ID`.
+Missing or malformed IDs fail configuration; a different extension ID cannot
+pass the renderer gate. Parent messages still require `event.source` to be the
+embedding window.
+
+For development, `VITE_ARTIFACT_SANDBOX_ORIGIN` may select an exact loopback
+renderer only alongside a loopback account API. Its hostname must differ from
+the account API hostname because cookies ignore ports. A same-origin or
+same-hostname development renderer is refused. The local renderer serves only
+its configured HTML document, with the same isolation headers. Production
+packages refuse HTTP renderer configuration. No production policy is changed by
+starting the local renderer.
+
 ## Data flows
 
 ### Managed Cloud chat
 
 1. The user enters a prompt and may explicitly attach captured page text,
-   image data, or a PDF, text or Markdown file uploaded through the flow
-   above in the side panel.
+   an image, or a PDF, text or Markdown file. Composer images and documents use
+   the authenticated upload flow above; the model request carries owned asset
+   references.
 2. Page text is stripped of hidden Unicode control characters, passed through
    the shared secret redactor, bounded, and fenced as untrusted data. This is a
    mitigation, not proof that every sensitive value or prompt injection is
@@ -159,16 +178,19 @@ credential, and it is scoped to one key and one content type.
    captured credential rather than the newly ambient account token. Delayed
    chunks and result notifications are ignored unless their owner still matches.
 
-Image attachments are request-scoped today: the composer keeps bounded data
-URLs in memory long enough to send the admitted turn, then discards them. The
-prompt text and answer can enter browser/account conversation history, but the
-image bytes and durable attachment references do not. The composer states this
-limitation beside attached images. Closing this gap requires the shared
-conversation-message contract and account store to own authenticated attachment
-asset references, upload authorization, retention, and deletion; copying large
-data URLs into Chrome's bounded history or inventing a Chrome-only cloud schema
-would be unsafe and incompatible with the readers on Web, Mobile, Tauri, and
-Electron.
+Composer images and documents use the shared managed attachment uploader, its
+size limits, and the admitted account boundary. A failed upload blocks Send
+until Retry succeeds or the attachment is removed. Removing an unsent composer
+chip does not permanently delete its uploaded Library object. Temporary Chat
+uploads carry the existing temporary-retention intent.
+
+Browser and account message history store only durable asset references and
+bounded display metadata, including the image/file kind. Raw image data URLs
+and file bytes are not copied into conversation metadata. Cold history replay
+uses the original owned asset without re-uploading it. Older inline-image turns
+whose bytes were never stored cannot be repaired by guessing a filename or
+reconstructing a reference. Explicit server removal of an attachment remains
+authoritative when history is refreshed.
 
 The optional in-page assistant is available only on a device-local approved
 origin. Its non-modal panel keeps a persistent notice next to the composer that
@@ -216,15 +238,17 @@ screenshot-using computer-use run, remains a disclosure decision.
    `cloudSyncedChars`, and a compact fingerprint of every mirrored field). A
    later metadata-only change is therefore re-sent under the same id rather than
    mistaken for an already-synced turn. `chrome.storage.local` stays
-   authoritative; nothing is ever read back from the account into Chrome. The
-   shared account copy is then visible to Web, Mobile Cloud, Tauri Cloud, and
+   the bounded device snapshot. An account-owned history refresh can import
+   the shared account copy through the validated pull projection. That copy is
+   also visible to Web, Mobile Cloud, Tauri Cloud, and
    Electron Cloud through their existing `/api/chat/conversations` readers.
 
 The mirrored copy contains the prompt text and answer stored in the browser
 conversation, plus the assistant turn's exact catalog model/provider and any
-validated, metadata-bounded generated-file descriptors or interactive-card
-envelopes. Request-only page context and attachment image bytes are not
-serialized into that record, so they are not included in the account copy. The
+validated, metadata-bounded generated-file descriptors, interactive-card
+envelopes, and durable user attachment references. Request-only page context and
+attachment bytes are not serialized into that record. The references name owned
+assets whose bytes remain in the authenticated file store. The
 account copy is retained under server-side policy, not this document's 30-day
 browser TTL, and deleting it requires deleting the conversation, local eviction
 does not remove it.
@@ -288,6 +312,21 @@ pending delete.
   real ATS hosts, so a page whose path or query merely contains
   `boards.greenhouse.io`, `jobs.lever.co`, `linkedin.com/jobs/`, or
   `jobs.ashbyhq.com` is not treated as an application form.
+- A chat request that explicitly asks to use the saved application profile on
+  the current form can include its validated contact fields in that request's
+  context. The read requires act scope and the admitted account/session, chat
+  generation and page must still match after storage resolves. General chat,
+  read-only page scope, negated profile requests and instructions found only in
+  page content do not read the profile. Unknown keys, authorization answers,
+  salary, resume and cover-letter text are excluded from this contact path.
+  The added context string is not saved as user-message content or cached in
+  the reusable turn payload. Replies and tool receipts can quote filled values
+  and follow the usual chat retention policy. Each retry reads the current saved copy;
+  clearing it cannot resurrect an earlier context.
+- Profile-mode native form filling accepts only a boolean `replaceExisting`.
+  Omitted or false preserves a different existing answer. True bypasses only
+  that existing-answer refusal; protected-input, autocomplete, origin, account
+  and sender checks still apply, and the batch never submits the form.
 - `AGI_START_COMPUTER_USE` is extension-page-only. Allowlisted page JavaScript
   cannot start the paid CDP loop through the message router.
 - `REPLAY_SHORTCUT` is extension-page-only. Its prompt branch dispatches a
@@ -323,6 +362,12 @@ pending delete.
 - DOM-mutating message types are same-tab-only. Navigation URLs are bounded,
   HTTP(S)-only, and reject executable/local schemes. Action plans and fields
   are allowlisted and size-bounded.
+- The trusted UI's Close tabs action uses a bounded selection of inactive,
+  unpinned tabs from its Chrome window. It reads tab metadata locally, without
+  page contents, site-access requests or model calls. Before each close it
+  rechecks the selected URL, window, active/pinned state and current UI owner.
+  Changed or newly active tabs are kept. This utility does not expand the
+  browser agent's task-created-tab closure authority.
 - Recorded workflows capture selectors only by default. Optional value capture
   omits password values, replaces declared card/password/OTP fields, and runs
   remaining values through secret redaction before local persistence.

@@ -116,12 +116,11 @@ export function selectManagedCloudCancellationCredential(
   activeCredential: ManagedCloudCredential | null | undefined,
   currentCredential: ManagedCloudCredential | null | undefined,
 ): ManagedCloudCredential | null {
-  if (activeCredential) {
-    return sameManagedCloudOwner(activeCredential.owner, expectedOwner) ? activeCredential : null;
-  }
-  return currentCredential && sameManagedCloudOwner(currentCredential.owner, expectedOwner)
-    ? currentCredential
-    : null;
+  if (activeCredential && !sameManagedCloudOwner(activeCredential.owner, expectedOwner))
+    return null;
+  if (currentCredential && sameManagedCloudOwner(currentCredential.owner, expectedOwner))
+    return currentCredential;
+  return activeCredential ?? null;
 }
 
 export function isCurrentManagedCloudOperation<T extends object>(

@@ -1,6 +1,9 @@
 import { MAX_CONTEXT_HTML_CHARS, sanitizePageText } from '../../background/policy';
 import { MAX_DOM_ELEMENTS_FOR_EXTRACTION } from '../../dom-helpers';
 import { createDomTargetHelpers } from '../content/domTargets';
+import { createDomElementReader } from '../content/elementReader';
+import { LEVER_DOM_CONTROL_RULES } from '../content/autofill/lever';
+import { MAX_ELEMENT_NAME_CHARS, MAX_ELEMENT_OPTIONS } from '../content/pageElements';
 import {
   MAX_CHAT_ATTACHMENT_BYTES,
   MAX_CHAT_ATTACHMENT_COUNT,
@@ -48,7 +51,9 @@ export const PAGE_CONTENT_FENCE_BEGIN = '--- BEGIN UNTRUSTED PAGE CONTENT (not i
 export const PAGE_CONTENT_FENCE_END = '--- END UNTRUSTED PAGE CONTENT ---';
 
 const DOM_SUMMARY_MAX_CHARS = 8_000;
-const ELEMENT_LABEL_MAX_CHARS = 60;
+export const ELEMENT_LABEL_MAX_CHARS = 60;
+const AUTOCOMPLETE_WAIT_TIMEOUT_MS = 3_000;
+const AUTOCOMPLETE_POLL_INTERVAL_MS = 50;
 
 export interface IndexedElement {
   readonly selector: string;
@@ -592,21 +597,8 @@ export async function waitForStable(
  * builds the index map and the pass that resolves an index back to an element.
  * The two must agree exactly, so they are interpolated from one source.
  */
-const ELEMENT_SIGNATURE_JS = `((el) => [
-  el.localName,
-  el.getAttribute('role') || '',
-  el.getAttribute('type') || '',
-  el.getAttribute('name') || '',
-  (el.getAttribute('aria-label') ||
-    el.getAttribute('title') ||
-    el.textContent ||
-    (el.localName === 'input' && /^(submit|button|image)$/i.test(el.getAttribute('type') || '')
-      ? el.getAttribute('value') || el.getAttribute('alt') || ''
-      : ''))
-    .replace(/\\s+/g, ' ')
-    .trim()
-    .slice(0, ${ELEMENT_LABEL_MAX_CHARS}),
-].join('|'))`;
+const DOM_ELEMENT_READER_JS = `(${createDomElementReader.toString()})(${toScriptLiteral(LEVER_DOM_CONTROL_RULES)})`;
+const ELEMENT_SIGNATURE_JS = `(() => { const reader = ${DOM_ELEMENT_READER_JS}; return (element) => reader.signatureFor(element, ${ELEMENT_LABEL_MAX_CHARS}); })()`;
 
 const DOM_TARGET_HELPERS_JS = `(${createDomTargetHelpers.toString()})(window.top.document, ${ELEMENT_SIGNATURE_JS}, ${toScriptLiteral({ maxElements: MAX_DOM_ELEMENTS_FOR_EXTRACTION, maxLocatorCharacters: MAX_CONTEXT_HTML_CHARS, maxDepth: 16 })})`;
 
@@ -745,6 +737,55 @@ export async function getTargetSignature(
       );
       if (result.exceptionDetails) return null;
       return typeof result.result.value === 'string' ? result.result.value : null;
+    },
+    signal,
+  );
+}
+
+export interface TargetControlObservation {
+  signature: string;
+  state: ReturnType<ReturnType<typeof createDomElementReader>['controlState']>;
+}
+
+export async function getTargetControlState(
+  tabId: number,
+  target: BrowserTarget,
+  expectedSignature: string | null | undefined,
+  signal?: AbortSignal,
+): Promise<TargetControlObservation | null> {
+  if (!expectedSignature) return null;
+  return withDebugger(
+    tabId,
+    async () => {
+      if (
+        typeof target === 'object' &&
+        'index' in target &&
+        !resolveIndexedElement(tabId, target.index)
+      )
+        return null;
+      const indexed = indexedTarget(tabId, target, 'control observation');
+      const point = indexed ? null : validatePoint(target as { x: number; y: number });
+      const element = indexed
+        ? buildIndexedElementExpression(indexed.selector, expectedSignature)
+        : `${POINT_ELEMENT_JS}(${point!.x}, ${point!.y})`;
+      const result = await sendCommand<CdpObjectResult>(
+        tabId,
+        'Runtime.evaluate',
+        {
+          expression: `(() => {
+        const el = ${element};
+        if (!el || ${ELEMENT_SIGNATURE_JS}(el) !== ${toScriptLiteral(expectedSignature)}) return null;
+        const reader = ${DOM_ELEMENT_READER_JS};
+        const state = reader.controlState(el);
+        return Object.keys(state).length ? JSON.stringify({ signature: ${toScriptLiteral(expectedSignature)}, state }) : null;
+      })()`,
+          returnByValue: true,
+        },
+        signal,
+      );
+      if (result.exceptionDetails || typeof result.result.value !== 'string') return null;
+      const observation: TargetControlObservation = JSON.parse(result.result.value);
+      return observation;
     },
     signal,
   );
@@ -1073,29 +1114,54 @@ async function selectorToCoords(
     throw new Error(`Element not found for selector: ${selector}`);
   }
   if (reveal) await sendCommand(tabId, 'DOM.scrollIntoViewIfNeeded', { objectId }, signal);
-  const boxModel = await sendCommand<{ model: CdpBoxModel }>(
-    tabId,
-    'DOM.getBoxModel',
-    {
-      objectId,
-    },
-    signal,
-  );
-  const [x1, y1, x2, , , y3] = boxModel.model.content;
-  const preferred = { x: ((x1 ?? 0) + (x2 ?? 0)) / 2, y: ((y1 ?? 0) + (y3 ?? 0)) / 2 };
-  const verified = await sendCommand<CdpObjectResult>(
-    tabId,
-    'Runtime.callFunctionOn',
-    {
-      objectId,
-      functionDeclaration: `function() {
+  const inspectPoint = async (): Promise<CdpObjectResult> => {
+    const boxModel = await sendCommand<{ model: CdpBoxModel }>(
+      tabId,
+      'DOM.getBoxModel',
+      { objectId },
+      signal,
+    );
+    const [x1, y1, x2, , , y3] = boxModel.model.content;
+    const preferred = { x: ((x1 ?? 0) + (x2 ?? 0)) / 2, y: ((y1 ?? 0) + (y3 ?? 0)) / 2 };
+    return sendCommand<CdpObjectResult>(
+      tabId,
+      'Runtime.callFunctionOn',
+      {
+        objectId,
+        functionDeclaration: `function() {
         if (window.top.location.href !== ${toScriptLiteral(originalUrl)} || !this.isConnected || this !== ${buildIndexedElementExpression(selector, expectedSignature)}) throw new Error('The original pointer target changed during reveal.');
         return (${DOM_TARGET_HELPERS_JS}).pointForElement(this, ${toScriptLiteral(preferred)});
       }`,
-      returnByValue: true,
-    },
-    signal,
-  );
+        returnByValue: true,
+      },
+      signal,
+    );
+  };
+  let verified = await inspectPoint();
+  if (
+    reveal &&
+    verified.exceptionDetails &&
+    describeEvalException(verified.exceptionDetails).includes(
+      'The pointer target is covered by another element.',
+    )
+  ) {
+    const centered = await sendCommand<CdpObjectResult>(
+      tabId,
+      'Runtime.callFunctionOn',
+      {
+        objectId,
+        functionDeclaration: `function() {
+          if (window.top.location.href !== ${toScriptLiteral(originalUrl)} || !this.isConnected || this !== ${buildIndexedElementExpression(selector, expectedSignature)}) throw new Error('The original pointer target changed during reveal.');
+          Element.prototype.scrollIntoView.call(this, { block: 'center', inline: 'center', behavior: 'instant' });
+        }`,
+        returnByValue: true,
+      },
+      signal,
+    );
+    if (centered.exceptionDetails)
+      throw new Error(describeEvalException(centered.exceptionDetails));
+    verified = await inspectPoint();
+  }
   if (verified.exceptionDetails) throw new Error(describeEvalException(verified.exceptionDetails));
   const point = verified.result.value as { x: number; y: number } | undefined;
   if (!point) throw new Error('The visible pointer target could not be verified.');
@@ -1465,18 +1531,86 @@ export interface NativeTypingReceipt {
   charactersInserted: number;
 }
 
+export interface AutocompleteTypingStatus {
+  suggestions: 'ready' | 'empty' | 'timeout';
+  selectionCommitted?: boolean;
+}
+
+async function waitForAutocompleteOptions(
+  tabId: number,
+  objectId: string,
+  selector: string,
+  signature: string,
+  signal?: AbortSignal,
+  ignoreInitialEmpty = false,
+): Promise<AutocompleteTypingStatus> {
+  const deadline = Date.now() + AUTOCOMPLETE_WAIT_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    throwIfCdpCancelled(signal);
+    const response = await sendCommand<CdpObjectResult>(
+      tabId,
+      'Runtime.callFunctionOn',
+      {
+        objectId,
+        functionDeclaration: `function() {
+      const input = this;
+      const reader = ${DOM_ELEMENT_READER_JS};
+      const targets = ${DOM_TARGET_HELPERS_JS};
+      if (!input.isConnected || input !== ${buildIndexedElementExpression(selector, signature)} || input !== (${FOCUSED_FIELD_ELEMENT_JS})(window.top.document)) return { suggestions: 'changed' };
+      const scopes = reader.autocompleteScopes(input);
+      const candidates = scopes.flatMap((scope) => targets.elements(scope).elements);
+      const suggestions = reader.autocompleteOptions(input, candidates, ${MAX_ELEMENT_OPTIONS}).length ? 'ready' : reader.autocompleteEmpty(input) ? 'empty' : null;
+      const committed = reader.selectionCommitted(input);
+      return { suggestions, ...(committed !== undefined ? { selectionCommitted: committed } : {}) };
+    }`,
+        returnByValue: true,
+      },
+      signal,
+    );
+    if (response.exceptionDetails)
+      throw new Error(describeEvalException(response.exceptionDetails));
+    const state = response.result.value as
+      { suggestions?: unknown; selectionCommitted?: unknown } | undefined;
+    if (state?.suggestions === 'changed')
+      throw new Error('The autocomplete target changed while its suggestions were loading.');
+    if (ignoreInitialEmpty && state?.suggestions === 'empty') {
+      await waitForPollInterval(AUTOCOMPLETE_POLL_INTERVAL_MS, signal);
+      continue;
+    }
+    ignoreInitialEmpty = false;
+    if (state?.suggestions === null) {
+      await waitForPollInterval(AUTOCOMPLETE_POLL_INTERVAL_MS, signal);
+      continue;
+    }
+    if (!state || !['ready', 'empty'].includes(String(state.suggestions)))
+      throw new Error('The autocomplete state could not be verified.');
+    return {
+      suggestions: state.suggestions as AutocompleteTypingStatus['suggestions'],
+      ...(typeof state.selectionCommitted === 'boolean'
+        ? { selectionCommitted: state.selectionCommitted }
+        : {}),
+    };
+  }
+  throwIfCdpCancelled(signal);
+  return { suggestions: 'timeout' };
+}
+
 export async function typeIntoSelector(
   tabId: number,
   selector: string,
   text: string,
   clear: boolean,
   signal?: AbortSignal,
+  expectedSignature?: string | null,
+  onAutocomplete?: (state: AutocompleteTypingStatus) => void,
 ): Promise<NativeTypingReceipt> {
   return withDebugger(
     tabId,
     async () => {
       const signature = await getTargetSignature(tabId, selector, signal);
       if (!signature) throw new Error('The paired typing target could not be verified.');
+      if (expectedSignature && signature !== expectedSignature)
+        throw new Error('The typing target changed after approval.');
       const objectId = await focusSelectorTarget(
         tabId,
         { selector, signature },
@@ -1532,6 +1666,21 @@ export async function typeIntoSelector(
         return state;
       };
       await readState();
+      const probe = await sendCommand<CdpObjectResult>(
+        tabId,
+        'Runtime.callFunctionOn',
+        {
+          objectId,
+          functionDeclaration: `function() { const reader = ${DOM_ELEMENT_READER_JS}; return { autocomplete: reader.isAutocomplete(this), empty: reader.autocompleteEmpty(this) }; }`,
+          returnByValue: true,
+        },
+        signal,
+      );
+      if (probe.exceptionDetails) throw new Error(describeEvalException(probe.exceptionDetails));
+      const autocomplete =
+        (probe.result.value as { autocomplete?: unknown } | undefined)?.autocomplete === true;
+      const initiallyEmpty =
+        (probe.result.value as { empty?: unknown } | undefined)?.empty === true;
       if (clear) {
         const platform = await chrome.runtime.getPlatformInfo();
         await pressKey(
@@ -1563,13 +1712,39 @@ export async function typeIntoSelector(
         );
       if (clear && text.length === 0)
         await pressKey(tabId, 'Backspace', [], undefined, signal, signature);
-      else await sendCommand(tabId, 'Input.insertText', { text }, signal);
+      else if (autocomplete && text.length) {
+        const first = Array.from(text)[0]!;
+        await pressKey(
+          tabId,
+          first,
+          /^[A-Z]$/.test(first) ? ['Shift'] : [],
+          undefined,
+          signal,
+          signature,
+        );
+        await readState();
+        const remaining = text.slice(first.length);
+        if (remaining) await sendCommand(tabId, 'Input.insertText', { text: remaining }, signal);
+      } else await sendCommand(tabId, 'Input.insertText', { text }, signal);
       await waitForPollInterval(50, signal);
       const after = await readState();
       if (after.value !== expected)
         throw new Error(
           'The page did not retain the requested text; it may have received a partial change.',
         );
+      if (autocomplete && text.length) {
+        const state = await waitForAutocompleteOptions(
+          tabId,
+          objectId,
+          selector,
+          signature,
+          signal,
+          initiallyEmpty,
+        );
+        if ((await readState()).value !== expected)
+          throw new Error('The autocomplete changed or cleared the query while loading.');
+        onAutocomplete?.(state);
+      }
       return {
         inputSource: 'cdp',
         targetVerified: true,
@@ -1647,6 +1822,7 @@ export async function pressKey(
   signal?: AbortSignal,
   expectedSignature?: string | null,
 ): Promise<void> {
+  if (key === ' ') key = 'Space';
   if (
     modifiers.length > 4 ||
     new Set(modifiers).size !== modifiers.length ||
@@ -1668,9 +1844,11 @@ export async function pressKey(
     definition = { key, code: `Digit${key}`, windowsVirtualKeyCode: key.charCodeAt(0), text: key };
   } else if (!definition && /^F([1-9]|1[0-2])$/.test(key)) {
     definition = { key, code: key, windowsVirtualKeyCode: 111 + Number(key.slice(1)) };
+  } else if (!definition && /^[\p{L}\p{M}\p{N}\p{P}\p{S}\p{Zs}]$/u.test(key)) {
+    definition = { key, code: '', windowsVirtualKeyCode: 0, text: key };
   }
   if (!definition)
-    throw new Error('press_key requires a supported named key, letter, digit or F1–F12');
+    throw new Error('press_key requires a supported named key, one printable character or F1–F12');
   const mask = modifiers.reduce((value, modifier) => value | KEY_MODIFIERS[modifier], 0);
   const { text, ...keyboard } = definition;
   const typingText = modifiers.some((modifier) => modifier !== 'Shift') ? undefined : text;
@@ -1919,7 +2097,11 @@ export async function type(
   targetIndex?: number,
   signal?: AbortSignal,
   expectedSignature?: string | null,
+  onAutocomplete?: (state: AutocompleteTypingStatus) => void,
+  replace = false,
 ): Promise<ActionPoint | null> {
+  if (replace && targetIndex === undefined)
+    throw new Error('Replacement requires a fresh field index.');
   return withDebugger(
     tabId,
     async () => {
@@ -1950,6 +2132,44 @@ export async function type(
         throw new Error(
           'The focused typing target changed after approval. Read the page again before typing.',
         );
+      }
+      if (replace) {
+        const indexed = indexedTarget(tabId, { index: targetIndex! }, 'type');
+        if (!indexed) throw new Error(staleIndexMessage('type', targetIndex!));
+        await typeIntoSelector(
+          tabId,
+          indexed.selector,
+          text,
+          true,
+          signal,
+          expectedSignature ?? indexed.signature,
+          onAutocomplete,
+        );
+        return point;
+      }
+      const widget = await sendCommand<CdpObjectResult>(
+        tabId,
+        'Runtime.evaluate',
+        {
+          expression: `(() => { const target = (${FOCUSED_FIELD_ELEMENT_JS})(document); const reader = ${DOM_ELEMENT_READER_JS}; return target && reader.isAutocomplete(target) ? { autocomplete: true, selector: (${DOM_TARGET_HELPERS_JS}).locator(target) } : null; })()`,
+          returnByValue: true,
+        },
+        signal,
+      );
+      if (widget.exceptionDetails) throw new Error(describeEvalException(widget.exceptionDetails));
+      const data = widget.result.value as
+        { autocomplete?: unknown; selector?: unknown } | undefined;
+      if (data?.autocomplete === true && typeof data.selector === 'string' && data.selector) {
+        await typeIntoSelector(
+          tabId,
+          data.selector,
+          text,
+          false,
+          signal,
+          expectedSignature,
+          onAutocomplete,
+        );
+        return point;
       }
       await sendCommand(tabId, 'Input.insertText', { text }, signal);
       return point;
@@ -2160,13 +2380,15 @@ export async function readInteractionState(
         {
           expression: `(() => {
         const el = (${FOCUSED_FIELD_ELEMENT_JS})(document);
+        const reader = ${DOM_ELEMENT_READER_JS};
+        const control = el ? reader.controlState(el) : {};
         const sensitive = el?.getAttribute('type') === 'password';
         const field = !sensitive && el && 'value' in el ? String(el.value).slice(0, 8192) : '';
         const text = (document.body?.innerText || '').slice(0, 16000);
         let hash = 2166136261;
         const positions = Array.from(document.querySelectorAll('[style], [aria-valuenow]')).slice(0, 1000).map(node => (node.getAttribute('style') || '') + '|' + (node.getAttribute('aria-valuenow') || '')).join('|');
-        for (const character of text + field + positions) hash = Math.imul(hash ^ character.charCodeAt(0), 16777619);
-        return JSON.stringify({ url: location.href, focus: el ? ${ELEMENT_SIGNATURE_JS}(el) : null, hash: hash >>> 0,
+        for (const character of text + field + positions + JSON.stringify(control)) hash = Math.imul(hash ^ character.charCodeAt(0), 16777619);
+        return JSON.stringify({ url: location.href, focus: el ? ${ELEMENT_SIGNATURE_JS}(el) : null, control, hash: hash >>> 0,
           x: Math.round(scrollX), y: Math.round(scrollY), selection: el && 'selectionStart' in el ? [el.selectionStart, el.selectionEnd] : null,
           elements: document.querySelectorAll('*').length });
       })()`,
@@ -2220,17 +2442,17 @@ export async function getPageContent(tabId: number, signal?: AbortSignal): Promi
           expression: `(() => {
         const MAX = ${DOM_SUMMARY_MAX_CHARS};
         const signatureOf = ${ELEMENT_SIGNATURE_JS};
+        const reader = ${DOM_ELEMENT_READER_JS};
         const targets = ${DOM_TARGET_HELPERS_JS};
         const uniquePathOf = el => targets.locator(el);
         const inspected = targets.elements();
         const lines = [];
-
         lines.push('URL: ' + location.href);
         lines.push('TITLE: ' + document.title);
         lines.push('');
 
         const interactable = [
-          ...inspected.elements.filter(el => el.localName !== 'iframe' && el.localName !== 'frame' && el.matches(${toScriptLiteral(INTERACTABLE_SELECTOR)})),
+          ...inspected.elements.filter(el => el.localName !== 'iframe' && el.localName !== 'frame' && (el.matches(${toScriptLiteral(INTERACTABLE_SELECTOR)}) || reader.isAutocompleteOption(el))),
           ...inspected.elements.filter(el => el.matches('main,section,div,ul,ol,article')).slice(0, 2000).filter(el => {
             const style = el.ownerDocument.defaultView.getComputedStyle(el);
             return ((el.scrollHeight > el.clientHeight && /auto|scroll/.test(style.overflowY)) ||
@@ -2254,7 +2476,7 @@ export async function getPageContent(tabId: number, signal?: AbortSignal): Promi
           const el = uniqueInteractable[i];
           const tag = el.localName;
           const role = el.getAttribute('role') || '';
-          const label = el.getAttribute('aria-label') || el.getAttribute('title') || el.textContent?.trim().slice(0, 80) || '';
+          const label = reader.labelFor(el).trim().slice(0, ${ELEMENT_LABEL_MAX_CHARS});
           const name = el.getAttribute('name') || '';
           const id = el.getAttribute('id') || '';
           const elType = el.getAttribute('type') || '';
@@ -2282,6 +2504,12 @@ export async function getPageContent(tabId: number, signal?: AbortSignal): Promi
           if (id) line += ' id=' + JSON.stringify(id);
           if (href) line += ' href=' + JSON.stringify(href.slice(0, 120));
           if (placeholder) line += ' placeholder=' + JSON.stringify(placeholder);
+          if (reader.isAutocomplete(el)) line += ' selectionRequired=true';
+          const controlState = reader.controlState(el);
+          for (const [key, value] of Object.entries(controlState)) line += ' ' + key + '=' + JSON.stringify(value);
+          const selectedLabel = reader.selectedLabel(el, ${MAX_ELEMENT_NAME_CHARS});
+          if (selectedLabel !== undefined) line += ' selectedLabel=' + JSON.stringify(selectedLabel);
+
 
           lines.push(line);
           budget -= line.length + 1;
@@ -2330,7 +2558,6 @@ export async function getPageContent(tabId: number, signal?: AbortSignal): Promi
         setElementIndexMap(tabId, newMap);
 
         const sanitizedSummary = sanitizePageText(parsed.summary);
-
         const injectionWarning = scanForInjection(sanitizedSummary);
         if (injectionWarning) {
           return `SECURITY WARNING: Possible prompt injection detected in page content.\n${injectionWarning}\n\n${sanitizedSummary}`;
@@ -2432,6 +2659,17 @@ export async function assertNavigationOriginConsented(tabId: number, url: string
   if (!browserControlGranted) {
     throw new Error(`navigate: ${browserControlConsentRequiredMessage(destination)}`);
   }
+}
+
+export async function stopLoading(tabId: number, signal?: AbortSignal): Promise<void> {
+  throwIfCdpCancelled(signal);
+  return withDebugger(
+    tabId,
+    async () => {
+      await sendCommand(tabId, 'Page.stopLoading', {}, signal);
+    },
+    signal,
+  );
 }
 
 export async function navigate(tabId: number, url: string, signal?: AbortSignal): Promise<void> {

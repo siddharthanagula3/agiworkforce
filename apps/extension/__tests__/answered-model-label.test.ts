@@ -14,7 +14,10 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getModelMetadataById, getPickerModels } from '@agiworkforce/types';
+import { getModelMetadataById, getPickerModels, resolveModelEffort } from '@agiworkforce/types';
+import { BrowserTaskSiteGrants } from '../src/features/computer-use/taskSiteGrants';
+import { ROUTING_TASK_TYPES } from '../src/features/cloud-bridge/managedChatRouting';
+import { normalizeAnsweredModel } from '../src/features/cloud-bridge/answeredModel';
 
 const local: Record<string, unknown> = {};
 
@@ -277,6 +280,25 @@ describe('the reply is labelled with the model that answered', () => {
     });
   });
 
+  it('does not attribute a local routing explanation to a different server-selected model', () => {
+    const route = resolvedRouteFrom(
+      { modelKey: PICKED, answeredModel: ANSWERED, reason: 'continuity' },
+      () => PICKED,
+    )!;
+    expect(route.movedFromModel).toBe(PICKED);
+    expect(route.autoRouteReason).toBeUndefined();
+    const reply: SidePanelChatMessage = {
+      id: 'server-auto-receipt',
+      role: 'assistant',
+      content: 'Done.',
+      timestamp: 1,
+    };
+    applyResolvedRoute(reply, route);
+    expect(render(reply).querySelector('.sp-answer-route')?.textContent).toBe(
+      `Moved to ${ANSWERED_NAME}`,
+    );
+  });
+
   it('keeps the label after a reload from history', () => {
     const reply = hydrateStoredChatMessage(
       { role: 'assistant', content: 'hello', timestamp: 1, model: ANSWERED },
@@ -300,6 +322,69 @@ describe('the reply is labelled with the model that answered', () => {
 
     const assistant = result?.entry.messages.find((message) => message.role === 'assistant');
     expect(assistant?.model).toBe(ANSWERED);
+  });
+});
+
+describe('server-reported model continuity', () => {
+  function harness() {
+    const source = readFileSync(join(APP_ROOT, 'src', 'side_panel.ts'), 'utf8');
+    const program = ts.createSourceFile('side_panel.ts', source, ts.ScriptTarget.Latest, true);
+    const fn = program.statements.find(
+      (node) => ts.isFunctionDeclaration(node) && node.name?.text === 'applyRoutingContinuation',
+    );
+    if (!fn) throw new Error('Production routing continuation was not found');
+    const context = {
+      selectedModel: 'auto',
+      currentModelKey: PICKED,
+      previousTaskType: 'general',
+      reasoningEffort: resolveModelEffort(PICKED, undefined),
+    };
+    const refreshEffortUI = vi.fn();
+    const dependencies = {
+      _ctx: context,
+      ROUTING_TASK_TYPES,
+      normalizeAnsweredModel,
+      resolveModelEffort,
+      refreshEffortUI,
+    };
+    const compiled = ts.transpileModule(
+      `${fn.getText(program)}\nreturn applyRoutingContinuation;`,
+      {
+        compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
+      },
+    );
+    // llm-guardrail-allow: executes repository-owned routing admission in this isolated fixture.
+    const apply = new Function(...Object.keys(dependencies), compiled.outputText)(
+      ...Object.values(dependencies),
+    ) as (routing: unknown) => boolean;
+    return { context, refreshEffortUI, apply };
+  }
+
+  it('uses the server model for continuation and effort while keeping the Auto preference', () => {
+    const h = harness();
+    h.apply({ modelKey: PICKED, answeredModel: ANSWERED, taskType: 'general', reason: 'primary' });
+    expect(h.context.currentModelKey).toBe(ANSWERED);
+    expect(h.context.reasoningEffort).toBe(resolveModelEffort(ANSWERED, undefined));
+    expect(h.context.selectedModel).toBe('auto');
+    expect(h.refreshEffortUI).toHaveBeenCalledOnce();
+  });
+
+  it('does not replace a named model preference with the server receipt', () => {
+    const h = harness();
+    h.context.selectedModel = PICKED;
+    h.apply({ modelKey: PICKED, answeredModel: ANSWERED, taskType: 'general', reason: 'explicit' });
+    expect(h.context.selectedModel).toBe(PICKED);
+    expect(h.context.currentModelKey).toBe(ANSWERED);
+  });
+
+  it.each(['not-a-model', 7])('refuses invalid answered-model metadata %s', (answeredModel) => {
+    const h = harness();
+    const before = { ...h.context };
+    expect(
+      h.apply({ modelKey: PICKED, answeredModel, taskType: 'general', reason: 'primary' }),
+    ).toBe(false);
+    expect(h.context).toEqual(before);
+    expect(h.refreshEffortUI).not.toHaveBeenCalled();
   });
 });
 
@@ -327,6 +412,7 @@ describe('a reply that failed before streaming keeps the answered model', () => 
       needsMessageRebuild: false,
     };
     const dependencies = {
+      taskSiteGrants: new BrowserTaskSiteGrants(),
       _ctx: context,
       resolvedRouteFrom,
       applyResolvedRoute,
@@ -334,6 +420,7 @@ describe('a reply that failed before streaming keeps the answered model', () => 
       resolvedRouteByStreamId: new Map(),
       quickModeByStreamId: new Map(),
       ownerByStreamId: new Map(),
+      pendingManagedAdmissions: new Set<string>(),
       assistantCloudIdByStreamId: new Map(),
       streamStartedAtById: new Map(),
       connectorInputResponses: new Map(),

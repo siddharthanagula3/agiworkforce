@@ -1,5 +1,6 @@
 import type { DetectedField } from './detector';
 import { matchesAtsHostRules, type AtsHostRule } from './hosts';
+import { resolveAutofillSelector } from '../../../jobAutofill.runtime.js';
 
 const ASHBY_HOST_RULES: AtsHostRule[] = [
   { host: 'jobs.ashbyhq.com' },
@@ -92,12 +93,7 @@ export const ASHBY_ALWAYS_ESCALATE_KEYS = new Set<string>([
 export function resolveAshbySelector(
   key: string,
 ): { element: HTMLElement; selector: string } | null {
-  const selectors = ASHBY_SELECTORS[key] ?? [];
-  for (const sel of selectors) {
-    const el = document.querySelector<HTMLElement>(sel);
-    if (el) return { element: el, selector: sel };
-  }
-  return null;
+  return resolveAutofillSelector(key, ASHBY_SELECTORS[key] ?? []);
 }
 
 export function collectResolvableAshbyFields(): DetectedField[] {

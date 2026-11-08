@@ -1,17 +1,4 @@
-/**
- * The side-panel composer must not hold attachments the managed transport will
- * refuse to send. `executeChromeManagedChat` runs `assertAttachmentBudget`
- * (freeTrialClient) on the way out: at most MANAGED_CHAT_MAX_ATTACHMENTS images
- * totalling MANAGED_CHAT_MAX_ATTACHMENT_BYTES decoded bytes, each a base64 PNG,
- * JPEG, WebP or GIF. Anything the composer admits past that is discovered as a
- * failed turn *after* send, with the user's text already consumed.
- *
- * These tests drive the real listeners built by `buildUI()`, drop, paste, the
- * `+` menu file picker and the `+` menu screenshot, and read the resulting
- * attachments back out of the preview chips.
- *
- * @vitest-environment jsdom
- */
+/** @vitest-environment jsdom */
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 type ScanModule0 = typeof import('../src/features/cloud-bridge/clerkAuth');
@@ -211,6 +198,7 @@ vi.mock('../src/features/cloud-bridge/capabilityDocument', async (importOriginal
   }),
 }));
 import { getRoutingSlotModel, parseManagedUsageSummaryResponse } from '@agiworkforce/types';
+import { MAX_CHAT_ATTACHMENT_MESSAGE_BYTES } from '@agiworkforce/cloud-contracts';
 import {
   deleteConversation,
   saveConversation,
@@ -221,7 +209,6 @@ import catalog from '../_locales/en/messages.json';
 import {
   createMultimodalUserContent,
   MANAGED_CHAT_MAX_ATTACHMENTS,
-  MANAGED_CHAT_MAX_ATTACHMENT_BYTES,
   MANAGED_CHAT_MAX_ATTACHMENT_FILE_BYTES,
 } from '../src/features/cloud-bridge/freeTrialClient';
 import '../src/side_panel';
@@ -350,6 +337,28 @@ beforeEach(async () => {
 });
 
 describe('side panel composer attachment caps', () => {
+  it('uploads picked images durably and blocks Send until a failed upload is retried or removed', async () => {
+    vi.mocked(fetch).mockClear();
+    pickFiles([imageFile(16, 'image/png', 'durable-image.png')]);
+    await expectPendingCount(1);
+    await vi.waitFor(() => {
+      const presign = vi
+        .mocked(fetch)
+        .mock.calls.find(([url]) => String(url).endsWith('/api/uploads/presign'));
+      expect(presign).toBeDefined();
+      expect(JSON.parse(String(presign?.[1]?.body))).toMatchObject({
+        kind: 'chat-attachment',
+        fileName: 'durable-image.png',
+        mimeType: 'image/png',
+        byteCount: 16,
+      });
+      expect(attachmentBar().querySelector('.sp-attachment-doc-retry')).not.toBeNull();
+      expect(
+        document.querySelector<HTMLButtonElement>('[aria-label="Send message"]')?.disabled,
+      ).toBe(true);
+    });
+  });
+
   it('adopts the real side panel stylesheet in the browser fixture', () => {
     expect(document.adoptedStyleSheets).toHaveLength(1);
     expect(document.adoptedStyleSheets[0]).toBeInstanceOf(CSSStyleSheet);
@@ -455,7 +464,7 @@ describe('side panel composer attachment caps', () => {
   });
 
   it('keeps the `+` menu screenshot inside the request byte budget', async () => {
-    const halfBudget = Math.floor(MANAGED_CHAT_MAX_ATTACHMENT_BYTES * 0.6);
+    const halfBudget = Math.floor(MAX_CHAT_ATTACHMENT_MESSAGE_BYTES * 0.6);
     captureScreenshot(dataUrlOfBytes(halfBudget));
     await expectPendingCount(1);
     expect(noticeText()).toBe('');

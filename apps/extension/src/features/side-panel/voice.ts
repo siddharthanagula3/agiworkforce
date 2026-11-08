@@ -19,6 +19,7 @@ type SpeechRecognitionCtor = new () => {
   onresult: ((event: { results: Array<Array<{ transcript: string }>> }) => void) | null;
   start(): void;
   stop(): void;
+  abort(): void;
 };
 
 const MICROPHONE_NOTICE_ACK_KEY = 'agi.notice.microphone';
@@ -69,6 +70,7 @@ async function microphoneNoticeAcknowledged(): Promise<boolean> {
 export interface MicrophoneNotice {
   element: HTMLElement;
   ask(onContinue: () => void, returnFocus: HTMLElement): void;
+  close(): void;
 }
 
 export function buildMicrophoneNotice(): MicrophoneNotice {
@@ -93,11 +95,11 @@ export function buildMicrophoneNotice(): MicrophoneNotice {
   element.appendChild(continueBtn);
 
   let pending: { onContinue: () => void; returnFocus: HTMLElement } | null = null;
-  const close = (): void => {
+  const close = (returnFocus = true): void => {
     const request = pending;
     pending = null;
     element.classList.remove('visible');
-    request?.returnFocus.focus();
+    if (returnFocus) request?.returnFocus.focus();
   };
   declineBtn.addEventListener('click', () => {
     close();
@@ -118,6 +120,7 @@ export function buildMicrophoneNotice(): MicrophoneNotice {
 
   return {
     element,
+    close: () => close(false),
     ask(onContinue, returnFocus) {
       pending = { onContinue, returnFocus };
       element.classList.add('visible');
@@ -126,13 +129,17 @@ export function buildMicrophoneNotice(): MicrophoneNotice {
   };
 }
 
+export interface VoiceInputAPI {
+  reset(): void;
+}
+
 export function setupVoiceInput(
   micBtn: HTMLButtonElement,
   inputEl: HTMLTextAreaElement,
   autoResize: (el: HTMLTextAreaElement) => void,
   onError: (message: string) => void,
   notice: MicrophoneNotice,
-): void {
+): VoiceInputAPI {
   const w = window as unknown as Record<string, unknown>;
   const SpeechRecognitionCtor: SpeechRecognitionCtor | undefined =
     (w['SpeechRecognition'] as SpeechRecognitionCtor | undefined) ??
@@ -142,13 +149,40 @@ export function setupVoiceInput(
     micBtn.title = t('spVoiceUnsupported');
     micBtn.disabled = true;
     micBtn.setAttribute('aria-disabled', 'true');
-    return;
+    return { reset: () => notice.close() };
   }
   micBtn.title = micTooltip(null);
 
   let recognition: InstanceType<SpeechRecognitionCtor> | null = null;
   let listening = false;
   let language: string | null = null;
+  let generation = 0;
+  let pendingStart = false;
+  let stopRequested = false;
+
+  const renderIdle = (): void => {
+    listening = false;
+    micBtn.classList.remove('active');
+    micBtn.replaceChildren(renderIcon(Mic, 14));
+    micBtn.title = micTooltip(language);
+    micBtn.setAttribute('aria-pressed', 'false');
+  };
+
+  const reset = (): void => {
+    generation += 1;
+    pendingStart = false;
+    notice.close();
+    const current = recognition;
+    recognition = null;
+    renderIdle();
+    if (current) {
+      current.onstart = null;
+      current.onend = null;
+      current.onerror = null;
+      current.onresult = null;
+      current.abort();
+    }
+  };
 
   const refreshLanguage = async (): Promise<void> => {
     language = await activeDictationLanguage();
@@ -160,61 +194,92 @@ export function setupVoiceInput(
     if (area === 'sync' && DICTATION_LANGUAGE_KEY in changes) void refreshLanguage();
   });
 
-  const startListening = (): void => {
-    recognition = new SpeechRecognitionCtor();
-    if (language) recognition.lang = language;
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
+  const startListening = (expectedGeneration: number): void => {
+    if (generation !== expectedGeneration) return;
+    pendingStart = false;
+    if (micBtn.disabled || inputEl.disabled) return;
+    stopRequested = false;
+    let receivedTranscript = false;
+    const current = new SpeechRecognitionCtor();
+    recognition = current;
+    const isCurrent = (): boolean => generation === expectedGeneration && recognition === current;
+    if (language) current.lang = language;
+    current.interimResults = false;
+    current.maxAlternatives = 1;
 
-    recognition.onstart = () => {
+    current.onstart = () => {
+      if (!isCurrent()) return;
       listening = true;
       micBtn.classList.add('active');
+      micBtn.setAttribute('aria-pressed', 'true');
       setChild(micBtn, { tag: 'span', className: 'sp-mic-pulse' });
       micBtn.title = t('spVoiceListening');
     };
 
-    recognition.onresult = (event: { results: Array<Array<{ transcript: string }>> }) => {
+    current.onresult = (event: { results: Array<Array<{ transcript: string }>> }) => {
+      if (!isCurrent()) return;
       const transcript = (event.results[0]?.[0]?.transcript ?? '') as string;
       if (transcript) {
+        receivedTranscript = true;
         appendComposerText(inputEl, transcript);
         autoResize(inputEl);
       }
     };
 
-    recognition.onerror = (event) => {
+    current.onerror = (event) => {
+      if (!isCurrent()) return;
+      recognition = null;
+      renderIdle();
       const message = describeVoiceError(event?.error);
       if (message) onError(message);
     };
 
-    recognition.onend = () => {
-      listening = false;
-      if (document.body) {
-        micBtn.classList.remove('active');
-        micBtn.replaceChildren(renderIcon(Mic, 14));
-        micBtn.title = micTooltip(language);
-      }
+    current.onend = () => {
+      if (!isCurrent()) return;
       recognition = null;
+      renderIdle();
+      if (!receivedTranscript && !stopRequested) onError(describeVoiceError(undefined));
     };
 
-    recognition.start();
+    try {
+      current.start();
+    } catch {
+      if (!isCurrent()) return;
+      recognition = null;
+      renderIdle();
+      onError(describeVoiceError(undefined));
+    }
   };
 
   micBtn.addEventListener('click', () => {
-    if (listening) {
-      recognition?.stop();
+    if (recognition) {
+      stopRequested = true;
+      recognition.stop();
       return;
     }
+    if (pendingStart) {
+      reset();
+      return;
+    }
+    const expectedGeneration = ++generation;
+    pendingStart = true;
     void (async () => {
       const permission = await microphonePermission();
+      if (generation !== expectedGeneration) return;
       if (permission === 'denied') {
+        pendingStart = false;
         onError(t('spVoiceMicBlocked'));
         return;
       }
-      if (permission === 'granted' || (await microphoneNoticeAcknowledged())) {
-        startListening();
+      const acknowledged = permission === 'granted' || (await microphoneNoticeAcknowledged());
+      if (generation !== expectedGeneration) return;
+      if (acknowledged) {
+        startListening(expectedGeneration);
         return;
       }
-      notice.ask(startListening, micBtn);
+      pendingStart = false;
+      notice.ask(() => startListening(expectedGeneration), micBtn);
     })();
   });
+  return { reset };
 }

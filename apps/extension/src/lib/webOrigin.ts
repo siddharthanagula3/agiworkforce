@@ -1,5 +1,6 @@
 export const DEFAULT_AGI_WEB_ORIGIN = 'https://agiworkforce.com';
-export const ARTIFACT_SANDBOX_ORIGIN = 'https://sandbox.agiworkforce.com';
+export const ARTIFACT_SANDBOX_ORIGIN =
+  import.meta.env?.VITE_ARTIFACT_SANDBOX_ORIGIN || 'https://sandbox.agiworkforce.com';
 
 function metaEnv(): Record<string, string | undefined> {
   const importEnv =

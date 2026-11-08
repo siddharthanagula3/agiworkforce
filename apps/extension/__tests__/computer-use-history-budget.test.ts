@@ -150,6 +150,34 @@ function toolResultIds(history: readonly AgentMessage[]): string[] {
 }
 
 describe('pruneObservationHistory', () => {
+  it('preserves a text-only task and action receipts when their DOM snapshots expire', () => {
+    const history: AgentMessage[] = [
+      systemMessage(),
+      { role: 'user', content: `Goal: ${GOAL}\n\n${DOM_SUMMARY_HEADING}:\n${domSummary(0)}` },
+    ];
+    for (let step = 1; step <= 4; step++) {
+      history.push(assistantCall(step, 'click', { index: 1 }));
+      history.push(
+        toolResult(
+          step,
+          'click',
+          `CLICK_RECEIPT_${step}\n\n${DOM_SUMMARY_HEADING}:\n${domSummary(step)}`,
+        ),
+      );
+    }
+    const original = JSON.stringify(history);
+    const pruned = pruneObservationHistory(history);
+    expect(pruned[1]?.content).toContain(`Goal: ${GOAL}`);
+    expect(pruned[1]?.content).not.toContain('body text for step 0');
+    for (let step = 1; step <= 4; step++) {
+      expect(pruned[step * 2 + 1]?.content).toContain(`CLICK_RECEIPT_${step}`);
+    }
+    expect(JSON.stringify(pruned)).not.toContain('body text for step 1');
+    expect(JSON.stringify(pruned)).toContain('body text for step 4');
+    expect(JSON.stringify(history)).toBe(original);
+    expect(toolResultIds(pruned)).toEqual(toolResultIds(history));
+  });
+
   it('bounds serialized growth across a 20-step run', () => {
     const atFive = bytes(pruneObservationHistory(syntheticRun(5)));
     const atTwenty = bytes(pruneObservationHistory(syntheticRun(20)));

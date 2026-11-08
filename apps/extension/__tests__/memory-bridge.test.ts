@@ -97,7 +97,7 @@ describe('signed-out boundary', () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal('fetch', fetchSpy);
 
-    const result = await memoryList();
+    const result = await memoryList(OWNER);
 
     expect(result.status).toBe('signed-out');
     expect(result.memories).toEqual([]);
@@ -109,9 +109,9 @@ describe('signed-out boundary', () => {
     await storageMock.local.set({ [ACCOUNT_MEMORY_CACHE_KEY]: cacheWith(OWNER, ['private fact']) });
     vi.stubGlobal('fetch', vi.fn());
 
-    expect((await memoryAdd('new fact')).status).toBe('signed-out');
-    expect((await memoryUpdate('id', 'edited')).status).toBe('signed-out');
-    expect((await memoryDelete('id')).status).toBe('signed-out');
+    expect((await memoryAdd(OWNER, 'new fact')).status).toBe('signed-out');
+    expect((await memoryUpdate(OWNER, 'id', 'edited')).status).toBe('signed-out');
+    expect((await memoryDelete(OWNER, 'id')).status).toBe('signed-out');
     expect(storageMock.local._store[ACCOUNT_MEMORY_CACHE_KEY]).toBeUndefined();
   });
 
@@ -123,7 +123,7 @@ describe('signed-out boundary', () => {
       vi.fn(async () => jsonResponse({ error: 'Unauthorized' }, 401)),
     );
 
-    const result = await memoryList();
+    const result = await memoryList(OWNER);
 
     expect(result.status).toBe('signed-out');
     expect(result.memories).toEqual([]);
@@ -142,21 +142,59 @@ describe('signed-out boundary', () => {
       vi.fn(async () => jsonResponse({ error: 'offline' }, 503)),
     );
 
-    const result = await memoryList();
+    const result = await memoryList(OWNER);
 
     expect(result.status).toBe('unavailable');
     expect(result.memories).toEqual([]);
   });
 });
 
+describe('request owner boundary', () => {
+  it.each(['list', 'add', 'update', 'delete'] as const)(
+    'refuses %s for a replaced owner before making a request',
+    async (operation) => {
+      const replacement = { ...OWNER, authIncarnation: 'replacement-session' };
+      authMock.getManagedCloudAuthContext.mockResolvedValue({ token: 'new', owner: replacement });
+      const currentCache = cacheWith(replacement, ['Current session']);
+      await storageMock.local.set({ [ACCOUNT_MEMORY_CACHE_KEY]: currentCache });
+      const fetchSpy = vi.fn();
+      vi.stubGlobal('fetch', fetchSpy);
+      const result = await (operation === 'list'
+        ? memoryList(OWNER)
+        : operation === 'add'
+          ? memoryAdd(OWNER, 'Old draft')
+          : operation === 'update'
+            ? memoryUpdate(OWNER, 'old-id', 'Old draft')
+            : memoryDelete(OWNER, 'old-id'));
+      expect(result.status).toBe('signed-out');
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(storageMock.local._store[ACCOUNT_MEMORY_CACHE_KEY]).toEqual(currentCache);
+    },
+  );
+});
+
 describe('hosted memory client mapping', () => {
+  it('does not publish an old read after the authenticated session changes', async () => {
+    authMock.getManagedCloudAuthContext.mockResolvedValueOnce({ token: 'tok', owner: OWNER });
+    authMock.getManagedCloudAuthContext.mockResolvedValue({
+      token: 'new-token',
+      owner: { accountId: OWNER.accountId, authIncarnation: 'replacement-session' },
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponse({ memories: [row('old', 'Old session')] })),
+    );
+    expect(await memoryList(OWNER)).toMatchObject({ status: 'signed-out', memories: [] });
+    expect(storageMock.local._store[ACCOUNT_MEMORY_CACHE_KEY]).toBeUndefined();
+  });
+
   it('lists the account memories from the hosted route', async () => {
     const fetchSpy = vi.fn(async () =>
       jsonResponse({ memories: [row('m1', 'first'), row('m2', 'second')] }),
     );
     vi.stubGlobal('fetch', fetchSpy);
 
-    const result = await memoryList();
+    const result = await memoryList(OWNER);
 
     expect(result.status).toBe('ready');
     expect(result.fromCache).toBe(false);
@@ -171,7 +209,7 @@ describe('hosted memory client mapping', () => {
       'fetch',
       vi.fn(async () => jsonResponse({ memories: [row('m1', 'first')] })),
     );
-    await memoryList();
+    await memoryList(OWNER);
 
     vi.stubGlobal(
       'fetch',
@@ -179,7 +217,7 @@ describe('hosted memory client mapping', () => {
         throw new Error('network down');
       }),
     );
-    const result = await memoryList();
+    const result = await memoryList(OWNER);
 
     expect(result.status).toBe('ready');
     expect(result.fromCache).toBe(true);
@@ -187,11 +225,35 @@ describe('hosted memory client mapping', () => {
     expect(result.error).toBeTruthy();
   });
 
+  it('refreshes an unchanged page timestamp so a later outage can use the successful read', async () => {
+    const memories = [row('m1', 'first')];
+    const fetchedAtMs = Date.now() - 120_000;
+    await storageMock.local.set({
+      [ACCOUNT_MEMORY_CACHE_KEY]: {
+        owner: OWNER,
+        fetchedAtMs,
+        items: parseAccountMemoryList({ memories }),
+      },
+    });
+    const fetchSpy = vi.fn(async () => jsonResponse({ memories }));
+    vi.stubGlobal('fetch', fetchSpy);
+    await memoryList(OWNER);
+    expect(
+      (storageMock.local._store[ACCOUNT_MEMORY_CACHE_KEY] as { fetchedAtMs: number }).fetchedAtMs,
+    ).toBeGreaterThan(fetchedAtMs);
+    fetchSpy.mockRejectedValueOnce(new Error('Offline'));
+    expect(await memoryList(OWNER)).toMatchObject({
+      status: 'ready',
+      fromCache: true,
+      memories: [expect.objectContaining({ id: 'm1', content: 'first' })],
+    });
+  });
+
   it('sends an edit as a PUT on the memory id and a delete as a DELETE', async () => {
     const fetchSpy = vi.fn(async () => jsonResponse({ memory: row('m1', 'edited') }));
     vi.stubGlobal('fetch', fetchSpy);
 
-    const updated = await memoryUpdate('m1', '  edited  ');
+    const updated = await memoryUpdate(OWNER, 'm1', '  edited  ');
     expect(updated.status).toBe('ready');
     expect(updated.memory?.content).toBe('edited');
     const [updateUrl, updateInit] = fetchSpy.mock.calls[0] as [string, RequestInit];

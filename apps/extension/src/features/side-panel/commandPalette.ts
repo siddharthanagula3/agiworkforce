@@ -224,9 +224,15 @@ export function buildCommandPalette(load: () => Promise<PaletteCommand[]>): Comm
   }
 
   function close(): void {
-    if (backdrop.hidden) return;
     generation += 1;
     backdrop.hidden = true;
+    commands = [];
+    visible = [];
+    active = 0;
+    input.value = '';
+    input.removeAttribute('aria-activedescendant');
+    list.replaceChildren();
+    empty.textContent = '';
     const target = returnFocus;
     returnFocus = null;
     if (target?.isConnected) target.focus();

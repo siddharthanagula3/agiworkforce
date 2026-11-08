@@ -5,13 +5,15 @@ import {
   ManagedCloudSchedulesHttpError,
   MANAGED_CLOUD_SCHEDULES_DEFAULT_PAGE_SIZE,
   managedCloudSchedulePath,
+  getScheduleModelOptions,
+  type ScheduleModelOption,
   type ManagedCloudScheduleMutation,
   type ManagedCloudScheduleRun,
   type ManagedCloudScheduleRunApproval,
   type ManagedCloudSchedulesClient,
   type ManagedCloudScheduleTask,
 } from '@agiworkforce/cloud-contracts';
-import { FREE_TRIAL_GATEWAY, getAuthToken } from './freeTrialClient';
+import { FREE_TRIAL_GATEWAY, getAuthToken, getManagedModelAccess } from './freeTrialClient';
 import { platformRequestHeaders } from '../../platformHeaders';
 
 export const CHROME_SCHEDULE_PAGE_SIZE = MANAGED_CLOUD_SCHEDULES_DEFAULT_PAGE_SIZE;
@@ -40,6 +42,32 @@ export interface ChromeSchedulesError {
   status: 'error';
   code: ChromeSchedulesErrorCode;
   message: string;
+}
+
+export type ChromeScheduleModelsResult =
+  { status: 'success'; options: ScheduleModelOption[] } | ChromeSchedulesError;
+
+export async function listChromeScheduleModels(
+  options: { signal?: AbortSignal } = {},
+  dependencies: {
+    getAuthToken?: typeof getAuthToken;
+    getModelAccess?: typeof getManagedModelAccess;
+  } = {},
+): Promise<ChromeScheduleModelsResult> {
+  try {
+    options.signal?.throwIfAborted();
+    const token = await (dependencies.getAuthToken ?? getAuthToken)();
+    options.signal?.throwIfAborted();
+    if (!token) return signedOut();
+    const access = await (dependencies.getModelAccess ?? getManagedModelAccess)(
+      token,
+      options.signal,
+    );
+    options.signal?.throwIfAborted();
+    return { status: 'success', options: getScheduleModelOptions(access.subscriptionTier) };
+  } catch (error) {
+    return describeSchedulesFailure(error, options.signal);
+  }
 }
 
 export type ChromeScheduleListResult =

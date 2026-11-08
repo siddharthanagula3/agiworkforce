@@ -11,6 +11,7 @@ import {
   submitPairingCode,
   unpair,
   releaseStoredDesktopPairing,
+  desktopPairingRejectsAccount,
   confirmPairing,
   _resetStateForTesting,
 } from '../src/features/native-bridge/pairing';
@@ -246,6 +247,46 @@ describe('unpair', () => {
   it('is safe to call when already idle', async () => {
     const state = await unpair();
     expect(state.phase).toBe('idle');
+  });
+});
+
+describe('desktopPairingRejectsAccount', () => {
+  function seedDurablePairing(accountId: string | null): void {
+    localStore['connectedToDesktop'] = true;
+    localStore['agi_paired_desktop'] = { fingerprint: 'ab12', accountId };
+  }
+
+  it('rejects a pairing bound to a different account', async () => {
+    seedDurablePairing('acct_1');
+    expect(await desktopPairingRejectsAccount('acct_2')).toBe(true);
+  });
+
+  it('keeps a pairing for the same account', async () => {
+    seedDurablePairing('acct_1');
+    expect(await desktopPairingRejectsAccount('acct_1')).toBe(false);
+  });
+
+  it('rejects a bound pairing when the account has signed out', async () => {
+    seedDurablePairing('acct_1');
+    expect(await desktopPairingRejectsAccount(null)).toBe(true);
+  });
+
+  it('keeps a pairing that was issued with no account', async () => {
+    seedDurablePairing(null);
+    expect(await desktopPairingRejectsAccount('acct_2')).toBe(false);
+  });
+
+  it('does nothing when no pairing is stored', async () => {
+    expect(await desktopPairingRejectsAccount('acct_2')).toBe(false);
+  });
+
+  it('uses the session account when the pair token is still in memory', async () => {
+    sessionStore['agi_pair_token'] = DESKTOP_PAIR_TOKEN;
+    sessionStore['agi_pair_account'] = 'acct_1';
+    localStore['connectedToDesktop'] = true;
+    localStore['agi_paired_desktop'] = { fingerprint: 'ab12', accountId: 'acct_9' };
+    expect(await desktopPairingRejectsAccount('acct_2')).toBe(true);
+    expect(await desktopPairingRejectsAccount('acct_1')).toBe(false);
   });
 });
 

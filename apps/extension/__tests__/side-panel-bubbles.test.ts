@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { beforeEach, describe, it, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import {
   parseInteractiveCardDelta,
   AGENT_EVENT_SCHEMA_VERSION,
@@ -10,11 +10,14 @@ import type { InteractiveCard } from '@agiworkforce/types';
 import {
   buildInteractiveCardEl,
   buildBubbleWithTools,
+  refreshAgentActivityClocks,
+  resetReadAloud,
   openInteractiveCardUrl,
   resolveManagedArtifactUrl,
 } from '../src/features/side-panel/bubbles';
 import {
   applyCanonicalAgentEvent,
+  reconcileManagedRunActivity,
   type SidePanelChatMessage,
 } from '../src/features/side-panel/chat-state';
 
@@ -37,10 +40,13 @@ function getMessage(key: string, substitutions: string[] = []): string {
 }
 
 beforeEach(() => {
+  vi.spyOn(Date, 'now').mockReturnValue(2000);
   (globalThis as { chrome?: unknown }).chrome = {
     i18n: { getMessage, getUILanguage: () => 'en' },
+    runtime: { getURL: (path: string) => `chrome-extension://test/${path}` },
   };
 });
+afterEach(() => vi.restoreAllMocks());
 
 function msg(overrides: Partial<SidePanelChatMessage> = {}): SidePanelChatMessage {
   return { id: 'm1', role: 'user', content: 'hello world', timestamp: 0, ...overrides };
@@ -63,8 +69,6 @@ function activity(
     entries: [],
   };
 }
-
-const LOADER_2_PATH = 'M21 12a9 9 0 1 1-6.219-8.56';
 
 const MAP_CARD_ENVELOPE = {
   schemaVersion: 1,
@@ -167,7 +171,7 @@ describe('side-panel buildBubbleWithTools (real render)', () => {
   });
 
   it.each([
-    ['running', 'Working for 1s', `path[d="${LOADER_2_PATH}"]`, true],
+    ['running', 'Working for 1s', 'img.agi-loading-mark', true],
     ['completed', 'Worked for 2s', 'path[d="m9 12 2 2 4-4"]', false],
     ['failed', 'Failed after 2s', 'path[d="m15 9-6 6"]', false],
     ['cancelled', 'Cancelled after 2s', 'path[d="m15 9-6 6"]', false],
@@ -184,9 +188,84 @@ describe('side-panel buildBubbleWithTools (real render)', () => {
 
       expect(summary?.textContent).toContain(label);
       expect(icon?.querySelector(iconSelector)).not.toBeNull();
-      expect(icon?.querySelector(`path[d="${LOADER_2_PATH}"]`) !== null).toBe(usesLoader);
+      expect(icon?.querySelector('img.agi-loading-mark') !== null).toBe(usesLoader);
     },
   );
+
+  it('keeps one rotating brand mark beside a live clock without rebuilding the indicator', () => {
+    vi.mocked(Date.now).mockReturnValue(7000);
+    const node = buildBubbleWithTools(
+      msg({
+        role: 'assistant',
+        streaming: true,
+        agentActivity: activity('running'),
+      }),
+    );
+    const summary = node.querySelector('.sp-agent-activity > summary');
+    const mark = summary?.querySelector('img.agi-loading-mark');
+    expect(summary?.textContent).toContain('Working for 6s');
+    expect(node.querySelectorAll('img.agi-loading-mark')).toHaveLength(1);
+    expect(node.querySelector('.sp-thinking-mark')).toBeNull();
+    refreshAgentActivityClocks(node, 10000);
+    expect(summary?.textContent).toContain('Working for 9s');
+    expect(summary?.querySelector('img.agi-loading-mark')).toBe(mark);
+  });
+
+  it('does not animate a completed download just because its name contains load', () => {
+    const done = activity('completed');
+    done.entries.push({
+      kind: 'tool',
+      id: 'download',
+      toolCallId: 'download-1',
+      name: 'download',
+      category: 'computer-use',
+      summary: 'Downloaded file',
+      status: 'completed',
+      startedAtMs: 1000,
+      completedAtMs: 2000,
+    });
+    const node = buildBubbleWithTools(msg({ role: 'assistant', agentActivity: done }));
+    expect(node.querySelector('.agi-loading-mark')).toBeNull();
+  });
+
+  it('keeps the same message clock when another tool round starts a new activity turn', () => {
+    vi.mocked(Date.now).mockReturnValue(8000);
+    const nextRound = { ...activity('running'), startedAtMs: 6000, updatedAtMs: 7000 };
+    const message = msg({
+      role: 'assistant',
+      timestamp: 1000,
+      streaming: true,
+      agentActivity: nextRound,
+    });
+    const node = buildBubbleWithTools(message);
+    expect(node.querySelector('summary')?.textContent).toContain('Working for 7s');
+    refreshAgentActivityClocks(node, 9000);
+    expect(node.querySelector('summary')?.textContent).toContain('Working for 8s');
+    const finished = buildBubbleWithTools({
+      ...message,
+      streaming: false,
+      agentActivity: { ...nextRound, status: 'completed', completedAtMs: 10000 },
+    });
+    expect(finished.querySelector('summary')?.textContent).toContain('Worked for 9s');
+    expect(finished.querySelector('.agi-loading-mark')).toBeNull();
+    const synchronized = buildBubbleWithTools({
+      ...message,
+      timestamp: 11000,
+      streaming: false,
+      agentEvents: [
+        {
+          schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+          sessionId: 'session-1',
+          turnId: 'round-1',
+          sequence: 0,
+          emittedAtMs: 1000,
+          event: { type: 'lifecycle', phase: 'started' },
+        },
+      ],
+      agentActivity: { ...nextRound, status: 'completed', completedAtMs: 10000 },
+    });
+    expect(synchronized.querySelector('summary')?.textContent).toContain('Worked for 9s');
+  });
 
   it('renders a generated artifact as an authenticated AGI open/download action', () => {
     const messages: SidePanelChatMessage[] = [];
@@ -353,6 +432,56 @@ describe('interrupted reply (reload mid-stream)', () => {
 });
 
 describe('in-chat browser turns and read aloud', () => {
+  it('renders cloud and browser work as one completed timeline after the cloud turn ends', () => {
+    const browserActivity = activity('running');
+    browserActivity.entries.push({
+      kind: 'tool',
+      id: 'browser-read',
+      toolCallId: 'read-1',
+      name: 'browser_read_page',
+      category: 'computer-use',
+      summary: 'Read page',
+      status: 'completed',
+      startedAtMs: 1_500,
+      completedAtMs: 2_000,
+    });
+    const agentActivity = activity('completed');
+    agentActivity.entries.push({
+      kind: 'progress',
+      id: 'cloud-progress',
+      progressId: 'work',
+      summary: 'Prepare answer',
+      status: 'completed',
+      startedAtMs: 1_000,
+      completedAtMs: 3_000,
+    });
+    const assistant = msg({
+      role: 'assistant',
+      content: 'Read the form.',
+      browserActivity,
+      agentActivity,
+      cloudAgentRun: {
+        runId: 'run-1',
+        runPath: '/runs/run-1',
+        lastSequence: 4,
+        state: 'completed',
+      },
+    });
+    reconcileManagedRunActivity(assistant, 3_000);
+    const node = buildBubbleWithTools(assistant);
+    expect(node.querySelectorAll('.sp-agent-activity')).toHaveLength(1);
+    expect(node.querySelector('.sp-agent-activity > summary')?.textContent).toContain(
+      'Worked for 2s',
+    );
+    expect(node.querySelector('.sp-agent-activity > summary')?.textContent).not.toContain(
+      'Working',
+    );
+    expect(node.textContent).toContain('Read page');
+    expect(node.textContent).toContain('Prepare answer');
+    expect(node.querySelectorAll('.sp-agent-step')).toHaveLength(2);
+    expect(node.querySelector('.sp-agent-activity')?.getAttribute('data-status')).toBe('completed');
+  });
+
   it('renders the browser activity and its live controls inside the assistant turn', () => {
     const controls = document.createElement('div');
     controls.className = 'sp-browser-turn';
@@ -399,6 +528,61 @@ describe('in-chat browser turns and read aloud', () => {
       button!.click();
       expect(cancel).toHaveBeenCalled();
       expect(button!.getAttribute('aria-label')).toBe('Read aloud');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('keeps a restarted reading owned when the previous playback ends late', async () => {
+    const speak = vi.fn();
+    const cancel = vi.fn();
+    vi.stubGlobal('speechSynthesis', { speak, cancel, getVoices: () => [] });
+    vi.stubGlobal('SpeechSynthesisUtterance', class {});
+    (globalThis as { chrome?: unknown }).chrome = {
+      i18n: { getMessage, getUILanguage: () => 'en' },
+      storage: { local: { get: vi.fn(async () => ({})) } },
+    };
+    try {
+      const bubble = buildBubbleWithTools(msg({ role: 'assistant', content: 'Read this answer.' }));
+      const button = bubble.querySelector<HTMLButtonElement>('.sp-read-aloud-btn')!;
+      button.click();
+      await vi.waitFor(() => expect(speak).toHaveBeenCalledOnce());
+      const previous = speak.mock.calls[0]![0] as { onerror: () => void };
+      button.click();
+      button.click();
+      await vi.waitFor(() => expect(speak).toHaveBeenCalledTimes(2));
+      previous.onerror();
+      expect(button.getAttribute('aria-pressed')).toBe('true');
+      cancel.mockClear();
+      resetReadAloud();
+      expect(cancel).toHaveBeenCalledOnce();
+      expect(button.getAttribute('aria-pressed')).toBe('false');
+    } finally {
+      resetReadAloud();
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('does not start pending read aloud after the conversation is reset', async () => {
+    const speak = vi.fn();
+    const cancel = vi.fn();
+    let finish!: (stored: Record<string, unknown>) => void;
+    vi.stubGlobal('speechSynthesis', { speak, cancel, getVoices: () => [] });
+    vi.stubGlobal('SpeechSynthesisUtterance', class {});
+    (globalThis as { chrome?: unknown }).chrome = {
+      i18n: { getMessage, getUILanguage: () => 'en' },
+      storage: { local: { get: vi.fn(() => new Promise((resolve) => (finish = resolve))) } },
+    };
+    try {
+      const bubble = buildBubbleWithTools(msg({ role: 'assistant', content: 'Retired text' }));
+      const button = bubble.querySelector<HTMLButtonElement>('.sp-read-aloud-btn')!;
+      button.click();
+      expect(finish).toBeDefined();
+      resetReadAloud();
+      finish({});
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(speak).not.toHaveBeenCalled();
+      expect(button.getAttribute('aria-pressed')).toBe('false');
     } finally {
       vi.unstubAllGlobals();
     }

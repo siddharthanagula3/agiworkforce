@@ -1,9 +1,10 @@
 import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
-import type {
-  ManagedCloudScheduleRun,
-  ManagedCloudSchedulesClient,
-  ManagedCloudScheduleTask,
+import {
+  getScheduleActionAvailability,
+  type ManagedCloudScheduleRun,
+  type ManagedCloudSchedulesClient,
+  type ManagedCloudScheduleTask,
 } from '@agiworkforce/cloud-contracts';
 import { TOOL_APPROVAL_ACTION_LABELS, PRODUCT_NAMES } from '@agiworkforce/types';
 import {
@@ -105,6 +106,13 @@ export async function setScheduleEnabledInteractively(
   isActive: boolean,
   host: ScheduleActionHost,
 ): Promise<void> {
+  if (!getScheduleActionAvailability(task).canToggle) {
+    void vscode.window.showInformationMessage(
+      `${PRODUCT_NAMES.code}: this schedule cannot be paused or resumed in its current state.`,
+    );
+    host.onChanged();
+    return;
+  }
   await withScheduleRetry(
     isActive
       ? `${PRODUCT_NAMES.code}: resuming "${scheduleTitle(task)}"…`
@@ -121,6 +129,13 @@ export async function runScheduleNowInteractively(
   task: ManagedCloudScheduleTask,
   host: ScheduleActionHost,
 ): Promise<void> {
+  if (!getScheduleActionAvailability(task).canRun) {
+    void vscode.window.showInformationMessage(
+      `${PRODUCT_NAMES.code}: this schedule must be active and enabled to run.`,
+    );
+    host.onChanged();
+    return;
+  }
   const answer = await vscode.window.showWarningMessage(
     `Run "${scheduleTitle(task)}" now?`,
     { modal: true, detail: scheduleRunNowConsequence(task) },

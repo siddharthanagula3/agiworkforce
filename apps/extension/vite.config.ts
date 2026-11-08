@@ -18,6 +18,7 @@ export default defineConfig(({ mode }) => {
   const configuredManifest = configureChromeManifest(sourceManifest, buildConfiguration);
 
   const target = process.env['BUILD_TARGET'] === 'content' ? 'content' : 'main';
+  const terserOptions = { maxWorkers: 1 };
 
   if (target === 'content') {
     return {
@@ -25,12 +26,16 @@ export default defineConfig(({ mode }) => {
       define: {
         'process.env.CLERK_PUBLISHABLE_KEY': JSON.stringify(clerkPublishableKey),
         'process.env.CLERK_SYNC_HOST': JSON.stringify(clerkSyncHost),
+        'import.meta.env.VITE_ARTIFACT_SANDBOX_ORIGIN': JSON.stringify(
+          buildConfiguration.artifactSandboxOrigin ?? '',
+        ),
       },
       publicDir: false,
       build: {
         outDir: 'dist',
         emptyOutDir: false, // preserve the main pass's output
         minify: 'terser',
+        terserOptions,
         sourcemap: mode !== 'production',
         rollupOptions: {
           input: { content: resolve(__dirname, 'src/content.ts') },
@@ -49,6 +54,9 @@ export default defineConfig(({ mode }) => {
     define: {
       'process.env.CLERK_PUBLISHABLE_KEY': JSON.stringify(clerkPublishableKey),
       'process.env.CLERK_SYNC_HOST': JSON.stringify(clerkSyncHost),
+      'import.meta.env.VITE_ARTIFACT_SANDBOX_ORIGIN': JSON.stringify(
+        buildConfiguration.artifactSandboxOrigin ?? '',
+      ),
     },
     publicDir: false,
     build: {
@@ -58,6 +66,7 @@ export default defineConfig(({ mode }) => {
       // data URI is refused and KaTeX falls back to the wrong glyphs.
       assetsInlineLimit: (filePath: string) => (filePath.endsWith('.woff2') ? false : undefined),
       minify: 'terser',
+      terserOptions,
       sourcemap: mode !== 'production',
       rollupOptions: {
         input: {

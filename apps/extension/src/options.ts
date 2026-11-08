@@ -1716,7 +1716,7 @@ function buildPage(): void {
     el(
       'div',
       { class: 'opt-row-hint', style: 'padding-top:4px' },
-      'Stored only on this device. Used by the deterministic fast-path filler and the AGI computer-use agent. Deleted when you log out, or immediately with Delete profile.',
+      'Saved on this device. When you ask chat to use it on a form, contact details are sent with that request. Log out or Delete profile removes the saved copy.',
     ),
   );
   profileSection.appendChild(profileHeader);

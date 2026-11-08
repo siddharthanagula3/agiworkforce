@@ -154,10 +154,10 @@ export function createDomTargetHelpers(
       throw new Error('The element changed since read_dom; read the page again.');
     return element;
   }
-  function elements() {
-    const result: Element[] = [];
-    const scopes: Array<{ scope: Document | ShadowRoot; depth: number }> = [
-      { scope: rootDocument, depth: 0 },
+  function elements(startScope: Document | ShadowRoot | Element = rootDocument) {
+    const result: Element[] = startScope.nodeType === 1 ? [startScope as Element] : [];
+    const scopes: Array<{ scope: Document | ShadowRoot | Element; depth: number }> = [
+      { scope: startScope, depth: 0 },
     ];
     let blockedFrames = 0;
     let limited = false;

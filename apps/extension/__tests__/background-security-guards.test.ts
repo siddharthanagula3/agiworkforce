@@ -157,8 +157,15 @@ const harness = vi.hoisted(() => {
       open: vi.fn(() => Promise.resolve()),
     },
     commands: { onCommand: event() },
-    action: { setBadgeText: vi.fn(), setBadgeBackgroundColor: vi.fn(), setTitle: vi.fn() },
-    scripting: { executeScript: vi.fn(() => Promise.resolve([])) },
+    action: {
+      onClicked: event(),
+      setBadgeText: vi.fn(),
+      setBadgeBackgroundColor: vi.fn(),
+      setTitle: vi.fn(),
+    },
+    scripting: {
+      executeScript: vi.fn(async (): Promise<Array<{ documentId: string; result: string }>> => []),
+    },
     debugger: debuggerMock,
     permissions: {
       contains: vi.fn(() => Promise.resolve(true)),
@@ -195,6 +202,7 @@ const harness = vi.hoisted(() => {
     tab,
     runAgentLoop,
     getManagedModelAccess,
+    chromeMock,
   };
 });
 
@@ -210,6 +218,14 @@ vi.mock('../src/features/cloud-bridge/freeTrialClient', async (importOriginal) =
 
 import { assertDestinationAllowlisted, navigate } from '../src/features/computer-use/cdpDriver';
 import { MAX_RUN_GUIDANCE_CHARS } from '../src/features/computer-use/agentLoop';
+import {
+  captureEditableSelection,
+  applyEditableSelection,
+  undoEditableSelection,
+} from '../src/features/content/editableSelection';
+import { USER_SITE_BLOCKLIST_STORAGE_KEY } from '../src/features/site-policy/userBlocklist';
+import { ADMIN_SITE_POLICY_STORAGE_KEY } from '../src/features/site-policy/store';
+import * as sitePolicyStore from '../src/features/site-policy/store';
 
 const { EXTENSION_ID, RUN_TAB_ID, SITE_A, SITE_B, SITE_ALLOWLIST_KEY, CONSENT_KEY } = harness;
 
@@ -277,10 +293,327 @@ describe('background service worker security guards', () => {
       allowedAutoModes: [],
     });
     harness.unreadableKeys.clear();
+    delete harness.localStore[USER_SITE_BLOCKLIST_STORAGE_KEY];
+    delete harness.localStore[ADMIN_SITE_POLICY_STORAGE_KEY];
     harness.debuggerMock.sendCommand.mockClear();
+    harness.chromeMock.scripting.executeScript.mockReset().mockResolvedValue([]);
     harness.tab.url = `${SITE_A}/start`;
     putStorage(SITE_ALLOWLIST_KEY, [SITE_A, SITE_B]);
     putStorage(CONSENT_KEY, [SITE_A]);
+  });
+
+  describe('selected-text insertion authority', () => {
+    const base = {
+      type: 'APPLY_EDITABLE_SELECTION',
+      tabId: RUN_TAB_ID,
+      pageUrl: `${SITE_A}/start`,
+      documentId: 'document-a',
+      selectionId: '11111111-1111-4111-8111-111111111111',
+      text: 'clear wording',
+    };
+
+    it('executes only the captured field without creating general browser-control consent', async () => {
+      const auth = await dispatch({ type: 'GET_CLOUD_AUTH_TOKEN', refresh: false });
+      putStorage(SITE_ALLOWLIST_KEY, []);
+      putStorage(CONSENT_KEY, []);
+      vi.stubGlobal('location', { href: harness.tab.url });
+      vi.stubGlobal('CSS', { escape: (value: string) => value });
+      const rect = vi
+        .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+        .mockReturnValue({ width: 100, height: 30 } as DOMRect);
+      document.body.innerHTML =
+        '<textarea id="draft" aria-label="Draft">Before rough words after.</textarea><input id="other">';
+      const field = document.getElementById('draft') as HTMLTextAreaElement;
+      field.focus();
+      field.setSelectionRange(7, 18);
+      const owner = auth['owner'] as { accountId: string; authIncarnation: string };
+      const captured = captureEditableSelection(harness.tab.url, 'rough words', owner);
+      harness.chromeMock.scripting.executeScript.mockResolvedValue([
+        { documentId: base.documentId, result: harness.tab.url },
+      ]);
+      harness.chromeMock.tabs.sendMessage.mockClear();
+      harness.chromeMock.tabs.sendMessage.mockImplementationOnce(
+        async (_tabId: unknown, request: unknown) => {
+          const message = request as typeof base & { owner: typeof owner };
+          return applyEditableSelection(
+            message.selectionId,
+            message.pageUrl,
+            message.text,
+            message.owner,
+          );
+        },
+      );
+      try {
+        expect(
+          await dispatch({ ...base, selectionId: captured.selection.id, owner }),
+        ).toMatchObject({ success: true, verified: true });
+        expect(field.value).toBe('Before clear wording after.');
+        expect((document.getElementById('other') as HTMLInputElement).value).toBe('');
+        expect(harness.localStore[SITE_ALLOWLIST_KEY]).toEqual([]);
+        expect(harness.localStore[CONSENT_KEY]).toEqual([]);
+        harness.chromeMock.tabs.sendMessage.mockImplementationOnce(
+          async (_tabId: unknown, request: unknown) => {
+            const message = request as typeof base & { owner: typeof owner };
+            return undoEditableSelection(message.selectionId, message.pageUrl, message.owner);
+          },
+        );
+        expect(
+          await dispatch({
+            ...base,
+            type: 'UNDO_EDITABLE_SELECTION',
+            selectionId: captured.selection.id,
+            owner,
+          }),
+        ).toMatchObject({ success: true, verified: true });
+        expect(field.value).toBe('Before rough words after.');
+      } finally {
+        rect.mockRestore();
+        document.body.replaceChildren();
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it.each(['account', 'document', 'blocked', 'admin', 'unreadable'] as const)(
+      'refuses changed or unavailable %s authority before insertion',
+      async (failure) => {
+        const auth = await dispatch({ type: 'GET_CLOUD_AUTH_TOKEN', refresh: false });
+        harness.chromeMock.tabs.sendMessage.mockClear();
+        harness.chromeMock.scripting.executeScript.mockResolvedValue([
+          {
+            documentId: failure === 'document' ? 'replacement' : base.documentId,
+            result: harness.tab.url,
+          },
+        ]);
+        if (failure === 'blocked') putStorage(USER_SITE_BLOCKLIST_STORAGE_KEY, [SITE_A]);
+        if (failure === 'admin')
+          vi.spyOn(sitePolicyStore, 'readAdminSitePolicy').mockResolvedValueOnce({
+            version: 1,
+            blocklist: [{ pattern: SITE_A }],
+            allowlist: [],
+          });
+        if (failure === 'unreadable') harness.unreadableKeys.add(USER_SITE_BLOCKLIST_STORAGE_KEY);
+        const owner =
+          failure === 'account'
+            ? { accountId: 'someone-else', authIncarnation: 'other-session' }
+            : auth['owner'];
+        const response = await dispatch({ ...base, owner });
+        expect(response).toMatchObject({ success: false });
+        if (failure === 'unreadable')
+          expect(response['error']).toContain('permissions are unavailable');
+        expect(harness.chromeMock.tabs.sendMessage).not.toHaveBeenCalled();
+      },
+    );
+
+    it('refuses page-script insertion requests even when they know a target token', async () => {
+      expect(
+        await dispatch(base, {
+          id: EXTENSION_ID,
+          url: harness.tab.url,
+          origin: SITE_A,
+          tab: { ...harness.tab },
+        }),
+      ).toMatchObject({ success: false, error: 'This action requires the extension UI.' });
+    });
+  });
+
+  it('checks a retained grant against the exact origin and revocation state', async () => {
+    const grantId = 'site_once_background-check';
+    expect(await dispatch({ type: 'CHECK_SITE_ONCE', grantId, origin: SITE_A })).toMatchObject({
+      success: false,
+    });
+    expect(
+      await dispatch({
+        type: 'GRANT_SITE_ONCE',
+        grantId,
+        origin: SITE_A,
+        hostPermissionAdded: false,
+      }),
+    ).toMatchObject({ success: true });
+    expect(await dispatch({ type: 'CHECK_SITE_ONCE', grantId, origin: SITE_A })).toMatchObject({
+      success: true,
+    });
+    expect(await dispatch({ type: 'CHECK_SITE_ONCE', grantId, origin: SITE_B })).toMatchObject({
+      success: false,
+    });
+    await dispatch({ type: 'REVOKE_SITE_ONCE', grantId });
+    expect(await dispatch({ type: 'CHECK_SITE_ONCE', grantId, origin: SITE_A })).toMatchObject({
+      success: false,
+    });
+  });
+
+  it('does not expose retained grant checks to a content script', async () => {
+    expect(
+      await dispatch(
+        { type: 'CHECK_SITE_ONCE', grantId: 'site_once_background-check', origin: SITE_A },
+        {
+          id: EXTENSION_ID,
+          url: `${SITE_A}/start`,
+          origin: SITE_A,
+          tab: { id: RUN_TAB_ID, url: `${SITE_A}/start` },
+        },
+      ),
+    ).toMatchObject({ success: false, error: 'This action requires the extension UI.' });
+  });
+
+  describe('application batch authorization', () => {
+    it('addresses a generic plan to the exact observed Chrome document', async () => {
+      const auth = await dispatch({ type: 'GET_CLOUD_AUTH_TOKEN', refresh: false });
+      harness.chromeMock.tabs.sendMessage.mockClear();
+      harness.chromeMock.tabs.sendMessage.mockResolvedValueOnce({ success: true, filledCount: 2 });
+      const documentId = 'document-1';
+      harness.chromeMock.scripting.executeScript.mockResolvedValueOnce([
+        { documentId, result: harness.tab.url },
+      ]);
+      const request = {
+        type: 'FILL_OBSERVED_FORM',
+        tabId: RUN_TAB_ID,
+        pageUrl: harness.tab.url,
+        documentId,
+        formSnapshotId: '77777777-7777-4777-8777-777777777777',
+        plan: { fields: { '#name': 'Test Applicant', '#onion': true } },
+        owner: auth['owner'],
+      };
+      expect(await dispatch(request)).toMatchObject({ success: true, filledCount: 2 });
+      expect(harness.chromeMock.tabs.sendMessage).toHaveBeenCalledExactlyOnceWith(
+        RUN_TAB_ID,
+        request,
+        { documentId },
+      );
+    });
+
+    it('refuses selector plans when a same-address document was replaced', async () => {
+      const auth = await dispatch({ type: 'GET_CLOUD_AUTH_TOKEN', refresh: false });
+      harness.chromeMock.tabs.sendMessage.mockClear();
+      harness.chromeMock.scripting.executeScript.mockResolvedValueOnce([
+        { documentId: 'replacement', result: harness.tab.url },
+      ]);
+      expect(
+        await dispatch({
+          type: 'FILL_OBSERVED_FORM',
+          tabId: RUN_TAB_ID,
+          pageUrl: harness.tab.url,
+          documentId: 'original',
+          formSnapshotId: '77777777-7777-4777-8777-777777777777',
+          plan: { fields: { '#name': 'Test' } },
+          owner: auth['owner'],
+        }),
+      ).toMatchObject({ success: false, error: expect.stringContaining('document changed') });
+      expect(harness.chromeMock.tabs.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('refuses selector plans sent by a page instead of the controller', async () => {
+      expect(
+        await dispatch(
+          {
+            type: 'FILL_OBSERVED_FORM',
+            tabId: RUN_TAB_ID,
+            pageUrl: harness.tab.url,
+            documentId: 'original',
+            formSnapshotId: '77777777-7777-4777-8777-777777777777',
+            plan: { fields: { '#name': 'Test' } },
+            owner: {},
+          },
+          { id: EXTENSION_ID, url: harness.tab.url, origin: SITE_A, tab: { ...harness.tab } },
+        ),
+      ).toMatchObject({ success: false, error: 'This action requires the extension UI.' });
+    });
+
+    it('forwards one validated profile to the authorized live document', async () => {
+      const auth = await dispatch({ type: 'GET_CLOUD_AUTH_TOKEN', refresh: false });
+      expect(auth['owner']).toBeTruthy();
+      harness.chromeMock.tabs.sendMessage.mockClear();
+      harness.chromeMock.tabs.sendMessage.mockResolvedValueOnce({ success: true, filledCount: 1 });
+      const profile = { fullName: 'Test Applicant' };
+      const result = await dispatch({
+        type: 'FILL_APPLICATION_CONTACT',
+        tabId: RUN_TAB_ID,
+        pageUrl: harness.tab.url,
+        profile,
+        owner: auth['owner'],
+      });
+      expect(result).toMatchObject({ success: true, filledCount: 1 });
+      expect(harness.chromeMock.tabs.sendMessage).toHaveBeenCalledExactlyOnceWith(RUN_TAB_ID, {
+        type: 'FILL_APPLICATION_CONTACT',
+        tabId: RUN_TAB_ID,
+        pageUrl: harness.tab.url,
+        profile,
+        owner: auth['owner'],
+      });
+    });
+
+    it.each([true, false])(
+      'forwards the exact profile replacement flag %s after normal authorization',
+      async (replaceExisting) => {
+        const auth = await dispatch({ type: 'GET_CLOUD_AUTH_TOKEN', refresh: false });
+        harness.chromeMock.tabs.sendMessage.mockClear();
+        await dispatch({
+          type: 'FILL_APPLICATION_CONTACT',
+          tabId: RUN_TAB_ID,
+          pageUrl: harness.tab.url,
+          profile: { email: 'replace@example.test' },
+          replaceExisting,
+          owner: auth['owner'],
+        });
+        expect(harness.chromeMock.tabs.sendMessage).toHaveBeenCalledExactlyOnceWith(RUN_TAB_ID, {
+          type: 'FILL_APPLICATION_CONTACT',
+          tabId: RUN_TAB_ID,
+          pageUrl: harness.tab.url,
+          profile: { email: 'replace@example.test' },
+          replaceExisting,
+          owner: auth['owner'],
+        });
+      },
+    );
+
+    it.each(['true', 1, null, {}])(
+      'rejects invalid replacement flag %j before forwarding',
+      async (replaceExisting) => {
+        const auth = await dispatch({ type: 'GET_CLOUD_AUTH_TOKEN', refresh: false });
+        harness.chromeMock.tabs.sendMessage.mockClear();
+        const result = await dispatch({
+          type: 'FILL_APPLICATION_CONTACT',
+          tabId: RUN_TAB_ID,
+          pageUrl: harness.tab.url,
+          profile: { email: 'replace@example.test' },
+          replaceExisting,
+          owner: auth['owner'],
+        });
+        expect(result).toMatchObject({ success: false });
+        expect(harness.chromeMock.tabs.sendMessage).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each(['account', 'document', 'site', 'payload', 'sender'] as const)(
+      'refuses a changed or unauthorized %s before forwarding profile data',
+      async (failure) => {
+        const auth = await dispatch({ type: 'GET_CLOUD_AUTH_TOKEN', refresh: false });
+        const request = {
+          type: 'FILL_APPLICATION_CONTACT',
+          tabId: RUN_TAB_ID,
+          pageUrl: harness.tab.url,
+          profile: { fullName: 'Test Applicant' } as Record<string, unknown>,
+          owner: auth['owner'],
+        };
+        if (failure === 'account')
+          request.owner = { accountId: 'another-user', authIncarnation: 'another-session' };
+        if (failure === 'document') request.pageUrl += '?old';
+        if (failure === 'site') putStorage(SITE_ALLOWLIST_KEY, []);
+        if (failure === 'payload') request.profile['autoSubmit'] = 'true';
+        harness.chromeMock.tabs.sendMessage.mockClear();
+        const sender =
+          failure === 'sender'
+            ? {
+                ...SIDE_PANEL_SENDER,
+                url: harness.tab.url,
+                origin: SITE_A,
+                tab: { id: RUN_TAB_ID, url: harness.tab.url },
+              }
+            : SIDE_PANEL_SENDER;
+        const result = await dispatch(request, sender);
+        expect(result['success']).toBe(false);
+        expect(harness.chromeMock.tabs.sendMessage).not.toHaveBeenCalled();
+      },
+    );
   });
 
   describe('browser model selection admission', () => {
@@ -471,6 +804,92 @@ describe('background service worker security guards', () => {
   });
 
   describe('ongoing CDP control is re-authorized against the browser-control grant', () => {
+    it.each([SITE_A, SITE_B])(
+      're-authorizes an owned navigation that commits between tab reads: %s',
+      async (origin) => {
+        putStorage(CONSENT_KEY, [SITE_A, SITE_B]);
+        const options = await startRun('cu_run_navigation_commit');
+        await options.onActionStateChange(true);
+        harness.chromeMock.tabs.get.mockImplementationOnce(async () => {
+          const before = { ...harness.tab };
+          harness.tab.url = `${origin}/next`;
+          return before;
+        });
+        await expect(options.assertOwnership()).resolves.toBeUndefined();
+        expect(options.signal.aborted).toBe(false);
+        await options.onActionStateChange(false);
+        await expect(options.assertOwnership()).resolves.toBeUndefined();
+      },
+    );
+
+    it('still rejects a user navigation between tab reads outside an owned action', async () => {
+      const options = await startRun('cu_run_user_navigation_commit');
+      harness.chromeMock.tabs.get.mockImplementationOnce(async () => {
+        const before = { ...harness.tab };
+        harness.tab.url = `${SITE_A}/other`;
+        return before;
+      });
+      await expect(options.assertOwnership()).rejects.toThrow(/tab intent changed/);
+      expect(options.signal.aborted).toBe(true);
+    });
+
+    it('does not authorize an unconsented destination by retrying a navigation read', async () => {
+      const options = await startRun('cu_run_unconsented_navigation_commit');
+      await options.onActionStateChange(true);
+      harness.chromeMock.tabs.get.mockImplementationOnce(async () => {
+        const before = { ...harness.tab };
+        harness.tab.url = `${SITE_B}/inbox`;
+        return before;
+      });
+      await expect(options.assertOwnership()).rejects.toThrow(/tab intent changed/);
+      expect(options.signal.aborted).toBe(true);
+    });
+
+    it('bounds re-authorization when the tab keeps changing during an owned action', async () => {
+      const options = await startRun('cu_run_unstable_navigation_commit');
+      await options.onActionStateChange(true);
+      const original = harness.chromeMock.tabs.get.getMockImplementation()!;
+      let reads = 0;
+      harness.chromeMock.tabs.get.mockImplementation(async () => {
+        const before = { ...harness.tab };
+        harness.tab.url = `${SITE_A}/moving-${++reads}`;
+        return before;
+      });
+      try {
+        await expect(options.assertOwnership()).rejects.toThrow(/tab intent changed/);
+        expect(reads).toBe(4);
+        expect(options.signal.aborted).toBe(true);
+      } finally {
+        harness.chromeMock.tabs.get.mockImplementation(original);
+      }
+    });
+
+    it('rechecks the account before re-authorizing a navigation snapshot', async () => {
+      const options = await startRun('cu_run_account_navigation_commit');
+      await options.onActionStateChange(true);
+      const client = await import('../src/features/cloud-bridge/freeTrialClient');
+      const original = await client.getManagedCloudAuthContext();
+      if (!original) throw new Error('Expected the fixture account to be signed in.');
+      const context = vi
+        .spyOn(client, 'getManagedCloudAuthContext')
+        .mockResolvedValueOnce(original)
+        .mockResolvedValue({
+          ...original,
+          owner: { accountId: 'other-account', authIncarnation: 'other-session' },
+        });
+      harness.chromeMock.tabs.get.mockImplementationOnce(async () => {
+        const before = { ...harness.tab };
+        harness.tab.url = `${SITE_A}/next`;
+        return before;
+      });
+      try {
+        await expect(options.assertOwnership()).rejects.toThrow(/account changed/);
+        expect(options.signal.aborted).toBe(true);
+      } finally {
+        context.mockRestore();
+      }
+    });
+
     it('cancels the run when the debugged tab moves to an allowlisted but never CDP-consented origin', async () => {
       const options = await startRun('cu_run_cross_origin');
 

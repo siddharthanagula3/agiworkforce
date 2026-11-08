@@ -1,3 +1,4 @@
+import { SELECTED_MODEL_STORAGE_KEY } from '../../background/policy';
 import { t } from '../../i18n';
 import { normalizeShortcutStartUrl } from '../shortcuts/origin';
 import { el } from '../side-panel/dom';
@@ -32,6 +33,7 @@ export interface RecordableTab {
 export interface ShortcutsSectionDependencies {
   send<T extends SuccessResponse>(message: Record<string, unknown>): Promise<T | undefined>;
   queryTabs(): Promise<RecordableTab[]>;
+  getModelSelection?(): Promise<string | undefined>;
   schedules?: { sectionEl: HTMLElement; setActive(active: boolean): void };
 }
 
@@ -281,7 +283,28 @@ export function createShortcutsSection(
       run.addEventListener('click', () => {
         run.disabled = true;
         announce(t('spWorkflowRunning', [shortcut.name]));
-        void send<SuccessResponse>({ type: 'REPLAY_SHORTCUT', shortcutId: shortcut.id })
+        void (async () => {
+          const modelSelection = promptShortcut
+            ? await dependencies.getModelSelection?.()
+            : undefined;
+          let target: { id: number; origin: string } | null = null;
+          if (!promptShortcut) {
+            const origin = normalizeShortcutStartUrl(shortcut.startUrl);
+            target = pickRecordableTab(
+              (await dependencies.queryTabs()).filter(
+                (tab) => origin !== null && normalizeShortcutStartUrl(tab.url) === origin,
+              ),
+            );
+            if (!target)
+              throw new Error('Open the recorded website before replaying this workflow.');
+          }
+          return send<SuccessResponse>({
+            type: 'REPLAY_SHORTCUT',
+            shortcutId: shortcut.id,
+            ...(target ? { tabId: target.id } : {}),
+            ...(modelSelection !== undefined ? { modelSelection } : {}),
+          });
+        })()
           .then((response) =>
             response?.success
               ? announce(t('spWorkflowCompleted', [shortcut.name]))
@@ -623,6 +646,17 @@ export function browserShortcutsDependencies(
   return {
     send: async <T extends SuccessResponse>(message: Record<string, unknown>) =>
       (await chrome.runtime.sendMessage(message)) as T | undefined,
+    getModelSelection: async () => {
+      const stored = (await chrome.storage.local.get(SELECTED_MODEL_STORAGE_KEY))[
+        SELECTED_MODEL_STORAGE_KEY
+      ];
+      if (stored === undefined) return undefined;
+      if (typeof stored !== 'string' || !stored.trim())
+        throw new Error(
+          'The saved chat model choice is invalid. Select a model in chat and try again.',
+        );
+      return stored;
+    },
     queryTabs: () => chrome.tabs.query({}),
     ...(schedules ? { schedules } : {}),
   };

@@ -87,3 +87,40 @@ describe('clearAutofillProfile, SEC-49 erasure path', () => {
     await expect(clearAutofillProfile()).resolves.toBeUndefined();
   });
 });
+
+describe('saved contact profile turn context', () => {
+  it('reads only validated contact fields from the canonical saved profile', async () => {
+    const { local } = installChromeStub();
+    await local.set({
+      agi_autofill_profile: {
+        firstName: ' Sage ',
+        lastName: 'QA',
+        email: 'qa@example.test',
+        currentCompany: 'Fixture Company',
+        phone: 'bad\nvalue',
+        workAuthorization: 'private authorization answer',
+        coverLetterText: 'private letter',
+        token: 'must never leave storage',
+      },
+    });
+    const storage = await import('../src/features/content/autofill/profile-storage');
+    expect('loadContactAutofillProfile' in storage).toBe(true);
+    const load = Reflect.get(storage, 'loadContactAutofillProfile') as () => Promise<unknown>;
+    expect(await load()).toEqual({
+      firstName: 'Sage',
+      lastName: 'QA',
+      email: 'qa@example.test',
+      currentCompany: 'Fixture Company',
+    });
+  });
+
+  it('reports storage failure to an explicitly requested contact read', async () => {
+    const { local } = installChromeStub();
+    vi.spyOn(local, 'get').mockRejectedValue(new Error('Storage unavailable'));
+    const storage = await import('../src/features/content/autofill/profile-storage');
+    expect('loadContactAutofillProfile' in storage).toBe(true);
+    const load = Reflect.get(storage, 'loadContactAutofillProfile') as () => Promise<unknown>;
+    await expect(load()).rejects.toThrow('Storage unavailable');
+    await expect(storage.loadAutofillProfile()).resolves.toEqual({});
+  });
+});

@@ -82,6 +82,7 @@ const clerkAuthMock = vi.hoisted(() => ({
   ),
   getFreshClerkToken: vi.fn(async (): Promise<string | null> => null),
   signOutClerk: vi.fn(async (): Promise<void> => undefined),
+  revokeSyncedWebSession: vi.fn(async (): Promise<void> => undefined),
 }));
 
 vi.mock('../src/features/cloud-bridge/clerkAuth', () => clerkAuthMock);
@@ -99,6 +100,7 @@ import {
   MANAGED_CHAT_MAX_STREAMED_TEXT_CHARS,
   getAuthToken,
   clearAuthToken,
+  signOutOfAccount,
   getManagedModelAccess,
   parseQuotaWarningHeader,
   streamFreeChat,
@@ -487,6 +489,50 @@ describe('clearAuthToken', () => {
       previousOwner: { accountId: 'account-a', authIncarnation: 'session-a' },
     });
     expect(clerkAuthMock.signOutClerk).not.toHaveBeenCalled();
+  });
+});
+
+describe('signOutOfAccount', () => {
+  it('tears down owned work before waiting for synced session revocation', async () => {
+    const owner = { accountId: 'account-a', authIncarnation: 'session-a' };
+    clerkAuthMock.getFreshClerkAuthContext.mockResolvedValueOnce({ token: 'token-a', owner });
+    let finishRevocation!: () => void;
+    const revocation = new Promise<void>((resolve) => {
+      finishRevocation = resolve;
+    });
+    clerkAuthMock.revokeSyncedWebSession.mockReturnValueOnce(revocation);
+    const logout = signOutOfAccount();
+    try {
+      await vi.waitFor(() =>
+        expect(chromeMock.runtime.sendMessage).toHaveBeenCalledWith({
+          type: 'MANAGED_CLOUD_AUTH_CHANGED',
+          previousOwner: owner,
+        }),
+      );
+      expect(clerkAuthMock.signOutClerk).not.toHaveBeenCalled();
+      expect(clerkAuthMock.revokeSyncedWebSession).toHaveBeenCalledWith({
+        token: 'token-a',
+        owner,
+      });
+    } finally {
+      finishRevocation();
+      await logout;
+    }
+    expect(chromeMock.runtime.sendMessage).toHaveBeenCalledOnce();
+    expect(clerkAuthMock.signOutClerk).toHaveBeenCalledOnce();
+  });
+
+  it('still clears local authentication when synced revocation fails', async () => {
+    clerkAuthMock.revokeSyncedWebSession.mockRejectedValueOnce(new Error('Network unavailable'));
+    chromeMock._sessionStore['agi_clerk_session_token'] = 'session-token';
+    chromeMock._localStore['agi_dev_bearer_token'] = 'development-token';
+    await expect(signOutOfAccount()).resolves.toEqual({ webSessionEnded: false });
+    expect(chromeMock.runtime.sendMessage).toHaveBeenCalledBefore(
+      clerkAuthMock.revokeSyncedWebSession,
+    );
+    expect(chromeMock._sessionStore['agi_clerk_session_token']).toBeUndefined();
+    expect(chromeMock._localStore['agi_dev_bearer_token']).toBeUndefined();
+    expect(clerkAuthMock.signOutClerk).toHaveBeenCalledOnce();
   });
 });
 
@@ -1584,6 +1630,57 @@ describe('streamFreeChat, model routing', () => {
     expect(body.skill_name).toBe('release-notes');
   });
 
+  it('reads canonical completion after a provider finish frame on a durable run', async () => {
+    const runId = '11111111-1111-4111-8111-111111111111';
+    const running = {
+      schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+      sessionId: 'conversation-1',
+      turnId: 'turn-1',
+      sequence: 0,
+      emittedAtMs: 1_752_000_000_123,
+      event: { type: 'task-state-changed', taskId: 'task-1', state: 'running' },
+    } as const;
+    const ready = {
+      ...running,
+      sequence: 1,
+      emittedAtMs: running.emittedAtMs + 1,
+      event: {
+        type: 'task-state-changed',
+        taskId: 'task-1',
+        previousState: 'running',
+        state: 'ready_for_review',
+      },
+    } as const;
+    fetchMock.mockResolvedValueOnce(
+      makeStreamResponse(
+        [
+          JSON.stringify({ choices: [{ delta: { x_agent_event: running }, finish_reason: null }] }),
+          JSON.stringify({
+            choices: [{ delta: { content: 'Document answer' }, finish_reason: 'stop' }],
+          }),
+          JSON.stringify({ choices: [{ delta: { x_agent_event: ready }, finish_reason: null }] }),
+          '[DONE]',
+        ],
+        200,
+        {
+          'X-AGI-Agent-Run-Id': runId,
+          'X-AGI-Agent-Run-URL': `/api/llm/v1/chat/completions/runs/${runId}`,
+        },
+      ),
+    );
+    const chunks = await collectChunks(
+      streamFreeChat(SAMPLE_MESSAGES, 'token', { model: FREE_TRIAL_MODEL }),
+    );
+    expect(chunks).toContainEqual({ type: 'agent-event', envelope: ready });
+    expect(chunks).toContainEqual({
+      type: 'run',
+      run: expect.objectContaining({ runId, lastSequence: 1, state: 'ready_for_review' }),
+    });
+    expect(chunks.at(-1)).toEqual({ type: 'done' });
+    expect(chunks.filter((chunk) => chunk.type === 'done')).toHaveLength(1);
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
   it('emits the validated run handle and canonical activity event', async () => {
     const runId = '11111111-1111-4111-8111-111111111111';
     const envelope = {
@@ -1606,6 +1703,7 @@ describe('streamFreeChat, model routing', () => {
             choices: [{ delta: { x_agent_event: envelope }, finish_reason: null }],
           }),
           JSON.stringify({ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] }),
+          '[DONE]',
         ],
         200,
         {

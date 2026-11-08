@@ -31,6 +31,12 @@ export const MESSAGE_POLICY: Record<string, MessageTypePolicy> = {
   AUTO_FILL_JOB_APPLICATION: { senderClass: 'allowlisted-tab', allowsCrossTab: false },
   FIND_ELEMENTS: { senderClass: 'allowlisted-tab', allowsCrossTab: false },
   FILL_FIELDS: { senderClass: 'allowlisted-tab', allowsCrossTab: false },
+  FILL_APPLICATION_CONTACT: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  FILL_OBSERVED_FORM: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  APPLY_EDITABLE_SELECTION: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  UNDO_EDITABLE_SELECTION: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  CAPTURE_EDITABLE_SELECTION: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  CHECK_SITE_ONCE: { senderClass: 'extension-page-only', allowsCrossTab: true },
 
   CREATE_SCHEDULED_TASK: { senderClass: 'extension-page-only', allowsCrossTab: true },
   UPDATE_SCHEDULED_TASK: { senderClass: 'extension-page-only', allowsCrossTab: true },
@@ -331,8 +337,8 @@ export const ALLOWED_SHORTCUT_ACTION_TYPES = new Set<string>([
   'hold_key',
 ]);
 
-const MAX_SELECTOR_LENGTH = 1024;
-const MAX_VALUE_LENGTH = 16384;
+export const MAX_SELECTOR_LENGTH = 1024;
+export const MAX_VALUE_LENGTH = 16384;
 const MAX_URL_LENGTH = 2048;
 const FORBIDDEN_URL_SCHEMES = ['javascript:', 'data:', 'vbscript:', 'file:'];
 

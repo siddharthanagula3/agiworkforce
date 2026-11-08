@@ -51,6 +51,14 @@ describe('user site blocklist', () => {
     expect(await unblockSite('https://bank.example', storage)).toEqual([]);
     const broken = { get: vi.fn(async () => Promise.reject(new Error('gone'))), set: vi.fn() };
     expect(await readUserSiteBlocklist(broken)).toEqual([]);
+    await expect(readUserSiteBlocklist(broken, { failClosed: true })).rejects.toThrow(
+      'permissions are unavailable',
+    );
+    await expect(
+      readUserSiteBlocklist(memoryStorage({ [USER_SITE_BLOCKLIST_STORAGE_KEY]: ['not a site'] }), {
+        failClosed: true,
+      }),
+    ).rejects.toThrow('permissions are unavailable');
   });
 });
 

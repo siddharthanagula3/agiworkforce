@@ -5,6 +5,8 @@ import {
   ManagedCloudChatHttpError,
   parseGeneratedFilesDelta,
   readPersistedInteractiveCards,
+  readPersistedAttachments,
+  resolveChatAttachmentMimeType,
   resolveVisibleThread,
   type ManagedCloudAccountWorkspaces,
   type ManagedCloudConversation,
@@ -176,7 +178,7 @@ function isManagedHistoryMessage(
   return true;
 }
 
-function projectPublicHistoryMessage(message: ManagedCloudMessage): HistoryMessage | null {
+export function projectPublicHistoryMessage(message: ManagedCloudMessage): HistoryMessage | null {
   if (message.role !== 'user' && message.role !== 'assistant') return null;
   const timestamp = Date.parse(message.createdAt);
   if (!ManagedCloudCreateMessageRequestSchema.shape.id.safeParse(message.id).success)
@@ -202,6 +204,14 @@ function projectPublicHistoryMessage(message: ManagedCloudMessage): HistoryMessa
   });
   const generatedFiles = parseGeneratedFilesDelta({ files });
   const interactiveCards = readPersistedInteractiveCards(metadata);
+  const attachments = (readPersistedAttachments(metadata['attachments']) ?? []).flatMap(
+    (attachment) => {
+      const mimeType = resolveChatAttachmentMimeType(attachment.name, attachment.mimeType ?? '');
+      return mimeType
+        ? [{ kind: attachment.type, assetId: attachment.assetId, name: attachment.name, mimeType }]
+        : [];
+    },
+  );
   return {
     role: message.role,
     content: boundedPublicContent(message),
@@ -211,6 +221,12 @@ function projectPublicHistoryMessage(message: ManagedCloudMessage): HistoryMessa
     ...(message.model ? { model: message.model } : {}),
     ...(message.provider ? { provider: message.provider } : {}),
     ...(metadata['managedQuickMode'] === true ? { managedQuickMode: true } : {}),
+    ...(message.role === 'assistant' && metadata['agiWorkPlanDeclined'] === true
+      ? { agiWorkPlanDeclined: true }
+      : {}),
+    ...(message.role === 'user' && Object.prototype.hasOwnProperty.call(metadata, 'attachments')
+      ? { attachments }
+      : {}),
     ...(generatedFiles.length > 0 ? { generatedFiles } : {}),
     ...(interactiveCards.length > 0 ? { interactiveCards } : {}),
   };

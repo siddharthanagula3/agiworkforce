@@ -118,44 +118,75 @@ async function select(
 }
 
 describe('approved DOM dropdown selection', () => {
-  it.each(['https://example.com/form', 'https://chase.com/transfer', null])(
-    'always asks on %s regardless of autonomy or target metadata',
-    (pageUrl) => {
+  it.each([
+    { pageUrl: 'https://example.com/form', expected: { alwaysAsk: true, reason: 'selection' } },
+    {
+      pageUrl: 'https://chase.com/transfer',
+      expected: { alwaysAsk: true, reason: 'sensitive_site', siteClass: 'banking' },
+    },
+    { pageUrl: null, expected: { alwaysAsk: true, reason: 'unidentified_input' } },
+  ])(
+    'classifies the page context before ordinary dropdown policy: $pageUrl',
+    ({ pageUrl, expected }) => {
       const requirement = approvalRequirement({
         toolName: 'select_option',
-        args: { index: 3, label: 'Beta' },
+        args: { index: 3, matchBy: 'label', option: 'Beta' },
         pageUrl,
         targetSignature: harness.signature,
       });
-      expect(requirement).toEqual({ alwaysAsk: true, reason: 'selection' });
-      expect(describeApprovalReason(requirement)).toContain('may submit a form');
+      expect(requirement).toEqual(expected);
+      expect(describeApprovalReason(requirement)).not.toBeNull();
     },
   );
 
+  it('keeps a declined permission dropdown from reaching the page', async () => {
+    harness.signature = 'select|||memberRole|Member role';
+    const approve = vi.fn(async () => false);
+    const { text } = await select(
+      { index: 3, matchBy: 'value', option: 'admin' },
+      { onBeforeAction: approve },
+    );
+    expect(approve).toHaveBeenCalledWith('select_option', expect.any(Object), undefined, {
+      alwaysAsk: true,
+      reason: 'permission_change',
+    });
+    expect(harness.selectOption).not.toHaveBeenCalled();
+    expect(text).toContain('skipped');
+  });
+
   it('offers only the indexed, exact-choice contract and names the chosen option', () => {
     const tool = BROWSER_TOOL_DEFINITIONS.find((entry) => entry.function.name === 'select_option')!;
-    expect(Object.keys(tool.function.parameters.properties)).toEqual(['index', 'value', 'label']);
+    expect(Object.keys(tool.function.parameters.properties)).toEqual([
+      'index',
+      'matchBy',
+      'option',
+    ]);
     expect(tool.function.parameters).toMatchObject({
-      required: ['index'],
+      required: ['index', 'matchBy', 'option'],
+      properties: { matchBy: { type: 'string', enum: ['value', 'label'] } },
       additionalProperties: false,
     });
     for (const keyword of ['oneOf', 'allOf', 'anyOf']) {
       expect(tool.function.parameters).not.toHaveProperty(keyword);
     }
-    expect(describeComputerUseAction('select_option', { index: 3, label: 'Beta' })).toBe(
-      'Choose option "Beta" in dropdown [3].',
-    );
-    expect(describeComputerUseAction('select_option', { index: 3, value: 'b' })).toBe(
-      'Choose value "b" in dropdown [3].',
-    );
+    expect(
+      describeComputerUseAction('select_option', { index: 3, matchBy: 'label', option: 'Beta' }),
+    ).toBe('Choose option "Beta" in dropdown [3].');
+    expect(
+      describeComputerUseAction('select_option', { index: 3, matchBy: 'value', option: 'b' }),
+    ).toBe('Choose value "b" in dropdown [3].');
   });
 
-  it.each([{ value: 'b' }, { label: 'Beta' }])(
+  it.each([
+    { matchBy: 'value', option: 'b', expected: { value: 'b' } },
+    { matchBy: 'label', option: 'Beta', expected: { label: 'Beta' } },
+  ])(
     'executes the approved exact choice %j and verifies the page afterward',
-    async (choice) => {
+    async ({ matchBy, option, expected }) => {
       const approval = vi.fn(async () => true);
-      const { text, steps } = await select({ index: 3, ...choice }, { onBeforeAction: approval });
-      expect(approval).toHaveBeenCalledWith('select_option', { index: 3, ...choice }, undefined, {
+      const args = { index: 3, matchBy, option };
+      const { text, steps } = await select(args, { onBeforeAction: approval });
+      expect(approval).toHaveBeenCalledWith('select_option', args, undefined, {
         alwaysAsk: true,
         reason: 'selection',
       });
@@ -163,7 +194,7 @@ describe('approved DOM dropdown selection', () => {
       expect(harness.selectOption).toHaveBeenCalledExactlyOnceWith(
         7,
         3,
-        choice,
+        expected,
         undefined,
         'select|||flavor|Choose flavor',
       );
@@ -188,12 +219,36 @@ describe('approved DOM dropdown selection', () => {
       eventSource: 'dom',
       changed: false,
     });
-    const { text } = await select({ index: 3, value: 'b' }, { onBeforeAction: async () => true });
+    const { text } = await select(
+      { index: 3, matchBy: 'value', option: 'b' },
+      { onBeforeAction: async () => true },
+    );
     expect(text).toContain('already selected; no new input/change events were sent');
   });
 
+  it('keeps an explicitly requested empty value distinct from a missing choice', async () => {
+    harness.selectOption.mockResolvedValue({
+      selectedValue: '',
+      selectedLabel: 'None',
+      eventSource: 'dom',
+      changed: true,
+    });
+    const { text } = await select(
+      { index: 3, matchBy: 'value', option: '' },
+      { onBeforeAction: async () => true },
+    );
+    expect(harness.selectOption).toHaveBeenCalledExactlyOnceWith(
+      7,
+      3,
+      { value: '' },
+      undefined,
+      'select|||flavor|Choose flavor',
+    );
+    expect(text).toContain('Selected option "None" (value "")');
+  });
+
   it('refuses unattended selection even when there is no approval preference callback', async () => {
-    const { text } = await select({ index: 3, value: 'b' });
+    const { text } = await select({ index: 3, matchBy: 'value', option: 'b' });
     expect(text).toContain('This run has no way to ask');
     expect(harness.selectOption).not.toHaveBeenCalled();
   });
@@ -203,20 +258,23 @@ describe('approved DOM dropdown selection', () => {
       maxSteps: 2,
       siteTools: [{ name: 'select_option', effect: 'read', source: 'imperative' }],
     };
-    const { text } = await select({ index: 3, value: 'b' }, legacyOptions);
+    const { text } = await select({ index: 3, matchBy: 'value', option: 'b' }, legacyOptions);
     expect(text).toContain('This run has no way to ask');
     expect(harness.selectOption).not.toHaveBeenCalled();
   });
 
   it('does not execute after Skip', async () => {
-    const { text } = await select({ index: 3, value: 'b' }, { onBeforeAction: async () => false });
+    const { text } = await select(
+      { index: 3, matchBy: 'value', option: 'b' },
+      { onBeforeAction: async () => false },
+    );
     expect(text).toContain('Action skipped');
     expect(harness.selectOption).not.toHaveBeenCalled();
   });
 
   it('refuses a dropdown replaced during approval', async () => {
     const { text } = await select(
-      { index: 3, value: 'b' },
+      { index: 3, matchBy: 'value', option: 'b' },
       {
         onBeforeAction: async () => {
           harness.signature = 'select|||permission|Share permissions';
@@ -234,7 +292,7 @@ describe('approved DOM dropdown selection', () => {
     ).getMockImplementation();
     try {
       const { text } = await select(
-        { index: 3, value: 'b' },
+        { index: 3, matchBy: 'value', option: 'b' },
         {
           onBeforeAction: async () => {
             (chrome.tabs.get as unknown as ReturnType<typeof vi.fn>).mockImplementation(
@@ -253,20 +311,26 @@ describe('approved DOM dropdown selection', () => {
 
   it('refuses a target whose live signature cannot be read', async () => {
     harness.signature = null;
-    const { text } = await select({ index: 3, value: 'b' }, { onBeforeAction: async () => true });
+    const { text } = await select(
+      { index: 3, matchBy: 'value', option: 'b' },
+      { onBeforeAction: async () => true },
+    );
     expect(text).toContain('dropdown target could not be identified');
     expect(harness.selectOption).not.toHaveBeenCalled();
   });
 
   it.each([
+    { index: 4, value: '', label: 'Option 2' },
     { index: 3, value: 'b', label: 'Beta' },
-    { index: 3, value: 'b', selector: '#flavor' },
+    { index: 3, matchBy: 'value', option: 'b', selector: '#flavor' },
     { index: 3, script: 'document.querySelector("select").value="b"' },
-    { index: 3.5, value: 'b' },
-    { index: 3, value: 7 },
+    { index: 3.5, matchBy: 'value', option: 'b' },
+    { index: 3, matchBy: 'guess', option: 'b' },
+    { index: 3, matchBy: 'value', option: 7 },
+    { index: 3, option: 'b' },
   ])('refuses malformed or broader arguments %j', async (args) => {
     const { text } = await select(args, { onBeforeAction: async () => true });
-    expect(text).toContain('exactly one string value or label');
+    expect(text).toContain('matchBy');
     expect(harness.selectOption).not.toHaveBeenCalled();
   });
 
@@ -276,7 +340,10 @@ describe('approved DOM dropdown selection', () => {
     'The current target is not a connected select control.',
   ])('conveys driver refusal: %s', async (reason) => {
     harness.selectOption.mockRejectedValue(new Error(reason));
-    const { text } = await select({ index: 3, value: 'b' }, { onBeforeAction: async () => true });
+    const { text } = await select(
+      { index: 3, matchBy: 'value', option: 'b' },
+      { onBeforeAction: async () => true },
+    );
     expect(text).toBe(`Tool error: ${reason}`);
     expect(harness.getPageContent).toHaveBeenCalledOnce();
   });

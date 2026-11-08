@@ -19,6 +19,7 @@ import { configuredAgiWebOrigin } from '../../lib/webOrigin';
 import {
   AgentEventSchema,
   parseAgentEventDelta,
+  readManagedCloudAgentRunHandle,
   ToolApprovalResumeErrorResponseSchema,
   type ToolApprovalResumeErrorResponse,
 } from '@agiworkforce/cloud-contracts';
@@ -347,6 +348,7 @@ async function callCloudRequest(
     );
   }
 
+  const durableRun = readManagedCloudAgentRunHandle(response) !== null;
   const reader = response.body?.getReader();
   if (!reader) throw new Error('callCloud: response body is not readable');
 
@@ -452,7 +454,7 @@ async function callCloudRequest(
         'protocol_error',
       );
 
-    if (choice.finish_reason === 'stop' && !toolHandoff) isDone = true;
+    if (choice.finish_reason === 'stop' && !toolHandoff && !durableRun) isDone = true;
 
     if (!delta) {
       if (choice.finish_reason === 'stop' && !toolHandoff) toolCallsAcc.clear();

@@ -127,11 +127,11 @@ function defaultSendCommandImpl(
       const indexMap: Record<string, { selector: string; signature: string }> = {
         '1': {
           selector: 'html > body:nth-of-type(1) > button:nth-of-type(1)',
-          signature: 'button||||Submit',
+          signature: 'button||||Submit|Submit',
         },
         '2': {
           selector: 'html > body:nth-of-type(1) > input:nth-of-type(1)',
-          signature: 'input||email|email|',
+          signature: 'input||email|email||email',
         },
       };
       callback({
@@ -445,9 +445,15 @@ describe('P1-1: waitForStable gate', () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
+        headers: new Headers(),
         body: makeToolCallSseStream('read_dom', '{}'),
       })
-      .mockResolvedValueOnce({ ok: true, status: 200, body: makeFinalSseStream() });
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        body: makeFinalSseStream(),
+      });
 
     await runAgentLoop('Test stable gate', 42, { maxSteps: 5 });
 
@@ -461,12 +467,18 @@ describe('P1-1: waitForStable gate', () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
+        headers: new Headers(),
         body: makeToolCallSseStream(
           'navigate',
           JSON.stringify({ url: 'https://example.com/jobs' }),
         ),
       })
-      .mockResolvedValueOnce({ ok: true, status: 200, body: makeFinalSseStream() });
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        body: makeFinalSseStream(),
+      });
 
     await runAgentLoop('Navigate test', 42, { maxSteps: 3 });
 
@@ -541,9 +553,15 @@ describe('P1-2: index-based targeting', () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
+        headers: new Headers(),
         body: makeToolCallSseStream('click', JSON.stringify({ index: 1 })),
       })
-      .mockResolvedValueOnce({ ok: true, status: 200, body: makeFinalSseStream() });
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        body: makeFinalSseStream(),
+      });
 
     await runAgentLoop('Click by index', 42, { maxSteps: 5, onBeforeAction: () => true });
 
@@ -569,7 +587,12 @@ describe('P1-2: index-based targeting', () => {
   });
 
   it('system prompt tells model to prefer acting by integer index', async () => {
-    fetchMock.mockResolvedValueOnce({ ok: true, status: 200, body: makeFinalSseStream() });
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: new Headers(),
+      body: makeFinalSseStream(),
+    });
     await runAgentLoop('Check system prompt', 42, { maxSteps: 1 });
 
     const body = JSON.parse(
@@ -623,9 +646,15 @@ describe('P1-3: post-action verification', () => {
         .mockResolvedValueOnce({
           ok: true,
           status: 200,
+          headers: new Headers(),
           body: makeToolCallSseStream('type', JSON.stringify({ index: 2, text: 'Ada' })),
         })
-        .mockResolvedValueOnce({ ok: true, status: 200, body: makeFinalSseStream() });
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          headers: new Headers(),
+          body: makeFinalSseStream(),
+        });
       const onProgress = vi.fn();
       await runAgentLoop('Type Ada into the name field', 42, {
         maxSteps: 3,
@@ -653,7 +682,8 @@ describe('P1-3: post-action verification', () => {
       const result = onProgress.mock.calls
         .map(([step]) => step)
         .find((step) => step.kind === 'tool_result' && step.toolName === 'type');
-      expect(result.toolResult).toContain('no observable change');
+      expect(result.toolResult).toContain('WARNING: field [2] value is');
+      expect(result.toolResult).toContain('Element may not have accepted input.');
     },
   );
 
@@ -733,6 +763,7 @@ describe('P1-3: post-action verification', () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
+        headers: new Headers(),
         body: makeToolCallSseStream(
           'navigate',
           JSON.stringify({ url: 'https://example.com/jobs' }),
@@ -742,7 +773,7 @@ describe('P1-3: post-action verification', () => {
         capturedMessages = (
           JSON.parse(init.body as string) as { messages: typeof capturedMessages }
         ).messages;
-        return { ok: true, status: 200, body: makeFinalSseStream() };
+        return { ok: true, status: 200, headers: new Headers(), body: makeFinalSseStream() };
       });
 
     await runAgentLoop('Navigate', 42, { maxSteps: 3 });
@@ -765,13 +796,14 @@ describe('P1-3: post-action verification', () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
+        headers: new Headers(),
         body: makeToolCallSseStream('click', JSON.stringify({ index: 1 })),
       })
       .mockImplementationOnce(async (_url: string, init: RequestInit) => {
         capturedMessages = (
           JSON.parse(init.body as string) as { messages: typeof capturedMessages }
         ).messages;
-        return { ok: true, status: 200, body: makeFinalSseStream() };
+        return { ok: true, status: 200, headers: new Headers(), body: makeFinalSseStream() };
       });
 
     await runAgentLoop('Click with verification', 42, { maxSteps: 3, onBeforeAction: () => true });
@@ -895,7 +927,12 @@ describe('P1-4: debugger auto-reattach on eviction', () => {
   });
 
   it('runAgentLoop forwards its detach handler to the driver registry', async () => {
-    fetchMock.mockResolvedValueOnce({ ok: true, status: 200, body: makeFinalSseStream() });
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: new Headers(),
+      body: makeFinalSseStream(),
+    });
     const onDebuggerDetachedByUser = vi.fn();
 
     const loop = runAgentLoop('Detach wiring', 42, { maxSteps: 1, onDebuggerDetachedByUser });
@@ -925,7 +962,12 @@ describe('P1-4: debugger auto-reattach on eviction', () => {
   });
 
   it('runAgentLoop registers the tab and unregisters it on completion', async () => {
-    fetchMock.mockResolvedValueOnce({ ok: true, status: 200, body: makeFinalSseStream() });
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: new Headers(),
+      body: makeFinalSseStream(),
+    });
 
     await runAgentLoop('Tab lifecycle test', 42, { maxSteps: 1 });
 
@@ -939,9 +981,15 @@ describe('P2-5: approval gate, fail-CLOSED on timeout', () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
+        headers: new Headers(),
         body: makeToolCallSseStream('click', JSON.stringify({ index: 1 })),
       })
-      .mockResolvedValueOnce({ ok: true, status: 200, body: makeFinalSseStream() });
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        body: makeFinalSseStream(),
+      });
 
     const denyAll = vi.fn().mockResolvedValue(false);
     const onProgress = vi.fn();
@@ -980,9 +1028,15 @@ describe('P2-5: approval gate, fail-CLOSED on timeout', () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
+        headers: new Headers(),
         body: makeToolCallSseStream('read_dom', '{}'),
       })
-      .mockResolvedValueOnce({ ok: true, status: 200, body: makeFinalSseStream() });
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        body: makeFinalSseStream(),
+      });
 
     const allowAll = vi.fn().mockResolvedValue(true);
     const result = await runAgentLoop('Read DOM', 42, {
@@ -1007,9 +1061,15 @@ describe('P2-5: approval gate, fail-CLOSED on timeout', () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
+        headers: new Headers(),
         body: makeToolCallSseStream('read_dom', '{}'),
       })
-      .mockResolvedValueOnce({ ok: true, status: 200, body: makeFinalSseStream() });
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        body: makeFinalSseStream(),
+      });
 
     const neverResolves = vi.fn(() => new Promise<boolean>(() => {}));
 
@@ -1198,6 +1258,7 @@ describe('P2-6: content fencing + injection heuristic', () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,
       status: 200,
+      headers: new Headers(),
       body: makeToolCallSseStream('read_dom', '{}'),
     });
 
@@ -1207,7 +1268,12 @@ describe('P2-6: content fencing + injection heuristic', () => {
   });
 
   it('system prompt includes CONTENT TRUST and UNTRUSTED labels', async () => {
-    fetchMock.mockResolvedValueOnce({ ok: true, status: 200, body: makeFinalSseStream() });
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: new Headers(),
+      body: makeFinalSseStream(),
+    });
     await runAgentLoop('Prompt trust test', 42, { maxSteps: 1 });
 
     const body = JSON.parse(
@@ -1220,14 +1286,19 @@ describe('P2-6: content fencing + injection heuristic', () => {
 });
 
 describe('P2-7: screenshot discipline + usage tracking', () => {
-  it('initial turn attaches exactly ONE screenshot', async () => {
-    fetchMock.mockResolvedValueOnce({ ok: true, status: 200, body: makeFinalSseStream() });
+  it('starts with DOM context and no screenshot by default', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: new Headers(),
+      body: makeFinalSseStream(),
+    });
     await runAgentLoop('Screenshot discipline', 42, { maxSteps: 1 });
 
     const screenshotCalls = chromeMock.debugger.sendCommand.mock.calls.filter(
       (c: unknown[]) => c[1] === 'Page.captureScreenshot',
     );
-    expect(screenshotCalls.length).toBe(1);
+    expect(screenshotCalls.length).toBe(0);
   });
 
   it('read_dom step does NOT auto-attach a screenshot', async () => {
@@ -1235,20 +1306,31 @@ describe('P2-7: screenshot discipline + usage tracking', () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
+        headers: new Headers(),
         body: makeToolCallSseStream('read_dom', '{}'),
       })
-      .mockResolvedValueOnce({ ok: true, status: 200, body: makeFinalSseStream() });
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        body: makeFinalSseStream(),
+      });
 
     await runAgentLoop('Two-step test', 42, { maxSteps: 5 });
 
     const screenshotCalls = chromeMock.debugger.sendCommand.mock.calls.filter(
       (c: unknown[]) => c[1] === 'Page.captureScreenshot',
     );
-    expect(screenshotCalls.length).toBe(1);
+    expect(screenshotCalls.length).toBe(0);
   });
 
   it('callCloud returns tokensUsed=0 when gateway does not emit usage', async () => {
-    fetchMock.mockResolvedValueOnce({ ok: true, status: 200, body: makeFinalSseStream('done') });
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: new Headers(),
+      body: makeFinalSseStream('done'),
+    });
     const { tokensUsed } = await callCloud(
       [{ role: 'user', content: 'hello' }],
       'token',
@@ -1266,6 +1348,7 @@ describe('P2-7: screenshot discipline + usage tracking', () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,
       status: 200,
+      headers: new Headers(),
       body: makeSseStream([
         wire.slice(0, 2),
         wire.slice(2, contentStart + 4),
@@ -1297,7 +1380,7 @@ describe('P2-7: screenshot discipline + usage tracking', () => {
         cancelled(reason);
       },
     });
-    fetchMock.mockResolvedValueOnce({ ok: true, status: 200, body });
+    fetchMock.mockResolvedValueOnce({ ok: true, status: 200, headers: new Headers(), body });
 
     const stopReason = new Error('Computer-use run cancelled: user stopped');
     const request = callCloud(
@@ -1317,6 +1400,7 @@ describe('P2-7: screenshot discipline + usage tracking', () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,
       status: 200,
+      headers: new Headers(),
       body: makeUsageSseStream(100, 50),
     });
     const { tokensUsed } = await callCloud(
@@ -1335,6 +1419,7 @@ describe('P2-7: screenshot discipline + usage tracking', () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,
       status: 200,
+      headers: new Headers(),
       body: makeSseStream([`data: ${chunk}\n\n`, 'data: [DONE]\n\n']),
     });
     const { tokensUsed } = await callCloud(
@@ -1374,11 +1459,13 @@ describe('P2-7: screenshot discipline + usage tracking', () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
+        headers: new Headers(),
         body: makeSseStream([`data: ${toolCallChunk}\n\n`, 'data: [DONE]\n\n']),
       })
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
+        headers: new Headers(),
         body: makeSseStream([`data: ${finalChunk}\n\n`, 'data: [DONE]\n\n']),
       });
 
@@ -1394,7 +1481,12 @@ describe('P2-7: screenshot discipline + usage tracking', () => {
   });
 
   it('onUsageUpdate receives maxSteps and stepsUsed', async () => {
-    fetchMock.mockResolvedValueOnce({ ok: true, status: 200, body: makeFinalSseStream() });
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: new Headers(),
+      body: makeFinalSseStream(),
+    });
 
     const updates: AgentLoopUsage[] = [];
     await runAgentLoop('Usage meta', 42, {
@@ -1409,14 +1501,24 @@ describe('P2-7: screenshot discipline + usage tracking', () => {
   });
 
   it('runAgentLoop result includes totalTokens field', async () => {
-    fetchMock.mockResolvedValueOnce({ ok: true, status: 200, body: makeFinalSseStream() });
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: new Headers(),
+      body: makeFinalSseStream(),
+    });
     const result = await runAgentLoop('Token field test', 42, { maxSteps: 1 });
     expect(Object.prototype.hasOwnProperty.call(result, 'totalTokens')).toBe(true);
     expect(typeof result.totalTokens).toBe('number');
   });
 
   it('system prompt includes SCREENSHOT DISCIPLINE directive', async () => {
-    fetchMock.mockResolvedValueOnce({ ok: true, status: 200, body: makeFinalSseStream() });
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: new Headers(),
+      body: makeFinalSseStream(),
+    });
     await runAgentLoop('Prompt discipline', 42, { maxSteps: 1 });
 
     const body = JSON.parse(

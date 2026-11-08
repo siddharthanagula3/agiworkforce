@@ -9,6 +9,7 @@ import {
 } from '../src/features/cloud-bridge/managedCloudAuthority';
 import {
   CHAT_BROWSER_TASK_TOOL,
+  CHAT_AUTOFILL_TOOL,
   CHAT_READ_PAGE_TOOL,
   CHAT_TOOL_HANDOFF_TIMEOUT_MS,
   chatBrowserToolDefinitions,
@@ -96,7 +97,7 @@ describe('background chat tool handoff bridge', () => {
     });
     expect(
       resolved.status === 'resolved' && resolved.tools?.map((tool) => tool.function.name),
-    ).toEqual([CHAT_READ_PAGE_TOOL, CHAT_BROWSER_TASK_TOOL]);
+    ).toEqual([CHAT_READ_PAGE_TOOL, CHAT_BROWSER_TASK_TOOL, CHAT_AUTOFILL_TOOL]);
     expect(b.pending.size).toBe(0);
   });
 

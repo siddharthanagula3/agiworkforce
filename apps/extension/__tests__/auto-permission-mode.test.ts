@@ -61,7 +61,11 @@ describe('Auto acts without asking and stops for crucial actions', () => {
       false,
     );
     await expect(
-      asks('auto', { toolName: 'select_option', args: { index: 2, value: 'M' }, pageUrl: PAGE }),
+      asks('auto', {
+        toolName: 'select_option',
+        args: { index: 2, matchBy: 'value', option: 'M' },
+        pageUrl: PAGE,
+      }),
     ).resolves.toBe(false);
   });
 
@@ -80,6 +84,44 @@ describe('Auto acts without asking and stops for crucial actions', () => {
     expect(crucialActionCategory(approvalRequirement(input))).toBe(category);
     await expect(asks('auto', input)).resolves.toBe(true);
   });
+
+  it.each([
+    {
+      pageUrl: 'https://chase.com/transfer',
+      targetSignature: 'select|||account|Destination',
+      reason: 'sensitive_site',
+    },
+    {
+      pageUrl: 'https://example.com/settings/permissions',
+      targetSignature: 'select|||role|Role',
+      reason: 'permission_change',
+    },
+    {
+      pageUrl: PAGE,
+      targetSignature: 'select|||memberRole|Member role',
+      reason: 'permission_change',
+    },
+    { pageUrl: PAGE, targetSignature: 'select|||answer|Security code', reason: 'sensitive_input' },
+    { pageUrl: PAGE, targetSignature: 'select|||agreement|I agree to the terms', reason: 'terms' },
+    {
+      pageUrl: 'https://example.com/login',
+      targetSignature: 'select|||provider|Provider',
+      reason: 'authentication',
+    },
+  ])(
+    'keeps the crucial classification for dropdowns: $reason / $pageUrl',
+    async ({ pageUrl, targetSignature, reason }) => {
+      const input = {
+        toolName: 'select_option',
+        args: { index: 2, matchBy: 'value', option: 'choice' },
+        pageUrl,
+        targetSignature,
+      };
+      expect(approvalRequirement(input)).toMatchObject({ alwaysAsk: true, reason });
+      expect(isCrucialAction(approvalRequirement(input))).toBe(true);
+      await expect(asks('auto', input)).resolves.toBe(true);
+    },
+  );
 
   it('asks before entering a password or card number and before a download', async () => {
     await expect(

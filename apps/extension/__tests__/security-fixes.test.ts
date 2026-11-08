@@ -331,11 +331,11 @@ describe('H-10 side panel does not send apiKey on CHAT_MESSAGE', () => {
 describe('side panel page-context capture sanitizes raw innerText', () => {
   const sidePanelSource = readFileSync(join(__dirname, '..', 'src', 'side_panel.ts'), 'utf8');
 
-  it('passes executeScript innerText results through sanitizePageText before attaching context', () => {
-    const start = sidePanelSource.indexOf('async function capturePageContext');
-    const end = sidePanelSource.indexOf('function expandSlashCommand', start);
+  it('sanitizes the document-bound observation before attaching context', () => {
+    const start = sidePanelSource.indexOf('async function readTabText');
+    const end = sidePanelSource.indexOf('async function readLinkedPage', start);
     const body = sidePanelSource.slice(start, end);
-    expect(body).toContain('sanitizePageText(raw)');
+    expect(body).toContain('sanitizePageText(observation.text)');
     expect(body).not.toContain('resolve(results[0].result as string)');
   });
 });

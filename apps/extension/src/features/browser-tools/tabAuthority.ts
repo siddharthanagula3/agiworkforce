@@ -18,6 +18,37 @@ export interface AuthorizedTab {
   readonly url: string;
 }
 
+export interface AuthorizedTabSnapshot {
+  readonly authorized: AuthorizedTab;
+  readonly tab: chrome.tabs.Tab;
+}
+
+export async function readAuthorizedBrowserTab(
+  tabId: number,
+  options: {
+    assertCurrent: () => void | Promise<void>;
+    reauthorizeNavigation: (snapshot: AuthorizedTabSnapshot) => boolean | Promise<boolean>;
+  },
+): Promise<AuthorizedTabSnapshot> {
+  const read = async (): Promise<AuthorizedTabSnapshot> => {
+    await options.assertCurrent();
+    const authorized = await authorizeBrowserToolTab(tabId);
+    await options.assertCurrent();
+    const tab = await chrome.tabs.get(tabId);
+    await options.assertCurrent();
+    return { authorized, tab };
+  };
+  let snapshot = await read();
+  if (
+    snapshot.tab.url !== snapshot.authorized.url &&
+    (await options.reauthorizeNavigation(snapshot))
+  )
+    snapshot = await read();
+  if (snapshot.tab.url !== snapshot.authorized.url)
+    throw new Error('The browser tab changed while its access was being verified.');
+  return snapshot;
+}
+
 /**
  * The gate every download, console and network capability passes before it
  * touches a tab, held to the same bar as click and type: the tab's live origin

@@ -15,6 +15,7 @@ import {
   getConversation as getOwnedConversation,
   deleteConversation as deleteOwnedConversation,
   filterConversations,
+  conversationAwaitsProjectBinding,
   persistConversationSeed as persistOwnedConversationSeed,
   MAX_CONVERSATION_STORE_BYTES,
   type HistoryMessage,
@@ -825,6 +826,27 @@ describe('conversation-history', () => {
       if (original) Object.defineProperty(navigator, 'locks', original);
       else delete (navigator as Navigator & { locks?: LockManager }).locks;
     }
+  });
+
+  it('waits for selected, changed and cleared project bindings without delaying ordinary chats', async () => {
+    const entry = await upsertOwnedConversation(OWNER, 'project-admission', msgs(2));
+    if (!entry) throw new Error('Expected owned conversation');
+    entry.cloudSync = {
+      state: 'idle',
+      conversationId: '00000000-0000-4000-8000-000000000000',
+      createAcknowledged: true,
+      syncedProjectId: null,
+    };
+    expect(conversationAwaitsProjectBinding(undefined, undefined)).toBe(false);
+    expect(conversationAwaitsProjectBinding(undefined, 'project')).toBe(true);
+    expect(conversationAwaitsProjectBinding(entry, undefined)).toBe(false);
+    entry.projectId = 'project';
+    expect(conversationAwaitsProjectBinding(entry, undefined)).toBe(true);
+    entry.cloudSync.syncedProjectId = 'project';
+    expect(conversationAwaitsProjectBinding(entry, undefined)).toBe(false);
+    delete entry.projectId;
+    expect(conversationAwaitsProjectBinding(entry, undefined)).toBe(true);
+    expect(conversationAwaitsProjectBinding(entry, null)).toBe(true);
   });
 
   it('fails closed on a storage read error instead of overwriting durable history', async () => {

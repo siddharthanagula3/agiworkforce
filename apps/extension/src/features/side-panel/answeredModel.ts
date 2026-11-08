@@ -28,16 +28,24 @@ export function resolvedRouteFrom(
   return {
     model: metadata.id,
     provider: metadata.provider,
-    ...(chosenByAuto ? { autoRouteReason: routing.reason } : {}),
+    ...(chosenByAuto && metadata.id === routing.modelKey
+      ? { autoRouteReason: routing.reason }
+      : {}),
     ...(movedFrom && movedFrom !== metadata.id ? { movedFromModel: movedFrom } : {}),
   };
 }
 
-export function applyResolvedRoute(message: SidePanelChatMessage, route: ResolvedRoute): void {
+export function applyResolvedRoute(message: SidePanelChatMessage, route: ResolvedRoute): boolean {
+  const changed =
+    message.model !== route.model ||
+    message.provider !== route.provider ||
+    message.autoRouteReason !== route.autoRouteReason ||
+    message.movedFromModel !== route.movedFromModel;
   message.model = route.model;
   message.provider = route.provider;
   if (route.autoRouteReason) message.autoRouteReason = route.autoRouteReason;
   else delete message.autoRouteReason;
   if (route.movedFromModel) message.movedFromModel = route.movedFromModel;
   else delete message.movedFromModel;
+  return changed;
 }

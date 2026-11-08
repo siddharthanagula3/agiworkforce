@@ -325,7 +325,6 @@ export function approvalRequirement(input: ActionApprovalInput): ActionApprovalR
   }
   if (toolName === 'download_file') return { alwaysAsk: true, reason: 'download' };
   if (toolName === 'upload_file') return { alwaysAsk: true, reason: 'upload' };
-  if (toolName === 'select_option') return { alwaysAsk: true, reason: 'selection' };
   if (toolName === 'go_back' || toolName === 'go_forward')
     return { alwaysAsk: true, reason: 'history_navigation' };
   if (toolName === 'reload') return { alwaysAsk: true, reason: 'reload' };
@@ -344,6 +343,7 @@ export function approvalRequirement(input: ActionApprovalInput): ActionApprovalR
     toolName === 'type' ||
     toolName === 'hover' ||
     toolName === 'press_key' ||
+    toolName === 'select_option' ||
     gestures;
   if (acts && targets.some((entry) => targetsFileInput(input, entry))) {
     return { alwaysAsk: true, reason: 'upload' };
@@ -393,6 +393,7 @@ export function approvalRequirement(input: ActionApprovalInput): ActionApprovalR
   ) {
     return { alwaysAsk: true, reason: 'unidentified_input' };
   }
+  if (toolName === 'select_option') return { alwaysAsk: true, reason: 'selection' };
   return ASK_NOT_REQUIRED;
 }
 

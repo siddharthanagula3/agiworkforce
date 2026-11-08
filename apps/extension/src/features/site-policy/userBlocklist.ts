@@ -42,11 +42,22 @@ export function blockedSiteOrigin(value: string): string | null {
 
 export async function readUserSiteBlocklist(
   storage: BlocklistStorage = chromeLocal(),
+  options: { failClosed?: boolean } = {},
 ): Promise<string[]> {
   try {
     const stored = await storage.get(USER_SITE_BLOCKLIST_STORAGE_KEY);
+    const value = stored[USER_SITE_BLOCKLIST_STORAGE_KEY];
+    if (
+      options.failClosed &&
+      value !== undefined &&
+      value !== null &&
+      (!Array.isArray(value) ||
+        value.some((entry) => typeof entry !== 'string' || !normalizeApprovedSiteOrigin(entry)))
+    )
+      throw new Error('Site permissions are unavailable.');
     return sanitizeApprovedSiteOrigins(stored[USER_SITE_BLOCKLIST_STORAGE_KEY]);
   } catch {
+    if (options.failClosed) throw new Error('Site permissions are unavailable.');
     return [];
   }
 }

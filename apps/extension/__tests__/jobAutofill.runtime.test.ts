@@ -50,6 +50,26 @@ async function runAutofill(html, path, profile = BASE_PROFILE, options = {}) {
 }
 
 describe('runPlatformJobAutofill runtime', () => {
+  it('preserves technical words when matching a saved custom answer', async () => {
+    await runAutofill(
+      '<form><label>JavaScript proficiency<input id="js-level"></label></form>',
+      '/custom-form',
+      { customAnswers: { 'JavaScript proficiency': 'Advanced' } },
+      { platform: 'generic' },
+    );
+    expect((document.getElementById('js-level') as HTMLInputElement).value).toBe('Advanced');
+  });
+
+  it('uses the company answer for a machine-style company-name label', async () => {
+    await runAutofill(
+      '<form><label>CompanyName<input id="org"></label></form>',
+      '/custom-form',
+      { fullName: 'Person Name', currentCompany: 'Actual Company' },
+      { platform: 'generic' },
+    );
+    expect((document.getElementById('org') as HTMLInputElement).value).toBe('Actual Company');
+  });
+
   it('does not read a bare /application path as greenhouse', () => {
     expect(detectPlatformFromUrl('https://careers.example.com/jobs/42/application')).toBe(
       'unknown',

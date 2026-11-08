@@ -389,8 +389,11 @@ export class TaskTabs {
           );
         returnTabId = requestedReturn;
         returnUrl = (await this.read(returnTabId)).url;
-      } else if (args['returnToTabId'] !== undefined)
-        throw new Error('returnToTabId is only used when closing the current task tab.');
+      } else if (
+        args['returnToTabId'] !== undefined &&
+        (args['returnToTabId'] !== sourceTabId || !source.active)
+      )
+        throw new Error('Closing an inactive tab may only retain the active current task tab.');
     }
     const plan = Object.freeze({
       action,

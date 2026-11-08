@@ -1,7 +1,9 @@
+import type { SidePanelMessageAttachment } from '../side-panel/chat-state';
 import {
   createManagedCloudChatClient,
   MANAGED_CLOUD_CHAT_MAX_METADATA_LENGTH,
   managedCloudMetadataLength,
+  durableAttachmentDescriptors,
   type GeneratedFileWire,
   type ManagedCloudChatClient,
   type ManagedCloudChatFetch,
@@ -66,7 +68,9 @@ export interface ExtensionCloudMessageMetadataInput {
   provider?: string;
   generatedFiles?: GeneratedFileWire[];
   interactiveCards?: InteractiveCard[];
+  attachments?: readonly SidePanelMessageAttachment[];
   error?: boolean;
+  agiWorkPlanDeclined?: boolean;
 }
 
 export function buildExtensionCloudMessageMetadata(
@@ -81,10 +85,11 @@ export function buildExtensionCloudMessageMetadata(
     ...(input.model ? { model: input.model.slice(0, 200) } : {}),
     ...(input.provider ? { provider: input.provider.slice(0, 100) } : {}),
     ...(input.error ? { error: true } : {}),
+    ...(input.agiWorkPlanDeclined ? { agiWorkPlanDeclined: true } : {}),
   };
 
   const appendIfBounded = (
-    field: 'generatedFiles' | 'interactiveCards',
+    field: 'generatedFiles' | 'interactiveCards' | 'attachments',
     value: unknown,
   ): boolean => {
     const current = Array.isArray(metadata[field]) ? (metadata[field] as unknown[]) : [];
@@ -94,6 +99,22 @@ export function buildExtensionCloudMessageMetadata(
     metadata[field] = candidate[field];
     return true;
   };
+
+  if (input.attachments !== undefined) {
+    metadata['attachments'] = [];
+    const attachments = durableAttachmentDescriptors(
+      input.attachments.map((attachment) => ({
+        id: attachment.assetId ?? '',
+        assetId: attachment.assetId,
+        type: attachment.kind,
+        name: attachment.name,
+        mimeType: attachment.mimeType,
+      })),
+    );
+    for (const attachment of attachments ?? []) {
+      if (!appendIfBounded('attachments', attachment)) break;
+    }
+  }
 
   for (const file of input.generatedFiles ?? []) {
     if (

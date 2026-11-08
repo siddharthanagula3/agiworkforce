@@ -76,7 +76,12 @@ const harness = vi.hoisted(() => {
     },
     sidePanel: { setPanelBehavior: vi.fn(() => Promise.resolve()) },
     commands: { onCommand: event() },
-    action: { setBadgeText: vi.fn(), setBadgeBackgroundColor: vi.fn(), setTitle: vi.fn() },
+    action: {
+      onClicked: event(),
+      setBadgeText: vi.fn(),
+      setBadgeBackgroundColor: vi.fn(),
+      setTitle: vi.fn(),
+    },
     debugger: { onDetach: event() },
     i18n: { getMessage: (key: string) => key },
   };
@@ -250,6 +255,19 @@ describe('background stream cancellation', () => {
     });
   });
 
+  it('refreshes the cancellation token without changing its admitted owner', async () => {
+    await startChat('stream-renewed-stop');
+    harness.getAuthContext.mockResolvedValue({ owner, token: 'renewed-account-a-token' });
+    harness.cancelRun.mockImplementation(async (_run, dependencies) => {
+      expect(await dependencies.getAuthToken()).toBe('renewed-account-a-token');
+      return { status: 'success', run: cancelledRun };
+    });
+
+    const response = await dispatch({ type: 'CANCEL_STREAM', id: 'stream-renewed-stop', owner });
+    expect(response).toMatchObject({ success: true, cancellationConfirmed: true });
+    expect(signal?.aborted).toBe(true);
+  });
+
   it('rejects another account before aborting or cancelling the active account stream', async () => {
     await startChat('stream-owner-mismatch');
 
@@ -264,4 +282,26 @@ describe('background stream cancellation', () => {
     expect(harness.cancelRun).not.toHaveBeenCalled();
     expect(chunks()).toEqual([]);
   });
+
+  it.each(['LIST_MEMORIES', 'ADD_MEMORY', 'UPDATE_MEMORY', 'DELETE_MEMORY'])(
+    'refuses missing and mismatched owners for %s without a memory request',
+    async (type) => {
+      const requestsBefore = vi.mocked(fetch).mock.calls.length;
+      for (const requestOwner of [undefined, otherOwner]) {
+        const response = await dispatch({
+          type,
+          owner: requestOwner,
+          id: 'memory-id',
+          content: 'Old view draft',
+        });
+        expect(response).toMatchObject({ success: false, status: 'signed-out' });
+      }
+      expect(
+        vi
+          .mocked(fetch)
+          .mock.calls.slice(requestsBefore)
+          .filter(([url]) => String(url).includes('/api/memory')),
+      ).toEqual([]);
+    },
+  );
 });

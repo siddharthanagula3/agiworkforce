@@ -134,8 +134,8 @@ export function describeComputerUseAction(
         : 'Choose files for this page. AGI Cloud inspects approved files before sending their contents to this site.';
 
     case 'select_option': {
-      const mode = typeof a['label'] === 'string' ? 'option' : 'value';
-      const choice = typeof a['label'] === 'string' ? a['label'] : a['value'];
+      const mode = a['matchBy'] === 'label' ? 'option' : 'value';
+      const choice = a['option'];
       return `Choose ${mode} "${truncate(choice, 60)}" in dropdown [${String(a['index'])}].`;
     }
 

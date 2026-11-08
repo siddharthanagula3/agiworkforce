@@ -1957,7 +1957,7 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
       case 'type':
         return `Type: "${String(args?.['text'] ?? '').slice(0, 40)}"`;
       case 'select_option':
-        return `Choose option: ${String(args?.['label'] ?? args?.['value'] ?? '').slice(0, 60)}`;
+        return `Choose option: ${String(args?.['option'] ?? '').slice(0, 60)}`;
       case 'navigate':
         return `Navigate to: ${String(args?.['url'] ?? '').slice(0, 60)}`;
       case 'scroll':

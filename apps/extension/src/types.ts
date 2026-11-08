@@ -219,6 +219,11 @@ export interface GetPageInfoMessage extends BaseMessage {
   type: 'GET_PAGE_INFO';
 }
 
+export interface GetPageObservationMessage extends Omit<BaseMessage, 'type'> {
+  type: 'GET_PAGE_OBSERVATION';
+  pageUrl: string;
+}
+
 export interface GetPageInfoResponse {
   success: boolean;
   url?: string;
@@ -420,6 +425,7 @@ export interface RunPageAction {
 
 export interface RunPageActionsMessage extends BaseMessage {
   type: 'RUN_PAGE_ACTIONS';
+  expectedOrigin?: string;
   taskId: string;
   actions: RunPageAction[];
 }
@@ -429,6 +435,7 @@ export interface RunPageActionsResponse {
   taskId?: string;
   result?: unknown;
   actionsPerformed?: number;
+  actionsSkipped?: number;
   duration?: number;
   screenshot?: string;
   error?: string;
@@ -498,6 +505,12 @@ export interface GrantSiteOnceMessage extends BaseMessage {
 export interface RevokeSiteOnceMessage extends BaseMessage {
   type: 'REVOKE_SITE_ONCE';
   grantId: string;
+}
+
+export interface CheckSiteOnceMessage extends Omit<BaseMessage, 'type'> {
+  type: 'CHECK_SITE_ONCE';
+  grantId: string;
+  origin: string;
 }
 
 export interface CancelStreamMessage extends BaseMessage {
@@ -798,6 +811,7 @@ export interface UpdateShortcutMessage extends BaseMessage {
 export interface ReplayShortcutMessage extends BaseMessage {
   type: 'REPLAY_SHORTCUT';
   shortcutId: string;
+  modelSelection?: string;
 }
 
 export interface ShortcutResponse {
@@ -866,22 +880,26 @@ export interface ScheduledTaskResponse {
 
 export interface ListMemoriesMessage extends BaseMessage {
   type: 'LIST_MEMORIES';
+  owner: ManagedCloudOwner;
   offset?: number;
 }
 
 export interface AddMemoryMessage extends BaseMessage {
   type: 'ADD_MEMORY';
+  owner: ManagedCloudOwner;
   content: string;
 }
 
 export interface UpdateMemoryMessage extends BaseMessage {
   type: 'UPDATE_MEMORY';
+  owner: ManagedCloudOwner;
   id: string;
   content: string;
 }
 
 export interface DeleteMemoryMessage extends BaseMessage {
   type: 'DELETE_MEMORY';
+  owner: ManagedCloudOwner;
   id: string;
 }
 
@@ -940,12 +958,66 @@ export interface RunAutofillMessage {
   tabId?: number;
 }
 
+export interface FillApplicationContactMessage {
+  type: 'FILL_APPLICATION_CONTACT';
+  tabId: number;
+  pageUrl: string;
+  profile: JobApplicationProfile;
+  replaceExisting?: boolean;
+  owner: ManagedCloudOwner;
+}
+
+export interface FillObservedFormMessage extends Omit<BaseMessage, 'type'> {
+  type: 'FILL_OBSERVED_FORM';
+  tabId: number;
+  pageUrl: string;
+  documentId: string;
+  formSnapshotId: string;
+  plan: import('./features/content/formFillPlan').FormFillPlan;
+  owner: ManagedCloudOwner;
+}
+
 export interface BrowserContextTabReference {
   readonly tabId: number;
   readonly windowId: number;
   readonly url: string;
   readonly title: string;
   readonly documentId?: string;
+}
+
+export interface CaptureEditableSelectionMessage extends Omit<BaseMessage, 'type'> {
+  type: 'CAPTURE_EDITABLE_SELECTION';
+  pageUrl: string;
+  selectedText: string;
+  owner: ManagedCloudOwner;
+}
+
+export interface ApplyEditableSelectionMessage extends Omit<BaseMessage, 'type'> {
+  type: 'APPLY_EDITABLE_SELECTION';
+  tabId: number;
+  pageUrl: string;
+  documentId: string;
+  selectionId: string;
+  text: string;
+  owner: ManagedCloudOwner;
+}
+
+export interface UndoEditableSelectionMessage extends Omit<BaseMessage, 'type'> {
+  type: 'UNDO_EDITABLE_SELECTION';
+  tabId: number;
+  pageUrl: string;
+  documentId: string;
+  selectionId: string;
+  owner: ManagedCloudOwner;
+}
+
+export interface EditableSelectionResponse {
+  success: boolean;
+  selection?: { id: string; label: string; selectedText: string };
+  applied?: boolean;
+  verified?: boolean;
+  undoAvailable?: boolean;
+  error?: string;
 }
 
 export interface StartComputerUseMessage {
@@ -1111,6 +1183,7 @@ export type ExtensionMessage =
   | GetTextMessage
   | WaitForSelectorMessage
   | GetPageInfoMessage
+  | GetPageObservationMessage
   | ConnectionStatusMessage
   | GetCloudAuthTokenMessage
   | ManagedCloudAuthChangedMessage
@@ -1130,6 +1203,7 @@ export type ExtensionMessage =
   | ResolveChatToolsMessage
   | GrantSiteOnceMessage
   | RevokeSiteOnceMessage
+  | CheckSiteOnceMessage
   | InPagePromptMessage
   | OpenSidePanelMessage
   | OpenExtensionSettingsMessage
@@ -1172,6 +1246,11 @@ export type ExtensionMessage =
   | EnsureCloudConversationMessage
   | DeleteCloudConversationMessage
   | RunAutofillMessage
+  | FillApplicationContactMessage
+  | FillObservedFormMessage
+  | CaptureEditableSelectionMessage
+  | ApplyEditableSelectionMessage
+  | UndoEditableSelectionMessage
   | StartComputerUseMessage
   | ComputerUseApprovalRequestMessage
   | ComputerUseApprovalResponseMessage
@@ -1189,6 +1268,7 @@ export type ExtensionMessage =
   | ReadPageNetworkMessage;
 
 export type ExtensionResponse =
+  | EditableSelectionResponse
   | CaptureScreenshotResponse
   | ClickResponse
   | DoubleClickResponse

@@ -90,7 +90,9 @@ describe('composer attach button', () => {
 describe('More menu rows that open a tab', () => {
   it('end with an external-link mark that assistive technology skips', () => {
     expect(sidePanel).toContain("renderIcon(ExternalLink, 14, 'sp-external-mark')");
-    expect(sidePanel).toMatch(/const row = buildExternalMenuRow\(destination\.label\)/);
+    expect(sidePanel).toMatch(
+      /destination\.external === false[\s\S]*?: buildExternalMenuRow\(destination\.label\)/,
+    );
     expect(sidePanel).toContain('const openChatInWebItem = buildExternalMenuRow(');
     expect(sidePanel).toMatch(
       /\.sp-history-menu-item\.has-external-mark \{[^}]*justify-content: space-between;/,

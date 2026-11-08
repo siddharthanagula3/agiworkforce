@@ -9,6 +9,7 @@ interface ImportMetaEnv {
   readonly DEV: boolean;
   readonly VITE_AGI_WEB_API_BASE_URL?: string;
   readonly VITE_API_BASE_URL?: string;
+  readonly VITE_ARTIFACT_SANDBOX_ORIGIN?: string;
   readonly VITE_SENTRY_DSN?: string;
 }
 
@@ -25,4 +26,8 @@ declare module 'markdown-it-footnote' {
 declare module '*.css?inline' {
   const css: string;
   export default css;
+}
+declare module '*.png?inline' {
+  const image: string;
+  export default image;
 }

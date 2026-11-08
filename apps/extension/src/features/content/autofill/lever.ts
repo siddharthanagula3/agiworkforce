@@ -1,4 +1,18 @@
 import type { DetectedField } from './detector';
+import type { DomAutocompleteRule } from '../elementReader';
+import { resolveAutofillSelector } from '../../../jobAutofill.runtime.js';
+
+export const LEVER_DOM_CONTROL_RULES = [
+  {
+    selector: 'input.location-input[data-qa="location-input"][name="location"]',
+    questionSelector: '.application-label',
+    optionSelector: '.dropdown-results .dropdown-location',
+    emptySelector: '.dropdown-no-results',
+    popupSelector: '.dropdown-container',
+    selectionSelector: 'input[type="hidden"][name="selectedLocation"]',
+    selectionLabelKey: 'name',
+  },
+] as const satisfies readonly DomAutocompleteRule[];
 
 export const LEVER_SELECTORS: Record<string, string[]> = {
   fullName: [
@@ -155,10 +169,5 @@ export function detectLeverCustomFields(container: Element): LeverCustomField[] 
 export function resolveLeverSelector(
   key: string,
 ): { element: HTMLElement; selector: string } | null {
-  const selectors = LEVER_SELECTORS[key] ?? [];
-  for (const sel of selectors) {
-    const el = document.querySelector<HTMLElement>(sel);
-    if (el) return { element: el, selector: sel };
-  }
-  return null;
+  return resolveAutofillSelector(key, LEVER_SELECTORS[key] ?? []);
 }

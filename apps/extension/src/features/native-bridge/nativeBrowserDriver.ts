@@ -1,5 +1,5 @@
 import { BROWSER_COMMAND_TIMEOUT_MS } from '@agiworkforce/types';
-import { authorizeBrowserToolTab, authorizeBrowserToolUrl } from '../browser-tools/tabAuthority';
+import { readAuthorizedBrowserTab, authorizeBrowserToolUrl } from '../browser-tools/tabAuthority';
 import {
   click,
   getTargetSignature,
@@ -7,6 +7,7 @@ import {
   INPUT_CLEANUP_TIMEOUT_MS,
   navigate,
   navigateHistoryTarget,
+  stopLoading,
   registerActiveTab,
   resolveHistoryTarget,
   screenshot,
@@ -169,16 +170,21 @@ export class NativeBrowserDriver {
       this.assertExternalOwnership();
       if (this.disposed || tabId !== this.tabId || this.windowId === null || !this.sourceUrl)
         throw new Error('The original paired browser command lease changed.');
-      const authorized = await authorizeBrowserToolTab(tabId);
-      const tab = await chrome.tabs.get(tabId);
+      const { tab } = await readAuthorizedBrowserTab(tabId, {
+        assertCurrent: () => {
+          this.assertExternalOwnership();
+          if (!cleanup) throwIfCdpCancelled(this.signal);
+          if (this.disposed || tabId !== this.tabId || this.windowId === null || !this.sourceUrl)
+            throw new Error('The original paired browser command lease changed.');
+        },
+        reauthorizeNavigation: (snapshot) =>
+          this.destination !== null && snapshot.tab.url === this.destination,
+      });
       const window = await chrome.windows.getLastFocused();
       const [active] = await chrome.tabs.query({ active: true, windowId: this.windowId });
       if (window.id !== this.windowId || tab.windowId !== this.windowId || active?.id !== tabId)
         throw new Error('The original paired browser tab is no longer foreground.');
-      if (
-        authorized.url !== tab.url ||
-        (tab.url !== this.sourceUrl && tab.url !== this.destination)
-      )
+      if (tab.url !== this.sourceUrl && tab.url !== this.destination)
         throw new Error('The paired browser page changed outside the approved action.');
       if (this.session) {
         const current = await this.readDocument(
@@ -230,6 +236,11 @@ export class NativeBrowserDriver {
     const receipt = await typeIntoSelector(tabId, selector, text, clear, this.signal);
     await this.assertOwnership(tabId);
     return receipt;
+  }
+
+  async stop(tabId: number): Promise<void> {
+    await this.assertOwnership(tabId);
+    await stopLoading(tabId, this.signal);
   }
 
   async navigate(tabId: number, url: string): Promise<void> {

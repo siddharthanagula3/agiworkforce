@@ -31,6 +31,7 @@ export interface DesktopCommandContext {
   openTab?: (url: string) => Promise<unknown>;
   send: (tabId: number, message: Record<string, unknown>) => Promise<Record<string, unknown>>;
   navigate: (tabId: number, url: string) => Promise<void>;
+  stop?: (tabId: number) => Promise<void>;
   history: (tabId: number, direction: 'back' | 'forward') => Promise<void>;
   tabUrl: (tabId: number) => Promise<string>;
   capture: (tabId: number) => Promise<string>;
@@ -192,6 +193,11 @@ async function execute(
         await context.send(tabId, { type: 'FILL_FIELDS', fields: fillFields(args['fields']) }),
       );
       return { filled: response['filled'], failed: response['failed'] };
+    }
+    case 'browser_stop': {
+      if (!context.stop) throw new Error('The paired native browser driver is unavailable.');
+      await context.stop(tabId);
+      return { stopped: true };
     }
     case 'browser_history': {
       const direction = args['direction'];

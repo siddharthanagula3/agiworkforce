@@ -296,7 +296,7 @@ function isEligibleFieldForAutofillVisibility(element) {
   return Boolean(container);
 }
 
-function buildFieldDescriptor(element) {
+function buildFieldDescriptor(element, expandWords = false) {
   const parts = [
     element.getAttribute('name') || '',
     element.id || '',
@@ -306,7 +306,8 @@ function buildFieldDescriptor(element) {
     element.getAttribute('aria-label') || '',
     getFieldLabelText(element),
   ];
-  return normalize(parts.filter(Boolean).join(' '));
+  const descriptor = parts.filter(Boolean).join(' ');
+  return normalize(expandWords ? descriptor.replace(/([a-z0-9])([A-Z])/g, '$1 $2') : descriptor);
 }
 
 function matchesPattern(input, pattern) {
@@ -331,6 +332,23 @@ function resolveSemanticField(element, descriptor) {
     }
   }
 
+  return null;
+}
+
+export function isFullNameAutofillField(element) {
+  return resolveSemanticField(element, buildFieldDescriptor(element, true)) === 'fullName';
+}
+
+export function resolveAutofillSelector(key, selectors) {
+  for (const selector of selectors) {
+    const element = document.querySelector(selector);
+    if (
+      element instanceof HTMLElement &&
+      (key !== 'fullName' || isFullNameAutofillField(element))
+    ) {
+      return { element, selector };
+    }
+  }
   return null;
 }
 
@@ -933,7 +951,7 @@ async function runAutofillPass(platform, profile, options, alreadyFilled, deadli
       continue;
     }
 
-    const semantic = resolveSemanticField(field, descriptor);
+    const semantic = resolveSemanticField(field, buildFieldDescriptor(field, true));
     const resolved = resolveValueForField(semantic, descriptor, profile, options);
 
     if (!resolved) {

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as driver from '../src/features/computer-use/cdpDriver';
+import { createDomElementReader } from '../src/features/content/elementReader';
 import { createCdpInspectionFixture } from './fixtures/cdp-inspection';
 
 const inspection = createCdpInspectionFixture(document.location.href);
@@ -24,8 +25,20 @@ const send = vi.fn(
             value: JSON.stringify({
               summary: 'Synthetic focus fixture',
               indexMap: {
-                1: { selector: '#name', signature: 'input||text|name|Your name' },
-                2: { selector: '#button', signature: 'button||||Submit' },
+                1: {
+                  selector: '#name',
+                  signature: createDomElementReader().signatureFor(
+                    document.getElementById('name')!,
+                    driver.ELEMENT_LABEL_MAX_CHARS,
+                  ),
+                },
+                2: {
+                  selector: '#button',
+                  signature: createDomElementReader().signatureFor(
+                    document.getElementById('button')!,
+                    driver.ELEMENT_LABEL_MAX_CHARS,
+                  ),
+                },
               },
             }),
           },

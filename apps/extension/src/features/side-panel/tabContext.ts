@@ -3,6 +3,7 @@ import type { BrowserContextTabReference } from '../../types';
 import { pageWindowQuery } from '../surface/assistantPanel';
 import { sanitizePageText } from '../../background/policy';
 import { boundPageText } from '../content/in-page-panel/pageActions';
+import { MAX_TAB_CLEANUP_SELECTION } from '../browser-tools/tabCleanup';
 
 export const TAB_CONTEXT_PICKER_CSS = `
   .sp-tab-picker-overlay { position: fixed; inset: 0; z-index: 110; display: flex; align-items: center; justify-content: center; padding: 12px; background: var(--agi-ext-bg); }
@@ -22,11 +23,18 @@ export const TAB_CONTEXT_PICKER_CSS = `
   .sp-tab-picker-actions button:focus-visible, .sp-tab-picker-row input:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
 `;
 
-function ordinaryTab(tab: chrome.tabs.Tab): BrowserContextTabReference | null {
+function ordinaryTab(tab: chrome.tabs.Tab, cleanup = false): BrowserContextTabReference | null {
   if (!Number.isSafeInteger(tab.id) || !Number.isSafeInteger(tab.windowId) || !tab.url) return null;
   try {
     const url = new URL(tab.url);
-    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return null;
+    const ownExtensionPage =
+      cleanup && url.href.startsWith(chrome.runtime.getURL('')) && url.href !== location.href;
+    if (
+      (!['http:', 'https:'].includes(url.protocol) && !ownExtensionPage) ||
+      url.username ||
+      url.password
+    )
+      return null;
     return {
       tabId: tab.id!,
       windowId: tab.windowId,
@@ -38,11 +46,28 @@ function ordinaryTab(tab: chrome.tabs.Tab): BrowserContextTabReference | null {
   }
 }
 
-export async function chooseBrowserContextTabs(
+export function chooseBrowserContextTabs(
   isCurrent: () => boolean,
   maxTabs: number,
   requestAccess: (urls: readonly string[]) => Promise<boolean>,
   signal?: AbortSignal,
+): Promise<readonly BrowserContextTabReference[] | null> {
+  return chooseBrowserTabs(isCurrent, maxTabs, requestAccess, signal, false);
+}
+
+export function chooseTabsToClose(
+  isCurrent: () => boolean,
+  signal?: AbortSignal,
+): Promise<readonly BrowserContextTabReference[] | null> {
+  return chooseBrowserTabs(isCurrent, MAX_TAB_CLEANUP_SELECTION, async () => true, signal, true);
+}
+
+async function chooseBrowserTabs(
+  isCurrent: () => boolean,
+  maxTabs: number,
+  requestAccess: (urls: readonly string[]) => Promise<boolean>,
+  signal: AbortSignal | undefined,
+  cleanup: boolean,
 ): Promise<readonly BrowserContextTabReference[] | null> {
   if (signal?.aborted || !isCurrent() || !Number.isSafeInteger(maxTabs) || maxTabs <= 0)
     return null;
@@ -57,9 +82,11 @@ export async function chooseBrowserContextTabs(
   dialog.setAttribute('aria-labelledby', 'sp-tab-picker-title');
   const heading = document.createElement('h2');
   heading.id = 'sp-tab-picker-title';
-  heading.textContent = 'Attach tabs';
+  heading.textContent = cleanup ? 'Close tabs' : 'Attach tabs';
   const description = document.createElement('p');
-  description.textContent = `Choose up to ${maxTabs} tabs from this window. Only the selected pages are sent as context when you send your message. Browser actions still require site permissions.`;
+  description.textContent = cleanup
+    ? `Choose up to ${maxTabs} unused tabs to close. Closing can discard unsaved edits. Active and pinned tabs are kept. Page contents stay in Chrome.`
+    : `Choose up to ${maxTabs} tabs from this window. Only the selected pages are sent as context when you send your message. Browser actions still require site permissions.`;
   const status = document.createElement('p');
   status.setAttribute('role', 'status');
   status.setAttribute('aria-live', 'polite');
@@ -73,7 +100,7 @@ export async function chooseBrowserContextTabs(
   cancel.textContent = 'Cancel';
   const attach = document.createElement('button');
   attach.type = 'button';
-  attach.textContent = 'Attach selected tabs';
+  attach.textContent = cleanup ? 'Close selected tabs' : 'Attach selected tabs';
   attach.dataset['primary'] = 'true';
   attach.disabled = true;
   actions.append(cancel, attach);
@@ -126,7 +153,7 @@ export async function chooseBrowserContextTabs(
         return;
       }
       const tabs = [...selected.values()];
-      if (JSON.stringify(tabs).length > MANAGED_CLOUD_CHAT_MAX_METADATA_LENGTH) {
+      if (!cleanup && JSON.stringify(tabs).length > MANAGED_CLOUD_CHAT_MAX_METADATA_LENGTH) {
         status.textContent = 'These tab details exceed the context budget. Choose fewer tabs.';
         return;
       }
@@ -159,12 +186,17 @@ export async function chooseBrowserContextTabs(
         return;
       }
       const candidates = tabs
-        .map(ordinaryTab)
+        .filter((tab) => !cleanup || (!tab.active && !tab.pinned && !tab.pendingUrl))
+        .map((tab) => ordinaryTab(tab, cleanup))
         .filter((tab): tab is BrowserContextTabReference => tab !== null);
       status.textContent = candidates.length
-        ? 'Choose the pages to include.'
-        : 'No readable website tabs are open in this window.';
-      for (const tab of candidates) {
+        ? cleanup
+          ? 'Select the tabs you have finished using.'
+          : 'Choose the pages to include.'
+        : cleanup
+          ? 'No inactive, unpinned tabs are available to close.'
+          : 'No readable website tabs are open in this window.';
+      for (const tab of cleanup ? candidates.slice(0, maxTabs) : candidates) {
         const row = document.createElement('label');
         row.className = 'sp-tab-picker-row';
         const checkbox = document.createElement('input');
@@ -176,7 +208,8 @@ export async function chooseBrowserContextTabs(
         title.textContent = tab.title;
         const origin = document.createElement('span');
         origin.className = 'sp-tab-picker-row-origin';
-        origin.textContent = new URL(tab.url).origin;
+        const url = new URL(tab.url);
+        origin.textContent = url.protocol === 'chrome-extension:' ? 'Extension page' : url.origin;
         copy.append(title, origin);
         row.append(checkbox, copy);
         list.append(row);

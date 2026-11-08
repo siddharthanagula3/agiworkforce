@@ -82,6 +82,32 @@ async function streamingFailure(frames: unknown[]): Promise<CloudAgentGatewayErr
 }
 
 describe('browser gateway provider schema and streamed failures', () => {
+  it('reads late usage after a provider stop until the managed gateway finishes', async () => {
+    const response = streamResponse(
+      [
+        { choices: [{ delta: { content: 'Ready.' }, finish_reason: 'stop' }] },
+        { choices: [], usage: { prompt_tokens: 19, completion_tokens: 5 } },
+      ],
+      1,
+    );
+    response.headers.set('X-AGI-Agent-Run-Id', '11111111-1111-4111-8111-111111111111');
+    response.headers.set(
+      'X-AGI-Agent-Run-URL',
+      '/api/llm/v1/chat/completions/runs/11111111-1111-4111-8111-111111111111',
+    );
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => response),
+    );
+    const result = await callCloud(
+      [{ role: 'user', content: 'Read the page' }],
+      'test-token',
+      DEFAULT_GATEWAY_BASE,
+    );
+    expect(result.tokensUsed).toBe(24);
+    expect(result.message.content).toBe('Ready.');
+  });
+
   const providerError = {
     message: 'The provider rejected this request. Try again, or choose another model.',
     code: 'provider_rejected_request',
@@ -108,13 +134,15 @@ describe('browser gateway provider schema and streamed failures', () => {
       }
     }
     const selection = body.tools.find((tool) => tool.function.name === 'select_option')!;
-    expect(selection.function.description).toContain('either value or label');
+    expect(selection.function.description).toContain('Set matchBy to value or label');
     expect(selection.function.parameters).toMatchObject({
-      required: ['index'],
+      required: ['index', 'matchBy', 'option'],
       additionalProperties: false,
     });
     const type = body.tools.find((tool) => tool.function.name === 'type')!;
-    expect(type.function.description).toContain('preserving its selection');
+    expect(type.function.description).toContain(
+      'preserves selection and inserts the answer in bulk',
+    );
     expect(type.function.description).not.toContain('click-focus');
   });
 

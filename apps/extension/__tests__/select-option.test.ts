@@ -4,6 +4,7 @@ import * as driver from '../src/features/computer-use/cdpDriver';
 import * as sitePolicy from '../src/features/site-policy/store';
 import * as browserControlConsent from '../src/features/computer-use/browserControlConsent';
 import { createCdpInspectionFixture } from './fixtures/cdp-inspection';
+import { createDomElementReader } from '../src/features/content/elementReader';
 
 const inspection = createCdpInspectionFixture(document.location.href);
 
@@ -170,7 +171,15 @@ describe('indexed select driver settlement', () => {
                 type: 'string',
                 value: JSON.stringify({
                   summary: 'Synthetic select fixture',
-                  indexMap: { 1: { selector: '#choice', signature: 'select||||Category' } },
+                  indexMap: {
+                    1: {
+                      selector: '#choice',
+                      signature: createDomElementReader().signatureFor(
+                        original,
+                        driver.ELEMENT_LABEL_MAX_CHARS,
+                      ),
+                    },
+                  },
                 }),
               },
             });
@@ -219,7 +228,13 @@ describe('indexed select driver settlement', () => {
 
   it('verifies the retained original object after events settle', async () => {
     expect(
-      await driver.selectOption(42, 1, { label: 'Beta' }, undefined, 'select||||Category'),
+      await driver.selectOption(
+        42,
+        1,
+        { label: 'Beta' },
+        undefined,
+        createDomElementReader().signatureFor(original, driver.ELEMENT_LABEL_MAX_CHARS),
+      ),
     ).toEqual({
       selectedValue: 'b',
       selectedLabel: 'Beta',

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   CHAT_BROWSER_TASK_TOOL,
+  CHAT_AUTOFILL_TOOL,
   CHAT_READ_PAGE_TOOL,
   chatBrowserToolDefinitions,
   parseChatBrowserToolCall,
@@ -36,6 +37,7 @@ describe('history search is offered only when it is on', () => {
     expect(names(chatBrowserToolDefinitions('act'))).toEqual([
       CHAT_READ_PAGE_TOOL,
       CHAT_BROWSER_TASK_TOOL,
+      CHAT_AUTOFILL_TOOL,
     ]);
     expect(names(chatBrowserToolDefinitions('read', true))).toEqual([
       CHAT_READ_PAGE_TOOL,

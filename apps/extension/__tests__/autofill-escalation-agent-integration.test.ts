@@ -469,11 +469,13 @@ describe('AGI_START_COMPUTER_USE background handler → runAgentLoop', () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
+        headers: new Headers(),
         body: makeToolCallStream(),
       })
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
+        headers: new Headers(),
         body: makeFinalStream(),
       });
   });
@@ -572,11 +574,13 @@ describe('Full chain: AGI_RUN_AUTOFILL → shouldEscalate → AGI_START_COMPUTER
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
+        headers: new Headers(),
         body: makeToolCallStream(),
       })
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
+        headers: new Headers(),
         body: makeFinalStream(),
       });
   });

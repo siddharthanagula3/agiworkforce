@@ -913,6 +913,14 @@ export function getWebviewContent(
       to { transform: rotate(360deg); }
     }
 
+    .codicon.codicon-loading::before {
+      content: '';
+      display: block;
+      width: 1em;
+      height: 1em;
+      background: url("${markUri}") center / contain no-repeat;
+    }
+
     /* ── Input area / composer (design-spec §7) ── */
     .input-area {
       background: var(--bg-base);
@@ -4554,6 +4562,7 @@ export function getWebviewContent(
     }
 
     function showTyping() {
+      if (toolCallStack && toolCallStack.isConnected && toolCallStack.dataset.status === 'working') return;
       var existing = document.getElementById('typingIndicator');
       if (existing) {
         messagesEl.appendChild(existing);
@@ -7917,6 +7926,7 @@ export function getWebviewContent(
     }
 
     function ensureToolCallStack() {
+      removeTyping();
       if (toolCallStack && toolCallList) return toolCallList;
       toolCallStackHasError = false;
       var stackEl = document.createElement('section');
