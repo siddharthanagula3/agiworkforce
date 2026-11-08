@@ -1,12 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useState, useCallback, useLayoutEffect, useRef } from 'react';
-import {
-  Modal,
-  View,
-  TextInput,
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
+import { Modal, View, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
@@ -231,7 +225,7 @@ export function AddCustomConnectorModal({
               }}
             >
               {submitting ? (
-                <ActivityIndicator color={colors.textPrimary} />
+                <LoadingIndicator />
               ) : (
                 <Text
                   style={{

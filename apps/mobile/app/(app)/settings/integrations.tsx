@@ -1,5 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useState } from 'react';
-import { View, Alert, Linking, Platform, ActivityIndicator, ScrollView } from 'react-native';
+import { View, Alert, Linking, Platform, ScrollView } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -185,7 +186,7 @@ export default function IntegrationsScreen() {
 
           {isChecking && (
             <View className="flex-row items-center justify-center py-6">
-              <ActivityIndicator size="small" color={colors.teal} />
+              <LoadingIndicator size="small" />
               <Text className="text-sm ml-3" style={{ color: colors.textMuted }}>
                 Checking permissions...
               </Text>

@@ -1,5 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { View } from 'react-native';
 import { GitCompareArrows } from 'lucide-react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
@@ -86,10 +87,7 @@ export default function MemoryConflictsScreen() {
 
       {conflicts === null ? (
         <View style={{ paddingVertical: 32, alignItems: 'center' }}>
-          <ActivityIndicator
-            color={colors.textMuted}
-            accessibilityLabel="Loading replaced memories"
-          />
+          <LoadingIndicator accessibilityLabel="Loading replaced memories" />
         </View>
       ) : conflicts.length === 0 ? (
         <Text

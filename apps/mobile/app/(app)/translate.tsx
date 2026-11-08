@@ -1,9 +1,9 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   ScrollView,
   TextInput,
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Modal,
@@ -404,7 +404,7 @@ export default function TranslateScreen() {
             accessibilityState={{ disabled: !canTranslate }}
           >
             {state.isTranslating ? (
-              <ActivityIndicator size="small" color={colors.background} />
+              <LoadingIndicator size="small" />
             ) : (
               <Text
                 style={{
@@ -481,7 +481,7 @@ export default function TranslateScreen() {
                     marginTop: 8,
                   }}
                 >
-                  <ActivityIndicator size="small" color={colors.teal} />
+                  <LoadingIndicator size="small" />
                   <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
                     Translating...
                   </Text>

@@ -1,5 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { View } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -27,9 +28,9 @@ function DesktopUnavailable({ onPair }: { onPair: () => void }) {
   if (status === 'connecting' || status === 'reconnecting' || status === 'stale') {
     return (
       <View className="flex-1 items-center justify-center gap-3 px-8">
-        <ActivityIndicator
+        <LoadingIndicator
           size="small"
-          color={colors.teal}
+
           accessibilityLabel={`Reconnecting to ${computer}`}
         />
         <Text className="text-center" style={{ color: colors.textSecondary }}>

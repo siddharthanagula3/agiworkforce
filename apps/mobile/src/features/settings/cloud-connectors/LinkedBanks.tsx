@@ -1,5 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Switch, View } from 'react-native';
+import { Alert, Switch, View } from 'react-native';
 import type { BankAccountsItem } from '@agiworkforce/cloud-contracts';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
@@ -82,7 +83,7 @@ export function LinkedBanks({ onChanged }: { onChanged: () => void }) {
           Your linked banks could not be loaded.
         </Text>
       ) : items === null ? (
-        <ActivityIndicator color={colors.teal} />
+        <LoadingIndicator />
       ) : (
         items.map((item) => (
           <View

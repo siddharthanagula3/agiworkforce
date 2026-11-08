@@ -1,3 +1,4 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSegments, Slot } from 'expo-router';
 import { useLinkingURL } from 'expo-linking';
@@ -8,7 +9,6 @@ import { StatusBar } from 'expo-status-bar';
 import { reloadAppAsync } from 'expo';
 import {
   View,
-  ActivityIndicator,
   Alert,
   Appearance,
   BackHandler,
@@ -734,7 +734,7 @@ export default function RootLayout() {
           justifyContent: 'center',
         }}
       >
-        <ActivityIndicator color={themeColors.teal} size="large" />
+        <LoadingIndicator size="large" />
       </View>
     );
   }

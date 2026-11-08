@@ -1,5 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import React, { useCallback, useState } from 'react';
-import { View, ActivityIndicator, Alert, Modal, StyleSheet } from 'react-native';
+import { View, Alert, Modal, StyleSheet } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -255,7 +256,7 @@ export function ConversationExportSheet({
                           }}
                         >
                           {isLoading ? (
-                            <ActivityIndicator size="small" color={colors.teal} />
+                            <LoadingIndicator size="small" />
                           ) : (
                             <IconComponent size={18} color={iconColor} />
                           )}

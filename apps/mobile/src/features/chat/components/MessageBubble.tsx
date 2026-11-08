@@ -1464,9 +1464,14 @@ export const MessageBubble = memo(function MessageBubble({
             {contentElements.length > 0 ? (
               <View key={message.id}>
                 {contentElements}
-                {message.isStreaming && <StreamingIndicator label={streamingLabel} />}
+                {message.isStreaming && !canonicalActivity && (
+                  <StreamingIndicator label={streamingLabel} />
+                )}
               </View>
-            ) : message.isStreaming && !message.isGeneratingImage && !message.isGeneratingVideo ? (
+            ) : message.isStreaming &&
+              !canonicalActivity &&
+              !message.isGeneratingImage &&
+              !message.isGeneratingVideo ? (
               <StreamingIndicator
                 label={
                   streamingLabel ??

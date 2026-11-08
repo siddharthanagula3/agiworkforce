@@ -1,4 +1,5 @@
-import { ActivityIndicator, Modal, ScrollView, View } from 'react-native';
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
+import { Modal, ScrollView, View } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { X } from 'lucide-react-native';
@@ -142,7 +143,7 @@ export function CloudRunDetailSheet({
 
         {detail?.status === 'loading' && !run ? (
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-            <ActivityIndicator color={colors.textPrimary} />
+            <LoadingIndicator />
             <Text style={{ color: colors.textMuted }}>Opening this task…</Text>
           </View>
         ) : (

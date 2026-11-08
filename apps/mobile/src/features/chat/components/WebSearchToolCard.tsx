@@ -1,6 +1,7 @@
 import { Alert, View } from 'react-native';
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { PressableBox } from '@/components/ui/PressableBox';
-import { Globe, Loader2, SearchX, CircleSlash, TriangleAlert } from 'lucide-react-native';
+import { Globe, SearchX, CircleSlash, TriangleAlert } from 'lucide-react-native';
 import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
@@ -123,22 +124,24 @@ export function WebSearchToolCard({ tool, showSources }: { tool: ToolCall; showS
           : colors.textMuted;
 
   const LineIcon =
-    tool.status === 'running'
-      ? Loader2
-      : tool.status === 'failed'
-        ? SearchX
-        : tool.status === 'canceled'
-          ? CircleSlash
-          : tool.status === 'partial'
-            ? TriangleAlert
-            : Globe;
+    tool.status === 'failed'
+      ? SearchX
+      : tool.status === 'canceled'
+        ? CircleSlash
+        : tool.status === 'partial'
+          ? TriangleAlert
+          : Globe;
 
   return (
     <View style={{ paddingLeft: 20, paddingBottom: 8, gap: 6 }}>
       {line ? (
         <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 6 }}>
           <View style={{ paddingTop: 1 }}>
-            <LineIcon size={12} strokeWidth={1.75} color={toneColor} />
+            {tool.status === 'running' ? (
+              <LoadingIndicator size={12} accessible={false} />
+            ) : (
+              <LineIcon size={12} strokeWidth={1.75} color={toneColor} />
+            )}
           </View>
           <Text style={{ flex: 1, fontSize: typeScale.caption, color: toneColor }}>
             {line.text}

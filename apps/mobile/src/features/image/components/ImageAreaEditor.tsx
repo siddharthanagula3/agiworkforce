@@ -1,6 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Modal,
   PanResponder,
@@ -265,7 +265,7 @@ export function ImageAreaEditor({
               </View>
             </View>
           ) : error ? null : (
-            <ActivityIndicator color={colors.textMuted} accessibilityLabel="Loading image" />
+            <LoadingIndicator accessibilityLabel="Loading image" />
           )}
           {error ? (
             <Text
@@ -334,7 +334,7 @@ export function ImageAreaEditor({
               }}
             >
               {preparing ? (
-                <ActivityIndicator color={colors.accentText} />
+                <LoadingIndicator />
               ) : (
                 <Text
                   style={{ color: colors.accentText, fontSize: typeScale.body, fontWeight: '600' }}

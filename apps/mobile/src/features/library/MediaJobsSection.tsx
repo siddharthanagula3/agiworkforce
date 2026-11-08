@@ -1,5 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, AppState, View } from 'react-native';
+import { AppState, View } from 'react-native';
 import { MessageSquare, RotateCcw, X, type LucideIcon } from 'lucide-react-native';
 import type { MediaJobEntry } from '@agiworkforce/cloud-contracts';
 import { isInFlightMediaJobStatus, type MediaJobStatus } from '@agiworkforce/types';
@@ -196,7 +197,7 @@ export function MediaJobsSection({
                     accessibilityLiveRegion="polite"
                     style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
                   >
-                    {inFlight(job) ? <ActivityIndicator size="small" color={c.textMuted} /> : null}
+                    {inFlight(job) ? <LoadingIndicator size="small" /> : null}
                     <Text
                       style={{
                         color: job.status === 'failed' ? c.agentError : c.textSecondary,

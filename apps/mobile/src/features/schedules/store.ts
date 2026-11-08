@@ -46,6 +46,8 @@ export interface Schedule {
   timeOfDay: string;
   timezone: string;
   isActive: boolean;
+  status?: ManagedCloudScheduleTask['status'];
+  actionType?: ManagedCloudScheduleTask['actionType'];
   agentId?: string | null;
   connectors?: string[] | null;
   lastRunAt: string | null;
@@ -81,7 +83,15 @@ export interface RecentScheduleRun {
 
 export type CreateScheduleInput = Omit<
   Schedule,
-  'id' | 'createdAt' | 'updatedAt' | 'lastRunAt' | 'nextRunAt' | 'lastRunStatus' | 'pausedReason'
+  | 'id'
+  | 'createdAt'
+  | 'updatedAt'
+  | 'lastRunAt'
+  | 'nextRunAt'
+  | 'lastRunStatus'
+  | 'pausedReason'
+  | 'status'
+  | 'actionType'
 >;
 
 function recentRunSummary(run: ManagedCloudScheduleRecentRun): string | null {

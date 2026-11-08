@@ -1,6 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   Pressable,
   RefreshControl,
@@ -630,7 +630,7 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
                 </Text>
               ) : null}
               {isLoadingMoreConversations ? (
-                <ActivityIndicator color={colors.teal} accessibilityLabel="Loading older chats" />
+                <LoadingIndicator accessibilityLabel="Loading older chats" />
               ) : (
                 <Text
                   style={{ color: colors.teal, fontSize: typeScale.footnote, fontWeight: '600' }}
@@ -656,7 +656,7 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
               {searchOnly && !isSearching ? (
                 <Search size={34} color={colors.textMuted} />
               ) : appMode === 'cloud' && isLoadingConversations ? (
-                <ActivityIndicator color={colors.teal} accessibilityLabel="Loading chats" />
+                <LoadingIndicator accessibilityLabel="Loading chats" />
               ) : (
                 <MessageSquare size={34} color={colors.textMuted} />
               )}

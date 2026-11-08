@@ -1,5 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, Share, View } from 'react-native';
+import { Alert, Share, View } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { Check, ChevronRight, Copy, Share2, TriangleAlert } from 'lucide-react-native';
 import type { CloudCodeChanges, CodeTranscriptItem } from '@agiworkforce/cloud-contracts';
@@ -307,7 +308,7 @@ export function CloudCodeWorkingRow({
       accessibilityLabel={label}
       style={{ minHeight: 32, flexDirection: 'row', alignItems: 'center', gap: 8 }}
     >
-      <ActivityIndicator size="small" color={colors.textSecondary} />
+      <LoadingIndicator size="small" />
       <Text style={{ color: colors.textSecondary, fontSize: typeScale.subhead }}>{label}</Text>
     </View>
   );

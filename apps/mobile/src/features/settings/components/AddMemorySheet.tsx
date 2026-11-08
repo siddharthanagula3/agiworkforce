@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Modal, Platform, TextInput, View } from 'react-native';
+import { MANAGED_MEMORY_MAX_CONTENT_CHARS } from '@agiworkforce/types';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
@@ -152,7 +153,7 @@ export function AddMemorySheet({
             accessibilityLabel="Memory content"
             accessibilityValue={{ text: content }}
             autoCorrect={false}
-            maxLength={10_000}
+            maxLength={MANAGED_MEMORY_MAX_CONTENT_CHARS}
             multiline
             onChangeText={setContent}
             placeholder="What should AGI remember?"

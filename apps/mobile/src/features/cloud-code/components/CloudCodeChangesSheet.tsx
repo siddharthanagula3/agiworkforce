@@ -1,6 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Modal,
@@ -265,7 +265,7 @@ function PullRequestChecks({ load }: { load: () => Promise<CloudCodePullRequestS
       style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
     >
       {loading && !status ? (
-        <ActivityIndicator size="small" color={colors.textSecondary} />
+        <LoadingIndicator size="small" />
       ) : (
         <Text
           style={{
@@ -496,7 +496,7 @@ export function CloudCodeChangesSheet({
               </Text>
             ) : view.loading && !changes ? (
               <View accessibilityLabel={COPY.loading} style={{ paddingVertical: 24 }}>
-                <ActivityIndicator color={colors.textSecondary} />
+                <LoadingIndicator />
               </View>
             ) : changes && changes.files.length === 0 ? (
               <Text style={{ color: colors.textMuted, fontSize: typeScale.subhead }}>

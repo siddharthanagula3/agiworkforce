@@ -1,5 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, View } from 'react-native';
+import { Alert, View } from 'react-native';
 import { FileText } from 'lucide-react-native';
 import { resolveGeneratedFileUri, type LiveVoiceToolFile } from '@agiworkforce/cloud-contracts';
 import { PressableBox } from '@/components/ui/PressableBox';
@@ -51,7 +52,7 @@ export function VoiceToolFiles({ files }: { files: readonly LiveVoiceToolFile[] 
           style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8 }}
         >
           {opening === file.uri ? (
-            <ActivityIndicator size="small" color={colors.textSecondary} />
+            <LoadingIndicator size="small" />
           ) : (
             <FileText size={16} color={colors.textSecondary} />
           )}

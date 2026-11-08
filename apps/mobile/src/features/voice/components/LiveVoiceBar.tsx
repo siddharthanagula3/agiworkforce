@@ -1,12 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Image,
-  ScrollView,
-  useWindowDimensions,
-  View,
-  type LayoutChangeEvent,
-} from 'react-native';
+import { Image, ScrollView, useWindowDimensions, View, type LayoutChangeEvent } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
@@ -555,7 +549,7 @@ export function LiveVoiceBar({
                 }}
               >
                 {approval.deciding ? (
-                  <ActivityIndicator size="small" color={colors.accentText} />
+                  <LoadingIndicator size="small" />
                 ) : (
                   <Check size={16} color={colors.accentText} />
                 )}

@@ -1,13 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  ScrollView,
-  TextInput,
-  View,
-} from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, ScrollView, TextInput, View } from 'react-native';
 import { Check, Lock, X } from 'lucide-react-native';
 import type { CloudCodeBranch, CloudCodeRepository } from '@agiworkforce/cloud-contracts';
 import {
@@ -564,9 +557,7 @@ export function NewCloudCodeSessionSheet({
                       />
                     ))}
                   </View>
-                  {repositoryState.status === 'loading' ? (
-                    <ActivityIndicator color={colors.textMuted} />
-                  ) : null}
+                  {repositoryState.status === 'loading' ? <LoadingIndicator /> : null}
                   {repositoryState.status === 'ready' && repositoryState.truncated ? (
                     <Note>{COPY.repositoryTruncated}</Note>
                   ) : null}
@@ -621,10 +612,7 @@ export function NewCloudCodeSessionSheet({
                       style={inputStyle}
                     />
                     {branchState.status === 'loading' ? (
-                      <ActivityIndicator
-                        color={colors.textMuted}
-                        accessibilityLabel={COPY.branchLoading}
-                      />
+                      <LoadingIndicator accessibilityLabel={COPY.branchLoading} />
                     ) : null}
                     {branchState.status === 'error' ? (
                       <View style={{ gap: 6 }}>

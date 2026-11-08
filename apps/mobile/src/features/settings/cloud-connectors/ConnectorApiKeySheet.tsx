@@ -1,12 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  View,
-} from 'react-native';
+import { Alert, KeyboardAvoidingView, Modal, Platform, View } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui/Button';
@@ -157,7 +151,7 @@ export function ConnectorApiKeySheet({
               accessibilityLabel={`Checking how ${connectorName} takes a key`}
               style={{ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44 }}
             >
-              <ActivityIndicator color={colors.teal} />
+              <LoadingIndicator />
               <Text style={{ fontSize: typeScale.footnote, color: colors.textSecondary }}>
                 Checking how {connectorName} takes a key…
               </Text>

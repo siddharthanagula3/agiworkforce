@@ -1,3 +1,4 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import {
   MONTHLY_METERED_UNIT_COPY,
@@ -19,7 +20,7 @@ import {
   type ManagedUsageCredits,
   type UsageLimitPromotionState,
 } from '@agiworkforce/types';
-import { View, ActivityIndicator, Alert } from 'react-native';
+import { View, Alert } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { useRouter } from 'expo-router';
 import { BarChart3, Coins, RefreshCw } from 'lucide-react-native';
@@ -287,7 +288,7 @@ function ResourceStatus({
 }) {
   const colors = useThemeColors();
   if (resource.loading) {
-    return <ActivityIndicator accessibilityLabel={loadingLabel} color={colors.teal} />;
+    return <LoadingIndicator accessibilityLabel={loadingLabel} />;
   }
   if (!resource.error) return null;
   return (
@@ -706,7 +707,7 @@ export default function CloudUsageScreen() {
     ? formatPlanCreditAllowanceLine(planLabel, {
         monthly: snapshot.credits.monthly.allowance,
         weekly: snapshot.credits.weekly.allowance,
-        fiveHour: snapshot.credits.five_hour.allowance,
+        fiveHour: snapshot.credits.five_hour?.allowance ?? null,
       })
     : null;
 
@@ -789,7 +790,7 @@ export default function CloudUsageScreen() {
         <>
           {loading && !snapshot && (
             <View style={{ alignItems: 'center', paddingVertical: 32 }}>
-              <ActivityIndicator size="large" color={colors.teal} />
+              <LoadingIndicator size="large" />
             </View>
           )}
 

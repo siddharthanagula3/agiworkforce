@@ -1,5 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, ActivityIndicator, ScrollView, Alert } from 'react-native';
+import { View, ScrollView, Alert } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import {
   Plug,
@@ -592,7 +593,7 @@ export default function CloudConnectorsScreen({
             accessibilityLabel="Checking connector access"
             style={{ alignItems: 'center', gap: 10, paddingVertical: 32 }}
           >
-            <ActivityIndicator size="large" color={colors.teal} />
+            <LoadingIndicator size="large" />
             <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}>
               Checking connector access…
             </Text>
@@ -626,7 +627,7 @@ export default function CloudConnectorsScreen({
           loading &&
           !connections && (
             <View style={{ alignItems: 'center', paddingVertical: 32 }}>
-              <ActivityIndicator size="large" color={colors.teal} />
+              <LoadingIndicator size="large" />
             </View>
           )}
 
@@ -850,7 +851,7 @@ export default function CloudConnectorsScreen({
                 accessibilityLabel="Loading connectors"
                 style={{ alignItems: 'center', paddingVertical: 24 }}
               >
-                <ActivityIndicator color={colors.teal} />
+                <LoadingIndicator />
               </View>
             ) : browsesListings && nextCursor ? (
               <PressableBox

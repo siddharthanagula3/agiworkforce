@@ -1,5 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Check, Play, Volume2 } from 'lucide-react-native';
 import { LIVE_DEFAULT_VOICE, LIVE_VOICES } from '@agiworkforce/types/live-voices';
@@ -334,7 +335,7 @@ export default function VoiceLanguageScreen() {
               borderTopColor: colors.border,
             }}
           >
-            <ActivityIndicator color={colors.teal} />
+            <LoadingIndicator />
           </View>
         ) : visibleSystemVoices.length === 0 ? (
           <View

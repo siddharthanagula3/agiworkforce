@@ -26,6 +26,7 @@ import {
   ManagedCloudChatAttachmentPresignResponseSchema,
   chatAttachmentSizeLabel,
   resolveChatAttachmentMimeType,
+  managedUploadRequestOptions,
 } from '@agiworkforce/cloud-contracts';
 import { readPasskeyRequired } from '@agiworkforce/cloud-contracts/account-security';
 import { BILLING_PLAN_CAPABILITY_TIERS, isBillingPlanTier } from '@agiworkforce/types';
@@ -682,14 +683,30 @@ export const api = {
       );
       assertApiAccountGeneration(accountGeneration);
       const uploadUrl = new URL(presign.uploadUrl);
-      if (
-        uploadUrl.protocol !== 'https:' ||
-        uploadUrl.username !== '' ||
-        uploadUrl.password !== ''
-      ) {
-        throw new Error(`Refusing an insecure upload destination for "${file.name}".`);
-      }
 
+      const uploadOptions = await managedUploadRequestOptions(
+        uploadUrl.toString(),
+        presign.uploadHeaders,
+        {
+          baseUrl: API_URL,
+          getHeaders: async () => {
+            assertApiAccountGeneration(accountGeneration);
+            const current = await getAuthHeaders();
+            assertApiAccountGeneration(accountGeneration);
+            return {
+              ...platformRequestHeaders(),
+              ...current,
+              'X-Requested-With': 'XMLHttpRequest',
+            };
+          },
+        },
+      );
+      assertApiAccountGeneration(accountGeneration);
+      if (signal.aborted) {
+        const error = new Error('The attachment upload was cancelled.');
+        error.name = 'AbortError';
+        throw error;
+      }
       const onProgress = options?.onProgress;
       const uploadTask = createUploadTask(
         uploadUrl.toString(),
@@ -697,7 +714,7 @@ export const api = {
         {
           httpMethod: 'PUT',
           uploadType: FileSystemUploadType.BINARY_CONTENT,
-          headers: presign.uploadHeaders,
+          headers: uploadOptions.headers,
         },
         onProgress
           ? (progress) =>

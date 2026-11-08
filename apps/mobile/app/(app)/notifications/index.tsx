@@ -1,5 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useMemo } from 'react';
-import { ActivityIndicator, View, Alert } from 'react-native';
+import { View, Alert } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
@@ -395,7 +396,7 @@ export default function NotificationCenterScreen() {
           className="flex-1 items-center justify-center"
           accessibilityLabel="Loading notifications"
         >
-          <ActivityIndicator color={colors.textSecondary} />
+          <LoadingIndicator />
         </View>
       ) : rows.length === 0 ? (
         <View className="flex-1 items-center justify-center px-8">
@@ -435,7 +436,7 @@ export default function NotificationCenterScreen() {
           ListFooterComponent={
             account.loadingMore ? (
               <View className="py-4" accessibilityLabel="Loading older notifications">
-                <ActivityIndicator color={colors.textSecondary} />
+                <LoadingIndicator />
               </View>
             ) : null
           }

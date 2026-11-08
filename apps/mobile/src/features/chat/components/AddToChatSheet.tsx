@@ -1,5 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, forwardRef, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, View, ScrollView } from 'react-native';
+import { View, ScrollView } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { useRouter } from 'expo-router';
@@ -650,7 +651,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                 }}
                 accessibilityLiveRegion="polite"
               >
-                <ActivityIndicator size="small" color={themeColors.textMuted} />
+                <LoadingIndicator size="small" />
                 <Text style={{ fontSize: typeScale.footnote, color: themeColors.textMuted }}>
                   Loading your Library
                 </Text>
@@ -1568,11 +1569,7 @@ function ConfigLink({
       </View>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
         {pending ? (
-          <ActivityIndicator
-            testID={`config-link-pending-${label}`}
-            size="small"
-            color={mutedColor}
-          />
+          <LoadingIndicator testID={`config-link-pending-${label}`} size="small" />
         ) : (
           <>
             {value &&

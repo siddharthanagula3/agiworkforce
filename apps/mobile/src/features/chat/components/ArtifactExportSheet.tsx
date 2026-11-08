@@ -1,5 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Modal, StyleSheet, View } from 'react-native';
+import { Alert, Modal, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { FileCode, FileDown, FileText, X, type LucideIcon } from 'lucide-react-native';
@@ -127,7 +128,7 @@ export function ArtifactExportSheet({
                   >
                     <View style={[styles.iconWell, { backgroundColor: colors.neutralSurface }]}>
                       {busy ? (
-                        <ActivityIndicator size="small" color={colors.textSecondary} />
+                        <LoadingIndicator size="small" />
                       ) : (
                         <Icon size={20} color={colors.textSecondary} />
                       )}

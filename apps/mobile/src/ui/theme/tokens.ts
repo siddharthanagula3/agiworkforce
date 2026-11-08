@@ -65,6 +65,8 @@ export const radii = {
 
 export const dialogPadding = spacing['2xl'];
 
+export const loadingMarkSizes = { small: 20, large: 36 } as const;
+
 export const typeScale = {
   caption: 14,
   footnote: 14,

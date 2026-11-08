@@ -1,5 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, View } from 'react-native';
+import { Alert, View } from 'react-native';
 import { Image } from 'expo-image';
 import { Download, Film, Play } from 'lucide-react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
@@ -138,7 +139,7 @@ function GeneratedVideoOwner({
           }}
         >
           {loading === 'play' ? (
-            <ActivityIndicator size="small" color={colors.cameraOverlayText} />
+            <LoadingIndicator size="small" />
           ) : (
             <Play size={13} color={colors.cameraOverlayText} />
           )}
@@ -183,7 +184,7 @@ function GeneratedVideoOwner({
           }}
         >
           {loading === 'save' ? (
-            <ActivityIndicator size="small" color={colors.textSecondary} />
+            <LoadingIndicator size="small" />
           ) : (
             <Download size={15} color={colors.textSecondary} />
           )}

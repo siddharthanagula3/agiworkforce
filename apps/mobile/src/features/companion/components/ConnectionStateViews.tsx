@@ -1,6 +1,7 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useState } from 'react';
 import Animated, { FadeIn } from 'react-native-reanimated';
-import { View, ActivityIndicator, ScrollView } from 'react-native';
+import { View, ScrollView } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import {
   QrCode,
@@ -232,7 +233,7 @@ export function ConnectingView({ onCancel }: { onCancel: () => void }) {
       <Text className="text-white/50 text-center text-sm mb-6">
         Keep both apps open and online. They can connect across different networks.
       </Text>
-      <ActivityIndicator size="small" color={colors.teal} />
+      <LoadingIndicator size="small" />
 
       <Button title="Cancel" variant="ghost" size="md" onPress={onCancel} className="mt-6 w-48" />
     </Animated.View>

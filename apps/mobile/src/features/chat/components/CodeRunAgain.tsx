@@ -1,5 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Image, View } from 'react-native';
+import { Image, View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { RotateCcw, Square } from 'lucide-react-native';
 import type { ChatCodeRunResponse } from '@agiworkforce/cloud-contracts';
@@ -77,7 +78,7 @@ export function CodeRunAgain({ conversationId, language, code }: CodeRunAgainPro
               <Square size={14} color={colors.textPrimary} />
               <Text style={{ color: colors.textPrimary, fontSize: typeScale.footnote }}>Stop</Text>
             </Pressable>
-            <ActivityIndicator size="small" color={colors.textMuted} accessibilityLabel="Running" />
+            <LoadingIndicator size="small" accessibilityLabel="Running" />
           </>
         ) : (
           <Pressable

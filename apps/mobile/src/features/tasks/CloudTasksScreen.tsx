@@ -1,6 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   AppState,
   RefreshControl,
@@ -544,7 +544,7 @@ export function CloudTasksScreen() {
 
       {status === 'loading' && runs.length === 0 ? (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-          <ActivityIndicator color={colors.textPrimary} />
+          <LoadingIndicator />
           <Text style={{ color: colors.textMuted }}>Loading Cloud tasks…</Text>
         </View>
       ) : error && runs.length === 0 ? (
@@ -603,7 +603,7 @@ export function CloudTasksScreen() {
                 style={{ minHeight: 48, alignItems: 'center', justifyContent: 'center' }}
               >
                 {loadingMore ? (
-                  <ActivityIndicator color={colors.textPrimary} />
+                  <LoadingIndicator />
                 ) : (
                   <Text style={{ color: colors.textSecondary, fontWeight: '600' }}>Load more</Text>
                 )}

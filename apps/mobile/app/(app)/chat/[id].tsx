@@ -1,14 +1,8 @@
 import { runComposerAttachmentPick } from '@/src/features/chat/utils/runComposerAttachmentPick';
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 import { useEffect, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import {
-  View,
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Alert,
-  Keyboard,
-  Linking,
-} from 'react-native';
+import { View, KeyboardAvoidingView, Alert, Keyboard, Linking } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -1947,9 +1941,7 @@ export default function ChatScreen() {
               paddingVertical: 8,
             }}
           >
-            {inFlightTurn === 'running' ? (
-              <ActivityIndicator size="small" color={colors.textMuted} />
-            ) : null}
+            {inFlightTurn === 'running' ? <LoadingIndicator size="small" /> : null}
             <Text
               style={{
                 flex: 1,

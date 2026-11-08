@@ -1,13 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  ScrollView,
-  TextInput,
-  View,
-} from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, ScrollView, TextInput, View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
@@ -182,7 +175,7 @@ export function NewSkillSheet({
               }}
             >
               {saving ? (
-                <ActivityIndicator color={colors.teal} />
+                <LoadingIndicator />
               ) : (
                 <Text
                   style={{ fontSize: typeScale.subhead, fontWeight: '600', color: colors.teal }}

@@ -1,6 +1,7 @@
 import { useLocalDataExport } from '@/src/features/settings/data-controls/useLocalDataExport';
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useEffect, useState } from 'react';
-import { View, Alert, ActivityIndicator } from 'react-native';
+import { View, Alert } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { HardDrive, Trash2, Download, FileDown, AlertTriangle, Signal } from 'lucide-react-native';
@@ -208,7 +209,7 @@ export default function StorageManagerScreen() {
       className="absolute inset-0 z-50 items-center justify-center"
       style={{ backgroundColor: c.scrim }}
     >
-      <ActivityIndicator size="large" color={c.teal} />
+      <LoadingIndicator size="large" />
       <Text className="mt-3 text-sm" style={{ color: c.textSecondary }}>
         Deleting all local data…
       </Text>
@@ -363,7 +364,7 @@ export default function StorageManagerScreen() {
                 )}
               </View>
             </View>
-            {isExporting ? <ActivityIndicator size="small" color={c.teal} /> : null}
+            {isExporting ? <LoadingIndicator size="small" /> : null}
           </Pressable>
 
           <Separator />

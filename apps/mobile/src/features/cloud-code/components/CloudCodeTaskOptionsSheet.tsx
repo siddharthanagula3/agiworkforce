@@ -1,5 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useEffect, type ReactNode } from 'react';
-import { ActivityIndicator, Modal, ScrollView, View } from 'react-native';
+import { Modal, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Check, ChevronRight, X } from 'lucide-react-native';
 import {
@@ -265,7 +266,7 @@ export function CloudCodeTaskOptionsSheet({
                 />
               </>
             ) : loading ? (
-              <ActivityIndicator color={colors.textSecondary} />
+              <LoadingIndicator />
             ) : (
               <Text style={{ color: colors.textMuted, fontSize: typeScale.footnote }}>
                 {COPY.usageUnavailable}

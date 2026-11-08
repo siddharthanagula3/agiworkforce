@@ -1,6 +1,7 @@
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { useRecyclingState } from '@shopify/flash-list';
 import { View, Modal, ScrollView } from 'react-native';
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { PressableBox } from '@/components/ui/PressableBox';
 import {
   ChevronDown,
@@ -10,7 +11,6 @@ import {
   CircleSlash,
   Clock,
   AlertCircle,
-  Loader2,
   Maximize2,
   ShieldAlert,
   X,
@@ -41,10 +41,9 @@ import type { ToolStatus } from '@agiworkforce/types';
 import type { ToolCall } from '@/types/chat';
 import { translatePlural } from '@/src/i18n/plural';
 
-const STATUS_GLYPH: Record<Exclude<ToolStatus, 'succeeded'>, typeof CircleCheck> = {
+const STATUS_GLYPH: Record<Exclude<ToolStatus, 'succeeded' | 'running'>, typeof CircleCheck> = {
   pending: Clock,
   'awaiting-approval': ShieldAlert,
-  running: Loader2,
   partial: CircleDashed,
   canceled: CircleSlash,
   failed: AlertCircle,
@@ -94,6 +93,7 @@ function ToolRowIcon({ tool }: { tool: ToolCall }) {
   const sourceBadge = getToolSourceBadge(tool.name);
   const status = effectiveStatus(tool);
 
+  if (status === 'running') return <LoadingIndicator size={15} accessible={false} />;
   if (status !== 'succeeded') {
     const Glyph = STATUS_GLYPH[status];
     const tone = toolStatusColor(status, colors);
@@ -721,7 +721,8 @@ export function ToolCallTimeline({
     [toolCalls],
   );
   const outcome = useMemo(() => groupOutcome(toolCalls), [toolCalls]);
-  const OutcomeGlyph = outcome === 'succeeded' ? CircleCheck : STATUS_GLYPH[outcome];
+  const OutcomeGlyph =
+    outcome === 'succeeded' ? CircleCheck : outcome === 'running' ? null : STATUS_GLYPH[outcome];
 
   const userToggledRef = useRef(false);
   const autoCollapsedRef = useRef(false);
@@ -784,7 +785,11 @@ export function ToolCallTimeline({
               <View
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 5 }}
               >
-                <OutcomeGlyph size={15} strokeWidth={1.75} color={colors.textMuted} />
+                {OutcomeGlyph ? (
+                  <OutcomeGlyph size={15} strokeWidth={1.75} color={colors.textMuted} />
+                ) : (
+                  <LoadingIndicator size={15} accessible={false} />
+                )}
                 <Text
                   style={{
                     fontSize: typeScale.footnote,

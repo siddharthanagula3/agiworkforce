@@ -1,13 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import {
-  View,
-  StyleSheet,
-  Linking,
-  TextInput,
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Alert,
-} from 'react-native';
+import { View, StyleSheet, Linking, TextInput, KeyboardAvoidingView, Alert } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
@@ -197,7 +190,7 @@ export default function CameraScreen() {
   if (!permission) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator color={c.teal} />
+        <LoadingIndicator />
       </View>
     );
   }
@@ -286,7 +279,7 @@ export default function CameraScreen() {
                 accessibilityLabel="Send to AI"
               >
                 {isSending ? (
-                  <ActivityIndicator size="small" color={c.accentText} />
+                  <LoadingIndicator size="small" />
                 ) : (
                   <Send size={20} color={c.accentText} />
                 )}
@@ -381,9 +374,9 @@ export default function CameraScreen() {
             accessibilityLabel="Take photo"
           >
             {isCapturing ? (
-              <ActivityIndicator color={c.black} />
+              <LoadingIndicator />
             ) : !cameraReady ? (
-              <ActivityIndicator color={c.black} />
+              <LoadingIndicator />
             ) : (
               <View style={styles.captureInner} />
             )}

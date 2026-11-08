@@ -1,5 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, TextInput, View } from 'react-native';
+import { TextInput, View } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import {
   AlertCircle,
@@ -60,7 +61,7 @@ function StepIcon({ step, colors }: { step: ResearchStep; colors: ColorScheme })
   const tint = stepTint(step.status, colors);
   if (step.status === 'completed') return <Check size={13} color={tint} />;
   if (step.status === 'failed') return <AlertCircle size={13} color={tint} />;
-  if (step.status === 'running') return <ActivityIndicator size="small" color={tint} />;
+  if (step.status === 'running') return <LoadingIndicator size="small" />;
   if (step.status === 'dropped') return <CircleSlash size={13} color={tint} />;
   return <CircleDashed size={13} color={tint} />;
 }

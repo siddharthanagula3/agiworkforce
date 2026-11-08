@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { getScheduleActionAvailability } from '@agiworkforce/cloud-contracts';
 import { View, type GestureResponderEvent } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -170,11 +171,19 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
   const fetchSchedules = useScheduleStore((s) => s.fetchSchedules);
   const [starting, setStarting] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
+  const availability =
+    schedule.status && schedule.actionType
+      ? getScheduleActionAvailability({
+          status: schedule.status,
+          actionType: schedule.actionType,
+          isEnabled: schedule.isActive,
+        })
+      : null;
 
   const handleRunNow = useCallback(
     async (event: GestureResponderEvent) => {
       event.stopPropagation();
-      if (starting) return;
+      if (starting || !availability?.canRun) return;
       if (hapticsEnabled) {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
@@ -190,7 +199,7 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
         setStarting(false);
       }
     },
-    [starting, hapticsEnabled, schedule.id, fetchRuns, fetchSchedules],
+    [starting, availability?.canRun, hapticsEnabled, schedule.id, fetchRuns, fetchSchedules],
   );
 
   const handleDelete = useCallback(
@@ -222,17 +231,21 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
         .springify()}
     >
       <PressableBox
-        onPress={() => onPress(schedule.id)}
+        onPress={availability?.canEdit ? () => onPress(schedule.id) : undefined}
         className="mb-3 active:opacity-80"
         accessibilityLabel={`Schedule: ${schedule.name}, ${formatRecurrence(schedule)}`}
-        accessibilityRole="button"
+        accessibilityRole={availability?.canEdit ? 'button' : undefined}
       >
         <Card variant="elevated">
           <View className="flex-row items-center justify-between mb-2">
             <Text className="text-[15px] font-semibold text-white flex-1 mr-3" numberOfLines={1}>
               {schedule.name}
             </Text>
-            <Switch value={schedule.isActive} onValueChange={() => onToggle(schedule.id)} />
+            <Switch
+              value={schedule.isActive}
+              disabled={!availability?.canToggle || starting}
+              onValueChange={() => onToggle(schedule.id)}
+            />
           </View>
 
           <Text className="text-sm text-white/50 mb-2.5 leading-[18px]" numberOfLines={2}>
@@ -272,12 +285,12 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
             <View className="flex-row items-center gap-1">
               <PressableBox
                 onPress={handleRunNow}
-                disabled={starting}
+                disabled={starting || !availability?.canRun}
                 hitSlop={8}
                 className="flex-row items-center gap-1 px-2 py-1 rounded-md active:bg-white/5"
                 accessibilityLabel={starting ? 'Starting a run' : 'Run now'}
                 accessibilityRole="button"
-                accessibilityState={{ disabled: starting, busy: starting }}
+                accessibilityState={{ disabled: starting || !availability?.canRun, busy: starting }}
               >
                 <Play size={11} color={colors.textMuted} />
                 <Text className="text-sm text-white/40">{starting ? 'Starting…' : 'Run now'}</Text>

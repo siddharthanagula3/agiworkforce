@@ -1,5 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useUser } from '@clerk/expo';
@@ -141,7 +142,7 @@ export default function GitHubInstallReturnRoute() {
           style={{ alignItems: 'center', gap: 16 }}
           accessibilityLabel="Finishing the GitHub connection"
         >
-          <ActivityIndicator color={colors.textPrimary} />
+          <LoadingIndicator />
           <Button
             title="Cancel"
             variant="outline"

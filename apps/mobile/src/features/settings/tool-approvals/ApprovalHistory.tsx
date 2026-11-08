@@ -1,5 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MANAGED_CLOUD_APPROVAL_HISTORY_PATH } from '@agiworkforce/cloud-contracts';
 import { TOOL_APPROVAL_ACTION_LABELS, getToolDisplayLabel } from '@agiworkforce/types';
@@ -69,7 +70,7 @@ export function ApprovalHistory() {
       </Text>
       {state.status === 'loading' ? (
         <View accessibilityLabel="Loading approval history" style={{ paddingVertical: 16 }}>
-          <ActivityIndicator color={colors.teal} />
+          <LoadingIndicator />
         </View>
       ) : state.status === 'error' ? (
         <Pressable

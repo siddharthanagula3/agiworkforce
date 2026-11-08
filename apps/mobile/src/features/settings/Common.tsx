@@ -1,5 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import type React from 'react';
-import { ActivityIndicator, View, ScrollView, type RefreshControlProps } from 'react-native';
+import { View, ScrollView, type RefreshControlProps } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -122,7 +123,7 @@ export function CloudAccountRequired({
           gap: 10,
         }}
       >
-        <ActivityIndicator color={colors.teal} />
+        <LoadingIndicator />
         <Text style={{ color: colors.textMuted, fontSize: typeScale.footnote }}>
           Checking AGI Cloud account…
         </Text>

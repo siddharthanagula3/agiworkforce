@@ -1,5 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Modal, View } from 'react-native';
+import { Modal, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Monitor, RefreshCw, X } from 'lucide-react-native';
 import type { DevicePresence } from '@agiworkforce/cloud-contracts';
@@ -147,7 +148,7 @@ export function AccountComputersCard({ connectedName }: { connectedName: string 
               Your computers could not be loaded.
             </Text>
           ) : (
-            <ActivityIndicator color={colors.textSecondary} />
+            <LoadingIndicator />
           )
         ) : computers.length === 0 ? (
           <Text className="text-sm text-white/50">

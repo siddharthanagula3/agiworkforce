@@ -1,5 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { FileCode2 } from 'lucide-react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
@@ -37,9 +38,9 @@ export function ProjectArtifactsTab({ projectId }: { projectId: string }) {
 
   if (state.status === 'loading') {
     return (
-      <ActivityIndicator
+      <LoadingIndicator
         accessibilityLabel="Loading artifacts"
-        color={colors.textSecondary}
+
         style={{ marginTop: 32 }}
       />
     );

@@ -1,12 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  TextInput,
-  View,
-} from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, TextInput, View } from 'react-native';
 import { useSignIn } from '@clerk/expo';
 import { useSignInWithApple } from '@clerk/expo/apple';
 import { useSSO } from '@clerk/expo/experimental';
@@ -290,7 +284,7 @@ export function MobileSignIn({
       }}
     >
       {busy ? (
-        <ActivityIndicator color={colors.accentText} />
+        <LoadingIndicator />
       ) : (
         <Text style={{ color: colors.accentText, fontSize: typeScale.callout, fontWeight: '600' }}>
           {label}

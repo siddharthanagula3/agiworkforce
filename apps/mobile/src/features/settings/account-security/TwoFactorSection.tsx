@@ -1,6 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Linking,
@@ -394,7 +394,7 @@ export function TwoFactorSection({
                     onPress={() => void verify()}
                   />
                 </View>
-                {busy ? <ActivityIndicator color={colors.teal} /> : null}
+                {busy ? <LoadingIndicator /> : null}
               </>
             ) : stage.name === 'codes' ? (
               <>

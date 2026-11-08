@@ -1,5 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, RefreshControl, ScrollView, View } from 'react-native';
+import { Alert, FlatList, RefreshControl, ScrollView, View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { useNavigation, useRouter } from 'expo-router';
 import { stageComposerAttachments } from '@/src/features/chat/composerHandoff';
@@ -787,14 +788,14 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
         ListFooterComponent={
           library.loadingMore ? (
             <View className="py-6 items-center">
-              <ActivityIndicator color={c.textMuted} />
+              <LoadingIndicator />
             </View>
           ) : null
         }
         ListEmptyComponent={
           library.loading ? (
             <View testID="library-loading" className="py-20 items-center">
-              <ActivityIndicator color={c.textMuted} />
+              <LoadingIndicator />
             </View>
           ) : (
             <LibraryEmptyState

@@ -1,5 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, TextInput, View } from 'react-native';
+import { TextInput, View } from 'react-native';
 import { Ban, Bot, Globe, Laptop, Smartphone, X, type LucideIcon } from 'lucide-react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
@@ -223,9 +224,9 @@ export default function MemoryExclusionsScreen() {
       ) : null}
 
       {!loaded ? (
-        <ActivityIndicator
+        <LoadingIndicator
           accessibilityLabel="Loading what memory leaves out"
-          color={colors.textSecondary}
+
           style={{ marginVertical: 16 }}
         />
       ) : exclusions.excludedTerms.length === 0 ? (

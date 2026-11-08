@@ -18,6 +18,7 @@ import {
   ManagedCloudProjectKnowledgeRegisterResponseSchema,
   managedCloudProjectKnowledgeFilePath,
   managedCloudProjectKnowledgePath,
+  managedUploadRequestOptions,
   type ManagedCloudProjectKnowledgeFile,
 } from '@agiworkforce/cloud-contracts';
 import { validateAttachmentMeta } from '@agiworkforce/types';
@@ -255,22 +256,27 @@ export const cloudProjectSources = {
       storageKey = presign.storageKey;
       assertCurrent();
       const uploadUrl = new URL(presign.uploadUrl);
-      if (
-        uploadUrl.protocol !== 'https:' ||
-        uploadUrl.username !== '' ||
-        uploadUrl.password !== ''
-      ) {
-        throw new ProjectSourceError(
-          `Refusing an insecure upload destination for "${source.name}".`,
-        );
-      }
+      const uploadOptions = await managedUploadRequestOptions(
+        uploadUrl.toString(),
+        presign.uploadHeaders,
+        {
+          baseUrl: API_URL,
+          getHeaders: async () => {
+            assertCurrent();
+            const headers = await getAuthHeaders();
+            assertCurrent();
+            return headers;
+          },
+        },
+      );
+      assertCurrent();
       const task = createUploadTask(
         uploadUrl.toString(),
         source.uri,
         {
           httpMethod: 'PUT',
           uploadType: FileSystemUploadType.BINARY_CONTENT,
-          headers: presign.uploadHeaders,
+          headers: uploadOptions.headers,
         },
         (data) => {
           if (

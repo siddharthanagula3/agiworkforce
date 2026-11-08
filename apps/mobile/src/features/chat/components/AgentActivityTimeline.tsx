@@ -11,7 +11,6 @@ import {
   Database,
   FileText,
   Globe,
-  Loader2,
   Monitor,
   PauseCircle,
   ShieldAlert,
@@ -24,6 +23,7 @@ import type {
 import { TOOL_STATUS_PRESENTATION, normalizeToolStatus } from '@agiworkforce/types';
 import { CHAT_CODE_RUN_TOOL_NAME } from '@agiworkforce/cloud-contracts';
 import { Text } from '@/components/ui/Text';
+import { AgiMark } from '@/components/ui/AgiMark';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { toolStatusColor } from '@/src/features/chat/utils/toolStatusTone';
@@ -360,11 +360,8 @@ function ProgressRow({ entry }: { entry: Extract<AgentActivityEntry, { kind: 'pr
   const progressStatus = normalizeToolStatus(entry.status);
   const statusColor =
     progressStatus === 'succeeded' ? colors.textMuted : toolStatusColor(progressStatus, colors);
-  const Icon = TOOL_STATUS_PRESENTATION[progressStatus].terminal
-    ? progressStatus === 'succeeded'
-      ? Clock
-      : AlertCircle
-    : Loader2;
+  const terminal = TOOL_STATUS_PRESENTATION[progressStatus].terminal;
+  const Icon = progressStatus === 'succeeded' ? Clock : AlertCircle;
 
   return (
     <View
@@ -374,7 +371,7 @@ function ProgressRow({ entry }: { entry: Extract<AgentActivityEntry, { kind: 'pr
         entry.detail ? `, ${entry.detail}` : ''
       }`}
     >
-      <Icon size={16} color={statusColor} />
+      {terminal ? <Icon size={16} color={statusColor} /> : <AgiMark size={16} spinning />}
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={{ color: colors.textPrimary, fontSize: typeScale.footnote }}>
           {entry.summary}
@@ -484,7 +481,7 @@ function StaticRow({
 
 function RunStatusIcon({ status }: { status: AgentActivityState['status'] }) {
   const colors = useThemeColors();
-  if (status === 'running') return <Loader2 size={16} color={colors.agentActive} />;
+  if (status === 'running') return <AgiMark size={16} spinning />;
   if (status === 'paused') return <PauseCircle size={16} color={colors.textMuted} />;
   if (status === 'completed') return <CheckCircle2 size={16} color={colors.agentSuccess} />;
   if (status === 'awaiting-approval') return <ShieldAlert size={16} color={colors.agentWarning} />;

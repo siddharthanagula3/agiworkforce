@@ -1,5 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useEffect, useMemo } from 'react';
-import { ActivityIndicator, Alert, View, ScrollView } from 'react-native';
+import { Alert, View, ScrollView } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -195,7 +196,7 @@ function SettingsListRow({ row, isLast }: { row: SettingsRow; isLast: boolean })
           take the space the label does not need, and cap font scaling so the row
           still fits at accessibility sizes. */}
       {row.loading ? (
-        <ActivityIndicator testID={`settings-row-loading-${row.key}`} color={colors.textMuted} />
+        <LoadingIndicator testID={`settings-row-loading-${row.key}`} />
       ) : row.value ? (
         <Text
           numberOfLines={1}

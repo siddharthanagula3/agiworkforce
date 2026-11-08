@@ -1,13 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  ScrollView,
-  TextInput,
-  View,
-} from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, ScrollView, TextInput, View } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Check, X } from 'lucide-react-native';
@@ -255,11 +248,7 @@ export function StartWorkSheet({
                 backgroundColor: colors.textPrimary,
               }}
             >
-              {submitting ? (
-                <ActivityIndicator color={colors.accentText} />
-              ) : (
-                <Check size={18} color={colors.accentText} />
-              )}
+              {submitting ? <LoadingIndicator /> : <Check size={18} color={colors.accentText} />}
               <Text
                 style={{ color: colors.accentText, fontWeight: '700', fontSize: typeScale.body }}
               >

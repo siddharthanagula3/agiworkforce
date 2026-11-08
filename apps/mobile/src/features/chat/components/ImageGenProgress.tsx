@@ -1,7 +1,8 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useEffect } from 'react';
 import { View } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
-import { ImagePlus, AlertCircle, Loader2, Square } from 'lucide-react-native';
+import { ImagePlus, AlertCircle, Square } from 'lucide-react-native';
 import Animated, {
   FadeInDown,
   useAnimatedStyle,
@@ -112,7 +113,7 @@ export function ImageGenProgress({
             </Text>
           </View>
 
-          {status === 'generating' && <Loader2 size={16} color={colors.textMuted} />}
+          {status === 'generating' && <LoadingIndicator accessible={false} size={16} />}
         </View>
 
         <Text

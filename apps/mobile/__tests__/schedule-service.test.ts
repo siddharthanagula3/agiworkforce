@@ -112,6 +112,8 @@ describe('mobile schedule service', () => {
         timeOfDay: '09:00',
         timezone: 'America/Chicago',
         isActive: true,
+        status: 'active',
+        actionType: 'agent',
         agentId: null,
         connectors: null,
         lastRunAt: '2026-07-17T14:00:00.000Z',
@@ -122,6 +124,16 @@ describe('mobile schedule service', () => {
         createdAt: '2026-07-01T12:00:00.000Z',
         updatedAt: '2026-07-17T14:00:01.000Z',
       },
+    ]);
+  });
+
+  it('preserves terminal lifecycle fields for action availability', async () => {
+    apiMock.get.mockResolvedValueOnce({
+      schedules: [{ ...serverSchedule, status: 'completed', isEnabled: false }],
+      pagination: { limit: 50, offset: 0 },
+    });
+    await expect(fetchSchedules()).resolves.toMatchObject([
+      { status: 'completed', actionType: 'agent', isActive: false },
     ]);
   });
 

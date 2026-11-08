@@ -1,5 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useEffect, useState } from 'react';
-import { View, ScrollView, ActivityIndicator } from 'react-native';
+import { View, ScrollView } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { useRouter } from 'expo-router';
 import { Bot } from 'lucide-react-native';
@@ -69,7 +70,7 @@ export function ProjectWorkTab({ projectId, projectName }: ProjectWorkTabProps) 
   if (state.status === 'loading') {
     return (
       <View className="items-center justify-center py-16" accessibilityLabel="Loading work">
-        <ActivityIndicator size="small" color={colors.teal} />
+        <LoadingIndicator size="small" />
       </View>
     );
   }

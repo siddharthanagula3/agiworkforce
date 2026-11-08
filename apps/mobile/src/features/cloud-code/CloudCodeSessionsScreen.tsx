@@ -1,5 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, RefreshControl, View } from 'react-native';
+import { FlatList, RefreshControl, View } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -202,7 +203,7 @@ function SessionList({ onBack }: { onBack: () => void }) {
 
       {status === 'loading' ? (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-          <ActivityIndicator color={colors.textPrimary} />
+          <LoadingIndicator />
           <Text style={{ color: colors.textMuted }}>Loading cloud sessions</Text>
         </View>
       ) : status === 'error' ? (

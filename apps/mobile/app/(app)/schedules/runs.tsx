@@ -1,5 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, RefreshControl, View } from 'react-native';
+import { FlatList, RefreshControl, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import {
@@ -205,7 +206,7 @@ export default function ScheduledRunsScreen() {
           renderItem={({ item }) => <RunRow run={item} onPress={handleOpenSchedule} />}
           ListFooterComponent={
             loadingMore ? (
-              <ActivityIndicator className="py-4" color={colors.textMuted} />
+              <LoadingIndicator className="py-4" />
             ) : error ? (
               <PressableBox
                 onPress={handleEndReached}

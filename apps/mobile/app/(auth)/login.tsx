@@ -1,5 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -236,7 +237,7 @@ export default function LoginScreen() {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 20 }}>
-          <ActivityIndicator testID="cloud-sign-in-completing" color={colors.teal} size="large" />
+          <LoadingIndicator testID="cloud-sign-in-completing" size="large" />
           <Text style={{ color: colors.textSecondary, textAlign: 'center' }}>
             {userId ? 'Checking your AGI Cloud access…' : 'Finishing sign-in…'}
           </Text>

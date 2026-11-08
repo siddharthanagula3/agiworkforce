@@ -1,5 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, TextInput, View } from 'react-native';
+import { TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { BookOpen, ChevronRight } from 'lucide-react-native';
 import {
@@ -250,7 +251,7 @@ export function StudyScreen() {
         }}
       >
         {starting ? (
-          <ActivityIndicator color={colors.surfaceElevated} />
+          <LoadingIndicator />
         ) : (
           <Text
             style={{ color: colors.surfaceElevated, fontSize: typeScale.body, fontWeight: '600' }}

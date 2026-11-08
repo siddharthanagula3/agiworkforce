@@ -1,3 +1,4 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, RefreshControl, Alert } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
@@ -10,7 +11,6 @@ import {
   CheckCircle2,
   XCircle,
   Clock,
-  Loader2,
   ChevronRight,
   ShieldCheck,
   ShieldAlert,
@@ -51,7 +51,7 @@ function AgentStatusIcon({ status }: { status: Agent['status'] }) {
   const colors = useThemeColors();
   switch (status) {
     case 'running':
-      return <Loader2 size={16} color={colors.agentActive} />;
+      return <LoadingIndicator accessible={false} size={16} />;
     case 'completed':
       return <CheckCircle2 size={16} color={colors.agentSuccess} />;
     case 'failed':

@@ -1,5 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, View } from 'react-native';
+import { Alert, View } from 'react-native';
 import { ChevronRight, Users } from 'lucide-react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
@@ -119,9 +120,9 @@ export function ProjectMembersSection({
 
   if (overview === undefined) {
     return (
-      <ActivityIndicator
+      <LoadingIndicator
         accessibilityLabel="Loading who can access this project"
-        color={colors.textSecondary}
+
         style={{ marginBottom: 24 }}
       />
     );

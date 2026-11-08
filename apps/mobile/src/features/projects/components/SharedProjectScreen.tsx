@@ -1,5 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { FileText, Users } from 'lucide-react-native';
 import type {
@@ -69,10 +70,7 @@ export function SharedProjectScreen({ projectId }: { projectId: string }) {
   if (!view) {
     return (
       <SettingsScreenShell title="Shared project" backHref="/(app)/(tabs)/projects">
-        <ActivityIndicator
-          accessibilityLabel="Loading shared project"
-          color={colors.textSecondary}
-        />
+        <LoadingIndicator accessibilityLabel="Loading shared project" />
       </SettingsScreenShell>
     );
   }

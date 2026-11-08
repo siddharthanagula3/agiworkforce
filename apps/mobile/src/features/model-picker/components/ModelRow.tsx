@@ -1,4 +1,5 @@
-import { ActivityIndicator, View, Switch } from 'react-native';
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
+import { View, Switch } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { Brain, Check, Cloud, Cpu, Download, Lock, Star } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
@@ -251,7 +252,7 @@ export function ModelRow({
               <Text style={{ color: colors.teal, fontSize: typeScale.caption }}>
                 {progressPercent}%
               </Text>
-              <ActivityIndicator size="small" color={colors.teal} />
+              <LoadingIndicator size="small" />
             </>
           ) : null}
           {isLocal && isFailed ? <Badge label="Retry" color="yellow" /> : null}

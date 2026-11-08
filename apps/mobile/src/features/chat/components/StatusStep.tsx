@@ -1,3 +1,4 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useState, useCallback, useEffect } from 'react';
 import { View } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
@@ -18,7 +19,6 @@ import {
   XCircle,
   ChevronDown,
   ChevronRight,
-  Loader2,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/Text';
 import { useThemeColors, type ColorScheme, motion } from '@/src/ui/theme';
@@ -111,7 +111,7 @@ export function StatusStep({ step, stepNumber, totalSteps }: StatusStepProps) {
         >
           <View className="mt-0.5">
             {step.status === 'running' ? (
-              <Loader2 size={16} color={iconColor} />
+              <LoadingIndicator accessible={false} size={16} />
             ) : (
               <StepIconComponent size={16} color={iconColor} />
             )}

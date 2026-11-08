@@ -1,3 +1,4 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback } from 'react';
 import { View, ScrollView, Alert } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
@@ -20,7 +21,6 @@ import {
   Clock,
   CheckCircle2,
   XCircle,
-  Loader2,
   RefreshCw,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/Text';
@@ -45,7 +45,7 @@ function AgentStatusIcon({ status }: { status: 'running' | 'completed' | 'failed
   const colors = useThemeColors();
   switch (status) {
     case 'running':
-      return <Loader2 size={20} color={colors.agentActive} />;
+      return <LoadingIndicator accessible={false} size={20} />;
     case 'completed':
       return <CheckCircle2 size={20} color={colors.agentSuccess} />;
     case 'failed':

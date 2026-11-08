@@ -1,5 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useEffect, useState, type ReactNode } from 'react';
-import { ActivityIndicator, Alert, View } from 'react-native';
+import { Alert, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
   FileCode2,
@@ -259,10 +260,7 @@ export function SharedWithYouScreen() {
   if (loaded === undefined) {
     return (
       <SettingsScreenShell title="Shared with you" backHref="/(app)/(tabs)/projects">
-        <ActivityIndicator
-          accessibilityLabel="Loading what is shared with you"
-          color={colors.textSecondary}
-        />
+        <LoadingIndicator accessibilityLabel="Loading what is shared with you" />
       </SettingsScreenShell>
     );
   }

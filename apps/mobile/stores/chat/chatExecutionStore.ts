@@ -2000,6 +2000,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             id: conversationId,
             title: conversation?.title ?? 'New conversation',
             model: requestedModel,
+            projectId: activeProjectId,
             isTemporary: conversation?.temporary ?? false,
           });
         } catch (error) {

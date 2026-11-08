@@ -1,5 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useEffect, useMemo, useState } from 'react';
-import { View, Text, Pressable, ActivityIndicator, Alert, ScrollView } from 'react-native';
+import { View, Text, Pressable, Alert, ScrollView } from 'react-native';
 import { Image } from 'expo-image';
 import { AlertCircle, MapPinned, Navigation, ExternalLink } from 'lucide-react-native';
 import { isAllowedItineraryRouteUrl } from '@agiworkforce/cloud-contracts';
@@ -265,7 +266,7 @@ function MapTiles({
         }}
       >
         {tileAccess.status === 'authorizing' ? (
-          <ActivityIndicator color={colors.teal} />
+          <LoadingIndicator />
         ) : (
           <MapPinned size={24} color={colors.textMuted} />
         )}

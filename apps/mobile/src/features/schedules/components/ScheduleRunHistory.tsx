@@ -1,5 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useEffect, useCallback } from 'react';
-import { View, Pressable, ActivityIndicator } from 'react-native';
+import { View, Pressable } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import {
   Check,
@@ -100,7 +101,7 @@ function PendingApproval({ run }: RunRowProps) {
           accessibilityState={{ disabled: sending, busy: sending }}
         >
           {sending ? (
-            <ActivityIndicator size="small" color={colors.accentText} />
+            <LoadingIndicator size="small" />
           ) : (
             <Check size={14} color={colors.accentText} />
           )}
@@ -254,7 +255,7 @@ export function ScheduleRunHistory({ scheduleId, maxRuns = 5 }: ScheduleRunHisto
           accessibilityRole="button"
         >
           {loading ? (
-            <ActivityIndicator size="small" color={colors.textMuted} />
+            <LoadingIndicator size="small" />
           ) : (
             <RefreshCw size={13} color={colors.textMuted} />
           )}
@@ -263,7 +264,7 @@ export function ScheduleRunHistory({ scheduleId, maxRuns = 5 }: ScheduleRunHisto
 
       {loading && runs.length === 0 ? (
         <View className="py-3 items-center">
-          <ActivityIndicator size="small" color={colors.textMuted} />
+          <LoadingIndicator size="small" />
           <Text className="text-sm text-white/30 mt-2">Loading runs…</Text>
         </View>
       ) : error && runs.length === 0 ? (

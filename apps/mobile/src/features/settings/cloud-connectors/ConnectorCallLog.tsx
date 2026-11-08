@@ -1,5 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { View } from 'react-native';
 import type { ConnectorCallEntry, ConnectorCallOutcome } from '@agiworkforce/cloud-contracts';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
@@ -81,7 +82,7 @@ export function ConnectorCallLog({ connectorId }: { connectorId: string }) {
           accessibilityLabel="Reading the call log"
           style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}
         >
-          <ActivityIndicator size="small" color={colors.teal} />
+          <LoadingIndicator size="small" />
           <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}>
             Reading the call log
           </Text>

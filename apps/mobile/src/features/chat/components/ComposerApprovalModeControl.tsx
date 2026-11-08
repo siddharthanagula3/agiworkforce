@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { ActivityIndicator, Modal, View } from 'react-native';
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
+import { useRef, useState } from 'react';
+import { Modal, View } from 'react-native';
 import { Check, ChevronDown, ShieldCheck, TriangleAlert } from 'lucide-react-native';
 import {
   TOOL_APPROVAL_POLICY_OPTIONS,
@@ -53,7 +54,7 @@ export function ComposerApprovalModeControl() {
         }}
       >
         {busy ? (
-          <ActivityIndicator size="small" color={colors.textMuted} />
+          <LoadingIndicator size="small" />
         ) : (
           <Glyph size={16} color={policy === AUTONOMOUS ? colors.agentError : colors.textMuted} />
         )}

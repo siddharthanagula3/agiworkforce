@@ -1,5 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useEffect } from 'react';
-import { ActivityIndicator } from 'react-native';
+
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
@@ -50,7 +51,7 @@ export default function ConnectorOAuthReturnRoute() {
       }}
       accessibilityLabel="Finishing the connection"
     >
-      <ActivityIndicator color={colors.textPrimary} />
+      <LoadingIndicator />
       <Pressable
         onPress={handleCancel}
         accessibilityRole="button"

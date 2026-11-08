@@ -1,10 +1,10 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
   StyleSheet,
   Linking,
   TextInput,
-  ActivityIndicator,
   KeyboardAvoidingView,
   Alert,
   useWindowDimensions,
@@ -229,7 +229,7 @@ export default function ScanScreen() {
   if (!permission) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator color={c.teal} />
+        <LoadingIndicator />
       </View>
     );
   }
@@ -291,7 +291,7 @@ export default function ScanScreen() {
       <View style={styles.flex}>
         <Image source={{ uri: capturedUri }} style={StyleSheet.absoluteFill} contentFit="cover" />
         <View style={styles.processingOverlay}>
-          <ActivityIndicator color={c.teal} size="large" />
+          <LoadingIndicator size="large" />
           <Text style={styles.processingLabel}>Extracting text…</Text>
         </View>
       </View>
@@ -391,7 +391,7 @@ export default function ScanScreen() {
                   accessibilityLabel="Send to AI"
                 >
                   {isSending ? (
-                    <ActivityIndicator size="small" color={c.accentText} />
+                    <LoadingIndicator size="small" />
                   ) : (
                     <Send size={20} color={c.accentText} />
                   )}
@@ -482,9 +482,9 @@ export default function ScanScreen() {
             accessibilityLabel="Capture and scan"
           >
             {isCapturing ? (
-              <ActivityIndicator color={c.accentText} />
+              <LoadingIndicator />
             ) : !cameraReady ? (
-              <ActivityIndicator color={c.accentText} />
+              <LoadingIndicator />
             ) : (
               <ScanText size={26} color={c.accentText} />
             )}

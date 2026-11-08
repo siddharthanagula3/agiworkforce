@@ -1,3 +1,4 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 /**
  * ReportFlagButton: per-turn in-app report/flag control.
  *
@@ -17,7 +18,6 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -239,7 +239,7 @@ export function ReportSheet({
                   style={[styles.submitBtn, { backgroundColor: colors.teal }]}
                 >
                   {loading ? (
-                    <ActivityIndicator size="small" color={colors.accentText} />
+                    <LoadingIndicator size="small" />
                   ) : (
                     <Text style={[styles.submitBtnText, { color: colors.accentText }]}>Send</Text>
                   )}
@@ -270,7 +270,7 @@ export function ReportSheet({
                   style={[styles.submitBtn, { backgroundColor: colors.teal }]}
                 >
                   {loading ? (
-                    <ActivityIndicator size="small" color={colors.accentText} />
+                    <LoadingIndicator size="small" />
                   ) : (
                     <Text style={[styles.submitBtnText, { color: colors.accentText }]}>
                       Email this report to support
@@ -444,7 +444,7 @@ export function ReportSheet({
                 ]}
               >
                 {loading ? (
-                  <ActivityIndicator size="small" color={colors.accentText} />
+                  <LoadingIndicator size="small" />
                 ) : (
                   <Text style={[styles.submitBtnText, { color: colors.accentText }]}>
                     Save report

@@ -1,5 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, View } from 'react-native';
+import { Alert, View } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import BottomSheet, {
   BottomSheetBackdrop,
@@ -776,7 +777,7 @@ export function ModelPickerSheet({
             accessibilityRole="progressbar"
             accessibilityLabel="Loading models"
           >
-            <ActivityIndicator size="small" color={colors.textMuted} />
+            <LoadingIndicator size="small" />
             <Text style={{ color: colors.textMuted, fontSize: typeScale.footnote }}>
               Loading models…
             </Text>

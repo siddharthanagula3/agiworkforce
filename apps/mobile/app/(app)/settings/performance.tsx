@@ -1,5 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, ScrollView, ActivityIndicator, AccessibilityInfo, Platform } from 'react-native';
+import { View, ScrollView, AccessibilityInfo, Platform } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -608,7 +609,7 @@ export default function PerformanceScreen() {
           </View>
 
           {caps === null ? (
-            <ActivityIndicator size="small" color={c.teal} />
+            <LoadingIndicator size="small" />
           ) : tierInfo ? (
             <>
               <View
@@ -648,7 +649,7 @@ export default function PerformanceScreen() {
                 <View
                   style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}
                 >
-                  <ActivityIndicator size="small" color={c.teal} />
+                  <LoadingIndicator size="small" />
                   <Text
                     style={{ fontSize: typeScale.caption, color: c.textMuted, flex: 1 }}
                     accessibilityLabel={tierInfo.fetchingNote}
@@ -972,7 +973,7 @@ export default function PerformanceScreen() {
           >
             {isBenchmarking ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <ActivityIndicator size="small" color={c.textSecondary} />
+                <LoadingIndicator size="small" />
                 <Text
                   style={{ fontSize: typeScale.subhead, fontWeight: '600', color: c.textSecondary }}
                 >

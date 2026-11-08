@@ -1,8 +1,8 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   ScrollView,
-  ActivityIndicator,
   Alert,
   Modal,
   TextInput,
@@ -150,7 +150,7 @@ function UploadProgressRow({
       }}
       testID="project-source-upload-progress"
     >
-      <ActivityIndicator size="small" color={colors.teal} />
+      <LoadingIndicator size="small" />
       <View className="flex-1" accessible accessibilityLiveRegion="polite">
         <Text
           className="text-sm font-medium"
@@ -578,7 +578,7 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
           accessibilityLabel="Add sources"
           accessibilityState={{ disabled: busy || target === 'unknown' }}
         >
-          {busy ? <ActivityIndicator size="small" color={colors.teal} /> : null}
+          {busy ? <LoadingIndicator size="small" /> : null}
           <Plus size={16} color={colors.teal} />
           <Text className="text-[14px] font-semibold" style={{ color: colors.teal }}>
             Add sources
@@ -693,7 +693,7 @@ export function ProjectSourcesTab({ projectId }: ProjectSourcesTabProps) {
                 }}
               >
                 {busy ? (
-                  <ActivityIndicator size="small" color={colors.teal} />
+                  <LoadingIndicator size="small" />
                 ) : (
                   <Text style={{ color: colors.teal, fontWeight: '600' }}>Add</Text>
                 )}

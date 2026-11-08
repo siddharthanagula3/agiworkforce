@@ -1,22 +1,12 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useEffect, useRef } from 'react';
 import { View, ScrollView } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { useRecyclingState } from '@shopify/flash-list';
-import Animated, {
-  FadeIn,
-  FadeOut,
-  LinearTransition,
-  useSharedValue,
-  withRepeat,
-  withTiming,
-  Easing,
-  cancelAnimation,
-  useAnimatedStyle,
-} from 'react-native-reanimated';
+import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 import {
   CheckCircle2,
   XCircle,
-  Loader2,
   Terminal,
   Globe,
   Database,
@@ -44,31 +34,6 @@ export interface ExecutionStreamProps {
 const EXECUTION_STREAM_PAGE_SIZE = 20;
 const TIMELINE_GUTTER_WIDTH = 20;
 const TIMELINE_MAX_HEIGHT = 300;
-
-function SpinningLoader({ size = 14, color }: { size?: number; color: string }) {
-  const rotation = useSharedValue(0);
-
-  useEffect(() => {
-    rotation.value = withRepeat(
-      withTiming(360, { duration: motion.pulse, easing: Easing.linear }),
-      -1,
-      false,
-    );
-    return () => {
-      cancelAnimation(rotation);
-    };
-  }, [rotation]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${rotation.value}deg` }],
-  }));
-
-  return (
-    <Animated.View style={animatedStyle}>
-      <Loader2 size={size} color={color} />
-    </Animated.View>
-  );
-}
 
 function formatDuration(startedAt: string): string {
   try {
@@ -133,7 +98,7 @@ function ToolCallRow({ call, isLatest }: ToolCallRowProps) {
           style={{ backgroundColor: `${statusColor}18` }}
         >
           {!isTerminalToolStatus(call.status) ? (
-            <SpinningLoader size={11} color={statusColor} />
+            <LoadingIndicator accessible={false} size={11} />
           ) : call.status === 'succeeded' ? (
             <CheckCircle2 size={11} color={statusColor} />
           ) : (
@@ -252,7 +217,7 @@ export function ExecutionStream({ taskId, onComplete }: ExecutionStreamProps) {
       <View className="flex-row items-center justify-between mb-3">
         <View className="flex-row items-center gap-2">
           {agent.status === 'running' ? (
-            <SpinningLoader size={14} color={colors.agentActive} />
+            <LoadingIndicator accessible={false} size={14} />
           ) : agent.status === 'completed' ? (
             <CheckCircle2 size={14} color={colors.agentSuccess} />
           ) : agent.status === 'failed' ? (
@@ -324,7 +289,7 @@ export function ExecutionStream({ taskId, onComplete }: ExecutionStreamProps) {
         <View className="items-center py-4">
           {agent.status === 'running' ? (
             <View className="flex-row items-center gap-2">
-              <SpinningLoader size={13} color={colors.agentActive} />
+              <LoadingIndicator accessible={false} size={13} />
               <Text className="text-sm text-white/40">Waiting for tool calls...</Text>
             </View>
           ) : (

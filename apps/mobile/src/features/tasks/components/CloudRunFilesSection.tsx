@@ -1,5 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useState } from 'react';
-import { ActivityIndicator, Alert, View } from 'react-native';
+import { Alert, View } from 'react-native';
 import { FileText, Share } from 'lucide-react-native';
 import { resolveGeneratedFileUri } from '@agiworkforce/cloud-contracts';
 import { formatBytes } from '@agiworkforce/utils/format';
@@ -82,11 +83,7 @@ export function CloudRunFilesSection({ files }: { files: CloudRunProducedFile[] 
                 </Text>
               ) : null}
             </View>
-            {opening ? (
-              <ActivityIndicator color={colors.textSecondary} />
-            ) : (
-              <Share size={18} color={colors.textSecondary} />
-            )}
+            {opening ? <LoadingIndicator /> : <Share size={18} color={colors.textSecondary} />}
           </PressableBox>
         );
       })}

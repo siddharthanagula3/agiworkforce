@@ -1,5 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useState } from 'react';
-import { View, ActivityIndicator, Modal, StyleSheet } from 'react-native';
+import { View, Modal, StyleSheet } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -215,7 +216,7 @@ export function FileExportButton({
                           }}
                         >
                           {isLoading ? (
-                            <ActivityIndicator size="small" color={colors.teal} />
+                            <LoadingIndicator size="small" />
                           ) : isSuccess ? (
                             <Check size={20} color={colors.agentSuccess} />
                           ) : (

@@ -1,3 +1,4 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import {
   useCallback,
   useLayoutEffect,
@@ -6,7 +7,7 @@ import {
   type Dispatch,
   type SetStateAction,
 } from 'react';
-import { View, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
+import { View, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -597,7 +598,7 @@ function ResponsePanel({ slot, modelId, state, winner }: ResponsePanelProps) {
 
       {state.isStreaming && (
         <View className="flex-row items-center gap-2 mb-3">
-          <ActivityIndicator size="small" color={slotColor} />
+          <LoadingIndicator size="small" />
           <Text className="text-sm text-fg-muted">Generating...</Text>
         </View>
       )}

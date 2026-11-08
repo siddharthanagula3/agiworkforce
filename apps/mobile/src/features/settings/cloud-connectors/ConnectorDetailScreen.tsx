@@ -1,5 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, View } from 'react-native';
+import { Alert, View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { useRouter } from 'expo-router';
 import { useUser } from '@clerk/expo';
@@ -260,13 +261,13 @@ function PermissionRow({
             style={{ width: 32, height: 32, alignItems: 'center', justifyContent: 'center' }}
           >
             {saving ? (
-              <ActivityIndicator size="small" color={colors.textMuted} />
+              <LoadingIndicator size="small" />
             ) : (
               <RotateCcw size={16} color={colors.textMuted} />
             )}
           </Pressable>
         ) : saving ? (
-          <ActivityIndicator size="small" color={colors.textMuted} />
+          <LoadingIndicator size="small" />
         ) : null}
       </View>
 
@@ -732,7 +733,7 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
         <CloudSyncBlockedBanner onSwitchToCloud={() => setAppMode('cloud')} />
       ) : loading && !loaded ? (
         <View style={{ alignItems: 'center', gap: 10, paddingVertical: 36 }}>
-          <ActivityIndicator size="large" color={colors.teal} />
+          <LoadingIndicator size="large" />
           <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}>
             Loading connector…
           </Text>
@@ -944,7 +945,7 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
                 })}
               >
                 {reconnecting ? (
-                  <ActivityIndicator size="small" color={colors.teal} />
+                  <LoadingIndicator size="small" />
                 ) : (
                   <RotateCcw size={17} color={colors.teal} />
                 )}
@@ -993,7 +994,7 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
               accessibilityLabel="Loading tools"
               style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 18 }}
             >
-              <ActivityIndicator size="small" color={colors.teal} />
+              <LoadingIndicator size="small" />
               <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}>
                 Loading tools…
               </Text>
@@ -1156,7 +1157,7 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
             })}
           >
             {disconnecting ? (
-              <ActivityIndicator size="small" color={colors.agentError} />
+              <LoadingIndicator size="small" />
             ) : (
               <Trash2 size={17} color={colors.agentError} />
             )}
@@ -1227,7 +1228,7 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
                 opacity: pressed || connecting ? 0.8 : 1,
               })}
             >
-              {connecting ? <ActivityIndicator size="small" color={colors.accentText} /> : null}
+              {connecting ? <LoadingIndicator size="small" /> : null}
               <Text
                 style={{ color: colors.accentText, fontSize: typeScale.body, fontWeight: '700' }}
               >

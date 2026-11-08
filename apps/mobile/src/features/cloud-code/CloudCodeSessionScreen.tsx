@@ -1,6 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   RefreshControl,
   ScrollView,
@@ -305,7 +305,7 @@ function SessionView({
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
         <Header session={null} onBack={onBack} />
         <CenteredState>
-          <ActivityIndicator color={colors.textPrimary} />
+          <LoadingIndicator />
           <Text style={{ color: colors.textMuted }}>Opening this session</Text>
         </CenteredState>
       </SafeAreaView>

@@ -1,13 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Linking,
-  Platform,
-  ScrollView,
-  View,
-} from 'react-native';
+import { Alert, KeyboardAvoidingView, Linking, Platform, ScrollView, View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -252,11 +245,7 @@ export default function ReminderReviewScreen() {
               opacity: creating ? 0.6 : pressed ? 0.82 : 1,
             })}
           >
-            {creating ? (
-              <ActivityIndicator color={colors.surfaceBase} />
-            ) : (
-              <Bell size={18} color={colors.surfaceBase} />
-            )}
+            {creating ? <LoadingIndicator /> : <Bell size={18} color={colors.surfaceBase} />}
             <Text
               style={{ color: colors.surfaceBase, fontSize: typeScale.body, fontWeight: '700' }}
             >

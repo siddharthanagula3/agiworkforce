@@ -1,3 +1,4 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { PROJECT_TEMPLATES, getProjectTemplate } from '@agiworkforce/types';
 import {
@@ -10,7 +11,6 @@ import {
   ScrollView,
   FlatList,
   RefreshControl,
-  ActivityIndicator,
 } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { StatusBar } from 'expo-status-bar';
@@ -455,7 +455,7 @@ export default function ProjectsTabScreen() {
         >
           {isCloud && syncStatus === 'syncing' ? (
             <View style={{ alignItems: 'center', gap: 12 }}>
-              <ActivityIndicator color={colors.teal} accessibilityLabel="Loading projects" />
+              <LoadingIndicator accessibilityLabel="Loading projects" />
               <Text style={{ color: colors.textSecondary }}>Loading projects</Text>
             </View>
           ) : isCloud && syncStatus === 'error' ? (

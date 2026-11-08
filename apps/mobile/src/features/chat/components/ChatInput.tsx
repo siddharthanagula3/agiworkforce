@@ -1,3 +1,4 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import {
   useState,
   useRef,
@@ -7,7 +8,7 @@ import {
   useLayoutEffect,
   useMemo,
 } from 'react';
-import { ActivityIndicator, Alert, View, TextInput, Keyboard } from 'react-native';
+import { Alert, View, TextInput, Keyboard } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -1356,7 +1357,7 @@ ${current}`
                   backgroundColor: themeColors.inputSurface,
                 }}
               >
-                <ActivityIndicator size="small" color={themeColors.textSecondary} />
+                <LoadingIndicator size="small" />
               </View>
             ) : (
               <PressableBox

@@ -1,13 +1,6 @@
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 import { useState, useCallback, useRef } from 'react';
-import {
-  View,
-  TextInput,
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  Modal,
-  Keyboard,
-} from 'react-native';
+import { View, TextInput, KeyboardAvoidingView, Platform, Modal, Keyboard } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { Zap, X, Plus, ArrowUp } from 'lucide-react-native';
 import { Text } from '@/components/ui/Text';
@@ -451,7 +444,7 @@ export function QuickSchedule({
                   accessibilityRole="button"
                 >
                   {loading ? (
-                    <ActivityIndicator color={colors.accentText} size="small" />
+                    <LoadingIndicator size="small" />
                   ) : (
                     <Text
                       className="text-[15px] font-semibold"
