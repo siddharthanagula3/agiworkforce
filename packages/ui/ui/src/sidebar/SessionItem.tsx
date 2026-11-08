@@ -187,7 +187,7 @@ function SessionItemBase({
   // accessible name has to carry the mode rather than leave it to colour.
   const rowNameParts = [
     rowLabel,
-    session.agiWork ? t('sidebar.agiWork', 'AGI Work') : null,
+    session.agiWork ? t('sidebar.agiWork', 'Work') : null,
     session.needsYou ? t('sidebar.needsYou', 'Needs you') : null,
     session.runState === 'running' ? t('sidebar.running', 'Running') : null,
     session.unread ? t('sidebar.unread', 'Unread') : null,

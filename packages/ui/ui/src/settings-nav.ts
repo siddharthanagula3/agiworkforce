@@ -155,13 +155,13 @@ export const SETTINGS_NAV: SettingsNavEntry[] = [
   { key: 'connectors', label: 'Connectors', icon: Plug, keywords: ['mcp', 'integration'] },
   {
     key: 'agi-code',
-    label: 'AGI Code',
+    label: 'Code',
     icon: Code2,
     keywords: ['cli', 'claude.md', 'agents.md', 'instructions', 'code agent', 'vs code'],
   },
   {
     key: 'agi-in-chrome',
-    label: 'AGI Extension',
+    label: 'Extension',
     icon: Globe,
     keywords: ['browser', 'extension', 'bridge', 'native messaging', 'pairing'],
   },

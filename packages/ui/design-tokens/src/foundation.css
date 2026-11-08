@@ -120,6 +120,13 @@
     /* A vendor logo is drawn on a surface the brand chose, not on ours: many
      * marks are near black and vanish on a dark ground. This pair is fixed in
      * both themes for that reason. */
+    --symbol-ribbon-shine: #ffffff;
+    --symbol-shine-band: path(
+      'M -8 -23 C -2 -30 5 -24 4 -16 C 13 -17 9 -5 5 -2 C 13 5 8 10 3 11 C 8 22 -1 29 -6 22 C -14 24 -9 11 -5 7 C -13 1 -8 -6 -5 -8 C -13 -14 -14 -20 -8 -23 Z'
+    );
+    --symbol-shine-path: path(
+      'M 50 24 C 55 24 60 38 66 49 C 72 60 84 79 75 80 C 66 81 60 75 50 75 C 40 75 25 84 23 77 C 21 70 32 52 38 41 C 44 30 45 24 50 24 Z'
+    );
     --logo-surface: 0 0% 100%;
     --logo-on-surface: 0 0% 12%;
 
@@ -294,6 +301,7 @@
      * Keeping that exception named prevents 700ms from leaking into menus,
      * toggles, drawers, or progress updates. */
     --duration-reveal: 700ms;
+    --duration-mark-flow: 4200ms;
     --curve-standard: cubic-bezier(0.2, 0, 0, 1);
     --curve-exit: cubic-bezier(0.4, 0, 1, 1);
     --curve-spring: cubic-bezier(0.22, 1.2, 0.36, 1);
@@ -462,22 +470,59 @@
 }
 
 .agi-mark-spin {
-  animation: agi-mark-spin 1s linear infinite;
+  animation: none;
 }
 
-.agi-fl-hero-brand-mark.agi-mark-spin {
-  animation-duration: 3s;
+.agi-mark-motion {
+  position: relative;
+  display: inline-grid;
+  flex: none;
+  max-inline-size: 100%;
+  line-height: 0;
+  vertical-align: middle;
+  isolation: isolate;
+  mask-image: var(--agi-mark-symbol);
+  mask-size: contain;
+  mask-position: center;
+  mask-repeat: no-repeat;
 }
 
-@keyframes agi-mark-spin {
+.agi-mark-ribbon {
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  pointer-events: none;
+}
+
+.agi-mark-shine {
+  fill: var(--symbol-ribbon-shine);
+  d: var(--symbol-shine-band);
+  opacity: 0.55;
+  filter: blur(3px);
+  offset-path: var(--symbol-shine-path);
+  offset-rotate: auto;
+  animation: agi-mark-shine var(--duration-mark-flow) linear infinite;
+}
+
+.agi-mark-motion[data-paused] .agi-mark-shine {
+  animation-play-state: paused;
+}
+
+@keyframes agi-mark-shine {
+  from {
+    offset-distance: 0%;
+  }
   to {
-    transform: rotate(360deg);
+    offset-distance: 100%;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .agi-mark-spin,
-  .agi-fl-hero-brand-mark {
+  .agi-mark-ribbon {
+    display: none;
+  }
+  .agi-mark-shine {
     animation: none;
   }
 }

@@ -1,9 +1,10 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 
 export type VoiceInputState = 'idle' | 'listening' | 'error' | 'unsupported';
 
 interface UseVoiceInputOptions {
   onTranscript: (text: string) => void;
+  scopeKey?: string | null;
 }
 
 interface SpeechRecognitionEvent extends Event {
@@ -33,13 +34,23 @@ declare global {
   }
 }
 
-export function useVoiceInput({ onTranscript }: UseVoiceInputOptions) {
+export function useVoiceInput({ onTranscript, scopeKey }: UseVoiceInputOptions) {
   const [state, setState] = useState<VoiceInputState>(() => {
     if (typeof window === 'undefined') return 'unsupported';
     return window.SpeechRecognition || window.webkitSpeechRecognition ? 'idle' : 'unsupported';
   });
 
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const stopRequestedRef = useRef(false);
+
+  useEffect(() => {
+    setState((previous) => (previous === 'unsupported' ? previous : 'idle'));
+    return () => {
+      const recognition = recognitionRef.current;
+      recognitionRef.current = null;
+      recognition?.abort();
+    };
+  }, [scopeKey]);
 
   const start = useCallback(() => {
     if (typeof window === 'undefined') return;
@@ -50,23 +61,31 @@ export function useVoiceInput({ onTranscript }: UseVoiceInputOptions) {
     }
 
     if (recognitionRef.current) {
+      stopRequestedRef.current = true;
       recognitionRef.current.stop();
       return;
     }
 
     const recognition = new Ctor();
+    stopRequestedRef.current = false;
+    let receivedTranscript = false;
     recognition.continuous = false;
     recognition.interimResults = false;
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
+      if (recognitionRef.current !== recognition) return;
       const transcript = Array.from(event.results)
         .map((r) => r[0]?.transcript ?? '')
         .join(' ')
         .trim();
-      if (transcript) onTranscript(transcript);
+      if (transcript) {
+        receivedTranscript = true;
+        onTranscript(transcript);
+      }
     };
 
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+      if (recognitionRef.current !== recognition) return;
       if (event.error !== 'aborted') {
         setState('error');
       }
@@ -74,7 +93,8 @@ export function useVoiceInput({ onTranscript }: UseVoiceInputOptions) {
     };
 
     recognition.onend = () => {
-      setState((prev) => (prev === 'error' ? 'error' : 'idle'));
+      if (recognitionRef.current !== recognition) return;
+      setState(!receivedTranscript && !stopRequestedRef.current ? 'error' : 'idle');
       recognitionRef.current = null;
     };
 
@@ -85,6 +105,7 @@ export function useVoiceInput({ onTranscript }: UseVoiceInputOptions) {
 
   const stop = useCallback(() => {
     if (recognitionRef.current) {
+      stopRequestedRef.current = true;
       recognitionRef.current.stop();
     }
   }, []);

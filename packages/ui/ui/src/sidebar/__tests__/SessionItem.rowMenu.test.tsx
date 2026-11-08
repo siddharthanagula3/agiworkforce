@@ -74,6 +74,24 @@ describe('chat row menu (Sidebar > SessionItem)', () => {
     expect(itemLabels(menu)).not.toContain('Copy link');
   });
 
+  it('pins the chat from the row menu without opening it', () => {
+    const onTogglePin = vi.fn();
+    const onSelect = vi.fn();
+    const menu = renderRowMenu({ onTogglePin, onSelect });
+    fireEvent.click(within(menu).getByRole('menuitem', { name: 'Pin' }));
+    expect(onTogglePin).toHaveBeenCalledWith('s1');
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('archives the chat from the row menu without opening it', () => {
+    const onArchive = vi.fn();
+    const onSelect = vi.fn();
+    const menu = renderRowMenu({ onArchive, onSelect });
+    fireEvent.click(within(menu).getByRole('menuitem', { name: 'Archive' }));
+    expect(onArchive).toHaveBeenCalledWith('s1');
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
   it('calls onMarkUnread with the session id', () => {
     const onMarkUnread = vi.fn();
     const menu = renderRowMenu({ onMarkUnread });

@@ -22,7 +22,7 @@ export interface AgiWorkRerunGoal {
 export function workModeLabel(mode: CloudAgentWorkMode): string {
   switch (mode) {
     case 'agiwork':
-      return 'AGI Work';
+      return 'Work';
     case 'research':
       return 'Research';
     case 'chat':

@@ -1,5 +1,5 @@
-import { ArrowUp, Clock, Loader2, Square } from 'lucide-react';
-import { useUiTranslation } from '@agiworkforce/ui';
+import { ArrowUp, Clock, Square } from 'lucide-react';
+import { AgiMark, useUiTranslation } from '@agiworkforce/ui';
 import { cn } from '../lib/utils';
 
 export type SendButtonMode = 'send' | 'stop' | 'queue';
@@ -100,7 +100,7 @@ export function SendButton({
       }
     >
       {isSending ? (
-        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+        <AgiMark spinning className="h-4 w-4" aria-hidden="true" />
       ) : (
         <ArrowUp className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
       )}

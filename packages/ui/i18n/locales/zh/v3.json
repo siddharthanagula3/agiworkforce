@@ -64,8 +64,8 @@
       "aria": "在本地与云端之间切换",
       "switchTo": "切换到{{mode}}",
       "soon": "即将推出",
-      "cloudUnavailable": "AGI Cloud 可在桌面端使用,, 登录后即可使用托管模型和同步的对话。",
-      "localUnavailable": "本地模式通过 AGI CLI 中的 Ollama 或 LM Studio 运行。桌面版对话使用托管云。"
+      "cloudUnavailable": "Cloud 可在桌面端使用,, 登录后即可使用托管模型和同步的对话。",
+      "localUnavailable": "本地模式通过 CLI 中的 Ollama 或 LM Studio 运行。桌面版对话使用托管云。"
     },
     "groups": {
       "lastHour": "Last hour",
@@ -76,7 +76,7 @@
     },
     "modes": {
       "chat": "Chat",
-      "work": "AGI Work",
+      "work": "Work",
       "code": "Code"
     },
     "nav": {
@@ -313,13 +313,13 @@
   "agiWork": {
     "home": {
       "headline": "Let's knock something off your list",
-      "learnLink": "Learn how to use AGI Work safely.",
+      "learnLink": "Learn how to use Work safely.",
       "placeholder": "How can I help you today?",
       "startTask": "Start task",
       "kbdHint": "to start a task and keep going",
       "active": "Active",
       "clearActive": "Clear active",
-      "onboardingTitle": "Get to know AGI Work",
+      "onboardingTitle": "Get to know Work",
       "onboarding": {
         "startTitle": "Start your first task",
         "startDesc": "Describe a recurring work job above and let your AI team handle it.",
@@ -355,7 +355,7 @@
       "startChat": "Start a chat"
     },
     "projects": {
-      "title": "AGI Work projects",
+      "title": "Work projects",
       "newProject": "New project",
       "untitled": "未命名项目",
       "empty": "暂无项目",
@@ -369,7 +369,7 @@
       "keepAwake": "Keep this Mac awake for scheduled tasks",
       "keepAwakeDesc": "When on, uses caffeinate to prevent sleep during scheduled runs. Plug in for long tasks.",
       "keepAwakeTitle": "保持电脑唤醒",
-      "keepAwakeHint": "计划任务仅在 AGI Desktop 打开时运行。如果在应用关闭或电脑睡眠期间错过了某次运行，且该运行在过去 7 天内到期，则会在应用再次打开时运行一次。",
+      "keepAwakeHint": "计划任务仅在 Desktop 打开时运行。如果在应用关闭或电脑睡眠期间错过了某次运行，且该运行在过去 7 天内到期，则会在应用再次打开时运行一次。",
       "keepAwakeUnavailable": "不可用：{{reason}}",
       "loading": "Loading scheduled tasks…",
       "nextRun": "Next run",
@@ -411,9 +411,9 @@
       "toolWebSearch": "网页搜索与浏览",
       "toolCodeExecution": "代码执行",
       "palette": {
-        "label": "AGI Work 工具",
+        "label": "Work 工具",
         "searchPlaceholder": "搜索插件、文件夹和技能",
-        "searchLabel": "搜索 AGI Work 面板",
+        "searchLabel": "搜索 Work 面板",
         "connectorsHeading": "已连接应用",
         "connectorsLoading": "正在加载已连接应用",
         "skillsHeading": "技能",

@@ -80,8 +80,8 @@
 
 [data-design='agi'] {
   --public-label-size: 0.9375rem;
-  --public-label-font: var(--font-geist-mono), ui-monospace, monospace;
-  --public-label-ink: var(--agi-amber);
+  --public-label-font: var(--font-geist-sans), system-ui, sans-serif;
+  --public-label-ink: var(--agi-ink-2);
   --public-caption-ink: var(--agi-ink-2);
   --public-body-size: 1.0625rem;
   --public-provider-card-min: 13.5rem;
@@ -98,11 +98,6 @@
   --agi-reading-width: 42rem;
   --agi-header-height: 4rem;
   --agi-header-height-compact: 3rem;
-}
-
-[data-theme='light'] body:has([data-public-palette='flagship']) [data-design='agi'],
-body:has([data-public-palette='flagship']) [data-theme='light'][data-design='agi'] {
-  --public-label-ink: #6b3700;
 }
 
 [data-design='agi'].dx {
@@ -275,6 +270,7 @@ html[data-theme='light'] body:has([data-design='agi'][data-public-reference]) {
 }
 
 [data-design='agi'] footer.agi-footer-responsive {
+  --public-footer-font: var(--font-geist-sans), system-ui, sans-serif;
   --public-footer-text-meta: 0.875rem;
   --public-footer-text-ui: 1rem;
   --public-footer-text-body: 1.0625rem;

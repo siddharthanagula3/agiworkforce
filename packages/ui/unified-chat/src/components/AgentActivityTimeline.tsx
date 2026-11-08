@@ -10,7 +10,6 @@ import {
   FileOutput,
   Globe2,
   Info,
-  Loader2,
   MousePointerClick,
   PauseCircle,
   Square,
@@ -51,7 +50,7 @@ import {
   parseQualifiedConnectorTool,
   type ConnectorStepPhase,
 } from './connector-step-sentence';
-import { translateUiPlural } from '@agiworkforce/ui';
+import { AgiMark, translateUiPlural } from '@agiworkforce/ui';
 
 const ACTIVITY_PAGE_SIZE = 40;
 const TOKEN_NUMBER_FORMAT = new Intl.NumberFormat('en-US');
@@ -71,7 +70,7 @@ const THINKING_LABEL = 'Thinking';
 export interface AgentActivityTimelineProps {
   activity: AgentActivityState;
   /**
-   * The mode the turn was sent in. In AGI Work the collapsed line names the
+   * The mode the turn was sent in. In Work the collapsed line names the
    * running step beside a live elapsed counter, which is what both leaders show
    * for an autonomous run.
    */
@@ -678,10 +677,7 @@ function ProgressRow({ entry }: { entry: Extract<AgentActivityEntry, { kind: 'pr
     <div className="relative ps-8 py-1.5">
       <span className="absolute start-0 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-[var(--chat-surface-base)] text-muted-foreground">
         {entry.status === 'running' ? (
-          <Loader2
-            className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none"
-            aria-hidden="true"
-          />
+          <AgiMark size={14} spinning />
         ) : entry.status === 'failed' || entry.status === 'cancelled' ? (
           <AlertCircle className="h-3.5 w-3.5 text-danger-text" aria-hidden="true" />
         ) : (
@@ -824,20 +820,9 @@ function useHeldRunningSummary(
   return isRunningPhase && !bypassHold ? committed : rawSummary;
 }
 
-function RunStatusIcon({
-  status,
-  spinnerless,
-}: {
-  status: AgentActivityState['status'];
-  spinnerless: boolean;
-}) {
+function RunStatusIcon({ status }: { status: AgentActivityState['status'] }) {
   if (status === 'running') {
-    // An AGI Work run reports progress with the live counter beside this slot;
-    // both leaders show no spinner glyph there.
-    if (spinnerless) return null;
-    return (
-      <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
-    );
+    return <AgiMark size={16} spinning />;
   }
   if (status === 'paused' || status === 'awaiting-approval') {
     return <PauseCircle className="h-4 w-4" aria-hidden="true" />;
@@ -958,7 +943,7 @@ export function AgentActivityTimeline({
       entry.status === 'running' &&
       entry.summary === REASONING_PROGRESS_SUMMARY,
   );
-  // The AGI Work counter has to advance every second on its own; a run that
+  // The Work counter has to advance every second on its own; a run that
   // emits no events for a minute would otherwise freeze at the last render.
   const ticksLive = isReasoning || (isAgiWork && activity.status === 'running');
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -1060,7 +1045,7 @@ export function AgentActivityTimeline({
           }
           className="group flex min-w-0 flex-1 touch-manipulation items-center gap-2 rounded-md py-1.5 text-start text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-default disabled:hover:text-muted-foreground"
         >
-          <RunStatusIcon status={settledStatus} spinnerless={isAgiWork} />
+          <RunStatusIcon status={settledStatus} />
           <span className="min-w-0 flex-1 truncate">{failureLead}</span>
           {canExpand && (
             <ChevronRight

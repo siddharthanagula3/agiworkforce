@@ -10,7 +10,6 @@ import {
   Folder,
   Globe,
   ListChecks,
-  Loader2,
   MousePointerClick,
   Plug,
   RefreshCw,
@@ -41,7 +40,7 @@ import {
   type AgentActivityState,
   type AgentActivityToolEntry,
 } from '@agiworkforce/client-runtime';
-import { Button, translateUiPlural } from '@agiworkforce/ui';
+import { AgiMark, Button, translateUiPlural } from '@agiworkforce/ui';
 import { cn } from '../../lib/utils';
 import {
   type AgiWorkExcludedTool,
@@ -525,7 +524,7 @@ export function TaskDetailPanel({
             aria-label="Refresh task details"
           >
             {loading ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              <AgiMark spinning className="h-3.5 w-3.5" />
             ) : (
               <RefreshCw className="h-3.5 w-3.5" />
             )}

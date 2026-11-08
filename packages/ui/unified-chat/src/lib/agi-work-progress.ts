@@ -1,7 +1,7 @@
 import type { AgentActivityEntry } from '@agiworkforce/client-runtime';
 
 /**
- * Mirrors the ids the AGI Work planner emits; the server constants live behind
+ * Mirrors the ids the Work planner emits; the server constants live behind
  * `server-only` and cannot be imported here.
  */
 export const AGIWORK_GOAL_PROGRESS_ID = 'agiwork:goal';

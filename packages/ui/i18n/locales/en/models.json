@@ -1,6 +1,6 @@
 {
   "providers": {
-    "managed_cloud": "Managed Cloud",
+    "managed_cloud": "Cloud",
     "ollama": "Ollama",
     "openai": "OpenAI",
     "anthropic": "Anthropic",
@@ -68,8 +68,8 @@
     "noByokModelsHint": "Add a provider API key in Models & Keys.",
     "noLocalModels": "No local models detected",
     "noLocalModelsHint": "Start a local runtime and download a model.",
-    "noManagedModels": "No managed models available",
-    "noManagedModelsHint": "Managed model capacity is currently unavailable.",
+    "noManagedModels": "No Cloud models available",
+    "noManagedModelsHint": "Cloud model capacity is currently unavailable.",
     "openLocalModelSettings": "Open local model settings",
     "openModelsAndKeys": "Open Models & Keys",
     "providerCountOne": "{{count}} Provider",

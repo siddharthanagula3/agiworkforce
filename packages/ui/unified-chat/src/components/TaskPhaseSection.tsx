@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Loader2, CheckCircle2, XCircle, ChevronRight, ChevronDown, Wrench } from 'lucide-react';
-import { translateUiPlural } from '@agiworkforce/ui';
+import { CheckCircle2, XCircle, ChevronRight, ChevronDown, Wrench } from 'lucide-react';
+import { AgiMark, translateUiPlural } from '@agiworkforce/ui';
 import { cn } from '../lib/utils';
 import type { ToolLabelEntry } from '@agiworkforce/types';
 
@@ -49,7 +49,7 @@ function StatusIcon({ status }: { status: TaskPhase['status'] }) {
   const colorClass = statusIconColor(status);
   switch (status) {
     case 'running':
-      return <Loader2 className={cn('w-3.5 h-3.5 animate-spin shrink-0', colorClass)} />;
+      return <AgiMark spinning className={cn('w-3.5 h-3.5 shrink-0', colorClass)} />;
     case 'completed':
       return <CheckCircle2 className={cn('w-3.5 h-3.5 shrink-0', colorClass)} />;
     case 'failed':

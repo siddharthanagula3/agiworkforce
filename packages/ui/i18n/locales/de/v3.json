@@ -64,8 +64,8 @@
       "aria": "Zwischen Lokal und Cloud wechseln",
       "switchTo": "Zu {{mode}} wechseln",
       "soon": "Bald",
-      "cloudUnavailable": "AGI Cloud ist auf dem Desktop verfügbar – melde dich an, um verwaltete Modelle und synchronisierte Chats zu nutzen.",
-      "localUnavailable": "Der lokale Modus läuft in AGI CLI über Ollama oder LM Studio. Desktop-Unterhaltungen verwenden die verwaltete Cloud."
+      "cloudUnavailable": "Cloud ist auf dem Desktop verfügbar – melde dich an, um verwaltete Modelle und synchronisierte Chats zu nutzen.",
+      "localUnavailable": "Der lokale Modus läuft in CLI über Ollama oder LM Studio. Desktop-Unterhaltungen verwenden die verwaltete Cloud."
     },
     "groups": {
       "lastHour": "Last hour",
@@ -76,7 +76,7 @@
     },
     "modes": {
       "chat": "Chat",
-      "work": "AGI Work",
+      "work": "Work",
       "code": "Code"
     },
     "nav": {
@@ -313,13 +313,13 @@
   "agiWork": {
     "home": {
       "headline": "Let's knock something off your list",
-      "learnLink": "Learn how to use AGI Work safely.",
+      "learnLink": "Learn how to use Work safely.",
       "placeholder": "How can I help you today?",
       "startTask": "Start task",
       "kbdHint": "to start a task and keep going",
       "active": "Active",
       "clearActive": "Clear active",
-      "onboardingTitle": "Get to know AGI Work",
+      "onboardingTitle": "Get to know Work",
       "onboarding": {
         "startTitle": "Start your first task",
         "startDesc": "Describe a recurring work job above and let your AI team handle it.",
@@ -355,7 +355,7 @@
       "startChat": "Start a chat"
     },
     "projects": {
-      "title": "AGI Work projects",
+      "title": "Work projects",
       "newProject": "New project",
       "untitled": "Unbenanntes Projekt",
       "empty": "Noch keine Projekte",
@@ -369,7 +369,7 @@
       "keepAwake": "Keep this Mac awake for scheduled tasks",
       "keepAwakeDesc": "When on, uses caffeinate to prevent sleep during scheduled runs. Plug in for long tasks.",
       "keepAwakeTitle": "Computer wach halten",
-      "keepAwakeHint": "Geplante Aufgaben laufen nur, solange AGI Desktop geöffnet ist. Ein Lauf, der verpasst wurde, während die App geschlossen war oder der Computer im Ruhezustand war, wird einmal nachgeholt, sobald die App wieder geöffnet wird, sofern er in den letzten 7 Tagen fällig war.",
+      "keepAwakeHint": "Geplante Aufgaben laufen nur, solange Desktop geöffnet ist. Ein Lauf, der verpasst wurde, während die App geschlossen war oder der Computer im Ruhezustand war, wird einmal nachgeholt, sobald die App wieder geöffnet wird, sofern er in den letzten 7 Tagen fällig war.",
       "keepAwakeUnavailable": "Nicht verfügbar: {{reason}}",
       "loading": "Loading scheduled tasks…",
       "nextRun": "Next run",
@@ -411,9 +411,9 @@
       "toolWebSearch": "Websuche und Browsen",
       "toolCodeExecution": "Codeausführung",
       "palette": {
-        "label": "AGI Work-Werkzeuge",
+        "label": "Work-Werkzeuge",
         "searchPlaceholder": "Plugins, Ordner und Skills suchen",
-        "searchLabel": "In der AGI Work-Palette suchen",
+        "searchLabel": "In der Work-Palette suchen",
         "connectorsHeading": "Verbundene Apps",
         "connectorsLoading": "Verbundene Apps werden geladen",
         "skillsHeading": "Skills",

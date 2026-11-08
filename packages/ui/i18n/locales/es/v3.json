@@ -64,8 +64,8 @@
       "aria": "Cambiar entre Local y Nube",
       "switchTo": "Cambiar a {{mode}}",
       "soon": "Pronto",
-      "cloudUnavailable": "AGI Cloud está disponible en el escritorio: inicia sesión para usar modelos gestionados y chats sincronizados.",
-      "localUnavailable": "El modo local funciona en AGI CLI mediante Ollama o LM Studio. Las conversaciones de Desktop usan la nube administrada."
+      "cloudUnavailable": "Cloud está disponible en el escritorio: inicia sesión para usar modelos gestionados y chats sincronizados.",
+      "localUnavailable": "El modo local funciona en CLI mediante Ollama o LM Studio. Las conversaciones de Desktop usan la nube administrada."
     },
     "groups": {
       "lastHour": "Última hora",
@@ -76,7 +76,7 @@
     },
     "modes": {
       "chat": "Chat",
-      "work": "AGI Work",
+      "work": "Work",
       "code": "Código"
     },
     "nav": {
@@ -313,13 +313,13 @@
   "agiWork": {
     "home": {
       "headline": "Vamos a tachar algo de tu lista",
-      "learnLink": "Aprende a usar AGI Work con seguridad.",
+      "learnLink": "Aprende a usar Work con seguridad.",
       "placeholder": "¿En qué puedo ayudarte hoy?",
       "startTask": "Iniciar tarea",
       "kbdHint": "para iniciar una tarea y seguir",
       "active": "Activo",
       "clearActive": "Limpiar activo",
-      "onboardingTitle": "Conoce AGI Work",
+      "onboardingTitle": "Conoce Work",
       "onboarding": {
         "startTitle": "Inicia tu primera tarea",
         "startDesc": "Describe un trabajo recurrente arriba y deja que tu equipo de IA lo gestione.",
@@ -355,7 +355,7 @@
       "startChat": "Iniciar un chat"
     },
     "projects": {
-      "title": "Proyectos AGI Work",
+      "title": "Proyectos Work",
       "newProject": "Nuevo proyecto",
       "untitled": "Proyecto sin título",
       "empty": "Aún no hay proyectos",
@@ -369,7 +369,7 @@
       "keepAwake": "Mantener este Mac despierto para tareas programadas",
       "keepAwakeDesc": "Cuando está activado, usa caffeinate para prevenir el sueño durante ejecuciones programadas. Conéctalo para tareas largas.",
       "keepAwakeTitle": "Mantener el ordenador despierto",
-      "keepAwakeHint": "Las tareas programadas solo se ejecutan mientras AGI Desktop está abierto. Una ejecución perdida mientras la app estaba cerrada o el ordenador en reposo se ejecuta una vez al volver a abrir la app, si debía ejecutarse en los últimos 7 días.",
+      "keepAwakeHint": "Las tareas programadas solo se ejecutan mientras Desktop está abierto. Una ejecución perdida mientras la app estaba cerrada o el ordenador en reposo se ejecuta una vez al volver a abrir la app, si debía ejecutarse en los últimos 7 días.",
       "keepAwakeUnavailable": "No disponible: {{reason}}",
       "loading": "Cargando tareas programadas…",
       "nextRun": "Próxima ejecución",
@@ -411,9 +411,9 @@
       "toolWebSearch": "Búsqueda web y navegación",
       "toolCodeExecution": "Ejecución de código",
       "palette": {
-        "label": "Herramientas de AGI Work",
+        "label": "Herramientas de Work",
         "searchPlaceholder": "Buscar complementos, carpetas y habilidades",
-        "searchLabel": "Buscar en la paleta de AGI Work",
+        "searchLabel": "Buscar en la paleta de Work",
         "connectorsHeading": "Aplicaciones conectadas",
         "connectorsLoading": "Cargando aplicaciones conectadas",
         "skillsHeading": "Habilidades",

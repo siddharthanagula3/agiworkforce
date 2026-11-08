@@ -196,7 +196,7 @@ export function Sidebar(props: SidebarProps) {
 
   const { t } = useUiTranslation('chat');
   const { t: tCommon } = useUiTranslation('common');
-  const codeLabel = t('sidebar.codeAction', 'AGI Code');
+  const codeLabel = t('sidebar.codeAction', 'Code');
 
   const [archivedViewRequested, setArchivedViewRequested] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Set<SidebarTemporalGroup>>(

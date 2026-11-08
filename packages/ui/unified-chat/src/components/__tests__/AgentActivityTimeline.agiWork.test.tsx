@@ -51,7 +51,7 @@ function triggerText(): string {
 }
 
 describe('AgentActivityTimeline in AGI Work', () => {
-  it('counts the run up live, one second at a time, with no spinner glyph', () => {
+  it('counts the run up live beside the rotating AGI mark', () => {
     vi.useFakeTimers();
     vi.setSystemTime(4_000);
     try {
@@ -59,8 +59,8 @@ describe('AgentActivityTimeline in AGI Work', () => {
 
       expect(triggerText()).toContain('Searching official sources · 3s');
       expect(
-        screen.getByRole('button', { name: /agent activity/i }).querySelector('.animate-spin'),
-      ).toBeNull();
+        screen.getByRole('button', { name: /agent activity/i }).querySelector('.agi-mark-spin'),
+      ).not.toBeNull();
 
       act(() => {
         vi.advanceTimersByTime(2_000);
@@ -115,7 +115,7 @@ describe('AgentActivityTimeline in AGI Work', () => {
     }
   });
 
-  it('keeps the latest step label and its spinner for an ordinary chat turn', () => {
+  it('keeps the latest step label and AGI mark for an ordinary chat turn', () => {
     vi.useFakeTimers();
     vi.setSystemTime(4_000);
     try {
@@ -124,7 +124,7 @@ describe('AgentActivityTimeline in AGI Work', () => {
       expect(triggerText()).not.toContain('Working for');
       expect(triggerText()).toContain('Searching official sources');
       expect(
-        screen.getByRole('button', { name: /agent activity/i }).querySelector('.animate-spin'),
+        screen.getByRole('button', { name: /agent activity/i }).querySelector('.agi-mark-spin'),
       ).not.toBeNull();
     } finally {
       vi.useRealTimers();

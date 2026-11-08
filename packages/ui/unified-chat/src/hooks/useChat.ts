@@ -1152,7 +1152,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
                   agentActivity: startAgentActivityLocally({
                     sessionId: convId,
                     turnId: assistantMessageId,
-                    summary: 'Starting AGI Work',
+                    summary: 'Starting Work',
                     startedAtMs,
                   }),
                 },

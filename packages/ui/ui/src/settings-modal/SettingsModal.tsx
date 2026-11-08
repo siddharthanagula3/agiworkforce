@@ -1,4 +1,5 @@
 'use client';
+import { AgiMark } from '../AgiMark';
 
 import React, { useId, useMemo, useRef, useState, useCallback, useEffect } from 'react';
 import { toUserMessage } from '../lib/network-error';
@@ -19,7 +20,6 @@ import {
   ArrowLeft,
   AlertTriangle,
   ChevronDown,
-  Loader2,
   FileJson,
   type LucideIcon,
 } from 'lucide-react';
@@ -1101,7 +1101,7 @@ function ConnectorsPanel({
           aria-live="polite"
           className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground"
         >
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          <AgiMark spinning className="h-4 w-4" aria-hidden="true" />
           Loading connectors…
         </p>
       ) : loadError ? (

@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Pin, PinOff, Trash2 } from 'lucide-react';
-import { MEMORY_CATEGORIES, type MemoryCategory } from '@agiworkforce/types';
+import {
+  MANAGED_MEMORY_MAX_CONTENT_CHARS as MAX_FACT_CHARS,
+  MEMORY_CATEGORIES,
+  type MemoryCategory,
+} from '@agiworkforce/types';
 import { translateUiPlural, useConfirmAction, useUnsavedChangesGuard } from '@agiworkforce/ui';
 import { cn } from '../lib/utils';
 import { toUserMessage } from '../lib/network-error';
 import { useMemoryStore, type MemoryFact } from '../stores/memoryStore';
 
-const MAX_FACT_CHARS = 280;
 const LEARNED_SOURCE = 'auto';
 const IMPORTED_SOURCE_PREFIX = 'imported:';
 const OTHER_GROUP = 'other';
@@ -268,6 +271,7 @@ function MemoryEditorContent({
                 editRevision.current += 1;
                 setEditDraft(e.target.value.slice(0, MAX_FACT_CHARS));
               }}
+              maxLength={MAX_FACT_CHARS}
               aria-label={`Editing memory: ${fact.text}`}
               rows={2}
               className="resize-none rounded-sm border-0 bg-transparent text-sm text-[var(--chat-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--chat-focus-ring)]"
@@ -437,6 +441,7 @@ function MemoryEditorContent({
               draftRevision.current += 1;
               setDraft(e.target.value.slice(0, MAX_FACT_CHARS));
             }}
+            maxLength={MAX_FACT_CHARS}
             aria-label="Add a new fact"
             placeholder="Example: I prefer Python over JavaScript for data work."
             rows={2}
@@ -511,7 +516,7 @@ function MemoryEditorContent({
           >
             {isAccountScoped
               ? syncStatus === 'synced'
-                ? 'No cloud memory facts yet. Add one above and it will be available to your Managed Cloud conversations.'
+                ? 'No cloud memory facts yet. Add one above and it will be available to your Cloud conversations.'
                 : 'Cloud memory facts are not loaded.'
               : 'No local memory facts yet. Add one above and it will be available to conversations on this device.'}
           </p>
@@ -594,16 +599,16 @@ function syncStatusLabel(status: MemoryEditorSyncStatus, isAccountScoped: boolea
   if (isAccountScoped) {
     switch (status) {
       case 'syncing':
-        return 'Loading memory from your Managed Cloud account…';
+        return 'Loading memory from your Cloud account…';
       case 'synced':
-        return 'Saved to your Managed Cloud account, available on every signed-in device.';
+        return 'Saved to your Cloud account, available on every signed-in device.';
       case 'error':
-        return 'Couldn’t refresh your Managed Cloud memory. The loaded list may be out of date. Device-local memory was not used.';
+        return 'Couldn’t refresh your Cloud memory. The loaded list may be out of date. Device-local memory was not used.';
       case 'unavailable':
-        return 'Managed Cloud memory is unavailable.';
+        return 'Cloud memory is unavailable.';
       case 'idle':
       default:
-        return 'Managed Cloud account memory is separate from Local Mode memory.';
+        return 'Cloud account memory is separate from Local Mode memory.';
     }
   }
 

@@ -89,6 +89,16 @@ describe('a Recents row says which conversation it is', () => {
     renderRow({}, { activeSessionId: 'another' });
     expect(rowLink().getAttribute('aria-current')).toBeNull();
   });
+
+  it('opens a past chat from the recents row', () => {
+    const onSelect = vi.fn();
+    renderRow({}, { onSelect });
+    const row = rowLink();
+    expect(row.getAttribute('href')).toBe('/chat/s1');
+    fireEvent.click(row);
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(onSelect).toHaveBeenCalledWith('s1');
+  });
 });
 
 describe('a Recents row says what has been done to the conversation', () => {

@@ -130,7 +130,7 @@ function getProviderLabel(providerKey: string): string {
     return PROVIDER_DISPLAY[displayKey].label;
   }
   const fallback: Record<string, string> = {
-    managed_cloud: 'AGI Cloud',
+    managed_cloud: 'Cloud',
     mistral: 'Mistral AI',
     groq: 'Groq',
     nvidia_nim: 'NVIDIA NIM',
@@ -335,7 +335,7 @@ function BestAutoRow({ isSelected, onSelect, disabled = false }: BestAutoRowProp
             : 'text-[var(--chat-text-primary)] hover:bg-[var(--chat-surface-hover)]',
         )}
       >
-        {/* AGI Cloud logo */}
+        {/* Cloud logo */}
         <ProviderLogo providerKey="agi-cloud" size={16} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
@@ -747,7 +747,7 @@ export function ModelSelector({
                       ? t('selector.noLocalModels', 'No local models detected')
                       : executionMode === 'byok'
                         ? t('selector.noByokModels', 'No BYOK models configured')
-                        : t('selector.noManagedModels', 'No managed models available')}
+                        : t('selector.noManagedModels', 'No Cloud models available')}
                   </div>
                   <p className="mt-1 text-xs leading-relaxed text-[var(--chat-text-muted)]">
                     {executionMode === 'local_only'
@@ -759,7 +759,7 @@ export function ModelSelector({
                         ? t('selector.noByokModelsHint', 'Add a provider API key in Models & Keys.')
                         : t(
                             'selector.noManagedModelsHint',
-                            'Managed model capacity is currently unavailable.',
+                            'Cloud model capacity is currently unavailable.',
                           )}
                   </p>
                   {onSettingsClick && (

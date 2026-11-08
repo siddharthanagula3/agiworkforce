@@ -181,7 +181,7 @@
   },
   "AGI_PLANNING_FAILED": {
     "title": "Planning Failed",
-    "message": "The AGI planner could not create a plan for the goal.",
+    "message": "The planner could not create a plan for the goal.",
     "suggestions": [
       "Try rephrasing the goal more specifically",
       "Break down complex goals into smaller steps",
@@ -190,7 +190,7 @@
   },
   "AGI_EXECUTION_FAILED": {
     "title": "Execution Failed",
-    "message": "The AGI system failed to execute a step.",
+    "message": "The system failed to execute a step.",
     "suggestions": [
       "Review the step details in the error log",
       "Check if required tools are available",

@@ -64,8 +64,8 @@
       "aria": "Switch between Local and Cloud",
       "switchTo": "Switch to {{mode}}",
       "soon": "Soon",
-      "cloudUnavailable": "AGI Cloud is available on Desktop, sign in to use managed models and synced chats.",
-      "localUnavailable": "Local mode runs in AGI CLI through Ollama or LM Studio. Desktop conversations use managed cloud."
+      "cloudUnavailable": "Cloud is available on Desktop, sign in to use Cloud models and synced chats.",
+      "localUnavailable": "Local mode runs in CLI through Ollama or LM Studio. Desktop conversations use cloud."
     },
     "groups": {
       "lastHour": "Last hour",
@@ -76,7 +76,7 @@
     },
     "modes": {
       "chat": "Chat",
-      "work": "AGI Work",
+      "work": "Work",
       "code": "Code"
     },
     "nav": {
@@ -114,7 +114,7 @@
     "fallbackName": "there",
     "modeLabel": "Local Mode",
     "cloudSyncAction": "Cloud Sync",
-    "cloudSyncAria": "Set up Managed Cloud sync",
+    "cloudSyncAria": "Set up Cloud sync",
     "chipPrompts": {
       "code": "Help me write code for ",
       "write": "Help me write ",
@@ -195,7 +195,7 @@
     "viewAllPlans": "View all plans",
     "byokLocal": "BYOK & local models",
     "appsExtensions": "Apps & extensions",
-    "giftAGI": "Gift AGI",
+    "giftAGI": "Gift a subscription",
     "helpSupport": "Help & support",
     "logOut": "Log out",
     "accountFallback": "Account",
@@ -208,7 +208,7 @@
   },
   "customize": {
     "title": "Customize",
-    "subtitle": "Skills, connectors, and plugins extend what AGI can do.",
+    "subtitle": "Skills, connectors, and plugins extend what the assistant can do.",
     "tabs": {
       "skills": "Skills",
       "connectors": "Connectors",
@@ -236,10 +236,10 @@
   },
   "connectors": {
     "connected": "Connected",
-    "connectedDesc": "Per-tool permissions for each connector. AGI never uses ⚠ Ask actions without confirmation.",
+    "connectedDesc": "Per-tool permissions for each connector. The assistant never uses ⚠ Ask actions without confirmation.",
     "noneConnected": "No connectors connected yet.",
     "notConnected": "Not connected",
-    "notConnectedDesc": "Add a connector to give AGI scoped access to your tools.",
+    "notConnectedDesc": "Add a connector to give the assistant scoped access to your tools.",
     "add": "Add",
     "perm": {
       "allow": "Allow",
@@ -289,7 +289,7 @@
   },
   "plugins": {
     "installed": "Installed plugins",
-    "installedDesc": "Server-side tools AGI can call mid-response. Different from connectors, plugins do not need an account.",
+    "installedDesc": "Server-side tools the assistant can call mid-response. Different from connectors, plugins do not need an account.",
     "featured": "Featured in the directory",
     "browseAll": "Browse all plugins",
     "loading": "Loading...",
@@ -313,13 +313,13 @@
   "agiWork": {
     "home": {
       "headline": "What should we get done?",
-      "learnLink": "Learn how to use AGI Work safely.",
+      "learnLink": "Learn how to use Work safely.",
       "placeholder": "How can I help you today?",
       "startTask": "Start task",
       "kbdHint": "to start a task and keep going",
       "active": "Active",
       "clearActive": "Clear active",
-      "onboardingTitle": "Get to know AGI Work",
+      "onboardingTitle": "Get to know Work",
       "onboarding": {
         "startTitle": "Start your first task",
         "startDesc": "Describe a recurring work job above and let your AI team handle it.",
@@ -369,7 +369,7 @@
       "keepAwake": "Keep this Mac awake for scheduled tasks",
       "keepAwakeDesc": "Prevents sleep during scheduled runs. Plug in for long tasks.",
       "keepAwakeTitle": "Keep computer awake",
-      "keepAwakeHint": "Scheduled tasks run only while AGI Desktop is open. A run missed while the app was closed or the computer slept runs once when the app opens again, if it was due in the last 7 days.",
+      "keepAwakeHint": "Scheduled tasks run only while Desktop is open. A run missed while the app was closed or the computer slept runs once when the app opens again, if it was due in the last 7 days.",
       "keepAwakeUnavailable": "Unavailable: {{reason}}",
       "loading": "Loading scheduled tasks…",
       "nextRun": "Next run",
@@ -411,9 +411,9 @@
       "toolWebSearch": "Web search and browsing",
       "toolCodeExecution": "Code execution",
       "palette": {
-        "label": "AGI Work tools",
+        "label": "Work tools",
         "searchPlaceholder": "Search plugins, folders and skills",
-        "searchLabel": "Search the AGI Work palette",
+        "searchLabel": "Search the Work palette",
         "connectorsHeading": "Connected apps",
         "connectorsLoading": "Loading connected apps",
         "skillsHeading": "Skills",

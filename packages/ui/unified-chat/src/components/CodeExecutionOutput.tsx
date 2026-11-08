@@ -1,5 +1,6 @@
+import { AgiMark } from '@agiworkforce/ui';
 import { useState } from 'react';
-import { CheckCircle2, ChevronDown, ChevronRight, Code2, Loader2, XCircle } from 'lucide-react';
+import { CheckCircle2, ChevronDown, ChevronRight, Code2, XCircle } from 'lucide-react';
 import { cn } from '../lib/utils';
 import type { ChatMessage } from '../lib/types';
 
@@ -115,8 +116,9 @@ export function CodeExecutionOutput({ isExecuting, result }: CodeExecutionOutput
         <Code2 className="h-4 w-4 shrink-0 text-[var(--chat-accent-primary-text)]" aria-hidden />
         <span className="flex-1 font-medium text-[var(--chat-text-primary)]">Code execution</span>
         {isExecuting ? (
-          <Loader2
-            className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none text-[var(--chat-accent-primary-text)]"
+          <AgiMark
+            spinning
+            className="h-3.5 w-3.5 text-[var(--chat-accent-primary-text)]"
             aria-hidden
           />
         ) : succeeded ? (

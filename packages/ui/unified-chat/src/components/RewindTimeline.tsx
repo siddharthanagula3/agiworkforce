@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { History, RotateCcw, RefreshCw } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useCheckpointStore, selectCheckpoints } from '../stores/checkpointStore';
-import { useUiTranslation } from '@agiworkforce/ui';
+import { AgiMark, useUiTranslation } from '@agiworkforce/ui';
 
 export interface CodingCheckpoint {
   id: string;
@@ -138,12 +138,13 @@ export function RewindTimeline({
           onClick={loadCheckpoints}
           disabled={loading}
           aria-label="Refresh checkpoints"
-          className={cn(
-            'rounded-compact p-1 text-muted-foreground hover:text-foreground transition-colors',
-            loading && 'animate-spin',
-          )}
+          className="rounded-compact p-1 text-muted-foreground hover:text-foreground transition-colors"
         >
-          <RefreshCw className="w-3.5 h-3.5" />
+          {loading ? (
+            <AgiMark spinning className="w-3.5 h-3.5" />
+          ) : (
+            <RefreshCw className="w-3.5 h-3.5" />
+          )}
         </button>
       </div>
 
@@ -186,7 +187,7 @@ export function RewindTimeline({
       <div className="flex-1 overflow-y-auto">
         {loading && checkpoints.length === 0 ? (
           <div className="flex items-center justify-center h-24 text-xs text-muted-foreground">
-            <RefreshCw className="w-3.5 h-3.5 animate-spin me-2" />
+            <AgiMark spinning className="w-3.5 h-3.5 me-2" />
             Loading…
           </div>
         ) : checkpoints.length === 0 ? (
@@ -271,7 +272,11 @@ export function RewindTimeline({
                           (isRewinding || rewinding !== null) && 'opacity-40 cursor-not-allowed',
                         )}
                       >
-                        <RotateCcw className={cn('w-3 h-3', isRewinding && 'animate-spin')} />
+                        {isRewinding ? (
+                          <AgiMark spinning className={cn('w-3 h-3', '')} />
+                        ) : (
+                          <RotateCcw className="w-3 h-3" />
+                        )}
                         {isRewinding ? 'Rewinding' : 'Rewind'}
                       </button>
                     </div>

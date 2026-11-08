@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Download, FileQuestion, Loader2, RotateCcw } from 'lucide-react';
+import { AlertTriangle, Download, FileQuestion, RotateCcw } from 'lucide-react';
 import {
   PRIVACY_MODES,
   PROVIDER_MODES,
@@ -14,6 +14,7 @@ import {
   type ProviderMode,
 } from '@agiworkforce/types';
 import {
+  AgiMark,
   Button,
   Dialog,
   DialogContent,
@@ -385,7 +386,7 @@ export function MessageGeneratedFiles({ message }: MessageGeneratedFilesProps) {
           data-testid="generated-files-pending"
           className="mt-2 flex items-center gap-2 rounded-md border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] p-3 text-xs text-[var(--chat-text-muted)]"
         >
-          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+          <AgiMark spinning className="h-3.5 w-3.5" aria-hidden />
           <span>{runningExecutionLabel(message)}</span>
         </div>
       );
@@ -406,7 +407,7 @@ export function MessageGeneratedFiles({ message }: MessageGeneratedFilesProps) {
             className="h-7 gap-1.5 text-xs text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]"
           >
             {downloadingAll ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+              <AgiMark spinning className="h-3.5 w-3.5" aria-hidden />
             ) : (
               <Download className="h-3.5 w-3.5" aria-hidden />
             )}
@@ -466,7 +467,7 @@ export function MessageGeneratedFiles({ message }: MessageGeneratedFilesProps) {
             <div className="min-h-0 overflow-auto bg-[var(--chat-surface-overlay)] p-4">
               {previewState.status === 'loading' ? (
                 <div className="flex h-full min-h-72 items-center justify-center gap-2 text-sm text-[var(--chat-text-muted)]">
-                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                  <AgiMark spinning className="h-4 w-4" aria-hidden />
                   Loading preview…
                 </div>
               ) : null}

@@ -69,7 +69,7 @@ describe('InlineToolCall, status states', () => {
       <InlineToolCall id="s2" label="bash" status="running" body={<span />} />,
     );
     expect(within(container).queryByText('Running')).not.toBeNull();
-    expect(container.querySelector('.animate-spin')).not.toBeNull();
+    expect(container.querySelector('.agi-mark-spin')).not.toBeNull();
   });
 
   it('success renders no suffix and no trailing indicator', () => {
@@ -78,7 +78,7 @@ describe('InlineToolCall, status states', () => {
     );
     expect(within(container).queryByText('Running')).toBeNull();
     expect(within(container).queryByText(/Error/)).toBeNull();
-    expect(container.querySelector('.animate-spin')).toBeNull();
+    expect(container.querySelector('.agi-mark-spin')).toBeNull();
   });
 
   it('error renders prefixed error message and danger color class', () => {
@@ -107,7 +107,7 @@ describe('InlineToolCall, status states', () => {
     );
     expect(within(container).queryByText('Waiting for your approval')).not.toBeNull();
     expect(within(container).queryByText('Running')).toBeNull();
-    expect(container.querySelector('.animate-spin')).toBeNull();
+    expect(container.querySelector('.agi-mark-spin')).toBeNull();
     expect(
       screen.getByRole('button', { name: 'Review Execute Code action, Waiting for your approval' }),
     ).toBeTruthy();

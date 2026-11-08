@@ -64,8 +64,8 @@
       "aria": "التبديل بين المحلي والسحابي",
       "switchTo": "التبديل إلى {{mode}}",
       "soon": "قريبًا",
-      "cloudUnavailable": "يتوفر AGI Cloud على سطح المكتب, سجّل الدخول لاستخدام النماذج المُدارة والمحادثات المتزامنة.",
-      "localUnavailable": "يعمل الوضع المحلي في AGI CLI عبر Ollama أو LM Studio. تستخدم محادثات سطح المكتب السحابة المُدارة."
+      "cloudUnavailable": "يتوفر Cloud على سطح المكتب, سجّل الدخول لاستخدام النماذج المُدارة والمحادثات المتزامنة.",
+      "localUnavailable": "يعمل الوضع المحلي في CLI عبر Ollama أو LM Studio. تستخدم محادثات سطح المكتب السحابة المُدارة."
     },
     "groups": {
       "lastHour": "Last hour",
@@ -76,7 +76,7 @@
     },
     "modes": {
       "chat": "Chat",
-      "work": "AGI Work",
+      "work": "Work",
       "code": "Code"
     },
     "nav": {
@@ -317,13 +317,13 @@
   "agiWork": {
     "home": {
       "headline": "Let's knock something off your list",
-      "learnLink": "Learn how to use AGI Work safely.",
+      "learnLink": "Learn how to use Work safely.",
       "placeholder": "How can I help you today?",
       "startTask": "Start task",
       "kbdHint": "to start a task and keep going",
       "active": "Active",
       "clearActive": "Clear active",
-      "onboardingTitle": "Get to know AGI Work",
+      "onboardingTitle": "Get to know Work",
       "onboarding": {
         "startTitle": "Start your first task",
         "startDesc": "Describe a recurring work job above and let your AI team handle it.",
@@ -359,7 +359,7 @@
       "startChat": "Start a chat"
     },
     "projects": {
-      "title": "AGI Work projects",
+      "title": "Work projects",
       "newProject": "New project",
       "untitled": "مشروع بلا عنوان",
       "empty": "لا توجد مشاريع بعد",
@@ -373,7 +373,7 @@
       "keepAwake": "Keep this Mac awake for scheduled tasks",
       "keepAwakeDesc": "When on, uses caffeinate to prevent sleep during scheduled runs. Plug in for long tasks.",
       "keepAwakeTitle": "إبقاء الكمبيوتر مستيقظًا",
-      "keepAwakeHint": "لا تعمل المهام المجدولة إلا أثناء فتح AGI Desktop. التشغيل الذي فات أثناء إغلاق التطبيق أو سكون الكمبيوتر يُنفَّذ مرة واحدة عند فتح التطبيق مجددًا، إذا كان موعده خلال آخر 7 أيام.",
+      "keepAwakeHint": "لا تعمل المهام المجدولة إلا أثناء فتح Desktop. التشغيل الذي فات أثناء إغلاق التطبيق أو سكون الكمبيوتر يُنفَّذ مرة واحدة عند فتح التطبيق مجددًا، إذا كان موعده خلال آخر 7 أيام.",
       "keepAwakeUnavailable": "غير متاح: {{reason}}",
       "loading": "Loading scheduled tasks…",
       "nextRun": "Next run",
@@ -415,9 +415,9 @@
       "toolWebSearch": "البحث على الويب والتصفح",
       "toolCodeExecution": "تنفيذ التعليمات البرمجية",
       "palette": {
-        "label": "أدوات AGI Work",
+        "label": "أدوات Work",
         "searchPlaceholder": "ابحث في الإضافات والمجلدات والمهارات",
-        "searchLabel": "البحث في لوحة AGI Work",
+        "searchLabel": "البحث في لوحة Work",
         "connectorsHeading": "التطبيقات المتصلة",
         "connectorsLoading": "جارٍ تحميل التطبيقات المتصلة",
         "skillsHeading": "المهارات",

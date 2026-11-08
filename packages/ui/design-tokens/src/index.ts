@@ -292,12 +292,74 @@ export const agiCornerCssVars = {
 } as const satisfies CssVariableMap &
   Record<(typeof agiRadiiVar)[keyof typeof agiRadiiVar], string>;
 
+export const agiSymbolPalette = { shine: '#ffffff' } as const;
+
+export const agiRibbonMotion = {
+  center: [0.5, 0.54],
+  textureSize: 256,
+  pathSamples: 256,
+  pathOversampling: 4,
+  stripWidth: 64,
+  flowMapSize: 128,
+  crossSectionRadius: 0.24,
+  minimumMaterialValue: 40,
+  materialSmoothing: 8,
+  pixelRatioLimit: 2,
+} as const;
+
+export const agiSymbolShineBand =
+  'M -8 -23 C -2 -30 5 -24 4 -16 C 13 -17 9 -5 5 -2 C 13 5 8 10 3 11 C 8 22 -1 29 -6 22 C -14 24 -9 11 -5 7 C -13 1 -8 -6 -5 -8 C -13 -14 -14 -20 -8 -23 Z';
+
+const SYMBOL_SHINE_START = [50, 24] as const;
+const SYMBOL_SHINE_CURVES = [
+  [55, 24, 60, 38, 66, 49],
+  [72, 60, 84, 79, 75, 80],
+  [66, 81, 60, 75, 50, 75],
+  [40, 75, 25, 84, 23, 77],
+  [21, 70, 32, 52, 38, 41],
+  [44, 30, 45, 24, 50, 24],
+] as const;
+
+export const agiSymbolShinePath = `M ${SYMBOL_SHINE_START.join(' ')} ${SYMBOL_SHINE_CURVES.map((curve) => `C ${curve.join(' ')}`).join(' ')} Z`;
+
+export function symbolShinePoint(progress: number): { x: number; y: number; rotation: number } {
+  'worklet';
+  const phase = Math.max(0, Math.min(1, progress)) * SYMBOL_SHINE_CURVES.length;
+  const index = Math.min(SYMBOL_SHINE_CURVES.length - 1, Math.floor(phase));
+  const curve = SYMBOL_SHINE_CURVES[index]!;
+  const prior = index === 0 ? SYMBOL_SHINE_START : SYMBOL_SHINE_CURVES[index - 1]!.slice(4);
+  const t = phase - index;
+  const inverse = 1 - t;
+  const dx =
+    3 * inverse ** 2 * (curve[0] - prior[0]!) +
+    6 * inverse * t * (curve[2] - curve[0]) +
+    3 * t ** 2 * (curve[4] - curve[2]);
+  const dy =
+    3 * inverse ** 2 * (curve[1] - prior[1]!) +
+    6 * inverse * t * (curve[3] - curve[1]) +
+    3 * t ** 2 * (curve[5] - curve[3]);
+  return {
+    rotation: (Math.atan2(dy, dx) * 180) / Math.PI,
+    x:
+      inverse ** 3 * prior[0]! +
+      3 * inverse ** 2 * t * curve[0] +
+      3 * inverse * t ** 2 * curve[2] +
+      t ** 3 * curve[4],
+    y:
+      inverse ** 3 * prior[1]! +
+      3 * inverse ** 2 * t * curve[1] +
+      3 * inverse * t ** 2 * curve[3] +
+      t ** 3 * curve[5],
+  };
+}
+
 export const agiMotion = {
   duration: {
     instant: '90ms',
     quick: '160ms',
     moved: '260ms',
     reveal: '700ms',
+    markFlow: '4200ms',
   },
   curve: {
     standard: 'cubic-bezier(0.2, 0, 0, 1)',
@@ -310,6 +372,7 @@ export const agiMotionCssVars = {
   '--duration-quick': agiMotion.duration.quick,
   '--duration-moved': agiMotion.duration.moved,
   '--duration-reveal': agiMotion.duration.reveal,
+  '--duration-mark-flow': agiMotion.duration.markFlow,
   '--curve-standard': agiMotion.curve.standard,
   '--curve-exit': agiMotion.curve.exit,
 } as const satisfies CssVariableMap;

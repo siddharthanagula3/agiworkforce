@@ -461,6 +461,7 @@ export function ChatInput({
   );
   const setAgentEffort = useAgentControlStore((s) => s.setEffort);
   const { state: browserVoiceState, start: startBrowserVoice } = useVoiceInput({
+    scopeKey: conversationId,
     onTranscript: (text) => {
       const cleanedText = cleanupVoiceDictation(text);
       const isCommand = detectVoiceCommand(cleanedText);
@@ -1359,7 +1360,7 @@ export function ChatInput({
                 </AttachmentMenu>
               </div>
 
-              {/* Work-mode segmented toggle (Chat | AGI Work), web parity,
+              {/* Work-mode segmented toggle (Chat | Work), web parity,
                   sitting immediately right of "+". Rendered only when the host
                   feeds projectPicker. */}
               {projectPicker && canUseAgiWork && (
@@ -1383,7 +1384,7 @@ export function ChatInput({
                         disabled && 'cursor-not-allowed opacity-50',
                       )}
                     >
-                      {mode === 'chat' ? t('composer.modeChat', 'Chat') : 'AGI Work'}
+                      {mode === 'chat' ? t('composer.modeChat', 'Chat') : 'Work'}
                     </button>
                   ))}
                 </div>
@@ -1511,9 +1512,9 @@ export function ChatInput({
         </div>
       </div>
 
-      {/* AGI Work scope row, "Project or folder ▾" chip DIRECTLY BELOW the
+      {/* Work scope row, "Project or folder ▾" chip DIRECTLY BELOW the
           composer (web ChatComposerNew / claude.ai Cowork reference layout).
-          Rendered only in AGI Work mode with host-provided project data; the
+          Rendered only in Work mode with host-provided project data; the
           local-folder action appears only when the host feeds the folder seam
           (desktop, privacy-gated by the host). */}
       {projectPicker && (workMode === 'agiwork' || !canUseAgiWork) && (
@@ -1587,7 +1588,7 @@ export function ChatInput({
                   {agiWorkUnavailableReason ??
                     t(
                       'composer.agiWorkUnavailable',
-                      'AGI Work is unavailable. Project chat still works.',
+                      'Work is unavailable. Project chat still works.',
                     )}
                 </p>
               )}

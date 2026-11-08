@@ -88,3 +88,167 @@ describe('memoryStore pinning', () => {
     expect(useMemoryStore.getState().facts[0]?.pinned).toBeUndefined();
   });
 });
+
+describe('memoryStore account transitions', () => {
+  const fact = (id: string, text: string) => ({
+    id,
+    serverId: id,
+    text,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  });
+  const json = (body: unknown) =>
+    new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+
+  beforeEach(() => useMemoryStore.getState().resetOnLogout());
+  afterEach(() => {
+    useMemoryStore.getState().resetOnLogout();
+    vi.unstubAllGlobals();
+  });
+
+  it('does not send an old draft after its CSRF request finishes in another account', async () => {
+    let finish!: (response: Response) => void;
+    const csrf = new Promise<Response>((resolve) => (finish = resolve));
+    const fetchMock = vi.fn(async (path: string) => {
+      if (path === '/api/csrf') return csrf;
+      throw new Error('Stale mutation reached the network');
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const saving = useMemoryStore
+      .getState()
+      .add('Old account draft')
+      .catch(() => null);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+    useMemoryStore.getState().resetOnLogout();
+    finish(json({ token: 'old-csrf', expiresIn: 3_600_000 }));
+    await saving;
+    expect(fetchMock.mock.calls.map(([path]) => path)).toEqual(['/api/csrf']);
+    expect(useMemoryStore.getState().facts).toEqual([]);
+  });
+
+  it('does not restore a previous account after a delayed memory read', async () => {
+    let finish!: (response: Response) => void;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => new Promise<Response>((resolve) => (finish = resolve))),
+    );
+    const loading = useMemoryStore.getState().hydrateFromServer();
+    useMemoryStore.getState().resetOnLogout();
+    finish(
+      json({
+        memories: [
+          {
+            id: 'old-server',
+            content: 'Old account memory',
+            category: null,
+            source: 'web',
+            pinned: false,
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+      }),
+    );
+    await loading;
+    expect(useMemoryStore.getState().facts).toEqual([]);
+    expect(useMemoryStore.getState().syncStatus).toBe('idle');
+  });
+
+  it('does not roll a failed deletion back into the next account', async () => {
+    let fail!: (error: Error) => void;
+    const deletion = new Promise<Response>((_resolve, reject) => (fail = reject));
+    const fetchMock = vi.fn(async (path: string) =>
+      path === '/api/csrf' ? json({ token: 'csrf', expiresIn: 3_600_000 }) : deletion,
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    useMemoryStore.setState({ facts: [fact('old', 'Old account memory')] });
+    const deleting = useMemoryStore
+      .getState()
+      .remove('old')
+      .catch(() => undefined);
+    await vi.waitFor(() =>
+      expect(fetchMock.mock.calls.some(([path]) => path.endsWith('/old'))).toBe(true),
+    );
+    useMemoryStore.getState().resetOnLogout();
+    useMemoryStore.setState({ facts: [fact('new', 'New account memory')] });
+    fail(new Error('Offline'));
+    await deleting;
+    expect(useMemoryStore.getState().facts).toEqual([fact('new', 'New account memory')]);
+  });
+
+  it('still reads and saves memory for the unchanged account', async () => {
+    const fetchMock = vi.fn(async (path: string, init?: RequestInit) => {
+      if (path === '/api/csrf') return json({ token: 'csrf', expiresIn: 3_600_000 });
+      if (init?.method === 'POST')
+        return json({
+          memory: {
+            id: 'saved',
+            content: 'Current account memory',
+            category: null,
+            source: 'web',
+            pinned: false,
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+          },
+        });
+      return json({ memories: [] });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    await useMemoryStore.getState().hydrateFromServer();
+    const saved = await useMemoryStore.getState().add('Current account memory');
+    expect(saved?.serverId).toBe('saved');
+    expect(saved?.pending).toBe(false);
+    expect(useMemoryStore.getState().facts).toHaveLength(1);
+  });
+
+  it.each(['update', 'pin'] as const)(
+    'does not roll a failed %s back into the next account',
+    async (operation) => {
+      let fail!: (error: Error) => void;
+      const response = new Promise<Response>((_resolve, reject) => (fail = reject));
+      const fetchMock = vi.fn(async (path: string) =>
+        path === '/api/csrf' ? json({ token: 'csrf', expiresIn: 3_600_000 }) : response,
+      );
+      vi.stubGlobal('fetch', fetchMock);
+      useMemoryStore.setState({ facts: [fact('same-id', 'Old account memory')] });
+      const saving = (
+        operation === 'update'
+          ? useMemoryStore.getState().update('same-id', 'Old account edit')
+          : useMemoryStore.getState().setPinned('same-id', true)
+      ).catch(() => undefined);
+      await vi.waitFor(() =>
+        expect(fetchMock.mock.calls.some(([path]) => path.endsWith('/same-id'))).toBe(true),
+      );
+      useMemoryStore.getState().resetOnLogout();
+      useMemoryStore.setState({ facts: [fact('same-id', 'New account memory')] });
+      fail(new Error('Offline'));
+      await saving;
+      expect(useMemoryStore.getState().facts).toEqual([fact('same-id', 'New account memory')]);
+    },
+  );
+
+  it('does not clear the next account after an older deletion succeeds', async () => {
+    let finish!: (response: Response) => void;
+    const deletion = new Promise<Response>((resolve) => (finish = resolve));
+    const fetchMock = vi.fn(async (path: string) =>
+      path === '/api/csrf' ? json({ token: 'csrf', expiresIn: 3_600_000 }) : deletion,
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    useMemoryStore.setState({ facts: [fact('old', 'Old account memory')] });
+    const clearing = useMemoryStore
+      .getState()
+      .clear()
+      .catch(() => undefined);
+    await vi.waitFor(() =>
+      expect(fetchMock.mock.calls.some(([path]) => path === '/api/memory')).toBe(true),
+    );
+    useMemoryStore.getState().resetOnLogout();
+    useMemoryStore.setState({ facts: [fact('new', 'New account memory')] });
+    finish(json({ success: true }));
+    await clearing;
+    expect(useMemoryStore.getState().facts).toEqual([fact('new', 'New account memory')]);
+  });
+});

@@ -27,7 +27,6 @@ import {
   FileText,
   Image as ImageIcon,
   Layers,
-  Loader2,
   Lock,
   Play,
   Presentation,
@@ -37,7 +36,7 @@ import {
 } from 'lucide-react';
 import type { GeneratedFileKind, GeneratedFilePresentation } from '@agiworkforce/types';
 import { cn } from '../lib/utils';
-import { Button } from '@agiworkforce/ui';
+import { AgiMark, Button } from '@agiworkforce/ui';
 
 export interface GeneratedFileCardProps {
   presentation: GeneratedFilePresentation;
@@ -119,7 +118,7 @@ function StatusBadge({ presentation }: { presentation: GeneratedFilePresentation
         aria-live="polite"
         className="inline-flex items-center gap-1 rounded-full bg-warning-fill/10 px-2 py-0.5 text-caption font-medium uppercase tracking-wide text-warning-text"
       >
-        <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+        <AgiMark spinning className="h-3 w-3" aria-hidden />
         {presentation.statusLabel}
       </span>
     );

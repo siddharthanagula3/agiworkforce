@@ -1,5 +1,5 @@
 {
-  "placeholder": "Message AGI...",
+  "placeholder": "Message…",
   "thinking": "Thinking...",
   "searching": "Searching...",
   "writing": "Writing...",
@@ -64,7 +64,7 @@
   "artifactPublish": {
     "untitled": "Published artifact",
     "publishedOn": "Published {{date}}",
-    "sharedFrom": "Shared from AGI",
+    "sharedFrom": "Shared conversation",
     "sharedWithWorkspace": "Shared with your workspace",
     "renderFailed": "This artifact failed to render: {{error}}",
     "svgUnavailable": "This SVG contained nothing that could be safely displayed.",
@@ -87,7 +87,7 @@
   },
   "sidebar": {
     "activeConversation": "Active conversation",
-    "agiWork": "AGI Work",
+    "agiWork": "Work",
     "archive": "Archive",
     "archivedCount": "Archived ({{count}})",
     "budgetUsed": "{{percent}}% of token budget used",
@@ -113,7 +113,7 @@
     "moreOptionsFor": "More options for {{name}}",
     "moveToProject": "Move to project",
     "navLabel": "Chat history",
-    "codeAction": "AGI Code",
+    "codeAction": "Code",
     "newChatAction": "New chat",
     "newChatInProject": "New chat in project",
     "newChatInProjectNamed": "New chat in {{name}}",
@@ -155,7 +155,7 @@
   },
   "composer": {
     "addAttachment": "Add attachment",
-    "agiWorkUnavailable": "AGI Work is unavailable. Project chat still works.",
+    "agiWorkUnavailable": "Work is unavailable. Project chat still works.",
     "analyzeAttachedFile": "Please analyze the attached file.",
     "analyzeAttachedFiles": "Please analyze the attached files.",
     "chooseDifferentFolder": "Choose a different folder",
@@ -190,9 +190,9 @@
     "voiceStopping": "Stopping voice action",
     "voiceTranscribing": "Transcribing voice",
     "voiceUnsupported": "Voice input unavailable",
-    "modeAgiWork": "AGI Work",
+    "modeAgiWork": "Work",
     "modeChatTitle": "Chat: quick questions and conversation",
-    "modeAgiWorkTitle": "AGI Work: multi-step tasks with tools, files, and reviewable deliverables",
+    "modeAgiWorkTitle": "Work: multi-step tasks with tools, files, and reviewable deliverables",
     "style": "Style",
     "styleCustom": "Custom",
     "responseStyle": "Response Style",
@@ -219,7 +219,7 @@
     "collapseInput": "Collapse message input"
   },
   "bubble": {
-    "assistantSaid": "AGI said:",
+    "assistantSaid": "Assistant said:",
     "assistantThinking": "Assistant is thinking",
     "cancelEdit": "Cancel",
     "copied": "Copied",

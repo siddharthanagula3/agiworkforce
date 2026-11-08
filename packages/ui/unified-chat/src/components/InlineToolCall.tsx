@@ -1,3 +1,4 @@
+import { AgiMark } from '@agiworkforce/ui';
 import {
   useState,
   useCallback,
@@ -7,7 +8,6 @@ import {
 } from 'react';
 import {
   ChevronRight,
-  Loader2,
   Terminal,
   FileText,
   FilePen,
@@ -212,10 +212,11 @@ function MarkSlot({ mark }: { mark: ReactNode }) {
 function StatusIndicator({ status }: { status: InlineToolCallStatus }) {
   if (status === 'pending' || status === 'running') {
     return (
-      <Loader2
+      <AgiMark
+        spinning
         size={14}
-        strokeWidth={2}
-        className="inline-tool-call__spinner animate-spin text-[color:var(--chat-text-muted,#8b8680)]"
+
+        className="inline-tool-call__spinner text-[color:var(--chat-text-muted,#8b8680)]"
         aria-hidden="true"
       />
     );

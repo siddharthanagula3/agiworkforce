@@ -4,7 +4,6 @@ import {
   Archive,
   ArchiveRestore,
   ListChecks,
-  Loader2,
   MessageSquare,
   Pause,
   Play,
@@ -19,7 +18,7 @@ import {
   type ManagedCloudAgentRunClient,
 } from '@agiworkforce/cloud-contracts';
 import { TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
-import { ApprovalCard, Button, SegmentedControl, Spinner } from '@agiworkforce/ui';
+import { AgiMark, ApprovalCard, Button, SegmentedControl, Spinner } from '@agiworkforce/ui';
 import { cn } from '../../lib/utils';
 import { toUserMessageWithStatus } from '../../lib/network-error';
 import { getManagedModelPresentationLabel } from '../../lib/modelInfo';
@@ -546,7 +545,7 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
           <ListChecks className="h-5 w-5 text-primary" />
           <h1 className="font-[var(--chat-font-sans)] text-display">Work history</h1>
         </div>
-        <p className="text-sm text-muted-foreground">Your Managed Cloud work sessions</p>
+        <p className="text-sm text-muted-foreground">Your Cloud work sessions</p>
       </header>
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
@@ -600,11 +599,11 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
               ? 'A finished task moves here when you archive it, and stays until you restore it.'
               : filter === 'needs_you'
                 ? 'A work session that is waiting for your approval, an answer or a resume shows up here.'
-                : 'Runs from AGI Work, Research, and long tool sessions show up here.'}
+                : 'Runs from Work, Research, and long tool sessions show up here.'}
           </p>
           {transport.startWork && filter !== 'archived' && filter !== 'needs_you' ? (
             <Button size="sm" onClick={transport.startWork}>
-              Start AGI Work
+              Start Work
             </Button>
           ) : null}
         </div>
@@ -712,7 +711,7 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
                   {/*
                     The action group is shrink-0, so on a phone it held its
                     width and left the details button 146px: the task title got
-                    31px of "AGI Work" and the model label 9px of its display
+                    31px of "Work" and the model label 9px of its display
                     name. The actions drop to their own line instead.
                   */}
                   <div className="flex flex-wrap items-start justify-between gap-2">
@@ -819,7 +818,7 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
                           onClick={() => void handleCancel(run.id)}
                         >
                           {cancellingId === run.id ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            <AgiMark spinning className="h-3.5 w-3.5" />
                           ) : (
                             <>
                               <X className="me-1 h-3.5 w-3.5" /> Stop
@@ -836,7 +835,7 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
                           onClick={() => void handleArchive(run, false)}
                         >
                           {archivingId === run.id ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            <AgiMark spinning className="h-3.5 w-3.5" />
                           ) : (
                             <>
                               <ArchiveRestore className="me-1 h-3.5 w-3.5" /> Restore
@@ -853,7 +852,7 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
                           onClick={() => void handleArchive(run, true)}
                         >
                           {archivingId === run.id ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            <AgiMark spinning className="h-3.5 w-3.5" />
                           ) : (
                             <>
                               <Archive className="me-1 h-3.5 w-3.5" /> Archive
@@ -935,7 +934,7 @@ export function TasksPage({ transport, initialRunId = null }: TasksPageProps) {
                   disabled={loadingMore}
                   onClick={() => void load(filter, nextCursor)}
                 >
-                  {loadingMore ? <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" /> : null}
+                  {loadingMore ? <AgiMark spinning className="me-1.5 h-3.5 w-3.5" /> : null}
                   Show more
                 </Button>
               </div>

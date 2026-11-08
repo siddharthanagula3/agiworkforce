@@ -788,7 +788,7 @@ export function MessageBubble({
       data-testid="message-item"
       className="message-enter flex flex-col gap-1"
     >
-      <h6 className="sr-only">{t('bubble.assistantSaid', 'AGI said:')}</h6>
+      <h6 className="sr-only">{t('bubble.assistantSaid', 'Assistant said:')}</h6>
       {canonicalActivity && (
         <div className="mb-2">
           <AgentActivityTimeline
@@ -888,7 +888,7 @@ export function MessageBubble({
         </div>
       )}
 
-      {/* Managed-cloud sandbox files (x_generated_files), shared cards with
+      {/* Cloud sandbox files (x_generated_files), shared cards with
           an authed Download action. Never present on Local-mode messages.
           Also renders while an E2B execution tool is still running so the
           user sees an honest "Running code…" strip before any file exists. */}
@@ -903,7 +903,7 @@ export function MessageBubble({
           are wired (honest omission on desktop today). `isLast` no longer gates
           the row. */}
       {/* The reply saved, but one or more optional side-panels were too large
-          for the managed-cloud metadata budget and were dropped on save. Say so
+          for the cloud metadata budget and were dropped on save. Say so
           instead of letting the user find an empty Thinking/Artifacts panel
           after a reload and assume the app lost the answer. */}
       {trimmedMetadataFields.length > 0 && (

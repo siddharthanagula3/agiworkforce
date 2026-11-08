@@ -98,15 +98,24 @@ const MEMORY_REQUEST_FAILED = 'Could not reach your memory. Nothing changed.';
 
 let cachedCsrfToken: string | null = null;
 let cachedCsrfExpiry = 0;
+let accountGeneration = 0;
+let accountRequests = new AbortController();
 
-async function getCsrfToken(): Promise<string | null> {
+function assertAccountGeneration(generation: number): void {
+  if (generation !== accountGeneration) throw new Error('Memory account changed.');
+}
+
+async function getCsrfToken(generation: number): Promise<string | null> {
+  assertAccountGeneration(generation);
   if (cachedCsrfToken && Date.now() < cachedCsrfExpiry) {
     return cachedCsrfToken;
   }
   try {
-    const res = await fetch('/api/csrf', { method: 'GET' });
+    const res = await fetch('/api/csrf', { method: 'GET', signal: accountRequests.signal });
+    assertAccountGeneration(generation);
     if (!res.ok) return null;
     const data = (await res.json()) as { token?: string; expiresIn?: number };
+    assertAccountGeneration(generation);
     if (!data.token) return null;
     cachedCsrfToken = data.token;
     cachedCsrfExpiry = Date.now() + (data.expiresIn ?? 3_600_000) - 5 * 60_000;
@@ -117,20 +126,28 @@ async function getCsrfToken(): Promise<string | null> {
 }
 
 async function withCsrfHeaders(
+  generation: number,
   headers: Record<string, string> = {},
 ): Promise<Record<string, string>> {
-  const token = await getCsrfToken();
+  const token = await getCsrfToken(generation);
   return token ? { ...headers, 'x-csrf-token': token } : headers;
 }
 
-async function memoryRequest(path: string, init: RequestInit): Promise<unknown> {
+async function memoryRequest(
+  generation: number,
+  path: string,
+  init: RequestInit,
+): Promise<unknown> {
+  assertAccountGeneration(generation);
   let res: Response;
   try {
-    res = await fetch(path, init);
+    res = await fetch(path, { ...init, signal: accountRequests.signal });
   } catch {
     throw new Error(MEMORY_REQUEST_FAILED);
   }
+  assertAccountGeneration(generation);
   const body: unknown = await res.json().catch(() => null);
+  assertAccountGeneration(generation);
   if (!res.ok || body === null) {
     const message =
       body && typeof body === 'object'
@@ -146,14 +163,18 @@ function contractOrFail<T>(parsed: T | null): T {
   return parsed;
 }
 
-async function fetchServerMemories(): Promise<ManagedMemoryRecord[]> {
+async function fetchServerMemories(generation: number): Promise<ManagedMemoryRecord[]> {
   const rows: ManagedMemoryRecord[] = [];
   for (let offset = 0; offset <= MEMORY_MAX_OFFSET; offset += MEMORY_PAGE_SIZE) {
     const page = contractOrFail(
       parseManagedMemoryListResponse(
-        await memoryRequest(`${MEMORY_API_BASE}?limit=${MEMORY_PAGE_SIZE}&offset=${offset}`, {
-          method: 'GET',
-        }),
+        await memoryRequest(
+          generation,
+          `${MEMORY_API_BASE}?limit=${MEMORY_PAGE_SIZE}&offset=${offset}`,
+          {
+            method: 'GET',
+          },
+        ),
       ),
     );
     rows.push(...page.memories);
@@ -163,14 +184,15 @@ async function fetchServerMemories(): Promise<ManagedMemoryRecord[]> {
 }
 
 async function createServerMemory(
+  generation: number,
   text: string,
   projectId?: string,
 ): Promise<ManagedMemoryWriteResponse> {
   return contractOrFail(
     parseManagedMemoryWriteResponse(
-      await memoryRequest(MEMORY_API_BASE, {
+      await memoryRequest(generation, MEMORY_API_BASE, {
         method: 'POST',
-        headers: await withCsrfHeaders({ 'Content-Type': 'application/json' }),
+        headers: await withCsrfHeaders(generation, { 'Content-Type': 'application/json' }),
         body: JSON.stringify({ content: text, source: 'web', ...(projectId ? { projectId } : {}) }),
       }),
     ),
@@ -178,31 +200,32 @@ async function createServerMemory(
 }
 
 async function updateServerMemory(
+  generation: number,
   serverId: string,
   patch: { content?: string; pinned?: boolean },
 ): Promise<ManagedMemoryRecord> {
   return contractOrFail(
     parseManagedMemoryItemResponse(
-      await memoryRequest(`${MEMORY_API_BASE}/${encodeURIComponent(serverId)}`, {
+      await memoryRequest(generation, `${MEMORY_API_BASE}/${encodeURIComponent(serverId)}`, {
         method: 'PUT',
-        headers: await withCsrfHeaders({ 'Content-Type': 'application/json' }),
+        headers: await withCsrfHeaders(generation, { 'Content-Type': 'application/json' }),
         body: JSON.stringify(patch),
       }),
     ),
   ).memory;
 }
 
-async function deleteServerMemory(serverId: string): Promise<void> {
-  await memoryRequest(`${MEMORY_API_BASE}/${encodeURIComponent(serverId)}`, {
+async function deleteServerMemory(generation: number, serverId: string): Promise<void> {
+  await memoryRequest(generation, `${MEMORY_API_BASE}/${encodeURIComponent(serverId)}`, {
     method: 'DELETE',
-    headers: await withCsrfHeaders(),
+    headers: await withCsrfHeaders(generation),
   });
 }
 
-async function deleteAllServerMemories(): Promise<void> {
-  await memoryRequest(MEMORY_API_BASE, {
+async function deleteAllServerMemories(generation: number): Promise<void> {
+  await memoryRequest(generation, MEMORY_API_BASE, {
     method: 'DELETE',
-    headers: await withCsrfHeaders(),
+    headers: await withCsrfHeaders(generation),
   });
 }
 
@@ -235,6 +258,7 @@ export const useMemoryStore = create<MemoryState>()(
       syncStatus: canSyncToServer() ? 'idle' : 'unavailable',
 
       add: async (text, sourceConversationId, project) => {
+        const generation = accountGeneration;
         const trimmed = text.trim();
         if (!trimmed) return null;
         const dupe = get().facts.find(
@@ -258,11 +282,13 @@ export const useMemoryStore = create<MemoryState>()(
 
         let created: ManagedMemoryWriteResponse;
         try {
-          created = await createServerMemory(trimmed, project?.id);
+          created = await createServerMemory(generation, trimmed, project?.id);
         } catch (error) {
+          if (generation !== accountGeneration) return null;
           set((state) => ({ facts: state.facts.filter((f) => f.id !== fact.id) }));
           throw error;
         }
+        if (generation !== accountGeneration) return null;
 
         const superseded = new Set(created.supersededIds);
         const keeper = created.supersededBy
@@ -291,6 +317,7 @@ export const useMemoryStore = create<MemoryState>()(
       },
 
       update: async (id, text) => {
+        const generation = accountGeneration;
         const trimmed = text.trim();
         const target = get().facts.find((f) => f.id === id);
         if (!trimmed || !target || target.pending) return;
@@ -301,17 +328,20 @@ export const useMemoryStore = create<MemoryState>()(
         }));
         if (!canSyncToServer() || !target.serverId) return;
         try {
-          const row = await updateServerMemory(target.serverId, { content: trimmed });
+          const row = await updateServerMemory(generation, target.serverId, { content: trimmed });
+          if (generation !== accountGeneration) return;
           set((state) => ({
             facts: state.facts.map((f) => (f.id === id ? withServerRow(f, row) : f)),
           }));
         } catch (error) {
+          if (generation !== accountGeneration) return;
           set((state) => ({ facts: state.facts.map((f) => (f.id === id ? target : f)) }));
           throw error;
         }
       },
 
       setPinned: async (id, pinned) => {
+        const generation = accountGeneration;
         const target = get().facts.find((f) => f.id === id);
         if (!target || target.pending) return;
         set((state) => ({
@@ -319,17 +349,20 @@ export const useMemoryStore = create<MemoryState>()(
         }));
         if (!canSyncToServer() || !target.serverId) return;
         try {
-          const row = await updateServerMemory(target.serverId, { pinned });
+          const row = await updateServerMemory(generation, target.serverId, { pinned });
+          if (generation !== accountGeneration) return;
           set((state) => ({
             facts: state.facts.map((f) => (f.id === id ? withServerRow(f, row) : f)),
           }));
         } catch (error) {
+          if (generation !== accountGeneration) return;
           set((state) => ({ facts: state.facts.map((f) => (f.id === id ? target : f)) }));
           throw error;
         }
       },
 
       remove: async (id) => {
+        const generation = accountGeneration;
         const facts = get().facts;
         const index = facts.findIndex((f) => f.id === id);
         const target = facts[index];
@@ -337,8 +370,9 @@ export const useMemoryStore = create<MemoryState>()(
         set((state) => ({ facts: state.facts.filter((f) => f.id !== id) }));
         if (!canSyncToServer() || !target.serverId) return;
         try {
-          await deleteServerMemory(target.serverId);
+          await deleteServerMemory(generation, target.serverId);
         } catch (error) {
+          if (generation !== accountGeneration) return;
           set((state) => {
             const next = [...state.facts];
             next.splice(Math.min(index, next.length), 0, target);
@@ -349,15 +383,28 @@ export const useMemoryStore = create<MemoryState>()(
       },
 
       clear: async () => {
-        if (canSyncToServer()) await deleteAllServerMemories();
+        const generation = accountGeneration;
+        try {
+          if (canSyncToServer()) await deleteAllServerMemories(generation);
+        } catch (error) {
+          if (generation !== accountGeneration) return;
+          throw error;
+        }
+        if (generation !== accountGeneration) return;
         set({ facts: [] });
       },
 
       resetOnLogout: () => {
+        accountGeneration += 1;
+        accountRequests.abort();
+        accountRequests = new AbortController();
+        cachedCsrfToken = null;
+        cachedCsrfExpiry = 0;
         set({ facts: [], syncStatus: canSyncToServer() ? 'idle' : 'unavailable' });
       },
 
       hydrateFromServer: async () => {
+        const generation = accountGeneration;
         if (!canSyncToServer()) {
           set({ syncStatus: 'unavailable' });
           return;
@@ -365,11 +412,13 @@ export const useMemoryStore = create<MemoryState>()(
         set({ syncStatus: 'syncing' });
         let rows: ManagedMemoryRecord[];
         try {
-          rows = await fetchServerMemories();
+          rows = await fetchServerMemories(generation);
         } catch {
+          if (generation !== accountGeneration) return;
           set({ syncStatus: 'error' });
           return;
         }
+        if (generation !== accountGeneration) return;
 
         const serverTexts = new Set(rows.map((row) => row.content.toLowerCase()));
         const backlog = get().facts.filter(
@@ -391,7 +440,8 @@ export const useMemoryStore = create<MemoryState>()(
 
         for (const fact of backlog) {
           try {
-            const created = await createServerMemory(fact.text);
+            const created = await createServerMemory(generation, fact.text);
+            if (generation !== accountGeneration) return;
             const superseded = new Set(created.supersededIds);
             set((state) => ({
               facts: state.facts
@@ -404,6 +454,7 @@ export const useMemoryStore = create<MemoryState>()(
                 }),
             }));
           } catch {
+            if (generation !== accountGeneration) return;
             set((state) => ({
               facts: state.facts.map((f) => (f.id === fact.id ? { ...f, unsaved: true } : f)),
             }));

@@ -1,6 +1,6 @@
 {
   "providers": {
-    "managed_cloud": "Managed Cloud",
+    "managed_cloud": "Cloud",
     "ollama": "Ollama",
     "openai": "OpenAI",
     "anthropic": "Anthropic",

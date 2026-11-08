@@ -68,7 +68,7 @@
   },
   "modal": {
     "close": "Close settings",
-    "description": "Search and configure AGI settings.",
+    "description": "Search and configure settings.",
     "navigation": "Settings navigation",
     "noMatches": "No matches.",
     "searchLabel": "Search settings",

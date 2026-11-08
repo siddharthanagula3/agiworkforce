@@ -64,8 +64,8 @@
       "aria": "로컬과 클라우드 전환",
       "switchTo": "{{mode}}(으)로 전환",
       "soon": "곧 제공",
-      "cloudUnavailable": "AGI Cloud는 데스크톱에서 사용할 수 있습니다. 로그인하면 관리형 모델과 동기화된 채팅을 이용할 수 있습니다.",
-      "localUnavailable": "로컬 모드는 AGI CLI에서 Ollama 또는 LM Studio를 통해 실행됩니다. 데스크톱 대화는 관리형 클라우드를 사용합니다."
+      "cloudUnavailable": "Cloud는 데스크톱에서 사용할 수 있습니다. 로그인하면 관리형 모델과 동기화된 채팅을 이용할 수 있습니다.",
+      "localUnavailable": "로컬 모드는 CLI에서 Ollama 또는 LM Studio를 통해 실행됩니다. 데스크톱 대화는 관리형 클라우드를 사용합니다."
     },
     "groups": {
       "lastHour": "Last hour",
@@ -76,7 +76,7 @@
     },
     "modes": {
       "chat": "Chat",
-      "work": "AGI Work",
+      "work": "Work",
       "code": "Code"
     },
     "nav": {
@@ -313,13 +313,13 @@
   "agiWork": {
     "home": {
       "headline": "Let's knock something off your list",
-      "learnLink": "Learn how to use AGI Work safely.",
+      "learnLink": "Learn how to use Work safely.",
       "placeholder": "How can I help you today?",
       "startTask": "Start task",
       "kbdHint": "to start a task and keep going",
       "active": "Active",
       "clearActive": "Clear active",
-      "onboardingTitle": "Get to know AGI Work",
+      "onboardingTitle": "Get to know Work",
       "onboarding": {
         "startTitle": "Start your first task",
         "startDesc": "Describe a recurring work job above and let your AI team handle it.",
@@ -355,7 +355,7 @@
       "startChat": "Start a chat"
     },
     "projects": {
-      "title": "AGI Work projects",
+      "title": "Work projects",
       "newProject": "New project",
       "untitled": "제목 없는 프로젝트",
       "empty": "아직 프로젝트가 없습니다",
@@ -369,7 +369,7 @@
       "keepAwake": "Keep this Mac awake for scheduled tasks",
       "keepAwakeDesc": "When on, uses caffeinate to prevent sleep during scheduled runs. Plug in for long tasks.",
       "keepAwakeTitle": "컴퓨터 깨어 있게 유지",
-      "keepAwakeHint": "예약된 작업은 AGI Desktop가 열려 있는 동안에만 실행됩니다. 앱이 닫혀 있거나 컴퓨터가 잠자기 상태여서 놓친 실행은 지난 7일 이내에 예정된 경우 앱을 다시 열 때 한 번 실행됩니다.",
+      "keepAwakeHint": "예약된 작업은 Desktop가 열려 있는 동안에만 실행됩니다. 앱이 닫혀 있거나 컴퓨터가 잠자기 상태여서 놓친 실행은 지난 7일 이내에 예정된 경우 앱을 다시 열 때 한 번 실행됩니다.",
       "keepAwakeUnavailable": "사용할 수 없음: {{reason}}",
       "loading": "Loading scheduled tasks…",
       "nextRun": "Next run",
@@ -411,9 +411,9 @@
       "toolWebSearch": "웹 검색 및 탐색",
       "toolCodeExecution": "코드 실행",
       "palette": {
-        "label": "AGI Work 도구",
+        "label": "Work 도구",
         "searchPlaceholder": "플러그인, 폴더, 스킬 검색",
-        "searchLabel": "AGI Work 팔레트 검색",
+        "searchLabel": "Work 팔레트 검색",
         "connectorsHeading": "연결된 앱",
         "connectorsLoading": "연결된 앱 불러오는 중",
         "skillsHeading": "스킬",

@@ -64,8 +64,8 @@
       "aria": "ローカルとクラウドを切り替える",
       "switchTo": "{{mode}} に切り替える",
       "soon": "近日公開",
-      "cloudUnavailable": "AGI Cloud はデスクトップでご利用いただけます。ログインするとマネージドモデルと同期されたチャットを使えます。",
-      "localUnavailable": "ローカルモードは AGI CLI で Ollama または LM Studio を通じて動作します。デスクトップの会話はマネージドクラウドを使用します。"
+      "cloudUnavailable": "Cloud はデスクトップでご利用いただけます。ログインするとマネージドモデルと同期されたチャットを使えます。",
+      "localUnavailable": "ローカルモードは CLI で Ollama または LM Studio を通じて動作します。デスクトップの会話はマネージドクラウドを使用します。"
     },
     "groups": {
       "lastHour": "Last hour",
@@ -76,7 +76,7 @@
     },
     "modes": {
       "chat": "Chat",
-      "work": "AGI Work",
+      "work": "Work",
       "code": "Code"
     },
     "nav": {
@@ -313,13 +313,13 @@
   "agiWork": {
     "home": {
       "headline": "Let's knock something off your list",
-      "learnLink": "Learn how to use AGI Work safely.",
+      "learnLink": "Learn how to use Work safely.",
       "placeholder": "How can I help you today?",
       "startTask": "Start task",
       "kbdHint": "to start a task and keep going",
       "active": "Active",
       "clearActive": "Clear active",
-      "onboardingTitle": "Get to know AGI Work",
+      "onboardingTitle": "Get to know Work",
       "onboarding": {
         "startTitle": "Start your first task",
         "startDesc": "Describe a recurring work job above and let your AI team handle it.",
@@ -355,7 +355,7 @@
       "startChat": "Start a chat"
     },
     "projects": {
-      "title": "AGI Work projects",
+      "title": "Work projects",
       "newProject": "New project",
       "untitled": "無題のプロジェクト",
       "empty": "まだプロジェクトがありません",
@@ -369,7 +369,7 @@
       "keepAwake": "Keep this Mac awake for scheduled tasks",
       "keepAwakeDesc": "When on, uses caffeinate to prevent sleep during scheduled runs. Plug in for long tasks.",
       "keepAwakeTitle": "コンピューターをスリープさせない",
-      "keepAwakeHint": "スケジュールされたタスクは AGI Desktop が開いている間のみ実行されます。アプリが閉じていた間やコンピューターがスリープしていた間に実行されなかったタスクは、過去 7 日以内に予定されていた場合、アプリを再度開いたときに 1 回実行されます。",
+      "keepAwakeHint": "スケジュールされたタスクは Desktop が開いている間のみ実行されます。アプリが閉じていた間やコンピューターがスリープしていた間に実行されなかったタスクは、過去 7 日以内に予定されていた場合、アプリを再度開いたときに 1 回実行されます。",
       "keepAwakeUnavailable": "利用できません: {{reason}}",
       "loading": "Loading scheduled tasks…",
       "nextRun": "Next run",
@@ -411,9 +411,9 @@
       "toolWebSearch": "ウェブ検索と閲覧",
       "toolCodeExecution": "コード実行",
       "palette": {
-        "label": "AGI Work ツール",
+        "label": "Work ツール",
         "searchPlaceholder": "プラグイン、フォルダー、スキルを検索",
-        "searchLabel": "AGI Work パレットを検索",
+        "searchLabel": "Work パレットを検索",
         "connectorsHeading": "接続済みアプリ",
         "connectorsLoading": "接続済みアプリを読み込み中",
         "skillsHeading": "スキル",

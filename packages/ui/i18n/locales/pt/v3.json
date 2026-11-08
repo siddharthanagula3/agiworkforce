@@ -64,8 +64,8 @@
       "aria": "Alternar entre Local e Nuvem",
       "switchTo": "Alternar para {{mode}}",
       "soon": "Em breve",
-      "cloudUnavailable": "O AGI Cloud está disponível no desktop, entre para usar modelos gerenciados e chats sincronizados.",
-      "localUnavailable": "O modo Local funciona no AGI CLI por meio do Ollama ou LM Studio. As conversas no Desktop usam a nuvem gerenciada."
+      "cloudUnavailable": "O Cloud está disponível no desktop, entre para usar modelos gerenciados e chats sincronizados.",
+      "localUnavailable": "O modo Local funciona no CLI por meio do Ollama ou LM Studio. As conversas no Desktop usam a nuvem gerenciada."
     },
     "groups": {
       "lastHour": "Last hour",
@@ -76,7 +76,7 @@
     },
     "modes": {
       "chat": "Chat",
-      "work": "AGI Work",
+      "work": "Work",
       "code": "Code"
     },
     "nav": {
@@ -313,13 +313,13 @@
   "agiWork": {
     "home": {
       "headline": "Let's knock something off your list",
-      "learnLink": "Learn how to use AGI Work safely.",
+      "learnLink": "Learn how to use Work safely.",
       "placeholder": "How can I help you today?",
       "startTask": "Start task",
       "kbdHint": "to start a task and keep going",
       "active": "Active",
       "clearActive": "Clear active",
-      "onboardingTitle": "Get to know AGI Work",
+      "onboardingTitle": "Get to know Work",
       "onboarding": {
         "startTitle": "Start your first task",
         "startDesc": "Describe a recurring work job above and let your AI team handle it.",
@@ -355,7 +355,7 @@
       "startChat": "Start a chat"
     },
     "projects": {
-      "title": "AGI Work projects",
+      "title": "Work projects",
       "newProject": "New project",
       "untitled": "Projeto sem título",
       "empty": "Ainda não há projetos",
@@ -369,7 +369,7 @@
       "keepAwake": "Keep this Mac awake for scheduled tasks",
       "keepAwakeDesc": "When on, uses caffeinate to prevent sleep during scheduled runs. Plug in for long tasks.",
       "keepAwakeTitle": "Manter o computador ativo",
-      "keepAwakeHint": "As tarefas agendadas só são executadas enquanto o AGI Desktop está aberto. Uma execução perdida enquanto o app estava fechado ou o computador em repouso é executada uma vez quando o app é aberto novamente, se estava prevista nos últimos 7 dias.",
+      "keepAwakeHint": "As tarefas agendadas só são executadas enquanto o Desktop está aberto. Uma execução perdida enquanto o app estava fechado ou o computador em repouso é executada uma vez quando o app é aberto novamente, se estava prevista nos últimos 7 dias.",
       "keepAwakeUnavailable": "Indisponível: {{reason}}",
       "loading": "Loading scheduled tasks…",
       "nextRun": "Next run",
@@ -411,9 +411,9 @@
       "toolWebSearch": "Pesquisa na web e navegação",
       "toolCodeExecution": "Execução de código",
       "palette": {
-        "label": "Ferramentas do AGI Work",
+        "label": "Ferramentas do Work",
         "searchPlaceholder": "Pesquisar plugins, pastas e habilidades",
-        "searchLabel": "Pesquisar na paleta do AGI Work",
+        "searchLabel": "Pesquisar na paleta do Work",
         "connectorsHeading": "Apps conectados",
         "connectorsLoading": "Carregando apps conectados",
         "skillsHeading": "Habilidades",
