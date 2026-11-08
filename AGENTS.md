@@ -222,8 +222,10 @@ that omits a real export its subject imports.
 
 What bites:
 
-- **Guards read the working tree (`git ls-files -co`), not HEAD.** A green local
-  run says nothing about what you committed. Stage first, then run, then commit.
+- **Most guards read the working tree (`git ls-files -co`), not HEAD.** A green
+  local run says nothing about what you committed. Stage first, then run, then
+  commit. `check:llm-failures:staged` reads immutable index blobs and rejects an
+  index that changes during validation.
 - **The guard chain is `&&`** and hides every failure after the first. When
   diagnosing, run the individual guards.
 - **Priority tiers match a token against `apps/*/__tests__` paths**, and a tier
