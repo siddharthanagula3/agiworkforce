@@ -1,16 +1,7 @@
+import { AgiMark } from '@agiworkforce/ui';
 import { useState, useEffect, useMemo, useCallback, type ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  Search,
-  Clock,
-  MessageSquare,
-  FileText,
-  X,
-  Loader2,
-  TrendingUp,
-  Zap,
-  History,
-} from 'lucide-react';
+import { Search, Clock, MessageSquare, FileText, X, TrendingUp, Zap, History } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import Fuse from 'fuse.js';
 import { useChatStore, dbIdToUuid, type ConversationSummary } from '../../stores/chat/chatStore';
@@ -541,7 +532,7 @@ export function CommandPalette({ isOpen, onClose, commands = [] }: CommandPalett
           {/* Search header */}
           <div className="flex items-center gap-3 border-b border-border px-4 py-3">
             {ftsLoading ? (
-              <Loader2 className="h-5 w-5 shrink-0 animate-spin text-teal-400" aria-hidden="true" />
+              <AgiMark spinning className="h-5 w-5 shrink-0 text-teal-400" aria-hidden="true" />
             ) : (
               <Search className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
             )}

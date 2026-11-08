@@ -1,5 +1,5 @@
 import React, { Suspense, lazy } from 'react';
-import { Check, Download, Loader2, Server } from 'lucide-react';
+import { Check, Download, Server } from 'lucide-react';
 import type { Provider } from '@agiworkforce/types';
 import { validateUrl } from '@/utils/security';
 import { invoke } from '@/lib/tauri-mock';
@@ -8,7 +8,7 @@ import { deleteApiKey, listLockedApiKeys, listSavedApiKeys } from '@/api/byok';
 import { formatModelSize, type OllamaPullOutcome, type OllamaPullProgress } from '@/api/ollama';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { VAULT_STATE_CHANGED_EVENT } from '../../masterPasswordVault';
-import { useConfirmAction } from '@agiworkforce/ui';
+import { AgiMark, useConfirmAction } from '@agiworkforce/ui';
 import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { Button } from '@/ui/Button';
 import { Progress } from '@/ui/Progress';
@@ -267,7 +267,7 @@ export function BYOKApiKeysSection() {
                   className="shrink-0 h-8 w-16 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
                   {status === 'saving' ? (
-                    <Loader2 className="mx-auto h-3.5 w-3.5 animate-spin" />
+                    <AgiMark spinning className="mx-auto h-3.5 w-3.5" />
                   ) : status === 'saved' ? (
                     <Check className="mx-auto h-3.5 w-3.5" />
                   ) : (
@@ -281,7 +281,7 @@ export function BYOKApiKeysSection() {
                   className="shrink-0 h-8 w-14 rounded-md border border-border text-xs font-medium hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
                   {status === 'testing' ? (
-                    <Loader2 className="mx-auto h-3.5 w-3.5 animate-spin" />
+                    <AgiMark spinning className="mx-auto h-3.5 w-3.5" />
                   ) : (
                     'Test'
                   )}
@@ -500,7 +500,7 @@ export function ModelsKeysTab({
                   </p>
                   {checkingOllama ? (
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Loader2 className="h-3 w-3 animate-spin" />
+                      <AgiMark spinning className="h-3 w-3" />
                       <span>Checking Ollama status...</span>
                     </div>
                   ) : isOllamaAvailable ? (
@@ -639,9 +639,7 @@ export function ModelsKeysTab({
                         disabled={checkingOllama}
                         aria-label="Re-check Ollama status"
                       >
-                        {checkingOllama ? (
-                          <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
-                        ) : null}
+                        {checkingOllama ? <AgiMark spinning className="mr-2 h-3.5 w-3.5" /> : null}
                         Re-check
                       </Button>
                     </div>

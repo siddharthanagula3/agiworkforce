@@ -1,7 +1,7 @@
 import React from 'react';
-import { Check, Loader2, RefreshCw, Server } from 'lucide-react';
+import { Check, RefreshCw, Server } from 'lucide-react';
 import { toast } from 'sonner';
-import { useConfirmAction } from '@agiworkforce/ui';
+import { AgiMark, useConfirmAction } from '@agiworkforce/ui';
 import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { McpClient } from '@/api/mcp';
 import { deleteApiKey, listSavedApiKeys } from '@/api/byok';
@@ -321,7 +321,7 @@ function LocalRuntimeCard({ runtime }: { runtime: RuntimeConfig }) {
 
             {checking ? (
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Loader2 className="h-3 w-3 animate-spin" />
+                <AgiMark spinning className="h-3 w-3" />
                 <span>Checking {runtime.label} status...</span>
               </div>
             ) : available ? (
@@ -388,7 +388,11 @@ function LocalRuntimeCard({ runtime }: { runtime: RuntimeConfig }) {
           title={`Re-check ${runtime.label} status`}
           className="shrink-0 rounded-md border border-border p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
-          <RefreshCw className={checking ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />
+          {checking ? (
+            <AgiMark spinning className={'h-3.5 w-3.5'} />
+          ) : (
+            <RefreshCw className={'h-3.5 w-3.5'} />
+          )}
         </button>
       </div>
       {confirmDialog}

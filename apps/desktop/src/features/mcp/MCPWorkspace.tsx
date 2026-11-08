@@ -1,3 +1,4 @@
+import { AgiMark } from '@agiworkforce/ui';
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useMcpStore } from '../../stores/mcpStore';
@@ -81,7 +82,11 @@ export default function MCPWorkspace() {
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={handleRefreshAll} disabled={isLoading}>
-            <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+            {isLoading ? (
+              <AgiMark spinning className="w-4 h-4 mr-2" />
+            ) : (
+              <RefreshCw className="w-4 h-4 mr-2" />
+            )}
             Refresh
           </Button>
         </div>

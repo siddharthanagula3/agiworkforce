@@ -1,6 +1,6 @@
+import { AgiMark } from '@agiworkforce/ui';
 import { memo } from 'react';
 import {
-  Loader2,
   CheckCircle2,
   Circle,
   Search,
@@ -88,7 +88,7 @@ function PhaseRow({ config, status, subStatusText }: PhaseRowProps) {
       {/* Status icon */}
       <div className="shrink-0 mt-0.5">
         {status === 'complete' && <CheckCircle2 className="h-5 w-5 text-primary" />}
-        {status === 'active' && <Loader2 className="h-5 w-5 text-primary animate-spin" />}
+        {status === 'active' && <AgiMark spinning className="h-5 w-5 text-primary" />}
         {status === 'pending' && <Circle className="h-5 w-5 text-muted-foreground" />}
       </div>
 

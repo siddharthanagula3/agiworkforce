@@ -1,3 +1,4 @@
+import { AgiMark } from '@agiworkforce/ui';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import type { BrowserSessionKind } from '@agiworkforce/types';
@@ -438,7 +439,11 @@ export function BrowserViewer({ className, tabId }: BrowserViewerProps) {
             className="h-7 w-7 p-0"
             title="Reload"
           >
-            <RefreshCw className={cn('h-3.5 w-3.5', isNavigating && 'animate-spin')} />
+            {isNavigating ? (
+              <AgiMark spinning className={cn('h-3.5 w-3.5', '')} />
+            ) : (
+              <RefreshCw className="h-3.5 w-3.5" />
+            )}
           </Button>
         </div>
 

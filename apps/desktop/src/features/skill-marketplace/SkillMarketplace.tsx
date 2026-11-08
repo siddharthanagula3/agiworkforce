@@ -1,3 +1,4 @@
+import { AgiMark } from '@agiworkforce/ui';
 /**
  * SkillMarketplace: the LOCAL-mode skill browser.
  *
@@ -133,7 +134,11 @@ export function SkillMarketplace() {
               aria-label="Reload skills"
               className="h-8 w-8 p-0"
             >
-              <RefreshCw className={cn('h-4 w-4', isLoading && 'animate-spin')} />
+              {isLoading ? (
+                <AgiMark spinning className={cn('h-4 w-4', '')} />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
             </Button>
 
             {/* View mode toggle */}

@@ -1,4 +1,5 @@
-import { AlertCircle, ArrowRight, Check, Download, Loader2, RefreshCw, X } from 'lucide-react';
+import { AgiMark } from '@agiworkforce/ui';
+import { AlertCircle, ArrowRight, Check, Download, RefreshCw, X } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -152,7 +153,7 @@ export function UpdateDialog({ open, onOpenChange }: UpdateDialogProps) {
           {/* Installing indicator */}
           {isInstalling && (
             <div className="flex items-center justify-center gap-2 py-4">
-              <Loader2 className="h-5 w-5 animate-spin text-primary" />
+              <AgiMark spinning className="h-5 w-5 text-primary" />
               <span className="text-muted-foreground">Installing update and restarting...</span>
             </div>
           )}

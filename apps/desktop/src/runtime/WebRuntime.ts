@@ -165,32 +165,59 @@ export class WebRuntime implements ChatRuntime {
   ): Promise<void> {
     const model = normalizeModelId(options?.model ?? '') ?? 'auto';
     const controller = new AbortController();
+    const abortFromCaller = () => controller.abort();
+    if (options?.signal?.aborted) controller.abort();
+    else options?.signal?.addEventListener('abort', abortFromCaller, { once: true });
     this._abortControllers.set(conversationId, controller);
-    await ensureCloudConversation(
-      conversationId,
-      'New chat',
-      model,
-      options?.projectId,
-      undefined,
-      await readTemporaryChatPreference(),
-    );
+    const clearController = () => {
+      options?.signal?.removeEventListener('abort', abortFromCaller);
+      if (this._abortControllers.get(conversationId) === controller)
+        this._abortControllers.delete(conversationId);
+    };
+    const shouldStopBeforeDispatch = () => {
+      const superseded = this._abortControllers.get(conversationId) !== controller;
+      if (!controller.signal.aborted && !superseded) return false;
+      if (superseded) controller.abort();
+      clearController();
+      return true;
+    };
+    if (shouldStopBeforeDispatch()) return;
+    try {
+      await ensureCloudConversation(
+        conversationId,
+        'New chat',
+        model,
+        options?.projectId,
+        controller.signal,
+        await readTemporaryChatPreference(),
+      );
+    } catch (error) {
+      if (shouldStopBeforeDispatch()) return;
+      clearController();
+      throw error;
+    }
+    if (shouldStopBeforeDispatch()) return;
     const persistence = createCloudChatPersistenceClient();
     const userMessageId = uuidv7();
     const assistantMessageId = options?.continuationMessageId ?? uuidv7();
     const isContinuation = options?.isContinuation === true;
 
-    if (options?.signal) {
-      options.signal.addEventListener('abort', () => controller.abort());
+    let uploadedAttachments: Awaited<ReturnType<typeof uploadDesktopCloudAttachments>>;
+    try {
+      uploadedAttachments =
+        !isContinuation && options?.attachments?.length
+          ? await uploadDesktopCloudAttachments(
+              options.attachments,
+              controller.signal,
+              conversationId,
+            )
+          : [];
+    } catch (error) {
+      if (shouldStopBeforeDispatch()) return;
+      clearController();
+      throw error;
     }
-
-    const uploadedAttachments =
-      !isContinuation && options?.attachments?.length
-        ? await uploadDesktopCloudAttachments(
-            options.attachments,
-            controller.signal,
-            conversationId,
-          )
-        : [];
+    if (shouldStopBeforeDispatch()) return;
     const messageHistory = options?.messageHistory ?? [];
     const currentHistoryAttachments = messageHistory[messageHistory.length - 1]?.attachments ?? [];
     for (const [index, attachment] of currentHistoryAttachments.entries()) {
@@ -244,6 +271,7 @@ export class WebRuntime implements ChatRuntime {
         model,
         ...(options?.projectId !== undefined ? { projectId: options.projectId } : {}),
       });
+      if (shouldStopBeforeDispatch()) return;
       if (!isContinuation) {
         await persistence.saveMessage(conversationId, {
           id: userMessageId,
@@ -255,6 +283,7 @@ export class WebRuntime implements ChatRuntime {
             : {}),
         });
       }
+      if (shouldStopBeforeDispatch()) return;
       await sendCloudMessage(
         conversationId,
         content,
@@ -415,7 +444,7 @@ export class WebRuntime implements ChatRuntime {
         this.emit({ type: 'error', error: message });
       }
     } finally {
-      this._abortControllers.delete(conversationId);
+      clearController();
       // Nothing settles this turn once `sendMessage` has returned; leaving it
       // live would let a later Stop persist a stopped turn over a finished one.
       settleTurn();

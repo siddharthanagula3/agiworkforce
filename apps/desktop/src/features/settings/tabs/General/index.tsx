@@ -1,6 +1,7 @@
+import { AgiMark } from '@agiworkforce/ui';
 import { Suspense, lazy, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Cloud, Loader2, Shield } from 'lucide-react';
+import { Cloud, Shield } from 'lucide-react';
 import { formatChatExecutionModeLabel, PRODUCT_BRAND, PRODUCT_NAMES } from '@agiworkforce/types';
 import { autostart, window as desktopWindow } from '@agiworkforce/desktop-command-client';
 import { toast } from 'sonner';
@@ -82,7 +83,7 @@ function AppModeSection() {
 
       {isCloud && !sessionValidated && (
         <div className="rounded-lg border border-zinc-500/20 bg-zinc-500/5 px-4 py-3 flex items-center gap-3">
-          <Loader2 className="h-4 w-4 text-zinc-400 shrink-0 animate-spin" />
+          <AgiMark spinning className="h-4 w-4 text-zinc-400 shrink-0" />
           <p className="text-sm text-zinc-400 flex-1">Checking authentication...</p>
         </div>
       )}

@@ -1,5 +1,6 @@
+import { AgiMark } from '@agiworkforce/ui';
 import { useEffect, useRef, useState } from 'react';
-import { CheckCheck, Loader2, Mic, Sparkles } from 'lucide-react';
+import { CheckCheck, Mic, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { useVoiceInputStore } from '../../stores/settingsStore';
 import { cn } from '../../lib/utils';
@@ -100,7 +101,7 @@ export function VoiceInputOverlay() {
         )}
       >
         {isListening && <Mic size={24} className="text-white" />}
-        {isTranscribing && <Loader2 size={24} className="text-white animate-spin" />}
+        {isTranscribing && <AgiMark spinning size={24} className="text-white" />}
         {isProcessing && <Sparkles size={24} className="text-violet-300 animate-pulse" />}
         {isPreview && <CheckCheck size={24} className="text-white" />}
       </div>

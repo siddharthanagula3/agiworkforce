@@ -1,6 +1,7 @@
+import { AgiMark } from '@agiworkforce/ui';
 import { useEffect, useId, useRef, useState } from 'react';
 import type { ToolApprovalRequest } from '@agiworkforce/types';
-import { Loader2, Mic2, PauseCircle, ShieldAlert } from 'lucide-react';
+import { Mic2, PauseCircle, ShieldAlert } from 'lucide-react';
 
 import {
   describeApprovalReason,
@@ -242,7 +243,7 @@ export function CloudVoiceActionDialog({
                 className="inline-flex items-center gap-2 rounded-lg bg-[var(--chat-accent-primary)] px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60"
               >
                 {isResolvingConfirmation && (
-                  <Loader2 aria-hidden="true" size={15} className="animate-spin" />
+                  <AgiMark spinning aria-hidden="true" size={15} className="" />
                 )}
                 Approve
               </button>
@@ -302,7 +303,7 @@ export function CloudVoiceActionDialog({
                   className="inline-flex items-center gap-2 rounded-lg bg-[var(--chat-accent-primary)] px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-60"
                 >
                   {(isExecuting || isStopping) && (
-                    <Loader2 aria-hidden="true" size={15} className="animate-spin" />
+                    <AgiMark spinning aria-hidden="true" size={15} className="" />
                   )}
                   {isStopping
                     ? 'Waiting for desktop control to stop…'

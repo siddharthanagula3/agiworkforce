@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { AlertCircle, ChevronLeft, Loader2, Shield, Puzzle } from 'lucide-react';
-import { useConfirmAction } from '@agiworkforce/ui';
+import { AlertCircle, ChevronLeft, Shield, Puzzle } from 'lucide-react';
+import { AgiMark, useConfirmAction } from '@agiworkforce/ui';
 import { useIsMounted } from '@/hooks/useIsMounted';
 import { Button } from '@/ui/Button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/ui/Select';
@@ -64,7 +64,7 @@ function PermissionRow({ tool, level, onChange, saving }: PermissionRowProps) {
 
       {/* Permission dropdown */}
       <div className="shrink-0 flex items-center gap-1.5">
-        {saving && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+        {saving && <AgiMark spinning className="h-3.5 w-3.5 text-muted-foreground" />}
         <Select
           value={level}
           onValueChange={(v) => onChange(v as ConnectorPermissionLevel)}
@@ -297,7 +297,7 @@ export function ConnectorDetailView({ connector, tools, onBack }: ConnectorDetai
       {/* Tool list */}
       {storeUnreadable ? null : tools === null || !loaded ? (
         <div className="flex items-center justify-center py-8 text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin" />
+          <AgiMark spinning className="h-5 w-5" />
         </div>
       ) : toolSchemaUnavailable ? (
         <div className="rounded-lg border border-border bg-muted/30 px-4 py-6 text-center">

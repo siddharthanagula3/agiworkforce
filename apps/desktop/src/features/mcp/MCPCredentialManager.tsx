@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useConfirmAction } from '@agiworkforce/ui';
+import { AgiMark, useConfirmAction } from '@agiworkforce/ui';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/ui/Card';
 import { Button } from '@/ui/Button';
 import { Alert, AlertDescription } from '@/ui/Alert';
@@ -12,7 +12,6 @@ import {
   MessageSquare,
   CheckCircle,
   AlertCircle,
-  Loader2,
   Key,
   Eye,
   EyeOff,
@@ -495,7 +494,7 @@ export default function MCPCredentialManager({ servers }: MCPCredentialManagerPr
                       >
                         {isLoading ? (
                           <>
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            <AgiMark spinning className="w-4 h-4 mr-2" />
                             Disconnecting...
                           </>
                         ) : (
@@ -507,7 +506,7 @@ export default function MCPCredentialManager({ servers }: MCPCredentialManagerPr
                     <Button onClick={() => startOAuth(providerKey)} disabled={isLoading}>
                       {isLoading ? (
                         <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          <AgiMark spinning className="w-4 h-4 mr-2" />
                           Connecting...
                         </>
                       ) : (

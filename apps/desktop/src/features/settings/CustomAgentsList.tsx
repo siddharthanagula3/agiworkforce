@@ -1,4 +1,4 @@
-import { Bot, FolderOpen, Loader2, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { Bot, FolderOpen, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { homeDir } from '@tauri-apps/api/path';
 import { toast } from 'sonner';
@@ -18,7 +18,7 @@ import {
   AlertDialogTitle,
 } from '@/ui/AlertDialog';
 import { CustomAgentEditor } from './CustomAgentEditor';
-import { useUiTranslation } from '@agiworkforce/ui';
+import { AgiMark, useUiTranslation } from '@agiworkforce/ui';
 
 interface AgentCardProps {
   agent: CustomAgentConfig;
@@ -240,7 +240,11 @@ export function CustomAgentsList() {
             disabled={isLoading}
             aria-label="Refresh agents"
           >
-            <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+            {isLoading ? (
+              <AgiMark spinning className="h-4 w-4" />
+            ) : (
+              <RefreshCw className="h-4 w-4" />
+            )}
           </Button>
           <Button size="sm" onClick={handleCreate} disabled={isLoading}>
             <Plus className="h-4 w-4 mr-1" />
@@ -294,7 +298,7 @@ export function CustomAgentsList() {
             className="shrink-0 p-1 rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50"
           >
             {openingFolder ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+              <AgiMark spinning className="h-3.5 w-3.5" aria-hidden="true" />
             ) : (
               <FolderOpen className="h-3.5 w-3.5" aria-hidden="true" />
             )}

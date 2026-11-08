@@ -1,12 +1,11 @@
 import { dotfiles } from '@agiworkforce/desktop-command-client';
 import { toast } from 'sonner';
-import { useConfirmAction } from '@agiworkforce/ui';
+import { AgiMark, useConfirmAction } from '@agiworkforce/ui';
 import { cn } from '@/lib/utils';
 import {
   ChevronDown,
   ChevronUp,
   FolderOpen,
-  Loader2,
   Plus,
   Puzzle,
   Save,
@@ -65,7 +64,7 @@ function OpenFolderButton({ path, name, kind = 'file' }: OpenFolderButtonProps) 
       className="shrink-0 p-1 rounded text-muted-foreground hover:bg-muted hover:text-foreground transition-colors disabled:opacity-50"
     >
       {opening ? (
-        <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+        <AgiMark spinning className="h-3.5 w-3.5" aria-hidden="true" />
       ) : (
         <FolderOpen className="h-3.5 w-3.5" aria-hidden="true" />
       )}
@@ -157,7 +156,7 @@ function ConfigEditorSection() {
   if (loading) {
     return (
       <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" />
+        <AgiMark spinning className="h-4 w-4" />
         Loading config...
       </div>
     );
@@ -205,7 +204,7 @@ function ConfigEditorSection() {
         <div className="flex justify-end pt-2">
           <Button size="sm" onClick={() => void handleSave()} disabled={saving}>
             {saving ? (
-              <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+              <AgiMark spinning className="mr-2 h-3.5 w-3.5" />
             ) : (
               <Save className="mr-2 h-3.5 w-3.5" />
             )}
@@ -348,7 +347,7 @@ function McpServersSection() {
 
       {loading ? (
         <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
+          <AgiMark spinning className="h-4 w-4" />
           Loading servers...
         </div>
       ) : serverEntries.length === 0 ? (
@@ -432,7 +431,7 @@ function EcosystemSection() {
           disabled={importing}
         >
           {importing ? (
-            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+            <AgiMark spinning className="mr-1.5 h-3.5 w-3.5" />
           ) : (
             <Zap className="mr-1.5 h-3.5 w-3.5" />
           )}
@@ -445,7 +444,7 @@ function EcosystemSection() {
 
       {loading ? (
         <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
+          <AgiMark spinning className="h-4 w-4" />
           Scanning...
         </div>
       ) : tools.length === 0 ? (
@@ -518,7 +517,7 @@ function SkillsBrowserSection() {
 
       {loading ? (
         <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
+          <AgiMark spinning className="h-4 w-4" />
           Scanning skills...
         </div>
       ) : skills.length === 0 ? (
@@ -588,7 +587,7 @@ function InstructionsEditorSection() {
   if (loading) {
     return (
       <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" />
+        <AgiMark spinning className="h-4 w-4" />
         Loading instructions...
       </div>
     );
@@ -618,7 +617,7 @@ function InstructionsEditorSection() {
       <div className="flex justify-end pt-2">
         <Button size="sm" onClick={() => void handleSave()} disabled={saving || !isDirty}>
           {saving ? (
-            <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+            <AgiMark spinning className="mr-2 h-3.5 w-3.5" />
           ) : (
             <Save className="mr-2 h-3.5 w-3.5" />
           )}
@@ -655,7 +654,7 @@ function MemoryViewerSection() {
   if (loading) {
     return (
       <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" />
+        <AgiMark spinning className="h-4 w-4" />
         Loading memories...
       </div>
     );

@@ -6,7 +6,6 @@ import {
   Clock3,
   History,
   LayoutTemplate,
-  Loader2,
   Pencil,
   Play,
   Plus,
@@ -17,11 +16,12 @@ import {
   Zap,
 } from 'lucide-react';
 import { getPlanMaxScheduledTasks, TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
-import { ApprovalCard, useConfirmAction } from '@agiworkforce/ui';
+import { AgiMark, ApprovalCard, useConfirmAction } from '@agiworkforce/ui';
 import {
   MANAGED_CLOUD_SCHEDULE_DEFAULT_SOURCES,
   MANAGED_CLOUD_SCHEDULE_TEMPLATES,
   describeScheduleRunTiming,
+  getScheduleActionAvailability,
   managedCloudScheduleShareUrlPath,
   type ManagedCloudScheduleTemplate,
   type ManagedCloudScheduleRecentRun,
@@ -1077,7 +1077,7 @@ function AuthenticatedDesktopCloudSchedules({
             role="status"
             className="flex items-center gap-2 rounded-xl border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] px-4 py-3 text-sm text-[var(--chat-text-muted)]"
           >
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            <AgiMark spinning className="h-4 w-4" aria-hidden />
             Loading schedule-compatible Managed Cloud models…
           </div>
         ) : null}
@@ -1131,7 +1131,7 @@ function AuthenticatedDesktopCloudSchedules({
 
         {listStatus === 'loading' && schedules.length === 0 ? (
           <div className="flex items-center justify-center gap-2 py-20 text-sm text-[var(--chat-text-muted)]">
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            <AgiMark spinning className="h-4 w-4" aria-hidden />
             Loading schedules…
           </div>
         ) : listStatus !== 'error' && schedules.length === 0 ? (
@@ -1162,6 +1162,7 @@ function AuthenticatedDesktopCloudSchedules({
           <div className="space-y-3">
             {schedules.map((schedule) => {
               const busy = operation[schedule.id];
+              const availability = getScheduleActionAvailability(schedule);
               const expanded = expandedHistoryId === schedule.id;
               const triggersExpanded = expandedTriggersId === schedule.id;
               const historyState = historyById[schedule.id] ?? EMPTY_HISTORY;
@@ -1210,7 +1211,11 @@ function AuthenticatedDesktopCloudSchedules({
                         <button
                           type="button"
                           onClick={() => void toggleSchedule(schedule)}
-                          disabled={Boolean(busy) || (!schedulesEnabled && !schedule.isEnabled)}
+                          disabled={
+                            Boolean(busy) ||
+                            !availability.canToggle ||
+                            (!schedulesEnabled && !schedule.isEnabled)
+                          }
                           title={
                             !schedulesEnabled && !schedule.isEnabled
                               ? 'Upgrade to Basic or higher to resume this schedule.'
@@ -1219,14 +1224,14 @@ function AuthenticatedDesktopCloudSchedules({
                           className={SECONDARY_BUTTON}
                         >
                           {busy === 'status update' ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                            <AgiMark spinning className="h-3.5 w-3.5" aria-hidden />
                           ) : null}
                           {schedule.isEnabled ? 'Pause' : 'Resume'}
                         </button>
                         <button
                           type="button"
                           onClick={() => void runNow(schedule)}
-                          disabled={Boolean(busy) || !schedulesEnabled}
+                          disabled={Boolean(busy) || !availability.canRun || !schedulesEnabled}
                           title={
                             !schedulesEnabled
                               ? 'Upgrade to Basic or higher to run this schedule.'
@@ -1235,7 +1240,7 @@ function AuthenticatedDesktopCloudSchedules({
                           className={SECONDARY_BUTTON}
                         >
                           {busy === 'manual run' ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                            <AgiMark spinning className="h-3.5 w-3.5" aria-hidden />
                           ) : (
                             <Play className="h-3.5 w-3.5" aria-hidden />
                           )}
@@ -1288,7 +1293,12 @@ function AuthenticatedDesktopCloudSchedules({
                           aria-label={`Edit ${schedule.name}`}
                           title="Edit schedule"
                           onClick={() => openEdit(schedule)}
-                          disabled={Boolean(busy) || !schedulesEnabled || !modelCatalogReady}
+                          disabled={
+                            Boolean(busy) ||
+                            !availability.canEdit ||
+                            !schedulesEnabled ||
+                            !modelCatalogReady
+                          }
                           className={SECONDARY_BUTTON}
                         >
                           <Pencil className="h-3.5 w-3.5" aria-hidden />
@@ -1302,7 +1312,7 @@ function AuthenticatedDesktopCloudSchedules({
                           className={`${SECONDARY_BUTTON} hover:border-[var(--chat-destructive)]/40 hover:text-[var(--chat-destructive)]`}
                         >
                           {busy === 'deletion' ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                            <AgiMark spinning className="h-3.5 w-3.5" aria-hidden />
                           ) : (
                             <Trash2 className="h-3.5 w-3.5" aria-hidden />
                           )}
@@ -1388,7 +1398,7 @@ function AuthenticatedDesktopCloudSchedules({
                     <div className="border-t border-[var(--chat-border)] px-4 py-3">
                       {historyState.status === 'loading' ? (
                         <div className="flex items-center gap-2 py-4 text-xs text-[var(--chat-text-muted)]">
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                          <AgiMark spinning className="h-3.5 w-3.5" aria-hidden />
                           Loading run history…
                         </div>
                       ) : historyState.error ? (
@@ -1497,7 +1507,7 @@ function AuthenticatedDesktopCloudSchedules({
                               className={SECONDARY_BUTTON}
                             >
                               {historyState.loadingMore ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                                <AgiMark spinning className="h-3.5 w-3.5" aria-hidden />
                               ) : null}
                               Show more runs
                             </button>
@@ -1519,7 +1529,7 @@ function AuthenticatedDesktopCloudSchedules({
             onClick={() => void loadSchedules(true, nextOffset)}
             className={`${SECONDARY_BUTTON} self-center`}
           >
-            {loadingMore ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
+            {loadingMore ? <AgiMark spinning className="h-4 w-4" aria-hidden /> : null}
             Show more schedules
           </button>
         ) : null}
@@ -1847,7 +1857,7 @@ function AuthenticatedDesktopCloudSchedules({
                 onClick={() => void save()}
                 className={PRIMARY_BUTTON}
               >
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
+                {saving ? <AgiMark spinning className="h-4 w-4" aria-hidden /> : null}
                 {editing ? 'Save changes' : 'Create schedule'}
               </button>
             </div>

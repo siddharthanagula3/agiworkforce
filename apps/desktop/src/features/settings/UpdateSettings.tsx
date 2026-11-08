@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AlertCircle, Check, Download, Info, Loader2, RefreshCw, Settings2 } from 'lucide-react';
+import { AlertCircle, Check, Download, Info, RefreshCw, Settings2 } from 'lucide-react';
 import { Button } from '@/ui/Button';
 import { Switch } from '@/ui/Switch';
 import { Label } from '@/ui/Label';
@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useUpdater } from '../../features/updates/useUpdater';
 import { useUpdaterStore } from '../../stores/updaterStore';
 import { UpdateDialog } from '../../features/updates';
-import { useUiTranslation } from '@agiworkforce/ui';
+import { AgiMark, useUiTranslation } from '@agiworkforce/ui';
 import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 export function UpdateSettings() {
@@ -66,7 +66,7 @@ export function UpdateSettings() {
         return {
           title: 'Checking for Updates...',
           description: 'Please wait while we check for available updates.',
-          icon: <Loader2 className="h-6 w-6 text-muted-foreground animate-spin" />,
+          icon: <AgiMark spinning className="h-6 w-6 text-muted-foreground" />,
         };
       case 'available':
         return {
@@ -78,7 +78,7 @@ export function UpdateSettings() {
         return {
           title: 'Downloading Update...',
           description: `Downloading version ${updateInfo?.version}... ${downloadProgress?.percent || 0}%`,
-          icon: <Loader2 className="h-6 w-6 text-muted-foreground animate-spin" />,
+          icon: <AgiMark spinning className="h-6 w-6 text-muted-foreground" />,
         };
       case 'downloaded':
         return {
@@ -90,7 +90,7 @@ export function UpdateSettings() {
         return {
           title: 'Installing Update...',
           description: 'Restarting the application to apply the update.',
-          icon: <Loader2 className="h-6 w-6 text-muted-foreground animate-spin" />,
+          icon: <AgiMark spinning className="h-6 w-6 text-muted-foreground" />,
         };
       case 'error':
         return {
@@ -158,7 +158,7 @@ export function UpdateSettings() {
                 >
                   {isChecking ? (
                     <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      <AgiMark spinning className="mr-2 h-4 w-4" />
                       Checking...
                     </>
                   ) : (

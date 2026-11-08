@@ -1,4 +1,5 @@
-import { CalendarClock, Loader2, Plus, Sparkles } from 'lucide-react';
+import { AgiMark } from '@agiworkforce/ui';
+import { CalendarClock, Plus, Sparkles } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   type ScheduledTask,
@@ -165,7 +166,7 @@ export function ScheduledTasksPanel() {
       <div className="flex-1 overflow-y-auto">
         {isLoading && tasks.length === 0 ? (
           <div className="flex items-center justify-center py-12 text-sm text-slate-500">
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            <AgiMark spinning className="mr-2 h-4 w-4" />
             Loading tasks...
           </div>
         ) : tasks.length === 0 ? (

@@ -1,5 +1,6 @@
+import { AgiMark } from '@agiworkforce/ui';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Check, Download, ExternalLink, Loader2, ShieldAlert, X } from 'lucide-react';
+import { Check, Download, ExternalLink, ShieldAlert, X } from 'lucide-react';
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
 import { toast } from 'sonner';
@@ -94,7 +95,7 @@ export function CloudDataSection() {
             >
               {exporting ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <AgiMark spinning className="mr-2 h-4 w-4" />
                   Exporting…
                 </>
               ) : (
@@ -140,7 +141,7 @@ export function CloudDataSection() {
             >
               {openingAccount ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <AgiMark spinning className="mr-2 h-4 w-4" />
                   Opening…
                 </>
               ) : (

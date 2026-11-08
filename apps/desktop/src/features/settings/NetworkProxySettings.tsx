@@ -1,5 +1,6 @@
+import { AgiMark } from '@agiworkforce/ui';
 import { open } from '@tauri-apps/plugin-dialog';
-import { AlertTriangle, Check, Eye, EyeOff, Loader2, Network, Trash2 } from 'lucide-react';
+import { AlertTriangle, Check, Eye, EyeOff, Network, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -182,7 +183,7 @@ export function NetworkProxySettings() {
   if (loading) {
     return (
       <div className="flex items-center gap-3 rounded-lg border border-border bg-card p-5 text-sm text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" />
+        <AgiMark spinning className="h-4 w-4" />
         Loading encrypted network settings…
       </div>
     );
@@ -358,7 +359,7 @@ export function NetworkProxySettings() {
           )}
         </span>
         <Button type="button" disabled={saving || Boolean(validationError)} onClick={save}>
-          {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {saving && <AgiMark spinning className="mr-2 h-4 w-4" />}
           Apply network settings
         </Button>
       </div>

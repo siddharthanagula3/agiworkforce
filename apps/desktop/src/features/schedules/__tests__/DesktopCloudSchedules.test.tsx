@@ -198,6 +198,35 @@ describe('DesktopCloudSchedules', () => {
     expect(models).not.toHaveBeenCalled();
   });
 
+  it.each(['completed', 'expired'] as const)(
+    'keeps %s lifecycle actions disabled while history and deletion remain available',
+    async (status) => {
+      const task = { ...schedule, status, isEnabled: false };
+      const api = makeApi({ listSchedules: vi.fn(async () => schedulePage([task])) });
+      render(<DesktopCloudSchedules api={api} loadModels={loadModels()} />);
+      await screen.findByText('Morning brief');
+      await waitFor(() =>
+        expect(
+          (screen.getByRole('button', { name: 'Create schedule' }) as HTMLButtonElement).disabled,
+        ).toBe(false),
+      );
+      for (const name of ['Resume', 'Run now', 'Edit Morning brief']) {
+        const button = screen.getByRole('button', { name }) as HTMLButtonElement;
+        expect(button.disabled).toBe(true);
+        fireEvent.click(button);
+      }
+      expect((screen.getByRole('button', { name: 'History' }) as HTMLButtonElement).disabled).toBe(
+        false,
+      );
+      expect(
+        (screen.getByRole('button', { name: 'Delete Morning brief' }) as HTMLButtonElement)
+          .disabled,
+      ).toBe(false);
+      expect(api.setScheduleEnabled).not.toHaveBeenCalled();
+      expect(api.runNow).not.toHaveBeenCalled();
+    },
+  );
+
   it('lists account schedules and toggles them through the Cloud adapter', async () => {
     const api = makeApi();
     render(<DesktopCloudSchedules api={api} loadModels={loadModels()} />);

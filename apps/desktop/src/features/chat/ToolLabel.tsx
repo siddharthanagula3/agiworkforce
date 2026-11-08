@@ -9,7 +9,6 @@ import {
   GitBranch,
   Image,
   Database,
-  Loader2,
   Check,
   X,
   Wrench,
@@ -28,7 +27,7 @@ import type { ToolLabelEntry } from '@agiworkforce/types';
 import React, { useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import { codeEditing } from '@agiworkforce/desktop-command-client';
-import { useConfirmAction } from '@agiworkforce/ui';
+import { AgiMark, useConfirmAction } from '@agiworkforce/ui';
 import { getSimpleErrorMessage } from '../../lib/errorMessages';
 import { useToolStore } from '../../stores/chat/toolStore';
 import {
@@ -300,7 +299,7 @@ export function ToolLabel({ entry }: { entry: ToolLabelEntry }) {
       <div className="flex items-center gap-2">
         {/* Status indicator */}
         {isRunning ? (
-          <Loader2 className="w-3 h-3 animate-spin text-violet-400 shrink-0" />
+          <AgiMark spinning className="w-3 h-3 text-violet-400 shrink-0" />
         ) : isError ? (
           <X className="w-3 h-3 text-danger-text shrink-0" />
         ) : (

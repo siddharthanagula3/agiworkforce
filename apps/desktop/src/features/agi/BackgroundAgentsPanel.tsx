@@ -1,7 +1,7 @@
-import { CheckCircle2, Clock, Loader2, Pause, Play, XCircle } from 'lucide-react';
+import { CheckCircle2, Clock, Pause, Play, XCircle } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
-import { useConfirmAction, type ConfirmActionRequest } from '@agiworkforce/ui';
+import { AgiMark, useConfirmAction, type ConfirmActionRequest } from '@agiworkforce/ui';
 
 import { cn } from '../../lib/utils';
 import {
@@ -45,7 +45,7 @@ const STATUS_STYLES: Record<BackgroundAgentStatus, string> = {
 };
 
 function StatusIcon({ status }: { status: BackgroundAgentStatus }) {
-  if (status === 'running') return <Loader2 className="h-4 w-4 animate-spin" />;
+  if (status === 'running') return <AgiMark spinning className="h-4 w-4" />;
   if (status === 'queued') return <Clock className="h-4 w-4" />;
   if (status === 'paused') return <Pause className="h-4 w-4" />;
   if (status === 'completed') return <CheckCircle2 className="h-4 w-4" />;

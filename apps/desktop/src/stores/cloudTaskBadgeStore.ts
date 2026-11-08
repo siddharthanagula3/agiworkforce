@@ -36,11 +36,19 @@ const EMPTY = {
   error: null,
 } as const;
 
+let refreshGeneration = 0;
+
 export const useCloudTaskBadgeStore = create<CloudTaskBadgeState>()((set) => ({
   ...EMPTY,
   status: 'idle',
 
   refresh: async () => {
+    const generation = ++refreshGeneration;
+    const sessionEpoch = useUnifiedAuthStore.getState().cloudSessionEpoch;
+    const isCurrent = () =>
+      generation === refreshGeneration &&
+      sessionEpoch === useUnifiedAuthStore.getState().cloudSessionEpoch &&
+      canReadCloudRuns();
     if (!canReadCloudRuns()) {
       set({ ...EMPTY, status: 'idle' });
       return;
@@ -53,10 +61,7 @@ export const useCloudTaskBadgeStore = create<CloudTaskBadgeState>()((set) => ({
         limit: PAGE_LIMIT,
       });
 
-      if (!canReadCloudRuns()) {
-        set({ ...EMPTY, status: 'idle' });
-        return;
-      }
+      if (!isCurrent()) return;
 
       const needsUserCount = page.runs.filter((run) =>
         NEEDS_USER_STATES.includes(run.state),
@@ -70,6 +75,7 @@ export const useCloudTaskBadgeStore = create<CloudTaskBadgeState>()((set) => ({
         error: null,
       });
     } catch (error) {
+      if (!isCurrent()) return;
       set({
         ...EMPTY,
         status: 'error',
@@ -78,5 +84,8 @@ export const useCloudTaskBadgeStore = create<CloudTaskBadgeState>()((set) => ({
     }
   },
 
-  reset: () => set({ ...EMPTY, status: 'idle' }),
+  reset: () => {
+    refreshGeneration += 1;
+    set({ ...EMPTY, status: 'idle' });
+  },
 }));

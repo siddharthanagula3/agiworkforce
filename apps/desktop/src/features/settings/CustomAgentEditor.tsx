@@ -1,4 +1,5 @@
-import { Lock, Loader2, Trash2 } from 'lucide-react';
+import { AgiMark } from '@agiworkforce/ui';
+import { Lock, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { toast } from 'sonner';
@@ -181,7 +182,7 @@ export function CustomAgentEditor({ initialAgent, onClose }: CustomAgentEditorPr
                   disabled={busy}
                   onClick={() => void handleDelete()}
                 >
-                  {isDeleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Confirm'}
+                  {isDeleting ? <AgiMark spinning className="h-3.5 w-3.5" /> : 'Confirm'}
                 </Button>
                 <Button
                   variant="ghost"
@@ -345,7 +346,7 @@ export function CustomAgentEditor({ initialAgent, onClose }: CustomAgentEditorPr
           Cancel
         </Button>
         <Button onClick={() => void handleSave()} disabled={busy}>
-          {isSaving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+          {isSaving ? <AgiMark spinning className="h-4 w-4 mr-1" /> : null}
           {isEditing ? 'Save Changes' : 'Create Agent'}
         </Button>
       </div>

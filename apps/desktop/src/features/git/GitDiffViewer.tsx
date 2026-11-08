@@ -1,3 +1,4 @@
+import { AgiMark } from '@agiworkforce/ui';
 /**
  * Git Diff Viewer component.
  *
@@ -8,7 +9,7 @@
  */
 
 import { invoke } from '../../lib/tauri-mock';
-import { AlertCircle, FileCode, Loader2, Minus, Plus, RefreshCw } from 'lucide-react';
+import { AlertCircle, FileCode, Minus, Plus, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { cn } from '../../lib/utils';
 import type { GitDiff } from '../../hooks/useGit';
@@ -202,11 +203,7 @@ export function GitDiffViewer({
           disabled={loading}
           title="Refresh diff"
         >
-          {loading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <RefreshCw className="h-4 w-4" />
-          )}
+          {loading ? <AgiMark spinning className="h-4 w-4" /> : <RefreshCw className="h-4 w-4" />}
         </Button>
       </div>
 
@@ -214,7 +211,7 @@ export function GitDiffViewer({
       <ScrollArea className="flex-1">
         {loading ? (
           <div className="flex items-center justify-center h-32">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            <AgiMark spinning className="h-6 w-6 text-muted-foreground" />
           </div>
         ) : diffs.length === 0 ? (
           <div className="flex items-center justify-center h-32 text-muted-foreground">

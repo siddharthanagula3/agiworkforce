@@ -1,10 +1,10 @@
+import { AgiMark } from '@agiworkforce/ui';
 import { useCallback, useEffect } from 'react';
 import {
   Activity,
   AlertTriangle,
   CheckCircle2,
   HelpCircle,
-  Loader2,
   RefreshCw,
   ServerCrash,
   WifiOff,
@@ -291,7 +291,11 @@ function DashboardHeader({
             className="h-7 w-7 p-0"
             aria-label="Refresh server health"
           >
-            <RefreshCw className={cn('h-3.5 w-3.5', isLoading && 'animate-spin')} />
+            {isLoading ? (
+              <AgiMark spinning className={cn('h-3.5 w-3.5', '')} />
+            ) : (
+              <RefreshCw className="h-3.5 w-3.5" />
+            )}
           </Button>
         </TooltipTrigger>
         <TooltipContent>Refresh health status</TooltipContent>
@@ -303,7 +307,7 @@ function DashboardHeader({
 function EmptyState() {
   return (
     <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-      <Loader2 className="h-8 w-8 mb-3 opacity-30" />
+      <AgiMark spinning className="h-8 w-8 mb-3 opacity-30" />
       <p className="text-sm font-medium">No MCP servers configured</p>
       <p className="text-xs mt-1 opacity-70">
         Add servers via the MCP configuration to see their health here.

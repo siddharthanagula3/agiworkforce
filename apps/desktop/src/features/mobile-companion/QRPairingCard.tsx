@@ -1,3 +1,4 @@
+import { AgiMark } from '@agiworkforce/ui';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { toDataURL } from 'qrcode';
@@ -134,10 +135,11 @@ export function QRPairingCard() {
                   aria-label="Refresh pairing code"
                   className="rounded-md border border-slate-200 bg-white/95 p-2 text-slate-600 shadow-xs transition-colors hover:bg-white hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  <RefreshCw
-                    className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin' : ''}`}
-                    aria-hidden="true"
-                  />
+                  {isLoading ? (
+                    <AgiMark spinning className="h-3.5 w-3.5" aria-hidden="true" />
+                  ) : (
+                    <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+                  )}
                 </button>
                 <button
                   type="button"
@@ -203,7 +205,7 @@ export function QRPairingCard() {
         >
           {isLoading ? (
             <>
-              <RefreshCw className="mr-2 h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+              <AgiMark spinning className="mr-2 h-3.5 w-3.5" aria-hidden="true" />
               Generating...
             </>
           ) : hasCode ? (

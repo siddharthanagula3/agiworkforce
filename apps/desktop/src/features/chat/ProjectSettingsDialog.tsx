@@ -31,12 +31,11 @@ import {
   Trash2,
   Upload,
   Database,
-  Loader2,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { useReducedMotion } from '@agiworkforce/unified-chat';
-import { useConfirmAction } from '@agiworkforce/ui';
+import { AgiMark, useConfirmAction } from '@agiworkforce/ui';
 import { open as openFilePicker } from '@tauri-apps/plugin-dialog';
 import {
   useProjectStore,
@@ -1106,7 +1105,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                   <ScrollArea className="h-[220px] rounded-lg border border-border p-2">
                     {isLoadingCloudKnowledge ? (
                       <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
-                        <Loader2 className="h-6 w-6 animate-spin" />
+                        <AgiMark spinning className="h-6 w-6" />
                         <p className="text-sm">Loading Cloud sources…</p>
                       </div>
                     ) : cloudKnowledgeError ? (
@@ -1163,7 +1162,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                               className="shrink-0 text-muted-foreground hover:text-danger-text"
                             >
                               {removingCloudKnowledgeIds.has(file.id) ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
+                                <AgiMark spinning className="h-4 w-4" />
                               ) : (
                                 <Trash2 className="h-4 w-4" />
                               )}
@@ -1336,7 +1335,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
           >
             {isSaving ? (
               <>
-                <span className="animate-spin mr-2">...</span>
+                <AgiMark spinning className="mr-2 h-4 w-4" />
                 Saving...
               </>
             ) : (

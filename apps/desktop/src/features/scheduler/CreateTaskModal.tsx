@@ -1,4 +1,5 @@
-import { Loader2, X } from 'lucide-react';
+import { AgiMark } from '@agiworkforce/ui';
+import { X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import {
@@ -248,7 +249,7 @@ export function CreateTaskModal({ isOpen, editingTask, onClose }: CreateTaskModa
                 : 'bg-teal-600 text-foreground hover:bg-teal-500',
             )}
           >
-            {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+            {isSaving && <AgiMark spinning className="h-4 w-4" />}
             {isEditing ? 'Save changes' : 'Create task'}
           </button>
         </div>

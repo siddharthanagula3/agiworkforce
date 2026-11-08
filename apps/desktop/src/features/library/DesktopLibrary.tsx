@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, FileQuestion, Loader2, RotateCcw } from 'lucide-react';
+import { AlertTriangle, FileQuestion, RotateCcw } from 'lucide-react';
 import { LibraryView, type LibraryTransport } from '@agiworkforce/unified-chat';
 import {
+  AgiMark,
   Button,
   Dialog,
   DialogContent,
@@ -227,7 +228,7 @@ function AuthenticatedDesktopLibrary({
             <div className="min-h-0 overflow-auto bg-[var(--chat-surface-overlay)] p-4">
               {previewState.status === 'loading' ? (
                 <div className="flex h-full min-h-72 items-center justify-center gap-2 text-sm text-[var(--chat-text-muted)]">
-                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                  <AgiMark spinning className="h-4 w-4" aria-hidden />
                   Loading preview…
                 </div>
               ) : null}

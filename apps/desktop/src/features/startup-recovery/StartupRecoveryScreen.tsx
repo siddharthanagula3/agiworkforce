@@ -1,3 +1,4 @@
+import { AgiMark } from '@agiworkforce/ui';
 import { useState } from 'react';
 import { Database, FileDown, FolderOpen, Power, RotateCcw, ShieldCheck } from 'lucide-react';
 import { PRODUCT_NAMES } from '@agiworkforce/types';
@@ -105,10 +106,11 @@ export function StartupRecoveryScreen({
             onClick={() => void run('retry', onRetry)}
             className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-white px-4 text-sm font-semibold text-[#0b0e13] transition hover:bg-white/90 disabled:cursor-wait disabled:opacity-50"
           >
-            <RotateCcw
-              className={`h-4 w-4 ${pending === 'retry' ? 'animate-spin' : ''}`}
-              aria-hidden="true"
-            />
+            {pending === 'retry' ? (
+              <AgiMark spinning className="h-4 w-4" aria-hidden="true" />
+            ) : (
+              <RotateCcw className="h-4 w-4" aria-hidden="true" />
+            )}
             {pending === 'retry' ? 'Restarting…' : 'Retry'}
           </button>
           <button

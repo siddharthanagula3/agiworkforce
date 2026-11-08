@@ -1,3 +1,4 @@
+import { AgiMark } from '@agiworkforce/ui';
 import { useCallback, useEffect, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { REGISTRY_DISCOVERY_DEBOUNCE_MS } from '@agiworkforce/utils';
@@ -18,7 +19,6 @@ import {
   FileText,
   CheckCircle,
   ExternalLink,
-  Loader2,
   ShieldCheck,
   TrendingUp,
   AlertCircle,
@@ -87,7 +87,7 @@ function InstallProgressModal({
               </div>
             ) : (
               <div className="p-2 rounded-full bg-blue-500/10">
-                <Loader2 className="w-6 h-6 text-blue-400 animate-spin" />
+                <AgiMark spinning className="w-6 h-6 text-blue-400" />
               </div>
             )}
             <div>
@@ -203,7 +203,7 @@ function StatusStep({
       {complete ? (
         <CheckCircle className="w-4 h-4" />
       ) : active ? (
-        <Loader2 className="w-4 h-4 animate-spin" />
+        <AgiMark spinning className="w-4 h-4" />
       ) : failed ? (
         <AlertCircle className="w-4 h-4" />
       ) : (
@@ -471,7 +471,7 @@ function BundleDetailsModal({
                   {!canInstall ? (
                     <ExternalLink className="w-4 h-4" />
                   ) : isInstalling ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <AgiMark spinning className="w-4 h-4" />
                   ) : (
                     <Download className="w-4 h-4" />
                   )}
@@ -717,7 +717,11 @@ export function MCPBundleBrowser({ onConfigureServer }: MCPBundleBrowserProps) {
               onClick={() => fetchRegistry()}
               disabled={isLoading}
             >
-              <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+              {isLoading ? (
+                <AgiMark spinning className="w-4 h-4 mr-2" />
+              ) : (
+                <RefreshCw className="w-4 h-4 mr-2" />
+              )}
               Refresh
             </Button>
           </div>
@@ -808,7 +812,7 @@ export function MCPBundleBrowser({ onConfigureServer }: MCPBundleBrowserProps) {
           {/* Loading State */}
           {isLoading && bundles.length === 0 ? (
             <div className="text-center py-12">
-              <Loader2 className="w-12 h-12 text-blue-400 mx-auto mb-4 animate-spin" />
+              <AgiMark spinning className="w-12 h-12 text-blue-400 mx-auto mb-4" />
               <p className="text-muted-foreground">Loading bundles...</p>
             </div>
           ) : filteredBundles.length === 0 ? (

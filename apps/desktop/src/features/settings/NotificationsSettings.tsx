@@ -1,4 +1,5 @@
-import { Loader2 } from 'lucide-react';
+import { AgiMark } from '@agiworkforce/ui';
+
 import { isCloudWeb } from '@/lib/tauri-mock';
 import { Label } from '@/ui/Label';
 import { Switch } from '@/ui/Switch';
@@ -79,7 +80,7 @@ export function NotificationsSettings({
       <p className="text-sm text-muted-foreground mb-6">Configure how you receive notifications</p>
       {notificationLoading ? (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
+          <AgiMark spinning className="h-4 w-4" />
           <span>Loading notification settings...</span>
         </div>
       ) : notificationSettings ? (

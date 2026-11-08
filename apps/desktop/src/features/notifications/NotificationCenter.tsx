@@ -1,3 +1,4 @@
+import { AgiMark } from '@agiworkforce/ui';
 import {
   Bell,
   BellOff,
@@ -446,7 +447,11 @@ export function NotificationCenter({ className, onActionClick }: NotificationCen
                   disabled={isLoading}
                   aria-label="Refresh"
                 >
-                  <RefreshCw className={cn('h-3.5 w-3.5', isLoading && 'animate-spin')} />
+                  {isLoading ? (
+                    <AgiMark spinning className={cn('h-3.5 w-3.5', '')} />
+                  ) : (
+                    <RefreshCw className="h-3.5 w-3.5" />
+                  )}
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Refresh</TooltipContent>
@@ -577,7 +582,7 @@ export function NotificationCenter({ className, onActionClick }: NotificationCen
                     >
                       {isLoading ? (
                         <>
-                          <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                          <AgiMark spinning className="h-4 w-4 mr-2" />
                           Loading...
                         </>
                       ) : (

@@ -1,3 +1,4 @@
+import { AgiMark } from '@agiworkforce/ui';
 import React, { useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useTerminalStore, type ShellTypeLiteral } from '../../stores/terminalStore';
@@ -6,7 +7,7 @@ import { Input } from '@/ui/Input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/ui/Card';
 import { Badge } from '@/ui/Badge';
 import { toast } from 'sonner';
-import { Loader2, Sparkles, AlertTriangle, CheckCircle, Code } from 'lucide-react';
+import { Sparkles, AlertTriangle, CheckCircle, Code } from 'lucide-react';
 
 interface TerminalAIAssistantProps {
   sessionId: string;
@@ -132,7 +133,7 @@ export const TerminalAIAssistant: React.FC<TerminalAIAssistantProps> = ({
             <Button onClick={handleSuggestCommand} disabled={loading || !intent.trim()}>
               {loading ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <AgiMark spinning className="mr-2 h-4 w-4" />
                   Generating...
                 </>
               ) : (
@@ -215,7 +216,7 @@ export const TerminalAIAssistant: React.FC<TerminalAIAssistantProps> = ({
           >
             {loading ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <AgiMark spinning className="mr-2 h-4 w-4" />
                 Committing...
               </>
             ) : (

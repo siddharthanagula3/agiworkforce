@@ -1,4 +1,5 @@
 import { RefreshCw } from 'lucide-react';
+import { AgiMark } from '@agiworkforce/ui';
 import { useUpdater } from './useUpdater';
 
 interface UpdatePillProps {
@@ -52,13 +53,11 @@ export function UpdatePill({ collapsed = false, onUpdateNow }: UpdatePillProps) 
         textOverflow: 'ellipsis',
       }}
     >
-      <RefreshCw
-        size={13}
-        style={{
-          flexShrink: 0,
-          animation: status === 'downloading' ? 'spin 1s linear infinite' : undefined,
-        }}
-      />
+      {status === 'downloading' ? (
+        <AgiMark size={13} spinning style={{ flexShrink: 0 }} />
+      ) : (
+        <RefreshCw size={13} style={{ flexShrink: 0 }} />
+      )}
       {!collapsed && <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>}
     </button>
   );

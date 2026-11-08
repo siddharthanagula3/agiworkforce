@@ -1,3 +1,4 @@
+import { AgiMark } from '@agiworkforce/ui';
 import React from 'react';
 import { RefreshCw } from 'lucide-react';
 
@@ -166,11 +167,11 @@ function MemoryHeader({
         title={`Refresh ${title.toLowerCase()}`}
         className="shrink-0 rounded-md border border-border p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
       >
-        <RefreshCw
-          className={
-            refreshing ? 'h-3.5 w-3.5 animate-spin motion-reduce:animate-none' : 'h-3.5 w-3.5'
-          }
-        />
+        {refreshing ? (
+          <AgiMark spinning className={'h-3.5 w-3.5 motion-reduce:animate-none'} />
+        ) : (
+          <RefreshCw className={'h-3.5 w-3.5'} />
+        )}
       </button>
     </div>
   );

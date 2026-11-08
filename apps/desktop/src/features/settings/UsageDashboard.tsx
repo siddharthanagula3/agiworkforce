@@ -1,3 +1,4 @@
+import { AgiMark } from '@agiworkforce/ui';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { BarChart3, Flame, RefreshCw, SlidersHorizontal } from 'lucide-react';
 import { toast } from 'sonner';
@@ -407,7 +408,11 @@ export function UsageDashboard() {
           disabled={isRefreshing}
           className="gap-1.5 text-muted-foreground"
         >
-          <RefreshCw className={cn('h-3.5 w-3.5', isRefreshing && 'animate-spin')} />
+          {isRefreshing ? (
+            <AgiMark spinning className={cn('h-3.5 w-3.5', '')} />
+          ) : (
+            <RefreshCw className="h-3.5 w-3.5" />
+          )}
           Refresh
         </Button>
       </div>

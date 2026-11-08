@@ -16,6 +16,7 @@ import { save } from '@tauri-apps/plugin-dialog';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
 import { ChevronRight, Search } from 'lucide-react';
 import {
+  AgiMark,
   SETTINGS_NAV,
   SETTINGS_NAV_GROUPS as NAV_GROUPS,
   type SettingsNavKey,
@@ -23,7 +24,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
-import { Loader2 } from 'lucide-react';
+
 import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 import {
@@ -960,8 +961,9 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
                       aria-live="polite"
                       className="flex items-center justify-center py-8"
                     >
-                      <Loader2
-                        className="h-6 w-6 animate-spin text-muted-foreground"
+                      <AgiMark
+                        spinning
+                        className="h-6 w-6 text-muted-foreground"
                         aria-hidden="true"
                       />
                       <span className="sr-only">Loading settings…</span>

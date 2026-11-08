@@ -3,7 +3,6 @@ import {
   ChevronRight,
   Clock,
   Edit2,
-  Loader2,
   Pause,
   Play,
   RotateCcw,
@@ -14,7 +13,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
-import { useConfirmAction } from '@agiworkforce/ui';
+import { AgiMark, useConfirmAction } from '@agiworkforce/ui';
 import {
   type ScheduledTask,
   type TaskStatus,
@@ -208,7 +207,7 @@ export function ScheduledTaskCard({ task, onEdit }: ScheduledTaskCardProps) {
               className="rounded-md p-1.5 text-slate-400 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isRunning ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <AgiMark spinning className="h-3.5 w-3.5" />
               ) : (
                 <Play className="h-3.5 w-3.5" />
               )}
@@ -225,7 +224,7 @@ export function ScheduledTaskCard({ task, onEdit }: ScheduledTaskCardProps) {
               className="rounded-md p-1.5 text-slate-400 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isToggling ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <AgiMark spinning className="h-3.5 w-3.5" />
               ) : task.status === 'active' ? (
                 <Pause className="h-3.5 w-3.5" />
               ) : (
@@ -255,7 +254,7 @@ export function ScheduledTaskCard({ task, onEdit }: ScheduledTaskCardProps) {
             className="rounded-md p-1.5 text-slate-400 transition hover:bg-red-900/30 hover:text-red-400 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isDeleting ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              <AgiMark spinning className="h-3.5 w-3.5" />
             ) : (
               <Trash2 className="h-3.5 w-3.5" />
             )}

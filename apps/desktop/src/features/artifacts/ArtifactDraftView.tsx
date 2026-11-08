@@ -1,6 +1,7 @@
+import { AgiMark } from '@agiworkforce/ui';
 
 import { useEffect, useRef } from 'react';
-import { Loader2, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { Badge } from '@/ui/Badge';
 import { Button } from '@/ui/Button';
 import type { ArtifactDraft } from '@/stores/artifactStore';
@@ -27,8 +28,9 @@ export function ArtifactDraftView({ draft, onClose }: ArtifactDraftViewProps) {
       className="flex h-full flex-col bg-white dark:bg-zinc-900"
     >
       <div className="flex items-center gap-2 border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
-        <Loader2
-          className="h-4 w-4 animate-spin text-blue-500"
+        <AgiMark
+          spinning
+          className="h-4 w-4 text-blue-500"
           aria-hidden="true"
           data-testid="artifact-draft-spinner"
         />

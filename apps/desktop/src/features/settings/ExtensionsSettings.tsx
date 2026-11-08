@@ -1,9 +1,9 @@
+import { AgiMark } from '@agiworkforce/ui';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AlertCircle,
   Check,
   ExternalLink,
-  Loader2,
   Package,
   Play,
   Power,
@@ -460,7 +460,7 @@ export function ExtensionsSettings() {
       case 'updating':
         return (
           <Badge className="bg-warning-fill/10 text-warning-text border-warning-fill/30">
-            <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+            <AgiMark spinning className="h-3 w-3 mr-1" />
             Updating
           </Badge>
         );
@@ -505,7 +505,7 @@ export function ExtensionsSettings() {
         <Button onClick={handleInstall} disabled={installing}>
           {installing ? (
             <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              <AgiMark spinning className="mr-2 h-4 w-4" />
               Installing...
             </>
           ) : (
@@ -516,7 +516,11 @@ export function ExtensionsSettings() {
           )}
         </Button>
         <Button variant="outline" onClick={() => void loadExtensions()} disabled={loading}>
-          <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          {loading ? (
+            <AgiMark spinning className="mr-2 h-4 w-4" />
+          ) : (
+            <RefreshCw className="mr-2 h-4 w-4" />
+          )}
           Refresh
         </Button>
       </div>
@@ -525,7 +529,7 @@ export function ExtensionsSettings() {
       {installProgress && (
         <div className="rounded-lg border border-border bg-card p-4">
           <div className="flex items-center gap-3">
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            <AgiMark spinning className="h-5 w-5 text-muted-foreground" />
             <div className="flex-1">
               <p className="text-sm font-medium">{installProgress.message}</p>
               <div className="mt-2 h-2 w-full rounded-full bg-muted">
@@ -556,7 +560,7 @@ export function ExtensionsSettings() {
         <ScrollArea className="h-[400px]">
           {loading && extensions.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-8">
-              <Loader2 className="h-8 w-8 animate-spin mb-2" />
+              <AgiMark spinning className="h-8 w-8 mb-2" />
               <p className="text-sm">Loading extensions...</p>
             </div>
           ) : extensions.length === 0 ? (
@@ -660,7 +664,7 @@ export function ExtensionsSettings() {
                           }
                         >
                           {actionInProgress === extension.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <AgiMark spinning className="h-4 w-4" />
                           ) : isEnabled ? (
                             <>
                               <PowerOff className="h-4 w-4 mr-1" />
@@ -691,7 +695,7 @@ export function ExtensionsSettings() {
 
                         {configLoading ? (
                           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <AgiMark spinning className="h-4 w-4" />
                             Loading configuration...
                           </div>
                         ) : (
@@ -797,7 +801,7 @@ export function ExtensionsSettings() {
                           >
                             {configSaving ? (
                               <>
-                                <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                                <AgiMark spinning className="h-4 w-4 mr-1" />
                                 Saving...
                               </>
                             ) : (

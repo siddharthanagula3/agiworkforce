@@ -1,9 +1,9 @@
+import { AgiMark } from '@agiworkforce/ui';
 import {
   AlertCircle,
   Check,
   ChevronDown,
   ExternalLink,
-  Loader2,
   MoreHorizontal,
   Plus,
   Plug,
@@ -270,7 +270,7 @@ function ConnectedConnectorRow({
               className="w-8 px-0"
             >
               {loading ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                <AgiMark spinning className="h-3.5 w-3.5" />
               ) : (
                 <MoreHorizontal className="h-4 w-4" />
               )}
@@ -348,7 +348,7 @@ function SavedConnectorRow({
           className="border-teal-500/40 bg-teal-500/10 text-teal-200 hover:bg-teal-500/20"
         >
           {loading ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            <AgiMark spinning className="h-3.5 w-3.5" />
           ) : (
             <Plug className="h-3.5 w-3.5" />
           )}
@@ -411,7 +411,7 @@ function AvailableConnectorCard({ connector, loading, error, onConnect }: Availa
               'transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50',
             )}
           >
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+            {loading ? <AgiMark spinning className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
           </button>
         </div>
         <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">

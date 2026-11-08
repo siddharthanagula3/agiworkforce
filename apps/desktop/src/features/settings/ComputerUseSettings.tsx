@@ -1,3 +1,4 @@
+import { AgiMark } from '@agiworkforce/ui';
 /**
  * ComputerUseSettings
  *
@@ -329,9 +330,11 @@ export function ComputerUseSettings() {
                 }}
                 disabled={permissionsLoading}
               >
-                <RefreshCcw
-                  className={cn('mr-1 h-3.5 w-3.5', permissionsLoading && 'animate-spin')}
-                />
+                {permissionsLoading ? (
+                  <AgiMark spinning className={cn('mr-1 h-3.5 w-3.5', '')} />
+                ) : (
+                  <RefreshCcw className="mr-1 h-3.5 w-3.5" />
+                )}
                 Refresh
               </Button>
             </div>

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { useConfirmAction } from '@agiworkforce/ui';
+import { AgiMark, useConfirmAction } from '@agiworkforce/ui';
 import {
   Calendar,
   Check,
@@ -11,7 +11,6 @@ import {
   FileSearch,
   FolderOpen,
   Globe,
-  Loader2,
   Plus,
   RefreshCw,
   Trash2,
@@ -1021,7 +1020,7 @@ function TriggerForm({
             disabled={saving}
             className="flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50"
           >
-            {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            {saving && <AgiMark spinning className="h-3.5 w-3.5" />}
             {editId ? 'Save changes' : 'Create trigger'}
           </button>
         </DialogFooter>
@@ -1232,7 +1231,11 @@ export function AutomationBuilder() {
             title="Refresh triggers"
             className="flex h-8 w-8 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40"
           >
-            <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
+            {loading ? (
+              <AgiMark spinning className={cn('h-3.5 w-3.5', '')} />
+            ) : (
+              <RefreshCw className="h-3.5 w-3.5" />
+            )}
           </button>
           <button
             type="button"

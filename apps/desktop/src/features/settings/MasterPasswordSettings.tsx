@@ -1,5 +1,6 @@
+import { AgiMark } from '@agiworkforce/ui';
 import { invoke } from '@/lib/tauri-mock';
-import { Eye, EyeOff, KeyRound, Lock, LockOpen, RefreshCw, Shield } from 'lucide-react';
+import { Eye, EyeOff, KeyRound, Lock, LockOpen, Shield } from 'lucide-react';
 import { toast } from 'sonner';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -64,7 +65,7 @@ export function MasterPasswordSettings() {
   if (loading) {
     return (
       <div className="rounded-lg border border-border bg-card p-6 flex items-center gap-3 text-sm text-muted-foreground">
-        <RefreshCw className="h-4 w-4 animate-spin" />
+        <AgiMark spinning className="h-4 w-4" />
         <span>Loading security status...</span>
       </div>
     );

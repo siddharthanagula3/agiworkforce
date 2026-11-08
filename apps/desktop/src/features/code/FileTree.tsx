@@ -15,7 +15,7 @@ import {
   Trash,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useMenuKeyboard } from '@agiworkforce/ui';
+import { AgiMark, useMenuKeyboard } from '@agiworkforce/ui';
 import { toast } from 'sonner';
 import { cn, debounce } from '../../lib/utils';
 import { FILTER_INPUT_DEBOUNCE_MS } from '@agiworkforce/utils';
@@ -551,7 +551,11 @@ export function FileTree({ rootPath, onFileSelect, selectedFile, className }: Fi
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium">Files</span>
           <Button variant="ghost" size="sm" onClick={handleRefresh} disabled={loading}>
-            <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
+            {loading ? (
+              <AgiMark spinning className={cn('h-4 w-4', '')} />
+            ) : (
+              <RefreshCw className="h-4 w-4" />
+            )}
           </Button>
         </div>
         <Input

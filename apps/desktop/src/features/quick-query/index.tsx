@@ -3,7 +3,6 @@ import {
   ArrowRight,
   ChevronDown,
   History,
-  Loader2,
   MessageSquarePlus,
   Mic,
   Sparkles,
@@ -24,7 +23,7 @@ import {
 import { PROVIDER_LABELS } from '../../constants/llm';
 import { ScreenCaptureButton } from '@/features/screen-capture/ScreenCaptureButton';
 import type { CaptureResult } from '../../types/capture';
-import { useUiTranslation } from '@agiworkforce/ui';
+import { AgiMark, useUiTranslation } from '@agiworkforce/ui';
 
 interface RecentConversationItem {
   conversationId: string | number;
@@ -399,7 +398,7 @@ export function QuickQuery({
             <div className="max-h-48 space-y-1 overflow-y-auto pr-1">
               {isLoadingRecent ? (
                 <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-zinc-500">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <AgiMark spinning className="h-3.5 w-3.5" />
                   <span>Loading recent chats…</span>
                 </div>
               ) : recentConversations.length > 0 ? (

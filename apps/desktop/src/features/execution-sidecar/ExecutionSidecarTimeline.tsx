@@ -1,6 +1,7 @@
+import { AgiMark } from '@agiworkforce/ui';
 import { useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2, Check, X, Wrench, Clock } from 'lucide-react';
+import { Check, X, Wrench, Clock } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useToolStore, type ToolStreamStateEntry } from '../../stores/chat/toolStore';
 import { useChatStore } from '../../stores/chat/chatStore';
@@ -70,7 +71,7 @@ function TimelineEntry({ entry, onClickEntry }: TimelineEntryProps) {
 function ActiveStreamEntry({ stream }: { stream: ToolStreamStateEntry }) {
   return (
     <div className="flex items-center gap-2 px-2 py-1.5 text-xs font-mono text-muted-foreground">
-      <Loader2 className="w-3 h-3 animate-spin text-violet-400 shrink-0" />
+      <AgiMark spinning className="w-3 h-3 text-violet-400 shrink-0" />
       <Wrench className="w-3 h-3 shrink-0" />
       <span className="truncate flex-1 min-w-0 text-foreground/80">{stream.tool_name}</span>
       {stream.progress > 0 && (

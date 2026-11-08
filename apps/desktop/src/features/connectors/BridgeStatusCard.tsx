@@ -1,5 +1,6 @@
+import { AgiMark } from '@agiworkforce/ui';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Check, Code2, Globe, Loader2, RefreshCw, ShieldOff } from 'lucide-react';
+import { AlertTriangle, Check, Code2, Globe, RefreshCw, ShieldOff } from 'lucide-react';
 import {
   browserExtension,
   type ExtensionStatusDiagnostics,
@@ -159,11 +160,7 @@ export function BridgeStatusCard({ fetcher, isTauriHost = isTauri }: BridgeStatu
           )}
           aria-label="Refresh bridge status"
         >
-          {loading ? (
-            <Loader2 className="h-3 w-3 animate-spin" />
-          ) : (
-            <RefreshCw className="h-3 w-3" />
-          )}
+          {loading ? <AgiMark spinning className="h-3 w-3" /> : <RefreshCw className="h-3 w-3" />}
           <span>Refresh</span>
         </button>
       </div>

@@ -1,5 +1,5 @@
+import { AgiMark } from '@agiworkforce/ui';
 import React from 'react';
-import { Loader2 } from 'lucide-react';
 
 import { invoke, isTauri } from '@/lib/tauri-mock';
 import { Button } from '@/ui/Button';
@@ -96,7 +96,7 @@ export function DailyBudgetSettings() {
           onClick={() => void saveCap()}
           disabled={!capIsValid || !isDirty || saving}
         >
-          {saving ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : null}
+          {saving ? <AgiMark spinning className="mr-2 h-3.5 w-3.5" /> : null}
           Save cap
         </Button>
       </div>

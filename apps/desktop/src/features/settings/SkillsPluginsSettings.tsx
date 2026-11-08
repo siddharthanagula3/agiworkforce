@@ -5,7 +5,6 @@ import {
   ChevronDown,
   ChevronRight,
   Command,
-  Loader2,
   Package,
   Puzzle,
   RefreshCw,
@@ -13,7 +12,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { homeDir as getHomeDir } from '@tauri-apps/api/path';
-import { useConfirmAction, useUiTranslation } from '@agiworkforce/ui';
+import { AgiMark, useConfirmAction, useUiTranslation } from '@agiworkforce/ui';
 import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { getSimpleErrorMessage } from '../../lib/errorMessages';
 import { invoke, isTauriContext } from '../../lib/tauri-mock';
@@ -283,7 +282,7 @@ function PluginRow({
             >
               {isUpdating ? (
                 <>
-                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                  <AgiMark spinning className="h-3.5 w-3.5 mr-1" />
                   Updating…
                 </>
               ) : (
@@ -299,7 +298,7 @@ function PluginRow({
             >
               {isRemoving ? (
                 <>
-                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                  <AgiMark spinning className="h-3.5 w-3.5 mr-1" />
                   Removing…
                 </>
               ) : (
@@ -710,11 +709,7 @@ export function SkillsPluginsSettings() {
           disabled={loading || isNonTauri}
           className="shrink-0"
         >
-          {loading ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <RefreshCw className="h-4 w-4" />
-          )}
+          {loading ? <AgiMark spinning className="h-4 w-4" /> : <RefreshCw className="h-4 w-4" />}
         </Button>
       </div>
 
@@ -762,7 +757,7 @@ export function SkillsPluginsSettings() {
           >
             {pluginActionInProgress?.startsWith('install:') ? (
               <>
-                <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                <AgiMark spinning className="h-3.5 w-3.5 mr-1" />
                 Installing…
               </>
             ) : (
@@ -791,7 +786,7 @@ export function SkillsPluginsSettings() {
 
       {loading && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
-          <Loader2 className="h-4 w-4 animate-spin" />
+          <AgiMark spinning className="h-4 w-4" />
           Loading plugins...
         </div>
       )}

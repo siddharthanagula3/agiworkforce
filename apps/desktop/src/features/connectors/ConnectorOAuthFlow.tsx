@@ -1,4 +1,5 @@
-import { Check, Loader2, X } from 'lucide-react';
+import { AgiMark } from '@agiworkforce/ui';
+import { Check, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/ui/Dialog';
 
 export type OAuthFlowState =
@@ -32,7 +33,7 @@ export function ConnectorOAuthFlow({ state, onClose, onRetry }: ConnectorOAuthFl
         <div className="flex flex-col items-center py-6 gap-4">
           {state.status === 'connecting' && (
             <>
-              <Loader2 className="h-10 w-10 animate-spin text-teal-500" />
+              <AgiMark spinning className="h-10 w-10 text-teal-500" />
               <p className="text-sm text-muted-foreground text-center">
                 Opening authorization page for {state.connectorName}...
               </p>

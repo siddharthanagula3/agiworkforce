@@ -517,12 +517,14 @@ function DesktopUsageSection() {
             resetAt={usage.usage_reset_at}
             credits={usage.credits?.monthly}
           />
-          <UsageMeter
-            label="Current 5-hour window"
-            value={usage.session_usage_percentage}
-            resetAt={usage.session_reset_at}
-            credits={usage.credits?.five_hour}
-          />
+          {usage.credits?.five_hour !== null && (
+            <UsageMeter
+              label="Current 5-hour window"
+              value={usage.session_usage_percentage}
+              resetAt={usage.session_reset_at}
+              credits={usage.credits?.five_hour}
+            />
+          )}
           <UsageMeter
             label="Weekly usage"
             value={usage.weekly_usage_percentage}

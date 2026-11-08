@@ -1,5 +1,6 @@
+import { AgiMark } from '@agiworkforce/ui';
 import { useCallback, useEffect, useState } from 'react';
-import { Check, ChevronDown, ChevronUp, Eye, EyeOff, Loader2, KeyRound } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, Eye, EyeOff, KeyRound } from 'lucide-react';
 import { McpClient } from '@/api/mcp';
 import { toast } from 'sonner';
 import { Button } from '@/ui/Button';
@@ -425,7 +426,7 @@ export function OAuthCredentialsPanel() {
                       >
                         {ps.saving ? (
                           <>
-                            <Loader2 size={14} className="animate-spin" />
+                            <AgiMark spinning size={14} className="" />
                             Saving...
                           </>
                         ) : (

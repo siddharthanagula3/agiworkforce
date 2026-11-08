@@ -1,3 +1,4 @@
+import { AgiMark } from '@agiworkforce/ui';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { listen } from '../../lib/tauri-mock';
 import {
@@ -7,7 +8,6 @@ import {
   Clock,
   ExternalLink,
   Keyboard,
-  Loader2,
   Mic,
   MousePointer2,
   Save,
@@ -449,7 +449,7 @@ export function ActionRecorder({ onSkillCreated, onClose }: ActionRecorderProps)
               disabled={isCheckingPermissions}
             >
               {isCheckingPermissions ? (
-                <Loader2 className="mr-2 h-4 w-4 motion-safe:animate-spin" aria-hidden="true" />
+                <AgiMark spinning className="mr-2 h-4 w-4" aria-hidden="true" />
               ) : (
                 <CircleDot className="mr-2 h-4 w-4" aria-hidden="true" />
               )}
@@ -703,9 +703,7 @@ export function ActionRecorder({ onSkillCreated, onClose }: ActionRecorderProps)
               onClick={() => void saveSkill()}
               disabled={isSaving || !skillName.trim() || !skillDescription.trim()}
             >
-              {isSaving && (
-                <Loader2 className="mr-2 h-4 w-4 motion-safe:animate-spin" aria-hidden="true" />
-              )}
+              {isSaving && <AgiMark spinning className="mr-2 h-4 w-4" aria-hidden="true" />}
               Create skill
             </Button>
           </DialogFooter>

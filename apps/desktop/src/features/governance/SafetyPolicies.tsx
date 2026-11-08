@@ -1,3 +1,4 @@
+import { AgiMark } from '@agiworkforce/ui';
 /**
  * SafetyPolicies
  *
@@ -6,15 +7,7 @@
  * Also shows and controls global auto-approve and agent mode settings.
  */
 import React, { useCallback, useEffect, useState } from 'react';
-import {
-  CheckCircle,
-  Loader2,
-  RefreshCw,
-  Shield,
-  ShieldAlert,
-  ShieldCheck,
-  ShieldOff,
-} from 'lucide-react';
+import { CheckCircle, RefreshCw, Shield, ShieldAlert, ShieldCheck, ShieldOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { invoke, isTauri } from '../../lib/tauri-mock';
 import { getSimpleErrorMessage } from '../../lib/errorMessages';
@@ -207,7 +200,7 @@ export const SafetyPolicies: React.FC<SafetyPoliciesProps> = ({ className }) => 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16 text-gray-500">
-        <Loader2 size={18} className="animate-spin mr-2" />
+        <AgiMark spinning size={18} className="mr-2" />
         Loading policies...
       </div>
     );
@@ -262,7 +255,7 @@ export const SafetyPolicies: React.FC<SafetyPoliciesProps> = ({ className }) => 
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {isUpdatingAutoApprove && <Loader2 size={13} className="animate-spin text-gray-400" />}
+            {isUpdatingAutoApprove && <AgiMark spinning size={13} className="text-gray-400" />}
             <Switch
               checked={autoApproveAll}
               onCheckedChange={(checked) => void handleAutoApproveToggle(checked)}
@@ -331,7 +324,7 @@ export const SafetyPolicies: React.FC<SafetyPoliciesProps> = ({ className }) => 
                   <span className="text-sm font-mono text-gray-300">{p.toolName}</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  {p.isUpdating && <Loader2 size={12} className="animate-spin text-gray-500" />}
+                  {p.isUpdating && <AgiMark spinning size={12} className="text-gray-500" />}
                   <select
                     aria-label={`Approval policy for ${p.toolName}`}
                     value={p.policy}
