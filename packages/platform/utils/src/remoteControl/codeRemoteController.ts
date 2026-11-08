@@ -265,8 +265,22 @@ function settleTools(tools: RemoteCodeToolRecord[]): RemoteCodeToolRecord[] {
   );
 }
 
-const PATCH_SOURCE = /^(?:--- a\/|\+\+\+ b\/|rename from |rename to |copy from |copy to )(.+)$/u;
-const PATCH_HEADER = /^diff --git a\/(.+) b\/(.+)$/u;
+const PATCH_SOURCE =
+  /^(?:--- a\/|\+\+\+ b\/|rename from |rename to |copy from |copy to )([\s\S]+)$/u;
+const PATCH_HEADER_PREFIX = 'diff --git a/';
+const PATCH_HEADER_SEPARATOR = ' b/';
+
+function patchHeaderSources(line: string): string[] {
+  if (!line.startsWith(PATCH_HEADER_PREFIX)) return [];
+  const separator = line.lastIndexOf(
+    PATCH_HEADER_SEPARATOR,
+    line.length - PATCH_HEADER_SEPARATOR.length - 1,
+  );
+  if (separator <= PATCH_HEADER_PREFIX.length) return [];
+  const destination = line.slice(separator + PATCH_HEADER_SEPARATOR.length);
+  if (!destination) return [];
+  return [line.slice(PATCH_HEADER_PREFIX.length, separator).trim(), destination.trim()];
+}
 
 /**
  * Every file a patch reads from or writes to, not only the one it is filed
@@ -275,8 +289,7 @@ const PATCH_HEADER = /^diff --git a\/(.+) b\/(.+)$/u;
 function patchSources(patch: string): string[] {
   const paths: string[] = [];
   for (const line of patch.split('\n')) {
-    const header = PATCH_HEADER.exec(line);
-    if (header?.[1] && header[2]) paths.push(header[1].trim(), header[2].trim());
+    paths.push(...patchHeaderSources(line));
     const source = PATCH_SOURCE.exec(line)?.[1]?.trim();
     if (source) paths.push(source);
   }

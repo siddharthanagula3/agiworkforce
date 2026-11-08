@@ -121,6 +121,10 @@ describe('isCredentialPath', () => {
     'certs/server.crt',
     '.github_token',
     'infra/prod.tfstate',
+    'infra/a\u2028b.tfstate',
+    'infra/a\u2029b.tfstate.backup',
+    'infra/a\u2028b.auto.tfvars',
+    'infra/a\u2029b.auto.tfvars.json',
     'prod.auto.tfvars.json',
     'C:\\Users\\me\\.aws\\credentials',
   ])('refuses %s', (candidate) => {
