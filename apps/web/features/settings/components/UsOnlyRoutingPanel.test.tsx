@@ -1,4 +1,4 @@
-import React, { StrictMode } from 'react';
+import { StrictMode } from 'react';
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { modelRegistry } from '@agiworkforce/model-registry';
@@ -16,17 +16,17 @@ const fixture = vi.hoisted(() => ({
 
 vi.mock('@clerk/nextjs', () => ({ useAuth: () => fixture.auth, useClerk: () => fixture.sdk }));
 vi.mock('@/lib/clerk-session', async (original) => ({
-  ...(await original<typeof import('@/lib/clerk-session')>()),
+  ...(await original<ImportedModule0>()),
   hasClerkSessionCookie: () => false,
   hasUsableClerkSessionToken: () => false,
   subscribeToClerkSessionChange: () => () => undefined,
 }));
 vi.mock('@/lib/client/csrf', async (original) => ({
-  ...(await original<typeof import('@/lib/client/csrf')>()),
+  ...(await original<ImportedModule1>()),
   addCsrfHeaders: vi.fn(async (headers: HeadersInit = {}) => headers),
 }));
 vi.mock('@agiworkforce/ui', async (original) => ({
-  ...(await original<typeof import('@agiworkforce/ui')>()),
+  ...(await original<ImportedModule2>()),
   Switch: (props: {
     checked: boolean;
     disabled: boolean;
@@ -377,3 +377,7 @@ describe('US-only routing preference ownership', () => {
     expect(puts()).toHaveLength(1);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/clerk-session');
+type ImportedModule1 = typeof import('@/lib/client/csrf');
+type ImportedModule2 = typeof import('@agiworkforce/ui');

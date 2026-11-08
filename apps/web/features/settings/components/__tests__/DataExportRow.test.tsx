@@ -21,7 +21,7 @@ import type { SessionAuthority } from '@/lib/identity/request-authority';
 
 const identity = vi.hoisted(() => ({ session: null as SessionAuthority | null }));
 vi.mock('@/lib/identity/useSessionSnapshot', async (original) => ({
-  ...(await original<typeof import('@/lib/identity/useSessionSnapshot')>()),
+  ...(await original<MockedModule0>()),
   useSessionSnapshot: () => () => identity.session,
 }));
 
@@ -460,7 +460,7 @@ describe('DataExportRow request ownership', () => {
     const click = createEvent.click(link, { bubbles: true, cancelable: true });
     fireEvent(link, click);
     expect(click.defaultPrevented).toBe(true);
-    const auxiliary = createEvent.auxClick(link, { bubbles: true, cancelable: true, button: 1 });
+    const auxiliary = new MouseEvent('auxclick', { bubbles: true, cancelable: true, button: 1 });
     fireEvent(link, auxiliary);
     expect(auxiliary.defaultPrevented).toBe(true);
     vi.stubGlobal(
@@ -669,3 +669,5 @@ describe('DataExportRow request ownership', () => {
     expect(screen.getByRole('link')).toBeInTheDocument();
   });
 });
+
+type MockedModule0 = typeof import('@/lib/identity/useSessionSnapshot');

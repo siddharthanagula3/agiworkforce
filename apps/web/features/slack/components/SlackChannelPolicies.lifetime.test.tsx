@@ -4,7 +4,7 @@ import { SlackChannelPolicies } from './SlackChannelPolicies';
 import { createSlackSettingsView } from '../lib/slack-settings-owner';
 
 vi.mock('@/lib/client/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/client/csrf')>()),
+  ...(await importOriginal<MockedModule0>()),
   getCsrfToken: vi.fn(async () => 'csrf'),
 }));
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
@@ -178,7 +178,7 @@ describe('Slack channel editor lifetime', () => {
     expect(writes()).toHaveLength(1);
   });
 
-  it('does not publish a previous installation GET body or carry its draft into replacement', async () => {
+  it('does not publish a previous installation GET body into replacement', async () => {
     const body = deferred<unknown>();
     fetchMock.mockImplementation(async (url) =>
       String(url).includes('/one/')
@@ -195,9 +195,7 @@ describe('Slack channel editor lifetime', () => {
       />,
     );
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    fireEvent.change(screen.getByLabelText('Turn it off in another channel'), {
-      target: { value: 'C999' },
-    });
+    expect(screen.queryByLabelText('Turn it off in another channel')).not.toBeInTheDocument();
     rerender(
       <SlackChannelPolicies
         view={view}
@@ -214,6 +212,36 @@ describe('Slack channel editor lifetime', () => {
       screen.queryByRole('combobox', { name: 'What AGI may do in C111' }),
     ).not.toBeInTheDocument();
     expect(screen.getByLabelText('Turn it off in another channel')).toHaveValue('');
+  });
+
+  it('clears an editable installation draft when the installation changes', async () => {
+    fetchMock.mockImplementation(async (url) =>
+      String(url).includes('/one/') ? json(policies()) : json(policies([channel('C222')], 'T456')),
+    );
+    const { view } = owner();
+    const { rerender } = render(
+      <SlackChannelPolicies
+        view={view}
+        installationId="one"
+        expectedTeamId="T123"
+        teamName="Acme"
+      />,
+    );
+    fireEvent.change(await screen.findByLabelText('Turn it off in another channel'), {
+      target: { value: 'C999' },
+    });
+    expect(screen.getByLabelText('Turn it off in another channel')).toHaveValue('C999');
+    rerender(
+      <SlackChannelPolicies
+        view={view}
+        installationId="two"
+        expectedTeamId="T456"
+        teamName="Beta"
+      />,
+    );
+    await screen.findByRole('combobox', { name: 'What AGI may do in C222' });
+    expect(screen.getByLabelText('Turn it off in another channel')).toHaveValue('');
+    expect(writes()).toHaveLength(0);
   });
 
   it('latches shared uncertainty when a dispatched installation mutation loses its target', async () => {
@@ -304,3 +332,5 @@ describe('Slack channel editor lifetime', () => {
     expect(writes()).toHaveLength(0);
   });
 });
+
+type MockedModule0 = typeof import('@/lib/client/csrf');

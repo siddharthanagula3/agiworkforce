@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -6,10 +7,23 @@ const clerk = vi.hoisted(() => ({
   isLoaded: true,
 }));
 
-vi.mock('@clerk/nextjs', () => ({
-  useUser: () => ({ isLoaded: clerk.isLoaded, user: clerk.user }),
-  useClerk: () => ({ signOut: vi.fn() }),
-}));
+vi.mock('@clerk/nextjs', async () => {
+  const { createClerkSessionFixture } =
+    await import('@/lib/identity/__tests__/clerk-session-fixture');
+  return {
+    ...createClerkSessionFixture(
+      () => ({
+        isLoaded: true,
+        isSignedIn: false,
+        userId: null,
+        sessionId: null,
+        getToken: async () => null,
+      }),
+      { signOut: vi.fn() },
+    ),
+    useUser: () => ({ isLoaded: clerk.isLoaded, user: clerk.user }),
+  };
+});
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
@@ -23,7 +37,8 @@ const service = vi.hoisted(() => ({
   regenerateBackupCodes: vi.fn(),
 }));
 
-vi.mock('@features/settings/services/user-preferences', () => ({
+vi.mock('@features/settings/services/user-preferences', async (importOriginal) => ({
+  ...(await importOriginal()),
   default: service,
   settingsService: service,
 }));
@@ -46,7 +61,7 @@ vi.mock('@features/settings/components/AuditLogPanel', () => ({
 }));
 
 vi.mock('@features/settings/components/Settings/TwoFactor', async (original) => ({
-  ...(await original<typeof import('@features/settings/components/Settings/TwoFactor')>()),
+  ...(await original<MockedModule0>()),
   TwoFactorPanel: () => <div data-testid="security-form-2fa" />,
 }));
 
@@ -72,7 +87,7 @@ describe('SecuritySection · operator console is not advertised to customers', (
     'renders no inbound /admin link for role %s',
     (role) => {
       clerk.user = { publicMetadata: { role } };
-      render(<SecuritySection />);
+      renderSecurity();
 
       expect(adminConsoleLink()).toBeNull();
       expect(screen.queryByTestId('admin-console-entry')).toBeNull();
@@ -81,8 +96,21 @@ describe('SecuritySection · operator console is not advertised to customers', (
 
   it('renders no admin entry point when the user has no role metadata', () => {
     clerk.user = { publicMetadata: {} };
-    render(<SecuritySection />);
+    renderSecurity();
 
     expect(screen.queryByTestId('admin-console-entry')).toBeNull();
   });
 });
+
+type MockedModule0 = typeof import('@features/settings/components/Settings/TwoFactor');
+
+function renderSecurity() {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false } },
+  });
+  return render(
+    <QueryClientProvider client={client}>
+      <SecuritySection />
+    </QueryClientProvider>,
+  );
+}

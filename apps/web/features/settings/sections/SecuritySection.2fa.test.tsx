@@ -11,13 +11,13 @@ const fixture = vi.hoisted(() => ({
 }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: vi.fn(), push: vi.fn() }) }));
 vi.mock('@/lib/identity/client', async (original) => ({
-  ...(await original<typeof import('@/lib/identity/client')>()),
+  ...(await original<ImportedModule0>()),
   useCurrentUser: () => ({ isLoaded: true, isSignedIn: false, user: null }),
   useSignOut: () => vi.fn(),
 }));
 vi.mock('@shared/stores/authentication-store', () => ({ useAuthStore: () => vi.fn() }));
 vi.mock('@agiworkforce/ui', async (original) => ({
-  ...(await original<typeof import('@agiworkforce/ui')>()),
+  ...(await original<ImportedModule1>()),
   useConfirmAction: () => ({ confirm: vi.fn(), dialog: null }),
 }));
 vi.mock('@features/settings/hooks/useStepUp', () => ({
@@ -28,7 +28,7 @@ vi.mock('@features/settings/hooks/use-settings-queries', () => ({
   useUpdateSettings: () => ({ mutate: fixture.mutate, isPending: false }),
 }));
 vi.mock('@features/settings/hooks/use-mfa-readers', async (original) => ({
-  ...(await original<typeof import('@features/settings/hooks/use-mfa-readers')>()),
+  ...(await original<ImportedModule2>()),
   useMfaStatus: (active: boolean) => {
     fixture.readStatus(active);
     return { data: active ? fixture.status : undefined };
@@ -65,7 +65,7 @@ vi.mock('./AccountSection', () => ({
   readApiError: (_body: unknown, fallback: string) => fallback,
 }));
 vi.mock('@features/settings/components/Settings/TwoFactor', async (original) => ({
-  ...(await original<typeof import('@features/settings/components/Settings/TwoFactor')>()),
+  ...(await original<ImportedModule3>()),
   TwoFactorPanel: ({
     securityForm,
     onSaveSecurity,
@@ -163,3 +163,8 @@ describe('SecuritySection mocked child composition (not enrollment integration)'
     },
   );
 });
+
+type ImportedModule0 = typeof import('@/lib/identity/client');
+type ImportedModule1 = typeof import('@agiworkforce/ui');
+type ImportedModule2 = typeof import('@features/settings/hooks/use-mfa-readers');
+type ImportedModule3 = typeof import('@features/settings/components/Settings/TwoFactor');

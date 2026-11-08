@@ -1,3 +1,5 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
+import { hostBridgeStub } from '@/test/host-bridge-stub';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -150,7 +152,7 @@ beforeEach(() => {
 describe('Show Terminal on the public window', () => {
   it('opens the terminal pane when the View menu command arrives', () => {
     const setTerminalState = vi.fn();
-    window.agiHost = { setTerminalState } as Window['agiHost'];
+    window.agiHost = hostBridgeStub({ setTerminalState });
     renderPanel();
 
     const button = screen.getByRole('button', { name: 'Terminal panel' });
@@ -1008,7 +1010,7 @@ describe('local session attachments', () => {
 
     expect(
       await screen.findByText(
-        'Pasting images into a coding session needs a newer version of AGI Desktop. Update the app, then try again.',
+        `Pasting images into a coding session needs a newer version of ${PRODUCT_NAMES.desktop}. Update the app, then try again.`,
       ),
     ).toBeInTheDocument();
   });
@@ -1423,4 +1425,15 @@ describe('local session effort levels', () => {
       'Max',
     ]);
   });
+});
+
+type ReadonlyIdentityModule = typeof import('@/lib/identity/useSessionSnapshot');
+vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => {
+  const lifetime = { isCurrent: () => true };
+  const capture = () => lifetime;
+  return {
+    ...(await importOriginal<ReadonlyIdentityModule>()),
+    useReadonlyIdentityLifetime: () => capture,
+    useSessionSnapshot: () => () => null,
+  };
 });

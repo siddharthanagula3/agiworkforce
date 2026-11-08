@@ -67,7 +67,7 @@ vi.mock('@/lib/logger', async (importOriginal) => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 vi.mock('@/lib/security/outbound-content-inspection', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/security/outbound-content-inspection')>()),
+  ...(await importOriginal<ImportedModule0>()),
   inspectOutboundContent: (...args: unknown[]) => mocks.inspect(...args),
 }));
 
@@ -406,3 +406,5 @@ describe('PATCH /api/artifacts/publish/[token]', () => {
     expect(outcomes).toEqual(['rollback']);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/security/outbound-content-inspection');

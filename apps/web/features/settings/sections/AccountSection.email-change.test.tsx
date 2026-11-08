@@ -26,7 +26,7 @@ vi.mock('../components/EmailAddressChange', () => ({
 }));
 vi.mock('../components/Settings/ApiKeys', () => ({ ApiKeysManager: () => null }));
 vi.mock('../hooks/use-settings-queries', async (original) => ({
-  ...(await original<typeof import('../hooks/use-settings-queries')>()),
+  ...(await original<ImportedModule0>()),
   useUserActivity: () => ({ data: [], isPending: false, error: null, refetch: vi.fn() }),
   useOrganizationOverview: () => ({ data: undefined }),
   useDeleteAccount: () => ({
@@ -171,3 +171,5 @@ describe('account email completion ownership', () => {
     expect(fixture.editor!.active).toBe(true);
   });
 });
+
+type ImportedModule0 = typeof import('../hooks/use-settings-queries');

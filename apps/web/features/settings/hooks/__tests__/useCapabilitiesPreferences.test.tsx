@@ -1,5 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+type PreferencesModule = typeof import('@/app/settings/_lib/preferences-client');
 
 const mocks = vi.hoisted(() => ({
   fetchPreferenceNamespace: vi.fn(),
@@ -26,7 +28,20 @@ class PreferenceVersionConflictError extends Error {
   }
 }
 
-vi.mock('@/app/settings/_lib/preferences-client', () => ({
+vi.mock('@/app/settings/_lib/preferences-client', async (original) => ({
+  ...(await original<PreferencesModule>()),
+  readOwnedPreferences: async (owner: Parameters<PreferencesModule['readOwnedPreferences']>[0]) => {
+    if (!owner.isCurrent()) throw new DOMException('Preference owner changed', 'AbortError');
+    const settings = await mocks.fetchPreferenceNamespace('capabilities');
+    return { settings: { capabilities: settings }, version: await mocks.readPreferencesVersion() };
+  },
+  saveOwnedPreferenceNamespace: (
+    owner: Parameters<PreferencesModule['saveOwnedPreferenceNamespace']>[0],
+    ...args: unknown[]
+  ) => {
+    if (!owner.isCurrent()) throw new DOMException('Preference owner changed', 'AbortError');
+    return mocks.savePreferenceNamespace(...args);
+  },
   fetchPreferenceNamespace: (...args: unknown[]) => mocks.fetchPreferenceNamespace(...args),
   savePreferenceNamespace: (...args: unknown[]) => mocks.savePreferenceNamespace(...args),
   readPreferencesVersion: (...args: unknown[]) => mocks.readPreferencesVersion(...args),
@@ -50,6 +65,10 @@ const NEXT_VERSION = '2026-09-07T10:00:01.000Z';
 describe('the last capabilities choice is the one that survives', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => Response.json({ organizationMemoryAllowed: true })),
+    );
     mocks.fetchPreferenceNamespace.mockResolvedValue({
       ...DEFAULT_CAPABILITIES_SETTINGS,
       memory: false,
@@ -78,7 +97,7 @@ describe('the last capabilities choice is the one that survives', () => {
     );
 
     const { result } = renderHook(() => useCapabilitiesPreferences());
-    await waitFor(() => expect(mocks.fetchPreferenceNamespace).toHaveBeenCalled());
+    await waitFor(() => expect(result.current.loaded).toBe(true));
 
     act(() => result.current.setBoolean('memory', true));
     act(() => result.current.setBoolean('memory', false));
@@ -102,6 +121,8 @@ describe('the last capabilities choice is the one that survives', () => {
     expect(result.current.settings.memory).toBe(false);
   });
 });
+
+afterEach(() => vi.unstubAllGlobals());
 
 describe('a capability save only claims the key the user changed', () => {
   beforeEach(() => {
@@ -204,4 +225,48 @@ describe('a capability save only claims the key the user changed', () => {
     expect(result.current.settings.memory).toBe(true);
     expect(result.current.settings.searchPastChats).toBe(true);
   });
+});
+
+type SessionSnapshotModule = typeof import('@/lib/identity/useSessionSnapshot');
+vi.mock('@/lib/identity/useSessionSnapshot', async (original) => {
+  const session = {
+    userId: 'preferences-owner',
+    sessionId: 'preferences-session',
+    isCurrent: () => true,
+    getToken: async () => 'preferences-token',
+  };
+  return { ...(await original<SessionSnapshotModule>()), useSessionSnapshot: () => () => session };
+});
+
+type WorkspacesModule = typeof import('@/features/workspaces/hooks/use-workspaces');
+vi.mock('@/features/workspaces/hooks/use-workspaces', async (original) => {
+  const { useSessionSnapshot } = await import('@/lib/identity/useSessionSnapshot');
+  const { observeWorkspaceOwner, admitWorkspace } =
+    await import('@/features/workspaces/lib/workspace-admission');
+  const data = {
+    accountId: 'preferences-account',
+    workspaces: [],
+    activeWorkspaceId: null,
+    activeOrganizationId: null,
+    scope: 'personal',
+  };
+  return {
+    ...(await original<WorkspacesModule>()),
+    useAccountWorkspaces: () => {
+      const owner = observeWorkspaceOwner(useSessionSnapshot()());
+      if (owner?.phase === 'resolving')
+        admitWorkspace(
+          owner,
+          owner.epoch,
+          JSON.stringify([data.scope, data.activeWorkspaceId, data.activeOrganizationId]),
+        );
+      return {
+        data,
+        isLoading: false,
+        isError: false,
+        requiresReload: owner?.phase === 'uncertain',
+        refetch: vi.fn(),
+      };
+    },
+  };
 });

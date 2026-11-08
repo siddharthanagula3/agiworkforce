@@ -32,7 +32,7 @@ const fixture = vi.hoisted(() => ({
 vi.mock('@clerk/nextjs', () => ({ useAuth: () => fixture.auth, useClerk: () => fixture.sdk }));
 vi.mock('@features/auth/step-up-fetch', () => ({ sendAuthorizedJson: vi.fn() }));
 vi.mock('@tanstack/react-query', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@tanstack/react-query')>();
+  const actual = await importOriginal<ImportedModule0>();
   return {
     ...actual,
     useQuery: (options: UseQueryOptions, client?: QueryClient) => {
@@ -290,3 +290,5 @@ describe('webhook delivery read gates', () => {
     expect(client.getQueryCache().findAll({ queryKey: deliveryPrefix }).length).toBeGreaterThan(1);
   });
 });
+
+type ImportedModule0 = typeof import('@tanstack/react-query');

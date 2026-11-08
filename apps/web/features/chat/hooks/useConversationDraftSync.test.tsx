@@ -1,3 +1,4 @@
+import { useLayoutEffect } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, render } from '@testing-library/react';
 import type { SessionAuthority } from '@/lib/identity/request-authority';
@@ -19,16 +20,16 @@ const { mockSaveConversationDraft, mockSession, mockToastError, mockIdentity } =
 
 vi.mock('@/lib/identity/client', () => ({ useSession: () => mockSession }));
 vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/identity/useSessionSnapshot')>()),
+  ...(await importOriginal<ImportedModule0>()),
   useSessionSnapshot: () => () => mockIdentity.current,
 }));
 vi.mock('@/lib/client/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/client/csrf')>()),
+  ...(await importOriginal<ImportedModule1>()),
   addCsrfHeaders: async (headers: HeadersInit = {}) => headers,
 }));
 vi.mock('sonner', () => ({ toast: { error: mockToastError, dismiss: vi.fn() } }));
 vi.mock('../services/conversation-draft', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../services/conversation-draft')>()),
+  ...(await importOriginal<ImportedModule2>()),
   saveConversationDraft: mockSaveConversationDraft,
   adoptConversationDraftRevision: vi.fn(),
   clearObservedConversationDraftRevisions: vi.fn(),
@@ -59,7 +60,10 @@ const LOCAL_MODEL: LocalModel = {
 let controls: DraftConflictControls;
 
 function Harness() {
-  controls = useConversationDraftSync();
+  const currentControls = useConversationDraftSync();
+  useLayoutEffect(() => {
+    controls = currentControls;
+  }, [currentControls]);
   return null;
 }
 
@@ -554,9 +558,7 @@ describe('draft job ownership across asynchronous work', () => {
 
 describe('draft transport across page lifetime', () => {
   it('dispatches an accepted empty clear after its token resolves following same-session unmount', async () => {
-    const actual = await vi.importActual<typeof import('../services/conversation-draft')>(
-      '../services/conversation-draft',
-    );
+    const actual = await vi.importActual<ImportedModule2>('../services/conversation-draft');
     actual.clearObservedConversationDraftRevisions();
     mockSaveConversationDraft.mockImplementationOnce(actual.saveConversationDraft);
     let finishToken!: (value: string) => void;
@@ -671,3 +673,7 @@ describe('retained draft controls', () => {
     expect(mockSaveConversationDraft).toHaveBeenCalledTimes(completedCalls);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/identity/useSessionSnapshot');
+type ImportedModule1 = typeof import('@/lib/client/csrf');
+type ImportedModule2 = typeof import('../services/conversation-draft');

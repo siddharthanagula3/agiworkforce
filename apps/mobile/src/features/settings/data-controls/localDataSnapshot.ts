@@ -60,10 +60,13 @@ function mapMobileMessage(
 }
 
 export class LocalExportAuthorityError extends Error {
+  readonly userMessage: string;
+
   constructor() {
-    super(
-      'Cloud data in this export could not be matched to the active account. Sign in to the account that owns it before exporting.',
-    );
+    const userMessage =
+      'Cloud data in this export could not be matched to the active account. Sign in to the account that owns it before exporting.';
+    super(userMessage);
+    this.userMessage = userMessage;
     this.name = 'LocalExportAuthorityError';
   }
 }

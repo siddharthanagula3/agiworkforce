@@ -68,7 +68,7 @@ const signInAdmission = vi.hoisted(() => vi.fn());
 const twoFactorAdmission = vi.hoisted(() => vi.fn());
 const retainedSettings = vi.hoisted(() => ({ enabled: false, retainSecurity: false }));
 vi.mock('@agiworkforce/ui', async (original) => {
-  const actual = await original<typeof import('@agiworkforce/ui')>();
+  const actual = await original<ImportedModule0>();
   return {
     ...actual,
     SettingsModal: (props: ComponentProps<typeof actual.SettingsModal>) =>
@@ -83,7 +83,7 @@ vi.mock('@agiworkforce/ui', async (original) => {
 });
 
 vi.mock('../sections/SecuritySection', async (original) => ({
-  ...(await original<typeof import('../sections/SecuritySection')>()),
+  ...(await original<ImportedModule1>()),
   SecuritySection: ({
     passwordEditorActive,
     signInMethodsActive,
@@ -1067,3 +1067,6 @@ describe('WebSettingsModal keyboard section', () => {
     expect(screen.getByRole('heading', { name: 'Voice' })).toBeInTheDocument();
   });
 });
+
+type ImportedModule0 = typeof import('@agiworkforce/ui');
+type ImportedModule1 = typeof import('../sections/SecuritySection');

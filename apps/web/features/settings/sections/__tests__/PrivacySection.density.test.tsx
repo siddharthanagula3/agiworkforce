@@ -19,7 +19,7 @@ const fixture = vi.hoisted(() => ({
 }));
 vi.mock('@clerk/nextjs', () => ({ useAuth: () => fixture.auth, useClerk: () => fixture.sdk }));
 vi.mock('../../services/privacy-preferences-client', async (original) => ({
-  ...(await original<typeof import('../../services/privacy-preferences-client')>()),
+  ...(await original<ImportedModule0>()),
   readPrivacyPreferences: vi.fn(async () => ({ stored: { ...fixture.stored }, version: 'v1' })),
   savePrivacyPreference: vi.fn(
     async (_authority: unknown, key: keyof typeof fixture.stored, value: boolean) => {
@@ -88,7 +88,7 @@ vi.mock('@/lib/sentry-shared', async (importOriginal) => ({
 }));
 
 vi.mock('@/app/settings/_lib/preferences-client', async (original) => ({
-  ...(await original<typeof import('@/app/settings/_lib/preferences-client')>()),
+  ...(await original<ImportedModule1>()),
   fetchPreferenceNamespace: vi.fn(async () => ({})),
   savePreferenceNamespace: vi.fn(async () => ({})),
 }));
@@ -181,3 +181,6 @@ describe('PrivacySection row density', () => {
     expect(screen.queryByText(/message content is never included/i)).toBeNull();
   });
 });
+
+type ImportedModule0 = typeof import('../../services/privacy-preferences-client');
+type ImportedModule1 = typeof import('@/app/settings/_lib/preferences-client');

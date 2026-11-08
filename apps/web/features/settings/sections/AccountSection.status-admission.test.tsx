@@ -4,6 +4,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   NO_PENDING_ACCOUNT_DELETION,
+  MANAGED_CLOUD_ACCOUNT_DELETION_PATH,
+  MANAGED_CLOUD_ACCOUNT_DELETION_CANCEL_SCHEDULE_PATH,
   type AccountDeletionStatus,
 } from '@agiworkforce/cloud-contracts';
 import { queryKeys } from '@shared/stores/query-client';
@@ -11,7 +13,7 @@ import { AccountSection } from './AccountSection';
 
 const { schedule, cancel, confirmations, identity } = vi.hoisted(() => ({
   schedule: vi.fn(),
-  cancel: vi.fn(),
+  cancel: vi.fn<(init?: RequestInit) => void>(),
   confirmations: new Map<string, () => void>(),
   identity: { epoch: 0, subject: 'native-user-1', listeners: new Set<() => void>() },
 }));
@@ -19,7 +21,7 @@ const { schedule, cancel, confirmations, identity } = vi.hoisted(() => ({
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: vi.fn() }) }));
 vi.mock('@clerk/nextjs', () => ({ useClerk: () => ({ signOut: vi.fn() }) }));
 vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/identity/useSessionSnapshot')>()),
+  ...(await importOriginal<MockedModule0>()),
   useSessionSnapshot: () => () => {
     const epoch = identity.epoch;
     return {
@@ -37,7 +39,7 @@ vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
   },
 }));
 vi.mock('@/lib/client/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/client/csrf')>()),
+  ...(await importOriginal<MockedModule1>()),
   addCsrfHeaders: async (headers: HeadersInit) => headers,
 }));
 vi.mock('@shared/stores/authentication-store', () => ({
@@ -64,7 +66,7 @@ vi.mock('../hooks/use-settings-queries', async (importOriginal) => ({
   }),
 }));
 vi.mock('@agiworkforce/ui', async (importOriginal) => {
-  const original = await importOriginal<typeof import('@agiworkforce/ui')>();
+  const original = await importOriginal<MockedModule2>();
   return {
     ...original,
     AlertDialogAction: (
@@ -83,10 +85,11 @@ vi.mock('@agiworkforce/ui', async (importOriginal) => {
 
 let key: readonly unknown[];
 const pending: AccountDeletionStatus = {
+  cancellationPrecondition: 'schedule-pair-v1',
   pending: true,
   canCancel: true,
   requestedAt: null,
-  scheduledFor: '2020-01-02T12:00:00+01:00',
+  scheduledFor: '2020-01-02T11:00:00.000Z',
 };
 
 function response(body: unknown) {
@@ -104,10 +107,10 @@ async function setup(
   const statusRead = vi
     .fn<() => Promise<Response>>()
     .mockImplementation(async () => response(responseBody));
-  vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
-    if (String(input) === '/api/user/delete-account') return statusRead();
-    if (String(input) === '/api/user/delete-account/cancel') {
-      cancel();
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+    if (String(input) === MANAGED_CLOUD_ACCOUNT_DELETION_PATH) return statusRead();
+    if (String(input) === MANAGED_CLOUD_ACCOUNT_DELETION_CANCEL_SCHEDULE_PATH) {
+      cancel(init);
       return response({ message: 'Account deletion cancelled.', cancelled: true });
     }
     return response({ sessions: [], totalCount: 0 });
@@ -180,6 +183,23 @@ describe('AccountSection deletion status admission', () => {
     const retained = await openConfirmation('cancel');
     act(() => retained());
     await waitFor(() => expect(cancel).toHaveBeenCalledTimes(1));
+    const sent = cancel.mock.calls[0]![0]!;
+    expect(sent.method).toBe('PUT');
+    expect(JSON.parse(String(sent.body))).toEqual({
+      expectedSchedule: { requestedAt: pending.requestedAt, scheduledFor: pending.scheduledFor },
+    });
+  });
+
+  it('shows a legacy offset status but refuses cancellation without a schedule-pair precondition', async () => {
+    await setup({
+      pending: true,
+      canCancel: true,
+      requestedAt: null,
+      scheduledFor: '2020-01-02T12:00:00+01:00',
+    });
+    expect(screen.getByTestId('cancel-deletion-trigger')).toBeDisabled();
+    expect(schedule).not.toHaveBeenCalled();
+    expect(cancel).not.toHaveBeenCalled();
   });
 
   it('blocks cached pending status after a malformed refetch and admits a fresh confirmation after retry', async () => {
@@ -301,7 +321,15 @@ describe('AccountSection deletion status admission', () => {
         await act(async () => {
           await client.refetchQueries({ queryKey: key, exact: true });
         });
-        if (change === 'equal-data') expect(client.getQueryData(key)).toBe(before?.data);
+        if (change === 'equal-data') {
+          const current = client.getQueryData<{
+            status: AccountDeletionStatus;
+            readSequence: number;
+          }>(key)!;
+          const previous = before!.data as { status: AccountDeletionStatus; readSequence: number };
+          expect(current.status).toEqual(previous.status);
+          expect(current.readSequence).toBeGreaterThan(previous.readSequence);
+        }
         if (change === 'malformed') expect(client.getQueryState(key)?.status).toBe('error');
         if (change === 'recovered') {
           statusRead.mockImplementation(async () => response(status));
@@ -333,3 +361,7 @@ describe('AccountSection deletion status admission', () => {
     });
   });
 });
+
+type MockedModule0 = typeof import('@/lib/identity/useSessionSnapshot');
+type MockedModule1 = typeof import('@/lib/client/csrf');
+type MockedModule2 = typeof import('@agiworkforce/ui');

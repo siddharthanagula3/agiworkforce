@@ -22,14 +22,14 @@ const fixture = vi.hoisted(() => ({
 vi.mock('@clerk/nextjs', () => ({ useAuth: () => fixture.auth, useClerk: () => fixture.sdk }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: fixture.replace }) }));
 vi.mock('@/lib/client/csrf', async (original) => ({
-  ...(await original<typeof import('@/lib/client/csrf')>()),
+  ...(await original<ImportedModule0>()),
   addCsrfHeaders: vi.fn(async (headers: HeadersInit = {}) => ({
     ...headers,
     'x-csrf-token': 'csrf',
   })),
 }));
 vi.mock('@agiworkforce/ui', async (original) => ({
-  ...(await original<typeof import('@agiworkforce/ui')>()),
+  ...(await original<ImportedModule1>()),
   ConfirmDialog: (props: ConfirmDialogProps) => {
     fixture.dialogs.push(props);
     return (
@@ -286,7 +286,7 @@ describe('owned bulk chat settings', () => {
       String(path) === MANAGED_CLOUD_WORKSPACES_PATH
         ? json(personal)
         : init?.method === 'POST'
-          ? ({ ok: true, json: readBody } as Response)
+          ? Object.assign(new Response(null), { json: readBody })
           : json(stats),
     );
     const mounted = render(<BulkConversationControls />, { wrapper });
@@ -344,7 +344,7 @@ describe('owned bulk chat settings', () => {
     fetchMock.mockImplementation(async (path, init) => {
       if (String(path) === MANAGED_CLOUD_WORKSPACES_PATH) return json(personal);
       if (init?.method !== 'POST') return json(stats);
-      if (++writes === 1) return { ok: true, json: readOldBody } as Response;
+      if (++writes === 1) return Object.assign(new Response(null), { json: readOldBody });
       return nextResponse.promise;
     });
     const mounted = render(<BulkConversationControls />, { wrapper });
@@ -442,3 +442,6 @@ describe('owned bulk chat settings', () => {
     expect(posts()).toHaveLength(1);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/client/csrf');
+type ImportedModule1 = typeof import('@agiworkforce/ui');

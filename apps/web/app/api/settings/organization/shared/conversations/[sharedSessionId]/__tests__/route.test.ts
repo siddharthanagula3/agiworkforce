@@ -183,9 +183,9 @@ describe('DELETE shared conversation', () => {
   it('canonicalizes a mixed-case UUID before deleting and auditing its exact receipt', async () => {
     const mixedCaseId = 'aBcDeF12-ABcd-4eF0-8aBc-Def123456789';
     const canonicalId = 'abcdef12-abcd-4ef0-8abc-def123456789';
-    const actual = await vi.importActual<
-      typeof import('@/lib/services/org-shared-session-service')
-    >('@/lib/services/org-shared-session-service');
+    const actual = await vi.importActual<ImportedModule0>(
+      '@/lib/services/org-shared-session-service',
+    );
     mocks.unshare.mockImplementation(actual.unshareSessionFromOrganization);
     DB.query.mockResolvedValue([{ shared_session_id: canonicalId }]);
     const mixedCaseRequest = new Request(
@@ -224,9 +224,9 @@ describe('DELETE shared conversation', () => {
     },
     { label: 'exact', rows: [{ shared_session_id: SESSION }], status: 200 },
   ])('reports the real delete helper outcome for $label receipts', async ({ rows, status }) => {
-    const actual = await vi.importActual<
-      typeof import('@/lib/services/org-shared-session-service')
-    >('@/lib/services/org-shared-session-service');
+    const actual = await vi.importActual<ImportedModule0>(
+      '@/lib/services/org-shared-session-service',
+    );
     mocks.unshare.mockImplementation(actual.unshareSessionFromOrganization);
     DB.query.mockResolvedValue(rows);
 
@@ -258,3 +258,5 @@ describe('DELETE shared conversation', () => {
     }
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/services/org-shared-session-service');

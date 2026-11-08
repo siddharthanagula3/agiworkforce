@@ -1,7 +1,11 @@
+import { CONNECTORS } from '@/features/connectors/data/connectors';
+import { connectorReleased } from '@agiworkforce/types';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
+import { CapabilityProvider } from '@agiworkforce/unified-chat/capabilities';
+import { createWebChatWorkspaceFixture } from './WebChatWorkspaceFixture';
 import type { ReactNode } from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { emitAppCommand } from '@shared/lib/app-commands';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 type ScanModule0 = typeof import('react-i18next');
 type ScanModule1 = typeof import('@/app/settings/_lib/preferences-client');
@@ -12,7 +16,6 @@ type ScanModule5 = typeof import('@agiworkforce/ui');
 type ScanModule6 = typeof import('@agiworkforce/unified-chat');
 type ScanModule7 = typeof import('../../components/ConversationTitleMenu');
 type ScanModule8 = typeof import('@features/chat/hooks/use-voice-session');
-type ScanModule9 = typeof import('../../stores/voice-session-store');
 
 const mocks = vi.hoisted(() => ({
   useKeyboardShortcuts: vi.fn(),
@@ -28,6 +31,17 @@ const mocks = vi.hoisted(() => ({
     sources: {} as Record<string, string>,
     customNames: {} as Record<string, string>,
     toolConnectorIds: {} as Record<string, string>,
+    connectedAtMap: {},
+    grantedScopes: {},
+    needsReauthorizationIds: new Set<string>(),
+    notRespondingIds: new Set<string>(),
+    availableIds: new Set<string>(),
+    setupRequirements: {},
+    mutatingIds: new Set<string>(),
+    connect: vi.fn(),
+    reconnect: vi.fn(),
+    disconnect: vi.fn(),
+    retry: vi.fn(),
     loading: false,
     error: null as string | null,
   },
@@ -42,15 +56,23 @@ vi.mock('next/navigation', () => ({
   usePathname: () => `/chat/${CONVERSATION_ID}`,
 }));
 
-vi.mock('@clerk/nextjs', () => ({
-  useAuth: () => ({
-    getToken: async () => 'fixture-token',
-    isLoaded: true,
-    userId: 'fixture-user',
-  }),
-  useClerk: () => ({ signOut: vi.fn() }),
-  useUser: () => ({ user: null }),
-}));
+vi.mock('@clerk/nextjs', async () => {
+  const { createClerkSessionFixture } =
+    await import('@/lib/identity/__tests__/clerk-session-fixture');
+  return {
+    ...createClerkSessionFixture(
+      () => ({
+        getToken: async () => 'fixture-token',
+        isLoaded: true,
+        isSignedIn: true,
+        userId: 'fixture-user',
+        sessionId: 'fixture-session',
+      }),
+      { signOut: vi.fn() },
+    ),
+    useUser: () => ({ user: null }),
+  };
+});
 
 vi.mock('react-i18next', async (importOriginal) => {
   const actual = await importOriginal<ScanModule0>();
@@ -147,7 +169,10 @@ vi.mock('@features/chat/hooks/use-promotional-media-models', () => ({
   usePromotionalMediaModels: () => ({
     models: [],
     issuer: 'QwenCloud',
+    limited: { image: null, video: null },
+    availability: { image: 'not_offered', video: 'not_offered' },
     status: 'ready',
+    refresh: () => undefined,
     retry: () => undefined,
   }),
 }));
@@ -156,7 +181,7 @@ vi.mock('@features/connectors/hooks/use-connectors', () => ({
 }));
 vi.mock('../../hooks/use-artifact-cloud-sync', () => ({ useArtifactCloudSync: vi.fn() }));
 vi.mock('../../hooks/use-share-conversation', () => ({
-  useShareConversation: () => ({ share: vi.fn(), isSharing: false }),
+  useShareConversation: () => ({ share: vi.fn(), isSharing: false, isViewCurrent: () => true }),
 }));
 vi.mock('../../hooks/use-conversation-branches', () => ({
   useConversationBranches: () => ({
@@ -199,18 +224,9 @@ vi.mock('@/features/connectors/stores/tool-permissions-store', async (importOrig
 });
 
 vi.mock('@features/projects', async (importOriginal) => {
-  const projectState = {
-    projects: [],
-    activeProjectId: null,
-    setActiveProject: vi.fn(),
-    updateProject: vi.fn(),
-    removeProject: vi.fn(),
-    setProjects: vi.fn(),
-  };
   return {
     ...(await importOriginal<Record<string, unknown>>()),
     useManagedCloudProjects: () => ({ projects: [], isReady: true }),
-    useProjectStore: (selector: (value: typeof projectState) => unknown) => selector(projectState),
     ProjectSettingsDialog: () => null,
   };
 });
@@ -281,30 +297,8 @@ import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { useVoiceInputStore } from '@features/chat/stores/voice-input-store';
 import { useVoiceSessionStore } from '../../stores/voice-session-store';
 import { VOICE_SESSION_EVENT } from '@agiworkforce/unified-chat';
-import { KEYBOARD_SHORTCUT_DOCS } from '../../hooks/use-keyboard-shortcuts';
-
-const HANDLER_BY_DESCRIPTION: Record<string, string> = {
-  'Open search': 'onSearch',
-  'Show keyboard shortcuts': 'onShowShortcuts',
-  'New conversation': 'onNewChat',
-  'Toggle sidebar': 'onToggleSidebar',
-  'Focus message composer': 'onFocusComposer',
-  'Copy last message': 'onCopyLastMessage',
-  'Regenerate last message': 'onRegenerateLastMessage',
-  'Toggle artifacts panel': 'onToggleArtifacts',
-  'Select model': 'onSelectModel',
-  'Toggle voice': 'onToggleVoice',
-  'Set custom instructions': 'onSetCustomInstructions',
-  'Copy last code block': 'onCopyLastCodeBlock',
-  'Delete chat': 'onDeleteConversation',
-};
 
 const LAST_ASSISTANT_CONTENT = 'The answer the viewer would copy.';
-const LAST_CODE_BLOCK = 'const answer = 42;';
-const CODE_ASSISTANT_CONTENT = ['Here is the code.', '', '```ts', LAST_CODE_BLOCK, '```'].join(
-  '\n',
-);
-
 function openConversation(assistantContent: string = LAST_ASSISTANT_CONTENT): void {
   useChatStore.getState().reset();
   useChatStore.getState().setConversations([
@@ -331,10 +325,14 @@ function openConversation(assistantContent: string = LAST_ASSISTANT_CONTENT): vo
   ]);
 }
 
-function latestShortcutOptions(): Record<string, unknown> {
-  const call = mocks.useKeyboardShortcuts.mock.calls.at(-1);
-  expect(call).toBeDefined();
-  return (call?.[0] ?? {}) as Record<string, unknown>;
+const workspaceFixture = createWebChatWorkspaceFixture();
+
+function PublicComposer({ children }: { children: ReactNode }) {
+  return (
+    <CapabilityProvider platform="web" document={null}>
+      <workspaceFixture.wrapper>{children}</workspaceFixture.wrapper>
+    </CapabilityProvider>
+  );
 }
 
 describe('the public chat window composer', () => {
@@ -381,29 +379,32 @@ describe('the public chat window composer', () => {
 
   it('keeps the typed draft when Chat and AGI Work switch on the public chat page', () => {
     openConversation();
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: PublicComposer });
 
     const draft = screen.getByRole('textbox', { name: /message input/i });
     fireEvent.change(draft, { target: { value: 'Keep this draft' } });
 
-    fireEvent.click(screen.getByRole('button', { name: 'AGI Work' }));
+    fireEvent.click(screen.getByRole('button', { name: PRODUCT_NAMES.work }));
 
-    expect(screen.getByRole('button', { name: 'AGI Work' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: PRODUCT_NAMES.work })).toHaveAttribute(
       'aria-pressed',
       'true',
     );
     expect(screen.getByRole('textbox', { name: /message input/i })).toHaveValue('Keep this draft');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Chat' }));
+    fireEvent.click(screen.getByRole('button', { name: PRODUCT_NAMES.chat }));
 
-    expect(screen.getByRole('button', { name: 'Chat' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: PRODUCT_NAMES.chat })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
     expect(screen.getByRole('textbox', { name: /message input/i })).toHaveValue('Keep this draft');
     expect(mocks.sendMessage).not.toHaveBeenCalled();
   });
 
   it('sends the typed draft from the public chat page', async () => {
     openConversation();
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: PublicComposer });
 
     const draft = screen.getByRole('textbox', { name: /message input/i });
     fireEvent.change(draft, { target: { value: 'Send this draft' } });
@@ -423,7 +424,7 @@ describe('the public chat window composer', () => {
     );
     openConversation();
     const before = useModelStore.getState().selectedModelId;
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: PublicComposer });
 
     const draft = screen.getByRole('textbox', { name: /message input/i });
     fireEvent.change(draft, { target: { value: 'Keep this draft' } });
@@ -454,24 +455,24 @@ describe('the public chat window composer', () => {
       configurable: true,
       writable: true,
     });
-    mocks.connectors.connectedIds = new Set(['custom-abc123']);
-    mocks.connectors.sources = { 'custom-abc123': 'custom' };
-    mocks.connectors.customNames = { 'custom-abc123': 'Internal Docs MCP' };
+    const connected = CONNECTORS.find((connector) => connectorReleased(connector.id));
+    expect(connected).toBeDefined();
+    mocks.connectors.connectedIds = new Set([connected!.id]);
     openConversation();
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: PublicComposer });
 
     const draft = screen.getByRole('textbox', { name: /message input/i });
     fireEvent.change(draft, { target: { value: 'Keep this draft' } });
     fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
     fireEvent.click(screen.getByText('Connectors'));
 
-    const checkbox = screen.getByRole('menuitemcheckbox', { name: 'Internal Docs MCP' });
+    const checkbox = screen.getByRole('menuitemcheckbox', { name: connected!.name });
     expect(checkbox).toHaveAttribute('aria-checked', 'true');
     fireEvent.click(checkbox);
 
     expect(checkbox).toHaveAttribute('aria-checked', 'false');
     expect(useChatStore.getState().getDisabledConnectorIds(CONVERSATION_ID)).toEqual([
-      'custom-abc123',
+      connected!.id,
     ]);
     expect(draft).toHaveValue('Keep this draft');
     expect(mocks.sendMessage).not.toHaveBeenCalled();
@@ -479,7 +480,7 @@ describe('the public chat window composer', () => {
 
   it('keeps a chosen file on the draft of the public chat page', () => {
     openConversation();
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: PublicComposer });
 
     const draft = screen.getByRole('textbox', { name: /message input/i });
     fireEvent.change(draft, { target: { value: 'Keep this draft' } });
@@ -507,7 +508,7 @@ describe('the public chat window composer', () => {
       writable: true,
     });
     openConversation();
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: PublicComposer });
 
     const draft = screen.getByRole('textbox', { name: /message input/i });
     fireEvent.change(draft, { target: { value: 'Keep this draft' } });
@@ -571,7 +572,7 @@ describe('the public chat window composer', () => {
     useSettingsStore.setState({ dictationEnabled: true });
     useVoiceInputStore.getState().cancelListening();
     openConversation();
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: PublicComposer });
 
     const draft = screen.getByRole('textbox', { name: /message input/i });
     fireEvent.change(draft, { target: { value: 'Keep this draft' } });
@@ -587,7 +588,7 @@ describe('the public chat window composer', () => {
   it('starts voice mode from the public chat page without sending the draft', () => {
     useVoiceSessionStore.getState().dispatch({ type: VOICE_SESSION_EVENT.exit });
     openConversation();
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: PublicComposer });
 
     const voiceMode = screen.getByRole('button', { name: 'Start voice mode' });
     expect(voiceMode).not.toBeDisabled();

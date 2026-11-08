@@ -191,6 +191,7 @@ export function useSlackSettingsView(active: boolean): SlackSettingsView {
     : null;
   const [, redraw] = useState(0);
   const rendered = useRef<SlackSettingsView | null>(null);
+  const phase = owner?.phase;
   const view = useMemo(() => {
     const next = createSlackSettingsView(
       owner?.session ?? null,
@@ -200,13 +201,14 @@ export function useSlackSettingsView(active: boolean): SlackSettingsView {
         !!owner &&
         epoch !== undefined &&
         scopeKey !== null &&
-        owner.phase === 'admitted' &&
+        phase === 'admitted' &&
+        owner.phase === phase &&
         owner.scopeKey === scopeKey &&
         workspaceOwnerIsCurrent(owner, epoch),
       scope?.activeOrganizationId ?? null,
     );
     return next;
-  }, [active, owner, owner?.phase, epoch, scopeKey, scope?.activeOrganizationId]);
+  }, [active, owner, phase, epoch, scopeKey, scope?.activeOrganizationId]);
   rendered.current = view;
   useLayoutEffect(() => {
     view.activate();

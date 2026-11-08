@@ -1063,7 +1063,7 @@ jobs:
       NEXT_PUBLIC_APP_URL: http://localhost:3000
       NEXT_PUBLIC_SANDBOX_ORIGIN: http://localhost:3001
       PLAYWRIGHT_BASE_URL: http://localhost:3000
-      NODE_OPTIONS: --max-old-space-size=6144
+      NODE_OPTIONS: --max-old-space-size=8192
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -1216,10 +1216,9 @@ jobs:
         # next build's own "Running TypeScript..." phase has hit
         # "Ineffective mark-compacts near heap limit" under Node's default
         # old-space cap here, independent of the js-verify job's tsc --noEmit.
-        # 6 GB of old space stays under this runner's memory while covering
-        # the ~3 GB the type-check phase needs.
+        # Keep this aligned with the web typecheck budget above.
         env:
-          NODE_OPTIONS: --max-old-space-size=6144
+          NODE_OPTIONS: --max-old-space-size=8192
         run: pnpm --filter @agiworkforce/web build
 
       - name: Start the database proxy

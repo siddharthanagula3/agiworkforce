@@ -472,3 +472,40 @@ export function createCloudMemoryController(
 }
 
 export type CloudMemoryController = ReturnType<typeof createCloudMemoryController>;
+
+let cachedController: CloudMemoryController | null = null;
+subscribeWorkspaceAdmission(() => {
+  if (cachedController && !cachedController.isCurrent()) {
+    cachedController.retire();
+    cachedController = null;
+  }
+});
+
+export function getScopedCloudMemoryController(
+  owner: WorkspaceOwner | null,
+  data: ManagedCloudAccountWorkspaces | undefined,
+  observedEpoch: number | undefined,
+): CloudMemoryController | null {
+  if (cachedController && !cachedController.isCurrent()) {
+    cachedController.retire();
+    cachedController = null;
+  }
+  if (
+    !owner ||
+    owner.epoch !== observedEpoch ||
+    owner.phase !== 'admitted' ||
+    !data ||
+    owner.scopeKey !== cloudMemoryScopeKey(data)
+  )
+    return null;
+  if (
+    !cachedController ||
+    cachedController.owner !== owner ||
+    cachedController.epoch !== observedEpoch ||
+    cachedController.scopeKey !== owner.scopeKey
+  ) {
+    cachedController?.retire();
+    cachedController = createCloudMemoryController(owner, data);
+  }
+  return cachedController;
+}

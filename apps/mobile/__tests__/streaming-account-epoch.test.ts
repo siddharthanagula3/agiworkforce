@@ -66,9 +66,9 @@ function load() {
     streamAuthRefusal: refusalMock,
   }));
 
-  const accounts = jest.requireActual<
-    typeof import('../src/features/auth/services/cloudAccountSession')
-  >('../src/features/auth/services/cloudAccountSession');
+  const accounts = jest.requireActual<ImportedModule0>(
+    '../src/features/auth/services/cloudAccountSession',
+  );
   accounts.activateCloudAccount('stream-account-a');
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const streaming = require('../services/streaming') as typeof import('../services/streaming');
@@ -581,3 +581,5 @@ describe('run clients keep their creation account', () => {
     expect(refusalMock).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('../src/features/auth/services/cloudAccountSession');

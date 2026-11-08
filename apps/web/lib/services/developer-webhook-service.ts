@@ -420,23 +420,24 @@ async function postWebhook(
 ): Promise<{ status: number | null; error: string | null }> {
   signal?.throwIfAborted();
   let response: Response;
+  let deadline: AbortSignal | undefined;
   try {
     await assertResolvedPublicHostname(url);
     signal?.throwIfAborted();
-    const timeout = AbortSignal.timeout(DELIVERY_TIMEOUT_MS);
+    deadline = AbortSignal.timeout(DELIVERY_TIMEOUT_MS);
     response = await pinnedPublicFetch(url, {
       method: 'POST',
       headers,
       body,
       redirect: 'manual',
-      signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+      signal: signal ? AbortSignal.any([signal, deadline]) : deadline,
     });
   } catch (error) {
     signal?.throwIfAborted();
     if (error instanceof EgressPolicyError) {
       return { status: null, error: 'The endpoint now resolves to a private address.' };
     }
-    const timedOut = error instanceof Error && error.name === 'TimeoutError';
+    const timedOut = deadline?.aborted === true;
     return {
       status: null,
       error: timedOut

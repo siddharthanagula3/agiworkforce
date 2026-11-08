@@ -34,8 +34,7 @@ vi.mock('@/lib/llm-providers/factory', () => ({
 
 const mockExecuteWebMcpTool = vi.fn();
 vi.mock('@/lib/mcp-tool-executor', async () => {
-  const actual =
-    await vi.importActual<typeof import('@/lib/mcp-tool-executor')>('@/lib/mcp-tool-executor');
+  const actual = await vi.importActual<ImportedModule0>('@/lib/mcp-tool-executor');
   return {
     ...actual,
     executeWebMcpTool: (...args: unknown[]) => mockExecuteWebMcpTool(...args),
@@ -291,3 +290,5 @@ describe('runToolLoop openai-passthrough dispatch (mocked adapter)', () => {
     expect(output).toContain('data: [DONE]');
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/mcp-tool-executor');

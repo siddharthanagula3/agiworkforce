@@ -2073,11 +2073,6 @@
     opacity: 0;
   }
 }
-@keyframes agi-mark-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
 @media (prefers-reduced-motion: reduce) {
   [data-design='agi'] .agi-cursor {
     animation: none;

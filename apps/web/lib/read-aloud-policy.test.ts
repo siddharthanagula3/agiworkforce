@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { LOCAL_MODEL_SERVERS, localModelId } from '@agiworkforce/local-runtime-contract';
 import {
   codeReadAloudUnavailable,
   currentReadAloudMessage,
@@ -24,9 +25,12 @@ describe('read-aloud trust policy', () => {
     },
   );
   it('recognizes a canonical Local model before streaming completion stamps metadata', () => {
-    expect(messageReadAloudUnavailable({ ...row, model: 'local:ollama/llama3' })).toBe(
-      READ_ALOUD_PRIVACY_UNAVAILABLE,
-    );
+    expect(
+      messageReadAloudUnavailable({
+        ...row,
+        model: localModelId(LOCAL_MODEL_SERVERS[0], 'test-fixture'),
+      }),
+    ).toBe(READ_ALOUD_PRIVACY_UNAVAILABLE);
   });
   it('does not invent a boundary for legacy Chat or unknown display models', () => {
     expect(messageReadAloudUnavailable(row)).toBeNull();

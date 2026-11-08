@@ -37,7 +37,7 @@ vi.mock('@/lib/server/claimed-user-scope-db', () => ({
   createClaimedUserScopedDb: mocks.claimScope,
 }));
 vi.mock('@/lib/services/active-workspace-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/active-workspace-service')>()),
+  ...(await importOriginal<ImportedModule0>()),
   resolveActiveOrganizationId: mocks.resolveOrganization,
 }));
 vi.mock('@/lib/logger', () => ({
@@ -273,3 +273,5 @@ it('returns 403 for an authenticated device credential before database or factor
   expect(mocks.removeSecondFactor).not.toHaveBeenCalled();
   expect(mocks.identityEvent).not.toHaveBeenCalled();
 });
+
+type ImportedModule0 = typeof import('@/lib/services/active-workspace-service');

@@ -3,8 +3,7 @@ import { enableMapSet } from 'immer';
 
 const mockInvoke = vi.fn();
 vi.mock('../../../lib/tauri-mock', async () => {
-  const actual =
-    await vi.importActual<typeof import('../../../lib/tauri-mock')>('../../../lib/tauri-mock');
+  const actual = await vi.importActual<ImportedModule0>('../../../lib/tauri-mock');
   return { ...actual, invoke: (...args: unknown[]) => mockInvoke(...args) };
 });
 
@@ -413,3 +412,5 @@ describe('agentWorkflowEvents', () => {
     expect(logged).toEqual(expect.arrayContaining(['bg-agent-notify-1', 'bg-agent-notify-2']));
   });
 });
+
+type ImportedModule0 = typeof import('../../../lib/tauri-mock');

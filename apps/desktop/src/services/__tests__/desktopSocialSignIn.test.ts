@@ -15,7 +15,7 @@ const clerk = {
 };
 
 vi.mock('../clerkNativeAuth', async () => {
-  const actual = await vi.importActual<typeof import('../clerkNativeAuth')>('../clerkNativeAuth');
+  const actual = await vi.importActual<ImportedModule0>('../clerkNativeAuth');
   return {
     ...actual,
     createOauthSignIn: (...args: unknown[]) => clerk.createOauthSignIn(...args),
@@ -155,3 +155,5 @@ describe('desktopSocialSignIn', () => {
     expect(clerk.createSessionToken).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('../clerkNativeAuth');

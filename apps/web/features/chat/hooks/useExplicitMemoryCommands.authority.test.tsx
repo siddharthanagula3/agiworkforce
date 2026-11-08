@@ -6,7 +6,7 @@ import { useExplicitMemoryCommands } from './use-explicit-memory-commands';
 import {
   createCloudMemoryFixture,
   getCloudMemoryFixtureSession,
-} from '@/features/memory/__tests__/cloud-memory-fixture';
+} from '@/features/memory/__tests__/CloudMemoryFixture';
 import { cloudMemoryScopeKey } from '@/features/memory/cloud-memory-controller';
 import {
   admitWorkspace,

@@ -14,7 +14,7 @@ const observed = vi.hoisted(() => ({
   clear: null as (() => void) | null,
 }));
 vi.mock('@agiworkforce/ui', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/ui')>();
+  const actual = await importOriginal<ImportedModule0>();
   return {
     ...actual,
     useConfirmAction: () => ({
@@ -305,3 +305,5 @@ describe('Shared data lifetime (UNRUN source fixtures)', () => {
     expect(toast.success).toHaveBeenCalledTimes(1);
   });
 });
+
+type ImportedModule0 = typeof import('@agiworkforce/ui');

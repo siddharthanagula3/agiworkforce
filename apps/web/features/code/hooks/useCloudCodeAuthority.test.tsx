@@ -31,9 +31,10 @@ describe('managed Code pane authority', () => {
     const { result, unmount } = renderHook(
       () => {
         const authority = useCloudCodeAuthority();
+        const capture = authority.capture;
         useEffect(() => {
-          captured.push(authority.capture());
-        }, [authority.capture]);
+          captured.push(capture());
+        }, [capture]);
         return authority;
       },
       { wrapper: StrictMode },

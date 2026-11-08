@@ -31,11 +31,11 @@ vi.mock('@/features/plugins/server/directory/installed-skills', () => ({
 }));
 
 vi.mock('@/lib/managed-compute-gate', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/managed-compute-gate')>()),
+  ...(await importOriginal<ImportedModule0>()),
   buildWorkspaceFeatureGateResponse: mocks.buildWorkspaceFeatureGateResponse,
 }));
 vi.mock('@/lib/services/workspace-plugin-access', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/workspace-plugin-access')>()),
+  ...(await importOriginal<ImportedModule1>()),
   listPermittedPluginIds: mocks.listPermittedPluginIds,
   workspaceAllowsPlugins: mocks.workspaceAllowsPlugins,
 }));
@@ -342,3 +342,6 @@ describe('/api/skills/installs', () => {
     expect(mocks.recordWorkspaceAuditEvent).toHaveBeenCalledTimes(1);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/managed-compute-gate');
+type ImportedModule1 = typeof import('@/lib/services/workspace-plugin-access');

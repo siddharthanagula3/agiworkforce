@@ -39,9 +39,9 @@ vi.mock('@/lib/server/rls-db', () => ({
   })),
 }));
 
-const { isDeliverableSubscription } = await vi.importActual<
-  typeof import('@/lib/services/web-push-service')
->('@/lib/services/web-push-service');
+const { isDeliverableSubscription } = await vi.importActual<ImportedModule0>(
+  '@/lib/services/web-push-service',
+);
 
 vi.mock('@/lib/services/web-push-service', () => ({
   getWebPushPublicKey: mockPublicKey,
@@ -219,3 +219,5 @@ describe('DELETE /api/web-push', () => {
     expect(mockExecute).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/services/web-push-service');

@@ -59,7 +59,7 @@ jest.mock('@/stores/chat/chatMessageStore', () => ({
 }));
 
 jest.mock('@/src/features/auth/store', () => {
-  const { create } = jest.requireActual<typeof import('zustand')>('zustand');
+  const { create } = jest.requireActual<ImportedModule0>('zustand');
   return {
     useAuthStore: create(() => ({
       isClerkLoaded: true,
@@ -103,7 +103,7 @@ jest.mock('@/src/features/waitlist/store', () => ({
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useFocusEffect: (callback: () => void | (() => void)) => {
-    const { useEffect } = jest.requireActual<typeof import('react')>('react');
+    const { useEffect } = jest.requireActual<ImportedModule1>('react');
     useEffect(() => {
       const cleanup = callback();
       mockFocusCallbacks.set(callback, typeof cleanup === 'function' ? cleanup : undefined);
@@ -796,3 +796,6 @@ describe('archived-chats bulk service', () => {
     await expect(deleteAllConversations(captureCloudAccountEpoch()!)).rejects.toThrow();
   });
 });
+
+type ImportedModule0 = typeof import('zustand');
+type ImportedModule1 = typeof import('react');

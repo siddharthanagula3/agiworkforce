@@ -41,7 +41,11 @@ export function useReflectRecap(range: ManagedCloudReflectRange, timezone: strin
   const [, redraw] = useState(0);
   const [state, setState] = useState<State | null>(null);
   const view = useMemo<View>(
-    () => ({ active: false, request: null }),
+    () =>
+      Object.assign(
+        { active: false, request: null },
+        { binding: { active, epoch, owner, range, scopeKey, timezone, version } },
+      ),
     [owner, epoch, scopeKey, range, timezone, active, version],
   );
   const rendered = useRef<View | null>(view);
@@ -140,7 +144,7 @@ export function useReflectRecap(range: ManagedCloudReflectRange, timezone: strin
     view.request?.retire();
     rendered.current = null;
     setVersion((value) => value + 1);
-  }, [active, current, view, owner, epoch, workspace.refetch]);
+  }, [active, current, view, owner, epoch, workspace]);
   const visible =
     current() && state?.view === view && state.request === view.request && state.request.isCurrent()
       ? state

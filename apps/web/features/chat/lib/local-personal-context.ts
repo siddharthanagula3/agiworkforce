@@ -107,6 +107,33 @@ async function refresh(candidate: ContextOwner, projectId: string | null): Promi
   return captured.pending;
 }
 
+function resolveLocalContextCache(
+  owner: WorkspaceOwner | null,
+  epoch: number | undefined,
+  scopeKey: string | null,
+  organizationId: string | null | undefined,
+): ContextOwner | null {
+  if (cached && !isCurrent(cached)) retire(cached);
+  if (
+    owner &&
+    owner.phase === 'admitted' &&
+    scopeKey !== null &&
+    scopeKey === owner.scopeKey &&
+    epoch !== undefined &&
+    workspaceOwnerIsCurrent(owner, epoch) &&
+    !cached
+  ) {
+    cached = {
+      owner,
+      epoch,
+      scopeKey,
+      organization: organizationId ?? MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
+      entries: new Map(),
+    };
+  }
+  return cached;
+}
+
 export function useLocalPersonalContextPrefetch(projectId: string | null): void {
   const localModelSelected = useLocalModelSelection((state) => state.selected !== null);
   const workspace = useAccountWorkspaces();
@@ -116,25 +143,12 @@ export function useLocalPersonalContextPrefetch(projectId: string | null): void 
   const scopeKey = data
     ? JSON.stringify([data.scope, data.activeWorkspaceId, data.activeOrganizationId])
     : null;
-  if (cached && !isCurrent(cached)) retire(cached);
-  if (
-    owner &&
-    owner.phase === 'admitted' &&
-    data &&
-    scopeKey !== null &&
-    scopeKey === owner.scopeKey &&
-    workspaceOwnerIsCurrent(owner, owner.epoch) &&
-    !cached
-  ) {
-    cached = {
-      owner,
-      epoch: owner.epoch,
-      scopeKey,
-      organization: data.activeOrganizationId ?? MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
-      entries: new Map(),
-    };
-  }
-  const candidate = cached;
+  const candidate = resolveLocalContextCache(
+    owner,
+    owner?.epoch,
+    scopeKey,
+    data?.activeOrganizationId,
+  );
   useEffect(() => {
     if (!localModelSelected || !candidate) return;
     const onFocus = () => {

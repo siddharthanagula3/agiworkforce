@@ -32,7 +32,7 @@ vi.mock('@clerk/nextjs', () => ({
 }));
 
 vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/identity/useSessionSnapshot')>()),
+  ...(await importOriginal<ImportedModule0>()),
   useSessionSnapshot: () => () => ({
     userId: 'native-user-1',
     sessionId: 'session-1',
@@ -212,3 +212,5 @@ function renderAccountSection() {
     </QueryClientProvider>,
   );
 }
+
+type ImportedModule0 = typeof import('@/lib/identity/useSessionSnapshot');

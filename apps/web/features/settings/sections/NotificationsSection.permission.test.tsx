@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const preferences = vi.hoisted(() => ({ load: vi.fn(), save: vi.fn() }));
 vi.mock('@/app/settings/_lib/preferences-client', async (original) => ({
-  ...(await original<typeof import('@/app/settings/_lib/preferences-client')>()),
+  ...(await original<ImportedModule0>()),
   fetchPreferenceNamespace: preferences.load,
   savePreferenceNamespace: preferences.save,
 }));
@@ -173,7 +173,7 @@ const notificationOwner = vi.hoisted(() => ({
   session: { userId: 'a', sessionId: 'a', isCurrent: () => true, getToken: async () => 'token-a' },
 }));
 vi.mock('../hooks/use-preference-owner', async (original) => ({
-  ...(await original<typeof import('../hooks/use-preference-owner')>()),
+  ...(await original<ImportedModule1>()),
   usePreferenceOwner: () => notificationOwner,
 }));
 vi.mock('../services/notification-preferences-client', () => ({
@@ -183,3 +183,6 @@ vi.mock('../services/notification-preferences-client', () => ({
     return { stored: patch, version: 'v2' };
   },
 }));
+
+type ImportedModule0 = typeof import('@/app/settings/_lib/preferences-client');
+type ImportedModule1 = typeof import('../hooks/use-preference-owner');

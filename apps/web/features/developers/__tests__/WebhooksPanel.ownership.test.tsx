@@ -29,11 +29,11 @@ const fixture = vi.hoisted(() => ({
 vi.mock('@clerk/nextjs', () => ({ useAuth: () => fixture.auth, useClerk: () => fixture.sdk }));
 vi.mock('sonner', () => ({ toast: { success: fixture.success, error: fixture.error } }));
 vi.mock('@/lib/client/csrf', async (original) => ({
-  ...(await original<typeof import('@/lib/client/csrf')>()),
+  ...(await original<ImportedModule0>()),
   getCsrfToken: vi.fn(async () => 'csrf'),
 }));
 vi.mock('@agiworkforce/ui', async (original) => {
-  const actual = await original<typeof import('@agiworkforce/ui')>();
+  const actual = await original<ImportedModule1>();
   return {
     ...actual,
     Button: (props: React.ComponentProps<typeof actual.Button>) => {
@@ -284,9 +284,7 @@ describe('webhook intent ownership', () => {
     const body = deferred<unknown>();
     const readBody = vi.fn(() => body.promise);
     fetchMock.mockImplementation(async (path, init) =>
-      init?.method === 'POST'
-        ? ({ ok: true, status: 200, json: readBody } as Response)
-        : read(path),
+      init?.method === 'POST' ? Object.assign(new Response(null), { json: readBody }) : read(path),
     );
     render(<WebhooksPanel />, { wrapper });
     await openEditor();
@@ -500,9 +498,7 @@ describe('webhook intent ownership', () => {
     const pending = deferred<unknown>();
     const readBody = vi.fn(() => pending.promise);
     fetchMock.mockImplementation(async (path, init) =>
-      init?.method === 'POST'
-        ? ({ ok: true, status: 200, json: readBody } as Response)
-        : read(path),
+      init?.method === 'POST' ? Object.assign(new Response(null), { json: readBody }) : read(path),
     );
     const mounted = render(<WebhooksPanel />, { wrapper });
     await openEditor();
@@ -598,3 +594,6 @@ describe('webhook intent ownership', () => {
     expect(fixture.success).toHaveBeenCalledWith('A test event is on its way.');
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/client/csrf');
+type ImportedModule1 = typeof import('@agiworkforce/ui');

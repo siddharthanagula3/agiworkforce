@@ -1,3 +1,4 @@
+import type { WebFetch } from '@/test/fetch';
 import React, { StrictMode } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -40,11 +41,11 @@ vi.mock('@clerk/nextjs', async (original) => ({
   useSession: () => ({ session: fixture.sdk.session }),
 }));
 vi.mock('@/lib/client/csrf', async (original) => ({
-  ...(await original<typeof import('@/lib/client/csrf')>()),
+  ...(await original<MockedModule0>()),
   getCsrfToken: vi.fn(async () => 'csrf'),
 }));
 vi.mock('@agiworkforce/ui', async (original) => {
-  const actual = await original<typeof import('@agiworkforce/ui')>();
+  const actual = await original<MockedModule1>();
   return {
     ...actual,
     Input: (props: React.ComponentProps<typeof actual.Input>) => {
@@ -109,9 +110,9 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 const initialAuthState = useAuthStore.getState();
-const admissionMock = vi.fn<typeof fetch>();
-const fetchMock = vi.fn<typeof fetch>();
-const transportMock = vi.fn<typeof fetch>();
+const admissionMock = vi.fn<WebFetch>();
+const fetchMock = vi.fn<WebFetch>();
+const transportMock = vi.fn<WebFetch>();
 const admissionReceipt = () => ({
   accountId: 'product-a',
   subject: fixture.auth.userId,
@@ -245,7 +246,7 @@ afterEach(() => {
 describe('email editor ownership and completion', () => {
   it('owns one complete add, code and primary change under StrictMode with synchronous subscriptions', async () => {
     render(<StrictMode>{view()}</StrictMode>);
-    await screen.findByLabelText('New email address');
+    await waitFor(() => expect(screen.getByLabelText('New email address')).toBeEnabled());
     const token = deferred<string>();
     vi.mocked(fixture.sdk.session!.getToken).mockReturnValueOnce(token.promise);
     fireEvent.change(screen.getByLabelText('New email address'), {
@@ -261,6 +262,7 @@ describe('email editor ownership and completion', () => {
     await act(async () => {
       token.resolve('token-a');
     });
+    await waitFor(() => expect(writes('POST')).toHaveLength(1));
     await enterCode();
     await approve();
     await screen.findByText('Your account now uses new@example.com.');
@@ -337,7 +339,9 @@ describe('email editor ownership and completion', () => {
     if (boundary === 'csrf') vi.mocked(getCsrfToken).mockReturnValueOnce(text.promise);
     if (boundary === 'response') fetchMock.mockReturnValueOnce(response.promise);
     if (boundary === 'body')
-      fetchMock.mockResolvedValueOnce({ ok: true, status: 201, json: readBody } as Response);
+      fetchMock.mockResolvedValueOnce(
+        Object.assign(new Response(null, { status: 201 }), { json: readBody }),
+      );
     if (boundary === 'native-reload') vi.mocked(user.reload).mockReturnValueOnce(reloaded.promise);
     if (boundary === 'native-prepare')
       vi.mocked(address.prepareVerification).mockReturnValueOnce(prepared.promise);
@@ -392,11 +396,11 @@ describe('email editor ownership and completion', () => {
       if (boundary === 'csrf') vi.mocked(getCsrfToken).mockReturnValueOnce(text.promise);
       if (boundary === 'response') fetchMock.mockReturnValueOnce(response.promise);
       if (boundary === 'success-body' || boundary === 'error-body')
-        fetchMock.mockResolvedValueOnce({
-          ok: boundary === 'success-body',
-          status: boundary === 'success-body' ? 200 : 503,
-          json: readBody,
-        } as Response);
+        fetchMock.mockResolvedValueOnce(
+          Object.assign(new Response(null, { status: boundary === 'success-body' ? 200 : 503 }), {
+            json: readBody,
+          }),
+        );
       await approve();
       if (boundary === 'csrf') await waitFor(() => expect(getCsrfToken).toHaveBeenCalledTimes(2));
       else if (boundary === 'success-body' || boundary === 'error-body')
@@ -903,7 +907,7 @@ describe('mapped product account admission', () => {
     ),
   )(
     'retires an admission $boundary across synchronous $owner A/B/A before a stale receipt settles',
-    async ({ boundary, retire }) => {
+    async ({ boundary, retire, owner }) => {
       const token = deferred<string>();
       const response = deferred<Response>();
       const body = deferred<unknown>();
@@ -1097,3 +1101,6 @@ describe('mapped product account admission', () => {
     expect(await screen.findByLabelText('New email address')).toHaveValue('');
   });
 });
+
+type MockedModule0 = typeof import('@/lib/client/csrf');
+type MockedModule1 = typeof import('@agiworkforce/ui');

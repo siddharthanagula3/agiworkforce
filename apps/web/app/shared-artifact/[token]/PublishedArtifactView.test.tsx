@@ -162,7 +162,7 @@ describe('PublishedArtifactView', () => {
 
   it('offers a way into the product from the provenance line', () => {
     render(<PublishedArtifactView {...BASE} kind="markdown" content="# Title" />);
-    expect(screen.getByRole('link', { name: 'Shared from AGI' })).toHaveAttribute('href', '/');
+    expect(screen.getByRole('link', { name: 'Shared conversation' })).toHaveAttribute('href', '/');
   });
 
   it('sends a workspace-shared artifact back to the app rather than the marketing home', () => {

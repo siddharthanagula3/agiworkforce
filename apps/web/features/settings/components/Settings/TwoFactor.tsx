@@ -126,6 +126,8 @@ export function PasswordPanel({
   onToggleShowNewPassword,
   onToggleShowConfirmPassword,
 }: PasswordPanelProps) {
+  const { isValid, isDirty } = passwordForm.formState;
+
   return (
     <div className="border-t border-border pt-6">
       <Form {...passwordForm}>
@@ -252,12 +254,7 @@ export function PasswordPanel({
           ) : null}
           <Button
             type="submit"
-            disabled={
-              blocked ||
-              isChangePasswordPending ||
-              !passwordForm.formState.isValid ||
-              !passwordForm.formState.isDirty
-            }
+            disabled={blocked || isChangePasswordPending || !isValid || !isDirty}
             variant="outline"
             className="w-full border-border"
           >

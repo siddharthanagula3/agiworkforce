@@ -256,7 +256,7 @@ export function useShareConversation(
         owner.scopeKey === scopeKey &&
         workspaceOwnerIsCurrent(owner, epoch),
     };
-    return next;
+    return Object.assign(next, { binding: { conversationId } });
   }, [owner, epoch, scopeKey, workspaceData?.activeOrganizationId, open, conversationId]);
   renderedScope.current = scope;
   const [view, setView] = useState<ShareView | null>(null);

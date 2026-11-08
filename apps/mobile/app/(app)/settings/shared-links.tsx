@@ -67,7 +67,7 @@ export default function SharedLinksScreen() {
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
   const [refreshing, setRefreshing] = useState(false);
   const [revoking, setRevoking] = useState<string | null>(null);
-  const [scopeRevision, setScopeRevision] = useState(0);
+  const [scope, setScope] = useState(() => ({ account: captureCloudAccountEpoch() }));
   const sessionRef = useRef<LinkSession | null>(null);
   const linksRef = useRef<OwnedLinks | null>(null);
   const confirmationRef = useRef<object | null>(null);
@@ -136,7 +136,7 @@ export default function SharedLinksScreen() {
       setState({
         kind: useChatAppModeStore.getState().appMode === 'cloud' ? 'loading' : 'blocked',
       });
-      setScopeRevision((revision) => revision + 1);
+      setScope({ account: captureCloudAccountEpoch() });
     };
     const stopEpoch = subscribeCloudAccountEpochChange(invalidate);
     const stopMode = useChatAppModeStore.subscribe((next, previous) => {
@@ -167,7 +167,7 @@ export default function SharedLinksScreen() {
         setState({ kind: 'blocked' });
         return;
       }
-      const account = captureCloudAccountEpoch();
+      const account = scope.account;
       if (!account || !isClerkSignedIn || account.ownerId !== clerkUserId) {
         setState({ kind: 'error' });
         return;
@@ -185,7 +185,7 @@ export default function SharedLinksScreen() {
       return () => {
         if (sessionRef.current === owner) retire();
       };
-    }, [isCloudMode, isClerkSignedIn, clerkUserId, scopeRevision, load, retire]),
+    }, [isCloudMode, isClerkSignedIn, clerkUserId, scope, load, retire]),
   );
 
   const handleRefresh = useCallback(() => {

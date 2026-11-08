@@ -12,7 +12,7 @@ let mockBlur: (() => void) | undefined;
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useFocusEffect: (callback: () => void | (() => void)) => {
-    const { useEffect } = jest.requireActual<typeof import('react')>('react');
+    const { useEffect } = jest.requireActual<ImportedModule0>('react');
     useEffect(() => {
       mockFocus = () => {
         const cleanup = callback();
@@ -30,7 +30,7 @@ jest.mock('@/services/api', () => ({
   apiFetch: (...args: unknown[]) => mockFetch(...args),
 }));
 jest.mock('@/src/features/auth/store', () => {
-  const { create } = jest.requireActual<typeof import('zustand')>('zustand');
+  const { create } = jest.requireActual<ImportedModule1>('zustand');
   return {
     useAuthStore: create(() => ({
       isClerkLoaded: true,
@@ -40,11 +40,11 @@ jest.mock('@/src/features/auth/store', () => {
   };
 });
 jest.mock('@/src/features/chat/store/appModeStore', () => {
-  const { create } = jest.requireActual<typeof import('zustand')>('zustand');
+  const { create } = jest.requireActual<ImportedModule1>('zustand');
   return { useChatAppModeStore: create(() => ({ appMode: 'cloud' })) };
 });
 jest.mock('@/src/features/settings/Common', () => {
-  const { Switch } = jest.requireActual<typeof import('react-native')>('react-native');
+  const { Switch } = jest.requireActual<ImportedModule2>('react-native');
   return {
     SettingsGroup: ({ children }: { children: React.ReactNode }) => children,
     SettingsSwitchRow: ({ label, ...props }: { label: string }) => (
@@ -53,7 +53,7 @@ jest.mock('@/src/features/settings/Common', () => {
   };
 });
 jest.mock('@/components/ui/Button', () => {
-  const { Pressable, Text } = jest.requireActual<typeof import('react-native')>('react-native');
+  const { Pressable, Text } = jest.requireActual<ImportedModule2>('react-native');
   return {
     Button: ({ title, ...props }: { title: string }) => (
       <Pressable {...props}>
@@ -457,3 +457,7 @@ describe('owned provider training choices', () => {
     );
   });
 });
+
+type ImportedModule0 = typeof import('react');
+type ImportedModule1 = typeof import('zustand');
+type ImportedModule2 = typeof import('react-native');

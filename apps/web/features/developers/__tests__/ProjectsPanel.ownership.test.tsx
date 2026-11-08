@@ -25,7 +25,7 @@ const fixture = vi.hoisted(() => ({
 vi.mock('@clerk/nextjs', () => ({ useAuth: () => fixture.auth, useClerk: () => fixture.sdk }));
 vi.mock('sonner', () => ({ toast: { success: fixture.success, error: fixture.error } }));
 vi.mock('@/lib/client/csrf', async (original) => ({
-  ...(await original<typeof import('@/lib/client/csrf')>()),
+  ...(await original<ImportedModule0>()),
   getCsrfToken: vi.fn(async () => 'csrf'),
 }));
 vi.mock('@features/settings/hooks/use-settings-queries', () => ({
@@ -35,7 +35,7 @@ vi.mock('../hooks/use-developer-usage', () => ({
   useDeveloperUsage: () => ({ data: { projects: [] }, isLoading: false, isError: false }),
 }));
 vi.mock('@agiworkforce/ui', async (original) => {
-  const actual = await original<typeof import('@agiworkforce/ui')>();
+  const actual = await original<ImportedModule1>();
   return {
     ...actual,
     Button: (props: React.ComponentProps<typeof actual.Button>) => {
@@ -247,7 +247,9 @@ describe('project intent ownership', () => {
     const body = deferred<unknown>();
     const readBody = vi.fn(() => body.promise);
     fetchMock.mockImplementation(async (path, init) =>
-      init?.method === 'DELETE' ? ({ ok: true, json: readBody } as Response) : read(path),
+      init?.method === 'DELETE'
+        ? Object.assign(new Response(null), { json: readBody })
+        : read(path),
     );
     const mounted = render(<ProjectsPanel />, { wrapper });
     const old = await openArchive();
@@ -328,7 +330,7 @@ describe('project intent ownership', () => {
     const body = deferred<unknown>();
     const readBody = vi.fn(() => body.promise);
     fetchMock.mockImplementation(async (path, init) =>
-      init?.method === 'POST' ? ({ ok: true, json: readBody } as Response) : read(path),
+      init?.method === 'POST' ? Object.assign(new Response(null), { json: readBody }) : read(path),
     );
     render(<ProjectsPanel />, { wrapper });
     await openEditor();
@@ -395,3 +397,6 @@ describe('project intent ownership', () => {
     expect(fixture.error).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/client/csrf');
+type ImportedModule1 = typeof import('@agiworkforce/ui');

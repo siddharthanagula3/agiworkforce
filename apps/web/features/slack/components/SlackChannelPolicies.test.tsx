@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/client/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/client/csrf')>()),
+  ...(await importOriginal<ImportedModule0>()),
   getCsrfToken: vi.fn(async () => 'csrf'),
 }));
 
@@ -177,3 +177,5 @@ describe('SlackChannelPolicies', () => {
     );
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/client/csrf');

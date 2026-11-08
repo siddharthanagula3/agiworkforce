@@ -5,7 +5,7 @@ import { describeOutboundRefusal } from '../core/outboundContentGuard';
 const realpath = vi.hoisted(() => vi.fn<(path: string) => string>());
 
 vi.mock('node:fs', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('node:fs')>()),
+  ...(await importOriginal<ImportedModule0>()),
   realpathSync: realpath,
 }));
 
@@ -105,3 +105,5 @@ describe('outbound content path policy', () => {
     );
   });
 });
+
+type ImportedModule0 = typeof import('node:fs');

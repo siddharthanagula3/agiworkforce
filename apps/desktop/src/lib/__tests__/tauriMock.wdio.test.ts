@@ -32,7 +32,7 @@ describe('tauri-mock isolated WDIO transport', () => {
       account_start_device_authorization: commandMock,
     };
 
-    const { invoke } = await vi.importActual<typeof import('../tauri-mock')>('../tauri-mock');
+    const { invoke } = await vi.importActual<ImportedModule0>('../tauri-mock');
     const args = { apiBaseUrl: 'https://agiworkforce.com' };
 
     await expect(invoke('account_start_device_authorization', args)).resolves.toEqual({
@@ -49,8 +49,10 @@ describe('tauri-mock isolated WDIO transport', () => {
     nativeInvoke.mockResolvedValue('native-result');
     (window as unknown as { __wdio_mocks__?: Record<string, unknown> }).__wdio_mocks__ = {};
 
-    const { invoke } = await vi.importActual<typeof import('../tauri-mock')>('../tauri-mock');
+    const { invoke } = await vi.importActual<ImportedModule0>('../tauri-mock');
     await expect(invoke('startup_get_recovery_state')).resolves.toBe('native-result');
     expect(nativeInvoke).toHaveBeenCalledWith('startup_get_recovery_state', undefined);
   });
 });
+
+type ImportedModule0 = typeof import('../tauri-mock');

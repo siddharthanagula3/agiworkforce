@@ -43,11 +43,11 @@ vi.mock('@features/settings/hooks/use-settings-queries', () => ({
 }));
 
 vi.mock('@/lib/identity/useSessionSnapshot', async (original) => ({
-  ...(await original<typeof import('@/lib/identity/useSessionSnapshot')>()),
+  ...(await original<ImportedModule0>()),
   useSessionSnapshot: () => () => session,
 }));
 vi.mock('@/features/workspaces/hooks/use-workspaces', async (original) => ({
-  ...(await original<typeof import('@/features/workspaces/hooks/use-workspaces')>()),
+  ...(await original<ImportedModule1>()),
   useAccountWorkspaces: () => ({
     data: { scope: 'personal', activeWorkspaceId: 'personal', activeOrganizationId: null },
   }),
@@ -268,3 +268,6 @@ describe('ApiKeysManager', () => {
     expect(retryUsage).toHaveBeenCalledOnce();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/identity/useSessionSnapshot');
+type ImportedModule1 = typeof import('@/features/workspaces/hooks/use-workspaces');

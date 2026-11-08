@@ -523,7 +523,10 @@ function OwnedApiKeysManager({
     lane.generation === intent.generation &&
     lane.intent === intent &&
     ownerCurrent();
-  const snapshot = useMemo(() => ({}), [apiKeys, isLoading, isError]);
+  const snapshot = useMemo(
+    () => Object.assign({}, { binding: { apiKeys, isError, isLoading } }),
+    [apiKeys, isLoading, isError],
+  );
   useLayoutEffect(() => {
     lane.snapshot = snapshot;
   }, [lane, snapshot]);

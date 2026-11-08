@@ -348,6 +348,7 @@ vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => {
   return {
     ...(await importOriginal<ReadonlyIdentityModule>()),
     useReadonlyIdentityLifetime: () => capture,
+    useSessionSnapshot: () => () => null,
   };
 });
 
@@ -395,3 +396,10 @@ it('does not attempt cleanup parking after only the identity changes', async () 
     useChatStore.setState({ setDraftContent: original });
   }
 });
+
+type WorkspacePolicyModule = typeof import('@shared/hooks/use-workspace-policy');
+vi.mock('@shared/hooks/use-workspace-policy', async (importOriginal) => ({
+  ...(await importOriginal<WorkspacePolicyModule>()),
+  useWorkspacePolicy: () => ({ policy: null, source: 'none', stale: false, checkedAt: null }),
+  useDisabledWorkspaceFeatures: () => [],
+}));

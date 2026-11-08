@@ -1,3 +1,4 @@
+import type { WebFetch } from '@/test/fetch';
 import { StrictMode } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -14,7 +15,7 @@ const boundary = vi.hoisted(() => ({
   session: null as SessionAuthority | null,
   snapshot: vi.fn<() => SessionAuthority | null>(),
   listeners: new Set<() => void>(),
-  fetch: vi.fn<typeof fetch>(),
+  fetch: vi.fn<WebFetch>(),
   csrf: vi.fn<() => Promise<Record<string, string>>>(),
   clipboard: vi.fn<(text: string) => Promise<void>>(),
 }));
@@ -91,16 +92,16 @@ async function show() {
   return mounted;
 }
 async function openConfirmation() {
-  fireEvent.click(screen.getByRole('button', { name: 'Unpublish', exact: true }));
+  fireEvent.click(screen.getByRole('button', { name: 'Unpublish' }));
   return screen.findByRole('alertdialog');
 }
 async function confirm() {
   const dialog = await openConfirmation();
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Unpublish artifact', exact: true }));
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Unpublish artifact' }));
 }
 async function openHistory() {
-  fireEvent.click(screen.getByRole('button', { name: 'History', exact: true }));
-  return screen.findByRole('button', { name: 'Put live', exact: true });
+  fireEvent.click(screen.getByRole('button', { name: 'History' }));
+  return screen.findByRole('button', { name: 'Put live' });
 }
 function noOldFeedback() {
   expect(screen.queryByText('Owner A page')).toBeNull();
@@ -143,7 +144,7 @@ describe('published artifacts bounded pages (UNRUN source fixtures)', () => {
     boundary.fetch.mockResolvedValueOnce(
       inventory([artifact('b'.repeat(24), 'Older page')], 'next-older'),
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Older', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Older' }));
     await screen.findByText('Older page');
     expect(screen.queryByText('Owner A page')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Put live' })).toBeNull();
@@ -165,18 +166,18 @@ describe('published artifacts bounded pages (UNRUN source fixtures)', () => {
     await show();
     const pending = deferred<Response>();
     boundary.fetch.mockReturnValueOnce(pending.promise);
-    fireEvent.click(screen.getByRole('button', { name: 'Older', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Older' }));
     await waitFor(() => expect(boundary.fetch).toHaveBeenCalledTimes(2));
     expect(screen.getByText('Owner A page')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Older', exact: true })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Refresh', exact: true })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Older' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Refresh' })).toBeDisabled();
     await act(async () =>
       pending.resolve(Response.json({ error: 'Unavailable' }, { status: 503 })),
     );
     expect(screen.getByRole('alert')).toHaveTextContent(/previously loaded page.*out of date/);
     expect(screen.getByText('Owner A page')).toBeInTheDocument();
     boundary.fetch.mockResolvedValueOnce(inventory([]));
-    fireEvent.click(screen.getByRole('button', { name: 'Retry', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     await screen.findByText('No artifacts on this page');
     expect(screen.queryByText('No published artifacts')).toBeNull();
     expect(boundary.fetch.mock.calls.map(([url]) => url)).toEqual([
@@ -184,7 +185,7 @@ describe('published artifacts bounded pages (UNRUN source fixtures)', () => {
       pageUrl,
       pageUrl,
     ]);
-    expect(screen.getByRole('button', { name: 'Older', exact: true })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Older' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Back to newest' })).toBeEnabled();
     boundary.fetch.mockResolvedValueOnce(inventory());
     fireEvent.click(screen.getByRole('button', { name: 'Back to newest' }));
@@ -205,7 +206,7 @@ describe('published artifacts bounded pages (UNRUN source fixtures)', () => {
       render(<PublishedArtifactsSection />);
       await screen.findByRole('alert');
       expect(screen.queryByText('No published artifacts')).toBeNull();
-      expect(screen.getByRole('button', { name: 'Older', exact: true })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Older' })).toBeDisabled();
       expect(boundary.fetch).toHaveBeenCalledTimes(1);
     },
   );
@@ -215,24 +216,24 @@ describe('published artifacts bounded pages (UNRUN source fixtures)', () => {
     await show();
     const older = artifact('b'.repeat(24), 'Older page');
     boundary.fetch.mockResolvedValueOnce(inventory([older], 'next-older'));
-    fireEvent.click(screen.getByRole('button', { name: 'Older', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Older' }));
     await screen.findByText('Older page');
     const dialog = await openConfirmation();
     for (const name of ['Older', 'Back to newest', 'Refresh'])
-      expect(screen.getByRole('button', { name, exact: true, hidden: true })).toBeDisabled();
+      expect(screen.getByRole('button', { name, hidden: true })).toBeDisabled();
     expect(boundary.fetch).toHaveBeenCalledTimes(2);
     const pending = deferred<Response>();
     boundary.fetch.mockReturnValueOnce(pending.promise);
     fireEvent.click(within(dialog).getByRole('button', { name: 'Unpublish artifact' }));
     await waitFor(() => expect(writes()).toHaveLength(1));
     for (const name of ['Older', 'Back to newest', 'Refresh'])
-      expect(screen.getByRole('button', { name, exact: true, hidden: true })).toBeDisabled();
+      expect(screen.getByRole('button', { name, hidden: true })).toBeDisabled();
     expect(writes()[0]![0]).toBe(managedCloudPublishedArtifactPath(older.token));
     await act(async () => pending.resolve(Response.json({ success: true, token: older.token })));
     await screen.findByText('No artifacts on this page');
     expect(screen.getByRole('button', { name: 'Back to newest' })).toBeEnabled();
     boundary.fetch.mockResolvedValueOnce(inventory());
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
     await screen.findByText('Owner A page');
     expect(boundary.fetch.mock.lastCall![0]).toBe(MANAGED_CLOUD_PUBLISHED_ARTIFACTS_PATH);
   });
@@ -241,7 +242,7 @@ describe('published artifacts bounded pages (UNRUN source fixtures)', () => {
     boundary.fetch.mockResolvedValueOnce(inventory([artifact()], cursor));
     await show();
     boundary.fetch.mockResolvedValueOnce(Response.json({ error: 'Older failed' }, { status: 503 }));
-    fireEvent.click(screen.getByRole('button', { name: 'Older', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Older' }));
     await screen.findByRole('alert');
     expect(boundary.fetch.mock.lastCall![0]).toBe(pageUrl);
     boundary.fetch.mockRejectedValueOnce(new TypeError('Lost mutation receipt'));
@@ -252,7 +253,7 @@ describe('published artifacts bounded pages (UNRUN source fixtures)', () => {
     expect(writes()).toHaveLength(1);
     expect(screen.queryByText('Owner A page')).toBeNull();
     boundary.fetch.mockResolvedValueOnce(inventory());
-    fireEvent.click(screen.getByRole('button', { name: 'Retry', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     await screen.findByText('Owner A page');
     expect(boundary.fetch.mock.lastCall![0]).toBe(MANAGED_CLOUD_PUBLISHED_ARTIFACTS_PATH);
     expect(writes()).toHaveLength(1);
@@ -272,7 +273,7 @@ describe('published artifacts bounded pages (UNRUN source fixtures)', () => {
         return body.promise;
       });
       boundary.fetch.mockResolvedValueOnce(response);
-      fireEvent.click(screen.getByRole('button', { name: 'Older', exact: true }));
+      fireEvent.click(screen.getByRole('button', { name: 'Older' }));
       await entered.promise;
       const oldSignal = boundary.fetch.mock.lastCall![1]?.signal;
       boundary.fetch.mockResolvedValueOnce(
@@ -305,7 +306,7 @@ describe('published artifacts session lifetime (UNRUN source fixtures)', () => {
     await act(async () => {});
     expect(boundary.fetch).not.toHaveBeenCalled();
     expect(screen.queryByText('No published artifacts')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Unpublish', exact: true })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Unpublish' })).toBeNull();
   });
 
   it('keeps the admitted account-wide view across ordinary rerenders', async () => {
@@ -383,7 +384,7 @@ describe('published artifacts session lifetime (UNRUN source fixtures)', () => {
     const alert = await screen.findByRole('alert');
     expect(alert).not.toHaveTextContent('Could not confirm whether that version was put live');
     expect(screen.getByRole('status')).toBe(notice);
-    expect(screen.queryByRole('button', { name: 'Put live', exact: true })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Put live' })).toBeNull();
     expect(screen.queryByText('Owner A page')).toBeNull();
     expect(writes()).toHaveLength(1);
     expect(boundary.fetch.mock.lastCall?.[0]).toBe(MANAGED_CLOUD_PUBLISHED_ARTIFACTS_PATH);
@@ -392,7 +393,7 @@ describe('published artifacts session lifetime (UNRUN source fixtures)', () => {
     fireEvent.click(within(alert).getByRole('button', { name: 'Retry' }));
     await screen.findByText('Owner A page');
     expect(writes()).toHaveLength(1);
-    expect(screen.queryByRole('button', { name: 'Put live', exact: true })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Put live' })).toBeNull();
   });
 
   it.each(['account', 'session', 'unavailable'] as const)(
@@ -420,7 +421,7 @@ describe('published artifacts session lifetime (UNRUN source fixtures)', () => {
     'rejects mounted %s before identity notification',
     async (action) => {
       await show();
-      const button = screen.getByRole('button', { name: action, exact: true });
+      const button = screen.getByRole('button', { name: action });
       boundary.session = session('owner-a', 'session-b');
       expect(button.isConnected).toBe(true);
       fireEvent.click(button);
@@ -465,10 +466,10 @@ describe('published artifacts session lifetime (UNRUN source fixtures)', () => {
       });
       if (putLive) fireEvent.click(putLive);
       else await confirm();
-      const retry = await screen.findByRole('button', { name: 'Retry', exact: true });
+      const retry = await screen.findByRole('button', { name: 'Retry' });
       expect(writes()).toHaveLength(1);
-      expect(screen.queryByRole('button', { name: 'Unpublish', exact: true })).toBeNull();
-      expect(screen.queryByRole('button', { name: 'Put live', exact: true })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Unpublish' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Put live' })).toBeNull();
       expect(screen.queryByRole('alertdialog')).toBeNull();
       fireEvent.click(retry);
       await screen.findByText('Fresh inventory');
@@ -531,7 +532,7 @@ describe('published artifacts session lifetime (UNRUN source fixtures)', () => {
       noOldFeedback();
       expect(screen.getByText('Owner B page')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Open' })).toBeDisabled();
-      expect(screen.getByRole('button', { name: 'Unpublish', exact: true })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Unpublish' })).toBeDisabled();
       await act(async () => newCopy.resolve());
       expect(screen.getByRole('button', { name: 'Open' })).toBeEnabled();
     },

@@ -30,7 +30,7 @@ vi.mock('@clerk/nextjs', () => ({
 }));
 
 vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/identity/useSessionSnapshot')>()),
+  ...(await importOriginal<ImportedModule0>()),
   useSessionSnapshot: () => () => ({
     userId: 'native-user-1',
     sessionId: 'session-1',
@@ -346,3 +346,5 @@ describe('AccountSection · cancel pending deletion (real hooks)', () => {
     expect(screen.getByTestId('delete-account-trigger')).toBeDisabled();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/identity/useSessionSnapshot');

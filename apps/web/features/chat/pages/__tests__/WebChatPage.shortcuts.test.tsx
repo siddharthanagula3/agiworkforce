@@ -1,4 +1,4 @@
-import { createWebChatWorkspaceFixture } from './web-chat-workspace-fixture';
+import { createWebChatWorkspaceFixture } from './WebChatWorkspaceFixture';
 import type { ReactNode } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { emitAppCommand } from '@shared/lib/app-commands';
@@ -351,7 +351,7 @@ describe('WebChatPage keyboard shortcut wiring', () => {
 
   it('opens the feedback dialog when Send Feedback reaches the chat page', async () => {
     openConversation();
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await screen.findByTestId('message-list');
     expect(screen.queryByRole('dialog', { name: 'Share feedback' })).toBeNull();
 
@@ -364,7 +364,7 @@ describe('WebChatPage keyboard shortcut wiring', () => {
 
   it('opens Keyboard Shortcuts when that command reaches the chat page', async () => {
     openConversation();
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await screen.findByTestId('message-list');
     expect(screen.queryByRole('dialog', { name: 'Keyboard Shortcuts' })).toBeNull();
 
@@ -377,7 +377,7 @@ describe('WebChatPage keyboard shortcut wiring', () => {
 
   it('opens Search on the chat page the public window loads without running a query', async () => {
     openConversation();
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await screen.findByTestId('message-list');
     expect(screen.queryByRole('dialog', { name: 'Search Conversations' })).toBeNull();
 
@@ -391,7 +391,7 @@ describe('WebChatPage keyboard shortcut wiring', () => {
 
   it('opens the create dialog when File > New Project reaches the chat page', async () => {
     openConversation();
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await screen.findByTestId('message-list');
     expect(screen.queryByRole('dialog', { name: 'Create project' })).toBeNull();
 
@@ -404,7 +404,7 @@ describe('WebChatPage keyboard shortcut wiring', () => {
 
   it('creates the named project when File > New Project is submitted on the public chat page', async () => {
     openConversation();
-    render(<WebChatPage />);
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await screen.findByTestId('message-list');
 
     await act(async () => {

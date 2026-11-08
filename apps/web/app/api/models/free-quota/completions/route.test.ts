@@ -67,6 +67,7 @@ const GENERATED_MP4 = Buffer.concat([
 ]);
 
 const mocks = vi.hoisted(() => ({
+  limitedMediaOfferEnabled: true,
   store: null as unknown as MemoryKeyValueStore,
   query: vi.fn(),
   stream: vi.fn(),
@@ -185,6 +186,7 @@ vi.mock('@/lib/server/free-pools', async (importOriginal) => {
       const inventory = document.inventory!;
       return {
         ...document,
+        limitedMediaOffer: mocks.limitedMediaOfferEnabled ? document.limitedMediaOffer : undefined,
         inventory: {
           ...inventory,
           termsReview: {
@@ -314,6 +316,7 @@ async function sharedState() {
 }
 
 beforeEach(async () => {
+  mocks.limitedMediaOfferEnabled = true;
   vi.useFakeTimers({ now: NOW, toFake: ['Date'] });
   vi.stubEnv('NODE_ENV', 'production');
   vi.stubEnv('QWEN_API_KEY', API_KEY);
@@ -466,7 +469,6 @@ describe('Qwen free quota turns on the Free plan', () => {
         conversationId: '52d14f7e-0b3d-40c7-952d-987e841033c5',
         userId: 'fixture-user',
         organizationId: null,
-        surface: 'web',
       },
       message: {
         id: '72d14f7e-0b3d-40c7-952d-987e841033c5',
@@ -744,8 +746,9 @@ describe('Qwen free quota turns on the Free plan', () => {
     ['image', imageModel],
     ['video', videoModel],
   ])(
-    'refuses promotional %s generation on a Free plan before provider dispatch',
+    'refuses promotional %s generation on a Free plan without a limited offer before provider dispatch',
     async (_kind, selectedModel) => {
+      mocks.limitedMediaOfferEnabled = false;
       const response = await post({ model: selectedModel }, `free-${_kind}-turn`);
 
       expect(response.status).toBe(403);
@@ -755,7 +758,8 @@ describe('Qwen free quota turns on the Free plan', () => {
     },
   );
 
-  it('refuses promotional video on Pro before any provider request', async () => {
+  it('refuses promotional video on Pro without a limited offer before any provider request', async () => {
+    mocks.limitedMediaOfferEnabled = false;
     mocks.plan.mockResolvedValue('pro');
 
     const response = await post({ model: videoModel }, 'pro-video-turn');
@@ -1287,7 +1291,6 @@ describe('Qwen free quota turns on the Free plan', () => {
       expect.objectContaining({
         userId: 'fixture-user',
         organizationId: null,
-        surface: 'web',
         conversationId: '52d14f7e-0b3d-40c7-952d-987e841033c5',
         origin: 'free_quota',
         model: imageModel,

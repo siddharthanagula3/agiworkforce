@@ -265,12 +265,13 @@ function useConversationReadScope() {
   const mountedRef = useRef(true);
   const requestsRef = useRef(new Set<RequestAuthority>());
   useEffect(() => {
+    const requests = requestsRef.current;
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
       lifetimeRef.current = {};
-      for (const request of requestsRef.current) request.retire();
-      requestsRef.current.clear();
+      for (const request of requests) request.retire();
+      requests.clear();
       if (conversationListLoad && !conversationListLoad.session.isCurrent()) {
         conversationListLoad.inFlight?.authority.retire();
       }

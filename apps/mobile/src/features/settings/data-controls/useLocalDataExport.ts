@@ -64,7 +64,7 @@ export function useLocalDataExport() {
         Alert.alert(
           'Export failed',
           error instanceof LocalExportAuthorityError
-            ? error.message
+            ? error.userMessage
             : 'Could not prepare your local data export. Try again.',
         );
       }

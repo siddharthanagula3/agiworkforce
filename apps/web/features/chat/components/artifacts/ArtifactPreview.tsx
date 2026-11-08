@@ -614,7 +614,11 @@ export function ArtifactPreview({
   const [changesShownFor, setChangesShownFor] = useState<string | null>(null);
   const historyToggleRef = useRef<HTMLButtonElement>(null);
   const draftOwner = useMemo(
-    () => ({ active: false }),
+    () =>
+      Object.assign(
+        { active: false },
+        { binding: { artifactContent: artifact.content, artifactId: artifact.id, versionCount } },
+      ),
     [artifact.id, artifact.content, versionCount],
   );
   useLayoutEffect(() => {
@@ -890,7 +894,7 @@ export function ArtifactPreview({
       ? versionHistory[shownVersionIndex]!.content
       : artifact.content;
   const publishFeedbackScope = useMemo(
-    () => ({}),
+    () => Object.assign({}, { binding: { activeContent, publicationView, shownVersionIndex } }),
     [publicationView, activeContent, shownVersionIndex],
   );
   const publishFeedbackView = usePublicationView(artifact.id, publishFeedbackScope);

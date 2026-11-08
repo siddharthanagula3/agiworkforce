@@ -58,7 +58,7 @@ vi.mock('../../updates', () => ({
 }));
 
 vi.mock('@agiworkforce/unified-chat', async () => {
-  const React = await vi.importActual<typeof import('react')>('react');
+  const React = await vi.importActual<ImportedModule0>('react');
   const readState = () => ({
     conversations: sharedChatMock.conversations,
     messagesByConversation: sharedChatMock.messagesByConversation,
@@ -332,3 +332,5 @@ describe('DesktopShellV3 Managed Cloud share payload', () => {
     expect(actions?.onShare).toBeUndefined();
   });
 });
+
+type ImportedModule0 = typeof import('react');

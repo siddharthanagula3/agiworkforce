@@ -1,3 +1,4 @@
+import { NextResponse } from 'next/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { NextRequest } from 'next/server';
@@ -87,7 +88,7 @@ describe('publication preparation shared by restore and Publish', () => {
   });
 
   it('returns the sharing refusal before moderation or outbound inspection', async () => {
-    const refusal = new Response('blocked by organization', { status: 403 });
+    const refusal = new NextResponse('blocked by organization', { status: 403 });
     vi.mocked(buildExternalSharingGateResponse).mockResolvedValue(refusal);
     await expect(preparePublishedArtifactPublication(db, input)).resolves.toBe(refusal);
     expect(moderateManagedPrompt).not.toHaveBeenCalled();

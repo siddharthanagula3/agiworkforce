@@ -13,15 +13,15 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<ImportedModule0>()),
   withRateLimit: (...args: unknown[]) => mocks.rateLimit(...args),
 }));
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  ...(await importOriginal<ImportedModule1>()),
   getUserScopedDb: (...args: unknown[]) => mocks.scopedDb(...args),
 }));
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<ImportedModule2>()),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 
@@ -124,3 +124,7 @@ describe('GET /api/artifacts/publish/lookup', () => {
     expect(mocks.query).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/rate-limit');
+type ImportedModule1 = typeof import('@/lib/server/rls-db');
+type ImportedModule2 = typeof import('@/lib/logger');

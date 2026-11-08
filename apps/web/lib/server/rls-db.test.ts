@@ -81,8 +81,8 @@ vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(
     () =>
       ({
-        query: (...args: unknown[]) => serviceQuery(...(args as [])),
-        execute: (...args: unknown[]) => serviceExecute(...(args as [])),
+        query: (sql: string, params?: unknown[]) => serviceQuery(sql, params),
+        execute: (sql: string, params?: unknown[]) => serviceExecute(sql, params),
         transaction: (...args: unknown[]) => serviceTransaction(...(args as [never])),
       }) as unknown as DatabaseAdapter,
   ),

@@ -5,10 +5,10 @@ import userEvent from '@testing-library/user-event';
 import {
   createCloudMemoryFixture,
   getCloudMemoryFixtureSession,
-} from '@/features/memory/__tests__/cloud-memory-fixture';
+} from '@/features/memory/__tests__/CloudMemoryFixture';
 
 vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/identity/useSessionSnapshot')>()),
+  ...(await importOriginal<ImportedModule0>()),
   useSessionSnapshot: () => getCloudMemoryFixtureSession,
   useReadonlyIdentityLifetime: () => () => {
     const session = getCloudMemoryFixtureSession();
@@ -340,3 +340,5 @@ const MEMORY_FIELD_LABELS = [
   'Include sensitive topics in memory',
   'Allow memory generation from tool-assisted chats',
 ];
+
+type ImportedModule0 = typeof import('@/lib/identity/useSessionSnapshot');

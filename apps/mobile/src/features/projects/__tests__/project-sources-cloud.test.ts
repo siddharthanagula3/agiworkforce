@@ -113,7 +113,7 @@ function cloudProject(overrides: Partial<CloudProject> = {}): CloudProject {
   };
 }
 
-function registeredFile() {
+function registeredFile(): { file: Awaited<ReturnType<typeof cloudProjectSources.upload>> } {
   return {
     file: {
       id: 'kf_1',

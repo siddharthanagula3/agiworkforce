@@ -14,6 +14,7 @@ vi.mock('@/features/projects/services/managed-cloud-projects', () => ({
   webManagedCloudProjects: { updateProject, deleteProject: vi.fn() },
 }));
 vi.mock('../KnowledgeFilesPanel', () => ({ KnowledgeFilesPanel: () => null }));
+vi.mock('../ProjectMemoryPanel', () => ({ ProjectMemoryPanel: () => null }));
 
 import { ProjectSettingsDialog } from '../ProjectSettingsDialog';
 import type { Project } from '@features/projects/stores/project-store';
@@ -136,3 +137,7 @@ describe('ProjectSettingsDialog description', () => {
     expect(updateProject.mock.calls[0]![1]).toMatchObject({ description: null });
   });
 });
+
+vi.mock('@features/chat/hooks/use-skills-list', () => ({
+  useSkillsList: () => ({ skills: [], loading: false, error: null }),
+}));

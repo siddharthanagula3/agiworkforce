@@ -1,3 +1,4 @@
+import type { WebFetch } from '@/test/fetch';
 import { describe, expect, it, vi } from 'vitest';
 import { fetchArtifactPublication } from './publishArtifactClient';
 
@@ -20,7 +21,7 @@ const artifact = {
 // UNRUN: source-authored exact lookup client fixtures.
 describe('fetchArtifactPublication exact lookup', () => {
   it('reads one exact ID independent of collection position and preserves restricted audience', async () => {
-    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(
+    const fetchImpl = vi.fn<WebFetch>().mockResolvedValue(
       Response.json({
         artifact,
         workspace: { memberCount: 2 },
@@ -41,7 +42,7 @@ describe('fetchArtifactPublication exact lookup', () => {
 
   it('returns null only for a validated successful explicit absence', async () => {
     const fetchImpl = vi
-      .fn<typeof fetch>()
+      .fn<WebFetch>()
       .mockResolvedValue(Response.json({ artifact: null, workspace: null }));
     await expect(fetchArtifactPublication('absent', fetchImpl)).resolves.toBeNull();
     expect(fetchImpl).toHaveBeenCalledTimes(1);
@@ -49,7 +50,7 @@ describe('fetchArtifactPublication exact lookup', () => {
 
   it.each([401, 403, 404, 429, 500])('rejects HTTP %s without list fallback', async (status) => {
     const fetchImpl = vi
-      .fn<typeof fetch>()
+      .fn<WebFetch>()
       .mockResolvedValue(Response.json({ error: 'unavailable' }, { status }));
     await expect(fetchArtifactPublication('artifact-1', fetchImpl)).rejects.toThrow();
     expect(fetchImpl).toHaveBeenCalledTimes(1);
@@ -62,14 +63,14 @@ describe('fetchArtifactPublication exact lookup', () => {
     { workspace: null },
     { artifact: { ...artifact, artifactId: artifact.artifactId.toLowerCase() }, workspace: null },
   ])('rejects malformed, legacy or wrong-identity response %j', async (body) => {
-    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(Response.json(body));
+    const fetchImpl = vi.fn<WebFetch>().mockResolvedValue(Response.json(body));
     await expect(fetchArtifactPublication(artifact.artifactId, fetchImpl)).rejects.toThrow();
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
   it('rejects invalid JSON and network errors instead of reporting absence', async () => {
     const fetchImpl = vi
-      .fn<typeof fetch>()
+      .fn<WebFetch>()
       .mockResolvedValueOnce(new Response('{'))
       .mockRejectedValueOnce(new Error('offline'));
     await expect(fetchArtifactPublication('artifact-1', fetchImpl)).rejects.toThrow();
@@ -77,7 +78,7 @@ describe('fetchArtifactPublication exact lookup', () => {
   });
 
   it('rejects invalid IDs before fetching', async () => {
-    const fetchImpl = vi.fn<typeof fetch>();
+    const fetchImpl = vi.fn<WebFetch>();
     for (const id of ['', ' ', 'x'.repeat(201)]) {
       await expect(fetchArtifactPublication(id, fetchImpl)).rejects.toThrow();
     }

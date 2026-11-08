@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),
   getUserScopedDb: vi.fn(async () => ({
+    organizationId: null,
     db: { query: mocks.scopedQuery },
     userId: 'user-free',
   })),

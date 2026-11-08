@@ -12,12 +12,18 @@ const mocks = vi.hoisted(() => ({
 }));
 
 // The factory is mocked: these fixtures exercise our boundary, not browser SDK resolution.
-vi.mock('@sentry/nextjs', async () => ({
-  ...(await vi.importActual<typeof import('@sentry/nextjs')>('@sentry/nextjs')),
-  makeFetchTransport: mocks.makeFetchTransport,
-  init: mocks.init,
-  captureRouterTransitionStart: mocks.captureRouterTransitionStart,
-}));
+vi.mock('@sentry/nextjs', async () => {
+  const { createRequire } = await import('node:module');
+  const actual = createRequire(import.meta.url)(
+    '@sentry/nextjs',
+  ) as typeof import('@sentry/nextjs');
+  return {
+    ...actual,
+    makeFetchTransport: mocks.makeFetchTransport,
+    init: mocks.init,
+    captureRouterTransitionStart: mocks.captureRouterTransitionStart,
+  };
+});
 vi.mock('botid/client/core', () => ({ initBotId: vi.fn() }));
 
 let consent: typeof import('@/lib/sentry-shared');

@@ -6,7 +6,7 @@ const screenshotHarness = vi.hoisted(() => ({
 }));
 
 vi.mock('../AttachmentMenu', async () => {
-  const React = await vi.importActual<typeof import('react')>('react');
+  const React = await vi.importActual<ImportedModule0>('react');
   return {
     AttachmentMenu: (props: {
       children?: import('react').ReactNode;
@@ -141,3 +141,5 @@ describe('ChatInput screenshot ownership', () => {
     );
   });
 });
+
+type ImportedModule0 = typeof import('react');

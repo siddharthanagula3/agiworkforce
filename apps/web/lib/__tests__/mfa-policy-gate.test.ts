@@ -27,7 +27,7 @@ vi.mock('@/lib/server/key-value', () => ({
   ),
 }));
 vi.mock('@/lib/server/identity', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/identity')>()),
+  ...(await importOriginal<ImportedModule0>()),
   getIdentityUser: mocks.getUser,
 }));
 
@@ -324,3 +324,5 @@ describe('session-native mfa enrollment', () => {
     expect(mocks.getUser).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/server/identity');

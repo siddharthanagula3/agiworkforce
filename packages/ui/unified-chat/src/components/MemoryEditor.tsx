@@ -109,7 +109,7 @@ function MemoryEditorContent({
     const generation = lifetime.current;
     return () =>
       generation !== null && lifetime.current === generation && (adapter.isCurrent?.() ?? true);
-  }, [adapter.isCurrent]);
+  }, [adapter]);
 
   const [draft, setDraft] = useState('');
   const draftRevision = useRef(0);

@@ -55,7 +55,11 @@ export function UsOnlyRoutingPanel() {
     US_ONLY_TIERS.includes(normalizeSubscriptionAccessTier(subscription.tier));
   const [eligibilityRevision, setEligibilityRevision] = useState(0);
   const lane = useMemo<RoutingLane>(
-    () => ({ active: false, ready: null, operation: null }),
+    () =>
+      Object.assign(
+        { active: false, ready: null, operation: null },
+        { binding: { eligibilityRevision, owner, status, tier } },
+      ),
     [owner, status, tier, eligibilityRevision],
   );
   const [view, setView] = useState<RoutingView | null>(null);

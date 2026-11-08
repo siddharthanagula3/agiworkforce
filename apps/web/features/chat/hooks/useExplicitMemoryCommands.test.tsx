@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createCloudMemoryFixture,
   getCloudMemoryFixtureSession,
-} from '@/features/memory/__tests__/cloud-memory-fixture';
+} from '@/features/memory/__tests__/CloudMemoryFixture';
 
 const mocks = vi.hoisted(() => ({
   toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }),

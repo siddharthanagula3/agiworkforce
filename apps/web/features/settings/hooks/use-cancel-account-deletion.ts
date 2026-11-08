@@ -1,6 +1,6 @@
 'use client';
 
-import { useLayoutEffect, useMemo, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import {
   MANAGED_CLOUD_ACCOUNT_DELETION_CANCEL_SCHEDULE_PATH,
@@ -52,7 +52,7 @@ const NOT_SENT =
 
 export function useCancelAccountDeletion(active = true) {
   const lane = useMemo(
-    () => ({ enabled: active, mounted: false, generation: {}, intent: null as Intent | null }),
+    () => ({ enabled: false, mounted: false, generation: {}, intent: null as Intent | null }),
     [],
   );
   lane.enabled = active;
@@ -63,20 +63,26 @@ export function useCancelAccountDeletion(active = true) {
     error: Error | null;
     needsStatusCheck: boolean;
   }>({ intent: null, status: 'idle', error: null, needsStatusCheck: false });
-  const current = (intent: Intent) =>
-    !intent.retired &&
-    lane.enabled &&
-    lane.mounted &&
-    lane.generation === intent.generation &&
-    lane.intent === intent &&
-    isAccountDeletionSnapshotCurrent(intent.snapshot) &&
-    intent.request.session.isCurrent();
-  const retire = (intent: Intent) => {
-    intent.retired = true;
-    intent.request.retire();
-    intent.release();
-    if (lane.intent === intent) lane.intent = null;
-  };
+  const current = useCallback(
+    (intent: Intent) =>
+      !intent.retired &&
+      lane.enabled &&
+      lane.mounted &&
+      lane.generation === intent.generation &&
+      lane.intent === intent &&
+      isAccountDeletionSnapshotCurrent(intent.snapshot) &&
+      intent.request.session.isCurrent(),
+    [lane],
+  );
+  const retire = useCallback(
+    (intent: Intent) => {
+      intent.retired = true;
+      intent.request.retire();
+      intent.release();
+      if (lane.intent === intent) lane.intent = null;
+    },
+    [lane],
+  );
   const ready = (snapshot: Snapshot) => permitsAccountDeletionAction(snapshot, 'cancel');
   useLayoutEffect(() => {
     lane.mounted = true;
@@ -86,13 +92,15 @@ export function useCancelAccountDeletion(active = true) {
       lane.mounted = false;
       if (lane.intent) retire(lane.intent);
     };
-  }, [lane, active]);
+  }, [lane, active, retire]);
+  const renderedIntent = lane.intent;
+  const renderedIntentCurrent = renderedIntent === null || current(renderedIntent);
   useLayoutEffect(() => {
-    if (lane.intent && !current(lane.intent)) {
-      retire(lane.intent);
+    if (renderedIntent && lane.intent === renderedIntent && !renderedIntentCurrent) {
+      retire(renderedIntent);
       setView({ intent: null, status: 'idle', error: null, needsStatusCheck: false });
     }
-  });
+  }, [lane, renderedIntent, renderedIntentCurrent, retire]);
 
   const mutation = useMutation<CancelAccountDeletionResult, Error, Intent>({
     retry: false,
@@ -191,7 +199,7 @@ export function useCancelAccountDeletion(active = true) {
       if (lane.intent.consumed && !lane.intent.settled) return null;
       retire(lane.intent);
     }
-    let intent: Intent;
+
     const request = createAccountDeletionRequest(
       snapshot,
       () => current(intent),
@@ -203,7 +211,7 @@ export function useCancelAccountDeletion(active = true) {
       },
     );
     if (!request) return null;
-    intent = {
+    const intent: Intent = {
       generation: lane.generation,
       snapshot,
       body,

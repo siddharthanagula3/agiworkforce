@@ -79,7 +79,6 @@ import {
   type SkillRecorderEntry,
 } from '@/features/skill-recorder';
 import { findShortcut, formatShortcutKeys } from '@agiworkforce/unified-chat';
-import { isDesktopHost } from '@/features/desktop-host';
 import { safePlatform } from '@shared/utils/browser-utils';
 import type { LibraryItem } from '@agiworkforce/cloud-contracts';
 import {

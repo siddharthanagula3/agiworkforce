@@ -76,11 +76,14 @@ describe('project knowledge file bytes and deletion', () => {
     expect(await response.text()).toBe('hello');
     expect(response.headers.get('cache-control')).toBe('private, no-store');
     expect(response.headers.get('x-content-type-options')).toBe('nosniff');
-    expect(String(mocks.query.mock.calls[0]?.[0])).toContain('p.user_id = $3');
+    expect(String(mocks.query.mock.calls[0]?.[0])).toContain('p.user_id = $2');
+    expect(String(mocks.query.mock.calls[0]?.[0])).toContain('p.id = $1');
+    expect(String(mocks.query.mock.calls[0]?.[0])).toContain('f.id = $4');
+    expect(String(mocks.query.mock.calls[0]?.[0])).toContain("m.status = 'active'");
     expect(String(mocks.query.mock.calls[0]?.[0])).toContain(
-      'p.organization_id is not distinct from $4::uuid',
+      'p.organization_id is not distinct from $3::uuid',
     );
-    expect(mocks.query.mock.calls[0]?.[1]).toEqual(['file-1', 'project-1', 'user-1', null]);
+    expect(mocks.query.mock.calls[0]?.[1]).toEqual(['project-1', 'user-1', null, 'file-1']);
   });
 
   it('denies a knowledge file whose parent project belongs to another workspace', async () => {
@@ -96,10 +99,10 @@ describe('project knowledge file bytes and deletion', () => {
     expect(response.status).toBe(404);
     expect(mocks.getBoundedPrivateObject).not.toHaveBeenCalled();
     expect(mocks.query.mock.calls[0]?.[1]).toEqual([
-      'file-1',
       'project-1',
       'user-1',
       organizationId,
+      'file-1',
     ]);
   });
 

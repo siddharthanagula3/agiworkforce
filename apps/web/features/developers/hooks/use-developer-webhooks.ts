@@ -39,11 +39,11 @@ function record(value: unknown): Record<string, unknown> | null {
 }
 
 function endpointReceipt(value: unknown, expectedId?: string): DeveloperWebhookEndpoint {
-  const endpoint = record(record(value)?.endpoint);
+  const endpoint = record(record(value)?.['endpoint']);
   if (
-    typeof endpoint?.id !== 'string' ||
-    !endpoint.id ||
-    (expectedId !== undefined && endpoint.id !== expectedId)
+    typeof endpoint?.['id'] !== 'string' ||
+    !endpoint['id'] ||
+    (expectedId !== undefined && endpoint['id'] !== expectedId)
   )
     throw new Error(UNCONFIRMED_RECEIPT);
   return endpoint as unknown as DeveloperWebhookEndpoint;
@@ -53,11 +53,11 @@ function deliveryReceipt(
   value: unknown,
   redeliveryOf?: string,
 ): { delivery: DeveloperWebhookDelivery } {
-  const delivery = record(record(value)?.delivery);
+  const delivery = record(record(value)?.['delivery']);
   if (
-    typeof delivery?.id !== 'string' ||
-    !delivery.id ||
-    (redeliveryOf !== undefined && delivery.redeliveryOf !== redeliveryOf)
+    typeof delivery?.['id'] !== 'string' ||
+    !delivery['id'] ||
+    (redeliveryOf !== undefined && delivery['redeliveryOf'] !== redeliveryOf)
   ) {
     throw new Error(UNCONFIRMED_RECEIPT);
   }
@@ -150,7 +150,7 @@ export function useCreateWebhookEndpoint() {
       );
       scope.request.assertCurrent();
       const endpoint = endpointReceipt(payload);
-      const secret = record(payload)?.secret;
+      const secret = record(payload)?.['secret'];
       if (typeof secret !== 'string' || !secret) throw new Error(UNCONFIRMED_RECEIPT);
       return { endpoint, secret };
     },
@@ -207,7 +207,7 @@ export function useDeleteWebhookEndpoint() {
           'The endpoint could not be removed.',
         );
         scope.request.assertCurrent();
-        if (record(payload)?.deleted !== true) throw new Error(UNCONFIRMED_RECEIPT);
+        if (record(payload)?.['deleted'] !== true) throw new Error(UNCONFIRMED_RECEIPT);
         return { deleted: true };
       },
       onSuccess: (_receipt, { scope }) => {

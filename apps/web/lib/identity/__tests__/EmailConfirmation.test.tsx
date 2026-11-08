@@ -28,7 +28,7 @@ vi.mock('@clerk/nextjs', async (importOriginal) => ({
   useSignUp: () => ({ fetchStatus: 'idle', signUp: {} }),
 }));
 vi.mock('@agiworkforce/local-runtime-contract', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/local-runtime-contract')>()),
+  ...(await importOriginal<ImportedModule0>()),
   getHostBridge: () => null,
 }));
 
@@ -181,3 +181,5 @@ describe('linking another way to sign in', () => {
     vi.unstubAllGlobals();
   });
 });
+
+type ImportedModule0 = typeof import('@agiworkforce/local-runtime-contract');

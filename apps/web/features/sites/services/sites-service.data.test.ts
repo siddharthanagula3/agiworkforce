@@ -1,10 +1,11 @@
+import type { WebFetch } from '@/test/fetch';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { managedCloudPublishedArtifactDataPath } from '@agiworkforce/cloud-contracts';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { clearPublishedSiteSharedData, readPublishedSiteData } from './sites-service';
 
 vi.mock('@/lib/client/csrf', () => ({ addCsrfHeaders: vi.fn() }));
-const fetchMock = vi.fn<typeof fetch>();
+const fetchMock = vi.fn<WebFetch>();
 const token = 'a'.repeat(24);
 const data = {
   supported: true,
@@ -29,7 +30,7 @@ function authority() {
     assertCurrent: () => {
       if (!current) throw new DOMException('Retired', 'AbortError');
     },
-    fetch: vi.fn<typeof fetch>((input, init) => fetchMock(input, init)),
+    fetch: vi.fn<WebFetch>((input, init) => fetchMock(input, init)),
   };
 }
 beforeEach(() => {

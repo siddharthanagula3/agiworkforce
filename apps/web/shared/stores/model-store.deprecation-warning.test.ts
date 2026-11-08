@@ -25,7 +25,7 @@ const { nearFutureIso, pastIso } = vi.hoisted(() => {
 });
 
 vi.mock('@agiworkforce/types', async () => {
-  const actual = await vi.importActual<typeof import('@agiworkforce/types')>('@agiworkforce/types');
+  const actual = await vi.importActual<ImportedModule0>('@agiworkforce/types');
   return {
     ...actual,
     getAutoRoutingProfiles: () => [],
@@ -84,3 +84,5 @@ describe('model-store · deprecation_date propagation', () => {
     expect(plain).not.toHaveProperty('deprecationDate');
   });
 });
+
+type ImportedModule0 = typeof import('@agiworkforce/types');

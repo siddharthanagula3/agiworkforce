@@ -10,9 +10,9 @@ vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(() => null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(() => null) }));
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: vi.fn() }));
 vi.mock('@/lib/services/cloud-agent-run-service', async () => {
-  const { HUMAN_HELD_TASK_STATES } = await vi.importActual<
-    typeof import('@/lib/services/cloud-agent-run-service')
-  >('@/lib/services/cloud-agent-run-service');
+  const { HUMAN_HELD_TASK_STATES } = await vi.importActual<ImportedModule0>(
+    '@/lib/services/cloud-agent-run-service',
+  );
   return {
     CloudAgentRunNotFoundError: class CloudAgentRunNotFoundError extends Error {},
     HUMAN_HELD_TASK_STATES,
@@ -200,3 +200,5 @@ describe('/api/llm/v1/chat/completions/runs/[runId]', () => {
     }
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/services/cloud-agent-run-service');

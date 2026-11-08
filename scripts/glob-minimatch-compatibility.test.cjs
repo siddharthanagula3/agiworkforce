@@ -394,47 +394,59 @@ function callbackGlob(glob, pattern, options) {
 for (const { major, entry } of legacy) {
   const glob = require(entry);
   const directory = fixture('legacy-' + major);
-  test('legacy glob' + major + ' preserves sync, callback and match-event semantics', async () => {
-    for (const row of legacyCases) {
-      const options = { cwd: directory, ...row.options };
-      const values = expected(row.expected, major, directory);
-      assert.deepEqual(sorted(glob.sync(row.pattern, options)), values, row.pattern);
-      assert.deepEqual(sorted(await callbackGlob(glob, row.pattern, options)), values, row.pattern);
-      const events = [];
-      await new Promise((resolve, reject) => {
-        new glob.Glob(row.pattern, options)
-          .on('match', (value) => events.push(value))
-          .on('error', reject)
-          .on('end', resolve);
-      });
-      assert.deepEqual(
-        sorted(events),
-        expected(row.events ?? row.expected, major, directory),
-        row.pattern,
-      );
-    }
-    assert.throws(() => glob.sync(null), /^Error: must provide pattern$/);
-  });
+  test(
+    'legacy glob' + major + ' preserves sync, callback and match-event semantics',
+    { timeout: 5_000 },
+    async () => {
+      for (const row of legacyCases) {
+        const options = { cwd: directory, ...row.options };
+        const values = expected(row.expected, major, directory);
+        assert.deepEqual(sorted(glob.sync(row.pattern, options)), values, row.pattern);
+        assert.deepEqual(
+          sorted(await callbackGlob(glob, row.pattern, options)),
+          values,
+          row.pattern,
+        );
+        const events = [];
+        await new Promise((resolve, reject) => {
+          new glob.Glob(row.pattern, options)
+            .on('match', (value) => events.push(value))
+            .on('error', reject)
+            .on('end', resolve);
+        });
+        assert.deepEqual(
+          sorted(events),
+          expected(row.events ?? row.expected, major, directory),
+          row.pattern,
+        );
+      }
+      assert.throws(() => glob.sync(null), /^Error: must provide pattern$/);
+    },
+  );
 
-  test('legacy glob' + major + ' stops matches after explicit abort', async () => {
-    let afterAbort = 0;
-    let aborted = false;
-    await new Promise((resolve, reject) => {
-      const stream = new glob.Glob('**/*', { cwd: directory, dot: true });
-      stream.on('error', reject);
-      stream.on('match', () => {
-        if (aborted) {
-          afterAbort += 1;
-        } else {
-          aborted = true;
-          stream.abort();
-          setTimeout(resolve, 75);
-        }
+  test(
+    'legacy glob' + major + ' stops matches after explicit abort',
+    { timeout: 5_000 },
+    async () => {
+      let afterAbort = 0;
+      let aborted = false;
+      await new Promise((resolve, reject) => {
+        const stream = new glob.Glob('**/*', { cwd: directory, dot: true });
+        stream.on('error', reject);
+        stream.on('match', () => {
+          if (aborted) {
+            afterAbort += 1;
+          } else {
+            aborted = true;
+            stream.abort();
+            setTimeout(resolve, 75);
+          }
+        });
       });
-    });
-    assert.equal(aborted, true);
-    assert.equal(afterAbort, 0);
-  });
+      assert.equal(aborted, true);
+      assert.equal(afterAbort, 0);
+    },
+  );
 }
 
 test('minimatch bounds amplification and large-set preprocessing', () => {

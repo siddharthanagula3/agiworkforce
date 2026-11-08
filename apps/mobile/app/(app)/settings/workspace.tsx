@@ -62,6 +62,8 @@ type LoadState =
     }
   | { kind: 'error'; message: string };
 
+const LOADING_STATE: LoadState = { kind: 'loading' };
+
 function titleCase(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
@@ -80,12 +82,12 @@ export default function WorkspaceScreen() {
   const appMode = useChatAppModeStore((state) => state.appMode);
   const setAppMode = useChatAppModeStore((state) => state.setAppMode);
 
-  const [loadedState, setState] = useState<LoadState>({ kind: 'loading' });
+  const [loadedState, setState] = useState<LoadState>(LOADING_STATE);
   const state: LoadState =
     loadedState.kind === 'ready' &&
     (!isCloudAccountEpochCurrent(loadedState.account) ||
       loadedState.account.ownerId !== clerkUserId)
-      ? { kind: 'loading' }
+      ? LOADING_STATE
       : loadedState;
   const readyState = useRef(state);
   readyState.current = state;

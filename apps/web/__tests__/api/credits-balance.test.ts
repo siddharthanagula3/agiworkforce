@@ -42,7 +42,7 @@ vi.mock('@/lib/services/free-trial-service', () => ({
 }));
 
 vi.mock('@/lib/errors', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/errors')>('@/lib/errors');
+  const actual = await vi.importActual<ImportedModule0>('@/lib/errors');
   return {
     createError: actual.createError,
     AppError: actual.AppError,
@@ -434,3 +434,5 @@ describe('Credits Balance API', () => {
     });
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/errors');

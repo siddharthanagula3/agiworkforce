@@ -162,7 +162,7 @@ function fixture(
     withOrg: forbidden,
     dispose: forbidden,
   };
-  const transaction = vi.fn(async <T>(fn: (adapter: DatabaseAdapter) => Promise<T>): Promise<T> => {
+  const transactionImpl = async <T>(fn: (adapter: DatabaseAdapter) => Promise<T>): Promise<T> => {
     if (active) throw new Error('Nested transaction');
     active = true;
     timeline.push('begin');
@@ -184,7 +184,9 @@ function fixture(
       staged.jobs.length = 0;
       active = false;
     }
-  });
+  };
+  const transactionHost = { transaction: transactionImpl };
+  const transaction = vi.spyOn(transactionHost, 'transaction');
   const db: DatabaseAdapter = {
     async query<T>(sql: string, params: unknown[] = []): Promise<T[]> {
       if (active) throw new Error('Outer adapter used inside transaction');
@@ -208,7 +210,7 @@ function fixture(
       throw new Error(`Unexpected outer SQL (writes are forbidden): ${normalized}`);
     },
     execute: forbidden,
-    transaction,
+    transaction: transactionHost.transaction,
     withUser: forbidden,
     withOrg: forbidden,
     dispose: forbidden,

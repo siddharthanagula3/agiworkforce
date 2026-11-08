@@ -20,7 +20,7 @@ vi.mock('@clerk/nextjs', async () => ({
   }),
 }));
 vi.mock('@agiworkforce/ui', async () => {
-  const actual = await vi.importActual<typeof import('@agiworkforce/ui')>('@agiworkforce/ui');
+  const actual = await vi.importActual<ImportedModule0>('@agiworkforce/ui');
   return {
     ...actual,
     useConfirmAction: () => {
@@ -56,10 +56,12 @@ describe('PasskeysPanel owned intent lifetime', () => {
   });
   it('reserves removal before confirmation and releases on cancel', async () => {
     render(<PasskeysPanel />);
+    const addButton = add();
+    const renameButton = rename();
     await userEvent.click(remove());
     expect(fixture.key.delete).not.toHaveBeenCalled();
-    expect(add()).toBeDisabled();
-    expect(rename()).toBeDisabled();
+    expect(addButton).toBeDisabled();
+    expect(renameButton).toBeDisabled();
     await userEvent.click(
       within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Cancel' }),
     );
@@ -364,3 +366,5 @@ describe('PasskeysPanel owned intent lifetime', () => {
     expect(screen.queryByRole('button', { name: 'Add a passkey' })).toBeNull();
   });
 });
+
+type ImportedModule0 = typeof import('@agiworkforce/ui');

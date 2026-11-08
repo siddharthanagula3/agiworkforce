@@ -46,7 +46,11 @@ export function useWorkspaceQuery<T>(
     : null;
   const organizationId = data?.activeOrganizationId ?? null;
   const lifetime = useMemo(
-    () => ({ active: false }),
+    () =>
+      Object.assign(
+        { active: false },
+        { binding: { enabled, epoch, owner, resourceKey, scopeKey } },
+      ),
     [owner, epoch, scopeKey, resourceKey, enabled],
   );
   useLayoutEffect(() => {

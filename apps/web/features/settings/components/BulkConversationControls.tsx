@@ -209,7 +209,7 @@ function OwnedBulkControls({
       setView({ ...EMPTY, ready: lane.ready, error: STREAMING_ERROR });
       return;
     }
-    let intent: Intent;
+
     const request = createRequestAuthority(
       owner.session,
       () => current(intent),
@@ -225,7 +225,7 @@ function OwnedBulkControls({
         intent.dispatched = true;
       },
     );
-    intent = {
+    const intent: Intent = {
       action,
       phase: 'counting',
       generation: lane.generation,

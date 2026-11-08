@@ -391,16 +391,16 @@ export function useCreateAPIKey(): CreateAPIKeyMutation {
       );
       const created = apiKeyReceiptRecord(await readOwnedAPIKeyReceipt(scope, response));
       scope.request.assertCurrent();
-      const key = apiKeyReceiptRecord(created?.api_key);
+      const key = apiKeyReceiptRecord(created?.['api_key']);
       if (
-        typeof key?.id !== 'string' ||
-        !key.id ||
-        typeof created?.full_key !== 'string' ||
-        !created.full_key
+        typeof key?.['id'] !== 'string' ||
+        !key['id'] ||
+        typeof created?.['full_key'] !== 'string' ||
+        !created['full_key']
       ) {
         throw new Error('The API key creation receipt could not be confirmed.');
       }
-      return { apiKey: key as unknown as APIKey, fullKey: created.full_key };
+      return { apiKey: key as unknown as APIKey, fullKey: created['full_key'] };
     },
     onSuccess: (_receipt, { scope }): void => {
       // Do not delay the once-only key receipt behind a background list reload.
@@ -437,7 +437,7 @@ export function useDeleteAPIKey(): UseMutationResult<
       );
       const receipt = apiKeyReceiptRecord(await readOwnedAPIKeyReceipt(scope, response));
       scope.request.assertCurrent();
-      if (typeof receipt?.message !== 'string' || !receipt.message) {
+      if (typeof receipt?.['message'] !== 'string' || !receipt['message']) {
         throw new Error('The API key revocation receipt could not be confirmed.');
       }
       return keyId;

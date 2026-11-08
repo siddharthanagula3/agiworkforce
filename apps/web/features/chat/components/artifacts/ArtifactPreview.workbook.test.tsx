@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { ArtifactPreview, type ArtifactData } from './ArtifactPreview';
 import {
   WorkbookPreviewLimitError,
@@ -10,12 +11,12 @@ import { downloadGeneratedFile } from '../../utils/downloadArtifacts';
 const loadWorkbookSheets = vi.fn();
 
 vi.mock('../../utils/downloadArtifacts', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../utils/downloadArtifacts')>()),
+  ...(await importOriginal<MockedModule0>()),
   downloadGeneratedFile: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('../../lib/office-file-preview', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../lib/office-file-preview')>()),
+  ...(await importOriginal<MockedModule1>()),
   loadWorkbookSheets: (uri: string) => loadWorkbookSheets(uri),
 }));
 
@@ -92,14 +93,15 @@ describe('ArtifactPreview · generated workbook', () => {
   });
 
   it('explains an oversized workbook without replacing the saved table', async () => {
+    const user = userEvent.setup();
     loadWorkbookSheets.mockRejectedValue(new WorkbookPreviewLimitError());
     render(<ArtifactPreview variant="panel" artifact={workbookArtifact()} />);
 
     expect(await screen.findByText(WORKBOOK_PREVIEW_TOO_LARGE)).toBeTruthy();
     expect(screen.queryByRole('tablist', { name: 'Worksheets' })).toBeNull();
     expect(screen.getByText('Fill in the budget')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Download artifact' }));
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Download generated file' }));
+    await user.click(screen.getByRole('button', { name: 'Download artifact' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Download generated file' }));
     await waitFor(() =>
       expect(downloadGeneratedFile).toHaveBeenCalledWith(
         '/api/files/workbook',
@@ -129,3 +131,6 @@ describe('ArtifactPreview · generated workbook', () => {
     expect(loadWorkbookSheets).not.toHaveBeenCalled();
   });
 });
+
+type MockedModule0 = typeof import('../../utils/downloadArtifacts');
+type MockedModule1 = typeof import('../../lib/office-file-preview');

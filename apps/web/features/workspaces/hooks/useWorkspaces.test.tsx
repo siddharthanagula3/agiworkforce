@@ -9,11 +9,11 @@ const state = vi.hoisted(() => ({ session: null as SessionAuthority | null, seri
 const finalizeWorkspaceSwitch = vi.hoisted(() => vi.fn(async () => undefined));
 
 vi.mock('@/features/workspaces/lib/workspace-cache-scope', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/features/workspaces/lib/workspace-cache-scope')>()),
+  ...(await importOriginal<ImportedModule0>()),
   finalizeWorkspaceSwitch,
 }));
 vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/identity/useSessionSnapshot')>()),
+  ...(await importOriginal<ImportedModule1>()),
   useSessionSnapshot: () => () => state.session,
 }));
 
@@ -223,3 +223,6 @@ describe('owned workspace selection', () => {
     client.clear();
   });
 });
+
+type ImportedModule0 = typeof import('@/features/workspaces/lib/workspace-cache-scope');
+type ImportedModule1 = typeof import('@/lib/identity/useSessionSnapshot');

@@ -322,6 +322,11 @@ const clipboardFixture = vi.hoisted(() => ({
 vi.mock('@clerk/nextjs', () => ({
   useAuth: () => clipboardFixture.auth,
   useClerk: () => clipboardFixture.sdk,
+  useUser: () => ({
+    isLoaded: clipboardFixture.auth.isLoaded,
+    isSignedIn: clipboardFixture.auth.isSignedIn,
+    user: clipboardFixture.sdk.user,
+  }),
 }));
 
 type DesktopHostModule = typeof import('@/features/desktop-host');

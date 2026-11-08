@@ -4,7 +4,7 @@ import { addCsrfHeaders } from '@/lib/client/csrf';
 import { readPrivacyPreferences, savePrivacyPreference } from './privacy-preferences-client';
 
 vi.mock('@/lib/client/csrf', async (original) => ({
-  ...(await original<typeof import('@/lib/client/csrf')>()),
+  ...(await original<ImportedModule0>()),
   addCsrfHeaders: vi.fn(async (headers: HeadersInit = {}) => new Headers(headers)),
 }));
 
@@ -117,3 +117,5 @@ describe('strict privacy snapshots', () => {
     }
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/client/csrf');

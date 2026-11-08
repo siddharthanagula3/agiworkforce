@@ -38,7 +38,7 @@ let mockBlur: (() => void) | undefined;
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useFocusEffect: (callback: () => void | (() => void)) => {
-    const { useEffect } = jest.requireActual<typeof import('react')>('react');
+    const { useEffect } = jest.requireActual<ImportedModule0>('react');
     useEffect(() => {
       let cleanup: (() => void) | undefined;
       mockFocus = () => {
@@ -68,11 +68,7 @@ const mockWithStepUp = jest.fn();
 jest.mock('../src/features/auth/hooks/useStepUp', () => ({
   useStepUp: () =>
     mockUseRealStepUp
-      ? jest
-          .requireActual<typeof import('../src/features/auth/hooks/useStepUp')>(
-            '../src/features/auth/hooks/useStepUp',
-          )
-          .useStepUp()
+      ? jest.requireActual<ImportedModule1>('../src/features/auth/hooks/useStepUp').useStepUp()
       : { withStepUp: mockWithStepUp, modal: null },
 }));
 
@@ -145,7 +141,7 @@ jest.mock('../src/ui/theme', () => ({
 
 jest.mock('../components/ui/Text', () => {
   const ReactRuntime = jest.requireActual<typeof React>('react');
-  const { Text: NativeText } = jest.requireActual<typeof import('react-native')>('react-native');
+  const { Text: NativeText } = jest.requireActual<ImportedModule2>('react-native');
   return {
     Text: (props: Record<string, unknown>) => ReactRuntime.createElement(NativeText, props),
   };
@@ -154,11 +150,7 @@ jest.mock('../components/ui/Text', () => {
 jest.mock('../src/features/settings/Common', () => {
   const ReactRuntime = jest.requireActual<typeof React>('react');
 
-  const {
-    Pressable,
-    View,
-    Text: NativeText,
-  } = jest.requireActual<typeof import('react-native')>('react-native');
+  const { Pressable, View, Text: NativeText } = jest.requireActual<ImportedModule2>('react-native');
   return {
     SettingsScreenShell: ({ children }: { children: React.ReactNode }) =>
       ReactRuntime.createElement(View, null, children),
@@ -1609,3 +1601,7 @@ describe('Cloud Account destructive action ownership', () => {
     expect(mockSignOut).toHaveBeenCalledTimes(1);
   });
 });
+
+type ImportedModule0 = typeof import('react');
+type ImportedModule1 = typeof import('../src/features/auth/hooks/useStepUp');
+type ImportedModule2 = typeof import('react-native');

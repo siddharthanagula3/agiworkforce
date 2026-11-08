@@ -4,10 +4,12 @@ import { NextRequest } from 'next/server';
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule0>()),
   getClerkAuthUser: vi.fn(async () => ({ userId: 'user-123' })),
 }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule1>()),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
@@ -20,13 +22,16 @@ vi.mock('@/lib/server/neon-db', () => ({
 // RLS policy on user_settings, the owner role has BYPASSRLS, so staying on the
 // unscoped client would have made the policy decorative. Same fake db, reached
 // the way the route now reaches it.
-vi.mock('@/lib/server/rls-db', () => ({
-  getUserScopedDb: vi.fn(async () => ({
-    db: { query: mockQuery, execute: mockExecute },
-    userId: 'user-123',
-    organizationId: null,
-  })),
-}));
+vi.mock('@/lib/server/rls-db', async () => {
+  const { createDatabaseAdapterFake } = await import('@/test/database-adapter-fake');
+  return {
+    getUserScopedDb: vi.fn(async () => ({
+      db: createDatabaseAdapterFake({ query: mockQuery, execute: mockExecute }),
+      userId: 'user-123',
+      organizationId: null,
+    })),
+  };
+});
 
 import { PUT } from '@/app/api/settings/preferences/route';
 
@@ -40,11 +45,11 @@ function makeRequest(body: unknown): NextRequest {
   });
 }
 
-function getUpsert(): { sql: string; params: unknown[] } {
+function getUpdate(): { sql: string; params: unknown[] } {
   const call = mockQuery.mock.calls.find(
-    (c) => typeof c[0] === 'string' && c[0].includes('insert into public.user_settings'),
+    (c) => typeof c[0] === 'string' && c[0].includes('update public.user_settings'),
   );
-  expect(call, 'expected an upsert into public.user_settings').toBeDefined();
+  expect(call, 'expected an update of public.user_settings').toBeDefined();
   return { sql: call![0] as string, params: (call![1] as unknown[]) ?? [] };
 }
 
@@ -56,19 +61,22 @@ describe('PUT /api/settings/preferences, lost-update fix', () => {
       .mockResolvedValueOnce([{ settings: { ...STORED, profile: { bio: 'new' } }, version: 'v2' }]);
   });
 
-  it('merges atomically in SQL (user_settings.settings || excluded.settings)', async () => {
+  it('merges atomically in SQL (user_settings.settings || $2::jsonb)', async () => {
     const res = await PUT(makeRequest({ namespace: 'profile', value: { bio: 'new' } }));
     expect(res.status).toBe(200);
 
-    const { sql } = getUpsert();
+    const { sql } = getUpdate();
     const normalized = sql.toLowerCase().replace(/\s+/g, ' ');
-    expect(normalized).toContain('user_settings.settings || excluded.settings');
+    expect(normalized).toContain('user_settings.settings || $2::jsonb');
+    expect(normalized).toContain('where user_id = $1');
+    expect(mockQuery.mock.calls[0]?.[0]).toContain('where user_id = $1 for update');
+    expect(mockQuery.mock.calls[0]?.[1]).toEqual(['user-123']);
   });
 
   it('persists ONLY the delta namespace, not the stale read-merged doc', async () => {
     await PUT(makeRequest({ namespace: 'profile', value: { bio: 'new' } }));
 
-    const { params } = getUpsert();
+    const { params } = getUpdate();
     const persisted = JSON.parse(params[1] as string);
     expect(persisted).toEqual({ profile: { bio: 'new' } });
     expect(persisted).not.toHaveProperty('theme');
@@ -82,7 +90,7 @@ describe('PUT /api/settings/preferences, lost-update fix', () => {
 
     await PUT(makeRequest({ settings: { weekly_reports: true } }));
 
-    const { params } = getUpsert();
+    const { params } = getUpdate();
     const persisted = JSON.parse(params[1] as string);
     expect(persisted).toEqual({ weekly_reports: true });
     expect(persisted).not.toHaveProperty('theme');
@@ -94,3 +102,7 @@ describe('PUT /api/settings/preferences, lost-update fix', () => {
     expect(json.settings).toEqual({ theme: 'dark', profile: { bio: 'new' } });
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/api-auth');
+
+type RetainedMockModule1 = typeof import('@/lib/logger');

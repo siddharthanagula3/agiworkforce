@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { reportUncaughtConfirmError, useConfirmAction } from '../ConfirmAction';
@@ -41,6 +41,58 @@ async function openAndConfirm(onConfirm: () => Promise<unknown>) {
 }
 
 describe('useConfirmAction', () => {
+  it('keeps independent confirmation owners distinct when their request sequences match', async () => {
+    const firstAction = vi.fn(async () => undefined);
+    const secondAction = vi.fn(async () => undefined);
+    let completeFirst!: () => void;
+    const completion = new Promise<void>((resolve) => {
+      completeFirst = resolve;
+    });
+    function IndependentOwners() {
+      const first = useConfirmAction();
+      const second = useConfirmAction();
+      return (
+        <>
+          <button
+            onClick={() => {
+              first.confirm({
+                title: 'First request',
+                description: 'First consequence',
+                onConfirm: () => {
+                  void firstAction();
+                  second.confirm({
+                    title: 'Second request',
+                    description: 'Second consequence',
+                    onConfirm: () => {
+                      completeFirst();
+                      return secondAction();
+                    },
+                  });
+                  return completion;
+                },
+              });
+            }}
+          >
+            Start first
+          </button>
+          {first.dialog}
+          {second.dialog}
+        </>
+      );
+    }
+    render(<IndependentOwners />);
+    fireEvent.click(screen.getByRole('button', { name: 'Start first' }));
+    const first = await screen.findByRole('alertdialog', { name: 'First request' });
+    fireEvent.click(within(first).getByRole('button', { name: 'Confirm' }));
+    const second = await screen.findByRole('alertdialog', { name: 'Second request' });
+    fireEvent.click(within(second).getByRole('button', { name: 'Confirm' }));
+    await waitFor(() => expect(screen.queryByText('Second request')).toBeNull());
+    await waitFor(() => expect(screen.queryByText('First request')).toBeNull());
+    expect(document.querySelector('[role=alertdialog]')).toBeNull();
+    expect(firstAction).toHaveBeenCalledOnce();
+    expect(secondAction).toHaveBeenCalledOnce();
+  });
+
   it('runs the confirmed action and closes', async () => {
     const onConfirm = vi.fn(async () => undefined);
     await openAndConfirm(onConfirm);
@@ -90,7 +142,7 @@ describe('useConfirmAction', () => {
       await pending;
     });
     expect(screen.getByText('Second action')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Confirm' })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Confirm' })).toHaveProperty('disabled', false);
     expect(replacement).not.toHaveBeenCalled();
   });
 

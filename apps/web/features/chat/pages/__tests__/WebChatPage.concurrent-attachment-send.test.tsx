@@ -1,4 +1,4 @@
-import { createWebChatWorkspaceFixture } from './web-chat-workspace-fixture';
+import { createWebChatWorkspaceFixture } from './WebChatWorkspaceFixture';
 import { act, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 type ScanModule0 = typeof import('react-i18next');

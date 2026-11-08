@@ -8,6 +8,7 @@ import { IMAGE_MODELS } from '../../lib/imageGenerationOptions';
 import { __resetComposerDraftStorageForTests } from './composer-draft-storage';
 import { RESEARCH_MIN_CONTEXT_WINDOW } from '@features/chat/lib/research-capability-gate';
 import {
+  PRODUCT_NAMES,
   getModelMetadataById,
   getModels,
   getProviderOfferings,
@@ -602,7 +603,7 @@ describe('ChatComposerNew', () => {
           }}
         />,
       );
-      expect(screen.getByRole('button', { name: 'AGI Work' })).toHaveAttribute(
+      expect(screen.getByRole('button', { name: PRODUCT_NAMES.work })).toHaveAttribute(
         'aria-pressed',
         'true',
       );
@@ -632,7 +633,7 @@ describe('ChatComposerNew', () => {
       />,
     );
 
-    expect(screen.getByRole('button', { name: 'AGI Work' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: PRODUCT_NAMES.work })).toHaveAttribute(
       'aria-pressed',
       'true',
     );
@@ -1526,7 +1527,7 @@ describe('ChatComposerNew', () => {
       />,
     );
 
-    expect(screen.queryByRole('button', { name: 'AGI Work' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: PRODUCT_NAMES.work })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Project: Free Project' })).toHaveTextContent(
       'Free Project',
     );
@@ -2025,7 +2026,7 @@ describe('ChatComposerNew', () => {
   it('renders the work-mode toggle ONLY when backed by host project data (never disconnected)', () => {
     render(<ChatComposerNew onSend={vi.fn()} />);
     expect(screen.queryByRole('button', { name: 'Chat' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'AGI Work' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: PRODUCT_NAMES.work })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /toggle web search/i })).not.toBeInTheDocument();
   });
 
@@ -2051,18 +2052,18 @@ describe('ChatComposerNew', () => {
       'title',
       'Chat: quick questions and conversation',
     );
-    expect(screen.getByRole('button', { name: 'AGI Work' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: PRODUCT_NAMES.work })).toHaveAttribute(
       'aria-pressed',
       'false',
     );
-    expect(screen.getByRole('button', { name: 'AGI Work' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: PRODUCT_NAMES.work })).toHaveAttribute(
       'title',
-      'AGI Work: multi-step tasks with tools, files, and reviewable deliverables',
+      `${PRODUCT_NAMES.work}: multi-step tasks with tools, files, and reviewable deliverables`,
     );
 
     fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
     expect(document.querySelector('.chat-composer-mode-in-menu')).toBeNull();
-    expect(screen.getAllByRole('button', { name: 'AGI Work' })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: PRODUCT_NAMES.work })).toHaveLength(1);
   });
 
   it('clicking AGI Work flips both buttons pressed state and rewrites the placeholder', () => {
@@ -2080,7 +2081,7 @@ describe('ChatComposerNew', () => {
       />,
     );
     const chatButton = screen.getByRole('button', { name: 'Chat' });
-    const agiWorkButton = screen.getByRole('button', { name: 'AGI Work' });
+    const agiWorkButton = screen.getByRole('button', { name: PRODUCT_NAMES.work });
     const textarea = screen.getByRole('textbox', { name: /message input/i });
 
     expect(chatButton).toHaveAttribute('aria-pressed', 'true');
@@ -2119,9 +2120,9 @@ describe('ChatComposerNew', () => {
     const textarea = screen.getByRole('textbox', { name: /message input/i });
     fireEvent.change(textarea, { target: { value: 'Keep this draft' } });
 
-    fireEvent.click(screen.getByRole('button', { name: 'AGI Work' }));
+    fireEvent.click(screen.getByRole('button', { name: PRODUCT_NAMES.work }));
 
-    expect(screen.getByRole('button', { name: 'AGI Work' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: PRODUCT_NAMES.work })).toHaveAttribute(
       'aria-pressed',
       'true',
     );
@@ -2223,7 +2224,7 @@ describe('ChatComposerNew', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'AGI Work' }));
+    fireEvent.click(screen.getByRole('button', { name: PRODUCT_NAMES.work }));
     expect(screen.queryByRole('button', { name: /scope/i })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
@@ -2272,7 +2273,7 @@ describe('ChatComposerNew', () => {
     expect(screen.queryByTestId('composer-work-bar')).not.toBeInTheDocument();
     expect(screen.queryByTestId('composer-project-tab')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'AGI Work' }));
+    fireEvent.click(screen.getByRole('button', { name: PRODUCT_NAMES.work }));
 
     const bar = screen.getByTestId('composer-work-bar');
     expect(within(bar).getByRole('button', { name: /project or folder/i })).toBeInTheDocument();
@@ -2306,7 +2307,7 @@ describe('ChatComposerNew', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'AGI Work' }));
+    fireEvent.click(screen.getByRole('button', { name: PRODUCT_NAMES.work }));
     fireEvent.click(screen.getByRole('button', { name: /project or folder/i }));
     expect(screen.getByLabelText('Search projects')).toBeInTheDocument();
 
@@ -2570,7 +2571,7 @@ describe('ChatComposerNew', () => {
     }
 
     function enterAgiWork() {
-      fireEvent.click(screen.getByRole('button', { name: 'Work', exact: true }));
+      fireEvent.click(screen.getByRole('button', { name: 'Work' }));
     }
 
     it('is absent when the host provides no project data (no cosmetic control)', () => {
@@ -2618,7 +2619,7 @@ describe('ChatComposerNew', () => {
       const picker = makePicker({ activeProjectId: 'proj-1' });
       const onSend = vi.fn();
       render(<ChatComposerNew onSend={onSend} emptyState projectPicker={picker} />);
-      expect(screen.getByRole('button', { name: 'AGI Work' })).toHaveAttribute(
+      expect(screen.getByRole('button', { name: PRODUCT_NAMES.work })).toHaveAttribute(
         'aria-pressed',
         'true',
       );

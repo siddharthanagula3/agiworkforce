@@ -11,12 +11,11 @@ const identity = vi.hoisted(() => ({
   getToken: async () => 'reflect-token',
 }));
 vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/identity/useSessionSnapshot')>()),
+  ...(await importOriginal<ImportedModule0>()),
   useSessionSnapshot: () => () => identity,
 }));
 vi.mock('@/features/workspaces/hooks/use-workspaces', async (importOriginal) => {
-  const original =
-    await importOriginal<typeof import('@/features/workspaces/hooks/use-workspaces')>();
+  const original = await importOriginal<ImportedModule1>();
   const { observeWorkspaceOwner, admitWorkspace } =
     await import('@/features/workspaces/lib/workspace-admission');
   const data = {
@@ -292,3 +291,6 @@ describe('ReflectSection topic share bar', () => {
     expect(rows[0]!.querySelector('[aria-hidden="true"]')?.className).toContain('bg-foreground');
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/identity/useSessionSnapshot');
+type ImportedModule1 = typeof import('@/features/workspaces/hooks/use-workspaces');

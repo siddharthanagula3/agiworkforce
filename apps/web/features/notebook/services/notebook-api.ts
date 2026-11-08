@@ -161,7 +161,7 @@ export function createNotebookApi(dependencies: NotebookApiDependencies = {}): N
   const fetchImpl = dependencies.fetchImpl ?? fetch;
   const getCsrfToken = dependencies.getCsrfToken ?? getBrowserCsrfToken;
   const assertCurrent = dependencies.assertCurrent ?? (() => undefined);
-  const mutationHeaders = async () =>
+  const mutationHeaders = async (): Promise<Record<string, string>> =>
     dependencies.bearerAuthenticated ? {} : { 'x-csrf-token': await getCsrfToken() };
 
   async function request<T>(path: string, init: RequestInit, schema: z.ZodType<T>): Promise<T> {

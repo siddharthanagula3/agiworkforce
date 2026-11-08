@@ -21,12 +21,12 @@ export function passkeyFixture() {
     createdAt: new Date('2026-09-01'),
     lastUsedAt: null as Date | null,
     update: vi.fn(async (_: { name: string }): Promise<unknown> => undefined),
-    delete: vi.fn(async () => undefined),
+    delete: vi.fn(async (): Promise<void> => undefined),
   };
   const user = {
     id: 'user-1',
     passkeys: [key],
-    createPasskey: vi.fn(async () => undefined),
+    createPasskey: vi.fn(async (): Promise<void> => undefined),
     reload: vi.fn(async (): Promise<{ id: string }> => ({ id: 'user-1' })),
   };
   const session = { id: 'session-1', user, getToken: vi.fn(async () => 'token') };
@@ -34,7 +34,7 @@ export function passkeyFixture() {
     loaded: true,
     user,
     session,
-    signOut: vi.fn(),
+    signOut: vi.fn<() => void>(),
     addListener: (listener: () => void) => {
       listeners.add(listener);
       return () => {
@@ -63,7 +63,7 @@ export function passkeyFixture() {
     listeners,
     emit,
     request,
-    scope: { authority: request, onDispatch: vi.fn() },
+    scope: { authority: request, onDispatch: vi.fn<() => void>() },
     retire: () => {
       active = false;
       emit();

@@ -1,6 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import {
+  topLevelStatements,
+  transactionControlErrors,
+} from '../../../../scripts/check-neon-migrations.mjs';
 
 const read = (name: string) => readFileSync(resolve(import.meta.dirname, name), 'utf8');
 const up = read('0393_connector_session_grant_revocation.sql');
@@ -36,7 +40,7 @@ describe('account-wide connector grant revocation migration contract', () => {
     expect(up).toContain('where user_id = v_subject');
     expect(up).toContain('and connector_id = p_connector_id');
     expect(up).toContain('and (p_tool_name is null or tool_name = p_tool_name)');
-    expect(up).not.toMatch(/p_user_id|organization_id|web_conversations/u);
+    expect(up).not.toMatch(/\bp_user_id\b|\borganization_id\b|\bweb_conversations\b/u);
   });
 
   it('exposes only a count and grants only the restricted application entry point', () => {
@@ -50,7 +54,10 @@ describe('account-wide connector grant revocation migration contract', () => {
     expect(up).toContain(
       'grant execute on function public.revoke_connector_tool_session_grants(text, text) to app_rls',
     );
-    expect(up.trim()).toMatch(/^begin;[\s\S]*commit;$/u);
+    const statements = topLevelStatements(up);
+    expect(statements[0]).toBe('begin');
+    expect(statements.at(-1)).toBe('commit');
+    expect(transactionControlErrors('0393_connector_session_grant_revocation.sql', up)).toEqual([]);
   });
 
   it('rolls back only the function and its migration ledger entry', () => {

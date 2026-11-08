@@ -1,3 +1,4 @@
+import { CONTEXT_POLICY_SNAPSHOT_KEY } from '@/lib/services/context-policy-snapshot';
 import { contextPolicySnapshotFixture } from '@/lib/services/__tests__/fixtures/context-policy-snapshot';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
@@ -486,6 +487,7 @@ describe('POST /api/llm/v1/chat/completions/approve, durable checkpoint boundary
       checkpoint: {
         ...claimedCheckpoint.checkpoint,
         request: {
+          [CONTEXT_POLICY_SNAPSHOT_KEY]: contextPolicySnapshotFixture(),
           conversation_id: CONVERSATION_ID,
           model: 'claude-test',
           stream: true,

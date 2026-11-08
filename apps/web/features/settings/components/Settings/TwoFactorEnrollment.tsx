@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import {
   Alert,
@@ -97,12 +97,15 @@ export function TwoFactorEnrollmentPanel({ active = true }: { active?: boolean }
     }
   }
   const owner = slot.current;
-  const replace = (uncertain = false) => {
-    if (!owner || slot.current !== owner) return;
-    if (uncertain && owner.session.isCurrent()) uncertainty.current = owner.session;
-    slot.current = null;
-    redraw((value) => value + 1);
-  };
+  const replace = useCallback(
+    (uncertain = false) => {
+      if (!owner || slot.current !== owner) return;
+      if (uncertain && owner.session.isCurrent()) uncertainty.current = owner.session;
+      slot.current = null;
+      redraw((value) => value + 1);
+    },
+    [owner],
+  );
   if (!active) return null;
   if (!owner) return <p role="status">Sign in to manage your authenticator app.</p>;
   return (
@@ -142,19 +145,24 @@ function OwnedTwoFactorEnrollment({
   const [copied, setCopied] = useState<'secret' | 'codes' | null>(null);
   const [printError, setPrintError] = useState<string | null>(null);
   const printFrameRef = useRef<HTMLIFrameElement | null>(null);
-  const lane = useMemo(
-    () => ({
-      active: false,
-      generation: {} as object,
-      intent: null as Intent | null,
-      requests: new Set<RequestAuthority>(),
-      stage,
-      status: null as TwoFactorStatus | null,
-      statusRead: 0,
-    }),
-    [],
-  );
-  const reconcileOwner = () => {
+  const committedStage = useRef(stage);
+  useLayoutEffect(() => {
+    committedStage.current = stage;
+  }, [stage]);
+  const lane = useRef({
+    active: false,
+    generation: {} as object,
+    intent: null as Intent | null,
+    requests: new Set<RequestAuthority>(),
+    stage,
+    status: null as TwoFactorStatus | null,
+    statusRead: 0,
+  }).current;
+  const removePrintFrame = useCallback(() => {
+    printFrameRef.current?.remove();
+    printFrameRef.current = null;
+  }, []);
+  const reconcileOwner = useCallback(() => {
     if (!lane.active || owner.session.isCurrent()) return;
     lane.active = false;
     for (const request of lane.requests) request.retire();
@@ -164,21 +172,17 @@ function OwnedTwoFactorEnrollment({
     lane.stage = { name: 'idle' };
     removePrintFrame();
     replace();
-  };
-  const current = () => {
+  }, [lane, owner, removePrintFrame, replace]);
+  const current = useCallback(() => {
     if (!lane.active) return false;
     if (owner.isCurrent()) return true;
     reconcileOwner();
     return false;
-  };
+  }, [lane, owner, reconcileOwner]);
   const owns = (intent: Intent) =>
     current() && lane.intent === intent && lane.generation === intent.generation;
   const { withStepUp, dialog: stepUpDialog } = useStepUp();
   const { confirm, dialog: confirmDialog } = useConfirmAction();
-  const removePrintFrame = () => {
-    printFrameRef.current?.remove();
-    printFrameRef.current = null;
-  };
   const changeStage = (next: Stage) => {
     if (!current()) return;
     lane.stage = next;
@@ -190,7 +194,7 @@ function OwnedTwoFactorEnrollment({
     setPrintError(null);
     setAcknowledged(false);
   };
-  const refreshStatus = async () => {
+  const refreshStatus = useCallback(async () => {
     if (!current()) return;
     lane.status = null;
     setStatus(null);
@@ -217,11 +221,11 @@ function OwnedTwoFactorEnrollment({
       request.retire();
       reconcileOwner();
     }
-  };
+  }, [current, lane, owner, reconcileOwner]);
   useLayoutEffect(() => {
     lane.active = true;
     lane.generation = {};
-    lane.stage = stage;
+    lane.stage = committedStage.current;
     const retire = () => {
       lane.active = false;
       for (const request of lane.requests) request.retire();
@@ -242,7 +246,7 @@ function OwnedTwoFactorEnrollment({
       retire();
       stop?.();
     };
-  }, [lane, owner]);
+  }, [lane, owner, refreshStatus, removePrintFrame, replace]);
 
   useEffect(() => {
     if (stage.name !== 'enrolling') return;
@@ -253,7 +257,7 @@ function OwnedTwoFactorEnrollment({
     return () => {
       retired = true;
     };
-  }, [stage, lane, owner]);
+  }, [stage, lane, owner, current]);
 
   const resetFlow = () => {
     if (!current() || lane.intent || lane.stage !== stage) return;

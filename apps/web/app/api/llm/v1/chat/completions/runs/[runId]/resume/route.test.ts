@@ -369,7 +369,11 @@ describe('POST /api/llm/v1/chat/completions/runs/[runId]/resume', () => {
     const response = await POST(makeRequest({}), context);
     await response.text();
 
-    expect(mockProcessRequest.mock.calls[0]![2]).toEqual({ workspaceControls: controls });
+    expect(mockProcessRequest.mock.calls[0]![2]).toEqual({
+      workspaceControls: controls,
+      turnToolProhibition: undefined,
+      contextPolicySnapshot: contextPolicySnapshotFixture(),
+    });
   });
 
   it('returns the pause to the user when the workspace controls refuse the resume', async () => {

@@ -21,6 +21,10 @@ const IGNORE_DIRS = new Set([
 
 const VALID_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.html'];
 
+function isRuntimeSourceFile(name: string): boolean {
+  return VALID_EXTENSIONS.some((ext) => name.endsWith(ext)) && !/\.(?:test|spec)\.tsx?$/.test(name);
+}
+
 function walk(dir: string): string[] {
   const entries: string[] = [];
   let items: string[];
@@ -40,14 +44,56 @@ function walk(dir: string): string[] {
     }
     if (st.isDirectory()) {
       entries.push(...walk(full));
-    } else if (VALID_EXTENSIONS.some((ext) => item.endsWith(ext))) {
+    } else if (isRuntimeSourceFile(item)) {
       entries.push(full);
     }
   }
   return entries;
 }
 
+function htmlBlobLines(text: string): { line: number; content: string }[] {
+  const offenders: { line: number; content: string }[] = [];
+  const lines = text.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!;
+    const trimmed = line.trim();
+    if (trimmed.startsWith('*') || trimmed.startsWith('//') || trimmed.startsWith('<!--')) continue;
+    if (!/new\s+Blob\s*\(/.test(line)) continue;
+    if (/type\s*:\s*['"]text\/html['"]/.test(lines.slice(i, i + 6).join('\n'))) {
+      offenders.push({ line: i + 1, content: trimmed });
+    }
+  }
+  return offenders;
+}
+
 describe('iframe-sandbox regression (WEB-13)', () => {
+  it.each([
+    ['ArtifactPreview.tsx', true],
+    ['ArtifactPreview.test.tsx', false],
+    ['renderer.spec.ts', false],
+    ['test-renderer.ts', true],
+    ['renderer.test.html', true],
+    ['renderer.test.js', true],
+    ['renderer.html', true],
+  ] as const)('classifies %s as a runtime source: %s', (name, expected) => {
+    expect(isRuntimeSourceFile(name)).toBe(expected);
+  });
+
+  it('still rejects inline and multiline executable blobs in runtime sources', () => {
+    expect(htmlBlobLines('const blob = new Blob([source], { type: "text/html" });')).toHaveLength(
+      1,
+    );
+    expect(
+      htmlBlobLines('const blob = new Blob([source], {\n  type: "text/html",\n});'),
+    ).toHaveLength(1);
+    expect(htmlBlobLines('const blob = new Blob([source], { type: "application/pdf" });')).toEqual(
+      [],
+    );
+    expect(walk(WEB_ROOT)).toContain(
+      join(WEB_ROOT, 'features', 'chat', 'components', 'SandboxedIframe.tsx'),
+    );
+  });
+
   it('only the dedicated cross-origin renderer combines allow-scripts and allow-same-origin', () => {
     const files = walk(WEB_ROOT);
     const offenders: { file: string; line: number; content: string }[] = [];
@@ -152,20 +198,7 @@ describe('iframe-sandbox regression (WEB-13)', () => {
         continue;
       }
 
-      const lines = text.split('\n');
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i]!;
-        const trimmed = line.trim();
-        if (trimmed.startsWith('*') || trimmed.startsWith('//') || trimmed.startsWith('<!--')) {
-          continue;
-        }
-        if (!/new\s+Blob\s*\(/.test(line)) continue;
-
-        const windowText = lines.slice(i, i + 6).join('\n');
-        if (/type\s*:\s*['"]text\/html['"]/.test(windowText)) {
-          offenders.push({ file, line: i + 1, content: line.trim() });
-        }
-      }
+      offenders.push(...htmlBlobLines(text).map((offender) => ({ file, ...offender })));
     }
 
     if (offenders.length > 0) {

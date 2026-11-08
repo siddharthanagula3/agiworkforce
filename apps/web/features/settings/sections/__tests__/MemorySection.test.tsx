@@ -9,10 +9,10 @@ import {
 import {
   createCloudMemoryFixture,
   getCloudMemoryFixtureSession,
-} from '@/features/memory/__tests__/cloud-memory-fixture';
+} from '@/features/memory/__tests__/CloudMemoryFixture';
 
 vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/identity/useSessionSnapshot')>()),
+  ...(await importOriginal<ImportedModule0>()),
   useSessionSnapshot: () => getCloudMemoryFixtureSession,
   useReadonlyIdentityLifetime: () => () => {
     const session = getCloudMemoryFixtureSession();
@@ -37,7 +37,7 @@ const fetchPreferenceNamespace = vi.fn(async (_namespace: string, fallback: unkn
 const savePreferenceNamespace = vi.fn(async (_namespace: string, _value: unknown) => undefined);
 
 vi.mock('@/app/settings/_lib/preferences-client', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/app/settings/_lib/preferences-client')>()),
+  ...(await importOriginal<ImportedModule1>()),
   readOwnedPreferences: async () => ({
     settings: { capabilities: await fetchPreferenceNamespace('capabilities', {}) },
     version: null,
@@ -224,3 +224,6 @@ describe('Unexecuted cloud MemorySection top-level settings entry', () => {
     expect(transport.mock.calls.filter(([, init]) => init?.method === 'DELETE')).toHaveLength(1);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/identity/useSessionSnapshot');
+type ImportedModule1 = typeof import('@/app/settings/_lib/preferences-client');

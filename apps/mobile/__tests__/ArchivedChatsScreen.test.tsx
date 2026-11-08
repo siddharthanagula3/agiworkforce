@@ -1,7 +1,16 @@
+import type { ReactTestInstance } from 'react-test-renderer';
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
 import { Alert, RefreshControl } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+
+function retainedPress(node: ReactTestInstance): () => void {
+  for (let current: ReactTestInstance | null = node; current; current = current.parent) {
+    const callback: unknown = current.props.onPress;
+    if (typeof callback === 'function') return callback as () => void;
+  }
+  throw new Error('No press callback on the rendered control');
+}
 
 const mockFetch = jest.fn();
 const mockRestore = jest.fn();
@@ -13,7 +22,7 @@ let mockBlur: (() => void) | undefined;
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useFocusEffect: (callback: () => void | (() => void)) => {
-    const { useEffect } = jest.requireActual<typeof import('react')>('react');
+    const { useEffect } = jest.requireActual<ImportedModule0>('react');
     useEffect(() => {
       mockFocus = () => {
         mockFocused = true;
@@ -50,7 +59,7 @@ jest.mock('@/src/ui/theme', () => {
   return { useTheme: () => ({ colors: tokens.lightColors, statusBarStyle: 'dark' }) };
 });
 jest.mock('@/src/features/auth/store', () => {
-  const { create } = jest.requireActual<typeof import('zustand')>('zustand');
+  const { create } = jest.requireActual<ImportedModule1>('zustand');
   return {
     useAuthStore: create(() => ({
       isClerkLoaded: true,
@@ -60,7 +69,7 @@ jest.mock('@/src/features/auth/store', () => {
   };
 });
 jest.mock('@/src/features/chat/store/appModeStore', () => {
-  const { create } = jest.requireActual<typeof import('zustand')>('zustand');
+  const { create } = jest.requireActual<ImportedModule1>('zustand');
   return { useChatAppModeStore: create(() => ({ appMode: 'cloud', setAppMode: jest.fn() })) };
 });
 jest.mock('@/stores/chat/chatMessageStore', () => ({
@@ -236,7 +245,7 @@ describe('Archived chats failure recovery', () => {
       nextOffset: 1,
     });
     const screen = render(<ArchivedChatsScreen />);
-    const restore = (await screen.findByLabelText('Restore Launch plan')).props.onPress;
+    const restore = retainedPress(await screen.findByLabelText('Restore Launch plan'));
     activateCloudAccount('account-b');
     useAuthStore.setState({ clerkUserId: 'account-b' });
     act(() => restore());
@@ -295,7 +304,7 @@ describe('Archived chats failure recovery', () => {
       'rejects saved rendered buttons after replacement, round trip: %s',
       async (roundTrip) => {
         const screen = await renderRows();
-        const press = screen.getByLabelText(label).props.onPress;
+        const press = retainedPress(screen.getByLabelText(label));
         activateCloudAccount('account-b');
         if (roundTrip) activateCloudAccount('account-a');
         act(() => press());
@@ -500,7 +509,7 @@ describe('Archived chats failure recovery', () => {
         .mockReturnValueOnce(current.promise);
       const screen = render(<ArchivedChatsScreen />);
       await screen.findByText('Initial');
-      const savedMore = screen.getByLabelText('Load more archived chats').props.onPress;
+      const savedMore = retainedPress(screen.getByLabelText('Load more archived chats'));
       act(() => {
         savedMore();
         savedMore();
@@ -541,8 +550,8 @@ describe('Archived chats failure recovery', () => {
       mockRestore.mockReturnValueOnce(mutation.promise);
       const screen = render(<ArchivedChatsScreen />);
       await screen.findByText('Initial');
-      const restore = screen.getByLabelText('Restore Initial').props.onPress;
-      const more = screen.getByLabelText('Load more archived chats').props.onPress;
+      const restore = retainedPress(screen.getByLabelText('Restore Initial'));
+      const more = retainedPress(screen.getByLabelText('Load more archived chats'));
       act(() => more());
       const pageSignal = mockFetch.mock.calls[1]?.[2] as AbortSignal;
       act(() => {
@@ -737,3 +746,6 @@ describe('Archived chats failure recovery', () => {
     expect(mockFetch).toHaveBeenCalledTimes(2);
   });
 });
+
+type ImportedModule0 = typeof import('react');
+type ImportedModule1 = typeof import('zustand');

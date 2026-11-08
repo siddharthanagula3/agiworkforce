@@ -137,11 +137,11 @@ describe('support model confinement', () => {
       admitModelCall: admitEveryModelCall,
     });
     const request = modelMocks.streamedRequests.at(-1) as Record<string, unknown>;
-    expect(request.model).toBe(SELECTED_ROUTE.providerModelId);
-    expect(request.effort).toBe('none');
-    expect(request.responseFormat).toEqual({ type: 'json_object' });
-    expect(request.tools).toBeUndefined();
-    expect(request.rawVendorTools).toBeUndefined();
+    expect(request['model']).toBe(SELECTED_ROUTE.providerModelId);
+    expect(request['effort']).toBe('none');
+    expect(request['responseFormat']).toEqual({ type: 'json_object' });
+    expect(request['tools']).toBeUndefined();
+    expect(request['rawVendorTools']).toBeUndefined();
   });
 
   it('refuses an unexpected model without making a provider call or spending budget', async () => {

@@ -634,7 +634,11 @@ describe('POST /api/llm/v1/chat/completions/resume-device', () => {
       const response = await POST(resume(resumeBody()));
       await response.text();
 
-      expect(mocks.processRequest.mock.calls[0]![2]).toEqual({ workspaceControls: controls });
+      expect(mocks.processRequest.mock.calls[0]![2]).toEqual({
+        workspaceControls: controls,
+        turnToolProhibition: undefined,
+        contextPolicySnapshot: contextPolicySnapshotFixture(),
+      });
     });
 
     it('releases the device step when the workspace controls refuse the resume', async () => {

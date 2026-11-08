@@ -18,7 +18,7 @@ import {
 
 vi.mock('@shared/lib/get-auth-token', () => ({ getAuthToken: vi.fn() }));
 vi.mock('@/lib/client/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/client/csrf')>()),
+  ...(await importOriginal<ImportedModule0>()),
   getCsrfToken: vi.fn(),
   addCsrfHeaders: vi.fn(),
   clearCsrfToken: vi.fn(),
@@ -572,3 +572,5 @@ describe('password receipt validation and mutation retention', () => {
     },
   );
 });
+
+type ImportedModule0 = typeof import('@/lib/client/csrf');

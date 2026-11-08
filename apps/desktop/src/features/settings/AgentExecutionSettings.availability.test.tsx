@@ -5,8 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mockInvoke = vi.fn();
 
 vi.mock('../../lib/tauri-mock', async () => {
-  const actual =
-    await vi.importActual<typeof import('../../lib/tauri-mock')>('../../lib/tauri-mock');
+  const actual = await vi.importActual<ImportedModule0>('../../lib/tauri-mock');
   return {
     ...actual,
     isTauriContext: () => true,
@@ -111,3 +110,5 @@ describe('AgentExecutionSettings sandbox runtime availability', () => {
     expect(screen.queryByLabelText('Runtime executable')).toBeNull();
   });
 });
+
+type ImportedModule0 = typeof import('../../lib/tauri-mock');

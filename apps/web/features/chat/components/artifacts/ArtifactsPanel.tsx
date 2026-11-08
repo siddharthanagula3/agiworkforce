@@ -339,7 +339,10 @@ export function ArtifactsPanel({
   const [settledPublication, setSettledPublication] = useState(0);
   const publicationLease = usePublishedSitesStore((state) => state.lease);
   const publicationOperations = useMemo(
-    () => new Map<string, { revision: number; pending: boolean }>(),
+    () =>
+      Object.assign(new Map<string, { revision: number; pending: boolean }>(), {
+        binding: { publicationLease },
+      }),
     [publicationLease],
   );
   const recordPublishedSite = usePublishedSitesStore((s) => s.record);
@@ -407,7 +410,20 @@ export function ArtifactsPanel({
   );
 
   const publicationScope = useMemo(
-    () => ({}),
+    () =>
+      Object.assign(
+        {},
+        {
+          binding: {
+            activeConversationId,
+            panelOpen,
+            publicationLease,
+            selectedArtifactId: selectedArtifact?.id,
+            selectedArtifactKey,
+            showStreamingView,
+          },
+        },
+      ),
     [
       activeConversationId,
       selectedArtifact?.id,

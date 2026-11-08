@@ -685,10 +685,10 @@ describe('SitesPage bounded page navigation (UNRUN source fixtures)', () => {
     expect(screen.getByTestId('sites-no-match')).toBeInTheDocument();
     expect(mocks.listPublishedSitesPage).toHaveBeenCalledTimes(1);
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: '' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Older', exact: true }));
-    await screen.findByRole('link', { name: 'Older page', exact: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Older' }));
+    await screen.findByRole('link', { name: 'Older page' });
     expect(screen.getAllByTestId('site-card')).toHaveLength(1);
-    expect(screen.queryByRole('link', { name: 'Team scoreboard', exact: true })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Team scoreboard' })).toBeNull();
     expect(usePublishedSitesStore.getState().byArtifactId['artifact-1']?.token).toBe(site().token);
     expect(usePublishedSitesStore.getState().byArtifactId['artifact-2']?.token).toBe(older.token);
     expect(mocks.listPublishedSitesPage.mock.calls.map(([cursor]) => cursor)).toEqual([
@@ -696,8 +696,8 @@ describe('SitesPage bounded page navigation (UNRUN source fixtures)', () => {
       'cursor-2',
     ]);
     fireEvent.click(screen.getByRole('button', { name: 'Back to newest' }));
-    await screen.findByRole('link', { name: 'Team scoreboard', exact: true });
-    expect(screen.queryByRole('link', { name: 'Older page', exact: true })).toBeNull();
+    await screen.findByRole('link', { name: 'Team scoreboard' });
+    expect(screen.queryByRole('link', { name: 'Older page' })).toBeNull();
     expect(mocks.listPublishedSitesPage.mock.calls.map(([cursor]) => cursor)).toEqual([
       null,
       'cursor-2',
@@ -715,9 +715,9 @@ describe('SitesPage bounded page navigation (UNRUN source fixtures)', () => {
       .mockResolvedValueOnce({ sites: [site()], workspace: null, nextCursor: 'cursor-2' });
     render(<SitesPage />);
     await screen.findByTestId('site-card');
-    fireEvent.click(screen.getByRole('button', { name: 'Older', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Older' }));
     expect(screen.getByTestId('site-card')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Older', exact: true })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Older' })).toBeDisabled();
     await act(async () => continuation.reject(new Error('Continuation unavailable')));
     expect(screen.getByRole('alert')).toBeInTheDocument();
     expect(screen.getByTestId('site-card')).toBeInTheDocument();
@@ -725,7 +725,7 @@ describe('SitesPage bounded page navigation (UNRUN source fixtures)', () => {
     await screen.findByText('No sites on this page.');
     expect(screen.queryByTestId('sites-empty')).toBeNull();
     expect(screen.getByRole('button', { name: 'Back to newest' })).toBeEnabled();
-    expect(screen.getByRole('button', { name: 'Older', exact: true })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Older' })).toBeDisabled();
     expect(mocks.listPublishedSitesPage.mock.calls.map(([cursor]) => cursor)).toEqual([
       null,
       'cursor-2',

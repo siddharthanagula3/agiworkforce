@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { createError } from '@/lib/errors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { recordAuditEvent } from '@/lib/security-audit';
 import { preparePublishedArtifactPublication } from '@/lib/services/published-artifact-publication-policy';
 import {
   readPublishedArtifactRestoreSource,
@@ -23,11 +24,16 @@ vi.mock('@/lib/error-handler', () => ({ withErrorHandler: <T>(handler: T): T => 
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn() }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn() }));
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: vi.fn() }));
+type SecurityAuditModule = typeof import('@/lib/security-audit');
+vi.mock('@/lib/security-audit', async (importOriginal) => ({
+  ...(await importOriginal<SecurityAuditModule>()),
+  recordAuditEvent: vi.fn(),
+}));
 vi.mock('@/lib/services/published-artifact-publication-policy', () => ({
   preparePublishedArtifactPublication: vi.fn(),
 }));
 vi.mock('@/lib/services/published-artifact-service', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/services/published-artifact-service')>();
+  const actual = await importOriginal<MockedModule0>();
   return {
     ...actual,
     readPublishedArtifactRestoreSource: vi.fn(),
@@ -99,6 +105,7 @@ beforeEach(() => {
 function expectNoWrites() {
   expect(restorePublishedArtifactRecord).not.toHaveBeenCalled();
   expect(publishArtifactRecord).not.toHaveBeenCalled();
+  expect(recordAuditEvent).not.toHaveBeenCalled();
 }
 
 describe('version POST restore handler', () => {
@@ -131,7 +138,7 @@ describe('version POST restore handler', () => {
 
   it('uses share-create rate limiting before authentication', async () => {
     const req = request();
-    const refusal = new Response('rate limit', { status: 429 });
+    const refusal = new NextResponse('rate limit', { status: 429 });
     vi.mocked(withRateLimit).mockResolvedValue(refusal);
     await expect(POST(req, context())).resolves.toBe(refusal);
     expect(withRateLimit).toHaveBeenCalledExactlyOnceWith(req, 'share-create');
@@ -208,6 +215,17 @@ describe('version POST restore handler', () => {
     ].map((mock) => vi.mocked(mock).mock.invocationCallOrder[0]!);
     expect(order).toEqual([...order].sort((left, right) => left - right));
     expect(publishArtifactRecord).not.toHaveBeenCalled();
+    expect(recordAuditEvent).toHaveBeenCalledExactlyOnceWith({
+      userId: 'owner',
+      organizationId: 'active-org',
+      eventType: 'share_link_updated',
+      request: req,
+      detail: {
+        resourceType: 'published_artifact',
+        resourceId: publication.id,
+        status: 'version_restored',
+      },
+    });
     expect(await response.json()).toMatchObject({
       token,
       title: restored.title,
@@ -222,6 +240,7 @@ describe('version POST restore handler', () => {
     await expect(POST(request(), context())).rejects.toMatchObject({ statusCode: 409 });
     expect(restorePublishedArtifactRecord).toHaveBeenCalledTimes(1);
     expect(publishArtifactRecord).not.toHaveBeenCalled();
+    expect(recordAuditEvent).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -233,6 +252,7 @@ describe('version POST restore handler', () => {
     await expect(POST(request(), context())).rejects.toMatchObject({ statusCode });
     expect(restorePublishedArtifactRecord).toHaveBeenCalledTimes(1);
     expect(publishArtifactRecord).not.toHaveBeenCalled();
+    expect(recordAuditEvent).not.toHaveBeenCalled();
   });
 
   it.each(['history unavailable', 'commit outcome unknown'])(
@@ -242,6 +262,7 @@ describe('version POST restore handler', () => {
       await expect(POST(request(), context())).rejects.toThrow(message);
       expect(restorePublishedArtifactRecord).toHaveBeenCalledTimes(1);
       expect(publishArtifactRecord).not.toHaveBeenCalled();
+      expect(recordAuditEvent).not.toHaveBeenCalled();
     },
   );
 
@@ -266,9 +287,11 @@ describe('version POST restore handler', () => {
     await entered;
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(settled).toBe(false);
+    expect(recordAuditEvent).not.toHaveBeenCalled();
     finishService(restored);
     expect(await (await response).json()).toMatchObject({ version: restored.version });
     expect(restorePublishedArtifactRecord).toHaveBeenCalledTimes(1);
+    expect(recordAuditEvent).toHaveBeenCalledTimes(1);
     expect(publishArtifactRecord).not.toHaveBeenCalled();
   }, 1_000);
 });
@@ -300,3 +323,5 @@ describe('version GET remains read-only', () => {
     expectNoWrites();
   });
 });
+
+type MockedModule0 = typeof import('@/lib/services/published-artifact-service');

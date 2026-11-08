@@ -33,6 +33,7 @@ vi.mock('@/lib/services/connector-policy-gate', () => ({
 
 import { NextRequest, NextResponse } from 'next/server';
 import { parseSkillFile } from '@/features/plugins/server/directory/skill-files';
+import { hashSkillContent } from '@agiworkforce/skills';
 import { USER_SKILL_AUTHORING_ENV_VAR } from '@/lib/services/user-skill-authoring';
 import { POST } from '../route';
 
@@ -222,6 +223,11 @@ describe('POST /api/plugins/authored', () => {
       description: 'Draft release notes from a changelog',
       body: 'Read the changelog and write the notes.',
       path: 'skills/draft-release-notes/SKILL.md',
+      frontmatter: {
+        name: 'draft-release-notes',
+        description: 'Draft release notes from a changelog',
+      },
+      contentHash: hashSkillContent(Buffer.from(file.content, 'utf8')),
     });
   });
 

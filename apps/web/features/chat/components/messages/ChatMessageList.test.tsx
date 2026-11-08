@@ -4,6 +4,7 @@ import { render, screen, fireEvent, act, waitFor, within } from '@testing-librar
 import { ChatMessageList, groupMessages, patchMessageGroups } from './ChatMessageList';
 import type { ChatMessage } from '@agiworkforce/unified-chat';
 import { getSelectableModels } from '@agiworkforce/types';
+import { LOCAL_MODEL_SERVERS, localModelId } from '@agiworkforce/local-runtime-contract';
 import { pickStandardModel } from '@/features/chat/lib/eligible-model';
 
 const ttsMock = vi.hoisted(() => {
@@ -1880,7 +1881,13 @@ describe('ChatMessageList current read-aloud provenance', () => {
     const retained = ttsMock.callbacks.get('current')!;
     view.rerender(
       <ChatMessageList
-        messages={[{ ...first, model: 'local:ollama/llama3', isStreaming: true }]}
+        messages={[
+          {
+            ...first,
+            model: localModelId(LOCAL_MODEL_SERVERS[0], 'test-fixture'),
+            isStreaming: true,
+          },
+        ]}
       />,
     );
     act(() => retained('current', 'Old'));

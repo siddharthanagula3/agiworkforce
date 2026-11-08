@@ -187,7 +187,9 @@ function makeFakeDb() {
             Date.parse(String(r['expires_at'])) > Date.now()) &&
           (!hasProjectGate ||
             r['project_id'] == null ||
-            (project?.user_id === r['user_id'] && project.archived_at === null))
+            (project !== undefined &&
+              project.user_id === r['user_id'] &&
+              project.archived_at === null))
         );
       });
     }

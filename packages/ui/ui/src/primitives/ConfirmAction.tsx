@@ -44,6 +44,7 @@ export function useConfirmAction(): {
   confirm: (request: ConfirmActionRequest) => void;
   dialog: React.ReactElement | null;
 } {
+  const dialogOwnerId = React.useId();
   const [pending, setPending] = React.useState<PendingConfirm | null>(null);
   const [busy, setBusy] = React.useState(false);
   const nextKey = React.useRef(0);
@@ -86,7 +87,7 @@ export function useConfirmAction(): {
 
   const dialog = pending ? (
     <AlertDialog
-      key={pending.key}
+      key={`${dialogOwnerId}:${pending.key}`}
       open
       onOpenChange={(open) => {
         if (open || busy || pendingKeyRef.current !== pending.key) return;

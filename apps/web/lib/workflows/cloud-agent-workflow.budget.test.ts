@@ -81,9 +81,9 @@ function database(scenario: Scenario) {
 const claimMocks = vi.hoisted(() => ({ claim: vi.fn(), fail: vi.fn(), complete: vi.fn() }));
 
 vi.mock('@/lib/services/cloud-agent-execution-service', async () => {
-  const actual = await vi.importActual<
-    typeof import('@/lib/services/cloud-agent-execution-service')
-  >('@/lib/services/cloud-agent-execution-service');
+  const actual = await vi.importActual<ImportedModule0>(
+    '@/lib/services/cloud-agent-execution-service',
+  );
   return {
     ...actual,
     claimCloudAgentExecutionOperation: claimMocks.claim,
@@ -177,3 +177,5 @@ describe('the cloud Work runtime enforces the CLI safety envelope', () => {
     ).resolves.toEqual({ answer: 1 });
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/services/cloud-agent-execution-service');

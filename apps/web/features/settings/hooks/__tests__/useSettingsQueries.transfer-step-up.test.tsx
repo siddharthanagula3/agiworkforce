@@ -15,7 +15,7 @@ import {
   verification,
   wrapper,
   writes,
-} from './organization-membership-fixture';
+} from './OrganizationMembershipFixture';
 import {
   act,
   fireEvent,

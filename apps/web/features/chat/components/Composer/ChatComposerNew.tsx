@@ -75,7 +75,6 @@ import {
   LocalFolderAttachDialog,
   clipboardAttachments,
   readHostClipboard,
-  isDesktopHost,
   useDesktopHost,
   useDesktopVoiceHotkey,
   useLocalModelSelection,
@@ -289,12 +288,7 @@ const COMPOSER_COUNTER_THRESHOLD = Math.floor(COMPOSER_MAX_CHARS * 0.75);
 
 export type ComposerWorkMode = CloudWorkMode;
 
-type ComposerSendArgs = [
-  content: string,
-  attachments?: File[],
-  skillId?: string,
-  meta?: ComposerSendMeta,
-];
+type ComposerSendArgs = Parameters<ChatComposerProps['onSend']>;
 
 interface QueuedFollowUp {
   id: string;

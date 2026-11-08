@@ -16,7 +16,7 @@ vi.mock('../hooks/use-settings-queries', () => ({
 }));
 
 vi.mock('../hooks/use-mfa-readers', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../hooks/use-mfa-readers')>()),
+  ...(await importOriginal<ImportedModule0>()),
   useMfaStatus: () => mockTwoFactorStatus(),
 }));
 
@@ -267,3 +267,5 @@ describe('WorkspacePolicySection security controls', () => {
     expect(screen.getByLabelText('Add an IP address or CIDR block')).toBeDisabled();
   });
 });
+
+type ImportedModule0 = typeof import('../hooks/use-mfa-readers');

@@ -22,11 +22,11 @@ const reverification = vi.hoisted(() => ({
   freshToken: vi.fn(),
 }));
 vi.mock('@/lib/identity/useSessionSnapshot', async (original) => ({
-  ...(await original<typeof import('@/lib/identity/useSessionSnapshot')>()),
+  ...(await original<MockedModule0>()),
   useSessionSnapshot: () => () => fixture.session,
 }));
 vi.mock('@agiworkforce/ui', async (original) => {
-  const ui = await original<typeof import('@agiworkforce/ui')>();
+  const ui = await original<MockedModule1>();
   return {
     ...ui,
     Button: (props: ComponentProps<typeof ui.Button>) => {
@@ -49,15 +49,18 @@ vi.mock('@agiworkforce/ui', async (original) => {
     },
   };
 });
-vi.mock('@/lib/client/csrf', () => ({ getCsrfToken: vi.fn(async () => 'csrf-token') }));
+vi.mock('@/lib/client/csrf', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule0>()),
+  getCsrfToken: vi.fn(async () => 'csrf-token'),
+}));
 // Native identity methods are modeled here; this is not evidence about live SDK event ordering.
 vi.mock('@/lib/identity/client', async (original) => ({
-  ...(await original<typeof import('@/lib/identity/client')>()),
+  ...(await original<MockedModule2>()),
   useSessionReverification: () => reverification,
   useSignOut: () => vi.fn(),
 }));
 vi.mock('@features/settings/hooks/use-mfa-readers', async (original) => ({
-  ...(await original<typeof import('@features/settings/hooks/use-mfa-readers')>()),
+  ...(await original<MockedModule3>()),
   invalidateMfaReaders: fixture.invalidate,
 }));
 vi.mock('qrcode', () => ({ default: { toString: fixture.qr } }));
@@ -835,3 +838,10 @@ describe('TwoFactorEnrollmentPanel owned lifetime (source-authored, unrun fixtur
     expect(fixture.invalidate).not.toHaveBeenCalled();
   });
 });
+
+type MockedModule0 = typeof import('@/lib/identity/useSessionSnapshot');
+type MockedModule1 = typeof import('@agiworkforce/ui');
+type MockedModule2 = typeof import('@/lib/identity/client');
+type MockedModule3 = typeof import('@features/settings/hooks/use-mfa-readers');
+
+type CompleteMockModule0 = typeof import('@/lib/client/csrf');

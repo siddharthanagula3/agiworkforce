@@ -3,7 +3,7 @@ import { conversationAsMarkdown, copyConversationMarkdown } from './conversation
 
 describe('Copy as Markdown on the public window', () => {
   it('copies the chat as Markdown', async () => {
-    const write = vi.fn(async () => undefined);
+    const write = vi.fn(async (_text: string) => undefined);
     const messages = [
       { role: 'user', content: 'Draft a plan' },
       { role: 'assistant', content: 'Here is the plan.' },

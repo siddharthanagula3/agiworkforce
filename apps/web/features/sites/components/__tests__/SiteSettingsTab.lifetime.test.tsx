@@ -9,7 +9,7 @@ import type { PublishedSite } from '../../services/sites-service';
 
 const observed = vi.hoisted(() => ({ restore: null as (() => void) | null }));
 vi.mock('@agiworkforce/ui', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/ui')>();
+  const actual = await importOriginal<ImportedModule0>();
   return {
     ...actual,
     Button: (props: ComponentProps<typeof actual.Button>) => {
@@ -192,3 +192,5 @@ describe('Versions ownership (UNRUN source fixtures)', () => {
     await waitFor(() => expect(writes()).toHaveLength(1));
   });
 });
+
+type ImportedModule0 = typeof import('@agiworkforce/ui');

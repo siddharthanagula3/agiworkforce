@@ -31,7 +31,11 @@ vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
   ...(await importOriginal<RlsDbModule>()),
   getUserScopedDb: vi.fn(async () => {
     const { createDatabaseAdapterFake } = await import('@/test/database-adapter-fake');
-    return { db: createDatabaseAdapterFake(), userId: 'user-free' };
+    return {
+      organizationId: null,
+      db: createDatabaseAdapterFake(),
+      userId: 'user-free',
+    };
   }),
 }));
 

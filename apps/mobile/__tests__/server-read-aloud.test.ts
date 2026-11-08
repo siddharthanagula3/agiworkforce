@@ -167,8 +167,7 @@ describe('owned read aloud', () => {
   });
 
   it('does not create playback if onStart stops its operation', async () => {
-    let speaking!: VoiceOutput.VoiceOutputHandle;
-    speaking = owner().start('Stop at start.', {
+    const speaking = owner().start('Stop at start.', {
       serverVoice: true,
       onStart: () => {
         void speaking.stop();

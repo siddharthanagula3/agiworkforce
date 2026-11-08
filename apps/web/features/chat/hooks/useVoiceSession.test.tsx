@@ -92,7 +92,7 @@ function lastCallbacks(): LiveVoiceSessionCallbacks {
   return options.callbacks;
 }
 
-function mount() {
+function mount(conversationId: string | null = null) {
   const onSend = vi.fn().mockReturnValue(true);
   const onEnsureConversation = vi.fn(async () => 'conv-1');
   const onTranscript = vi.fn();
@@ -100,7 +100,7 @@ function mount() {
     useVoiceSession({
       managed: true,
       turnActive: false,
-      conversationId: null,
+      conversationId,
       onSend,
       onEnsureConversation,
       onTranscript,
@@ -157,7 +157,6 @@ describe('useVoiceSession', () => {
   });
 
   it('binds a freshly created conversation before its navigation render', async () => {
-    let showCreated!: () => void;
     const view = renderHook(
       ({ conversationId }: { conversationId: string | null }) =>
         useVoiceSession({
@@ -174,7 +173,7 @@ describe('useVoiceSession', () => {
         }),
       { initialProps: { conversationId: null as string | null } },
     );
-    showCreated = () => view.rerender({ conversationId: 'conv-1' });
+    const showCreated = () => view.rerender({ conversationId: 'conv-1' });
     await act(async () => {
       view.result.current.enter();
     });
@@ -553,7 +552,7 @@ describe('useVoiceSession', () => {
     });
 
     it('carries the call across an in-app navigation and resumes it on the next surface', async () => {
-      const { result, unmount } = mount();
+      const { result, unmount } = mount('conv-1');
       await enterAndStart(result);
 
       await act(async () => {
@@ -563,7 +562,7 @@ describe('useVoiceSession', () => {
       });
       expect(live.close).not.toHaveBeenCalled();
 
-      const next = mount();
+      const next = mount('conv-1');
       await act(async () => {});
 
       expect(live.close).not.toHaveBeenCalled();

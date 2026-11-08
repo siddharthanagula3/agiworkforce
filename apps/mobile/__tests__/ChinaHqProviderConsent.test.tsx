@@ -1,7 +1,7 @@
 const mockStorage = new Map<string, string>();
 
 jest.mock('@/src/features/auth/store', () => {
-  const { create } = jest.requireActual<typeof import('zustand')>('zustand');
+  const { create } = jest.requireActual<ImportedModule0>('zustand');
   return {
     useAuthStore: create(() => ({
       isClerkLoaded: true,
@@ -297,3 +297,5 @@ describe('in-chat provider consent', () => {
     expect(onEnabled).toHaveBeenCalledWith(state);
   });
 });
+
+type ImportedModule0 = typeof import('zustand');

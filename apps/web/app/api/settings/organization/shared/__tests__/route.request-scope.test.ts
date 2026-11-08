@@ -47,7 +47,7 @@ vi.mock('@/lib/services/organization-permission-service', () => ({
 vi.mock('@/lib/connectors/connector-capability', () => ({ assertConnectorsReleased: vi.fn() }));
 vi.mock('@/lib/user-connector-tools', () => ({ evictOrgSharedConnectorCaches: mocks.evict }));
 vi.mock('@/lib/services/org-sharing-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/org-sharing-service')>()),
+  ...(await importOriginal<ImportedModule0>()),
   listSharedProjects: mocks.listProjects,
   shareProject: mocks.shareProject,
   unshareProject: mocks.unshareProject,
@@ -339,3 +339,5 @@ describe('sharing routes consume mocked authenticated scope through the real mem
     assertNoEffects();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/services/org-sharing-service');

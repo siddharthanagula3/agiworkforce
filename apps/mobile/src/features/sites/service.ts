@@ -25,10 +25,12 @@ import { api, ApiHttpError } from '@/services/api';
 import type { CloudAccountEpoch } from '@/src/features/auth/services/cloudAccountSession';
 
 export class SiteMutationUncertainError extends Error {
+  readonly userMessage: string;
+
   constructor(operation: 'update' | 'unpublish' | 'version restore') {
-    super(
-      `This site ${operation} could not be confirmed. It may have taken effect. Refresh to check before trying again.`,
-    );
+    const userMessage = `This site ${operation} could not be confirmed. It may have taken effect. Refresh to check before trying again.`;
+    super(userMessage);
+    this.userMessage = userMessage;
     this.name = 'SiteMutationUncertainError';
   }
 }

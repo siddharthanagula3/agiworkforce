@@ -14,11 +14,11 @@ import { buildComputerUseSoftCapWarningHeader } from '@/lib/server/managed-usage
 
 const downloadMocks = vi.hoisted(() => ({ count: vi.fn(), plan: vi.fn() }));
 vi.mock('./cogs-ledger-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('./cogs-ledger-service')>()),
+  ...(await importOriginal<ImportedModule0>()),
   countUserDownloadAllowanceGibSince: downloadMocks.count,
 }));
 vi.mock('./entitlement-resolution', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('./entitlement-resolution')>()),
+  ...(await importOriginal<ImportedModule1>()),
   resolveEntitledPlanTier: downloadMocks.plan,
 }));
 
@@ -229,3 +229,6 @@ describe('voice minutes consumption', () => {
     });
   });
 });
+
+type ImportedModule0 = typeof import('./cogs-ledger-service');
+type ImportedModule1 = typeof import('./entitlement-resolution');

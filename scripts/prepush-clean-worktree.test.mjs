@@ -435,3 +435,81 @@ test('the worktree is removed on both success and failure', () => {
     assert.deepEqual(fs.readdirSync(worktreeParent), []);
   });
 });
+
+function omittedPlatformFixture(
+  dir,
+  modules,
+  { foreign = true, optional = true, metadata = true, requiredElsewhere = false } = {},
+) {
+  const binary = '@vendor/platform-native';
+  const id = `${binary}@1.0.0`;
+  const lock = {
+    lockfileVersion: '9.0',
+    settings: {},
+    packages: {
+      [id]: metadata
+        ? { os: [foreign ? (process.platform === 'linux' ? 'darwin' : 'linux') : process.platform] }
+        : {},
+    },
+    snapshots: {
+      'external@1.0.0': {
+        [optional ? 'optionalDependencies' : 'dependencies']: { [binary]: '1.0.0' },
+      },
+    },
+    importers: { '.': {}, 'packages/scoped': {}, 'packages/plain': {}, 'apps/consumer': {} },
+  };
+  if (requiredElsewhere) lock.snapshots['other@1.0.0'] = { dependencies: { [binary]: '1.0.0' } };
+  const text = JSON.stringify(lock);
+  fs.writeFileSync(path.join(dir, 'pnpm-lock.yaml'), text);
+  fs.writeFileSync(path.join(modules, '.pnpm/lock.yaml'), text);
+  const file = path.join(modules, binary);
+  const target = path.join(modules, '.pnpm/@vendor+platform-native@1.0.0/node_modules', binary);
+  fs.symlinkSync(path.relative(path.dirname(file), target), file);
+  assert.equal(run('git', ['add', 'pnpm-lock.yaml'], { cwd: dir }).status, 0);
+  assert.equal(
+    run('git', ['commit', '--quiet', '-m', 'chore: declare native dependency'], { cwd: dir })
+      .status,
+    0,
+  );
+}
+
+test('omitted off-platform optional binaries retain their unavailable candidate links', () => {
+  withWorkspaceFixture((dir, worktreeParent, env, { modules }) => {
+    omittedPlatformFixture(dir, modules);
+    const program = [
+      "const fs = require('node:fs');",
+      "const assert = require('node:assert/strict');",
+      "const file = 'node_modules/@vendor/platform-native';",
+      'assert.ok(fs.lstatSync(file).isSymbolicLink());',
+      'assert.equal(fs.existsSync(file), false);',
+      "assert.equal(fs.readlinkSync(file), '../.pnpm/@vendor+platform-native@1.0.0/node_modules/@vendor/platform-native');",
+    ].join(' ');
+    const result = runHook(dir, worktreeParent, {
+      ...env,
+      AGI_PREPUSH_CHAIN_CMD: `node -e ${shellQuote(program)}`,
+    });
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.deepEqual(fs.readdirSync(worktreeParent), []);
+  });
+});
+
+for (const [name, options] of [
+  ['host-compatible optional', { foreign: false }],
+  ['off-platform required', { optional: false }],
+  ['optional without platform evidence', { metadata: false }],
+  ['off-platform optional also required elsewhere', { requiredElsewhere: true }],
+]) {
+  test(`missing ${name} dependencies fail before the chain runs`, () => {
+    withWorkspaceFixture((dir, worktreeParent, env, { modules }) => {
+      omittedPlatformFixture(dir, modules, options);
+      const result = runHook(dir, worktreeParent, {
+        ...env,
+        AGI_PREPUSH_CHAIN_CMD: 'echo chain-ran',
+      });
+      assert.notEqual(result.status, 0);
+      assert.doesNotMatch(result.stdout, /chain-ran/);
+      assert.match(result.stderr, /dependency link/);
+      assert.deepEqual(fs.readdirSync(worktreeParent), []);
+    });
+  });
+}

@@ -6,11 +6,11 @@ import type { PublishedArtifactRow } from '../published-artifact-service';
 const gates = vi.hoisted(() => ({ entitlement: vi.fn(), permission: vi.fn() }));
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/services/org-entitlements', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/org-entitlements')>()),
+  ...(await importOriginal<ImportedModule0>()),
   organizationCanShareArtifacts: gates.entitlement,
 }));
 vi.mock('@/lib/services/organization-permission-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/organization-permission-service')>()),
+  ...(await importOriginal<ImportedModule1>()),
   requireOrganizationPermission: gates.permission,
 }));
 
@@ -409,3 +409,6 @@ describe('updatePublishedArtifactAudience transaction model (not database integr
     expect(m.state().grants).toEqual([]);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/services/org-entitlements');
+type ImportedModule1 = typeof import('@/lib/services/organization-permission-service');

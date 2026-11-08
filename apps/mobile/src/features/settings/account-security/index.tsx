@@ -596,6 +596,7 @@ export default function AccountSecurityScreen() {
         {preferences.timeoutError ? (
           <SettingsRow
             label={preferences.timeoutError}
+            icon={Timer}
             value="Retry"
             onPress={savingTimeout ? undefined : preferences.retryTimeout}
           />
@@ -720,6 +721,7 @@ export default function AccountSecurityScreen() {
         <SettingsGroup>
           <SettingsRow
             label={preferences.lockdownError}
+            icon={Lock}
             value="Retry lockdown"
             onPress={savingLockdown ? undefined : preferences.retryLockdown}
           />

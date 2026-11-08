@@ -1,3 +1,4 @@
+import { getBillingPlanDisplay, formatCatalogPrice } from '@features/billing/lib/plan-display';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
@@ -6,8 +7,7 @@ const storeMocks = vi.hoisted(() => ({ refreshUser: vi.fn(async () => {}) }));
 const panelMocks = vi.hoisted(() => ({ onUpgraded: null as null | (() => void) }));
 
 vi.mock('@tanstack/react-query', async () => {
-  const actual =
-    await vi.importActual<typeof import('@tanstack/react-query')>('@tanstack/react-query');
+  const actual = await vi.importActual<ImportedModule0>('@tanstack/react-query');
   return { ...actual, useQueryClient: () => queryMocks };
 });
 vi.mock('@shared/stores/web-auth-store', () => ({
@@ -43,7 +43,13 @@ describe('UpgradeOrderScreen', () => {
     render(<UpgradeOrderScreen plan="max" />);
     expect(screen.getByTestId('panel')).toHaveAttribute('data-plan', 'max');
 
-    fireEvent.click(screen.getByRole('button', { name: /Max 20x/i }));
+    const nextPrice = getBillingPlanDisplay('max_15x').monthlyPriceUsd;
+    expect(nextPrice).not.toBeNull();
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: (name) => name.includes(`${formatCatalogPrice(nextPrice!)}/month`),
+      }),
+    );
 
     // The panel re-previews against the newly selected capacity, so the price
     // shown belongs to the plan the button will actually buy.
@@ -58,3 +64,5 @@ describe('UpgradeOrderScreen', () => {
     expect(screen.queryByRole('group', { name: 'Capacity' })).toBeNull();
   });
 });
+
+type ImportedModule0 = typeof import('@tanstack/react-query');

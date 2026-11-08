@@ -8,6 +8,7 @@ import { createError } from '@/lib/errors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { preparePublishedArtifactPublication } from '@/lib/services/published-artifact-publication-policy';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { recordAuditEvent } from '@/lib/security-audit';
 import {
   PUBLISHED_TOKEN_REGEX,
   PublishedArtifactOwnershipError,
@@ -104,6 +105,18 @@ async function handleRestoreVersion(
   if (!restored) {
     throw createError.conflict('This publication is no longer available to restore.');
   }
+
+  await recordAuditEvent({
+    userId,
+    organizationId,
+    eventType: 'share_link_updated',
+    request,
+    detail: {
+      resourceType: 'published_artifact',
+      resourceId: restored.id,
+      status: 'version_restored',
+    },
+  });
 
   return NextResponse.json({
     token: restored.token,

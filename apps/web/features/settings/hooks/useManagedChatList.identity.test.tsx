@@ -20,7 +20,7 @@ const fixture = vi.hoisted(() => ({
 vi.mock('@clerk/nextjs', () => ({ useAuth: () => fixture.auth, useClerk: () => fixture.sdk }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: fixture.replace }) }));
 vi.mock('@/lib/client/csrf', async (original) => ({
-  ...(await original<typeof import('@/lib/client/csrf')>()),
+  ...(await original<ImportedModule0>()),
   addCsrfHeaders: vi.fn(async (headers: HeadersInit = {}) => ({
     ...headers,
     'x-csrf-token': 'csrf',
@@ -167,3 +167,5 @@ it('an SDK account change during CSRF preparation prevents dispatch even before 
   expect(result.current.notice).toBeNull();
   expect(writes()).toHaveLength(0);
 });
+
+type ImportedModule0 = typeof import('@/lib/client/csrf');

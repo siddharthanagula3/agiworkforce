@@ -17,7 +17,7 @@ jest.mock('@/lib/mmkv', () => ({
   storage: { getString: jest.fn(), set: jest.fn(), delete: jest.fn() },
 }));
 jest.mock('@/src/features/auth/store', () => {
-  const { create } = jest.requireActual<typeof import('zustand')>('zustand');
+  const { create } = jest.requireActual<ImportedModule0>('zustand');
   return {
     useAuthStore: create(() => ({
       isClerkLoaded: true,
@@ -27,7 +27,7 @@ jest.mock('@/src/features/auth/store', () => {
   };
 });
 jest.mock('@/src/features/chat/store/appModeStore', () => {
-  const { create } = jest.requireActual<typeof import('zustand')>('zustand');
+  const { create } = jest.requireActual<ImportedModule0>('zustand');
   return { useChatAppModeStore: create(() => ({ appMode: 'cloud' })) };
 });
 
@@ -375,3 +375,5 @@ describe('agent activity push ownership', () => {
     expect(mockPut).toHaveBeenCalledTimes(writes);
   });
 });
+
+type ImportedModule0 = typeof import('zustand');

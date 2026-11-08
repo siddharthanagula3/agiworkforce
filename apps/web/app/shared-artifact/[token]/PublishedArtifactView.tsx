@@ -93,7 +93,26 @@ export function PublishedArtifactView({
   const returnPath = token ? `/shared-artifact/${token}` : '/chat';
 
   const source = useMemo(
-    () => ({}),
+    () =>
+      Object.assign(
+        {},
+        {
+          binding: {
+            audience,
+            capturedSessionId,
+            content,
+            heading,
+            isLoaded,
+            isSignedIn,
+            kind,
+            language,
+            publishedAt,
+            title,
+            token,
+            userId,
+          },
+        },
+      ),
     [
       token,
       content,
@@ -132,7 +151,7 @@ export function PublishedArtifactView({
     const session = captureSession();
     if (!session) return;
     const mounted = lifetime.current;
-    let current: { source: object; authority: RequestAuthority };
+
     const isVisible = () =>
       lifetime.current === mounted &&
       visibleSource.current === source &&
@@ -141,7 +160,7 @@ export function PublishedArtifactView({
     const authority = createRequestAuthority(session, undefined, () => {
       if (!isVisible()) throw new DOMException('Copy source changed', 'AbortError');
     });
-    current = { source, authority };
+    const current: { source: object; authority: RequestAuthority } = { source, authority };
     invocation.current = current;
     const ownsView = () =>
       lifetime.current === mounted &&

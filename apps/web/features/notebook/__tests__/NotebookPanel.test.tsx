@@ -56,7 +56,7 @@ const session: CloudCodeSession = {
 function createApi(overrides: Partial<NotebookApi> = {}): NotebookApi {
   return {
     execute: vi.fn(async () => ({ session, ok: true, outputs: [] as NotebookCellOutput[] })),
-    runAll: vi.fn(async () => ({
+    runAll: vi.fn<NotebookApi['runAll']>(async () => ({
       session,
       runId: '22222222-2222-4222-8222-222222222222',
       fromTop: true,
@@ -160,6 +160,7 @@ describe('NotebookPanel', () => {
 
     const file = new File(['a,b\n1,2'], 'data.csv', { type: 'text/csv' });
     const input = screen.getByLabelText('Upload file', { selector: 'input' });
+    await waitFor(() => expect(input).toBeEnabled());
     await user.upload(input, file);
 
     await waitFor(() => expect(api.uploadFile).toHaveBeenCalledWith(session.id, file, 'data.csv'));
@@ -172,7 +173,7 @@ describe('NotebookPanel', () => {
   it('runs every code cell in one recorded run and reports what it covered', async () => {
     const user = userEvent.setup();
     const api = createApi({
-      runAll: vi.fn(async (_sessionId, input) => ({
+      runAll: vi.fn<NotebookApi['runAll']>(async (_sessionId, input) => ({
         session,
         runId: '22222222-2222-4222-8222-222222222222',
         fromTop: true,

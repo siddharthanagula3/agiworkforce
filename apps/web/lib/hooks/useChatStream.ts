@@ -3751,16 +3751,18 @@ export function useChatStream(
   const cardResponseRuntimeActiveRef = useRef(false);
   const [, refreshCardResponses] = useState(0);
   useEffect(() => {
+    const ownedAuthorities = ownedAuthoritiesRef.current;
+    const requestAuthorities = requestAuthoritiesRef.current;
+    const turnAuthorities = turnAuthoritiesRef.current;
+    const cardResponses = cardResponsesRef.current;
     cardResponseRuntimeActiveRef.current = true;
     return () => {
       cardResponseRuntimeActiveRef.current = false;
-      for (const authority of ownedAuthoritiesRef.current) {
-        authority.retire();
-      }
-      ownedAuthoritiesRef.current.clear();
-      requestAuthoritiesRef.current.clear();
-      turnAuthoritiesRef.current.clear();
-      cardResponsesRef.current.clear();
+      for (const authority of ownedAuthorities) authority.retire();
+      ownedAuthorities.clear();
+      requestAuthorities.clear();
+      turnAuthorities.clear();
+      cardResponses.clear();
     };
   }, []);
   useEffect(() => {
@@ -4226,7 +4228,7 @@ export function useChatStream(
         latencyTrace?.cancel();
         authority?.signal.removeEventListener('abort', retireTransport);
         if (!tokenOwnerCurrent(getAuthToken)) {
-          endConversationRequest(conversationId, request);
+          endConversationRequest(turnConversationId, request);
           return;
         }
         stopStreaming(turnConversationId);
@@ -5027,7 +5029,6 @@ export function useChatStream(
       stopStreaming,
       setLoading,
       setError,
-      getToken,
       beginConversationRequest,
       endConversationRequest,
       captureSessionSnapshot,
@@ -5272,7 +5273,7 @@ export function useChatStream(
       }
       setLoading(false, targetConversationId);
     },
-    [getToken, stopStreaming, setLoading, abortConversation, invalidateRecovery],
+    [stopStreaming, setLoading, abortConversation, invalidateRecovery],
   );
 
   const steerActiveTurn = useCallback(
@@ -5290,7 +5291,7 @@ export function useChatStream(
       authority.assertCurrent();
       return steer.id;
     },
-    [getToken],
+    [],
   );
 
   return {

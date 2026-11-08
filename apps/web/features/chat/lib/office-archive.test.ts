@@ -75,14 +75,17 @@ describe('browser Office archive bounds', () => {
 
   it('rebuilds admitted DOCX parts using STORE and preserves their bytes', async () => {
     const zip = new JSZip();
-    zip.comment = 'Office package';
     zip.file('word/document.xml', '<document>日本語</document>', { createFolders: false });
     const stored = await storedOfficeArchive(
-      await zip.generateAsync({ type: 'arraybuffer', compression: 'DEFLATE' }),
+      await zip.generateAsync({
+        type: 'arraybuffer',
+        compression: 'DEFLATE',
+        comment: 'Office package',
+      }),
     );
     expect(new DataView(stored).getUint16(8, true)).toBe(0);
     const accepted = await JSZip.loadAsync(stored);
-    expect(accepted.comment).toBe('Office package');
+    expect(Reflect.get(accepted, 'comment')).toBe('Office package');
     expect(await accepted.file('word/document.xml')!.async('string')).toBe(
       '<document>日本語</document>',
     );

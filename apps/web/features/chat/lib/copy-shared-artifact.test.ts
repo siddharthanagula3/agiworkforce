@@ -97,7 +97,7 @@ describe('owned shared artifact copy', () => {
 
   it('preserves a known chat when the receipt omits workspace scope', async () => {
     const payload = created();
-    payload.conversation.organization_id = undefined;
+    Reflect.deleteProperty(payload.conversation, 'organization_id');
     const fetchMock = vi.fn(async () => Response.json(payload));
     vi.stubGlobal('fetch', fetchMock);
     expect(await copySharedArtifactToChat(input, owner().authority)).toEqual({

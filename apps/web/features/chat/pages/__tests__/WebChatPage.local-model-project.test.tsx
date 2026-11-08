@@ -383,6 +383,10 @@ describe('a chat on a model on this device, started inside a project', () => {
     await waitFor(() => expect(mocks.createConversation).toHaveBeenCalledTimes(1));
     const [, , projectId, options] = mocks.createConversation.mock.calls[0]!;
     expect(projectId ?? null).toBeNull();
-    expect(options).toEqual({ isTemporary: true });
+    expect(options).toEqual({
+      isTemporary: true,
+      authority: undefined,
+      shouldActivate: expect.any(Function),
+    });
   });
 });

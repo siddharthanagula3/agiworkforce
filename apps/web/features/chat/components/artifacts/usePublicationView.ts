@@ -8,16 +8,19 @@ export function usePublicationView(artifactId: string | null, scope?: object) {
   const lease = usePublishedSitesStore((state) => state.lease);
   const view = useMemo(() => {
     let mounted = false;
-    return {
-      get active() {
-        return mounted && isPublicationLeaseCurrent(lease);
+    return Object.assign(
+      {
+        get active() {
+          return mounted && isPublicationLeaseCurrent(lease);
+        },
+        set active(value: boolean) {
+          mounted = value;
+        },
+        pending: false,
+        revision: 0,
       },
-      set active(value: boolean) {
-        mounted = value;
-      },
-      pending: false,
-      revision: 0,
-    };
+      { binding: { artifactId, scope } },
+    );
   }, [artifactId, scope, lease]);
   useLayoutEffect(() => {
     view.active = true;

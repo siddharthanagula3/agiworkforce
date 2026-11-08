@@ -6,19 +6,19 @@ import { rateLimitConfigs } from '@/lib/rate-limit';
 
 const mocks = vi.hoisted(() => ({ auth: vi.fn(), csrf: vi.fn(), limit: vi.fn(), read: vi.fn() }));
 vi.mock('@/lib/server/rls-db', async (original) => ({
-  ...(await original<typeof import('@/lib/server/rls-db')>()),
+  ...(await original<ImportedModule0>()),
   getUserScopedDb: mocks.auth,
 }));
 vi.mock('@/lib/csrf', async (original) => ({
-  ...(await original<typeof import('@/lib/csrf')>()),
+  ...(await original<ImportedModule1>()),
   requireCsrfToken: mocks.csrf,
 }));
 vi.mock('@/lib/rate-limit', async (original) => ({
-  ...(await original<typeof import('@/lib/rate-limit')>()),
+  ...(await original<ImportedModule2>()),
   withRateLimit: mocks.limit,
 }));
 vi.mock('@/lib/url-fetch/url-fetch-tool', async (original) => ({
-  ...(await original<typeof import('@/lib/url-fetch/url-fetch-tool')>()),
+  ...(await original<ImportedModule3>()),
   executeUrlFetch: mocks.read,
 }));
 import { POST } from '../route';
@@ -104,3 +104,8 @@ describe('authenticated public page reads', () => {
     });
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/server/rls-db');
+type ImportedModule1 = typeof import('@/lib/csrf');
+type ImportedModule2 = typeof import('@/lib/rate-limit');
+type ImportedModule3 = typeof import('@/lib/url-fetch/url-fetch-tool');

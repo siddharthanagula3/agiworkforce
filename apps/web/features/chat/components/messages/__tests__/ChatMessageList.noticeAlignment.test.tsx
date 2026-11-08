@@ -81,11 +81,13 @@ describe('transcript notices share the message column', () => {
     expectMessageColumn(wrapperOf('Preparing'));
     expect(indicator).toBe(wrapperOf('Preparing'));
     for (const node of [indicator, ...indicator.querySelectorAll('*')]) {
-      expect(node.className).not.toMatch(/(^|\s)bg-/);
+      expect(node.getAttribute('class') ?? '').not.toMatch(/(^|\s)bg-/);
     }
-    const spinner = indicator.querySelector('.animate-spin');
-    expect(spinner?.classList.contains('motion-reduce:animate-none')).toBe(true);
-    expect(spinner?.getAttribute('aria-hidden')).toBe('true');
+    const spinner = indicator.querySelector('.agi-mark-motion');
+    expect(spinner).not.toBeNull();
+    const mark = spinner!.querySelector('img.agi-mark-spin');
+    expect(mark).not.toBeNull();
+    expect(mark!.getAttribute('aria-hidden')).toBe('true');
   });
 
   it('raises the failed-run links to a 44px target on a coarse pointer', () => {
@@ -101,4 +103,15 @@ describe('transcript notices share the message column', () => {
     expect(retry.classList.contains('pointer-coarse:min-w-11')).toBe(true);
     expect(retry.classList.contains('min-h-6')).toBe(true);
   });
+});
+
+type ReadonlyIdentityModule = typeof import('@/lib/identity/useSessionSnapshot');
+vi.mock('@/lib/identity/useSessionSnapshot', async (original) => {
+  const lifetime = { isCurrent: () => true };
+  const capture = () => lifetime;
+  return {
+    ...(await original<ReadonlyIdentityModule>()),
+    useReadonlyIdentityLifetime: () => capture,
+    useSessionSnapshot: () => () => null,
+  };
 });

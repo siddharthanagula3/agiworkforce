@@ -46,7 +46,8 @@ vi.mock('@/lib/server/neon-db', async (importOriginal) => {
     getNeonDb: () => createDatabaseAdapterFake(),
   };
 });
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule1>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/prompt-cache-helper', () => ({
@@ -63,13 +64,15 @@ vi.mock('@/lib/egress-policy', async (importOriginal) => ({
   validateUserImageUrl: vi.fn(),
   EgressPolicyError: class EgressPolicyError extends Error {},
 }));
-vi.mock('@/lib/cors', () => ({
+vi.mock('@/lib/cors', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule2>()),
   handleCorsPreflightRequest: vi.fn().mockReturnValue(null),
   getCorsHeaders: vi.fn().mockReturnValue({}),
   getSecurityHeaders: vi.fn().mockReturnValue({}),
   withCorsRoute: (handler: (...args: unknown[]) => unknown) => handler,
 }));
-vi.mock('@shared/utils/env', () => ({
+vi.mock('@shared/utils/env', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule3>()),
   requireEnv: vi.fn((key: string) => `mock-${key}`),
   getOptionalEnv: vi.fn((key: string) => `mock-${key}`),
 }));
@@ -177,7 +180,8 @@ vi.mock('@agiworkforce/providers-xai', () => inertCompatAdapter('XAI'));
 vi.mock('@agiworkforce/providers-perplexity', () => inertCompatAdapter('Perplexity'));
 
 const mockGetClerkAuthUser = vi.fn();
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule0>()),
   isAccountUnavailableError: vi.fn(() => false),
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
@@ -341,6 +345,7 @@ beforeEach(() => {
     current_period_end: new Date(Date.now() + 30 * 86400 * 1000).toISOString(),
   });
   rlsMocks.getUserScopedDb.mockResolvedValue({
+    organizationId: null,
     db: { query: vi.fn(async () => []) },
     userId: 'user-1',
   });
@@ -535,3 +540,9 @@ describe('managed failover, streaming', () => {
     expect(providerControl.openaiCalls).toBe(0);
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/api-auth');
+
+type RetainedMockModule1 = typeof import('@/lib/logger');
+type RetainedMockModule2 = typeof import('@/lib/cors');
+type RetainedMockModule3 = typeof import('@shared/utils/env');

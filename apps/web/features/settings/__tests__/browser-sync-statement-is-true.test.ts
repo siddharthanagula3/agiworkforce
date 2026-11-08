@@ -165,9 +165,9 @@ describe('the artifact storage notice describes what actually happens', () => {
 
   it('names a public link and the workspace because publishing reaches a link or the workspace', () => {
     expect(noticeCopy).toContain('publish an artifact, to a public link or your workspace');
-    expect(webSource('features/chat/components/artifacts/publishArtifactClient.ts')).toContain(
-      'MANAGED_CLOUD_PUBLISHED_ARTIFACT_VISIBILITIES',
-    );
+    const publisher = webSource('features/chat/components/artifacts/publishArtifactClient.ts');
+    expect(publisher).toContain('ManagedCloudPublishedArtifactPublishResponseSchema.safeParse(');
+    expect(publisher).toContain('visibility: body.visibility');
     expect([...MANAGED_CLOUD_PUBLISHED_ARTIFACT_VISIBILITIES].sort()).toEqual([
       'invited',
       'organization',

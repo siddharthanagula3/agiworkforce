@@ -6,7 +6,7 @@ const egress = vi.hoisted(() => ({ fetch: vi.fn(), privateHosts: new Set<string>
 // The real resolver would ask DNS about a test hostname. The hosts named here
 // stand for the ones whose addresses come back inside the deployment network.
 vi.mock('@/lib/egress-policy', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/egress-policy')>('@/lib/egress-policy');
+  const actual = await vi.importActual<ImportedModule0>('@/lib/egress-policy');
   return {
     ...actual,
     pinnedPublicFetch: (...args: unknown[]) => egress.fetch(...args),
@@ -37,7 +37,7 @@ const stat = vi.fn();
 const createReadStream = vi.fn();
 
 vi.mock('./object-storage', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('./object-storage')>()),
+  ...(await importOriginal<ImportedModule1>()),
   putObject: (...args: unknown[]) => putObject(...args),
   putPrivateObject: (...args: unknown[]) => putPrivateObject(...args),
   getObject: (...args: unknown[]) => getObject(...args),
@@ -652,3 +652,6 @@ describe('bounded stored media reads', () => {
     expect(createReadStream).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/egress-policy');
+type ImportedModule1 = typeof import('./object-storage');

@@ -20,7 +20,7 @@ const { requestGrant, reverification } = vi.hoisted(() => ({
 }));
 
 vi.mock('@/features/auth/step-up-fetch', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/features/auth/step-up-fetch')>()),
+  ...(await importOriginal<ImportedModule0>()),
   requestStepUpGrant: requestGrant,
 }));
 vi.mock('@/lib/identity/client', () => ({
@@ -522,3 +522,5 @@ it('keeps explicit owned challenge cancellation quiet while the editor remains c
   expect(result.current.dialog).toBeNull();
   expect(send).toHaveBeenCalledTimes(1);
 });
+
+type ImportedModule0 = typeof import('@/features/auth/step-up-fetch');

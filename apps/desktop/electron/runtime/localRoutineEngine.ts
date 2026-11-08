@@ -402,10 +402,11 @@ export class LocalRoutineEngine {
     const { threadId, turnId } = run;
     if (!threadId || !turnId || TERMINAL.has(run.state)) return Promise.resolve();
     stop.attempt = Promise.resolve()
-      .then(() => {
-        if (!TERMINAL.has(run.state))
-          return this.dependencies.cancel(routine.rootId, threadId, turnId);
-      })
+      .then(() =>
+        TERMINAL.has(run.state)
+          ? undefined
+          : this.dependencies.cancel(routine.rootId, threadId, turnId),
+      )
       .then(
         () => this.finishStop(routine, run, stop),
         () => {

@@ -170,13 +170,14 @@ export function StepUpModal(props: StepUpModalProps) {
   }, [challenge, current, onSatisfied, show]);
 
   useEffect(() => {
-    lifecycle.current.mounted = true;
-    lifecycle.current.locked = false;
+    const activeLifecycle = lifecycle.current;
+    activeLifecycle.mounted = true;
+    activeLifecycle.locked = false;
     void flow.begin();
     return () => {
-      lifecycle.current.mounted = false;
-      lifecycle.current.operation += 1;
-      lifecycle.current.locked = false;
+      activeLifecycle.mounted = false;
+      activeLifecycle.operation += 1;
+      activeLifecycle.locked = false;
     };
   }, [flow]);
 

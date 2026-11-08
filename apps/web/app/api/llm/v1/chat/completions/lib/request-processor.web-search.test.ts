@@ -1,3 +1,4 @@
+import { BILLING_PLAN_PRICING, PRODUCT_NAMES } from '@agiworkforce/types';
 import { afterAll, beforeAll, describe, it, expect, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import {
@@ -42,6 +43,7 @@ vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: vi.fn(async (request: NextRequest) => {
     const { createDatabaseAdapterFake } = await import('@/test/database-adapter-fake');
     return {
+      organizationId: null,
       db: createDatabaseAdapterFake(),
       userId: request.headers.get('idempotency-key')?.startsWith('free-')
         ? 'user-free'
@@ -169,7 +171,7 @@ describe('getWorkModeEntitlementError', () => {
     (planTier) => {
       expect(getWorkModeEntitlementError('agiwork', planTier)).toEqual({
         code: 'agi_work_plan_required',
-        message: 'AGI Work requires Pro or higher.',
+        message: `${PRODUCT_NAMES.work} requires ${BILLING_PLAN_PRICING.pro.label} or higher.`,
         requiredTier: 'pro',
       });
     },

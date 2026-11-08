@@ -1,6 +1,6 @@
 vi.mock('@/features/settings/hooks/use-preference-owner', async (original) => ({
-  ...(await original<typeof import('@/features/settings/hooks/use-preference-owner')>()),
-  usePreferenceOwner: () => null,
+  ...(await original<MockedModule0>()),
+  usePreferenceOwner: vi.fn<MockedModule0['usePreferenceOwner']>(() => null),
 }));
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -9,6 +9,12 @@ import { useChatStore } from '@shared/stores/web-chat-store';
 import { ArchivedChatsSection } from './ArchivedChatsSection';
 import { DeletedChatsSection } from './DeletedChatsSection';
 import { PrivacySection } from './PrivacySection';
+import { usePreferenceOwner } from '@/features/settings/hooks/use-preference-owner';
+import { observePreferenceOwner } from '@/app/settings/_lib/preferences-client';
+import {
+  MANAGED_CLOUD_DATA_EXPORT_PATH,
+  MANAGED_CLOUD_DATA_EXPORT_ARCHIVES_PATH,
+} from '@agiworkforce/cloud-contracts';
 import { SharedLinksSection } from './SharedLinksSection';
 import type { RequestAuthority } from '@/lib/identity/request-authority';
 import {
@@ -42,7 +48,7 @@ const session = {
 };
 vi.mock('@/lib/identity/useSessionSnapshot', () => ({ useSessionSnapshot: () => () => session }));
 vi.mock('@/features/workspaces/hooks/use-workspaces', async (original) => ({
-  ...(await original<typeof import('@/features/workspaces/hooks/use-workspaces')>()),
+  ...(await original<MockedModule1>()),
   useAccountWorkspaces: () => {
     const owner = observeWorkspaceOwner(session)!;
     admitWorkspace(owner, owner.epoch, JSON.stringify(['personal', 'personal', null]));
@@ -107,7 +113,7 @@ vi.mock('@shared/stores/web-auth-store', () => ({
 }));
 
 vi.mock('@/app/settings/_lib/preferences-client', async (original) => ({
-  ...(await original<typeof import('@/app/settings/_lib/preferences-client')>()),
+  ...(await original<MockedModule2>()),
   fetchPreferenceNamespace: vi.fn(async () => ({ shareTelemetry: false })),
   savePreferenceNamespace: vi.fn(async () => undefined),
 }));
@@ -157,6 +163,7 @@ const storeConversation = {
 describe('Web conversation data settings', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(usePreferenceOwner).mockReturnValue(null);
     observeWorkspaceOwner(null);
     mocks.listArchived.mockResolvedValue({
       conversations: [archivedConversation],
@@ -190,6 +197,7 @@ describe('Web conversation data settings', () => {
   });
 
   afterEach(() => {
+    observePreferenceOwner(null);
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
@@ -425,34 +433,43 @@ describe('Web conversation data settings', () => {
   });
 
   it('asks for the export archive and says the download link is emailed when it will be', async () => {
-    const fetchMock = vi.spyOn(global, 'fetch').mockImplementation(async (input) =>
-      String(input) === '/api/user/export'
-        ? new Response(
-            JSON.stringify({
-              archive: {
-                id: 'export-1',
-                status: 'preparing',
-                delivery: 'email',
-                requestedAt: '2026-09-28T10:00:00.000Z',
-                readyAt: null,
-                expiresAt: null,
-                volumes: [],
-              },
-            }),
-            { headers: { 'Content-Type': 'application/json' } },
-          )
-        : new Response('{}', { headers: { 'Content-Type': 'application/json' } }),
-    );
+    vi.mocked(usePreferenceOwner).mockReturnValue(observePreferenceOwner(session));
+    const fetchMock = vi
+      .spyOn(global, 'fetch')
+      .mockImplementation(async (input, _init?: RequestInit) =>
+        String(input) === MANAGED_CLOUD_DATA_EXPORT_PATH
+          ? new Response(
+              JSON.stringify({
+                archive: {
+                  id: 'export-1',
+                  status: 'preparing',
+                  delivery: 'email',
+                  requestedAt: '2026-09-28T10:00:00.000Z',
+                  readyAt: null,
+                  expiresAt: null,
+                  volumes: [],
+                },
+              }),
+              { headers: { 'Content-Type': 'application/json' } },
+            )
+          : new Response(
+              JSON.stringify(
+                String(input) === MANAGED_CLOUD_DATA_EXPORT_ARCHIVES_PATH ? { archive: null } : {},
+              ),
+              { headers: { 'Content-Type': 'application/json' } },
+            ),
+      );
 
     render(<PrivacySection />);
     expect(
       screen.getByText(/get a copy of your account data and the files you stored/i),
     ).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Export data' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Export data' }));
 
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
-        '/api/user/export',
+        MANAGED_CLOUD_DATA_EXPORT_PATH,
         expect.objectContaining({ method: 'POST' }),
       ),
     );
@@ -461,3 +478,13 @@ describe('Web conversation data settings', () => {
     ).toBeInTheDocument();
   });
 });
+
+type MockedModule0 = typeof import('@/features/settings/hooks/use-preference-owner');
+type MockedModule1 = typeof import('@/features/workspaces/hooks/use-workspaces');
+type MockedModule2 = typeof import('@/app/settings/_lib/preferences-client');
+
+type CsrfModule = typeof import('@/lib/client/csrf');
+vi.mock('@/lib/client/csrf', async (importOriginal) => ({
+  ...(await importOriginal<CsrfModule>()),
+  addCsrfHeaders: vi.fn(async () => ({ 'x-csrf-token': 'fixture-csrf' })),
+}));

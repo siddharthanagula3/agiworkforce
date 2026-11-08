@@ -43,8 +43,8 @@ describe('the composer keyboard contract', () => {
   });
 
   it('keeps every keyboard-avoiding view on the shared contract', () => {
-    const fs = jest.requireActual<typeof import('fs')>('fs');
-    const path = jest.requireActual<typeof import('path')>('path');
+    const fs = jest.requireActual<ImportedModule0>('fs');
+    const path = jest.requireActual<ImportedModule1>('path');
     const root = path.join(__dirname, '..');
     const offenders: string[] = [];
     const walk = (dir: string): void => {
@@ -107,3 +107,6 @@ describe('keyboard open and close', () => {
     expect(remove).toHaveBeenCalledTimes(2);
   });
 });
+
+type ImportedModule0 = typeof import('fs');
+type ImportedModule1 = typeof import('path');

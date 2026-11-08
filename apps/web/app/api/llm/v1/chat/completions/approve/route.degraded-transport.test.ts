@@ -1,3 +1,5 @@
+import { contextPolicySnapshotFixture } from '@/lib/services/__tests__/fixtures/context-policy-snapshot';
+import { CONTEXT_POLICY_SNAPSHOT_KEY } from '@/lib/services/context-policy-snapshot';
 type RequestProcessorModule = typeof import('../lib/request-processor');
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
@@ -89,7 +91,9 @@ vi.mock('@/lib/user-connector-tools', () => ({
 }));
 
 const db = { query: vi.fn(), transaction: vi.fn() };
-vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: vi.fn(async () => ({ db })) }));
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: vi.fn(async () => ({ db, userId: 'user-1', organizationId: null })),
+}));
 
 const checkpointMocks = vi.hoisted(() => ({
   claim: vi.fn(),
@@ -154,6 +158,7 @@ const claimedCheckpoint = {
     nextEventSequence: 6,
     completedSteps: 1,
     request: {
+      [CONTEXT_POLICY_SNAPSHOT_KEY]: contextPolicySnapshotFixture(),
       model: 'claude-test',
       stream: true,
       conversation_id: CONVERSATION_ID,

@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 type ScanModule0 = typeof import('@agiworkforce/types');
 
 vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/identity/useSessionSnapshot')>()),
+  ...(await importOriginal<ImportedModule0>()),
   useSessionSnapshot: () => () => ({
     userId: 'creation-fixture',
     sessionId: 'creation-session',
@@ -14,7 +14,7 @@ vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
   }),
 }));
 vi.mock('@/features/workspaces/lib/workspace-cache-scope', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/features/workspaces/lib/workspace-cache-scope')>()),
+  ...(await importOriginal<ImportedModule1>()),
   finalizeWorkspaceSwitch: vi.fn(async () => undefined),
 }));
 
@@ -439,3 +439,6 @@ describe('useAuditLogActions · renderHook (GET /api/settings/audit-logs/actions
     expect(result.current.error).toBeTruthy();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/identity/useSessionSnapshot');
+type ImportedModule1 = typeof import('@/features/workspaces/lib/workspace-cache-scope');

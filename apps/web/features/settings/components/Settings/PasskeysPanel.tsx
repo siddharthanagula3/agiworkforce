@@ -71,7 +71,7 @@ export function PasskeysPanel() {
   if (!current.current) {
     const session = captureSession();
     if (session && state.isCurrent()) {
-      const native = nativeSessionFor(session);
+      const native = nativeSessionFor<{ readonly user: unknown }>(session);
       const user = native.user;
       const owner: Owner = {
         id: ++nextId.current,
@@ -142,15 +142,12 @@ function OwnedPasskeysPanel({
   const [savingName, setSavingName] = useState(false);
   const [error, setError] = useState<string | null>(uncertain ? UNCERTAIN : null);
   const [blocked, setBlocked] = useState(uncertain);
-  const lane = useMemo(
-    () => ({
-      active: false,
-      generation: {} as object,
-      intent: null as Intent | null,
-      blocked: uncertain,
-    }),
-    [],
-  );
+  const lane = useRef({
+    active: false,
+    generation: {} as object,
+    intent: null as Intent | null,
+    blocked: uncertain,
+  }).current;
   const rendered = {};
   const latestRender = useRef(rendered);
   latestRender.current = rendered;

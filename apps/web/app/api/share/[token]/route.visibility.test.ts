@@ -51,7 +51,7 @@ vi.mock('@/lib/server/rls-db', () => ({
   })),
 }));
 vi.mock('@/lib/server/request-context-cache', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/request-context-cache')>()),
+  ...(await importOriginal<MockedModule0>()),
   getCachedActiveOrganizationId: vi.fn(async () => undefined),
   setCachedActiveOrganizationId: vi.fn(async () => undefined),
 }));
@@ -276,7 +276,7 @@ describe('PATCH /api/share/[token], source fixtures with modeled transaction bou
         const response = await call(visibility);
 
         expect(response.status).toBe(500);
-        expect((await response.json()).error.message).toBe('Internal server error');
+        expect((await response.json()).error.message).toBe('An unexpected error occurred');
         expect(auditSpy).not.toHaveBeenCalled();
         expect(mocks.transactionQuery).toHaveBeenCalledTimes(2);
         expect(mocks.committed).toEqual(
@@ -360,7 +360,7 @@ describe('PATCH /api/share/[token], source fixtures with modeled transaction bou
   }
 
   it('commits a public visibility change without inventing a grant or revoke audit', async () => {
-    mocks.stored.grant_organization_id = null;
+    mocks.stored['grant_organization_id'] = null;
     mocks.committed = { visibility: 'public', grant: null };
 
     expect((await call('public')).status).toBe(200);
@@ -440,7 +440,7 @@ describe('PATCH /api/share/[token], workspace audience', () => {
   });
 
   it('records no revoke when the conversation was never shared with the workspace', async () => {
-    mocks.stored.grant_organization_id = null;
+    mocks.stored['grant_organization_id'] = null;
 
     const response = await call('public');
 
@@ -619,7 +619,7 @@ describe('PATCH /api/share/[token], captured audience and confirmed revocation',
 
   for (const explicit of [false, true]) {
     it(`uses captured B, not saved A, for an organization grant (${explicit ? 'explicit' : 'headerless'})`, async () => {
-      mocks.stored.grant_organization_id = null;
+      mocks.stored['grant_organization_id'] = null;
 
       const response = await call(
         'organization',
@@ -720,8 +720,8 @@ describe('PATCH /api/share/[token], captured audience and confirmed revocation',
 
   for (const deniedScope of ['conversation', 'grant']) {
     it(`preserves the stored ${deniedScope} external-sharing denial with selected B`, async () => {
-      mocks.stored.conversation_id = CONVERSATION;
-      mocks.stored.conversation_organization_id = OTHER_ORG;
+      mocks.stored['conversation_id'] = CONVERSATION;
+      mocks.stored['conversation_organization_id'] = OTHER_ORG;
       mocks.savedOrganizationId = OTHER_ORG;
       const deniedOrganizationId = deniedScope === 'conversation' ? OTHER_ORG : ORG;
       const defaultQuery = mocks.privilegedQuery.getMockImplementation()!;
@@ -746,8 +746,8 @@ describe('PATCH /api/share/[token], captured audience and confirmed revocation',
   }
 
   it('keeps a headerless conversation in A out of captured B before any mutation', async () => {
-    mocks.stored.conversation_id = CONVERSATION;
-    mocks.stored.conversation_organization_id = ORG;
+    mocks.stored['conversation_id'] = CONVERSATION;
+    mocks.stored['conversation_organization_id'] = ORG;
 
     expect((await call('public')).status).toBe(403);
     expect(callsContaining('delete from public.organization_shared_sessions')).toHaveLength(0);
@@ -897,3 +897,5 @@ describe('PATCH /api/share/[token], captured audience and confirmed revocation',
     expect(mocks.transaction).toHaveBeenCalledTimes(1);
   });
 });
+
+type MockedModule0 = typeof import('@/lib/server/request-context-cache');

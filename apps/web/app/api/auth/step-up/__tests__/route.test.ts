@@ -37,19 +37,19 @@ vi.mock('@/lib/server/claimed-user-scope-db', () => ({
   createClaimedUserScopedDb: mocks.claimScope,
 }));
 vi.mock('@/lib/services/active-workspace-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/active-workspace-service')>()),
+  ...(await importOriginal<ImportedModule0>()),
   resolveActiveOrganizationId: mocks.resolveOrganization,
 }));
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<ImportedModule1>()),
   withRateLimit: mocks.withRateLimit,
 }));
 vi.mock('@/lib/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/csrf')>()),
+  ...(await importOriginal<ImportedModule2>()),
   requireCsrfToken: mocks.requireCsrfToken,
 }));
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<ImportedModule3>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/security-audit', () => ({
@@ -78,7 +78,7 @@ vi.mock('@/lib/server/identity', () => ({
   verifyIdentitySessionToken: vi.fn(),
 }));
 vi.mock('@/lib/mfa-policy-gate', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/mfa-policy-gate')>()),
+  ...(await importOriginal<ImportedModule4>()),
   rememberMfaEnrollment: mocks.rememberEnrollment,
 }));
 vi.mock('@/lib/server/step-up/session-proof', async (importOriginal) => ({
@@ -342,3 +342,9 @@ describe.each(['GET', 'POST'] as const)('%s /api/auth/step-up admission failures
     expect(mocks.claimScope).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/services/active-workspace-service');
+type ImportedModule1 = typeof import('@/lib/rate-limit');
+type ImportedModule2 = typeof import('@/lib/csrf');
+type ImportedModule3 = typeof import('@/lib/logger');
+type ImportedModule4 = typeof import('@/lib/mfa-policy-gate');

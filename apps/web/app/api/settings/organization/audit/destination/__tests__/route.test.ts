@@ -53,7 +53,7 @@ vi.mock('@/lib/services/org-entitlements', () => ({
   isOrgResourceLimitError: vi.fn(),
 }));
 vi.mock('node:crypto', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('node:crypto')>()),
+  ...(await importOriginal<ImportedModule0>()),
   randomBytes: mocks.randomBytes,
 }));
 vi.mock('@/lib/services/audit-streaming-proxy', () => ({
@@ -640,3 +640,5 @@ describe('captured audit destination organization with saved workspace A', () =>
     },
   );
 });
+
+type ImportedModule0 = typeof import('node:crypto');

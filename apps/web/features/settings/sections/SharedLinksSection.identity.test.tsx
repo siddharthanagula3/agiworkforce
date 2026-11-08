@@ -1,3 +1,4 @@
+import type { WebFetch } from '@/test/fetch';
 import { StrictMode } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -10,7 +11,7 @@ const boundary = vi.hoisted(() => ({
   session: null as SessionAuthority | null,
   snapshot: vi.fn<() => SessionAuthority | null>(),
   listeners: new Set<() => void>(),
-  fetch: vi.fn<typeof fetch>(),
+  fetch: vi.fn<WebFetch>(),
   csrf: vi.fn<() => Promise<Record<string, string>>>(),
   clipboard: vi.fn<(text: string) => Promise<void>>(),
 }));
@@ -88,10 +89,10 @@ async function show() {
 }
 
 async function confirmRevoke() {
-  fireEvent.click(screen.getAllByRole('button', { name: 'Revoke', exact: true })[0]!);
+  fireEvent.click(screen.getAllByRole('button', { name: 'Revoke' })[0]!);
   const dialog = await screen.findByRole('alertdialog');
   expect(within(dialog).getByText(/immediately lose access/)).toBeInTheDocument();
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Revoke link', exact: true }));
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Revoke link' }));
 }
 
 function expectNoOldFeedback() {
@@ -141,10 +142,10 @@ describe('Shared conversation links identity lifetime (UNRUN source fixtures)', 
     fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
     await screen.findByText('Copied the link for “Owner A planning”.');
     expect(boundary.clipboard).toHaveBeenCalledWith(share().shareUrl);
-    fireEvent.click(screen.getByRole('button', { name: 'Revoke', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke' }));
     expect(boundary.csrf).not.toHaveBeenCalled();
     expect(boundary.fetch).toHaveBeenCalledTimes(1);
-    fireEvent.click(await screen.findByRole('button', { name: 'Revoke link', exact: true }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Revoke link' }));
     await screen.findByText('Revoked the link for “Owner A planning”.');
     expect(boundary.fetch).toHaveBeenLastCalledWith(
       conversationSharePath('link-a'),
@@ -162,8 +163,8 @@ describe('Shared conversation links identity lifetime (UNRUN source fixtures)', 
       await show();
       fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
       await screen.findByText(/Copied the link/);
-      fireEvent.click(screen.getByRole('button', { name: 'Revoke', exact: true }));
-      const confirm = await screen.findByRole('button', { name: 'Revoke link', exact: true });
+      fireEvent.click(screen.getByRole('button', { name: 'Revoke' }));
+      const confirm = await screen.findByRole('button', { name: 'Revoke link' });
       observe(
         change === 'unavailable'
           ? null
@@ -185,7 +186,7 @@ describe('Shared conversation links identity lifetime (UNRUN source fixtures)', 
     await act(async () => {});
     expect(boundary.fetch).not.toHaveBeenCalled();
     expect(boundary.csrf).not.toHaveBeenCalled();
-    expect(screen.queryByRole('button', { name: 'Revoke', exact: true })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Revoke' })).toBeNull();
     expect(screen.queryByText('No shared links')).toBeNull();
   });
 
@@ -257,7 +258,7 @@ describe('Shared conversation links identity lifetime (UNRUN source fixtures)', 
     await show();
     const open = screen.getByRole('button', { name: 'Open' });
     const copy = screen.getByRole('button', { name: 'Copy' });
-    const revoke = screen.getByRole('button', { name: 'Revoke', exact: true });
+    const revoke = screen.getByRole('button', { name: 'Revoke' });
     boundary.session = session('owner-b', 'session-b');
     fireEvent.click(open);
     fireEvent.click(copy);
@@ -270,8 +271,8 @@ describe('Shared conversation links identity lifetime (UNRUN source fixtures)', 
 
   it('guards a retained confirmation before CSRF acquisition without a notification', async () => {
     await show();
-    fireEvent.click(screen.getByRole('button', { name: 'Revoke', exact: true }));
-    const confirm = await screen.findByRole('button', { name: 'Revoke link', exact: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke' }));
+    const confirm = await screen.findByRole('button', { name: 'Revoke link' });
     boundary.session = session('owner-a', 'session-new');
     fireEvent.click(confirm);
     expect(boundary.csrf).not.toHaveBeenCalled();
@@ -393,7 +394,7 @@ describe('Shared conversation links identity lifetime (UNRUN source fixtures)', 
     boundary.fetch.mockResolvedValueOnce(inventory()).mockReturnValueOnce(reread.promise);
     await show();
     const oldOpen = screen.getByRole('button', { name: 'Open' });
-    const oldRevoke = screen.getByRole('button', { name: 'Revoke', exact: true });
+    const oldRevoke = screen.getByRole('button', { name: 'Revoke' });
     fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
     const retry = await screen.findByRole('button', { name: 'Retry' });
     fireEvent.click(retry);

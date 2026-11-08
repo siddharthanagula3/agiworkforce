@@ -4,46 +4,18 @@ import { useCallback, useLayoutEffect, useMemo, useRef, useSyncExternalStore } f
 import type { MemoryEditorDataAdapter } from '@agiworkforce/unified-chat';
 import { useSessionSnapshot } from '@/lib/identity/useSessionSnapshot';
 import { useAccountWorkspaces } from '@/features/workspaces/hooks/use-workspaces';
+import { observeWorkspaceOwner } from '@/features/workspaces/lib/workspace-admission';
 import {
-  observeWorkspaceOwner,
-  subscribeWorkspaceAdmission,
-} from '@/features/workspaces/lib/workspace-admission';
-import {
-  cloudMemoryScopeKey,
-  createCloudMemoryController,
+  getScopedCloudMemoryController,
   UNAVAILABLE_MEMORY,
   type CloudMemoryController,
 } from './cloud-memory-controller';
-
-let cached: CloudMemoryController | null = null;
-subscribeWorkspaceAdmission(() => {
-  if (cached && !cached.isCurrent()) {
-    cached.retire();
-    cached = null;
-  }
-});
 
 export function useCloudMemory(): CloudMemoryController | null {
   const workspace = useAccountWorkspaces();
   const capture = useSessionSnapshot();
   const owner = observeWorkspaceOwner(capture());
-  const data = workspace.data;
-  if (cached && !cached.isCurrent()) {
-    cached.retire();
-    cached = null;
-  }
-  if (!owner || owner.phase !== 'admitted' || !data || owner.scopeKey !== cloudMemoryScopeKey(data))
-    return null;
-  if (
-    !cached ||
-    cached.owner !== owner ||
-    cached.epoch !== owner.epoch ||
-    cached.scopeKey !== owner.scopeKey
-  ) {
-    cached?.retire();
-    cached = createCloudMemoryController(owner, data);
-  }
-  return cached;
+  return getScopedCloudMemoryController(owner, workspace.data, owner?.epoch);
 }
 
 const subscribeUnavailable = () => () => {};

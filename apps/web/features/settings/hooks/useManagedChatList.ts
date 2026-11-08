@@ -66,7 +66,11 @@ export function useManagedChatList(kind: Kind) {
   const organizationId = data?.activeOrganizationId ?? null;
   const router = useRouter();
   const lane = useMemo<Lane>(
-    () => ({ active: false, token: {}, page: null, operation: null, intent: null }),
+    () =>
+      Object.assign(
+        { active: false, token: {}, page: null, operation: null, intent: null },
+        { binding: { epoch, kind, owner, scopeKey } },
+      ),
     [owner, epoch, scopeKey, kind],
   );
   const [state, setState] = useState<View | null>(null);
@@ -294,7 +298,7 @@ export function useManagedChatList(kind: Kind) {
       return;
     if (action === 'delete_archived' && kind !== 'archived') return;
     if (action !== 'delete_archived' && (!row || !page.conversations.includes(row))) return;
-    let intent: Intent;
+
     const request = createRequestAuthority(
       owner!.session,
       () => current() && lane.intent === intent,
@@ -316,7 +320,15 @@ export function useManagedChatList(kind: Kind) {
         intent.dispatched = true;
       },
     );
-    intent = { action, row, page, phase: 'confirming', request, dispatched: false, ids: [] };
+    const intent: Intent = {
+      action,
+      row,
+      page,
+      phase: 'confirming',
+      request,
+      dispatched: false,
+      ids: [],
+    };
     lane.intent = intent;
     lane.page = null;
     publish({ intent, error: null, notice: null });

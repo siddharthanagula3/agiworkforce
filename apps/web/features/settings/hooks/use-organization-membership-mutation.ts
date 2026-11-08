@@ -1,6 +1,6 @@
 'use client';
 
-import { useLayoutEffect, useMemo, useState, type ReactElement } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useState, type ReactElement } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   MANAGED_CLOUD_ORGANIZATION_HEADER,
@@ -131,7 +131,7 @@ function useWorkspaceMembershipMutation<Input extends { organizationId: string }
   const lane = useMemo(
     () => ({
       active: false,
-      enabled: active,
+      enabled: false,
       incarnation: 0,
       accountId: null as string | null,
       generation: {} as object,
@@ -151,24 +151,30 @@ function useWorkspaceMembershipMutation<Input extends { organizationId: string }
     error: Error | null;
     status: 'idle' | 'pending' | 'success' | 'error';
   }>({ intent: null, error: null, status: 'idle' });
-  const current = (intent: Intent) =>
-    lane.active &&
-    lane.enabled &&
-    lane.generation === intent.generation &&
-    lane.intent === intent &&
-    lane.accountId === intent.accountId &&
-    workspaceOwnerIsCurrent(intent.owner, intent.epoch);
-  const releaseTransition = (intent: Intent, uncertain: boolean) => {
+  const current = useCallback(
+    (intent: Intent) =>
+      lane.active &&
+      lane.enabled &&
+      lane.generation === intent.generation &&
+      lane.intent === intent &&
+      lane.accountId === intent.accountId &&
+      workspaceOwnerIsCurrent(intent.owner, intent.epoch),
+    [lane],
+  );
+  const releaseTransition = useCallback((intent: Intent, uncertain: boolean) => {
     if (!intent.transitioned) return;
     intent.transitioned = false;
     finishWorkspaceSwitch(intent.owner, intent.epoch, uncertain);
-  };
-  const retire = (intent: Intent) => {
-    if (lane.intent === intent) lane.intent = null;
-    intent.release();
-    intent.request.retire();
-    releaseTransition(intent, intent.dispatched);
-  };
+  }, []);
+  const retire = useCallback(
+    (intent: Intent) => {
+      if (lane.intent === intent) lane.intent = null;
+      intent.release();
+      intent.request.retire();
+      releaseTransition(intent, intent.dispatched);
+    },
+    [lane, releaseTransition],
+  );
   useLayoutEffect(() => {
     lane.active = active;
     lane.incarnation += 1;
@@ -186,14 +192,14 @@ function useWorkspaceMembershipMutation<Input extends { organizationId: string }
       lane.active = false;
       if (lane.intent) retire(lane.intent);
     };
-  }, [lane, active]);
+  }, [lane, active, current, retire]);
   useLayoutEffect(() => {
     const intent = lane.intent;
     if (intent && !current(intent)) {
       retire(intent);
       setView({ intent: null, error: null, status: 'idle' });
     }
-  }, [lane, accountId, owner]);
+  }, [lane, accountId, owner, current, retire]);
 
   const mutation = useMutation<Receipt, Error, Intent>({
     retry: false,
@@ -286,7 +292,7 @@ function useWorkspaceMembershipMutation<Input extends { organizationId: string }
       if (lane.intent.phase !== 'confirming') return null;
       retire(lane.intent);
     }
-    let intent: Intent;
+
     const request = createRequestAuthority(
       owner.session,
       () => current(intent),
@@ -294,7 +300,7 @@ function useWorkspaceMembershipMutation<Input extends { organizationId: string }
         if (intent.phase === 'writing') intent.dispatched = true;
       },
     );
-    intent = {
+    const intent: Intent = {
       owner,
       epoch,
       generation: lane.generation,

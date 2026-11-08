@@ -45,7 +45,7 @@ const fixture = vi.hoisted(() => ({
 }));
 vi.mock('@clerk/nextjs', () => ({ useAuth: () => fixture.auth, useClerk: () => fixture.sdk }));
 vi.mock('@features/auth/step-up-fetch', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@features/auth/step-up-fetch')>()),
+  ...(await importOriginal<ImportedModule0>()),
   sendAuthorizedJson: vi.fn(),
 }));
 
@@ -531,3 +531,5 @@ describe.each(subjects)('developer $name query ownership', (subject) => {
     expect(new Headers(reads()[2]![1]?.headers).get('Authorization')).toBe('Bearer token-b');
   });
 });
+
+type ImportedModule0 = typeof import('@features/auth/step-up-fetch');

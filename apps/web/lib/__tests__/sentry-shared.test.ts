@@ -697,7 +697,7 @@ describe('current-page telemetry refusal when storage writes fail', () => {
     expect(hasPendingTelemetryOptOut()).toBe(true);
     expect(hasTelemetryConsent()).toBe(false);
     expect(shouldInitializeSentry()).toBe(false);
-    expect(scrubEvent({ user: { id: 'old-user' } })?.user).toBeUndefined();
+    expect(scrubEvent({ type: undefined, user: { id: 'old-user' } })?.user).toBeUndefined();
   }
 
   it('refuses immediately when the pending marker write fails but old consent remains readable', () => {

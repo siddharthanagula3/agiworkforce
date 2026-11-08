@@ -44,6 +44,7 @@ import { managedChatIdempotencyPurpose } from '@agiworkforce/utils/managed-chat-
 import {
   IMAGE_CARD_KIND,
   BILLING_PLAN_PRICING,
+  PRODUCT_NAMES,
   EDIT_IMAGE_TOOL_NAME,
   GENERATE_IMAGE_TOOL_NAME,
   getPlanMaxAttachmentsPerMessage,
@@ -1350,7 +1351,7 @@ export function getWorkModeEntitlementError(
   }
   return {
     code: 'agi_work_plan_required',
-    message: `AGI Work requires ${BILLING_PLAN_PRICING.pro.label} or higher.`,
+    message: `${PRODUCT_NAMES.work} requires ${BILLING_PLAN_PRICING.pro.label} or higher.`,
     requiredTier: 'pro',
   };
 }

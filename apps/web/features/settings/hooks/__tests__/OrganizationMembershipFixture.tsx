@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { cleanup } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { afterEach, beforeEach, vi } from 'vitest';
+import { afterEach, beforeEach, vi, type Mock } from 'vitest';
 
 type NativeSession = {
   id: string;
@@ -14,7 +14,25 @@ type NativeSession = {
   }) => Promise<unknown>;
 };
 
-const fixture = vi.hoisted(() => ({
+interface MembershipFixture {
+  serial: number;
+  accountId: string;
+  auth: { isLoaded: boolean; isSignedIn: boolean; userId: string; sessionId: string };
+  listeners: Set<() => void>;
+  sdk: {
+    loaded: boolean;
+    user: { id: string };
+    session: NativeSession | null;
+    addListener: (listener: () => void) => () => void;
+  };
+  navigate: Mock;
+  finalize: Mock;
+  applyCacheScope: Mock<() => Promise<boolean>>;
+  success: Mock;
+  error: Mock;
+}
+
+const fixture: MembershipFixture = {
   serial: 0,
   accountId: '',
   auth: { isLoaded: true, isSignedIn: true, userId: '', sessionId: '' },
@@ -33,27 +51,27 @@ const fixture = vi.hoisted(() => ({
   applyCacheScope: vi.fn(async () => true),
   success: vi.fn(),
   error: vi.fn(),
-}));
+};
 
 export { fixture };
 
-vi.mock('@clerk/nextjs', async (original) => ({
+vi.doMock('@clerk/nextjs', async (original) => ({
   ...(await original()),
   useAuth: () => fixture.auth,
   useClerk: () => fixture.sdk,
   useSession: () => ({ isLoaded: true, session: fixture.sdk.session }),
 }));
-vi.mock('@/lib/client/csrf', async (original) => ({
-  ...(await original<typeof import('@/lib/client/csrf')>()),
+vi.doMock('@/lib/client/csrf', async (original) => ({
+  ...(await original<MockedModule0>()),
   getCsrfToken: vi.fn(async () => 'captured-csrf'),
 }));
-vi.mock('sonner', () => ({ toast: { success: fixture.success, error: fixture.error } }));
-vi.mock('@shared/stores/authentication-store', async (original) => ({
-  ...(await original<typeof import('@shared/stores/authentication-store')>()),
+vi.doMock('sonner', () => ({ toast: { success: fixture.success, error: fixture.error } }));
+vi.doMock('@shared/stores/authentication-store', async (original) => ({
+  ...(await original<MockedModule1>()),
   applyCacheScope: fixture.applyCacheScope,
 }));
-vi.mock('@/features/workspaces/lib/workspace-cache-scope', async (original) => {
-  const actual = await original<typeof import('@/features/workspaces/lib/workspace-cache-scope')>();
+vi.doMock('@/features/workspaces/lib/workspace-cache-scope', async (original) => {
+  const actual = await original<MockedModule2>();
   return {
     ...actual,
     finalizeWorkspaceSwitch: (...args: Parameters<typeof actual.finalizeWorkspaceSwitch>) => {
@@ -63,10 +81,11 @@ vi.mock('@/features/workspaces/lib/workspace-cache-scope', async (original) => {
   };
 });
 
-import { getCsrfToken } from '@/lib/client/csrf';
 import { MANAGED_CLOUD_WORKSPACES_PATH } from '@agiworkforce/cloud-contracts';
-export { getCsrfToken } from '@/lib/client/csrf';
-export { useLeaveOrganization, useTransferOrganizationOwnership } from '../use-settings-queries';
+const { getCsrfToken } = await import('@/lib/client/csrf');
+const { useLeaveOrganization, useTransferOrganizationOwnership } =
+  await import('../use-settings-queries');
+export { getCsrfToken, useLeaveOrganization, useTransferOrganizationOwnership };
 
 export const ORG = '11111111-1111-4111-8111-111111111111';
 export const OTHER_ORG = '22222222-2222-4222-8222-222222222222';
@@ -204,3 +223,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
+
+type MockedModule0 = typeof import('@/lib/client/csrf');
+type MockedModule1 = typeof import('@shared/stores/authentication-store');
+type MockedModule2 = typeof import('@/features/workspaces/lib/workspace-cache-scope');

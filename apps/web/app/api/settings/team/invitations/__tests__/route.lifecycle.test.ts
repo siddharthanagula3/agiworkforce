@@ -19,7 +19,8 @@ const { mockQuery, mockExecute, mockTransaction, mockRequireTeamAdminAccess } = 
 
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule1>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/security-audit', () => ({
@@ -28,7 +29,8 @@ vi.mock('@/lib/security-audit', () => ({
   logAuthFailure: vi.fn(async () => undefined),
   logRateLimitExceeded: vi.fn(),
 }));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule0>()),
   getClerkAuthUser: vi.fn(async () => ({ userId: 'org-a-admin' })),
 }));
 vi.mock('@/app/api/settings/team/team-admin-access', () => ({
@@ -606,7 +608,8 @@ describe('organization invitation lifecycle routes', () => {
         String(sql).includes("set status = 'declined'"),
       )!;
       expect(String(update[0])).toContain("set status = 'declined'");
-      expect(update[1]).toEqual([INVITE_ID]);
+      expect(String(update[0])).toContain('token_hash = $2');
+      expect(update[1]).toEqual([INVITE_ID, hashInvitationToken(token)]);
       expect(
         mockExecute.mock.calls.some(([sql]) =>
           String(sql).includes('insert into public.organization_members'),
@@ -729,3 +732,7 @@ describe('organization invitation lifecycle routes', () => {
     });
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/api-auth');
+
+type RetainedMockModule1 = typeof import('@/lib/logger');

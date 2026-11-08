@@ -29,7 +29,7 @@ import { ShareConversationDialog } from './ShareConversationDialog';
 
 const identity = vi.hoisted(() => ({ session: null as SessionAuthority | null, serial: 0 }));
 vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/identity/useSessionSnapshot')>()),
+  ...(await importOriginal<ImportedModule0>()),
   useSessionSnapshot: () => () => identity.session,
 }));
 
@@ -1575,3 +1575,5 @@ describe('ShareConversationDialog on a chat the store has not opened', () => {
     expect(sentBodies(fetchMock)).toEqual([]);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/identity/useSessionSnapshot');

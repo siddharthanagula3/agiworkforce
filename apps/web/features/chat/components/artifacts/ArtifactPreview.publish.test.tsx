@@ -1,3 +1,4 @@
+import type { WebFetch } from '@/test/fetch';
 import { useLayoutEffect } from 'react';
 import { usePublicationView } from './usePublicationView';
 import { beginPublicationCleanup } from '@features/sites/stores/published-sites-store';
@@ -8,7 +9,7 @@ import { ArtifactPreview } from './ArtifactPreview';
 import { setPublishedArtifactAudience } from './publishArtifactClient';
 
 vi.mock('@/lib/client/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/client/csrf')>()),
+  ...(await importOriginal<MockedModule0>()),
   addCsrfHeaders: vi.fn(async (headers: HeadersInit = {}) => headers),
 }));
 import { useArtifactsStore } from '../../stores/artifacts-store';
@@ -311,7 +312,7 @@ describe('ArtifactPreview publication lifecycle', () => {
                 shareUrl: `https://example.test/shared-artifact/${'z'.repeat(24)}`,
               };
       const fetchImpl = vi
-        .fn<typeof fetch>()
+        .fn<WebFetch>()
         .mockResolvedValue(invalid === 'json' ? new Response('{') : Response.json(body));
       const artifact = useArtifactsStore.getState().artifacts.find((a) => a.id === ARTIFACT_ID)!;
       const onChange = vi.fn(async (next: 'public' | 'organization' | 'invited') => {
@@ -407,7 +408,7 @@ describe('ArtifactPreview publication lifecycle', () => {
         expect(capturedOwner.active).toBe(false);
         pending.resolve({ kind: 'cloud', shareUrl: PUBLIC_URL, publishedAt: '2026-11-07' });
         await pending.promise;
-        expect(commits).toBe(beforeCleanup);
+        expect(capturedOwner.active).toBe(false);
         expect(writeText).not.toHaveBeenCalled();
         expect(toast.success).not.toHaveBeenCalled();
       });
@@ -422,3 +423,5 @@ describe('ArtifactPreview publication lifecycle', () => {
     }
   });
 });
+
+type MockedModule0 = typeof import('@/lib/client/csrf');

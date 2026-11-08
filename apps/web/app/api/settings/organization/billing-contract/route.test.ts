@@ -31,20 +31,22 @@ vi.mock('@/lib/services/organization-permission-service', async () => {
   const { createError } = await import('@/lib/errors');
   const permissions = (organizationId: string) =>
     permissionsForRole(scope.roles.get(organizationId) ?? permissionRole.value);
+  mocks.permission = vi.fn(
+    async (organizationId: string, _userId: string, permission: OrganizationPermission) => {
+      if (!permissions(organizationId).has(permission)) {
+        throw createError.forbidden('Permission denied');
+      }
+    },
+  );
   return {
     resolveOrganizationPermissions: vi.fn(async (organizationId: string) =>
       permissions(organizationId),
     ),
-    requireMemberPermission: mocks.permission.mockImplementation(
-      async (organizationId: string, _userId: string, permission: OrganizationPermission) => {
-        if (!permissions(organizationId).has(permission)) {
-          throw createError.forbidden('Permission denied');
-        }
-      },
-    ),
+    requireMemberPermission: mocks.permission,
   };
 });
-vi.mock('@/lib/error-handler', () => ({
+vi.mock('@/lib/error-handler', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule0>()),
   withErrorHandler:
     (handler: (request: NextRequest) => Promise<Response>) => async (request: NextRequest) => {
       try {
@@ -65,7 +67,8 @@ vi.mock('@/lib/server/neon-db', () => ({
 vi.mock('@/lib/services/active-workspace-service', () => ({
   resolveActiveOrganizationId: mocks.savedOrganization,
 }));
-vi.mock('@/lib/services/org-entitlements', () => ({
+vi.mock('@/lib/services/org-entitlements', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule0>()),
   getOrganizationEntitlements: vi.fn(),
   getSharedProjectLimitErrorMessage: vi.fn(),
   isOrgResourceLimitError: vi.fn(),
@@ -83,12 +86,14 @@ vi.mock('@/lib/server/payments/subscription-history', () => ({
 vi.mock('@/lib/server/admin-data-access', () => ({
   logAdminDataAccess: mocks.adminAudit,
 }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule1>()),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.rate }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mocks.csrf }));
-vi.mock('@/lib/security-audit', () => ({
+vi.mock('@/lib/security-audit', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule1>()),
   recordAuditEvent: mocks.recordAuditEvent,
 }));
 vi.mock('@/lib/server/rls-db', () => ({
@@ -825,3 +830,9 @@ describe('captured billing-contract workspace isolation', () => {
     });
   }
 });
+
+type CompleteMockModule0 = typeof import('@/lib/services/org-entitlements');
+type CompleteMockModule1 = typeof import('@/lib/security-audit');
+
+type RetainedMockModule0 = typeof import('@/lib/error-handler');
+type RetainedMockModule1 = typeof import('@/lib/logger');

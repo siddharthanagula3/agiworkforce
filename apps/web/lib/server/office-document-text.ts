@@ -203,7 +203,10 @@ async function extractDocx(data: Buffer, filename: string): Promise<string> {
   const bounded = await readZip(data, filename);
   try {
     const accepted = new JSZip();
-    accepted.comment = bounded.zip.comment;
+    const comment =
+      'comment' in bounded.zip && typeof bounded.zip.comment === 'string'
+        ? bounded.zip.comment
+        : undefined;
     for (const entry of Object.values(bounded.zip.files)) {
       const bytes = entry.dir ? new Uint8Array() : await readArchiveMember(entry, bounded.budget);
       accepted.file(entry.name, bytes, {
@@ -216,7 +219,11 @@ async function extractDocx(data: Buffer, filename: string): Promise<string> {
         compression: 'STORE',
       });
     }
-    const buffer = await accepted.generateAsync({ type: 'nodebuffer', compression: 'STORE' });
+    const buffer = await accepted.generateAsync({
+      type: 'nodebuffer',
+      compression: 'STORE',
+      comment,
+    });
     const result = await mammoth.convertToHtml({ buffer });
     return htmlToText(result.value);
   } catch (error) {

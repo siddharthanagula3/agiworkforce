@@ -40,11 +40,11 @@ vi.mock('@clerk/nextjs', async (original) => ({
 }));
 vi.mock('sonner', () => ({ toast: { success: fixture.success, error: fixture.error } }));
 vi.mock('@/lib/client/csrf', async (original) => ({
-  ...(await original<typeof import('@/lib/client/csrf')>()),
+  ...(await original<MockedModule0>()),
   getCsrfToken: vi.fn(async () => 'csrf'),
 }));
 vi.mock('@hookform/resolvers/zod', async (original) => {
-  const actual = await original<typeof import('@hookform/resolvers/zod')>();
+  const actual = await original<MockedModule1>();
   return {
     ...actual,
     zodResolver: (...args: Parameters<typeof actual.zodResolver>) => {
@@ -57,7 +57,7 @@ vi.mock('@hookform/resolvers/zod', async (original) => {
   };
 });
 vi.mock('@/features/developers/hooks/use-developer-projects', async (original) => ({
-  ...(await original<typeof import('@/features/developers/hooks/use-developer-projects')>()),
+  ...(await original<MockedModule2>()),
   useDeveloperProjects: () => ({ data: [], isLoading: false, isSuccess: true, isError: false }),
 }));
 vi.mock('@/features/developers/hooks/use-developer-usage', () => ({
@@ -69,7 +69,7 @@ vi.mock('@/features/developers/hooks/use-developer-usage', () => ({
   }),
 }));
 vi.mock('@agiworkforce/ui', async (original) => {
-  const actual = await original<typeof import('@agiworkforce/ui')>();
+  const actual = await original<MockedModule3>();
   return {
     ...actual,
     Button: (props: React.ComponentProps<typeof actual.Button>) => {
@@ -669,3 +669,8 @@ describe('API key editor ownership', () => {
     expect(fixture.error).not.toHaveBeenCalled();
   });
 });
+
+type MockedModule0 = typeof import('@/lib/client/csrf');
+type MockedModule1 = typeof import('@hookform/resolvers/zod');
+type MockedModule2 = typeof import('@/features/developers/hooks/use-developer-projects');
+type MockedModule3 = typeof import('@agiworkforce/ui');

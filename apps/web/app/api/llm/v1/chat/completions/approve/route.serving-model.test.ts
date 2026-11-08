@@ -1,3 +1,4 @@
+import { contextPolicySnapshotFixture } from '@/lib/services/__tests__/fixtures/context-policy-snapshot';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
@@ -57,7 +58,7 @@ vi.mock('@/lib/workflows/start-cloud-agent-workflow', async (importOriginal) => 
 const db = { query: vi.fn(async () => []), transaction: vi.fn() };
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
   ...(await importOriginal<RlsDbModule>()),
-  getUserScopedDb: async () => ({ db }),
+  getUserScopedDb: async () => ({ db, userId: 'user-1', organizationId: null }),
 }));
 vi.mock('@/lib/services/cloud-agent-run-service', async (importOriginal) => ({
   ...(await importOriginal<ScanModule4>()),
@@ -163,6 +164,9 @@ function claimedCheckpoint() {
         {},
         [],
         AUTO_SELECTION,
+        undefined,
+        undefined,
+        contextPolicySnapshotFixture(),
       ),
       messages: suspendedMessages,
       pendingToolCalls: [{ id: 'call_1', qualifiedName: 'mcp__gmail__search_threads', args: {} }],

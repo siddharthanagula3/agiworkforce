@@ -210,7 +210,11 @@ describe('partial artifact lifecycle boundaries (characterization)', () => {
     const shared = _sharedArtifactStore.getState().artifacts[0]!;
     expect(shared).not.toHaveProperty('interrupted');
     useArtifactsStore.getState().reset();
-    useArtifactsStore.getState().addArtifactForMessage(MESSAGE_ID, shared, CONVERSATION_ID);
+    if (shared.type !== 'html') throw new Error('Expected the HTML fixture');
+    _sharedArtifactStore.setState({
+      artifacts: [shared],
+      versionsById: { [shared.id]: [shared] },
+    });
     render(
       <MessageBubble
         message={{ ...assistantMessage(), metadata: { cloudApproval: projection } }}
@@ -220,6 +224,9 @@ describe('partial artifact lifecycle boundaries (characterization)', () => {
     expect(useArtifactsStore.getState().getMessageArtifacts(MESSAGE_ID)[0]?.content).toBe(
       shared.content,
     );
+    expect(
+      useArtifactsStore.getState().getMessageArtifacts(MESSAGE_ID)[0]?.createdAt.toISOString(),
+    ).toBe(shared.createdAt);
   });
 
   it('characterizes an existing partial winning over parsed completion after the fence closes', () => {

@@ -12,6 +12,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { recordAuditEvent } from '@/lib/security-audit';
 import { describePublishedArtifactWorkspace } from '@/lib/services/published-artifact-workspace';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { preparePublishedArtifactPublication } from '@/lib/services/published-artifact-publication-policy';
@@ -95,6 +96,18 @@ async function handlePublish(request: NextRequest): Promise<Response> {
     }
     throw error;
   }
+
+  await recordAuditEvent({
+    userId,
+    organizationId,
+    eventType: 'share_link_updated',
+    request,
+    detail: {
+      resourceType: 'published_artifact',
+      resourceId: published.id,
+      status: 'published',
+    },
+  });
 
   return NextResponse.json(
     {

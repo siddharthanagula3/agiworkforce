@@ -1,4 +1,4 @@
-import { createWebChatWorkspaceFixture } from './web-chat-workspace-fixture';
+import { createWebChatWorkspaceFixture } from './WebChatWorkspaceFixture';
 import type { ReactNode } from 'react';
 import { render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

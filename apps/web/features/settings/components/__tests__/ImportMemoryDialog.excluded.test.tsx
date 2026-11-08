@@ -4,10 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createCloudMemoryFixture,
   getCloudMemoryFixtureSession,
-} from '@/features/memory/__tests__/cloud-memory-fixture';
+} from '@/features/memory/__tests__/CloudMemoryFixture';
 
 vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/identity/useSessionSnapshot')>()),
+  ...(await importOriginal<ImportedModule0>()),
   useSessionSnapshot: () => getCloudMemoryFixtureSession,
   useReadonlyIdentityLifetime: () => () => {
     const session = getCloudMemoryFixtureSession();
@@ -172,3 +172,5 @@ describe('Unexecuted cloud import says what the never remember list dropped', ()
     expect(screen.queryByText(/never remember list/)).toBeNull();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/identity/useSessionSnapshot');

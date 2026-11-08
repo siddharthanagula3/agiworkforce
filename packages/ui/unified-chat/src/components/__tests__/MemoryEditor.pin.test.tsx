@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryEditor, type MemoryEditorDataAdapter } from '../MemoryEditor';
 import type { MemoryFact } from '../../stores/memoryStore';
 
@@ -14,7 +14,8 @@ const localStore = vi.hoisted(() => ({
   clear: vi.fn(),
 }));
 
-vi.mock('../../stores/memoryStore', () => ({
+vi.mock('../../stores/memoryStore', async (importOriginal) => ({
+  ...(await importOriginal<MemoryStoreModule>()),
   useMemoryStore: (selector?: (state: typeof localStore) => unknown) =>
     selector ? selector(localStore) : localStore,
 }));
@@ -69,15 +70,21 @@ describe('MemoryEditor pinning (unexecuted fixture alignment)', () => {
     );
   });
 
-  it('asks the owner to pin and unpin through the adapter', () => {
+  it('asks the owner to pin and unpin through the adapter', async () => {
     const data = adapter([fact('a', 'Prefers short answers'), fact('b', 'Works in Lisbon', true)]);
     render(<MemoryEditor adapter={data} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Pin memory' }));
     expect(data.setPinned).toHaveBeenCalledWith('a', true);
 
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Unpin memory' })).toHaveProperty(
+        'disabled',
+        false,
+      ),
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Unpin memory' }));
-    expect(data.setPinned).toHaveBeenCalledWith('b', false);
+    await waitFor(() => expect(data.setPinned).toHaveBeenCalledWith('b', false));
     expect(localStore.setPinned).not.toHaveBeenCalled();
   });
 
@@ -114,3 +121,5 @@ describe('MemoryEditor pinning (unexecuted fixture alignment)', () => {
     expect(screen.queryByText('Pinning is not available for this memory source.')).toBeNull();
   });
 });
+
+type MemoryStoreModule = typeof import('../../stores/memoryStore');

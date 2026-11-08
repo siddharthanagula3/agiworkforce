@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useBillingStore, type SubscriptionPlan } from '@shared/stores/web-auth-store';
@@ -107,7 +108,7 @@ describe('composer @mention menu', () => {
       <ChatComposerNew onSend={vi.fn()} emptyState projectPicker={picker({ onSelectProject })} />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'AGI Work' }));
+    fireEvent.click(screen.getByRole('button', { name: PRODUCT_NAMES.work }));
     const textarea = typeInComposer('@Laun');
 
     expect(screen.getByRole('option', { name: 'Launch' })).toBeVisible();
@@ -205,5 +206,13 @@ vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => {
   return {
     ...(await importOriginal<ReadonlyIdentityModule>()),
     useReadonlyIdentityLifetime: () => capture,
+    useSessionSnapshot: () => () => null,
   };
 });
+
+type WorkspacePolicyModule = typeof import('@shared/hooks/use-workspace-policy');
+vi.mock('@shared/hooks/use-workspace-policy', async (importOriginal) => ({
+  ...(await importOriginal<WorkspacePolicyModule>()),
+  useWorkspacePolicy: () => ({ policy: null, source: 'none', stale: false, checkedAt: null }),
+  useDisabledWorkspaceFeatures: () => [],
+}));

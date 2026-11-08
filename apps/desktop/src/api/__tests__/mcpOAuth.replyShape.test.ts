@@ -78,8 +78,7 @@ describe('MCP OAuth replies', () => {
 
 describe('MCP OAuth fixtures', () => {
   it('answers in the shape the native commands use, so no field is left undefined', async () => {
-    const actual =
-      await vi.importActual<typeof import('../../lib/tauri-mock')>('../../lib/tauri-mock');
+    const actual = await vi.importActual<ImportedModule0>('../../lib/tauri-mock');
     vi.mocked(invoke).mockImplementation(actual.invoke);
 
     expect(await mcpOAuthStart('github')).toEqual({
@@ -95,3 +94,5 @@ describe('MCP OAuth fixtures', () => {
     expect((await mcpOAuthRefresh('github')).expiresAt).toBeNull();
   });
 });
+
+type ImportedModule0 = typeof import('../../lib/tauri-mock');

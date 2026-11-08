@@ -12,23 +12,23 @@ const h = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  ...(await importOriginal<ImportedModule0>()),
   getUserScopedDb: h.getUserScopedDb,
 }));
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<ImportedModule1>()),
   withRateLimit: vi.fn(async () => null),
 }));
 vi.mock('@/lib/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/csrf')>()),
+  ...(await importOriginal<ImportedModule2>()),
   requireCsrfToken: vi.fn(async () => null),
 }));
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<ImportedModule3>()),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/server/request-context-cache', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/request-context-cache')>()),
+  ...(await importOriginal<ImportedModule4>()),
   invalidateActiveOrganizationCache: h.invalidateActiveOrganizationCache,
 }));
 
@@ -384,3 +384,9 @@ describe('transaction completion failures', () => {
     done();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/server/rls-db');
+type ImportedModule1 = typeof import('@/lib/rate-limit');
+type ImportedModule2 = typeof import('@/lib/csrf');
+type ImportedModule3 = typeof import('@/lib/logger');
+type ImportedModule4 = typeof import('@/lib/server/request-context-cache');

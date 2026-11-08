@@ -42,11 +42,11 @@ vi.mock('@/lib/services/org-sharing-service', async (importOriginal) => ({
   resolveSharedProjectScope: mockResolveSharedProjectScope,
 }));
 vi.mock('@/lib/services/active-workspace-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/active-workspace-service')>()),
+  ...(await importOriginal<ImportedModule0>()),
   resolveActiveOrganizationId: mockSavedOrganizationId,
 }));
 vi.mock('@/lib/services/organization-permission-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/organization-permission-service')>()),
+  ...(await importOriginal<ImportedModule1>()),
   resolveOrganizationPermissions: mockPermissions,
 }));
 
@@ -431,3 +431,6 @@ describe('the payload says which projects the caller may write', () => {
     expect(mockResolveSharedProjectScope).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/services/active-workspace-service');
+type ImportedModule1 = typeof import('@/lib/services/organization-permission-service');

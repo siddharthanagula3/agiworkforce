@@ -8,9 +8,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError, success: vi.fn() } }));
 vi.mock('@/runtime/TauriRuntime', async () => ({
-  resolveArtifactRenderType: (
-    await vi.importActual<typeof import('@/runtime/TauriRuntime')>('@/runtime/TauriRuntime')
-  ).resolveArtifactRenderType,
+  resolveArtifactRenderType: (await vi.importActual<ImportedModule0>('@/runtime/TauriRuntime'))
+    .resolveArtifactRenderType,
 }));
 vi.mock('@/stores/artifactStore', () => ({
   useArtifactStore: { getState: () => ({ getArtifact: mocks.getArtifact }) },
@@ -96,3 +95,5 @@ describe('openArtifactInChat', () => {
     expect(useChatArtifactStore.getState().activeArtifact).toBeNull();
   });
 });
+
+type ImportedModule0 = typeof import('@/runtime/TauriRuntime');

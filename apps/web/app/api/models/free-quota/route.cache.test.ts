@@ -156,7 +156,10 @@ it('reads the shared quota state once for every account instead of once per requ
 
   expect(reads).toHaveBeenCalledTimes(1);
   expect(otherFree).toEqual(free);
-  expect(free.models.every((model) => model.category === 'chat')).toBe(true);
+  expect(new Set(free.models.map((model) => model.category))).toEqual(
+    new Set(['chat', 'image', 'video']),
+  );
+  expect(free.limitedOffer?.map((offer) => offer.category)).toEqual(['image', 'video']);
   expect(media.models.every((model) => ['image', 'video'].includes(model.category))).toBe(true);
 });
 

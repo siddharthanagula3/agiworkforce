@@ -22,9 +22,7 @@ const {
   mockGetUserScopedDb: vi.fn(),
   mockRecordAuditEvent: vi.fn(async (_event: unknown) => undefined),
   mockRequireTeamAdminAccess: vi.fn(async () => ({ plan: 'team', canManageTeam: true })),
-  mockResolveMfaEnrolled: vi.fn<typeof import('@/lib/mfa-policy-gate').resolveMfaEnrolled>(
-    async () => true,
-  ),
+  mockResolveMfaEnrolled: vi.fn<ImportedModule0>(async () => true),
   mockGetIdentityUser: vi.fn(),
   mockEnrollmentCacheGet: vi.fn(),
   mockEnrollmentCacheSet: vi.fn(async () => undefined),
@@ -45,11 +43,11 @@ vi.mock('@/lib/security-audit', async (importOriginal) => {
 });
 vi.mock('@/lib/mfa-policy-gate', () => ({ resolveMfaEnrolled: mockResolveMfaEnrolled }));
 vi.mock('@/lib/server/identity', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/server/identity')>();
+  const actual = await importOriginal<ImportedModule1>();
   return { ...actual, getIdentityUser: mockGetIdentityUser };
 });
 vi.mock('@/lib/server/key-value', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/server/key-value')>();
+  const actual = await importOriginal<ImportedModule2>();
   return {
     ...actual,
     getKeyValueStore: vi.fn(() => ({
@@ -953,8 +951,7 @@ describe('native policy preflight (real MFA resolver; admitted auth/provider/DB 
     vi.stubEnv('AGI_AUTHENTICATOR_ENROLLMENT', '1');
     vi.mocked(requireCsrfToken).mockResolvedValue(null);
     vi.mocked(withRateLimit).mockResolvedValue(null);
-    const actual =
-      await vi.importActual<typeof import('@/lib/mfa-policy-gate')>('@/lib/mfa-policy-gate');
+    const actual = await vi.importActual<ImportedModule3>('@/lib/mfa-policy-gate');
     mockResolveMfaEnrolled.mockReset().mockImplementation(actual.resolveMfaEnrolled);
     mockGetIdentityUser.mockReset();
     mockEnrollmentCacheGet.mockReset().mockResolvedValue('enrolled');
@@ -983,7 +980,7 @@ describe('native policy preflight (real MFA resolver; admitted auth/provider/DB 
       expect(mockGetIdentityUser).toHaveBeenCalledExactlyOnceWith(subject);
       expect(mockEnrollmentCacheGet).not.toHaveBeenCalled();
       expect(mockEnrollmentCacheSet).not.toHaveBeenCalled();
-      expect(state.rows.get(CAPTURED_ORG)?.metadata).toMatchObject({ requireMfa: true });
+      expect(state.rows.get(CAPTURED_ORG)?.['metadata']).toMatchObject({ requireMfa: true });
       expect(state.revisions.get(CAPTURED_ORG)).toBe(10);
       expect(getCachedIpAllowList(CAPTURED_ORG)).toBeUndefined();
       expect(mockRecordAuditEvent).toHaveBeenCalledTimes(1);
@@ -1005,8 +1002,8 @@ describe('native policy preflight (real MFA resolver; admitted auth/provider/DB 
         const sessionIdentity = { subject, sessionId: 'captured-session' };
         const state = bindCapturedScope({ role: 'owner', sessionIdentity });
         const row = state.rows.get(CAPTURED_ORG)!;
-        row.metadata = {
-          ...(row.metadata as Record<string, unknown>),
+        row['metadata'] = {
+          ...(row['metadata'] as Record<string, unknown>),
           requireMfa: alreadyRequired,
         };
         const original = JSON.stringify(row);
@@ -1052,7 +1049,10 @@ describe('native policy preflight (real MFA resolver; admitted auth/provider/DB 
         sessionIdentity: { subject: nativeSubject, sessionId: 'captured-session' },
       });
       const row = state.rows.get(CAPTURED_ORG)!;
-      row.metadata = { ...(row.metadata as Record<string, unknown>), requireMfa: alreadyRequired };
+      row['metadata'] = {
+        ...(row['metadata'] as Record<string, unknown>),
+        requireMfa: alreadyRequired,
+      };
 
       const response = await PATCH(
         forgedMfaRequest(alreadyRequired ? { requireMfa: false } : { retentionDays: 30 }),
@@ -1063,7 +1063,7 @@ describe('native policy preflight (real MFA resolver; admitted auth/provider/DB 
       expect(mockGetIdentityUser).not.toHaveBeenCalled();
       expect(mockEnrollmentCacheGet).not.toHaveBeenCalled();
       expect(mockEnrollmentCacheSet).not.toHaveBeenCalled();
-      expect(state.rows.get(CAPTURED_ORG)?.metadata).toMatchObject({ requireMfa: false });
+      expect(state.rows.get(CAPTURED_ORG)?.['metadata']).toMatchObject({ requireMfa: false });
       state.assertAUnchanged();
     });
   }
@@ -1153,7 +1153,7 @@ describe('captured policy scope (auth mocked; UNRUN)', () => {
         allow_managed_compute: true,
         metadata: { marker: 'B' },
       });
-      expect(state.rows.get(CAPTURED_ORG)?.retention_days).toBe(30);
+      expect(state.rows.get(CAPTURED_ORG)?.['retention_days']).toBe(30);
       expect(body.policy.organizationId).toBe(CAPTURED_ORG);
       expect(body.policy.retentionDays).toBe(30);
       expect(body.revision).toBe(10);
@@ -1287,3 +1287,8 @@ describe('captured policy scope (auth mocked; UNRUN)', () => {
     }
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/mfa-policy-gate').resolveMfaEnrolled;
+type ImportedModule1 = typeof import('@/lib/server/identity');
+type ImportedModule2 = typeof import('@/lib/server/key-value');
+type ImportedModule3 = typeof import('@/lib/mfa-policy-gate');

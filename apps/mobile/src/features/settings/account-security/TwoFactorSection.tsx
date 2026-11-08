@@ -81,6 +81,8 @@ function ActionButton({
   );
 }
 
+const IDLE_STAGE: Stage = { name: 'idle' };
+
 export function TwoFactorSection({
   status,
   account,
@@ -95,11 +97,11 @@ export function TwoFactorSection({
   onChanged: () => void;
 }) {
   const colors = useThemeColors();
-  const [storedStage, setStage] = useState<Stage>({ name: 'idle' });
+  const [storedStage, setStage] = useState<Stage>(IDLE_STAGE);
   const stage: Stage =
     storedStage.name === 'idle' || isCloudAccountEpochCurrent(storedStage.account)
       ? storedStage
-      : { name: 'idle' };
+      : IDLE_STAGE;
   const operation = useRef(0);
   useEffect(
     () => () => {

@@ -17,7 +17,7 @@ function replaceAccount() {
 }
 
 vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/identity/useSessionSnapshot')>()),
+  ...(await importOriginal<ImportedModule0>()),
   useSessionSnapshot: () => () => session,
 }));
 
@@ -28,7 +28,7 @@ const fetchStoredPreferenceNamespace = vi.fn(async () => ({
 const savePreferenceNamespace = vi.fn(async () => undefined);
 
 vi.mock('@/app/settings/_lib/preferences-client', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/app/settings/_lib/preferences-client')>()),
+  ...(await importOriginal<ImportedModule1>()),
   fetchOwnedPreferenceNamespace: (_owner: unknown, ...args: unknown[]) =>
     fetchStoredPreferenceNamespace(...(args as [])),
   saveOwnedPreferenceNamespace: (_owner: unknown, ...args: unknown[]) =>
@@ -133,3 +133,6 @@ describe('memory source suppression control', () => {
     expect(screen.getByRole('checkbox', { name: /automatically captured/i })).toBeEnabled();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/identity/useSessionSnapshot');
+type ImportedModule1 = typeof import('@/app/settings/_lib/preferences-client');

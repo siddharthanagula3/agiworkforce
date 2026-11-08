@@ -49,7 +49,7 @@ vi.mock('@/lib/services/org-entitlements', () => ({
   isOrgResourceLimitError: vi.fn(),
 }));
 vi.mock('@/lib/services/org-sharing-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/org-sharing-service')>()),
+  ...(await importOriginal<ImportedModule0>()),
   resolveOrgMembership: mockResolveSavedMembership,
 }));
 vi.mock('@/lib/services/organization-permission-service', () => ({
@@ -541,3 +541,5 @@ describe('captured model-policy workspace boundary', () => {
     expectNoPolicyEffects();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/services/org-sharing-service');

@@ -70,7 +70,7 @@ export default function ArchivedChatsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [scopeRevision, setScopeRevision] = useState(0);
+  const [scope, setScope] = useState(() => ({ account: captureCloudAccountEpoch() }));
   const sessionRef = useRef<ArchivedSession | null>(null);
 
   const isCurrent = useCallback((owner: ArchivedSession) => {
@@ -163,7 +163,7 @@ export default function ArchivedChatsScreen() {
       setLoadingMore(false);
       setBusyId(null);
       setState({ kind: 'loading', owner: null });
-      setScopeRevision((revision) => revision + 1);
+      setScope({ account: captureCloudAccountEpoch() });
     };
     const stopEpoch = subscribeCloudAccountEpochChange(invalidate);
     const stopMode = useChatAppModeStore.subscribe((next, previous) => {
@@ -192,7 +192,7 @@ export default function ArchivedChatsScreen() {
       setLoadingMore(false);
       setBusyId(null);
       setState({ kind: 'loading', owner: null });
-      const account = captureCloudAccountEpoch();
+      const account = scope.account;
       if (
         appMode !== 'cloud' ||
         !isClerkLoaded ||
@@ -214,7 +214,7 @@ export default function ArchivedChatsScreen() {
       return () => {
         if (sessionRef.current === owner) retire();
       };
-    }, [appMode, isClerkLoaded, isClerkSignedIn, clerkUserId, scopeRevision, load, retire]),
+    }, [appMode, isClerkLoaded, isClerkSignedIn, clerkUserId, scope, load, retire]),
   );
 
   const handleBack = useCallback(() => {

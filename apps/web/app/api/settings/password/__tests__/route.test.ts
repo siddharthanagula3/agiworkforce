@@ -78,7 +78,7 @@ vi.mock('@/lib/server/neon-db', () => ({
   getStripeWebhookDb: vi.fn(),
 }));
 vi.mock('@/lib/services/active-workspace-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/active-workspace-service')>()),
+  ...(await importOriginal<ImportedModule0>()),
   resolveActiveOrganizationId: mocks.resolveOrganization,
 }));
 vi.mock('@/lib/server/claimed-user-scope-db', () => ({
@@ -500,3 +500,5 @@ describe('POST /api/settings/password', () => {
     );
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/services/active-workspace-service');

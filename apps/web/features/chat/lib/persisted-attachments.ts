@@ -1,4 +1,4 @@
-import type { Attachment, Message } from '@/shared/stores/web-chat-store';
+import type { Message } from '@/shared/stores/web-chat-store';
 
 export type ApiContentPart =
   | { type: 'text'; text: string }

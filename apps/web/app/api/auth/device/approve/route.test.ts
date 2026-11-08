@@ -25,7 +25,7 @@ vi.mock('@/lib/api-auth', () => ({
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/server/device-signin-policy', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/server/device-signin-policy')>();
+  const actual = await importOriginal<ImportedModule0>();
   return { ...actual, readDeviceCodeSignInPolicy: vi.fn(actual.readDeviceCodeSignInPolicy) };
 });
 vi.mock('@/lib/security-audit', () => ({
@@ -289,3 +289,5 @@ describe('POST /api/auth/device/approve', () => {
     );
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/server/device-signin-policy');

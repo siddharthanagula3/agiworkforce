@@ -17,7 +17,7 @@ vi.mock('server-only', () => ({}));
 
 const gmailAction = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/connectors/gmail-actions', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/connectors/gmail-actions')>()),
+  ...(await importOriginal<ImportedModule0>()),
   executeGmailAction: gmailAction,
 }));
 
@@ -1203,3 +1203,5 @@ vi.mock('@/lib/services/connector-policy-gate', async (importOriginal) => ({
   ...(await importOriginal<DiscoveryPolicyGateModule>()),
   evaluateConnectorPolicyForUser: vi.fn(async () => ({ allowed: true })),
 }));
+
+type ImportedModule0 = typeof import('@/lib/connectors/gmail-actions');

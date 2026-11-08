@@ -5,7 +5,7 @@ import { MICROUSD_PER_CREDIT } from '@agiworkforce/types';
 import { BLOCK_APPEAL_PATH } from '@/lib/security-audit';
 
 vi.mock('@/lib/services/usage-limit-promotion-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/usage-limit-promotion-service')>()),
+  ...(await importOriginal<ImportedModule0>()),
   resolvePromotionalCaps: vi.fn(async ({ caps }: { caps: unknown }) => caps),
 }));
 
@@ -1179,3 +1179,5 @@ describe('resolveManagedQuotaRecovery', () => {
     ).toEqual({ action: 'contact_support', href: BLOCK_APPEAL_PATH });
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/services/usage-limit-promotion-service');

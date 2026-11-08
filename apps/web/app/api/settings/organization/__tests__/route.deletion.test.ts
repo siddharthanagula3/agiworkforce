@@ -21,7 +21,7 @@ const {
 }));
 
 vi.mock('@/lib/server/request-context-cache', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/request-context-cache')>()),
+  ...(await importOriginal<ImportedModule0>()),
   getCachedActiveOrganizationId: mockGetCachedActiveOrganizationId,
   setCachedActiveOrganizationId: vi.fn(async () => undefined),
 }));
@@ -338,3 +338,5 @@ describe('DELETE /api/settings/organization', () => {
     });
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/server/request-context-cache');

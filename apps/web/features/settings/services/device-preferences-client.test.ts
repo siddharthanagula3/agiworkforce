@@ -5,11 +5,14 @@ import { addCsrfHeaders } from '@/lib/client/csrf';
 import { readDevicePreferences, saveDevicePreference } from './device-preferences-client';
 
 vi.mock('@/app/settings/_lib/preferences-client', async (original) => {
-  const module = await original<typeof import('@/app/settings/_lib/preferences-client')>();
-  return { ...module, invalidatePreferencesSnapshot: vi.fn(module.invalidatePreferencesSnapshot) };
+  const preferences = await original<ImportedModule0>();
+  return {
+    ...preferences,
+    invalidatePreferencesSnapshot: vi.fn(preferences.invalidatePreferencesSnapshot),
+  };
 });
 vi.mock('@/lib/client/csrf', async (original) => ({
-  ...(await original<typeof import('@/lib/client/csrf')>()),
+  ...(await original<ImportedModule1>()),
   addCsrfHeaders: vi.fn(async (headers: HeadersInit = {}) => new Headers(headers)),
 }));
 const fetchMock = vi.fn<typeof fetch>();
@@ -165,3 +168,6 @@ describe('device sign-in preference transport', () => {
     },
   );
 });
+
+type ImportedModule0 = typeof import('@/app/settings/_lib/preferences-client');
+type ImportedModule1 = typeof import('@/lib/client/csrf');

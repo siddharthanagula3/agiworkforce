@@ -72,7 +72,8 @@ vi.mock('@/lib/rate-limit', () => ({
   acquireManagedTurnSlot: vi.fn(async () => admitManagedTurnSlot()),
 }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn().mockResolvedValue(null) }));
-vi.mock('@/lib/error-handler', () => ({
+vi.mock('@/lib/error-handler', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule1>()),
   withErrorHandler: <T extends (...args: never[]) => unknown>(handler: T) => handler,
 }));
 vi.mock('@/lib/model-tiers', () => ({
@@ -92,7 +93,8 @@ vi.mock('@/lib/server/neon-db', async (importOriginal) => {
     getNeonDb: () => createDatabaseAdapterFake(),
   };
 });
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule2>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/prompt-cache-helper', () => ({
@@ -109,14 +111,16 @@ vi.mock('@/lib/egress-policy', async (importOriginal) => ({
   validateUserImageUrl: vi.fn(),
   EgressPolicyError: class EgressPolicyError extends Error {},
 }));
-vi.mock('@/lib/cors', () => ({
+vi.mock('@/lib/cors', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule3>()),
   handleCorsPreflightRequest: vi.fn().mockReturnValue(null),
   getCorsHeaders: vi.fn().mockReturnValue({}),
   getSecurityHeaders: vi.fn().mockReturnValue({}),
   withCorsRoute: (handler: (...args: unknown[]) => unknown) => handler,
 }));
 
-vi.mock('@shared/utils/env', () => ({
+vi.mock('@shared/utils/env', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule4>()),
   requireEnv: vi.fn((key: string) => `mock-${key}`),
   getOptionalEnv: vi.fn((key: string) => `mock-${key}`),
 }));
@@ -200,7 +204,8 @@ vi.mock('@agiworkforce/providers-openai', () => ({
 }));
 
 const mockGetClerkAuthUser = vi.fn();
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule0>()),
   isAccountUnavailableError: vi.fn(() => false),
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
@@ -418,6 +423,7 @@ describe.each(COMPAT_CASES)(
         });
         mockGetSubscription.mockResolvedValue(makeSubscription());
         rlsMocks.getUserScopedDb.mockResolvedValue({
+          organizationId: null,
           db: { query: vi.fn(async () => []) },
           userId: 'user-1',
         });
@@ -467,6 +473,7 @@ describe('Managed Web provider admission', () => {
     });
     mockGetSubscription.mockResolvedValue(makeSubscription());
     rlsMocks.getUserScopedDb.mockResolvedValue({
+      organizationId: null,
       db: { query: vi.fn(async () => []) },
       userId: 'user-1',
     });
@@ -492,7 +499,11 @@ describe('Managed Web conversation ownership', () => {
     });
     mockGetSubscription.mockResolvedValue(makeSubscription());
     const query = vi.fn().mockResolvedValue([]);
-    rlsMocks.getUserScopedDb.mockResolvedValue({ db: { query }, userId: 'attacker-user' });
+    rlsMocks.getUserScopedDb.mockResolvedValue({
+      organizationId: null,
+      db: { query },
+      userId: 'attacker-user',
+    });
     mockGetProviderFromModel.mockReturnValue('zhipu');
 
     const response = await POST(
@@ -536,7 +547,11 @@ describe('Managed Web conversation run as a custom agent', () => {
           ]
         : [],
     );
-    rlsMocks.getUserScopedDb.mockResolvedValue({ db: { query }, userId: 'user-1' });
+    rlsMocks.getUserScopedDb.mockResolvedValue({
+      organizationId: null,
+      db: { query },
+      userId: 'user-1',
+    });
     mockGetProviderFromModel.mockReturnValue('zhipu');
     agentTurnMocks.loadAgentTurnConfig.mockResolvedValue({
       ok: false,
@@ -570,6 +585,7 @@ describe('Managed Web AGI Work dispatch', () => {
     });
     mockGetSubscription.mockResolvedValue({ ...makeSubscription(), plan_tier: 'max' });
     rlsMocks.getUserScopedDb.mockResolvedValue({
+      organizationId: null,
       db: { query: vi.fn(async () => []) },
       userId: 'user-1',
     });
@@ -680,7 +696,7 @@ describe('Managed Web AGI Work dispatch', () => {
       customConnectorLimit: undefined,
       planTier: 'max',
       allowSelective: true,
-      organizationId: undefined,
+      organizationId: null,
       isConnectorDenied: expect.any(Function),
       isToolDenied: expect.any(Function),
       googleUserDataRouted: false,
@@ -885,7 +901,11 @@ describe('Managed Web conversation run concurrency guard', () => {
     const query = vi.fn(async (sql: string) =>
       /web_conversations/i.test(sql) ? [{ id: conversationId, user_id: 'user-1' }] : [],
     );
-    rlsMocks.getUserScopedDb.mockResolvedValue({ db: { query }, userId: 'user-1' });
+    rlsMocks.getUserScopedDb.mockResolvedValue({
+      organizationId: null,
+      db: { query },
+      userId: 'user-1',
+    });
     mockCheckAvailable.mockResolvedValue(true);
     mockDeductCredits.mockResolvedValue({ success: true, remaining_cents: 10000 });
     mockGetBalance.mockResolvedValue({
@@ -952,6 +972,7 @@ describe('Per-model tools capability gate', () => {
     });
     mockGetSubscription.mockResolvedValue({ ...makeSubscription(), plan_tier: 'max' });
     rlsMocks.getUserScopedDb.mockResolvedValue({
+      organizationId: null,
       db: { query: vi.fn(async () => []) },
       userId: 'user-1',
     });
@@ -998,3 +1019,10 @@ describe('Per-model tools capability gate', () => {
     }
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/api-auth');
+
+type RetainedMockModule1 = typeof import('@/lib/error-handler');
+type RetainedMockModule2 = typeof import('@/lib/logger');
+type RetainedMockModule3 = typeof import('@/lib/cors');
+type RetainedMockModule4 = typeof import('@shared/utils/env');

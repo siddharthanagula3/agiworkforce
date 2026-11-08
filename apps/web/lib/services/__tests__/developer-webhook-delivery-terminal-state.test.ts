@@ -15,7 +15,10 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('next/server', () => ({ after: mocks.forbidden }));
-vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn() } }));
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule0>()),
+  logger: { error: vi.fn(), warn: vi.fn() },
+}));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: mocks.forbidden }));
 vi.mock('@/lib/server/claimed-user-scope-db', () => ({
   createClaimedUserScopedDb: mocks.claimedScope,
@@ -25,8 +28,12 @@ vi.mock('@/lib/egress-policy', () => ({
   assertResolvedPublicHostname: mocks.resolveHost,
   pinnedPublicFetch: mocks.fetch,
 }));
-vi.mock('@/lib/crypto/cmek', () => ({ platformTenantKeyRing: mocks.keyRing }));
-vi.mock('@/lib/crypto/envelope', () => ({
+vi.mock('@/lib/crypto/cmek', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule0>()),
+  platformTenantKeyRing: mocks.keyRing,
+}));
+vi.mock('@/lib/crypto/envelope', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule1>()),
   openEnvelope: mocks.openEnvelope,
   sealEnvelope: mocks.forbidden,
 }));
@@ -487,6 +494,25 @@ describe('developer webhook cooperative cancellation', () => {
     },
   );
 
+  it('does not treat an arbitrary transport error name as its own deadline', async () => {
+    const f = fixture();
+    mocks.fetch.mockRejectedValueOnce(
+      Object.assign(new Error('Transport failure'), { name: 'TimeoutError' }),
+    );
+
+    await expect(
+      attemptDeveloperWebhookDelivery(f.db, USER_ID, DELIVERY_ID, false),
+    ).resolves.toEqual({
+      outcome: 'failed',
+      error: 'The endpoint could not be reached.',
+    });
+    expect(f.state).toMatchObject({
+      status: 'pending',
+      attempts: 1,
+      error: 'The endpoint could not be reached.',
+    });
+  });
+
   it.each(['network', 'private-address'] as const)(
     'retains %s failure classification',
     async (kind) => {
@@ -509,3 +535,8 @@ describe('developer webhook cooperative cancellation', () => {
     },
   );
 });
+
+type CompleteMockModule0 = typeof import('@/lib/crypto/cmek');
+type CompleteMockModule1 = typeof import('@/lib/crypto/envelope');
+
+type RetainedMockModule0 = typeof import('@/lib/logger');

@@ -204,7 +204,7 @@ export function PrivacySection() {
   const owner = usePreferenceOwner();
   const capture = usePreferenceView(owner);
   const lane = useMemo<PrivacyLane>(
-    () => ({ active: false, ready: null, operation: null }),
+    () => Object.assign({ active: false, ready: null, operation: null }, { binding: { owner } }),
     [owner],
   );
   const [view, setView] = useState<PrivacyView | null>(null);

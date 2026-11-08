@@ -260,9 +260,9 @@ describe('DELETE /api/settings/organization/leave deprovisions the departing mem
     const NONMEMBER_ORGANIZATION_ID = '44444444-4444-4444-8444-444444444444';
 
     beforeEach(async () => {
-      const actual = await vi.importActual<
-        typeof import('@/lib/services/active-workspace-service')
-      >('@/lib/services/active-workspace-service');
+      const actual = await vi.importActual<ImportedModule0>(
+        '@/lib/services/active-workspace-service',
+      );
       mockResolveActiveOrganizationId.mockImplementation((...args) => {
         const input = args as Parameters<typeof actual.resolveActiveOrganizationId>;
         return actual.resolveActiveOrganizationId(...input);
@@ -355,3 +355,5 @@ describe('DELETE /api/settings/organization/leave deprovisions the departing mem
     });
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/services/active-workspace-service');

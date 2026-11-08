@@ -20,7 +20,7 @@ vi.mock('@/lib/server/neon-db', () => ({
 // The real resolver would ask DNS about a test hostname. The hosts named here
 // stand for the ones whose addresses come back inside the deployment network.
 vi.mock('@/lib/egress-policy', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/egress-policy')>('@/lib/egress-policy');
+  const actual = await vi.importActual<ImportedModule0>('@/lib/egress-policy');
   return {
     ...actual,
     pinnedPublicFetch: (...args: unknown[]) => mocks.fetch(...args),
@@ -385,3 +385,5 @@ describe('never throws', () => {
     expect(mocks.fetch).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/egress-policy');

@@ -22,7 +22,7 @@ jest.mock('@/lib/mmkv', () => ({
   storage: { getString: jest.fn(), set: jest.fn(), delete: jest.fn() },
 }));
 jest.mock('@/src/features/auth/store', () => {
-  const { create } = jest.requireActual<typeof import('zustand')>('zustand');
+  const { create } = jest.requireActual<ImportedModule0>('zustand');
   return {
     useAuthStore: create(() => ({
       isClerkLoaded: true,
@@ -32,13 +32,13 @@ jest.mock('@/src/features/auth/store', () => {
   };
 });
 jest.mock('@/src/features/chat/store/appModeStore', () => {
-  const { create } = jest.requireActual<typeof import('zustand')>('zustand');
+  const { create } = jest.requireActual<ImportedModule0>('zustand');
   return { useChatAppModeStore: create(() => ({ appMode: 'cloud' })) };
 });
 jest.mock('@/stores/notificationPrefsStore', () => {
-  const { create } = jest.requireActual<typeof import('zustand')>('zustand');
+  const { create } = jest.requireActual<ImportedModule0>('zustand');
   const { normalizeTimeFocusPreferences: normalize } =
-    jest.requireActual<typeof import('@agiworkforce/types')>('@agiworkforce/types');
+    jest.requireActual<ImportedModule1>('@agiworkforce/types');
   return {
     useNotificationPrefsStore: create<
       TimeFocusPreferences & {
@@ -365,3 +365,6 @@ describe('time and focus account ownership', () => {
     expect(mockPut).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('zustand');
+type ImportedModule1 = typeof import('@agiworkforce/types');

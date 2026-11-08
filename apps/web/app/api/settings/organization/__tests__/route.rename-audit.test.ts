@@ -59,7 +59,7 @@ vi.mock('@/lib/services/active-workspace-service', async (importOriginal) => ({
   resolveActiveOrganizationId: mockResolveActiveOrganizationId,
 }));
 vi.mock('@/lib/server/request-context-cache', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/request-context-cache')>()),
+  ...(await importOriginal<ImportedModule0>()),
   getCachedActiveOrganizationId: mockGetCachedActiveOrganizationId,
   setCachedActiveOrganizationId: mockSetCachedActiveOrganizationId,
 }));
@@ -223,3 +223,5 @@ describe('PATCH /api/settings/organization leaves an audit record', () => {
     });
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/server/request-context-cache');

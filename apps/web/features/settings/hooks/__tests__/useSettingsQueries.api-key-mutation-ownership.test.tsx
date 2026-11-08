@@ -1,3 +1,4 @@
+import type { WebFetch } from '@/test/fetch';
 import type { ReactNode } from 'react';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { MutationCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -84,7 +85,7 @@ const operations = [
     },
   },
 ];
-const fetchMock = vi.fn<typeof fetch>();
+const fetchMock = vi.fn<WebFetch>();
 const getToken = vi.fn<() => Promise<string | null>>();
 const dispatched = vi.fn<() => void>();
 const knownRefusal = vi.fn<() => void>();
@@ -126,7 +127,10 @@ afterEach(() => {
 describe.each(operations)('API key $name owned mutation', (operation) => {
   function mount() {
     fetchMock.mockResolvedValue(json(operation.payload));
-    const view = renderHook(operation.useRun, { wrapper });
+    const view = renderHook<(scope: APIKeyMutationScope) => Promise<unknown>, void>(
+      operation.useRun,
+      { wrapper },
+    );
     const invalidate = vi.spyOn(client, 'invalidateQueries').mockResolvedValue(undefined);
     return { ...view, invalidate };
   }

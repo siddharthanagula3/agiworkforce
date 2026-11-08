@@ -16,7 +16,8 @@ describe('Library picker ownership', () => {
 
   it('revokes old destination callbacks even after returning to the original destination', () => {
     const { result, rerender } = renderHook(
-      ({ destination }) => useLibraryPickerScope(destination),
+      ({ destination }: { destination: Parameters<typeof useLibraryPickerScope>[0] }) =>
+        useLibraryPickerScope(destination),
       { initialProps: { destination: 'first' } },
     );
     const first = result.current;

@@ -80,6 +80,7 @@ export const UNAUDITED_MUTATING_ROUTES: readonly UnauditedRoute[] = [
   { route: 'mobile/feedback/route.ts', reason: 'own_content' },
   { route: 'mobile/push-token/route.ts', reason: 'no_governed_state' },
   { route: 'notifications/route.ts', reason: 'own_content' },
+  { route: 'page-context/read/route.ts', reason: 'no_governed_state' },
   { route: 'projects/[id]/duplicate/route.ts', reason: 'own_content' },
   { route: 'projects/[id]/knowledge-files/[fileId]/reindex/route.ts', reason: 'own_content' },
   { route: 'projects/[id]/knowledge-files/[fileId]/route.ts', reason: 'own_content' },
@@ -329,6 +330,11 @@ export const REQUIRED_ROUTE_AUDIT_EVENTS: readonly RequiredRouteAuditEvents[] = 
   { route: 'webhooks/slack-interactions/route.ts', eventTypes: ['tool_approval_decided'] },
   { route: 'settings/spend-limit/route.ts', eventTypes: ['spend_limit_changed'] },
   { route: 'artifacts/publish/[token]/viewers/route.ts', eventTypes: ['share_link_updated'] },
+  { route: 'artifacts/publish/route.ts', eventTypes: ['share_link_updated'] },
+  {
+    route: 'artifacts/publish/[token]/versions/[version]/route.ts',
+    eventTypes: ['share_link_updated'],
+  },
 ] as const;
 
 export type AuditedSurface = 'chrome' | 'vscode' | 'cli' | 'desktop' | 'mobile';

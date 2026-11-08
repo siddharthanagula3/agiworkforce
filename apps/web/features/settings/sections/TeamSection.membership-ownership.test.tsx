@@ -16,7 +16,7 @@ import {
   workspace,
   wrapper,
   writes,
-} from '../hooks/__tests__/organization-membership-fixture';
+} from '../hooks/__tests__/OrganizationMembershipFixture';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TeamMember } from '../hooks/use-settings-queries';
@@ -26,7 +26,7 @@ const team = vi.hoisted(() => ({
   members: [] as TeamMember[],
 }));
 vi.mock('../hooks/use-settings-queries', async (original) => ({
-  ...(await original<typeof import('../hooks/use-settings-queries')>()),
+  ...(await original<MockedModule0>()),
   useOrganizationOverview: () => ({
     data: {
       organization: {
@@ -69,7 +69,7 @@ vi.mock('../hooks/use-settings-queries', async (original) => ({
 }));
 vi.mock('./team/SSOPanel', () => ({ SSOPanel: () => null }));
 vi.mock('@/features/workspaces/lib/workspace-switch-interruptions', async (original) => ({
-  ...(await original<typeof import('@/features/workspaces/lib/workspace-switch-interruptions')>()),
+  ...(await original<MockedModule1>()),
   useWorkspaceSwitchInterruptions: () => [],
 }));
 
@@ -339,3 +339,6 @@ describe('Team membership real transport and confirmation', () => {
     expect(writes()).toHaveLength(1);
   });
 });
+
+type MockedModule0 = typeof import('../hooks/use-settings-queries');
+type MockedModule1 = typeof import('@/features/workspaces/lib/workspace-switch-interruptions');

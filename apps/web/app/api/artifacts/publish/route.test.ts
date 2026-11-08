@@ -237,7 +237,7 @@ describe('POST /api/artifacts/publish', () => {
     const stripeKey = `sk_live_${'a'.repeat(30)}`;
     await POST(postRequest({ ...VALID_BODY, content: `key='${stripeKey}'` }));
 
-    expect(mocks.recordAuditEvent).toHaveBeenCalledTimes(1);
+    expect(mocks.recordAuditEvent).toHaveBeenCalledTimes(2);
     const event = mocks.recordAuditEvent.mock.calls[0]![0] as {
       eventType: string;
       detail: Record<string, unknown>;
@@ -247,9 +247,20 @@ describe('POST /api/artifacts/publish', () => {
     expect(JSON.stringify(event)).not.toContain(stripeKey);
   });
 
-  it('does not record an audit event when the content is clean', async () => {
-    await POST(postRequest(VALID_BODY));
-    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+  it('audits clean publication using server identity without content or link credentials', async () => {
+    const request = postRequest(VALID_BODY);
+    await POST(request);
+    expect(mocks.recordAuditEvent).toHaveBeenCalledExactlyOnceWith({
+      userId: 'user-1',
+      organizationId: null,
+      eventType: 'share_link_updated',
+      request,
+      detail: {
+        resourceType: 'published_artifact',
+        resourceId: 'row-1',
+        status: 'published',
+      },
+    });
     expect(mocks.secretMode).not.toHaveBeenCalled();
   });
 
@@ -422,6 +433,7 @@ describe('POST /api/artifacts/publish', () => {
     await reachedCommit;
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(settled).toBe(false);
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
     expect(
       mocks.txQuery.mock.calls.filter(([sql]) =>
         String(sql).includes('insert into public.published_artifact_versions'),
@@ -429,6 +441,7 @@ describe('POST /api/artifacts/publish', () => {
     ).toHaveLength(1);
     finishCommit();
     expect((await response).status).toBe(201);
+    expect(mocks.recordAuditEvent).toHaveBeenCalledTimes(1);
     expect(mocks.transaction).toHaveBeenCalledTimes(1);
   }, 1_000);
 
@@ -441,6 +454,7 @@ describe('POST /api/artifacts/publish', () => {
     const response = await POST(postRequest(VALID_BODY));
 
     expect(response.status).toBe(500);
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
     expect(mocks.transaction).toHaveBeenCalledTimes(1);
     expect(mocks.txQuery.mock.calls.filter(([sql]) => isInsert(sql))).toHaveLength(1);
   });

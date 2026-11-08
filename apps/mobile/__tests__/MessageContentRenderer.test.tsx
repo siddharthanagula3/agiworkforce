@@ -6,7 +6,7 @@ jest.mock('../src/features/chat/components/MathBlock', () => ({
 }));
 
 jest.mock('../src/features/chat/components/GeneratedImage', () => {
-  const { Text } = jest.requireActual<typeof import('react-native')>('react-native');
+  const { Text } = jest.requireActual<ImportedModule0>('react-native');
   return {
     GeneratedImage: ({ imageUrl, revisedPrompt }: { imageUrl: string; revisedPrompt?: string }) => (
       <Text testID="generated-image">{`${imageUrl}|${revisedPrompt ?? ''}`}</Text>
@@ -246,3 +246,5 @@ describe('MessageContentRenderer', () => {
     expect(allEmptyTexts.length).toBeGreaterThan(0);
   });
 });
+
+type ImportedModule0 = typeof import('react-native');

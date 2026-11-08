@@ -5,7 +5,7 @@ const mockGet = jest.fn();
 const mockDelete = jest.fn();
 
 jest.mock('@/src/features/auth/store', () => {
-  const { create } = jest.requireActual<typeof import('zustand')>('zustand');
+  const { create } = jest.requireActual<ImportedModule0>('zustand');
   return {
     useAuthStore: create(() => ({ clerkUserId: 'fixture-account', isClerkSignedIn: true })),
   };
@@ -186,3 +186,5 @@ describe('Shared Links in Local Mode', () => {
     expect(screen.queryByText(/Could not load shared links/i)).toBeNull();
   });
 });
+
+type ImportedModule0 = typeof import('zustand');

@@ -37,7 +37,7 @@ vi.mock('@/lib/services/credit-service', () => ({
 }));
 
 vi.mock('@/lib/services/usage-limit-promotion-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/usage-limit-promotion-service')>()),
+  ...(await importOriginal<ImportedModule0>()),
   readSummaryPromotions: vi.fn(async () => null),
 }));
 
@@ -322,3 +322,5 @@ describe('managed usage summary, stated in credits', () => {
     expect(summary.credits?.purchase_expiry).toBeNull();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/services/usage-limit-promotion-service');

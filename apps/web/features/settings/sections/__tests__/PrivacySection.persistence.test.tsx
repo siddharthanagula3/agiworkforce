@@ -14,7 +14,7 @@ const identity = vi.hoisted(() => ({
 }));
 vi.mock('@clerk/nextjs', () => ({ useAuth: () => identity.auth, useClerk: () => identity.sdk }));
 vi.mock('@/lib/client/csrf', async (original) => ({
-  ...(await original<typeof import('@/lib/client/csrf')>()),
+  ...(await original<ImportedModule0>()),
   addCsrfHeaders: vi.fn(async (headers: HeadersInit = {}) => new Headers(headers)),
 }));
 
@@ -43,7 +43,7 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('@agiworkforce/ui', async (original) => ({
-  ...(await original<typeof import('@agiworkforce/ui')>()),
+  ...(await original<ImportedModule1>()),
   Switch: ({
     checked,
     disabled,
@@ -347,3 +347,6 @@ describe('owned privacy preference persistence', () => {
     window.removeEventListener('agi:preference-namespace-saved', event);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/client/csrf');
+type ImportedModule1 = typeof import('@agiworkforce/ui');

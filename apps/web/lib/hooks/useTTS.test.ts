@@ -332,7 +332,7 @@ describe('useTTS, owner lifetime fixtures', () => {
     act(() => second.result.current.speak('Second', { deviceVoice: true }));
     const cancel = vi.mocked(window.speechSynthesis.cancel);
     cancel.mockClear();
-    act(() => staleEnd?.(undefined as never));
+    act(() => staleEnd?.call(spoken[0]!, new Event('end') as SpeechSynthesisEvent));
     first.unmount();
     expect(cancel).not.toHaveBeenCalled();
   });

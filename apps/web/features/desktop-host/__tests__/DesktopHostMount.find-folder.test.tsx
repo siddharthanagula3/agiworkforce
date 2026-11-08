@@ -34,7 +34,7 @@ vi.mock('../components/DesktopChatRunner', () => ({
 }));
 
 vi.mock('../lib/runtime-client', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../lib/runtime-client')>();
+  const actual = await importOriginal<ImportedModule0>();
   return {
     ...actual,
     pickWorkspaceRoot,
@@ -85,6 +85,9 @@ function PublicSidebar() {
   return (
     <Sidebar
       sessions={[]}
+      onSelect={() => undefined}
+      onRename={() => undefined}
+      onDelete={() => undefined}
       collapsed={collapsed}
       onNewChat={() => undefined}
       onOpenSearch={() => undefined}
@@ -234,3 +237,5 @@ describe('the public window mount', () => {
     expect(historyGo.mock.calls).toEqual([['back'], ['forward']]);
   });
 });
+
+type ImportedModule0 = typeof import('../lib/runtime-client');

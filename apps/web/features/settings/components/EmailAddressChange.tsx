@@ -131,8 +131,13 @@ function OwnedEmailAddressChange({
     [],
   );
   const rendered = {};
-  const latestRender = useRef(rendered);
-  latestRender.current = rendered;
+  const latestRender = useRef<object | null>(null);
+  useLayoutEffect(() => {
+    latestRender.current = rendered;
+    return () => {
+      if (latestRender.current === rendered) latestRender.current = null;
+    };
+  });
   const current = () => lane.active && owner.isCurrent();
   const acceptsEvent = () => current() && latestRender.current === rendered;
   const owns = (intent: EmailIntent) =>

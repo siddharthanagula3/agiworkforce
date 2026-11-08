@@ -22,7 +22,7 @@ const fixture = vi.hoisted(() => ({
   listeners: new Set<() => void>(),
 }));
 vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/identity/useSessionSnapshot')>()),
+  ...(await importOriginal<ImportedModule0>()),
   useSessionSnapshot: () => () => fixture.session,
 }));
 function deferred<T>() {
@@ -503,3 +503,5 @@ describe('TOTP status admission and scoped invalidation (source-authored fixture
     expect(invalidate).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/identity/useSessionSnapshot');

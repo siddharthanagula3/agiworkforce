@@ -1,3 +1,4 @@
+import { hostBridgeStub } from '@/test/host-bridge-stub';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { emitAppCommand } from '@shared/lib/app-commands';
@@ -17,7 +18,7 @@ describe('Show Side Chat on the public window', () => {
 
   it('stays closed on a new chat', () => {
     const setSideChatState = vi.fn();
-    window.agiHost = { setSideChatState } as Window['agiHost'];
+    window.agiHost = hostBridgeStub({ setSideChatState });
     render(<SideChatPane />);
 
     expect(screen.queryByRole('complementary', { name: 'Side chat' })).toBeNull();
@@ -31,7 +32,7 @@ describe('Show Side Chat on the public window', () => {
   it('opens beside the current conversation and keeps a draft there', () => {
     pathname.current = '/chat/thread-1';
     const setSideChatState = vi.fn();
-    window.agiHost = { setSideChatState } as Window['agiHost'];
+    window.agiHost = hostBridgeStub({ setSideChatState });
     render(<SideChatPane />);
 
     expect(setSideChatState).toHaveBeenCalledWith({ available: true, open: false });
@@ -55,7 +56,7 @@ describe('Show Side Chat on the public window', () => {
   it('starts a fresh side chat from the open conversation and clears the previous draft', () => {
     pathname.current = '/chat/thread-1';
     const setSideChatState = vi.fn();
-    window.agiHost = { setSideChatState } as Window['agiHost'];
+    window.agiHost = hostBridgeStub({ setSideChatState });
     render(<SideChatPane />);
 
     fireEvent.click(screen.getByRole('button', { name: 'New side chat' }));
@@ -72,7 +73,7 @@ describe('Show Side Chat on the public window', () => {
   it('closes the side chat from the open conversation and drops its draft', () => {
     pathname.current = '/chat/thread-1';
     const setSideChatState = vi.fn();
-    window.agiHost = { setSideChatState } as Window['agiHost'];
+    window.agiHost = hostBridgeStub({ setSideChatState });
     render(<SideChatPane />);
 
     fireEvent.click(screen.getByRole('button', { name: 'New side chat' }));

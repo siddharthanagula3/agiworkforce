@@ -1,4 +1,4 @@
-import { createWebChatWorkspaceFixture } from './web-chat-workspace-fixture';
+import { createWebChatWorkspaceFixture } from './WebChatWorkspaceFixture';
 import { act, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FREE_MODEL_PROMOTION_PATH } from '@agiworkforce/cloud-contracts';

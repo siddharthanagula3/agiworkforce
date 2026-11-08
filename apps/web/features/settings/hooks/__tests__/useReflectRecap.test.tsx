@@ -27,12 +27,11 @@ const fixture = vi.hoisted(() => ({
   listeners: new Set<() => void>(),
 }));
 vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/identity/useSessionSnapshot')>()),
+  ...(await importOriginal<ImportedModule0>()),
   useSessionSnapshot: () => () => fixture.session,
 }));
 vi.mock('@/features/workspaces/hooks/use-workspaces', async (importOriginal) => {
-  const original =
-    await importOriginal<typeof import('@/features/workspaces/hooks/use-workspaces')>();
+  const original = await importOriginal<ImportedModule1>();
   const { observeWorkspaceOwner, admitWorkspace } =
     await import('@/features/workspaces/lib/workspace-admission');
   return {
@@ -430,3 +429,6 @@ describe('Reflect read ownership', () => {
     expect(fixture.refetch).toHaveBeenCalledTimes(1);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/identity/useSessionSnapshot');
+type ImportedModule1 = typeof import('@/features/workspaces/hooks/use-workspaces');

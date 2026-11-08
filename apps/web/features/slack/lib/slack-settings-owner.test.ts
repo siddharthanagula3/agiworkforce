@@ -7,7 +7,7 @@ import { getCsrfToken } from '@/lib/client/csrf';
 import { createSlackSettingsView } from './slack-settings-owner';
 
 vi.mock('@/lib/client/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/client/csrf')>()),
+  ...(await importOriginal<ImportedModule0>()),
   getCsrfToken: vi.fn(async () => 'csrf'),
 }));
 
@@ -180,3 +180,5 @@ describe('Slack settings view authority', () => {
     expect(operation.dispatched).toBe(true);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/client/csrf');

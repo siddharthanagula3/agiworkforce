@@ -7,7 +7,7 @@ import {
 import { useAttachments } from '../use-attachments';
 
 vi.mock('@features/chat/lib/attachment-metadata', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@features/chat/lib/attachment-metadata')>()),
+  ...(await importOriginal<ImportedModule0>()),
   prepareChatAttachment: vi.fn(),
 }));
 
@@ -30,8 +30,8 @@ describe('attachment draft reset', () => {
     vi.stubGlobal(
       'URL',
       class extends URL {
-        static createObjectURL = vi.fn(() => `blob:attachment-reset-${++nextUrl}`);
-        static revokeObjectURL = vi.fn();
+        static override createObjectURL = vi.fn(() => `blob:attachment-reset-${++nextUrl}`);
+        static override revokeObjectURL = vi.fn();
       },
     );
   });
@@ -97,3 +97,5 @@ describe('attachment draft reset', () => {
     expect(result.current.preparing).toBe(false);
   });
 });
+
+type ImportedModule0 = typeof import('@features/chat/lib/attachment-metadata');

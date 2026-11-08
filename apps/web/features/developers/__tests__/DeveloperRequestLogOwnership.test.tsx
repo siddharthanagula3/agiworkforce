@@ -1,4 +1,4 @@
-import React, { StrictMode } from 'react';
+import React from 'react';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -116,11 +116,6 @@ let client: QueryClient;
 let releaseAdmission: (() => void) | undefined;
 const wrapper = ({ children }: { children: React.ReactNode }) => (
   <QueryClientProvider client={client}>{children}</QueryClientProvider>
-);
-const strictWrapper = ({ children }: { children: React.ReactNode }) => (
-  <StrictMode>
-    <QueryClientProvider client={client}>{children}</QueryClientProvider>
-  </StrictMode>
 );
 function useLogHarness(fetchLogs?: RequestLogFetcher) {
   const capture = useSessionSnapshot();
@@ -431,7 +426,10 @@ describe('developer request log ownership', () => {
       pending.push(request);
       return request.promise;
     });
-    const { result } = renderHook(() => useLogHarness(fetchLogs), { wrapper: strictWrapper });
+    const { result } = renderHook(() => useLogHarness(fetchLogs), {
+      wrapper,
+      reactStrictMode: true,
+    });
     await waitFor(() => expect(fetchLogs).toHaveBeenCalledTimes(2));
     expect(fetchLogs.mock.calls[0]![1].request.signal.aborted).toBe(true);
     expect(fetchLogs.mock.calls[1]![1].request.signal.aborted).toBe(false);

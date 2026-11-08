@@ -126,7 +126,7 @@ vi.mock('../../updates', () => ({
 }));
 
 vi.mock('@/features/terminal/TerminalWorkspace', async () => {
-  const React = await vi.importActual<typeof import('react')>('react');
+  const React = await vi.importActual<ImportedModule0>('react');
   return {
     TerminalWorkspace: () =>
       React.createElement('div', { 'data-testid': 'terminal-workspace' }, 'Terminal workspace'),
@@ -134,7 +134,7 @@ vi.mock('@/features/terminal/TerminalWorkspace', async () => {
 });
 
 vi.mock('@/features/agi/AgentTaskPanel', async () => {
-  const React = await vi.importActual<typeof import('react')>('react');
+  const React = await vi.importActual<ImportedModule0>('react');
   return {
     AgentTaskPanel: () =>
       React.createElement('div', { 'data-testid': 'agent-task-panel' }, 'Local agent tasks'),
@@ -142,7 +142,7 @@ vi.mock('@/features/agi/AgentTaskPanel', async () => {
 });
 
 vi.mock('@agiworkforce/unified-chat', async () => {
-  const React = await vi.importActual<typeof import('react')>('react');
+  const React = await vi.importActual<ImportedModule0>('react');
   const sharedStoreState = {
     setDraftContent: unifiedChatMock.setDraftContent,
     appendDraftContent: unifiedChatMock.appendDraftContent,
@@ -1034,3 +1034,5 @@ describe('DesktopShellV3 duplication ownership', () => {
     });
   });
 });
+
+type ImportedModule0 = typeof import('react');

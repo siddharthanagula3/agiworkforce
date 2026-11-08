@@ -1,14 +1,14 @@
 import { describe, it, expect, vi } from 'vitest';
 
 async function getRealInvoke() {
-  const mod = await vi.importActual<typeof import('../lib/tauri-mock')>('../lib/tauri-mock');
+  const mod = await vi.importActual<ImportedModule0>('../lib/tauri-mock');
   return mod.invoke;
 }
 
 // The suite auto-mocks this module, so the real export has to be reached the
 // same way `getRealInvoke` reaches `invoke`.
 async function getShouldServeFixtures() {
-  const mod = await vi.importActual<typeof import('../lib/tauri-mock')>('../lib/tauri-mock');
+  const mod = await vi.importActual<ImportedModule0>('../lib/tauri-mock');
   return mod.shouldServeFixtures;
 }
 
@@ -181,3 +181,5 @@ describe('which runtimes may answer with a fixture', () => {
     expect(shouldServeFixtures({ test: false, desktopUiDev: false })).toBe(false);
   });
 });
+
+type ImportedModule0 = typeof import('../lib/tauri-mock');

@@ -78,8 +78,7 @@ describe('shared links service', () => {
   });
 
   it('treats revoking a link that is already gone as done', async () => {
-    const { ApiHttpError } =
-      jest.requireActual<typeof import('@/services/apiErrors')>('@/services/apiErrors');
+    const { ApiHttpError } = jest.requireActual<ImportedModule0>('@/services/apiErrors');
     mockDelete.mockRejectedValueOnce(new ApiHttpError('Share not found', 404));
 
     await expect(revokeSharedLink('gone', options)).resolves.toBeUndefined();
@@ -98,8 +97,7 @@ describe('shared links service', () => {
   });
 
   it('does not accept a late 404 after the original account retires', async () => {
-    const { ApiHttpError } =
-      jest.requireActual<typeof import('@/services/apiErrors')>('@/services/apiErrors');
+    const { ApiHttpError } = jest.requireActual<ImportedModule0>('@/services/apiErrors');
     let reject!: (error: Error) => void;
     mockDelete.mockReturnValueOnce(
       new Promise((_resolve, fail) => {
@@ -113,3 +111,5 @@ describe('shared links service', () => {
     expect(await settled).toMatchObject({ name: 'StaleCloudAccountOperationError' });
   });
 });
+
+type ImportedModule0 = typeof import('@/services/apiErrors');

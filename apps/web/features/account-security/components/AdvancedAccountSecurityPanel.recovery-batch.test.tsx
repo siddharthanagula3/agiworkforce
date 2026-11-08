@@ -29,7 +29,6 @@ vi.mock('@features/settings/hooks/useStepUp', () => ({
   useStepUp: () => ({ withStepUp: proof.withStepUp, dialog: null }),
 }));
 vi.mock('@agiworkforce/ui', async () => {
-  const React = await import('react');
   const Box = ({ children }: { children?: React.ReactNode }) => <div>{children}</div>;
   return {
     Alert: Box,
@@ -52,7 +51,7 @@ vi.mock('@agiworkforce/ui', async () => {
   };
 });
 vi.mock('../lib/account-security-client', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../lib/account-security-client')>();
+  const actual = await importOriginal<ImportedModule0>();
   return {
     ...actual,
     addCredential: vi.fn(),
@@ -117,7 +116,7 @@ function changeIdentity(userId: string, sessionId: string) {
   identity.clerk.session = { id: sessionId, user: { id: userId }, getToken: vi.fn() };
 }
 async function click(name: string) {
-  const button = await screen.findByRole('button', { name, exact: true });
+  const button = await screen.findByRole('button', { name });
   await waitFor(() => expect(button).toBeEnabled());
   fireEvent.click(button);
 }
@@ -163,7 +162,7 @@ describe('recovery batch UI ownership (source-authored, not browser acceptance)'
   it('retains the exact acknowledged receipt through setup, email resend and enrollment', async () => {
     render(<AdvancedAccountSecurityPanel />);
     await setupKeys();
-    expect(screen.getByRole('button', { name: 'Continue', exact: true })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled();
     await acknowledge();
     await click('Continue');
     await click('Send a new code');
@@ -235,7 +234,7 @@ describe('recovery batch UI ownership (source-authored, not browser acceptance)'
     await click('Generate new recovery keys');
     await screen.findByText(receiptB.recoveryKeys[0]!);
     expect(screen.getByRole('checkbox')).not.toBeChecked();
-    expect(screen.getByRole('button', { name: 'Continue', exact: true })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled();
     await acknowledge();
     await click('Continue');
     expect(await screen.findByRole('textbox', { name: 'Code from the email' })).toHaveValue('');
@@ -258,7 +257,7 @@ describe('recovery batch UI ownership (source-authored, not browser acceptance)'
     await click('Continue');
     await screen.findByText(receiptB.recoveryKeys[0]!);
     expect(screen.getByRole('checkbox')).not.toBeChecked();
-    expect(screen.getByRole('button', { name: 'Continue', exact: true })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled();
     expect(client.enrollAccountSecurity).not.toHaveBeenCalled();
   });
 
@@ -395,3 +394,5 @@ describe('recovery batch UI ownership (source-authored, not browser acceptance)'
     },
   );
 });
+
+type ImportedModule0 = typeof import('../lib/account-security-client');

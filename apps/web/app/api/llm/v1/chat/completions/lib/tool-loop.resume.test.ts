@@ -17,8 +17,7 @@ vi.mock('@/lib/e2b/runtime', () => ({
 
 const mockExecuteWebMcpTool = vi.fn();
 vi.mock('@/lib/mcp-tool-executor', async () => {
-  const actual =
-    await vi.importActual<typeof import('@/lib/mcp-tool-executor')>('@/lib/mcp-tool-executor');
+  const actual = await vi.importActual<ImportedModule0>('@/lib/mcp-tool-executor');
   return {
     ...actual,
     executeWebMcpTool: (...args: unknown[]) => mockExecuteWebMcpTool(...args),
@@ -548,3 +547,5 @@ describe('runToolLoop, manual approval resume', () => {
     expect(contRequest.messages.at(-1)?.role).toBe('tool');
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/mcp-tool-executor');

@@ -121,8 +121,7 @@ describe('lib/tauri-mock enforces the allowlist on the native path', () => {
       const tauriInvoke = vi.mocked(core.invoke);
       tauriInvoke.mockReset();
       tauriInvoke.mockResolvedValue(undefined);
-      const mod =
-        await vi.importActual<typeof import('../../lib/tauri-mock')>('../../lib/tauri-mock');
+      const mod = await vi.importActual<ImportedModule0>('../../lib/tauri-mock');
       expect(mod.isTauri).toBe(true);
       return { invoke: mod.invoke, tauriInvoke };
     } finally {
@@ -146,3 +145,5 @@ describe('lib/tauri-mock enforces the allowlist on the native path', () => {
     expect(tauriInvoke).toHaveBeenCalledWith('artifact_get', { id: 'x' });
   });
 });
+
+type ImportedModule0 = typeof import('../../lib/tauri-mock');

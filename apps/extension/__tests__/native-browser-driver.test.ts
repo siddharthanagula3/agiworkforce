@@ -4,15 +4,15 @@ import { NativeBrowserDriver } from '../src/features/native-bridge/nativeBrowser
 const navigation = vi.hoisted(() => vi.fn());
 
 vi.mock('../src/features/computer-use/cdpDriver', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../src/features/computer-use/cdpDriver')>()),
+  ...(await importOriginal<ImportedModule0>()),
   navigate: navigation,
 }));
 vi.mock('../src/features/site-policy/store', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../src/features/site-policy/store')>()),
+  ...(await importOriginal<ImportedModule1>()),
   assertSiteAccess: vi.fn(async () => undefined),
 }));
 vi.mock('../src/features/computer-use/browserControlConsent', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../src/features/computer-use/browserControlConsent')>()),
+  ...(await importOriginal<ImportedModule2>()),
   hasBrowserControlConsent: vi.fn(async () => true),
 }));
 
@@ -98,3 +98,7 @@ describe('paired browser navigation ownership', () => {
     expect(navigation).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('../src/features/computer-use/cdpDriver');
+type ImportedModule1 = typeof import('../src/features/site-policy/store');
+type ImportedModule2 = typeof import('../src/features/computer-use/browserControlConsent');

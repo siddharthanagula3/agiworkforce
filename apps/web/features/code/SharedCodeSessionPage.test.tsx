@@ -38,7 +38,13 @@ function shared(title: string): CloudCodeSharedSession {
     visibility: 'public',
     repositoryUrl: null,
     updatedAt: '2026-07-30T12:00:00Z',
-  } as CloudCodeSharedSession;
+    ownerName: null,
+    workingBranch: null,
+    baseBranch: null,
+    pullRequestUrl: null,
+    pullRequestNumber: null,
+    createdAt: '2026-07-30T12:00:00Z',
+  } satisfies CloudCodeSharedSession;
 }
 
 beforeEach(() => {

@@ -43,9 +43,9 @@ vi.mock('@/lib/server/incident/pager', () => ({
 }));
 
 vi.mock('@/lib/services/model-rollout/rollout-evaluation-service', async () => {
-  const actual = await vi.importActual<
-    typeof import('@/lib/services/model-rollout/rollout-evaluation-service')
-  >('@/lib/services/model-rollout/rollout-evaluation-service');
+  const actual = await vi.importActual<ImportedModule0>(
+    '@/lib/services/model-rollout/rollout-evaluation-service',
+  );
   return {
     ...actual,
     readCohortMetrics: (start: Date, end: Date) => mocks.readCohortMetrics(start, end),
@@ -57,9 +57,9 @@ vi.mock('@/lib/services/model-rollout/rollout-evaluation-service', async () => {
 });
 
 vi.mock('@/lib/services/semantic-decisions/trace-service', async () => {
-  const actual = await vi.importActual<
-    typeof import('@/lib/services/semantic-decisions/trace-service')
-  >('@/lib/services/semantic-decisions/trace-service');
+  const actual = await vi.importActual<ImportedModule1>(
+    '@/lib/services/semantic-decisions/trace-service',
+  );
   return {
     ...actual,
     purgeExpiredSemanticDecisionTraces: (config: unknown, nowMs: number) =>
@@ -159,3 +159,6 @@ describe('model rollout cron', () => {
     expect(response.status).toBe(500);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/services/model-rollout/rollout-evaluation-service');
+type ImportedModule1 = typeof import('@/lib/services/semantic-decisions/trace-service');

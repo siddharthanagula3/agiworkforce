@@ -78,11 +78,11 @@ function listed(id: string) {
 }
 
 function identityStub({
-  sessions = ['sess_1', 'sess_2'],
-  totalCount = sessions.length,
+  sessions: sessionIds = ['sess_1', 'sess_2'],
+  totalCount = sessionIds.length,
   listThrows = false,
-  failIds = [] as string[],
-} = {}) {
+  failIds = [],
+}: { sessions?: string[]; totalCount?: number; listThrows?: boolean; failIds?: string[] } = {}) {
   const revoked: string[] = [];
   return {
     revoked,
@@ -91,7 +91,7 @@ function identityStub({
         async (_userId: string, options: { offset?: number; limit?: number } = {}) => {
           if (listThrows) throw new Error('identity provider unavailable');
           const offset = options.offset ?? 0;
-          const page = sessions.slice(offset, offset + (options.limit ?? 50)).map(listed);
+          const page = sessionIds.slice(offset, offset + (options.limit ?? 50)).map(listed);
           return { sessions: page, totalCount };
         },
       ),

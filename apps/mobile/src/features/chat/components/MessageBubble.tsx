@@ -864,7 +864,10 @@ export const MessageBubble = memo(function MessageBubble({
   const [isSpeaking, setIsSpeaking] = useRecyclingState(false, [message.id]);
   const speechRef = useRef<voiceOutput.VoiceOutputHandle | null>(null);
   const speechScopeRef = useRef<object | null>(null);
-  const speechScope = useMemo(() => ({}), [message.id, message.content, speechOwner]);
+  const speechScope = useMemo(
+    () => ({ messageId: message.id, content: message.content, owner: speechOwner }),
+    [message.id, message.content, speechOwner],
+  );
 
   useLayoutEffect(() => {
     const scope = speechScope;

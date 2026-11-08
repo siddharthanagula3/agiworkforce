@@ -41,7 +41,7 @@ vi.mock('./ArtifactDocumentEditor', () => ({
 }));
 
 vi.mock('@agiworkforce/unified-chat', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/unified-chat')>();
+  const actual = await importOriginal<ImportedModule0>();
   return {
     ...actual,
     MarkdownContent: ({
@@ -216,9 +216,7 @@ describe('ArtifactPreview recovery ownership', () => {
       openMore();
       fireEvent.click(screen.getByTestId('artifact-restore-version'));
       expect(screen.getByRole('alertdialog')).toHaveTextContent(/unsaved edits are discarded/i);
-      fireEvent.click(
-        screen.getByRole('button', { name: confirm ? 'Restore' : 'Cancel', exact: true }),
-      );
+      fireEvent.click(screen.getByRole('button', { name: confirm ? 'Restore' : 'Cancel' }));
       vi.useFakeTimers();
       panel.unmount();
       advanceAfterUnmount();
@@ -393,3 +391,5 @@ describe('ArtifactPreview recovery ownership', () => {
     expect(versions()).toHaveLength(1);
   });
 });
+
+type ImportedModule0 = typeof import('@agiworkforce/unified-chat');

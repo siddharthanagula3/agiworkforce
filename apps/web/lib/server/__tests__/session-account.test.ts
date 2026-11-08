@@ -25,14 +25,14 @@ vi.mock('@/lib/server/neon-db', () => ({
   getStripeWebhookDb: vi.fn(),
 }));
 vi.mock('@/lib/services/active-workspace-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/active-workspace-service')>()),
+  ...(await importOriginal<ImportedModule0>()),
   resolveActiveOrganizationId: mocks.resolveOrganization,
 }));
 vi.mock('@/lib/server/claimed-user-scope-db', () => ({
   createClaimedUserScopedDb: mocks.claimScope,
 }));
 vi.mock('@/lib/observability/trace-context', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/observability/trace-context')>()),
+  ...(await importOriginal<ImportedModule1>()),
   setTenantScope: mocks.setTenantScope,
 }));
 
@@ -214,3 +214,6 @@ describe('mapped account database scope', () => {
     expect(mocks.claimScope).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/services/active-workspace-service');
+type ImportedModule1 = typeof import('@/lib/observability/trace-context');

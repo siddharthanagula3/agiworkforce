@@ -43,7 +43,7 @@ vi.mock('@/lib/ip-allow-list-gate', () => ({
 }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn() }));
 vi.mock('@/lib/server/admin-api-keys', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/admin-api-keys')>()),
+  ...(await importOriginal<ImportedModule0>()),
   verifyAdminApiKey: mocks.verifyAdminApiKey,
 }));
 
@@ -296,3 +296,5 @@ describe('compliance key scope is independent of interactive selection', () => {
     },
   );
 });
+
+type ImportedModule0 = typeof import('@/lib/server/admin-api-keys');

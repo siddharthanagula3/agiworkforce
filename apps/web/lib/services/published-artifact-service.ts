@@ -713,16 +713,16 @@ function readPublishedArtifactCursor(value: string, userId: string): PublishedAr
   const cursor = decoded as Record<string, unknown>;
   if (
     Object.keys(cursor).length !== 4 ||
-    cursor.v !== 1 ||
-    cursor.owner !== userId ||
-    typeof cursor.createdAt !== 'string' ||
-    !validCursorTimestamp(cursor.createdAt) ||
-    typeof cursor.id !== 'string' ||
-    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(cursor.id)
+    cursor['v'] !== 1 ||
+    cursor['owner'] !== userId ||
+    typeof cursor['createdAt'] !== 'string' ||
+    !validCursorTimestamp(cursor['createdAt']) ||
+    typeof cursor['id'] !== 'string' ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(cursor['id'])
   ) {
     throw invalid();
   }
-  return { v: 1, owner: userId, createdAt: cursor.createdAt, id: cursor.id };
+  return { v: 1, owner: userId, createdAt: cursor['createdAt'], id: cursor['id'] };
 }
 
 export async function listPublishedArtifactsPage(

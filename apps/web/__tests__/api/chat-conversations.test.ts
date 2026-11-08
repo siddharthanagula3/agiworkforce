@@ -343,12 +343,13 @@ describe('Chat Conversations API', () => {
             controller.error(new Error('Body transport failed'));
           },
         });
-        const init: RequestInit & { duplex: 'half' } = {
-          method: 'POST',
-          headers,
-          body,
-          duplex: 'half',
-        };
+        const init: NonNullable<ConstructorParameters<typeof NextRequest>[1]> & { duplex: 'half' } =
+          {
+            method: 'POST',
+            headers,
+            body,
+            duplex: 'half',
+          };
 
         const response = await POST(new NextRequest(url, init));
 
@@ -374,12 +375,13 @@ describe('Chat Conversations API', () => {
           },
           cancel,
         });
-        const init: RequestInit & { duplex: 'half' } = {
-          method: 'POST',
-          headers,
-          body,
-          duplex: 'half',
-        };
+        const init: NonNullable<ConstructorParameters<typeof NextRequest>[1]> & { duplex: 'half' } =
+          {
+            method: 'POST',
+            headers,
+            body,
+            duplex: 'half',
+          };
 
         const response = await POST(new NextRequest(url, init));
 

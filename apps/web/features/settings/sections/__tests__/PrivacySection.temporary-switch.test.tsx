@@ -1,5 +1,5 @@
 vi.mock('@/features/settings/hooks/use-preference-owner', async (original) => ({
-  ...(await original<typeof import('@/features/settings/hooks/use-preference-owner')>()),
+  ...(await original<ImportedModule0>()),
   usePreferenceOwner: () => null,
 }));
 
@@ -106,3 +106,5 @@ describe('the start-as-temporary switch', () => {
     expect(toggle).toHaveAttribute('data-state', 'checked');
   });
 });
+
+type ImportedModule0 = typeof import('@/features/settings/hooks/use-preference-owner');

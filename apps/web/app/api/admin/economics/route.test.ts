@@ -10,9 +10,9 @@ vi.mock('server-only', () => ({}));
 vi.mock('@/lib/auth-guards', () => ({ requirePlatformAdmin: mocks.requirePlatformAdmin }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
 vi.mock('@/features/admin/services/economics-summary', async () => {
-  const actual = await vi.importActual<
-    typeof import('@/features/admin/services/economics-summary')
-  >('@/features/admin/services/economics-summary');
+  const actual = await vi.importActual<ImportedModule0>(
+    '@/features/admin/services/economics-summary',
+  );
   return { ...actual, readEconomicsSummary: mocks.readEconomicsSummary };
 });
 vi.mock('@/lib/logger', () => ({
@@ -81,3 +81,5 @@ describe('GET /api/admin/economics', () => {
     expect(mocks.requirePlatformAdmin).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('@/features/admin/services/economics-summary');

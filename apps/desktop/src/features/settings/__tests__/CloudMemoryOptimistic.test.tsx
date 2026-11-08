@@ -22,7 +22,7 @@ const deleteCloudMemory = vi.fn();
 const observeMemoryAdapter = vi.fn();
 
 vi.mock('@agiworkforce/unified-chat', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/unified-chat')>();
+  const actual = await importOriginal<ImportedModule0>();
   return {
     ...actual,
     MemoryEditor: (props: ComponentProps<typeof actual.MemoryEditor>) => {
@@ -227,3 +227,5 @@ describe('cloud memory edit', () => {
     expect(screen.queryByText('likes decaf')).toBeNull();
   });
 });
+
+type ImportedModule0 = typeof import('@agiworkforce/unified-chat');

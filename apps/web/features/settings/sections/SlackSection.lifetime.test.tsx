@@ -21,11 +21,11 @@ const fixture = vi.hoisted(() => ({
   confirmations: [] as Array<{ onConfirm: () => unknown; onCancel?: () => void }>,
 }));
 vi.mock('next/navigation', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('next/navigation')>()),
+  ...(await importOriginal<ImportedModule0>()),
   useSearchParams: () => new URLSearchParams(),
 }));
 vi.mock('@agiworkforce/ui', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/ui')>()),
+  ...(await importOriginal<ImportedModule1>()),
   useConfirmAction: () => ({
     confirm: (request: (typeof fixture.confirmations)[number]) => {
       fixture.confirmations.push(request);
@@ -34,16 +34,15 @@ vi.mock('@agiworkforce/ui', async (importOriginal) => ({
   }),
 }));
 vi.mock('@/lib/client/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/client/csrf')>()),
+  ...(await importOriginal<ImportedModule2>()),
   getCsrfToken: vi.fn(async () => 'csrf'),
 }));
 vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/identity/useSessionSnapshot')>()),
+  ...(await importOriginal<ImportedModule3>()),
   useSessionSnapshot: () => () => fixture.session,
 }));
 vi.mock('@/features/workspaces/hooks/use-workspaces', async (importOriginal) => {
-  const original =
-    await importOriginal<typeof import('@/features/workspaces/hooks/use-workspaces')>();
+  const original = await importOriginal<ImportedModule4>();
   const { observeWorkspaceOwner, admitWorkspace } =
     await import('@/features/workspaces/lib/workspace-admission');
   return {
@@ -333,3 +332,9 @@ it('fails closed on duplicate overview resource IDs before rendering actionable 
   expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
 });
+
+type ImportedModule0 = typeof import('next/navigation');
+type ImportedModule1 = typeof import('@agiworkforce/ui');
+type ImportedModule2 = typeof import('@/lib/client/csrf');
+type ImportedModule3 = typeof import('@/lib/identity/useSessionSnapshot');
+type ImportedModule4 = typeof import('@/features/workspaces/hooks/use-workspaces');

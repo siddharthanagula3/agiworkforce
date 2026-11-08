@@ -1,3 +1,5 @@
+import { createDatabaseAdapterFake } from '@/test/database-adapter-fake';
+import type { UserScopedDb } from '@/lib/server/rls-db';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 type ScanModule0 = typeof import('@/lib/server/terms');
@@ -32,7 +34,8 @@ vi.mock('@/lib/server/neon-db', async (importOriginal) => {
     getNeonDb: () => createDatabaseAdapterFake(),
   };
 });
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule1>()),
   logger: {
     info: vi.fn(),
     error: vi.fn(),
@@ -57,14 +60,16 @@ vi.mock('@/lib/egress-policy', async (importOriginal) => ({
   EgressPolicyError: class EgressPolicyError extends Error {},
 }));
 
-vi.mock('@/lib/cors', () => ({
+vi.mock('@/lib/cors', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule2>()),
   handleCorsPreflightRequest: vi.fn().mockReturnValue(null),
   getCorsHeaders: vi.fn().mockReturnValue({}),
   getSecurityHeaders: vi.fn().mockReturnValue({}),
   withCorsRoute: (handler: (...args: unknown[]) => unknown) => handler,
 }));
 
-vi.mock('@shared/utils/env', () => ({
+vi.mock('@shared/utils/env', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule3>()),
   requireEnv: vi.fn((key: string) => `mock-${key}`),
   getOptionalEnv: vi.fn((key: string) =>
     key === 'ANTHROPIC_API_KEY' || key === 'GOOGLE_API_KEY' || key === 'OPENAI_API_KEY'
@@ -126,7 +131,8 @@ vi.mock('@agiworkforce/providers-openai', () => ({
 
 const mockGetClerkAuthUser = vi.fn();
 
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule0>()),
   isAccountUnavailableError: vi.fn(() => false),
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
@@ -289,9 +295,11 @@ describe('POST /api/llm/v1/chat/completions, canonical Pro-tier routing', () => 
 
     mockGetSubscription.mockResolvedValue(makeProSubscription());
     rlsMocks.getVerifiedBearerUserScopedDb.mockResolvedValue({
-      db: { query: vi.fn(async () => []) },
+      db: createDatabaseAdapterFake(),
       userId: 'pro-user-id',
-    });
+      organizationId: null,
+      surface: 'web',
+    } satisfies UserScopedDb);
 
     managedUsageMocks.reserve.mockImplementation(async (input) => ({
       db: input.db,
@@ -562,3 +570,9 @@ describe('POST /api/llm/v1/chat/completions, canonical Pro-tier routing', () => 
     expect(data.choices?.[0]?.message?.content).toBe('GPT says hi.');
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/api-auth');
+
+type RetainedMockModule1 = typeof import('@/lib/logger');
+type RetainedMockModule2 = typeof import('@/lib/cors');
+type RetainedMockModule3 = typeof import('@shared/utils/env');

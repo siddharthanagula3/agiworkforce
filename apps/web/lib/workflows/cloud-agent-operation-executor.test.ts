@@ -13,9 +13,9 @@ const receiptMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/services/cloud-agent-execution-service', async () => {
-  const actual = await vi.importActual<
-    typeof import('@/lib/services/cloud-agent-execution-service')
-  >('@/lib/services/cloud-agent-execution-service');
+  const actual = await vi.importActual<ImportedModule0>(
+    '@/lib/services/cloud-agent-execution-service',
+  );
   return {
     ...actual,
     claimCloudAgentExecutionOperation: receiptMocks.claim,
@@ -701,3 +701,5 @@ describe('durable cloud agent operation executor', () => {
     );
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/services/cloud-agent-execution-service');

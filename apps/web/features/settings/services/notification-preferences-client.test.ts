@@ -7,7 +7,7 @@ import {
 } from './notification-preferences-client';
 
 vi.mock('@/lib/client/csrf', async (original) => ({
-  ...(await original<typeof import('@/lib/client/csrf')>()),
+  ...(await original<ImportedModule0>()),
   addCsrfHeaders: vi.fn(async (headers: HeadersInit = {}) => new Headers(headers)),
 }));
 
@@ -193,3 +193,5 @@ describe('notification stored snapshots', () => {
     },
   );
 });
+
+type ImportedModule0 = typeof import('@/lib/client/csrf');

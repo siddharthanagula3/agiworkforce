@@ -137,7 +137,7 @@ function SiteDetailBody({
         if (view.isCurrent()) {
           setError(
             actionError instanceof SiteMutationUncertainError
-              ? actionError.message
+              ? actionError.userMessage
               : cloudActionError(actionError, failure),
           );
         }

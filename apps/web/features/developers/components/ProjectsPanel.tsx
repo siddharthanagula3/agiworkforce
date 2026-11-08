@@ -245,7 +245,19 @@ function OwnedProjectsPanel({
     lane.intent === intent &&
     ownerCurrent();
   const snapshot = useMemo(
-    () => ({}),
+    () =>
+      Object.assign(
+        {},
+        {
+          binding: {
+            apiKeysData: apiKeys.data,
+            keyStatus,
+            projectsData: projects.data,
+            projectsIsError: projects.isError,
+            projectsIsLoading: projects.isLoading,
+          },
+        },
+      ),
     [projects.data, projects.isLoading, projects.isError, apiKeys.data, keyStatus],
   );
   useLayoutEffect(() => {
@@ -293,7 +305,7 @@ function OwnedProjectsPanel({
       !projects.data
     )
       return null;
-    let intent: ProjectIntent;
+
     const request = createRequestAuthority(
       owner.session,
       () => current(intent),
@@ -304,7 +316,7 @@ function OwnedProjectsPanel({
     );
     const capturedEditor =
       editor?.mode === 'edit' ? { mode: 'edit' as const, project: { ...editor.project } } : editor;
-    intent = {
+    const intent: ProjectIntent = {
       id: ++lane.nextIntentId,
       generation: lane.generation,
       scope: { request, organizationId },

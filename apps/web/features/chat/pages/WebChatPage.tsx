@@ -1082,12 +1082,13 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   const prestreamAuthoritiesRef = useRef(new Set<RequestAuthority>());
   const sendPageGenerationRef = useRef<object>({});
   useEffect(() => {
+    const authorities = prestreamAuthoritiesRef.current;
     const generation = {};
     sendPageGenerationRef.current = generation;
     return () => {
       sendPageGenerationRef.current = {};
-      for (const authority of prestreamAuthoritiesRef.current) authority.retire();
-      prestreamAuthoritiesRef.current.clear();
+      for (const authority of authorities) authority.retire();
+      authorities.clear();
     };
   }, []);
   const router = useRouter();
@@ -6001,7 +6002,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         ) {
           return;
         }
+        const session = captureSessionSnapshot();
+        const authority = session ? createRequestAuthority(session) : null;
         try {
+          if (!authority) throw new Error('Sign in again to save this change.');
           await saveMessageToDb(
             displayedConversationId,
             {
@@ -6012,13 +6016,16 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
               parentId: assistantMsg.parentId,
               metadata,
             },
-            getToken,
+            Object.assign(() => authority.getToken(), { authority }),
           );
         } catch (error) {
+          if (authority && !authority.isCurrent()) return;
           setChatError(
             toUserMessage(error, 'The plan was cancelled here, but the change could not be saved.'),
             displayedConversationId,
           );
+        } finally {
+          authority?.retire();
         }
         return;
       }
@@ -6080,7 +6087,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       displayedConversation,
       displayedConversationId,
       displayedMessages,
-      getToken,
+      captureSessionSnapshot,
       handleOpenUpgradeDialog,
       isStreaming,
       isTrialExhausted,

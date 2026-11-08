@@ -1,4 +1,5 @@
-import { StrictMode, useLayoutEffect, type ReactNode } from 'react';
+import type { WebFetch } from '@/test/fetch';
+import { StrictMode, useLayoutEffect, useState, type ReactNode } from 'react';
 import { act, cleanup, render, renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -19,11 +20,11 @@ import {
 
 const mocks = vi.hoisted(() => ({ capture: vi.fn(), csrf: vi.fn() }));
 vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/identity/useSessionSnapshot')>()),
+  ...(await importOriginal<MockedModule0>()),
   useSessionSnapshot: () => mocks.capture,
 }));
 vi.mock('@/lib/client/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/client/csrf')>()),
+  ...(await importOriginal<MockedModule1>()),
   addCsrfHeaders: mocks.csrf,
 }));
 
@@ -36,7 +37,7 @@ const pending: AccountDeletionStatus = {
   scheduledFor: '2026-11-08T12:00:00.000Z',
 };
 const receipt = { message: 'Account deletion cancelled.', cancelled: true };
-const fetchMock = vi.fn<typeof fetch>();
+const fetchMock = vi.fn<WebFetch>();
 let client: QueryClient;
 let session: SessionAuthority;
 let live: boolean;
@@ -98,7 +99,7 @@ beforeEach(() => {
   fetchMock.mockReset().mockImplementation(async () => response());
   vi.stubGlobal(
     'fetch',
-    vi.fn<typeof fetch>((input, init) =>
+    vi.fn<WebFetch>((input, init) =>
       init?.method === 'GET' ? Promise.resolve(response(pending)) : fetchMock(input, init),
     ),
   );
@@ -636,18 +637,19 @@ describe('owned cancellation source fixtures (UNRUN)', () => {
     const handles: AccountDeletionCancellationIntent[] = [];
     function Harness() {
       const cancellation = useCancelAccountDeletion();
+      const [begin] = useState(() => cancellation.begin);
       useLayoutEffect(() => {
-        const intent = cancellation.begin(snapshot);
+        const intent = begin(snapshot);
         if (intent) handles.push(intent);
-      }, []);
+      }, [begin]);
       return null;
     }
     render(
-      <QueryClientProvider client={client}>
-        <StrictMode>
+      <StrictMode>
+        <QueryClientProvider client={client}>
           <Harness />
-        </StrictMode>
-      </QueryClientProvider>,
+        </QueryClientProvider>
+      </StrictMode>,
     );
     expect(handles).toHaveLength(2);
     expect(handles[0]?.isCurrent()).toBe(false);
@@ -660,3 +662,6 @@ describe('owned cancellation source fixtures (UNRUN)', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+type MockedModule0 = typeof import('@/lib/identity/useSessionSnapshot');
+type MockedModule1 = typeof import('@/lib/client/csrf');

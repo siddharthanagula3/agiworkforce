@@ -1,5 +1,5 @@
 vi.mock('@/features/settings/hooks/use-preference-owner', async (original) => ({
-  ...(await original<typeof import('@/features/settings/hooks/use-preference-owner')>()),
+  ...(await original<ImportedModule0>()),
   usePreferenceOwner: () => null,
 }));
 
@@ -66,7 +66,7 @@ vi.mock('@/lib/sentry-shared', async (importOriginal) => ({
 }));
 
 vi.mock('@/app/settings/_lib/preferences-client', async (original) => ({
-  ...(await original<typeof import('@/app/settings/_lib/preferences-client')>()),
+  ...(await original<ImportedModule1>()),
   fetchPreferenceNamespace: vi.fn(async () => ({})),
   savePreferenceNamespace: vi.fn(async () => ({})),
 }));
@@ -121,3 +121,6 @@ describe('PrivacySection · account deletion is a cross-link, not a second imple
     expect(screen.getByText('Danger zone')).toBeInTheDocument();
   });
 });
+
+type ImportedModule0 = typeof import('@/features/settings/hooks/use-preference-owner');
+type ImportedModule1 = typeof import('@/app/settings/_lib/preferences-client');

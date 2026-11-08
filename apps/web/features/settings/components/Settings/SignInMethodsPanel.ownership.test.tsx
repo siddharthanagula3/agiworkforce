@@ -25,11 +25,11 @@ vi.mock('@clerk/nextjs', async (original) => ({
   }),
 }));
 vi.mock('@/lib/client/csrf', async (original) => ({
-  ...(await original<typeof import('@/lib/client/csrf')>()),
+  ...(await original<MockedModule0>()),
   getCsrfToken: mocks.csrf,
 }));
 vi.mock('@agiworkforce/ui', async (original) => {
-  const actual = await original<typeof import('@agiworkforce/ui')>();
+  const actual = await original<MockedModule1>();
   return {
     ...actual,
     useConfirmAction: () => {
@@ -44,20 +44,32 @@ vi.mock('@agiworkforce/ui', async (original) => {
     },
   };
 });
-vi.mock('@/features/auth/StepUpDialog', async (original) => ({
-  ...(await original<typeof import('@/features/auth/StepUpDialog')>()),
-  StepUpDialog: (
-    props: ComponentProps<typeof import('@/features/auth/StepUpDialog').StepUpDialog>,
-  ) => {
-    mocks.stepUp = props;
-    return (
-      <div role="dialog">
-        <button onClick={() => props.onSatisfied('proof')}>Verify identity</button>
-        <button onClick={props.onCancel}>Cancel verification</button>
-      </div>
-    );
-  },
-}));
+vi.mock('@/features/auth/StepUpDialog', async (original) => {
+  const actual = await original<MockedModule2>();
+  const { Dialog, DialogContent, DialogTitle, DialogDescription } =
+    await vi.importActual<MockedModule1>('@agiworkforce/ui');
+  return {
+    ...actual,
+    StepUpDialog: (props: ComponentProps<typeof actual.StepUpDialog>) => {
+      mocks.stepUp = props;
+      return (
+        <Dialog
+          open={props.open}
+          onOpenChange={(open) => {
+            if (!open) props.onCancel();
+          }}
+        >
+          <DialogContent>
+            <DialogTitle>Verify identity</DialogTitle>
+            <DialogDescription>{props.consequence}</DialogDescription>
+            <button onClick={() => props.onSatisfied('proof')}>Verify identity</button>
+            <button onClick={props.onCancel}>Cancel verification</button>
+          </DialogContent>
+        </Dialog>
+      );
+    },
+  };
+});
 
 import { SignInMethodsPanel } from './SignInMethodsPanel';
 
@@ -68,7 +80,7 @@ function makeFixture() {
     id: 'external-1',
     provider: 'google',
     emailAddress: 'person@example.com',
-    destroy: vi.fn(async () => undefined),
+    destroy: vi.fn(async (): Promise<void> => undefined),
   };
   const user = {
     id: 'person',
@@ -588,3 +600,7 @@ function challenge() {
     { status: 403 },
   );
 }
+
+type MockedModule0 = typeof import('@/lib/client/csrf');
+type MockedModule1 = typeof import('@agiworkforce/ui');
+type MockedModule2 = typeof import('@/features/auth/StepUpDialog');

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readWebUsageSummary } from '../useManagedUsageSummary';
+import { parseManagedUsageSummaryResponse } from '@agiworkforce/types';
 
 const SUMMARY = {
   plan_tier: 'pro',
@@ -20,7 +20,7 @@ const SUMMARY = {
 
 describe('web usage meter', () => {
   it('reads the canonical percentage and reset', () => {
-    const usage = readWebUsageSummary(SUMMARY);
+    const usage = parseManagedUsageSummaryResponse(SUMMARY);
     expect(usage.usage_percentage).toBe(37);
     expect(usage.usage_reset_at).toBe('2026-11-01T00:00:00.000Z');
   });

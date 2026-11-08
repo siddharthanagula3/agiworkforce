@@ -101,6 +101,7 @@ export function useAccountWorkspaces() {
     refetch: () => {
       if (owner?.phase === 'unavailable') retryWorkspaceRead(owner);
       else if (canRead) return query.refetch();
+      return undefined;
     },
     data: admitted ? query.data : undefined,
     isLoading: canRead && query.isLoading,

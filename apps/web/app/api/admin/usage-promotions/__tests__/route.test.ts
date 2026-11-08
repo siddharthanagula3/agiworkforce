@@ -130,8 +130,7 @@ describe('admin usage promotions', () => {
   });
 
   it('keeps the changed keys and their values through the audit sanitizer', async () => {
-    const { sanitizeAuditDetail } =
-      await vi.importActual<typeof import('@/lib/security-audit')>('@/lib/security-audit');
+    const { sanitizeAuditDetail } = await vi.importActual<ImportedModule0>('@/lib/security-audit');
     expect(
       sanitizeAuditDetail({
         changedKeys: ['plans'],
@@ -173,3 +172,5 @@ describe('admin usage promotions', () => {
     expect(mocks.upsertUsageLimitPromotion).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/security-audit');

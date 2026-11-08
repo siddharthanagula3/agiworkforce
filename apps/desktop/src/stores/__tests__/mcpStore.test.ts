@@ -3,8 +3,7 @@ import { useMcpStore } from '../mcpStore';
 import type { McpServerHealth, McpServersConfig } from '../../types/mcp';
 
 vi.mock('../../lib/tauri-mock', async () => {
-  const actual =
-    await vi.importActual<typeof import('../../lib/tauri-mock')>('../../lib/tauri-mock');
+  const actual = await vi.importActual<ImportedModule0>('../../lib/tauri-mock');
   return {
     ...actual,
     isTauri: true,
@@ -459,3 +458,5 @@ describe('mcpStore', () => {
     });
   });
 });
+
+type ImportedModule0 = typeof import('../../lib/tauri-mock');

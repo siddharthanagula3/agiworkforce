@@ -1,4 +1,3 @@
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { BrowserAction } from '../types';
@@ -15,7 +14,7 @@ describe('runBrowserAction evaluate gate', () => {
   it('refuses evaluate when allowEvaluate is unset (no profile launched)', async () => {
     let openCalled = false;
     vi.doMock('../profile', async () => {
-      const actual = await vi.importActual<typeof import('../profile')>('../profile');
+      const actual = await vi.importActual<ImportedModule0>('../profile');
       return {
         ...actual,
         openProfile: vi.fn(async () => {
@@ -44,7 +43,7 @@ describe('runBrowserAction evaluate gate', () => {
   it('also refuses evaluate when allowEvaluate is explicitly false', async () => {
     let openCalled = false;
     vi.doMock('../profile', async () => {
-      const actual = await vi.importActual<typeof import('../profile')>('../profile');
+      const actual = await vi.importActual<ImportedModule0>('../profile');
       return {
         ...actual,
         openProfile: vi.fn(async () => {
@@ -74,7 +73,7 @@ describe('runBrowserAction evaluate gate', () => {
       },
     };
     vi.doMock('../profile', async () => {
-      const actual = await vi.importActual<typeof import('../profile')>('../profile');
+      const actual = await vi.importActual<ImportedModule0>('../profile');
       return {
         ...actual,
         openProfile: vi.fn(async () => fakePage),
@@ -95,3 +94,5 @@ describe('runBrowserAction evaluate gate', () => {
     }
   });
 });
+
+type ImportedModule0 = typeof import('../profile');

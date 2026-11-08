@@ -192,7 +192,7 @@ describe('SitesPage update callback boundary', () => {
     render(<SitesPage />);
     await screen.findByTestId('site-record');
     const originalPageCallback = mocks.onUpdated!;
-    fireEvent.click(screen.getByRole('button', { name: 'Older', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Older' }));
     await screen.findByText(/Older site/);
     expect(readRecord()).toEqual(older);
     fireEvent.click(screen.getByRole('button', { name: 'Refresh sites' }));

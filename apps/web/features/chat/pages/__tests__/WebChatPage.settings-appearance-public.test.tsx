@@ -2,7 +2,10 @@ import type { ReactNode } from 'react';
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { MANAGED_CLOUD_WORKSPACES_PATH } from '@agiworkforce/cloud-contracts';
+import {
+  MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH,
+  MANAGED_CLOUD_WORKSPACES_PATH,
+} from '@agiworkforce/cloud-contracts';
 import { CapabilityProvider } from '@agiworkforce/unified-chat/capabilities';
 import { ThemeProvider } from '@shared/components/ThemeProvider';
 import { QueryProvider } from '@shared/stores/query-client';
@@ -290,18 +293,50 @@ function PublicChatWindow({ children }: { children: ReactNode }) {
   );
 }
 
+let savedSettings: Record<string, Record<string, unknown>>;
+let savedSettingsVersion = 0;
+
+function settingsResponse(input: RequestInfo | URL, init?: RequestInit): Response {
+  const path = String(input);
+  if (path === MANAGED_CLOUD_WORKSPACES_PATH) {
+    return Response.json({
+      scope: 'personal',
+      activeWorkspaceId: 'personal',
+      activeOrganizationId: null,
+      workspaces: [],
+    });
+  }
+  if (path === MANAGED_CLOUD_SETTINGS_PREFERENCES_PATH) {
+    const settings = savedSettings;
+    if (init?.method === 'PUT' && typeof init.body === 'string') {
+      const body = JSON.parse(init.body) as { namespace: string; patch: Record<string, unknown> };
+      settings[body.namespace] = { ...settings[body.namespace], ...body.patch };
+      savedSettingsVersion += 1;
+    }
+    return Response.json({ settings, version: `settings-v${savedSettingsVersion}` });
+  }
+  return Response.json({});
+}
+
 describe('public settings window appearance', () => {
   beforeEach(() => {
+    savedSettings = {
+      notifications: { browserReplyReady: true },
+      privacy: { shareTelemetry: false },
+    };
+    savedSettingsVersion = 0;
     mocks.queryString = '';
     mocks.sessionId = null;
-    mocks.admitCloudSession = false;
+    mocks.admitCloudSession = true;
+    mocks.memoryClerk.user = { id: 'fixture-user' };
+    mocks.memoryClerk.session = { ...mocks.memoryClerk.session, user: mocks.memoryClerk.user };
     mocks.routerReplace.mockClear();
     localStorage.clear();
     installMatchMedia();
     invalidatePreferencesSnapshot();
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => new Response('{}', { status: 200 })),
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => settingsResponse(input, init)),
     );
   });
 
@@ -517,10 +552,7 @@ describe('public settings window appearance', () => {
     await user.click(await screen.findByRole('button', { name: 'Connectors' }));
 
     expect(await screen.findByRole('heading', { name: 'Connectors' })).toBeVisible();
-    expect(await screen.findByText('Coming soon')).toBeVisible();
-    expect(
-      screen.getByText('Connecting Gmail, Google Drive, Calendar and other apps is coming soon.'),
-    ).toBeVisible();
+    expect(await screen.findByRole('button', { name: 'GitHub, Coming soon' })).toBeDisabled();
     expect(screen.queryByRole('button', { name: 'Connect GitHub' })).toBeNull();
   });
 
@@ -748,7 +780,7 @@ describe('public settings window appearance', () => {
           headers: { 'Content-Type': 'application/json' },
         });
       }
-      return new Response('{}', { status: 200 });
+      return settingsResponse(input, init);
     });
     vi.stubGlobal('fetch', transport);
     render(<SettingsIndexPage />);

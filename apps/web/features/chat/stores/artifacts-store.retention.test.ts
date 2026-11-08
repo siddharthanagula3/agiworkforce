@@ -100,7 +100,7 @@ describe('create-only partial retention in currently known client state', () => 
     const store = useArtifactsStore.getState();
     store.upsertArtifact({
       ...partial,
-      type: 'pdf',
+      type: 'document',
       language: 'pdf',
       title: 'My file',
       generatedFile: {

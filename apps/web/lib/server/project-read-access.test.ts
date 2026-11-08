@@ -1,4 +1,6 @@
 import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
@@ -71,7 +73,10 @@ describe('project read statement contract', () => {
   });
 
   it('binds byte and text source lookup in the final storage-uri statement', () => {
-    const source = readFileSync(new URL('./project-knowledge-files.ts', import.meta.url), 'utf8');
+    const source = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), 'project-knowledge-files.ts'),
+      'utf8',
+    );
     const lookup = source.slice(
       source.indexOf('export async function findReadableProjectKnowledgeFile('),
       source.indexOf('export function projectKnowledgeResponse('),

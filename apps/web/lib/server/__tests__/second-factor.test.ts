@@ -22,7 +22,7 @@ vi.mock('@/lib/server/identity', () => ({
   }),
 }));
 vi.mock('@/lib/mfa-policy-gate', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/mfa-policy-gate')>()),
+  ...(await importOriginal<ImportedModule0>()),
   rememberMfaEnrollment: mocks.rememberEnrollment,
 }));
 vi.mock('@/lib/crypto/totp-envelope', () => ({
@@ -30,7 +30,7 @@ vi.mock('@/lib/crypto/totp-envelope', () => ({
   sealTotpSecret: vi.fn(),
 }));
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<ImportedModule1>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
@@ -214,3 +214,6 @@ describe('earlier authenticator enrollment registration', () => {
     expect(mocks.rememberEnrollment).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/mfa-policy-gate');
+type ImportedModule1 = typeof import('@/lib/logger');

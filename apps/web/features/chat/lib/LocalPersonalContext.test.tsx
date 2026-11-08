@@ -21,7 +21,7 @@ import {
 
 const state = vi.hoisted(() => ({ session: null as SessionAuthority | null, serial: 0 }));
 vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/identity/useSessionSnapshot')>()),
+  ...(await importOriginal<ImportedModule0>()),
   useSessionSnapshot: () => () => state.session,
 }));
 const personal = {
@@ -275,3 +275,5 @@ describe('Local optional personal context ownership', () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/identity/useSessionSnapshot');

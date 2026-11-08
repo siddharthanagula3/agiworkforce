@@ -34,7 +34,7 @@ jest.mock('react-native-webrtc', () => ({
 }));
 
 jest.mock('expo-crypto', () => {
-  const nodeCrypto = jest.requireActual<typeof import('crypto')>('crypto');
+  const nodeCrypto = jest.requireActual<ImportedModule0>('crypto');
   const randomBytes = (length: number) => {
     mockNonceCounter += 1;
     return Uint8Array.from({ length }, (_, index) => (mockNonceCounter + index * 7) & 0xff);
@@ -360,3 +360,5 @@ describe('Connection control session ownership', () => {
     expect(session.client.sendSignal).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('crypto');

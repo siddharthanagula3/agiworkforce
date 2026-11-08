@@ -7,7 +7,7 @@ const readBrowserPairing = vi.fn();
 const readBrowserActivity = vi.fn(async () => []);
 
 vi.mock('../lib/runtime-client', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../lib/runtime-client')>();
+  const actual = await importOriginal<ImportedModule0>();
   return {
     ...actual,
     stopPairedBrowser,
@@ -47,3 +47,5 @@ describe('BrowserToolsDialog Stop loading', () => {
     expect(stopPairedBrowser).toHaveBeenCalledTimes(1);
   });
 });
+
+type ImportedModule0 = typeof import('../lib/runtime-client');

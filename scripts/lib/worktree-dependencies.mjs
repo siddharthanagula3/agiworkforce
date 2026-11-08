@@ -116,6 +116,64 @@ function packageLocation(file) {
   return /(?:^|\/)node_modules\/(?:@[^/]+\/)?[^/]+$/.test(file.split(path.sep).join('/'));
 }
 
+function omittedPlatformTargets(root) {
+  const lock = lockfile(path.join(root, 'pnpm-lock.yaml'));
+  const optional = new Set();
+  const required = new Set();
+  const collect = (dependencies, destination) => {
+    for (const [name, entry] of Object.entries(dependencies ?? {})) {
+      const resolution = typeof entry === 'string' ? entry : entry?.version;
+      if (typeof resolution !== 'string') continue;
+      const version = resolution.split('(')[0];
+      destination.add(lock.packages?.[version] ? version : `${name}@${version}`);
+    }
+  };
+  for (const snapshot of Object.values(lock.snapshots ?? {})) {
+    collect(snapshot.optionalDependencies, optional);
+    collect(snapshot.dependencies, required);
+  }
+  for (const importer of Object.values(lock.importers ?? {})) {
+    collect(importer.optionalDependencies, optional);
+    collect(importer.dependencies, required);
+    collect(importer.devDependencies, required);
+  }
+  const excludesHost = (values, host) =>
+    Array.isArray(values) &&
+    values.length > 0 &&
+    values.every(
+      (value) => typeof value === 'string' && value !== 'any' && !value.startsWith('!'),
+    ) &&
+    !values.includes(host);
+  const targets = new Set();
+  for (const [id, metadata] of Object.entries(lock.packages ?? {})) {
+    if (
+      !optional.has(id) ||
+      required.has(id) ||
+      !(excludesHost(metadata.os, process.platform) || excludesHost(metadata.cpu, process.arch))
+    )
+      continue;
+    const split = id.lastIndexOf('@');
+    const name = id.slice(0, split);
+    const version = id.slice(split + 1);
+    if (
+      !/^(?:@[A-Za-z0-9._-]+\/)?[A-Za-z0-9._-]+$/.test(name) ||
+      name.split('/').some((part) => part === '.' || part === '..') ||
+      !/^[0-9][A-Za-z0-9.+_-]*$/.test(version)
+    )
+      continue;
+    targets.add(
+      path.join(
+        root,
+        'node_modules/.pnpm',
+        `${name.replace('/', '+')}@${version}`,
+        'node_modules',
+        name,
+      ),
+    );
+  }
+  return targets;
+}
+
 export function reuseWorktreeDependencies(source, candidate) {
   const sourceRoot = fs.realpathSync(source);
   const candidateRoot = fs.realpathSync(candidate);
@@ -178,6 +236,7 @@ export function reuseWorktreeDependencies(source, candidate) {
   }
   if (modules.length === 0) return;
   verifyInstalled(sourceRoot, sourcePackages);
+  const omittedTargets = omittedPlatformTargets(sourceRoot);
   roots.sort((a, b) => b.source.length - a.source.length);
   const replacements = new Map(roots.map((entry) => [entry.source, entry.candidate]));
   const sourcePaths = [...replacements.keys()]
@@ -185,6 +244,7 @@ export function reuseWorktreeDependencies(source, candidate) {
     .join('|');
   const shimPaths = new RegExp(`(?:${sourcePaths})(?=$|[/\\\\:;"'\\s])|/[^\\s"'\x60:;()<>|]+`, 'g');
   const links = [];
+  const omittedLinks = new Map();
 
   function localTarget(file) {
     const root = roots.find((entry) => inside(entry.source, file));
@@ -219,8 +279,26 @@ export function reuseWorktreeDependencies(source, candidate) {
       let target;
       try {
         target = fs.realpathSync(file);
-      } catch {
-        throw new Error('dependency link could not be safely resolved');
+      } catch (error) {
+        target = path.resolve(path.dirname(file), fs.readlinkSync(file));
+        if (error.code !== 'ENOENT' || !omittedTargets.has(target))
+          throw new Error('dependency link could not be safely resolved');
+        let ancestor = target;
+        for (;;) {
+          try {
+            fs.lstatSync(ancestor);
+            break;
+          } catch (missing) {
+            if (missing.code !== 'ENOENT') throw missing;
+            ancestor = path.dirname(ancestor);
+          }
+        }
+        if (!inside(sourceRoot, fs.realpathSync(ancestor)))
+          throw new Error('dependency link target is outside the verified inventory');
+        const mapped = localTarget(target);
+        link(mapped, destination);
+        omittedLinks.set(destination, mapped);
+        return;
       }
       link(workspaceTarget(file) ?? localTarget(target), destination);
       return;
@@ -275,6 +353,14 @@ export function reuseWorktreeDependencies(source, candidate) {
     mirror(entry.source, entry.candidate);
   }
   for (const file of links) {
+    if (omittedLinks.has(file)) {
+      if (
+        fs.existsSync(file) ||
+        path.resolve(path.dirname(file), fs.readlinkSync(file)) !== omittedLinks.get(file)
+      )
+        throw new Error('omitted platform dependency changed in the candidate');
+      continue;
+    }
     if (!inside(candidateRoot, fs.realpathSync(file)))
       throw new Error('dependency link resolves outside the candidate');
   }

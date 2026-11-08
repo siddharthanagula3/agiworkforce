@@ -12,7 +12,7 @@ vi.mock('@/lib/server/neon-db', () => ({
 }));
 // Web push goes through the vetted fetch; the real resolver would ask DNS about a test host.
 vi.mock('@/lib/egress-policy', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/egress-policy')>('@/lib/egress-policy');
+  const actual = await vi.importActual<ImportedModule0>('@/lib/egress-policy');
   return {
     ...actual,
     pinnedPublicFetch: (...args: unknown[]) => mocks.fetch(...args),
@@ -319,3 +319,5 @@ describe('device push preferences', () => {
     ]);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/egress-policy');

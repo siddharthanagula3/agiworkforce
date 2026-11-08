@@ -35,11 +35,11 @@ vi.mock('@clerk/nextjs', async (original) => ({
 }));
 vi.mock('sonner', () => ({ toast: { success: fixture.success, error: fixture.error } }));
 vi.mock('@/lib/client/csrf', async (original) => ({
-  ...(await original<typeof import('@/lib/client/csrf')>()),
+  ...(await original<MockedModule0>()),
   getCsrfToken: vi.fn(async () => 'csrf'),
 }));
 vi.mock('@hookform/resolvers/zod', async (original) => {
-  const actual = await original<typeof import('@hookform/resolvers/zod')>();
+  const actual = await original<MockedModule1>();
   return {
     ...actual,
     zodResolver: (...args: Parameters<typeof actual.zodResolver>) => {
@@ -53,7 +53,7 @@ vi.mock('@hookform/resolvers/zod', async (original) => {
   };
 });
 vi.mock('./TwoFactor', async (original) => {
-  const actual = await original<typeof import('./TwoFactor')>();
+  const actual = await original<MockedModule2>();
   return {
     ...actual,
     PasswordPanel: (props: React.ComponentProps<typeof actual.PasswordPanel>) => {
@@ -658,7 +658,12 @@ describe('password editor results and proof ownership', () => {
     );
     mount();
     fill();
-    submit();
+    fireEvent.blur(screen.getByPlaceholderText('Enter current password'));
+    fireEvent.blur(newInput());
+    fireEvent.blur(screen.getByPlaceholderText('Confirm new password'));
+    const save = screen.getByRole('button', { name: 'Change Password' });
+    await waitFor(() => expect(save).toBeEnabled());
+    fireEvent.click(save);
     const dialog = await screen.findByRole('dialog', { name: 'Confirm it is you' });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
@@ -736,3 +741,7 @@ describe('password editor results and proof ownership', () => {
     expect(fixture.error).not.toHaveBeenCalled();
   });
 });
+
+type MockedModule0 = typeof import('@/lib/client/csrf');
+type MockedModule1 = typeof import('@hookform/resolvers/zod');
+type MockedModule2 = typeof import('./TwoFactor');

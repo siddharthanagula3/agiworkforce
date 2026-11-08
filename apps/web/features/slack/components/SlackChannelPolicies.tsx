@@ -59,7 +59,20 @@ export function SlackChannelPolicies(props: {
   teamName: string;
   expectedTeamId: string;
 }) {
-  const target = useMemo(() => ({}), [props.view, props.installationId, props.expectedTeamId]);
+  const target = useMemo(
+    () =>
+      Object.assign(
+        {},
+        {
+          binding: {
+            expectedTeamId: props.expectedTeamId,
+            installationId: props.installationId,
+            view: props.view,
+          },
+        },
+      ),
+    [props.view, props.installationId, props.expectedTeamId],
+  );
   const rendered = useRef(target);
   rendered.current = target;
   const targetCurrent = useCallback(() => rendered.current === target, [target]);

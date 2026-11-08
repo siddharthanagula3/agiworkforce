@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/connectors/oauth-access', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/connectors/oauth-access')>()),
+  ...(await importOriginal<ImportedModule0>()),
   resolveConnectorAccessToken: mocks.access,
 }));
 vi.mock('@/lib/services/active-workspace-service', () => ({
@@ -257,3 +257,5 @@ describe('Gmail aggregate attachment read budget', () => {
     expect(mocks.fetch).toHaveBeenCalledOnce();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/connectors/oauth-access');

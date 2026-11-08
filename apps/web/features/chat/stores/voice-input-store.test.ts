@@ -120,6 +120,8 @@ describe('voiceInputStore', () => {
   });
 
   afterEach(() => {
+    _resetRuntimeRefs();
+    owner.retire();
     resetStore();
     defineWindowValue('MediaRecorder', undefined);
     vi.unstubAllGlobals();

@@ -13,7 +13,7 @@ const {
   mockOutsideQuery,
   mockCommitted,
 } = vi.hoisted(() => ({
-  mockOutsideQuery: vi.fn(() => {
+  mockOutsideQuery: vi.fn((..._args: unknown[]) => {
     throw new Error('Outside callback');
   }),
   mockCommitted: vi.fn(),
@@ -385,9 +385,9 @@ describe('required schedule pair cancellation', () => {
     },
   );
 
-  it.each([[], [{ id: 'user_cancelling' }]])(
+  it.each([[], [{ id: 'user_cancelling' }]].map((rows) => ({ rows })))(
     'does not audit missing or unscheduled rows: %j',
-    async (rows) => {
+    async ({ rows }) => {
       mockQuery
         .mockResolvedValueOnce(rows)
         .mockResolvedValueOnce([{ ...state, has_schedule: false }]);
@@ -398,31 +398,33 @@ describe('required schedule pair cancellation', () => {
     },
   );
 
-  it.each([
-    undefined,
-    null,
-    {},
-    [{}],
-    [{ id: 'victim' }],
-    [{ id: 'user_cancelling' }, { id: 'user_cancelling' }],
-  ])('fails closed on malformed lock output: %j', async (rows) => {
+  it.each(
+    [
+      undefined,
+      null,
+      {},
+      [{}],
+      [{ id: 'victim' }],
+      [{ id: 'user_cancelling' }, { id: 'user_cancelling' }],
+    ].map((rows) => ({ rows })),
+  )('fails closed on malformed lock output: %j', async ({ rows }) => {
     mockQuery.mockResolvedValueOnce(rows);
     expect((await PUT_SCHEDULE(pairRequest())).status).toBe(500);
     expect(mockRecordAuditEvent).not.toHaveBeenCalled();
   });
 
-  it.each([undefined, [], [{}], [{ ...state, pair_matches: null }]])(
+  it.each([undefined, [], [{}], [{ ...state, pair_matches: null }]].map((rows) => ({ rows })))(
     'fails closed on malformed state: %j',
-    async (rows) => {
+    async ({ rows }) => {
       mockQuery.mockResolvedValueOnce([{ id: 'user_cancelling' }]).mockResolvedValueOnce(rows);
       expect((await PUT_SCHEDULE(pairRequest())).status).toBe(500);
       expect(mockRecordAuditEvent).not.toHaveBeenCalled();
     },
   );
 
-  it.each([undefined, null, [{}], [{ id: 'victim' }]])(
+  it.each([undefined, null, [{}], [{ id: 'victim' }]].map((rows) => ({ rows })))(
     'fails closed on malformed update results: %j',
-    async (rows) => {
+    async ({ rows }) => {
       mockQuery
         .mockResolvedValueOnce([{ id: 'user_cancelling' }])
         .mockResolvedValueOnce([state])

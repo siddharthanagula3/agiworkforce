@@ -416,3 +416,14 @@ describe('scheduled managed agent executor', () => {
     );
   });
 });
+
+vi.mock('@/lib/server/neon-db', async () => {
+  const { createDatabaseAdapterFake } = await import('@/test/database-adapter-fake');
+  const privilegedDb = createDatabaseAdapterFake();
+  return {
+    getNeonDb: () => privilegedDb,
+    getStripeWebhookDb: () => {
+      throw new Error('Unexpected Stripe webhook database access');
+    },
+  };
+});

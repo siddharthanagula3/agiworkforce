@@ -1,4 +1,4 @@
-import { createWebChatWorkspaceFixture } from './web-chat-workspace-fixture';
+import { createWebChatWorkspaceFixture } from './WebChatWorkspaceFixture';
 import type { ReactNode } from 'react';
 import type { ImageRevisionRequest } from '../../components/ImageGenerationCard';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -93,6 +93,7 @@ vi.mock('@/lib/client/csrf', async (importOriginal) => ({
 vi.mock('@/app/settings/_lib/preferences-client', async (importOriginal) => ({
   ...(await importOriginal<ScanModule1>()),
   fetchPreferenceNamespace: async () => ({ browserReplyReady: true }),
+  fetchOwnedPreferenceNamespace: async () => ({ browserReplyReady: true }),
   readAutonomousToolApprovalsAllowed: async () => false,
   PREFERENCE_NAMESPACE_SAVED_EVENT: 'agi:preference-namespace-saved',
 }));

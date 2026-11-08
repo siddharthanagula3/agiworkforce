@@ -160,10 +160,10 @@ describe('web settings rail order', () => {
     const labels = Object.fromEntries(
       WEB_SETTINGS_NAV_GROUPS.flatMap((group) => group.items).map((item) => [item.key, item.label]),
     );
-    expect(labels.account).toBe('Account');
-    expect(labels.keyboard).toBe('Keyboard');
-    expect(labels.voice).toBe('Voice');
-    expect(labels.connectors).toBe('Connectors');
+    expect(labels['account']).toBe('Account');
+    expect(labels['keyboard']).toBe('Keyboard');
+    expect(labels['voice']).toBe('Voice');
+    expect(labels['connectors']).toBe('Connectors');
     expect(settingsSectionFromPath('/settings/account')).toBe('account');
     expect(settingsSectionFromPath('/settings/keyboard')).toBe('keyboard');
     expect(settingsSectionFromPath('/settings/voice')).toBe('voice');

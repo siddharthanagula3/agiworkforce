@@ -15,7 +15,7 @@ type ScanModule1 = typeof import('../utils/api');
 const realpath = vi.hoisted(() => vi.fn<(path: string) => string>());
 
 vi.mock('node:fs', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('node:fs')>()),
+  ...(await importOriginal<ImportedModule0>()),
   realpathSync: realpath,
 }));
 
@@ -493,3 +493,5 @@ describe('inline completions, plan usage limits', () => {
     expect(await ask(new AgiInlineCompletionProvider(SECRETS))).toHaveLength(1);
   });
 });
+
+type ImportedModule0 = typeof import('node:fs');

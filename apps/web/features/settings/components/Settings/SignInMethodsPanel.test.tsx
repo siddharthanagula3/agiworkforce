@@ -17,7 +17,7 @@ const identity = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/identity/useSessionSnapshot')>()),
+  ...(await importOriginal<ImportedModule0>()),
   useSessionSnapshot: () => () =>
     identity.signedIn && identity.userLoaded && identity.ownerId === identity.userId
       ? {
@@ -30,11 +30,11 @@ vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
       : null,
 }));
 vi.mock('@/lib/identity/native-session-authority', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/identity/native-session-authority')>()),
+  ...(await importOriginal<ImportedModule1>()),
   nativeSessionFor: () => ({ user: identity.nativeUser }),
 }));
 vi.mock('@/lib/identity/client', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/identity/client')>()),
+  ...(await importOriginal<ImportedModule2>()),
   useCurrentUser: () => ({
     isLoaded: identity.userLoaded,
     isSignedIn: identity.signedIn,
@@ -50,12 +50,12 @@ vi.mock('@/lib/identity/client', async (importOriginal) => ({
 }));
 
 vi.mock('@features/settings/hooks/useStepUp', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@features/settings/hooks/useStepUp')>()),
+  ...(await importOriginal<ImportedModule3>()),
   useStepUp: () => ({ withStepUp: vi.fn(), dialog: null }),
 }));
 
 vi.mock('@/features/auth/step-up-fetch', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/features/auth/step-up-fetch')>()),
+  ...(await importOriginal<ImportedModule4>()),
   isStepUpCancelled: () => false,
   fetchWithStepUp: vi.fn(),
   requestStepUpGrant: vi.fn(),
@@ -65,7 +65,7 @@ vi.mock('@/features/auth/step-up-fetch', async (importOriginal) => ({
 }));
 
 vi.mock('./use-sign-in-identities', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('./use-sign-in-identities')>()),
+  ...(await importOriginal<ImportedModule5>()),
   useSignInIdentities: () => ({
     ownerId: identity.ownerId,
     data:
@@ -207,3 +207,10 @@ describe('SignInMethodsPanel', () => {
     },
   );
 });
+
+type ImportedModule0 = typeof import('@/lib/identity/useSessionSnapshot');
+type ImportedModule1 = typeof import('@/lib/identity/native-session-authority');
+type ImportedModule2 = typeof import('@/lib/identity/client');
+type ImportedModule3 = typeof import('@features/settings/hooks/useStepUp');
+type ImportedModule4 = typeof import('@/features/auth/step-up-fetch');
+type ImportedModule5 = typeof import('./use-sign-in-identities');

@@ -17,14 +17,14 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@clerk/nextjs', () => ({ useAuth: mocks.useAuth, useClerk: () => mocks.sdk }));
 
 vi.mock('@/features/settings/services/privacy-preferences-client', async (original) => ({
-  ...(await original<typeof import('@/features/settings/services/privacy-preferences-client')>()),
+  ...(await original<ImportedModule0>()),
   readPrivacyPreferences: async () => ({
     stored: await mocks.fetchPreferenceNamespace(),
     version: 'v1',
   }),
 }));
 vi.mock('@/lib/sentry-shared', async (original) => ({
-  ...(await original<typeof import('@/lib/sentry-shared')>()),
+  ...(await original<ImportedModule1>()),
   hasTelemetryConsent: mocks.hasTelemetryConsent,
   setTelemetryConsentCache: mocks.setTelemetryConsentCache,
 }));
@@ -207,3 +207,6 @@ describe('exact account and view ownership', () => {
     expect(mocks.setTelemetryConsentCache).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('@/features/settings/services/privacy-preferences-client');
+type ImportedModule1 = typeof import('@/lib/sentry-shared');

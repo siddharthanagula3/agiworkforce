@@ -1,3 +1,4 @@
+import type { WebFetch } from '@/test/fetch';
 import React, { StrictMode } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -18,7 +19,7 @@ const fixture = vi.hoisted(() => ({
 // Keep the real confirmation hook and dialog; retain callbacks only to model stale
 // and duplicate delivery. Transport/CSRF are controlled, not a browser/server proof.
 vi.mock('@agiworkforce/ui', async (original) => {
-  const actual = await original<typeof import('@agiworkforce/ui')>();
+  const actual = await original<ImportedModule0>();
   return {
     ...actual,
     useConfirmAction: () => {
@@ -34,7 +35,7 @@ vi.mock('@agiworkforce/ui', async (original) => {
   };
 });
 vi.mock('@/lib/client/csrf', async (original) => ({
-  ...(await original<typeof import('@/lib/client/csrf')>()),
+  ...(await original<ImportedModule1>()),
   addCsrfHeaders: vi.fn(),
 }));
 vi.mock('@/features/auth/AuthLayout', () => ({
@@ -52,7 +53,7 @@ const actionName = 'Turn off Advanced Account Security';
 const confirmName = 'Turn off and remove registrations';
 const success =
   'Advanced Account Security was turned off. Review your sign-in methods and active sessions. Account recovery may need further attention.';
-const fetchMock = vi.fn<typeof fetch>();
+const fetchMock = vi.fn<WebFetch>();
 const gates: Array<() => void> = [];
 const receipt = (passwordReset = false) => ({ sessionsSignedOut: 98765, passwordReset });
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
@@ -73,7 +74,7 @@ function changeLink() {
   window.dispatchEvent(new HashChangeEvent('hashchange'));
 }
 function openConfirmation() {
-  fireEvent.click(screen.getByRole('button', { name: actionName, exact: true }));
+  fireEvent.click(screen.getByRole('button', { name: actionName }));
   return screen.getByRole('alertdialog');
 }
 function acceptConfirmation() {
@@ -82,7 +83,7 @@ function acceptConfirmation() {
   );
 }
 function expectNoRetry() {
-  const action = screen.queryByRole('button', { name: actionName, exact: true });
+  const action = screen.queryByRole('button', { name: actionName });
   if (action) expect(action).toBeDisabled();
   expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
 }
@@ -172,7 +173,7 @@ describe('anonymous undo-link intent and outcome fixtures', () => {
 
   it('locks duplicate same-tick opening and duplicate retained confirmation callbacks', async () => {
     render(<AccountSecurityUndo />);
-    const button = screen.getByRole('button', { name: actionName, exact: true });
+    const button = screen.getByRole('button', { name: actionName });
     act(() => {
       button.click();
       button.click();
@@ -326,7 +327,7 @@ describe('anonymous undo-link intent and outcome fixtures', () => {
   ] as const)('blocks a new prompt after synchronous %s route change', (method, route) => {
     render(<AccountSecurityUndo />);
     window.history[method](null, '', route);
-    fireEvent.click(screen.getByRole('button', { name: actionName, exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: actionName }));
     expect(fixture.confirmations).toHaveLength(0);
     expect(addCsrfHeaders).not.toHaveBeenCalled();
     expect(fetchMock).not.toHaveBeenCalled();
@@ -449,7 +450,7 @@ describe('anonymous undo-link intent and outcome fixtures', () => {
       await gate.promise;
     });
     expect(screen.queryByText(success)).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: actionName, exact: true })).toBeEnabled();
+    expect(screen.getByRole('button', { name: actionName })).toBeEnabled();
     openConfirmation();
     acceptConfirmation();
     await screen.findByText(success);
@@ -515,7 +516,10 @@ describe('anonymous undo-link intent and outcome fixtures', () => {
     expect(document.body).not.toHaveTextContent(
       /every session and linked device is signed out|your password is reset/i,
     );
-    expect(screen.getByRole('button', { name: actionName, exact: true })).toBeEnabled();
+    expect(screen.getByRole('button', { name: actionName })).toBeEnabled();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('@agiworkforce/ui');
+type ImportedModule1 = typeof import('@/lib/client/csrf');

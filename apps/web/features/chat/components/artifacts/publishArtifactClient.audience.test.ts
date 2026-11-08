@@ -1,8 +1,9 @@
+import type { WebFetch } from '@/test/fetch';
 import { describe, expect, it, vi } from 'vitest';
 import { setPublishedArtifactAudience } from './publishArtifactClient';
 
 vi.mock('@/lib/client/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/client/csrf')>()),
+  ...(await importOriginal<ImportedModule0>()),
   addCsrfHeaders: vi.fn(async (headers: HeadersInit = {}) => ({
     ...(headers as Record<string, string>),
     'x-csrf-token': 'test-token',
@@ -28,7 +29,7 @@ describe('setPublishedArtifactAudience confirmed receipts', () => {
         visibility,
         organizationId: visibility === 'organization' ? 'org-1' : null,
       };
-      const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(Response.json(body));
+      const fetchImpl = vi.fn<WebFetch>().mockResolvedValue(Response.json(body));
       await expect(
         setPublishedArtifactAudience(receipt.shareUrl, visibility, fetchImpl),
       ).resolves.toEqual({
@@ -65,7 +66,7 @@ describe('setPublishedArtifactAudience confirmed receipts', () => {
     { ...receipt, shareUrl: `${receipt.shareUrl}/` },
     { ...receipt, shareUrl: receipt.shareUrl.replace('https://', 'https://user:password@') },
   ])('does not confirm malformed, legacy or mismatched receipt %j', async (body) => {
-    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(Response.json(body));
+    const fetchImpl = vi.fn<WebFetch>().mockResolvedValue(Response.json(body));
     await expect(
       setPublishedArtifactAudience(receipt.shareUrl, 'invited', fetchImpl),
     ).rejects.toThrow('Audience change could not be confirmed. Access may have changed');
@@ -73,7 +74,7 @@ describe('setPublishedArtifactAudience confirmed receipts', () => {
   });
 
   it('reports invalid JSON as unconfirmed without rollback or retry', async () => {
-    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response('{'));
+    const fetchImpl = vi.fn<WebFetch>().mockResolvedValue(new Response('{'));
     await expect(
       setPublishedArtifactAudience(receipt.shareUrl, 'invited', fetchImpl),
     ).rejects.toThrow('Audience change could not be confirmed');
@@ -83,7 +84,7 @@ describe('setPublishedArtifactAudience confirmed receipts', () => {
   it.each([401, 403, 409, 429, 500])(
     'rejects HTTP %s with a valid-looking receipt',
     async (status) => {
-      const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(Response.json(receipt, { status }));
+      const fetchImpl = vi.fn<WebFetch>().mockResolvedValue(Response.json(receipt, { status }));
       await expect(
         setPublishedArtifactAudience(receipt.shareUrl, 'invited', fetchImpl),
       ).rejects.toThrow();
@@ -92,10 +93,12 @@ describe('setPublishedArtifactAudience confirmed receipts', () => {
   );
 
   it('does not confirm or retry interrupted transport', async () => {
-    const fetchImpl = vi.fn<typeof fetch>().mockRejectedValue(new Error('interrupted'));
+    const fetchImpl = vi.fn<WebFetch>().mockRejectedValue(new Error('interrupted'));
     await expect(
       setPublishedArtifactAudience(receipt.shareUrl, 'invited', fetchImpl),
     ).rejects.toThrow('interrupted');
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/client/csrf');

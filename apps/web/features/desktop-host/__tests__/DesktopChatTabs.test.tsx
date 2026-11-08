@@ -51,13 +51,13 @@ describe('Show Tabs on the public window', () => {
       deliver?.('toggle-chat-tabs');
     });
     expect(screen.getByRole('navigation', { name: 'Open tabs' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'one', exact: true })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'one' })).toBeTruthy();
 
     pathname.current = '/chat/two';
     view.rerender(<Harness />);
-    expect(screen.getByRole('button', { name: 'two', exact: true })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'two' })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: 'one', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'one' }));
     expect(push).toHaveBeenCalledWith('/chat/one');
   });
 
@@ -70,13 +70,13 @@ describe('Show Tabs on the public window', () => {
     view.rerender(<Harness />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Close one' }));
-    expect(screen.queryByRole('button', { name: 'one', exact: true })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'one' })).toBeNull();
 
     act(() => {
       deliver?.('reopen-closed-tab');
     });
 
-    expect(screen.getByRole('button', { name: 'one', exact: true })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'one' })).toBeTruthy();
     expect(push).toHaveBeenCalledWith('/chat/one');
   });
 
@@ -108,9 +108,9 @@ describe('Show Tabs on the public window', () => {
       deliver?.('close-tabs-to-the-right');
     });
 
-    expect(screen.getByRole('button', { name: 'one', exact: true })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'two', exact: true })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'three', exact: true })).toBeNull();
+    expect(screen.getByRole('button', { name: 'one' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'two' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'three' })).toBeNull();
   });
 
   it('closes every open tab except the one this window is showing', () => {
@@ -127,9 +127,9 @@ describe('Show Tabs on the public window', () => {
       deliver?.('close-other-tabs');
     });
 
-    expect(screen.getByRole('button', { name: 'three', exact: true })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'one', exact: true })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'two', exact: true })).toBeNull();
+    expect(screen.getByRole('button', { name: 'three' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'one' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'two' })).toBeNull();
   });
 
   it('closes the chat this window is showing', () => {
@@ -139,14 +139,14 @@ describe('Show Tabs on the public window', () => {
     });
     pathname.current = '/chat/two';
     view.rerender(<Harness />);
-    expect(screen.getByRole('button', { name: 'two', exact: true })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'two' })).toBeTruthy();
 
     act(() => {
       deliver?.('close-active-tab');
     });
 
-    expect(screen.queryByRole('button', { name: 'two', exact: true })).toBeNull();
-    expect(screen.getByRole('button', { name: 'one', exact: true })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'two' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'one' })).toBeTruthy();
   });
 
   it('opens the second chat when the public window asks for the second tab', () => {

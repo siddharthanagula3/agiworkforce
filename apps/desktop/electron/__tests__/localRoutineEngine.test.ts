@@ -192,7 +192,7 @@ describe('device-owned local routine lifecycle', () => {
 
     await f.engine.setEnabled(routine.id, false);
     await f.engine.setEnabled(routine.id, false);
-    await expect(f.engine.setEnabled(routine.id, true)).rejects.toThrow(/not acknowledged/);
+    await expect(f.engine.setEnabled(routine.id, true)).rejects.toThrow(/not been acknowledged/);
     expect(vi.mocked(f.dependencies.start).mock.calls[0]![4]()).toBe(false);
     expect(f.engine.state().routines[0]).toMatchObject({
       schedule: { enabled: false },

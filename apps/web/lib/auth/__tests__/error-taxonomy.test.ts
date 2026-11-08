@@ -20,6 +20,26 @@ function vendor(first: Record<string, unknown>, envelope: Record<string, unknown
 }
 
 describe('auth error taxonomy', () => {
+  it.each([
+    new DOMException('Owner retired', 'AbortError'),
+    { code: 20 },
+    { code: ['expired'] },
+    { code: { value: 'expired' } },
+    { errors: [null], message: 12, meta: { zxcvbn: { suggestions: {} } } },
+  ])('handles non-vendor error fields without throwing: %j', (error) => {
+    expect(classifyAuthError(error)).toEqual({ kind: 'unexpected' });
+  });
+
+  it.each(['constructor', '__proto__', 'toString'])(
+    'does not classify inherited map entries as auth codes: %s',
+    (code) => {
+      expect(classifyAuthError({ code, meta: { paramName: code } })).toEqual({
+        kind: 'unexpected',
+      });
+      expect(classifyProviderCallbackError(code)).toBe('provider_outage');
+    },
+  );
+
   it('separates an expired code from an incorrect one', () => {
     expect(classifyAuthError(vendor({ code: 'verification_expired' })).kind).toBe('code_expired');
     expect(classifyAuthError(vendor({ code: 'form_code_incorrect' })).kind).toBe('code_incorrect');

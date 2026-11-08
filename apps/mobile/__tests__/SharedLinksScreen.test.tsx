@@ -1,6 +1,15 @@
+import type { ReactTestInstance } from 'react-test-renderer';
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Alert, RefreshControl, Share } from 'react-native';
+
+function retainedPress(node: ReactTestInstance): () => void {
+  for (let current: ReactTestInstance | null = node; current; current = current.parent) {
+    const callback: unknown = current.props.onPress;
+    if (typeof callback === 'function') return callback as () => void;
+  }
+  throw new Error('No press callback on the rendered control');
+}
 
 const mockGet = jest.fn();
 const mockDelete = jest.fn();
@@ -8,7 +17,7 @@ const mockFocusCallbacks: Array<() => void | (() => void)> = [];
 let mockBlur: (() => void) | undefined;
 
 jest.mock('@/src/features/auth/store', () => {
-  const { create } = jest.requireActual<typeof import('zustand')>('zustand');
+  const { create } = jest.requireActual<ImportedModule0>('zustand');
   return {
     useAuthStore: create(() => ({ clerkUserId: 'fixture-account', isClerkSignedIn: true })),
   };
@@ -29,14 +38,30 @@ jest.mock('expo-router', () => ({
     navigate: jest.fn(),
   }),
   useFocusEffect: (callback: () => void | (() => void)) => {
-    const { useEffect } = jest.requireActual<typeof import('react')>('react');
-    const focus = () => {
-      const cleanup = callback();
-      mockBlur = typeof cleanup === 'function' ? cleanup : undefined;
-      return cleanup;
-    };
-    mockFocusCallbacks.push(focus);
-    useEffect(focus, [callback]);
+    const { useEffect } = jest.requireActual<ImportedModule1>('react');
+    useEffect(() => {
+      let active = true;
+      let cleanup: (() => void) | undefined;
+      const blur = () => {
+        cleanup?.();
+        cleanup = undefined;
+      };
+      const focus = () => {
+        if (!active) return;
+        blur();
+        const next = callback();
+        cleanup = typeof next === 'function' ? next : undefined;
+        mockBlur = blur;
+        return blur;
+      };
+      mockFocusCallbacks.push(focus);
+      focus();
+      return () => {
+        active = false;
+        blur();
+        if (mockBlur === blur) mockBlur = undefined;
+      };
+    }, [callback]);
   },
 }));
 
@@ -216,6 +241,7 @@ describe('Shared links screen', () => {
       fireEvent.press(await screen.findByLabelText(`Revoke link to ${share.title}`));
       const buttons = alerts.mock.calls[0][2];
       const confirm = buttons?.find((button) => button.text === 'Revoke')?.onPress;
+      if (boundary === 'unmount') view.unmount();
       act(() => {
         if (boundary === 'local') {
           useChatAppModeStore.setState({ appMode: 'local' });
@@ -223,9 +249,7 @@ describe('Shared links screen', () => {
         } else if (boundary === 'blur') {
           mockBlur?.();
           mockFocusCallbacks.at(-1)?.();
-        } else if (boundary === 'unmount') {
-          view.unmount();
-        } else {
+        } else if (boundary === 'cancel') {
           buttons?.find((button) => button.text === 'Cancel')?.onPress?.();
         }
         confirm?.();
@@ -290,7 +314,7 @@ describe('Shared links screen', () => {
         .spyOn(Share, 'share')
         .mockResolvedValue({ action: Share.sharedAction });
       const view = render(<SharedLinksScreen />);
-      const press = (await screen.findByLabelText(`Share link to ${share.title}`)).props.onPress;
+      const press = retainedPress(await screen.findByLabelText(`Share link to ${share.title}`));
       act(() => {
         if (boundary === 'local') {
           useChatAppModeStore.setState({ appMode: 'local' });
@@ -391,3 +415,6 @@ describe('Shared links screen', () => {
     expect(screen.queryByLabelText(`Revoke link to ${share.title}`)).toBeNull();
   });
 });
+
+type ImportedModule0 = typeof import('zustand');
+type ImportedModule1 = typeof import('react');

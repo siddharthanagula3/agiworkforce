@@ -180,14 +180,14 @@ export async function respondToAccountCompromise(
     !reportReceipt ||
     Array.isArray(reportReceipt) ||
     !sameCompromiseResponseId(reportReceipt.id, responseId) ||
-    typeof reportReceipt.user_id !== 'string' ||
-    reportReceipt.user_id !== input.userId ||
+    typeof reportReceipt['user_id'] !== 'string' ||
+    reportReceipt['user_id'] !== input.userId ||
     !Number.isInteger(sessionsRevoked) ||
     sessionsRevoked < 0 ||
     !Number.isInteger(sessionsFailed) ||
     sessionsFailed < 0 ||
-    reportReceipt.sessions_revoked !== sessionsRevoked ||
-    reportReceipt.sessions_failed !== sessionsFailed
+    reportReceipt['sessions_revoked'] !== sessionsRevoked ||
+    reportReceipt['sessions_failed'] !== sessionsFailed
   ) {
     throw createError
       .serviceUnavailable(
@@ -354,8 +354,8 @@ function confirmsCompromiseResolution(rows: unknown, responseId: string): boolea
   return (
     row !== null &&
     sameCompromiseResponseId(row.id, responseId) &&
-    row.password_reset_required === false &&
-    Number.isFinite(epochMs(row.resolved_at))
+    row['password_reset_required'] === false &&
+    Number.isFinite(epochMs(row['resolved_at']))
   );
 }
 

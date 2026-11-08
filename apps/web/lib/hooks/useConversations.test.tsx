@@ -1330,8 +1330,11 @@ describe('useConversations session-owned reads', () => {
       switchSession('user-2', 'session-2', nextToken);
       resolveToken('token-a');
     });
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(nextToken).not.toHaveBeenCalled();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+    expect(nextToken).toHaveBeenCalledOnce();
+    for (const [, init] of vi.mocked(fetch).mock.calls) {
+      expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer token-b');
+    }
 
     hook.rerender();
     await waitFor(() => expect(hook.result.current.isLoading).toBe(false));

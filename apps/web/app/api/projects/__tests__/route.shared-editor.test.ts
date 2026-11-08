@@ -25,11 +25,11 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 vi.mock('@/lib/services/active-workspace-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/active-workspace-service')>()),
+  ...(await importOriginal<ImportedModule0>()),
   resolveActiveOrganizationId: mockSavedOrganizationId,
 }));
 vi.mock('@/lib/services/organization-permission-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/organization-permission-service')>()),
+  ...(await importOriginal<ImportedModule1>()),
   resolveOrganizationPermissions: mockPermissions,
 }));
 vi.mock('@/lib/server/rls-db', () => ({
@@ -313,3 +313,6 @@ describe('PUT /api/projects/[id] · editor on a shared project', () => {
     expect(mockResolveProjectWriteAccess).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/services/active-workspace-service');
+type ImportedModule1 = typeof import('@/lib/services/organization-permission-service');

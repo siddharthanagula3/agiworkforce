@@ -157,7 +157,7 @@ jest.mock('../services/authSession', () => ({
 }));
 
 jest.mock('@agiworkforce/types', () => {
-  const actual = jest.requireActual<typeof import('@agiworkforce/types')>('@agiworkforce/types');
+  const actual = jest.requireActual<ImportedModule0>('@agiworkforce/types');
   return {
     ...actual,
     createAuditEvent: jest.fn((params: Record<string, unknown>) => ({
@@ -1587,3 +1587,5 @@ describe('Connection Store, friendly error messages', () => {
     expect(friendlyErrorMessage('')).toBe('An unexpected error occurred.');
   });
 });
+
+type ImportedModule0 = typeof import('@agiworkforce/types');

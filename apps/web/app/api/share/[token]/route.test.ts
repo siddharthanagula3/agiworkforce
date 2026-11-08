@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/feature-flags/tenant-lockdown', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/feature-flags/tenant-lockdown')>()),
+  ...(await importOriginal<ImportedModule0>()),
   assertTenantNotLockedDown: mocks.lockdown,
 }));
 vi.mock('@/lib/api-auth', () => ({
@@ -292,3 +292,5 @@ describe('GET /api/share/[token] authenticated fallback', () => {
     expect(mocks.scopedQuery).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/feature-flags/tenant-lockdown');

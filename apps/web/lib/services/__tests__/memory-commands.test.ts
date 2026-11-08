@@ -93,7 +93,13 @@ describe('runMemoryCommand', () => {
     expect(result?.outcome.message).toBe('Saved to memory: I use TypeScript');
     expect(mocks.writeConsolidatedMemory).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ content: 'I use TypeScript', source: 'web' }),
+      expect.objectContaining({
+        ...SCOPE,
+        projectId: null,
+        content: 'I use TypeScript',
+        source: 'web',
+      }),
+      { signal: undefined },
     );
   });
 
@@ -121,7 +127,13 @@ describe('runMemoryCommand', () => {
     expect(result?.outcome.status).toBe('stored');
     expect(mocks.writeConsolidatedMemory).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ content: 'I am a practicing Catholic', userRequested: true }),
+      expect.objectContaining({
+        ...SCOPE,
+        projectId: null,
+        content: 'I am a practicing Catholic',
+        userRequested: true,
+      }),
+      { signal: undefined },
     );
   });
 

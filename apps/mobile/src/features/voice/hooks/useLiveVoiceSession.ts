@@ -489,7 +489,16 @@ export function useLiveVoiceSession({
       setStatus('idle');
       endedRef.current(LIVE_VOICE_MESSAGE.sessionEnded);
     }
-  });
+  }, [
+    status,
+    active,
+    attempt,
+    executionMode,
+    conversationId,
+    identitySession,
+    offersWorkTask,
+    appendVoiceTurn,
+  ]);
 
   const toggleMute = useCallback(() => {
     setMuted((previous) => {

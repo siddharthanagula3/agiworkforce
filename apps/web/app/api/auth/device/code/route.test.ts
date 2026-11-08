@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { payloadCeilingBytes } from '@/lib/payload-ceiling';
@@ -82,7 +83,11 @@ describe('POST /api/auth/device/code', () => {
         controller.error(new Error('Body transport failed'));
       },
     });
-    const init: RequestInit & { duplex: 'half' } = { method: 'POST', body, duplex: 'half' };
+    const init: NonNullable<ConstructorParameters<typeof NextRequest>[1]> & { duplex: 'half' } = {
+      method: 'POST',
+      body,
+      duplex: 'half',
+    };
 
     const response = await POST(new NextRequest(url, init));
 
@@ -107,7 +112,11 @@ describe('POST /api/auth/device/code', () => {
       },
       cancel,
     });
-    const init: RequestInit & { duplex: 'half' } = { method: 'POST', body, duplex: 'half' };
+    const init: NonNullable<ConstructorParameters<typeof NextRequest>[1]> & { duplex: 'half' } = {
+      method: 'POST',
+      body,
+      duplex: 'half',
+    };
 
     const response = await POST(new NextRequest(url, init));
 
@@ -184,7 +193,7 @@ describe('GET /api/auth/device/code', () => {
     expect(response.headers.get('cache-control')).toBe('no-store');
     await expect(response.json()).resolves.toEqual({
       user_code: 'ABCD-2345',
-      client: { name: 'AGI Code', type: 'vscode' },
+      client: { name: PRODUCT_NAMES.code, type: 'vscode' },
       scopes: [
         {
           id: 'account:read',

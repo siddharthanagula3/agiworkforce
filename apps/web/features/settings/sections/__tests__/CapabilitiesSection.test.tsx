@@ -3,10 +3,13 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import {
   createCloudMemoryFixture,
   getCloudMemoryFixtureSession,
-} from '@/features/memory/__tests__/cloud-memory-fixture';
+} from '@/features/memory/__tests__/CloudMemoryFixture';
+
+const router = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
+vi.mock('next/navigation', () => ({ useRouter: () => router }));
 
 vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/identity/useSessionSnapshot')>()),
+  ...(await importOriginal<ImportedModule0>()),
   useSessionSnapshot: () => getCloudMemoryFixtureSession,
 }));
 
@@ -40,7 +43,7 @@ const savePreferenceNamespace = vi.fn(
 );
 
 vi.mock('@/app/settings/_lib/preferences-client', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/app/settings/_lib/preferences-client')>()),
+  ...(await importOriginal<ImportedModule1>()),
   readOwnedPreferences: async () => ({
     settings: { capabilities: await fetchPreferenceNamespace('capabilities', {}) },
     version,
@@ -232,3 +235,6 @@ describe('CapabilitiesSection search index', () => {
     ).toBeInTheDocument();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/identity/useSessionSnapshot');
+type ImportedModule1 = typeof import('@/app/settings/_lib/preferences-client');

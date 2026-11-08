@@ -9,11 +9,11 @@ import { DeviceSignInToggle } from '../DeviceSignInToggle';
 
 const identity = vi.hoisted(() => ({ owner: null as PreferenceOwner | null }));
 vi.mock('../../hooks/use-preference-owner', async (original) => ({
-  ...(await original<typeof import('../../hooks/use-preference-owner')>()),
+  ...(await original<ImportedModule0>()),
   usePreferenceOwner: () => identity.owner,
 }));
 vi.mock('@/lib/client/csrf', async (original) => ({
-  ...(await original<typeof import('@/lib/client/csrf')>()),
+  ...(await original<ImportedModule1>()),
   addCsrfHeaders: vi.fn(async (headers: HeadersInit = {}) => new Headers(headers)),
 }));
 const fetchMock = vi.fn<typeof fetch>();
@@ -230,3 +230,6 @@ describe('device sign-in switch ownership', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
+
+type ImportedModule0 = typeof import('../../hooks/use-preference-owner');
+type ImportedModule1 = typeof import('@/lib/client/csrf');

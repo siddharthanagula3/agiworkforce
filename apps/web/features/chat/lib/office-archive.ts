@@ -93,7 +93,10 @@ export async function officeMemberText(
 export async function storedOfficeArchive(data: ArrayBuffer): Promise<ArrayBuffer> {
   const archive = await openOfficeArchive(data);
   const accepted = new JSZip();
-  accepted.comment = archive.zip.comment;
+  const comment =
+    'comment' in archive.zip && typeof archive.zip.comment === 'string'
+      ? archive.zip.comment
+      : undefined;
   for (const entry of Object.values(archive.zip.files)) {
     const bytes = entry.dir ? new Uint8Array() : await readOfficeMember(entry, archive.budget);
     accepted.file(entry.name, bytes, {
@@ -106,5 +109,5 @@ export async function storedOfficeArchive(data: ArrayBuffer): Promise<ArrayBuffe
       compression: 'STORE',
     });
   }
-  return accepted.generateAsync({ type: 'arraybuffer', compression: 'STORE' });
+  return accepted.generateAsync({ type: 'arraybuffer', compression: 'STORE', comment });
 }

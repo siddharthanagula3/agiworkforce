@@ -93,20 +93,66 @@ const FIELD_BY_PARAM: Readonly<Record<string, AuthErrorField>> = {
 const RATE_LIMIT_STATUS = 429;
 const SERVER_FAULT_STATUS = 500;
 
+function errorRecord(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function errorString(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
+}
+
+function errorNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
 export function readVendorAuthError(error: unknown): VendorAuthError | null {
-  if (!error || typeof error !== 'object') return null;
-  const envelope = error as VendorAuthError;
-  const first = envelope.errors?.[0];
-  if (!first) return envelope;
+  const envelope = errorRecord(error);
+  if (!envelope) return null;
+  const errors = envelope['errors'];
+  const first = Array.isArray(errors) ? errorRecord(errors[0]) : null;
+  const entry = first ?? envelope;
+  const meta = errorRecord(entry['meta']);
+  const strength = errorRecord(meta?.['zxcvbn']);
+  const suggestions = strength?.['suggestions'];
   return {
-    ...first,
-    status: first.status ?? envelope.status,
-    retryAfter: first.retryAfter ?? envelope.retryAfter,
+    code: errorString(entry['code']),
+    message: errorString(entry['message']),
+    longMessage: errorString(entry['longMessage']),
+    status: errorNumber(entry['status']) ?? errorNumber(envelope['status']),
+    retryAfter: errorNumber(entry['retryAfter']) ?? errorNumber(envelope['retryAfter']),
+    ...(meta
+      ? {
+          meta: {
+            paramName: errorString(meta['paramName']),
+            retryAfter: errorNumber(meta['retryAfter']),
+            ...(Array.isArray(suggestions)
+              ? {
+                  zxcvbn: {
+                    suggestions: suggestions.flatMap((value) => {
+                      const suggestion = errorRecord(value);
+                      if (!suggestion) return [];
+                      return [
+                        {
+                          code: errorString(suggestion['code']),
+                          message: errorString(suggestion['message']),
+                        },
+                      ];
+                    }),
+                  },
+                }
+              : {}),
+          },
+        }
+      : {}),
   };
 }
 
 function kindFromCode(code: string): AuthErrorKind | null {
-  const mapped = CODE_KINDS[code];
+  const mapped = Object.prototype.hasOwnProperty.call(CODE_KINDS, code)
+    ? CODE_KINDS[code]
+    : undefined;
   if (mapped) return mapped;
   if (code.includes('already_verified') || code.includes('already_used'))
     return 'link_already_used';
@@ -144,7 +190,10 @@ export function classifyAuthError(error: unknown): AuthErrorDescriptor {
     'unexpected';
 
   const param = vendor.meta?.paramName;
-  const field = param ? FIELD_BY_PARAM[param] : undefined;
+  const field =
+    param && Object.prototype.hasOwnProperty.call(FIELD_BY_PARAM, param)
+      ? FIELD_BY_PARAM[param]
+      : undefined;
   const retryAfterSeconds = retryAfterOf(vendor);
   const message = [
     (vendor.longMessage ?? vendor.message ?? '').trim(),
@@ -193,5 +242,9 @@ const CALLBACK_ERROR_KINDS: Readonly<Record<string, AuthNoticeKind>> = {
 export function classifyProviderCallbackError(code: string | undefined): AuthNoticeKind | null {
   const trimmed = code?.trim();
   if (!trimmed) return null;
-  return CALLBACK_ERROR_KINDS[trimmed] ?? 'provider_outage';
+  return (
+    (Object.prototype.hasOwnProperty.call(CALLBACK_ERROR_KINDS, trimmed)
+      ? CALLBACK_ERROR_KINDS[trimmed]
+      : undefined) ?? 'provider_outage'
+  );
 }

@@ -75,7 +75,11 @@ export function useDeveloperRequestLogs(fetchLogs: RequestLogFetcher = fetchRequ
     : null;
   const organizationId = data?.activeOrganizationId ?? null;
   const lane = useMemo<LogLane>(
-    () => ({ active: false, token: {}, operation: null, page: null }),
+    () =>
+      Object.assign(
+        { active: false, token: {}, operation: null, page: null },
+        { binding: { epoch, fetchLogs, owner, scopeKey } },
+      ),
     [owner, epoch, scopeKey, fetchLogs],
   );
   const [state, setState] = useState<LogView | null>(null);

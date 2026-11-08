@@ -46,8 +46,12 @@ function deferred<T>() {
 function setup(overrides: Partial<NotebookApi> = {}) {
   let current = true;
   const api: NotebookApi = {
-    execute: vi.fn(async (id) => ({ session: session(id), ok: true, outputs: [] })),
-    runAll: vi.fn(async (id, input) => ({
+    execute: vi.fn<NotebookApi['execute']>(async (id) => ({
+      session: session(id),
+      ok: true,
+      outputs: [],
+    })),
+    runAll: vi.fn<NotebookApi['runAll']>(async (id, input) => ({
       session: session(id),
       runId: 'run',
       fromTop: true,
@@ -214,12 +218,12 @@ describe('notebook workspace ownership', () => {
 
   it('rejects response sessions or cell identities that do not match the request', async () => {
     const { workspace, cellId } = setup({
-      execute: vi.fn(async () => ({
+      execute: vi.fn<NotebookApi['execute']>(async () => ({
         session: session(B),
         ok: true,
         outputs: [{ kind: 'stream', data: 'wrong' }],
       })),
-      runAll: vi.fn(async () => ({
+      runAll: vi.fn<NotebookApi['runAll']>(async () => ({
         session: session(A),
         runId: 'run',
         fromTop: true,

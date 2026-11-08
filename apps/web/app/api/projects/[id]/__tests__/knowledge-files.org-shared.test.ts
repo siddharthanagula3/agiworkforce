@@ -20,15 +20,15 @@ const { mockSavedWorkspace, mockPermissions, mockStorageAllowance, mockStorageAv
   }));
 
 vi.mock('@/lib/services/active-workspace-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/active-workspace-service')>()),
+  ...(await importOriginal<ImportedModule0>()),
   resolveActiveOrganizationId: mockSavedWorkspace,
 }));
 vi.mock('@/lib/services/organization-permission-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/organization-permission-service')>()),
+  ...(await importOriginal<ImportedModule1>()),
   resolveOrganizationPermissions: mockPermissions,
 }));
 vi.mock('@/lib/server/file-storage', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/file-storage')>()),
+  ...(await importOriginal<ImportedModule2>()),
   resolveFileStorageAllowance: mockStorageAllowance,
   assertFileStorageAvailable: mockStorageAvailable,
 }));
@@ -354,3 +354,7 @@ describe('project knowledge files on an org-shared project', () => {
     ).toBe(false);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/services/active-workspace-service');
+type ImportedModule1 = typeof import('@/lib/services/organization-permission-service');
+type ImportedModule2 = typeof import('@/lib/server/file-storage');

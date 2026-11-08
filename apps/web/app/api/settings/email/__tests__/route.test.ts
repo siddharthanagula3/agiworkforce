@@ -40,7 +40,7 @@ vi.mock('@/lib/server/claimed-user-scope-db', () => ({
   createClaimedUserScopedDb: mocks.claimScope,
 }));
 vi.mock('@/lib/services/active-workspace-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/active-workspace-service')>()),
+  ...(await importOriginal<MockedModule0>()),
   resolveActiveOrganizationId: mocks.resolveOrganization,
 }));
 vi.mock('@/lib/server/identity', () => ({
@@ -56,15 +56,15 @@ vi.mock('@/lib/server/identity', () => ({
   }),
 }));
 vi.mock('@/lib/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/csrf')>()),
+  ...(await importOriginal<MockedModule1>()),
   requireCsrfToken: mocks.requireCsrfToken,
 }));
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<MockedModule2>()),
   withRateLimit: mocks.withRateLimit,
 }));
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<MockedModule3>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/security-audit', () => ({
@@ -179,6 +179,8 @@ beforeEach(() => {
   mocks.resolveOrganization.mockResolvedValue(ORGANIZATION);
   mocks.getUser.mockResolvedValue(providerUser());
   mocks.addEmailAddress.mockResolvedValue({ ...NEXT, verified: false });
+  mocks.setPrimaryEmailAddress.mockResolvedValue(undefined);
+  mocks.removeEmailAddress.mockResolvedValue(undefined);
   mocks.query.mockResolvedValue([{ id: ACCOUNT }]);
   mocks.requireCsrfToken.mockResolvedValue(null);
   mocks.withRateLimit.mockResolvedValue(null);
@@ -633,3 +635,8 @@ describe.each(['GET', 'POST', 'PATCH'] as const)('%s email native-session admiss
     assertNoMutations();
   });
 });
+
+type MockedModule0 = typeof import('@/lib/services/active-workspace-service');
+type MockedModule1 = typeof import('@/lib/csrf');
+type MockedModule2 = typeof import('@/lib/rate-limit');
+type MockedModule3 = typeof import('@/lib/logger');

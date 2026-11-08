@@ -2,7 +2,7 @@ import React from 'react';
 import { render } from '@testing-library/react-native';
 
 jest.mock('@/src/features/auth/store', () => {
-  const { create } = jest.requireActual<typeof import('zustand')>('zustand');
+  const { create } = jest.requireActual<ImportedModule0>('zustand');
   return {
     useAuthStore: create(() => ({
       isClerkLoaded: true,
@@ -71,3 +71,5 @@ describe('model-training privacy policy', () => {
     expect(queryByText(/without explicit consent/i)).toBeNull();
   });
 });
+
+type ImportedModule0 = typeof import('zustand');

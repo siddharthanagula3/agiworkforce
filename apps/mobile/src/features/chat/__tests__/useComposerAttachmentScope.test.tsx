@@ -24,9 +24,11 @@ describe('composer attachment operation ownership', () => {
   });
 
   it('retires destination ABA and retained capture methods', () => {
-    const { result, rerender } = renderHook(({ destination }) => useScope(destination, cloud), {
-      initialProps: { destination: 'first' },
-    });
+    const { result, rerender } = renderHook(
+      ({ destination }: { destination: Parameters<typeof useScope>[0] }) =>
+        useScope(destination, cloud),
+      { initialProps: { destination: 'first' } },
+    );
     const captureFirst = result.current;
     const first = captureFirst('cloud')!;
     rerender({ destination: 'second' });

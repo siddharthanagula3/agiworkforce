@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 const { lockdown } = vi.hoisted(() => ({ lockdown: vi.fn() }));
 vi.mock('@/lib/feature-flags/tenant-lockdown', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/feature-flags/tenant-lockdown')>()),
+  ...(await importOriginal<ImportedModule0>()),
   assertTenantNotLockedDown: lockdown,
 }));
 
@@ -88,3 +88,5 @@ describe.each(['session', 'artifact'] as const)('%s organization viewer admissio
     expect(lockdown).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/feature-flags/tenant-lockdown');

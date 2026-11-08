@@ -56,9 +56,9 @@ async function loadStreamingService() {
     useWaitlistStore: { getState: () => ({ cloudUnlocked: true }) },
   }));
 
-  const { activateCloudAccount } = jest.requireActual<
-    typeof import('../src/features/auth/services/cloudAccountSession')
-  >('../src/features/auth/services/cloudAccountSession');
+  const { activateCloudAccount } = jest.requireActual<ImportedModule0>(
+    '../src/features/auth/services/cloudAccountSession',
+  );
   activateCloudAccount('stream-account-a');
 
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -163,3 +163,5 @@ describe('starting an AGI Work run from mobile', () => {
     });
   });
 });
+
+type ImportedModule0 = typeof import('../src/features/auth/services/cloudAccountSession');

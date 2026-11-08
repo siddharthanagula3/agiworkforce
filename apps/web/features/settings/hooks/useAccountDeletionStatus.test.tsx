@@ -48,7 +48,7 @@ vi.mock('@clerk/nextjs', async (importOriginal) => ({
   useClerk: () => native.sdk,
 }));
 vi.mock('@/lib/client/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/client/csrf')>()),
+  ...(await importOriginal<MockedModule0>()),
   addCsrfHeaders: async (headers: HeadersInit) => headers,
 }));
 
@@ -82,11 +82,8 @@ function switchSession(userId = 'native-a', sessionId = 'session-a') {
 }
 function provider(strict = false) {
   return function Provider({ children }: { children: ReactNode }) {
-    return (
-      <QueryClientProvider client={client}>
-        {strict ? <StrictMode>{children}</StrictMode> : children}
-      </QueryClientProvider>
-    );
+    const content = <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+    return strict ? <StrictMode>{content}</StrictMode> : content;
   };
 }
 function useHarness(active = true) {
@@ -364,7 +361,8 @@ describe('native-session owned deletion status and admissions (UNRUN)', () => {
   it('uses fresh StrictMode setup generations and cannot reuse a closed reader snapshot', async () => {
     const hook = renderHook(({ active }) => useHarness(active), {
       initialProps: { active: true },
-      wrapper: provider(true),
+      wrapper: provider(),
+      reactStrictMode: true,
     });
     await waitFor(() => expect(hook.result.current.reader.data).toEqual(pending));
     const old = hook.result.current.reader.snapshot!;
@@ -377,3 +375,5 @@ describe('native-session owned deletion status and admissions (UNRUN)', () => {
     expect(hook.result.current.cancellation.begin(old)).toBeNull();
   });
 });
+
+type MockedModule0 = typeof import('@/lib/client/csrf');

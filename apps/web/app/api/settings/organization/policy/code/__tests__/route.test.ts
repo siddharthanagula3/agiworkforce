@@ -44,8 +44,7 @@ vi.mock('@/lib/services/organization-policy-override-service', () => ({
   readApplicablePolicyOverrides: mocks.overrides,
 }));
 vi.mock('@/lib/services/organization-policy-service', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@/lib/services/organization-policy-service')>();
+  const actual = await importOriginal<ImportedModule0>();
   return {
     ...actual,
     readOrganizationPolicy: (...args: Parameters<typeof actual.readOrganizationPolicy>) =>
@@ -617,3 +616,5 @@ describe('captured policy scope (auth mocked; UNRUN)', () => {
     state.assertAUnchanged();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/services/organization-policy-service');

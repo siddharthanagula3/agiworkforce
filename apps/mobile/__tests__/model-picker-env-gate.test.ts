@@ -27,7 +27,7 @@ jest.mock('../lib/mmkv', () => ({
 }));
 
 jest.mock('@agiworkforce/types', () => {
-  const actual = jest.requireActual<typeof import('@agiworkforce/types')>('@agiworkforce/types');
+  const actual = jest.requireActual<ImportedModule0>('@agiworkforce/types');
   return {
     ...actual,
     getModelMetadataById: jest.fn((id: string) => actual.getModelMetadataById(id)),
@@ -132,9 +132,7 @@ describe('getModelListForCloudAccess, environment gating wiring (c)', () => {
 
   beforeEach(() => {
     mockGetModelMetadataById.mockImplementation((id) =>
-      jest
-        .requireActual<typeof import('@agiworkforce/types')>('@agiworkforce/types')
-        .getModelMetadataById(id),
+      jest.requireActual<ImportedModule0>('@agiworkforce/types').getModelMetadataById(id),
     );
   });
 
@@ -144,7 +142,7 @@ describe('getModelListForCloudAccess, environment gating wiring (c)', () => {
 
   it('(c) a cloud model with requiresEnvironment:e2b is locked in getModelListForCloudAccess(true) even when cloudUnlocked', () => {
     const targetId = getCurrentCloudTargetId();
-    const actual = jest.requireActual<typeof import('@agiworkforce/types')>('@agiworkforce/types');
+    const actual = jest.requireActual<ImportedModule0>('@agiworkforce/types');
     mockGetModelMetadataById.mockImplementation((id) => {
       const base = actual.getModelMetadataById(id);
       if (id === targetId && base) {
@@ -163,7 +161,7 @@ describe('getModelListForCloudAccess, environment gating wiring (c)', () => {
 
   it('(c) non-targeted cloud models are unaffected by the injected requiresEnvironment', () => {
     const targetId = getCurrentCloudTargetId();
-    const actual = jest.requireActual<typeof import('@agiworkforce/types')>('@agiworkforce/types');
+    const actual = jest.requireActual<ImportedModule0>('@agiworkforce/types');
     mockGetModelMetadataById.mockImplementation((id) => {
       const base = actual.getModelMetadataById(id);
       if (id === targetId && base) {
@@ -219,3 +217,5 @@ describe('CRITICAL SAFETY: no current model availability is altered by Phase A e
     }
   });
 });
+
+type ImportedModule0 = typeof import('@agiworkforce/types');

@@ -1,6 +1,6 @@
 import React, { StrictMode } from 'react';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import {
   admitWorkspace,
@@ -24,7 +24,7 @@ const session = {
 };
 vi.mock('@/lib/identity/useSessionSnapshot', () => ({ useSessionSnapshot: () => () => session }));
 vi.mock('@/features/workspaces/hooks/use-workspaces', async (original) => ({
-  ...(await original<typeof import('@/features/workspaces/hooks/use-workspaces')>()),
+  ...(await original<ImportedModule0>()),
   useAccountWorkspaces: () => {
     if (fixture.workspacePhase !== 'ready')
       return {
@@ -46,7 +46,7 @@ vi.mock('@/features/workspaces/hooks/use-workspaces', async (original) => ({
 }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: fixture.replace }) }));
 vi.mock('@/lib/client/csrf', async (original) => ({
-  ...(await original<typeof import('@/lib/client/csrf')>()),
+  ...(await original<ImportedModule1>()),
   addCsrfHeaders: vi.fn(async (headers: HeadersInit = {}) => ({
     ...headers,
     'x-csrf-token': 'csrf',
@@ -347,3 +347,6 @@ it.each(['loading', 'switching'] as const)(
     expect(fetchMock).not.toHaveBeenCalled();
   },
 );
+
+type ImportedModule0 = typeof import('@/features/workspaces/hooks/use-workspaces');
+type ImportedModule1 = typeof import('@/lib/client/csrf');

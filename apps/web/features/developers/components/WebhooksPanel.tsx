@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useId, useLayoutEffect, useMemo, useState } from 'react';
+import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Button,
   Card,
@@ -318,8 +318,21 @@ function DeliveryLog({
     lifetime.active = true;
     return () => retireLifetime(lifetime);
   }, [lifetime]);
-  const snapshot = useMemo(() => ({}), [deliveries.data, deliveries.isLoading, deliveries.isError]);
-  const live = useMemo(() => ({ snapshot }), []);
+  const snapshot = useMemo(
+    () =>
+      Object.assign(
+        {},
+        {
+          binding: {
+            deliveriesData: deliveries.data,
+            deliveriesIsError: deliveries.isError,
+            deliveriesIsLoading: deliveries.isLoading,
+          },
+        },
+      ),
+    [deliveries.data, deliveries.isLoading, deliveries.isError],
+  );
+  const live = useRef({ snapshot }).current;
   useLayoutEffect(() => {
     live.snapshot = snapshot;
   }, [live, snapshot]);
@@ -423,8 +436,8 @@ function EndpointRow({
     setLog(next);
   };
   const lifetime = useLifetime();
-  const snapshot = useMemo(() => ({}), [endpoint]);
-  const live = useMemo(() => ({ snapshot }), []);
+  const snapshot = useMemo(() => Object.assign({}, { binding: { endpoint } }), [endpoint]);
+  const live = useRef({ snapshot }).current;
   useLayoutEffect(() => {
     live.snapshot = snapshot;
   }, [live, snapshot]);
@@ -575,7 +588,20 @@ function OwnedWebhooksPanel({
     lane.generation === intent.generation &&
     lane.intent === intent &&
     ownerCurrent();
-  const snapshot = useMemo(() => ({}), [endpoints.data, endpoints.isLoading, endpoints.isError]);
+  const snapshot = useMemo(
+    () =>
+      Object.assign(
+        {},
+        {
+          binding: {
+            endpointsData: endpoints.data,
+            endpointsIsError: endpoints.isError,
+            endpointsIsLoading: endpoints.isLoading,
+          },
+        },
+      ),
+    [endpoints.data, endpoints.isLoading, endpoints.isError],
+  );
   useLayoutEffect(() => {
     lane.snapshot = snapshot;
   }, [lane, snapshot]);
@@ -634,7 +660,7 @@ function OwnedWebhooksPanel({
       (lifetime && !lifetime.active)
     )
       return null;
-    let intent: WebhookIntent;
+
     const request = createRequestAuthority(
       owner.session,
       () => current(intent),
@@ -644,7 +670,7 @@ function OwnedWebhooksPanel({
       },
     );
     const retire = () => cancel(intent);
-    intent = {
+    const intent: WebhookIntent = {
       id: ++lane.nextId,
       generation: lane.generation,
       scope: { request, organizationId },

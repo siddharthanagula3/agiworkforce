@@ -38,9 +38,9 @@ async function loadStreamingService() {
     streamAuthRefusal: streamAuthRefusalMock,
   }));
 
-  const { activateCloudAccount } = jest.requireActual<
-    typeof import('../src/features/auth/services/cloudAccountSession')
-  >('../src/features/auth/services/cloudAccountSession');
+  const { activateCloudAccount } = jest.requireActual<ImportedModule0>(
+    '../src/features/auth/services/cloudAccountSession',
+  );
   activateCloudAccount('stream-account-a');
 
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -117,3 +117,5 @@ describe('the chat stream keeps the account rules every other request follows', 
     expect(callbacks.onError).toHaveBeenCalledWith(accountError);
   });
 });
+
+type ImportedModule0 = typeof import('../src/features/auth/services/cloudAccountSession');

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PreferenceOwner } from '@/app/settings/_lib/preferences-client';
 import type { RequestAuthority } from '@/lib/identity/request-authority';
 import type { NotificationSnapshot } from '../services/notification-preferences-client';
-import { AVAILABLE_NOW_LABEL, SURFACE_STATUS } from '@/lib/surface-status';
+import { AVAILABLE_NOW_LABEL, SURFACE_STATUS, type SurfaceStatusMap } from '@/lib/surface-status';
 import { NotificationsSection } from './NotificationsSection';
 
 const mocks = vi.hoisted(() => ({
@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
   browserOperation: vi.fn(),
 }));
 vi.mock('../hooks/use-preference-owner', async (original) => ({
-  ...(await original<typeof import('../hooks/use-preference-owner')>()),
+  ...(await original<ImportedModule0>()),
   usePreferenceOwner: () => mocks.owner,
 }));
 vi.mock('../services/notification-preferences-client', () => ({
@@ -25,7 +25,7 @@ vi.mock('../services/notification-preferences-client', () => ({
 vi.mock('@/features/notifications', async (original) => {
   const React = await import('react');
   return {
-    ...(await original<typeof import('@/features/notifications')>()),
+    ...(await original<ImportedModule1>()),
     useWebPushToggle: function useBrowserToggle() {
       const [busy, setBusy] = React.useState(false);
       React.useEffect(() => {
@@ -171,7 +171,7 @@ describe('notification view admission', () => {
   });
 
   it('does not revive a retained mobile option after an observed hide/show cycle', async () => {
-    const released = { ...SURFACE_STATUS, mobile: AVAILABLE_NOW_LABEL };
+    const released = { ...SURFACE_STATUS, mobile: AVAILABLE_NOW_LABEL } satisfies SurfaceStatusMap;
     const view = render(<NotificationsSection surfaceStatus={released} />);
     await ready();
     const oldChange = retainChange('Scheduled task finished');
@@ -230,3 +230,6 @@ describe('notification view admission', () => {
     expect(screen.queryByText('Saved')).toBeNull();
   });
 });
+
+type ImportedModule0 = typeof import('../hooks/use-preference-owner');
+type ImportedModule1 = typeof import('@/features/notifications');

@@ -190,7 +190,7 @@ export function SignInMethodsPanel({
   if (active && !slot.current) {
     const session = capture();
     if (session) {
-      const native = nativeSessionFor(session);
+      const native = nativeSessionFor<{ readonly user: unknown }>(session);
       const user = native.user;
       const owner: PanelOwner = {
         id: ++nextId.current,
@@ -259,15 +259,12 @@ function OwnedSignInMethodsPanel({
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(uncertain ? UNCERTAIN : null);
   const [blocked, setBlocked] = useState(uncertain);
-  const lane = useMemo(
-    () => ({
-      active: false,
-      generation: {} as object,
-      intent: null as SignInIntent | null,
-      blocked: uncertain,
-    }),
-    [],
-  );
+  const lane = useRef({
+    active: false,
+    generation: {} as object,
+    intent: null as SignInIntent | null,
+    blocked: uncertain,
+  }).current;
   const rendered = {};
   const latestRender = useRef(rendered);
   latestRender.current = rendered;

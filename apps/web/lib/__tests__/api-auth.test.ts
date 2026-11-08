@@ -294,7 +294,9 @@ function makeFakeDb() {
             Date.parse(String(r['expires_at'])) > Date.now()) &&
           (!hasProjectGate ||
             r['project_id'] == null ||
-            (project?.user_id === r['user_id'] && project.archived_at === null))
+            (project !== undefined &&
+              project.user_id === r['user_id'] &&
+              project.archived_at === null))
         );
       });
     }
@@ -882,6 +884,7 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
 
     beforeEach(() => {
       vi.stubEnv('CLERK_SECRET_KEY', 'test-clerk-secret-key');
+      mockNeonExecute.mockResolvedValue(0);
     });
 
     afterEach(() => {
@@ -984,7 +987,8 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
             headers: transport === 'bearer' ? { authorization: 'Bearer native-mfa-token' } : {},
           });
 
-        await expect(getClerkAuthUser(request())).resolves.toMatchObject({
+        const admitted = await getClerkAuthUser(request());
+        expect(admitted).toMatchObject({
           userId: 'product-mfa-account',
           sessionIdentity: { subject: 'native-mfa-subject', sessionId: null },
         });

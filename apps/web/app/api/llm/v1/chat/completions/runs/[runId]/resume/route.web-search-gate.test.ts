@@ -1,3 +1,5 @@
+import { contextPolicySnapshotFixture } from '@/lib/services/__tests__/fixtures/context-policy-snapshot';
+import { CONTEXT_POLICY_SNAPSHOT_KEY } from '@/lib/services/context-policy-snapshot';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 type ScanModule0 = typeof import('../../../lib/request-processor');
@@ -80,7 +82,11 @@ vi.mock('@/lib/workflows/start-cloud-agent-workflow', () => ({
 
 const db = { query: vi.fn(), transaction: vi.fn() };
 vi.mock('@/lib/server/rls-db', () => ({
-  getUserScopedDb: vi.fn(async () => ({ db, userId: 'user-1' })),
+  getUserScopedDb: vi.fn(async () => ({
+    organizationId: null,
+    db,
+    userId: 'user-1',
+  })),
 }));
 
 const runMocks = vi.hoisted(() => ({
@@ -119,7 +125,12 @@ const claim = {
     turnId: 'original-turn-1',
     nextEventSequence: 9,
     completedSteps: 3,
-    request: { model: 'claude-test', stream: true, tools: [NATIVE_SEARCH_TOOL] },
+    request: {
+      [CONTEXT_POLICY_SNAPSHOT_KEY]: contextPolicySnapshotFixture(),
+      model: 'claude-test',
+      stream: true,
+      tools: [NATIVE_SEARCH_TOOL],
+    },
     messages: [{ role: 'user', content: 'what shipped today' }],
     pendingToolCalls: [],
     state: 'resuming',

@@ -5,7 +5,7 @@ import { renderFileTextPreview } from '@/lib/server/file-text-preview';
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/server/file-text-preview', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/server/file-text-preview')>();
+  const actual = await importOriginal<ImportedModule0>();
   return { ...actual, renderFileTextPreview: vi.fn(actual.renderFileTextPreview) };
 });
 
@@ -291,3 +291,5 @@ describe('/api/files/[id]/text', () => {
     expect(await response.json()).toMatchObject({ kind: 'table', text: 'a,b\n1,2\n' });
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/server/file-text-preview');

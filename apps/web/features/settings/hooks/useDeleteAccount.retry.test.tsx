@@ -1,4 +1,4 @@
-import React from 'react';
+import { useLayoutEffect } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider, useMutation } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -21,7 +21,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/identity/useSessionSnapshot')>()),
+  ...(await importOriginal<ImportedModule0>()),
   useSessionSnapshot: () => () => ({
     userId: 'native-user-1',
     sessionId: 'session-1',
@@ -31,28 +31,28 @@ vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
 }));
 
 vi.mock('next/navigation', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('next/navigation')>()),
+  ...(await importOriginal<ImportedModule1>()),
   useRouter: () => ({ replace: mocks.replace }),
 }));
 
 vi.mock('@/lib/identity/client', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/identity/client')>()),
+  ...(await importOriginal<ImportedModule2>()),
   useSignOut: () => mocks.signOut,
 }));
 
 vi.mock('@shared/stores/authentication-store', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@shared/stores/authentication-store')>()),
+  ...(await importOriginal<ImportedModule3>()),
   useAuthStore: (selector: (state: { logout: typeof mocks.logout }) => unknown) =>
     selector({ logout: mocks.logout }),
 }));
 
 vi.mock('@shared/lib/get-auth-token', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@shared/lib/get-auth-token')>()),
+  ...(await importOriginal<ImportedModule4>()),
   getAuthToken: vi.fn(async () => 'session-token'),
 }));
 
 vi.mock('@/lib/client/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/client/csrf')>()),
+  ...(await importOriginal<ImportedModule5>()),
   getCsrfToken: vi.fn(async () => 'csrf-token'),
   addCsrfHeaders: vi.fn(async (headers: HeadersInit = {}) => ({
     ...Object.fromEntries(new Headers(headers).entries()),
@@ -61,7 +61,7 @@ vi.mock('@/lib/client/csrf', async (importOriginal) => ({
 }));
 
 vi.mock('@/features/auth/StepUpDialog', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/features/auth/StepUpDialog')>()),
+  ...(await importOriginal<ImportedModule6>()),
   StepUpDialog: (props: StepUpDialogProps) => {
     mocks.dialog(props);
     return <button onClick={props.onCancel}>Cancel identity confirmation</button>;
@@ -125,11 +125,14 @@ function grantCalls() {
 }
 
 function DeletionHarness() {
-  deletion = useDeleteAccount();
+  const currentDeletion = useDeleteAccount();
+  useLayoutEffect(() => {
+    deletion = currentDeletion;
+  }, [currentDeletion]);
   return (
     <>
-      <button onClick={() => deletion.mutate()}>Schedule deletion</button>
-      {deletion.stepUpDialog}
+      <button onClick={() => currentDeletion.mutate()}>Schedule deletion</button>
+      {currentDeletion.stepUpDialog}
     </>
   );
 }
@@ -143,10 +146,14 @@ function renderDeletion() {
 }
 
 function CancellationHarness() {
-  statusReader = useAccountDeletionStatus();
-  cancellation = useCancelAccountDeletion();
+  const currentStatus = useAccountDeletionStatus();
+  const currentCancellation = useCancelAccountDeletion();
+  useLayoutEffect(() => {
+    statusReader = currentStatus;
+    cancellation = currentCancellation;
+  }, [currentStatus, currentCancellation]);
   return (
-    <button onClick={() => cancellation.begin(statusReader.snapshot)?.confirm()}>
+    <button onClick={() => currentCancellation.begin(currentStatus.snapshot)?.confirm()}>
       Cancel scheduled deletion
     </button>
   );
@@ -434,3 +441,11 @@ describe('account deletion mutation receipts with production retry defaults', ()
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/identity/useSessionSnapshot');
+type ImportedModule1 = typeof import('next/navigation');
+type ImportedModule2 = typeof import('@/lib/identity/client');
+type ImportedModule3 = typeof import('@shared/stores/authentication-store');
+type ImportedModule4 = typeof import('@shared/lib/get-auth-token');
+type ImportedModule5 = typeof import('@/lib/client/csrf');
+type ImportedModule6 = typeof import('@/features/auth/StepUpDialog');

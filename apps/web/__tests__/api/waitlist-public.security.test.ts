@@ -14,7 +14,7 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 vi.mock('@/lib/error-handler', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/error-handler')>('@/lib/error-handler');
+  const actual = await vi.importActual<ImportedModule0>('@/lib/error-handler');
   return actual;
 });
 
@@ -631,3 +631,5 @@ describe('POST /api/waitlist/public, security tests', () => {
     });
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/error-handler');

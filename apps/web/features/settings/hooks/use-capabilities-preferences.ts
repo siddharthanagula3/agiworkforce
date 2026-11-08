@@ -82,13 +82,17 @@ export function useCapabilitiesPreferences(): UseCapabilitiesPreferencesResult {
   const [reloadKey, setReloadKey] = useState(0);
   const [rejected, setRejected] = useState<CapabilitiesPatch | null>(null);
   const lane = useMemo(
-    () => ({
-      acknowledged: DEFAULT_CAPABILITIES_SETTINGS,
-      version: null as string | null,
-      latestChoice: 0,
-      pending: {} as CapabilitiesPatch,
-      queue: Promise.resolve(),
-    }),
+    () =>
+      Object.assign(
+        {
+          acknowledged: DEFAULT_CAPABILITIES_SETTINGS,
+          version: null as string | null,
+          latestChoice: 0,
+          pending: {} as CapabilitiesPatch,
+          queue: Promise.resolve(),
+        },
+        { binding: { owner } },
+      ),
     [owner],
   );
   const workspace = useAccountWorkspaces();
