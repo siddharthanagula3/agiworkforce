@@ -549,6 +549,6 @@ comment on function public.extend_managed_usage_request_provider_step_microusd(
 
 
 delete from public.schema_migrations
- where filename = '0392_operator_usage_reset_window.sql';
+ where filename = '0396_operator_usage_reset_window.sql';
 
 commit;

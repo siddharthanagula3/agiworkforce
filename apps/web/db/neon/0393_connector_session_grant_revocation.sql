@@ -1,3 +1,4 @@
+-- destructive: the function below deletes a caller's connector session grants only when they revoke a tool. Applying this migration creates the function and deletes no rows.
 begin;
 
 do $$
