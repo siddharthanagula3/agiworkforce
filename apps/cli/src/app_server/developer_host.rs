@@ -1617,12 +1617,11 @@ impl CliDeveloperSessionHost {
     ) -> Result<ThreadSummary, DeveloperSessionHostError> {
         let store = self.store.clone();
         let thread_id = thread_id.to_string();
-        let resolved = tokio::task::spawn_blocking(move || {
-            resolve_execution_session(&store, &thread_id)
-        })
-        .await
-        .map_err(internal_error)?
-        .map_err(not_found_error)?;
+        let resolved =
+            tokio::task::spawn_blocking(move || resolve_execution_session(&store, &thread_id))
+                .await
+                .map_err(internal_error)?
+                .map_err(not_found_error)?;
         Ok(self.resolved_summary(resolved).await)
     }
 
@@ -1632,13 +1631,11 @@ impl CliDeveloperSessionHost {
     ) -> Result<PathBuf, DeveloperSessionHostError> {
         let store = self.store.clone();
         let thread_id = thread_id.to_string();
-        tokio::task::spawn_blocking(move || {
-            resolve_execution_session(&store, &thread_id)
-        })
-        .await
-        .map_err(internal_error)?
-        .map(|resolved| resolved.path)
-        .map_err(not_found_error)
+        tokio::task::spawn_blocking(move || resolve_execution_session(&store, &thread_id))
+            .await
+            .map_err(internal_error)?
+            .map(|resolved| resolved.path)
+            .map_err(not_found_error)
     }
 
     fn emit_writer_change(
@@ -2552,7 +2549,8 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         let client_name = client.name.clone();
         let through_message_index = params.through_message_index;
         let resolved = tokio::task::spawn_blocking(move || {
-            let resolved = resolve_execution_session(&store, &source_id).map_err(not_found_error)?;
+            let resolved =
+                resolve_execution_session(&store, &source_id).map_err(not_found_error)?;
             let source = load_resolved_session(&resolved).map_err(not_found_error)?;
             let reference = ManagedSessionReference::Path(resolved.path);
             if let Some(index) = through_message_index {
@@ -2779,8 +2777,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         let store = self.store.clone();
         let thread_id = params.thread_id.clone();
         let path = tokio::task::spawn_blocking(move || {
-            resolve_execution_session(&store, &thread_id)
-                .map(|resolved| resolved.path)
+            resolve_execution_session(&store, &thread_id).map(|resolved| resolved.path)
         })
         .await
         .map_err(internal_error)?
@@ -2813,12 +2810,11 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
 
         let store = self.store.clone();
         let thread_id = params.thread_id.clone();
-        let resolved = tokio::task::spawn_blocking(move || {
-            resolve_execution_session(&store, &thread_id)
-        })
-        .await
-        .map_err(internal_error)?
-        .map_err(not_found_error)?;
+        let resolved =
+            tokio::task::spawn_blocking(move || resolve_execution_session(&store, &thread_id))
+                .await
+                .map_err(internal_error)?
+                .map_err(not_found_error)?;
         let thread = self.resolved_summary(resolved).await;
         self.emit(
             agiworkforce_protocol::developer_session::method::THREAD_RENAMED,
@@ -11001,9 +10997,11 @@ mod tests {
         let unchanged = std::fs::read(&longer_path).expect("longer session bytes");
         std::fs::remove_file(&captured.path).expect("remove exact session");
         assert_eq!(
-            store.resolve(ManagedSessionReference::SessionId(first.session_id.clone()))
+            store
+                .resolve(ManagedSessionReference::SessionId(first.session_id.clone()))
                 .expect("read prefix still resolves")
-                .summary.session_id,
+                .summary
+                .session_id,
             longer.session_id
         );
         assert!(resolve_execution_session(&store, &first.session_id).is_err());
@@ -11012,7 +11010,10 @@ mod tests {
         assert!(store.unarchive(reference.clone()).is_err());
         assert!(store.fork(reference.clone()).is_err());
         assert!(store.delete(reference).is_err());
-        assert_eq!(std::fs::read(&longer_path).expect("longer session kept"), unchanged);
+        assert_eq!(
+            std::fs::read(&longer_path).expect("longer session kept"),
+            unchanged
+        );
     }
 
     #[tokio::test]

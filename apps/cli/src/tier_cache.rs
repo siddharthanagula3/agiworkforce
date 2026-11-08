@@ -72,7 +72,11 @@ fn cache_owner(base: &str, jwt: Option<&str>) -> Option<String> {
             Some((subject, session)) => vec!["session".to_string(), subject, session],
             None => {
                 let subject = crate::auth::jwt_subject(jwt)?;
-                vec!["legacy".to_string(), subject, crate::hex::encode(&Sha256::digest(jwt.as_bytes()))]
+                vec![
+                    "legacy".to_string(),
+                    subject,
+                    crate::hex::encode(&Sha256::digest(jwt.as_bytes())),
+                ]
             }
         },
     };
@@ -84,7 +88,9 @@ fn optional_environment(name: &str) -> Result<Option<String>> {
     match std::env::var(name) {
         Ok(value) => Ok(Some(value)),
         Err(std::env::VarError::NotPresent) => Ok(None),
-        Err(std::env::VarError::NotUnicode(_)) => anyhow::bail!("Managed configuration is not valid Unicode"),
+        Err(std::env::VarError::NotUnicode(_)) => {
+            anyhow::bail!("Managed configuration is not valid Unicode")
+        }
     }
 }
 
@@ -108,7 +114,10 @@ impl ManagedRequestContext {
 
     pub(crate) fn for_token(jwt: &str) -> Result<Self> {
         let context = Self::capture()?;
-        anyhow::ensure!(context.jwt.as_deref() == Some(jwt), "Managed account changed; retry the request");
+        anyhow::ensure!(
+            context.jwt.as_deref() == Some(jwt),
+            "Managed account changed; retry the request"
+        );
         Ok(context)
     }
 
@@ -117,21 +126,26 @@ impl ManagedRequestContext {
         crate::auth::AuthStore::with_snapshot(|store| {
             let current = Self::from_store(store).ok()?;
             self.matches_current(&current).then(read)
-        }).ok().flatten()
+        })
+        .ok()
+        .flatten()
     }
 
     fn with_current_token<T>(&self, read: impl FnOnce() -> T) -> Option<T> {
         crate::auth::AuthStore::with_snapshot(|store| {
             let current = Self::from_store(store).ok()?;
             (self.base == current.base && self.jwt == current.jwt).then(read)
-        }).ok().flatten()
+        })
+        .ok()
+        .flatten()
     }
 
     fn matches_current(&self, current: &Self) -> bool {
-        self.base == current.base && match (&self.owner, &current.owner) {
-            (Some(expected), Some(actual)) => expected == actual,
-            _ => self.jwt == current.jwt,
-        }
+        self.base == current.base
+            && match (&self.owner, &current.owner) {
+                (Some(expected), Some(actual)) => expected == actual,
+                _ => self.jwt == current.jwt,
+            }
     }
 
     pub(crate) fn is_current(&self) -> bool {
@@ -143,7 +157,6 @@ impl ManagedRequestContext {
             invalidate_for_request(&self.base, jwt);
         }
     }
-
 }
 
 pub(crate) fn invalidate_for_request(base: &str, jwt: &str) {
@@ -334,7 +347,8 @@ fn read_fresh_envelope(context: &ManagedRequestContext) -> Option<TierCacheEnvel
     let owner = context.owner.as_ref()?;
     let content = std::fs::read_to_string(tier_cache_path()?).ok()?;
     let envelope: TierCacheEnvelope = toml::from_str(&content).ok()?;
-    (envelope.owner.as_ref() == Some(owner) && cache_is_fresh(envelope.cached_at, now_secs())).then_some(envelope)
+    (envelope.owner.as_ref() == Some(owner) && cache_is_fresh(envelope.cached_at, now_secs()))
+        .then_some(envelope)
 }
 
 /// Read the cached tier from disk, returning `None` if absent or expired.
@@ -345,7 +359,9 @@ pub fn read_tier_cache() -> Option<CachedTier> {
 
 pub fn cached_capabilities() -> Option<CapabilityDocumentWire> {
     let context = ManagedRequestContext::capture().ok()?;
-    context.with_current(|| capabilities_for(&context)).flatten()
+    context
+        .with_current(|| capabilities_for(&context))
+        .flatten()
 }
 
 pub(crate) fn read_tier_for(context: &ManagedRequestContext) -> Option<CachedTier> {
@@ -381,8 +397,14 @@ pub fn capability_allowed(capability: &str) -> Option<bool> {
 
 /// Write a fresh tier to the disk cache.  Errors are silently swallowed, a
 /// failed cache write is never fatal.
-fn write_tier_cache(context: &ManagedRequestContext, tier: &UserTier, capabilities: Option<&CapabilityDocumentWire>) {
-    if context.owner.is_none() { return; }
+fn write_tier_cache(
+    context: &ManagedRequestContext,
+    tier: &UserTier,
+    capabilities: Option<&CapabilityDocumentWire>,
+) {
+    if context.owner.is_none() {
+        return;
+    }
     let Some(path) = tier_cache_path() else {
         return;
     };
@@ -459,7 +481,9 @@ pub fn plan_lists(models: &[String], model: &str) -> bool {
 }
 
 fn write_plan_models_cache(context: &ManagedRequestContext, models: &[String]) {
-    if context.owner.is_none() { return; }
+    if context.owner.is_none() {
+        return;
+    }
     let Some(path) = plan_models_cache_path() else {
         return;
     };
@@ -483,8 +507,15 @@ fn write_plan_models_cache(context: &ManagedRequestContext, models: &[String]) {
 /// route is judged, so the first verdict a client asks for reads the plan
 /// rather than the bundled vendor rule.
 pub async fn ensure_plan_models_cached() {
-    let Ok(context) = ManagedRequestContext::capture() else { return; };
-    if context.jwt.is_none() || context.with_current(|| plan_models_for(&context)).flatten().is_some() {
+    let Ok(context) = ManagedRequestContext::capture() else {
+        return;
+    };
+    if context.jwt.is_none()
+        || context
+            .with_current(|| plan_models_for(&context))
+            .flatten()
+            .is_some()
+    {
         return;
     }
     refresh_plan_models_cache(&context).await;
@@ -501,17 +532,19 @@ async fn refresh_plan_models_cache(context: &ManagedRequestContext) {
 }
 
 pub(crate) fn adopt_server_plan(context: &ManagedRequestContext, plan_tier: &str) -> bool {
-    context.with_current(|| {
-        let cached = read_tier_for(context).map(|cached| cached.tier);
-        match tier_to_adopt(plan_tier, cached.as_ref()) {
-            Some(server_tier) => {
-                invalidate_tier_cache();
-                write_tier_cache(context, &server_tier, None);
-                true
+    context
+        .with_current(|| {
+            let cached = read_tier_for(context).map(|cached| cached.tier);
+            match tier_to_adopt(plan_tier, cached.as_ref()) {
+                Some(server_tier) => {
+                    invalidate_tier_cache();
+                    write_tier_cache(context, &server_tier, None);
+                    true
+                }
+                None => false,
             }
-            None => false,
-        }
-    }).unwrap_or(false)
+        })
+        .unwrap_or(false)
 }
 
 /// The tier the cache should hold once the server states `plan_tier`, or `None`
@@ -715,51 +748,85 @@ pub async fn managed_auto_routing_tier() -> &'static str {
 }
 
 pub async fn resolve_user_tier(jwt: Option<&str>) -> TierResolution {
-    let Ok(context) = ManagedRequestContext::capture() else { return TierResolution::default(); };
-    if jwt != context.jwt.as_deref() { return TierResolution::default(); }
+    let Ok(context) = ManagedRequestContext::capture() else {
+        return TierResolution::default();
+    };
+    if jwt != context.jwt.as_deref() {
+        return TierResolution::default();
+    }
     resolve_user_tier_for(&context).await
 }
 
 pub(crate) async fn resolve_user_tier_for(context: &ManagedRequestContext) -> TierResolution {
     if let Some(cached) = context.with_current(|| read_tier_for(context)).flatten() {
-        if context.with_current(|| plan_models_for(context)).flatten().is_none() && context.jwt.is_some() {
+        if context
+            .with_current(|| plan_models_for(context))
+            .flatten()
+            .is_none()
+            && context.jwt.is_some()
+        {
             refresh_plan_models_cache(context).await;
         }
-        return context.with_current(|| TierResolution { cached: Some(cached), needs_reauth: false }).unwrap_or_default();
+        return context
+            .with_current(|| TierResolution {
+                cached: Some(cached),
+                needs_reauth: false,
+            })
+            .unwrap_or_default();
     }
-    let Some(jwt) = context.jwt.as_deref() else { return TierResolution::default(); };
+    let Some(jwt) = context.jwt.as_deref() else {
+        return TierResolution::default();
+    };
     let url = format!("{}/api/me", context.base);
     let result = tokio::time::timeout(TIER_FETCH_TIMEOUT, fetch_tier_from_api(&url, jwt)).await;
     match result {
         Ok(Ok(resp)) => {
-            let Some(tier_str) = resp.plan.as_ref().and_then(|plan| plan.effective_tier.as_deref().or(plan.tier.as_deref())) else {
+            let Some(tier_str) = resp
+                .plan
+                .as_ref()
+                .and_then(|plan| plan.effective_tier.as_deref().or(plan.tier.as_deref()))
+            else {
                 return TierResolution::default();
             };
             let fetched = parse_tier_str(tier_str);
             let resolved = context.with_current(|| {
                 let existing = read_tier_for(context);
                 let tier = match (fetched.clone(), existing) {
-                    (Some(fetched), Some(existing)) => reconcile_fetched_tier(&fetched, &existing.tier),
+                    (Some(fetched), Some(existing)) => {
+                        reconcile_fetched_tier(&fetched, &existing.tier)
+                    }
                     (Some(fetched), None) => fetched,
                     (None, Some(existing)) => existing.tier,
                     (None, None) => UserTier::Free,
                 };
                 let capabilities = if fetched.as_ref() == Some(&tier) {
                     resp.capability_handshake
-                } else { capabilities_for(context) };
+                } else {
+                    capabilities_for(context)
+                };
                 write_tier_cache(context, &tier, capabilities.as_ref());
                 tier
             });
-            let Some(tier) = resolved else { return TierResolution::default(); };
+            let Some(tier) = resolved else {
+                return TierResolution::default();
+            };
             refresh_plan_models_cache(context).await;
-            context.with_current(|| TierResolution { cached: Some(CachedTier { tier }), needs_reauth: false }).unwrap_or_default()
+            context
+                .with_current(|| TierResolution {
+                    cached: Some(CachedTier { tier }),
+                    needs_reauth: false,
+                })
+                .unwrap_or_default()
         }
-        Ok(Err(FetchError::Unauthorized)) => {
-            context.with_current_token(|| {
+        Ok(Err(FetchError::Unauthorized)) => context
+            .with_current_token(|| {
                 invalidate_tier_cache();
-                TierResolution { cached: None, needs_reauth: true }
-            }).unwrap_or_default()
-        }
+                TierResolution {
+                    cached: None,
+                    needs_reauth: true,
+                }
+            })
+            .unwrap_or_default(),
         Ok(Err(FetchError::Other(error))) => {
             tracing::debug!("[tier_cache] tier fetch failed: {error}");
             TierResolution::default()
@@ -925,22 +992,41 @@ mod tests {
     fn cache_token(subject: Option<&str>, session: Option<&str>, generation: u8) -> String {
         use base64::Engine;
         let claims = serde_json::json!({"sub": subject, "sid": session, "iat": generation});
-        format!("fixture.{}.signature", base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(claims.to_string()))
+        format!(
+            "fixture.{}.signature",
+            base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(claims.to_string())
+        )
     }
 
     fn cache_context(base: &str, jwt: Option<String>) -> ManagedRequestContext {
-        ManagedRequestContext { owner: cache_owner(base, jwt.as_deref()), jwt, base: base.to_string() }
+        ManagedRequestContext {
+            owner: cache_owner(base, jwt.as_deref()),
+            jwt,
+            base: base.to_string(),
+        }
     }
 
     #[test]
     fn cache_identity_preserves_session_renewal_but_not_account_session_or_deployment_switches() {
-        let first = cache_context(DEFAULT_API_BASE, Some(cache_token(Some("a"), Some("s1"), 1)));
-        let renewed = cache_context(DEFAULT_API_BASE, Some(cache_token(Some("a"), Some("s1"), 2)));
+        let first = cache_context(
+            DEFAULT_API_BASE,
+            Some(cache_token(Some("a"), Some("s1"), 1)),
+        );
+        let renewed = cache_context(
+            DEFAULT_API_BASE,
+            Some(cache_token(Some("a"), Some("s1"), 2)),
+        );
         assert!(first.matches_current(&renewed));
         assert_ne!(first.jwt, renewed.jwt);
         for replacement in [
-            cache_context(DEFAULT_API_BASE, Some(cache_token(Some("b"), Some("s1"), 1))),
-            cache_context(DEFAULT_API_BASE, Some(cache_token(Some("a"), Some("s2"), 1))),
+            cache_context(
+                DEFAULT_API_BASE,
+                Some(cache_token(Some("b"), Some("s1"), 1)),
+            ),
+            cache_context(
+                DEFAULT_API_BASE,
+                Some(cache_token(Some("a"), Some("s2"), 1)),
+            ),
             cache_context("https://api.agiworkforce.com", first.jwt.clone()),
             cache_context(DEFAULT_API_BASE, None),
         ] {
@@ -951,9 +1037,16 @@ mod tests {
     #[test]
     fn legacy_cache_identity_requires_subject_and_never_persists_token() {
         let token = cache_token(Some("legacy"), None, 1);
-        let owner = cache_owner(DEFAULT_API_BASE, Some(&token)).expect("subject-bound legacy owner");
+        let owner =
+            cache_owner(DEFAULT_API_BASE, Some(&token)).expect("subject-bound legacy owner");
         assert!(!owner.contains(&token));
-        assert_ne!(Some(owner), cache_owner(DEFAULT_API_BASE, Some(&cache_token(Some("legacy"), None, 2))));
+        assert_ne!(
+            Some(owner),
+            cache_owner(
+                DEFAULT_API_BASE,
+                Some(&cache_token(Some("legacy"), None, 2))
+            )
+        );
         assert!(cache_owner(DEFAULT_API_BASE, Some("opaque-token")).is_none());
         assert!(cache_owner(DEFAULT_API_BASE, Some(&cache_token(None, Some("s"), 1))).is_none());
     }
@@ -970,8 +1063,10 @@ mod tests {
 
     #[test]
     fn legacy_envelopes_do_not_acquire_the_current_owner() {
-        let tier: TierCacheEnvelope = toml::from_str("tier = 'pro'\ncached_at = 1").expect("legacy tier");
-        let models: PlanModelsEnvelope = toml::from_str("models = []\ncached_at = 1").expect("legacy models");
+        let tier: TierCacheEnvelope =
+            toml::from_str("tier = 'pro'\ncached_at = 1").expect("legacy tier");
+        let models: PlanModelsEnvelope =
+            toml::from_str("models = []\ncached_at = 1").expect("legacy models");
         assert!(tier.owner.is_none());
         assert!(models.owner.is_none());
         assert!(!cache_is_fresh(101, 100));

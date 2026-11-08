@@ -299,10 +299,7 @@ mod tests {
                 format!("    Includes: {}", labels(&plan_capabilities("free"))).as_str(),
             )
         );
-        assert_eq!(
-            rows[4].0,
-            "  Ultra: usage set by your contract"
-        );
+        assert_eq!(rows[4].0, "  Ultra: usage set by your contract");
         assert_eq!(
             rows[5].0,
             format!("  Team: {} per seat", window_credits("team"))
@@ -372,9 +369,7 @@ mod tests {
     fn a_max_20x_account_sees_itself_marked_under_its_catalog_label() {
         let lines = render_plans(Some(&UserTier::Max15x));
         let rows = plan_rows(&lines);
-        assert_eq!(
-            rows[4].0, "  Ultra (your plan): usage set by your contract"
-        );
+        assert_eq!(rows[4].0, "  Ultra (your plan): usage set by your contract");
         assert_eq!(rows[3].1, "    No features beyond Ultra");
         assert_eq!(
             rows[7].1,

@@ -276,20 +276,22 @@ impl SchedulesClient {
     }
 
     pub async fn list(&self, limit: u32, offset: u32) -> Result<Vec<Schedule>, ScheduleError> {
-        let body: ScheduleListBody = self.send(
-            self.request(reqwest::Method::GET, SCHEDULES_PATH)
-                .query(&[("limit", limit.to_string()), ("offset", offset.to_string())]),
-        )
-        .await?;
+        let body: ScheduleListBody = self
+            .send(
+                self.request(reqwest::Method::GET, SCHEDULES_PATH)
+                    .query(&[("limit", limit.to_string()), ("offset", offset.to_string())]),
+            )
+            .await?;
         Ok(body.schedules)
     }
 
     pub async fn create(&self, request: &ScheduleCreateRequest) -> Result<Schedule, ScheduleError> {
-        let body: ScheduleBody = self.send(
-            self.request(reqwest::Method::POST, SCHEDULES_PATH)
-                .json(request),
-        )
-        .await?;
+        let body: ScheduleBody = self
+            .send(
+                self.request(reqwest::Method::POST, SCHEDULES_PATH)
+                    .json(request),
+            )
+            .await?;
         Ok(body.schedule)
     }
 
@@ -298,11 +300,12 @@ impl SchedulesClient {
         schedule_id: &str,
         patch: &serde_json::Value,
     ) -> Result<Schedule, ScheduleError> {
-        let body: ScheduleBody = self.send(
-            self.request(reqwest::Method::PUT, &schedule_path(schedule_id))
-                .json(patch),
-        )
-        .await?;
+        let body: ScheduleBody = self
+            .send(
+                self.request(reqwest::Method::PUT, &schedule_path(schedule_id))
+                    .json(patch),
+            )
+            .await?;
         Ok(body.schedule)
     }
 
@@ -311,30 +314,33 @@ impl SchedulesClient {
         schedule_id: &str,
         active: bool,
     ) -> Result<Schedule, ScheduleError> {
-        let body: ScheduleBody = self.send(
-            self.request(reqwest::Method::PATCH, &schedule_path(schedule_id))
-                .json(&serde_json::json!({ "isActive": active })),
-        )
-        .await?;
+        let body: ScheduleBody = self
+            .send(
+                self.request(reqwest::Method::PATCH, &schedule_path(schedule_id))
+                    .json(&serde_json::json!({ "isActive": active })),
+            )
+            .await?;
         Ok(body.schedule)
     }
 
     pub async fn run_now(&self, schedule_id: &str) -> Result<ScheduleRun, ScheduleError> {
-        let body: RunBody = self.send(
-            self.request(reqwest::Method::POST, &runs_path(schedule_id))
-                .header(
-                    "Idempotency-Key",
-                    format!("agi.cli.schedule-run.{}", uuid::Uuid::new_v4()),
-                )
-                .timeout(MANUAL_RUN_TIMEOUT),
-        )
-        .await?;
+        let body: RunBody = self
+            .send(
+                self.request(reqwest::Method::POST, &runs_path(schedule_id))
+                    .header(
+                        "Idempotency-Key",
+                        format!("agi.cli.schedule-run.{}", uuid::Uuid::new_v4()),
+                    )
+                    .timeout(MANUAL_RUN_TIMEOUT),
+            )
+            .await?;
         Ok(body.run)
     }
 
     pub async fn delete(&self, schedule_id: &str) -> Result<(), ScheduleError> {
-        let _: serde_json::Value =
-            self.send(self.request(reqwest::Method::DELETE, &schedule_path(schedule_id))).await?;
+        let _: serde_json::Value = self
+            .send(self.request(reqwest::Method::DELETE, &schedule_path(schedule_id)))
+            .await?;
         Ok(())
     }
 
@@ -344,11 +350,12 @@ impl SchedulesClient {
         limit: u32,
         offset: u32,
     ) -> Result<Vec<ScheduleRun>, ScheduleError> {
-        let body: RunListBody = self.send(
-            self.request(reqwest::Method::GET, &runs_path(schedule_id))
-                .query(&[("limit", limit.to_string()), ("offset", offset.to_string())]),
-        )
-        .await?;
+        let body: RunListBody = self
+            .send(
+                self.request(reqwest::Method::GET, &runs_path(schedule_id))
+                    .query(&[("limit", limit.to_string()), ("offset", offset.to_string())]),
+            )
+            .await?;
         Ok(body.runs)
     }
 
@@ -390,14 +397,15 @@ impl SchedulesClient {
                     .collect()
             })
             .unwrap_or_default();
-        let body: RunBody = self.send(
-            self.request(reqwest::Method::POST, &approval_path(schedule_id, &run.id))
-                .json(&serde_json::json!({
-                    "decision": decision.wire(),
-                    "toolCallIds": tool_call_ids,
-                })),
-        )
-        .await?;
+        let body: RunBody = self
+            .send(
+                self.request(reqwest::Method::POST, &approval_path(schedule_id, &run.id))
+                    .json(&serde_json::json!({
+                        "decision": decision.wire(),
+                        "toolCallIds": tool_call_ids,
+                    })),
+            )
+            .await?;
         Ok(body.run)
     }
 
