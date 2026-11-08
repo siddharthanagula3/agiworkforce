@@ -82,6 +82,7 @@ const mockGetMe = jest.fn();
 const mockGetOrganization = jest.fn();
 const mockPatchMe = jest.fn();
 const mockCancelDeletion = jest.fn();
+const mockLegacyPost = jest.fn();
 const mockApiFetch = jest.fn();
 jest.mock('../services/api', () => ({
   apiFetch: (...args: unknown[]) => mockApiFetch(...args),
@@ -92,7 +93,8 @@ jest.mock('../services/api', () => ({
       return mockGetDeletionStatus(path, options);
     },
     patch: (...args: unknown[]) => mockPatchMe(...args),
-    post: (...args: unknown[]) => mockCancelDeletion(...args),
+    post: (...args: unknown[]) => mockLegacyPost(...args),
+    put: (...args: unknown[]) => mockCancelDeletion(...args),
     delete: (...args: unknown[]) => mockDeleteAccount(...args),
   },
 }));
@@ -142,26 +144,28 @@ jest.mock('../src/ui/theme', () => ({
 }));
 
 jest.mock('../components/ui/Text', () => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const ReactRuntime = require('react') as typeof React;
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { Text: NativeText } = require('react-native') as typeof import('react-native');
+  const ReactRuntime = jest.requireActual<typeof React>('react');
+  const { Text: NativeText } = jest.requireActual<typeof import('react-native')>('react-native');
   return {
     Text: (props: Record<string, unknown>) => ReactRuntime.createElement(NativeText, props),
   };
 });
 
 jest.mock('../src/features/settings/Common', () => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const ReactRuntime = require('react') as typeof React;
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { Pressable, View } = require('react-native') as typeof import('react-native');
+  const ReactRuntime = jest.requireActual<typeof React>('react');
+
+  const {
+    Pressable,
+    View,
+    Text: NativeText,
+  } = jest.requireActual<typeof import('react-native')>('react-native');
   return {
     SettingsScreenShell: ({ children }: { children: React.ReactNode }) =>
       ReactRuntime.createElement(View, null, children),
     SettingsGroup: ({ children }: { children: React.ReactNode }) =>
       ReactRuntime.createElement(View, null, children),
-    SettingsInfo: () => null,
+    SettingsInfo: ({ body }: { body: string }) =>
+      ReactRuntime.createElement(NativeText, null, body),
     SettingsRow: ({
       label,
       onPress,
@@ -181,8 +185,7 @@ jest.mock('../src/features/settings/Common', () => {
 });
 
 jest.mock('lucide-react-native', () => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const ReactRuntime = require('react') as typeof React;
+  const ReactRuntime = jest.requireActual<typeof React>('react');
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { View } = require('react-native') as typeof import('react-native');
   const Icon = () => ReactRuntime.createElement(View);
@@ -255,6 +258,7 @@ function deferred<T>() {
 }
 
 const pendingDeletionStatus = {
+  cancellationPrecondition: 'schedule-pair-v1',
   pending: true,
   canCancel: true,
   requestedAt: '2026-11-04T18:00:00.000Z',
@@ -656,8 +660,9 @@ describe('Cloud Account destructive action ownership', () => {
     expect(screen.queryByLabelText(/Copy Organization ID/)).toBeNull();
   });
 
-  it('lets the signed-in owner cancel a pending deletion after confirmation', async () => {
+  it('lets the signed-in owner cancel a pending deletion after confirmation (UNRUN)', async () => {
     mockGetDeletionStatus.mockResolvedValueOnce({
+      cancellationPrecondition: 'schedule-pair-v1',
       pending: true,
       canCancel: true,
       requestedAt: '2026-09-27T18:00:00.000Z',
@@ -677,15 +682,155 @@ describe('Cloud Account destructive action ownership', () => {
       buttons.find((button) => button.text === 'Cancel deletion')?.onPress?.();
     });
 
-    expect(mockCancelDeletion).toHaveBeenCalledWith('/api/user/delete-account/cancel', undefined, {
-      accountEpoch: captureCloudAccountEpoch(),
-    });
+    expect(mockCancelDeletion).toHaveBeenCalledWith(
+      '/api/user/delete-account/cancel-schedule',
+      {
+        expectedSchedule: {
+          requestedAt: '2026-09-27T18:00:00.000Z',
+          scheduledFor: '2026-09-28T18:00:00.000Z',
+        },
+      },
+      { accountEpoch: captureCloudAccountEpoch(), auth401Recovery: 'caller-owned' },
+    );
+    expect(mockLegacyPost).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.getByLabelText('Delete Account')).toBeTruthy());
     expect(mockSignOut).not.toHaveBeenCalled();
   });
 
+  it.each([null, '2026-11-04T18:00:00.123456Z'])(
+    'captures a frozen lossless pair with requestedAt %p (UNRUN)',
+    async (requestedAt) => {
+      const status = {
+        ...pendingDeletionStatus,
+        requestedAt,
+        scheduledFor: '2026-11-05T18:00:00.654321Z',
+      };
+      mockGetDeletionStatus.mockResolvedValueOnce(status);
+      render(<CloudAccountScreen />);
+      await waitFor(() => expect(screen.getByLabelText('Cancel Account Deletion')).toBeTruthy());
+      fireEvent.press(screen.getByLabelText('Cancel Account Deletion'));
+      const retained = deletionAlert('Cancel account deletion?');
+      status.scheduledFor = '2026-11-06T18:00:00.000000Z';
+      await act(async () => {
+        retained.confirm();
+        retained.confirm();
+      });
+      const [path, body, options] = mockCancelDeletion.mock.calls[0]!;
+      expect(path).toBe('/api/user/delete-account/cancel-schedule');
+      expect(body).toEqual({
+        expectedSchedule: { requestedAt, scheduledFor: '2026-11-05T18:00:00.654321Z' },
+      });
+      expect(Object.isFrozen(body)).toBe(true);
+      expect(Object.isFrozen(body.expectedSchedule)).toBe(true);
+      expect(options).toEqual({
+        accountEpoch: captureCloudAccountEpoch(),
+        auth401Recovery: 'caller-owned',
+      });
+      expect(mockCancelDeletion).toHaveBeenCalledTimes(1);
+      expect(mockLegacyPost).not.toHaveBeenCalled();
+    },
+  );
+
+  it('keeps a markerless deadline visible without inventing expiry or opening cancellation (UNRUN)', async () => {
+    mockGetDeletionStatus.mockResolvedValue({
+      ...pendingDeletionStatus,
+      cancellationPrecondition: undefined,
+    });
+    render(<CloudAccountScreen />);
+    await waitFor(() =>
+      expect(screen.getByLabelText('Protected cancellation unavailable. Refresh')).toBeTruthy(),
+    );
+    expect(screen.queryByLabelText('Cancellation window closed')).toBeNull();
+    expect(screen.getByText(/Cancellation deadline:/)).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('Protected cancellation unavailable. Refresh'));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(mockCancelDeletion).not.toHaveBeenCalled();
+    expect(mockLegacyPost).not.toHaveBeenCalled();
+    expect(Alert.alert).not.toHaveBeenCalled();
+  });
+
+  it('rejects an unknown protection marker (UNRUN)', async () => {
+    mockGetDeletionStatus.mockResolvedValueOnce({
+      ...pendingDeletionStatus,
+      cancellationPrecondition: 'schedule-pair-v2',
+    });
+    render(<CloudAccountScreen />);
+    await waitFor(() =>
+      expect(screen.getByLabelText('Could not check deletion status. Retry')).toBeTruthy(),
+    );
+    expect(mockCancelDeletion).not.toHaveBeenCalled();
+    expect(mockLegacyPost).not.toHaveBeenCalled();
+  });
+
+  it('requires fresh status and a new confirmation after schedule_changed (UNRUN)', async () => {
+    mockGetDeletionStatus.mockResolvedValueOnce(pendingDeletionStatus);
+    mockCancelDeletion.mockRejectedValueOnce(
+      new ApiHttpError('Changed', 409, null, { body: { reason: 'schedule_changed' } }),
+    );
+    render(<CloudAccountScreen />);
+    await waitFor(() => expect(screen.getByLabelText('Cancel Account Deletion')).toBeTruthy());
+    const refreshed = deferred<unknown>();
+    mockGetDeletionStatus.mockReturnValueOnce(refreshed.promise);
+    fireEvent.press(screen.getByLabelText('Cancel Account Deletion'));
+    const old = deletionAlert('Cancel account deletion?');
+    await act(async () => {
+      old.confirm();
+    });
+    expect(Alert.alert).toHaveBeenLastCalledWith(
+      'Deletion schedule changed',
+      expect.stringContaining('server refused'),
+    );
+    act(() => {
+      old.confirm();
+      old.cancel();
+      old.dismiss();
+    });
+    expect(mockCancelDeletion).toHaveBeenCalledTimes(1);
+    const next = { ...pendingDeletionStatus, scheduledFor: '2026-11-06T18:00:00.000001Z' };
+    await act(async () => {
+      refreshed.resolve(next);
+    });
+    act(() => {
+      old.confirm();
+    });
+    expect(mockCancelDeletion).toHaveBeenCalledTimes(1);
+    fireEvent.press(screen.getByLabelText('Cancel Account Deletion'));
+    await act(async () => {
+      deletionAlert('Cancel account deletion?').confirm();
+    });
+    expect(mockCancelDeletion.mock.calls[1]?.[1]).toEqual({
+      expectedSchedule: { requestedAt: next.requestedAt, scheduledFor: next.scheduledFor },
+    });
+    expect(mockLegacyPost).not.toHaveBeenCalled();
+  });
+
+  it('does not attribute a later absent schedule to an ambiguous cancellation (UNRUN)', async () => {
+    mockGetDeletionStatus.mockResolvedValueOnce(pendingDeletionStatus);
+    mockCancelDeletion.mockRejectedValueOnce(new Error('Lost response'));
+    render(<CloudAccountScreen />);
+    await waitFor(() => expect(screen.getByLabelText('Cancel Account Deletion')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('Cancel Account Deletion'));
+    const old = deletionAlert('Cancel account deletion?');
+    await act(async () => {
+      old.confirm();
+    });
+    await waitFor(() => expect(screen.getByLabelText('Delete Account')).toBeTruthy());
+    expect(Alert.alert).toHaveBeenLastCalledWith(
+      'Could not confirm cancellation',
+      expect.stringContaining('does not prove this cancellation succeeded'),
+    );
+    act(() => {
+      old.confirm();
+    });
+    expect(mockCancelDeletion).toHaveBeenCalledTimes(1);
+    expect(mockLegacyPost).not.toHaveBeenCalled();
+  });
+
   it('does not offer cancellation after the grace window closes', async () => {
     mockGetDeletionStatus.mockResolvedValueOnce({
+      cancellationPrecondition: 'schedule-pair-v1',
       pending: true,
       canCancel: false,
       requestedAt: '2026-09-25T18:00:00.000Z',
@@ -785,6 +930,7 @@ describe('Cloud Account destructive action ownership', () => {
     'uses the strict cancellation receipt %s and retires older status reads',
     async (cancelled) => {
       const pending = {
+        cancellationPrecondition: 'schedule-pair-v1',
         pending: true,
         canCancel: true,
         requestedAt: '2026-09-27T18:00:00.000Z',
@@ -843,6 +989,7 @@ describe('Cloud Account destructive action ownership', () => {
     'reconciles unknown cancellation %p without claiming deletion is still scheduled',
     async (outcome) => {
       mockGetDeletionStatus.mockResolvedValueOnce({
+        cancellationPrecondition: 'schedule-pair-v1',
         pending: true,
         canCancel: true,
         requestedAt: '2026-09-27T18:00:00.000Z',
@@ -877,6 +1024,7 @@ describe('Cloud Account destructive action ownership', () => {
 
   it('keeps an expired-window refusal separate from a no-pending receipt', async () => {
     const pending = {
+      cancellationPrecondition: 'schedule-pair-v1',
       pending: true,
       canCancel: true,
       requestedAt: '2026-11-04T18:00:00.000Z',
@@ -912,6 +1060,7 @@ describe('Cloud Account destructive action ownership', () => {
 
   it('keeps deletion disabled when a refresh finds no pending schedule during cancellation', async () => {
     mockGetDeletionStatus.mockResolvedValueOnce({
+      cancellationPrecondition: 'schedule-pair-v1',
       pending: true,
       canCancel: true,
       requestedAt: '2026-09-27T18:00:00.000Z',

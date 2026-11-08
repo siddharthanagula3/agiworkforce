@@ -10,7 +10,13 @@ const {
   mockWithRateLimit,
   mockRecordAuditEvent,
   mockGetNeonDb,
+  mockOutsideQuery,
+  mockCommitted,
 } = vi.hoisted(() => ({
+  mockOutsideQuery: vi.fn(() => {
+    throw new Error('Outside callback');
+  }),
+  mockCommitted: vi.fn(),
   mockQuery: vi.fn(),
   mockExecute: vi.fn(),
   mockGetClerkAuthUser: vi.fn(),
@@ -42,13 +48,16 @@ vi.mock('@/lib/server/rls-db', () => ({
     const { userId } = (await mockGetClerkAuthUser(...args)) as { userId: string };
     return {
       db: {
-        query: (...queryArgs: unknown[]) => mockQuery(...queryArgs),
+        query: (...queryArgs: unknown[]) => mockOutsideQuery(...queryArgs),
         execute: (...executeArgs: unknown[]) => mockExecute(...executeArgs),
-        transaction: async (callback: (tx: unknown) => unknown) =>
-          callback({
+        transaction: async (callback: (tx: unknown) => unknown) => {
+          const result = await callback({
             query: (...queryArgs: unknown[]) => mockQuery(...queryArgs),
             execute: (...executeArgs: unknown[]) => mockExecute(...executeArgs),
-          }),
+          });
+          mockCommitted();
+          return result;
+        },
       },
       userId,
       organizationId: null,
@@ -71,6 +80,9 @@ vi.mock('@/lib/server/pseudonymize', () => ({
 }));
 
 import { POST } from '../route';
+import { PUT as PUT_SCHEDULE, OPTIONS } from '../../cancel-schedule/route';
+import * as protectedRoute from '../../cancel-schedule/route';
+import * as legacyRoute from '../route';
 
 function cancelRequest() {
   return new Request('http://localhost:3000/api/user/delete-account/cancel', {
@@ -88,24 +100,26 @@ describe('POST /api/user/delete-account/cancel', () => {
     mockGetClerkAuthUser.mockResolvedValue({ userId: 'user_cancelling' });
     mockRequireCsrfToken.mockResolvedValue(null);
     mockWithRateLimit.mockResolvedValue(null);
+    mockRecordAuditEvent.mockResolvedValue(undefined);
   });
 
   it('cancels a deletion inside the grace window and records it symmetrically with scheduling', async () => {
-    mockQuery.mockResolvedValueOnce([{ id: 'user_cancelling' }]);
+    mockQuery
+      .mockResolvedValueOnce([{ id: 'user_cancelling' }])
+      .mockResolvedValueOnce([{ has_schedule: true, pair_matches: true, eligible: true }])
+      .mockResolvedValueOnce([{ id: 'user_cancelling' }]);
 
     const response = await POST(cancelRequest());
     const body = await response.json();
 
     expect(response.status).toBe(200);
     expect(body.cancelled).toBe(true);
-    expect(mockQuery).toHaveBeenCalledTimes(1);
-    const update = mockQuery.mock.calls.find(([sql]) =>
-      String(sql).includes('deletion_requested_at'),
-    );
+    expect(mockQuery).toHaveBeenCalledTimes(3);
+    const update = mockQuery.mock.calls.find(([sql]) => String(sql).startsWith('update profiles'));
     const [sql, params] = update as [string, unknown[]];
     expect(sql).toMatch(/deletion_requested_at\s*=\s*null/i);
     expect(sql).toMatch(/deletion_scheduled_for\s*=\s*null/i);
-    expect(sql).toMatch(/deletion_scheduled_for\s*>\s*now\(\)/i);
+    expect(sql).toMatch(/deletion_scheduled_for\s*>\s*clock_timestamp\(\)/i);
     expect(params).toEqual(['user_cancelling']);
 
     expect(mockRecordAuditEvent).toHaveBeenCalledWith(
@@ -118,8 +132,8 @@ describe('POST /api/user/delete-account/cancel', () => {
 
   it('is a clean no-op when nothing is pending, not a 500', async () => {
     mockQuery
-      .mockResolvedValueOnce([]) // conditional UPDATE matches nothing
-      .mockResolvedValueOnce([{ deletion_scheduled_for: null }]); // follow-up SELECT
+      .mockResolvedValueOnce([{ id: 'user_cancelling' }])
+      .mockResolvedValueOnce([{ has_schedule: false, pair_matches: true, eligible: false }]);
 
     const response = await POST(cancelRequest());
     const body = await response.json();
@@ -130,10 +144,11 @@ describe('POST /api/user/delete-account/cancel', () => {
   });
 
   it('refuses to cancel once the grace window has closed, and does not touch the columns', async () => {
-    const expired = new Date(Date.now() - 60 * 1000).toISOString();
     mockQuery
-      .mockResolvedValueOnce([]) // conditional UPDATE matches nothing (expired)
-      .mockResolvedValueOnce([{ deletion_scheduled_for: expired }]);
+      .mockResolvedValueOnce([{ id: 'user_cancelling' }])
+      .mockResolvedValueOnce([{ has_schedule: true, pair_matches: true, eligible: false }])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ has_schedule: true, pair_matches: true, eligible: false }]);
 
     const response = await POST(cancelRequest());
     const body = await response.json();
@@ -168,19 +183,23 @@ describe('POST /api/user/delete-account/cancel', () => {
 
   it('is scoped to the caller: the UPDATE is parameterised by their own userId, not a client-supplied id', async () => {
     mockGetClerkAuthUser.mockResolvedValue({ userId: 'user_other_caller' });
-    mockQuery.mockResolvedValueOnce([{ id: 'user_other_caller' }]);
+    mockQuery
+      .mockResolvedValueOnce([{ id: 'user_other_caller' }])
+      .mockResolvedValueOnce([{ has_schedule: true, pair_matches: true, eligible: true }])
+      .mockResolvedValueOnce([{ id: 'user_other_caller' }]);
 
     await POST(cancelRequest());
 
-    const update = mockQuery.mock.calls.find(([sql]) =>
-      String(sql).includes('deletion_requested_at'),
-    );
+    const update = mockQuery.mock.calls.find(([sql]) => String(sql).startsWith('update profiles'));
     const [, params] = update as [string, unknown[]];
     expect(params).toEqual(['user_other_caller']);
   });
 
   it('runs the cancellation update on the caller-scoped client, never the schema owner', async () => {
-    mockQuery.mockResolvedValueOnce([{ id: 'user_cancelling' }]);
+    mockQuery
+      .mockResolvedValueOnce([{ id: 'user_cancelling' }])
+      .mockResolvedValueOnce([{ has_schedule: true, pair_matches: true, eligible: true }])
+      .mockResolvedValueOnce([{ id: 'user_cancelling' }]);
 
     await POST(cancelRequest());
 
@@ -191,7 +210,10 @@ describe('POST /api/user/delete-account/cancel', () => {
   });
 
   it('ignores an identity smuggled into the query string and cancels for the session user', async () => {
-    mockQuery.mockResolvedValueOnce([{ id: 'user_cancelling' }]);
+    mockQuery
+      .mockResolvedValueOnce([{ id: 'user_cancelling' }])
+      .mockResolvedValueOnce([{ has_schedule: true, pair_matches: true, eligible: true }])
+      .mockResolvedValueOnce([{ id: 'user_cancelling' }]);
 
     const response = await POST(
       new Request('http://localhost:3000/api/user/delete-account/cancel?userId=victim-user', {
@@ -241,5 +263,246 @@ describe('POST /api/user/delete-account/cancel', () => {
 
     expect(response.status).toBe(500);
     expect(mockRecordAuditEvent).not.toHaveBeenCalled();
+  });
+});
+
+const expectedSchedule = {
+  scheduledFor: '2026-11-08T00:00:00.123456Z',
+  requestedAt: '2026-11-07T00:00:00.654321Z',
+};
+const state = { has_schedule: true, pair_matches: true, eligible: true };
+function pairRequest(body: string | undefined = JSON.stringify({ expectedSchedule })) {
+  return new Request('http://localhost:3000/api/user/delete-account/cancel-schedule', {
+    method: 'PUT',
+    body,
+  }) as never;
+}
+
+// Deterministic SQL mocks assert protocol shape, not database, clock, RLS or concurrency behavior.
+describe('required schedule pair cancellation', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    mockGetClerkAuthUser.mockResolvedValue({ userId: 'user_cancelling' });
+    mockRequireCsrfToken.mockResolvedValue(null);
+    mockWithRateLimit.mockResolvedValue(null);
+  });
+
+  it.each([
+    '',
+    ' ',
+    '{',
+    'null',
+    '[]',
+    '1',
+    '"text"',
+    '{}',
+    JSON.stringify({ expectedSchedule: { scheduledFor: expectedSchedule.scheduledFor } }),
+    JSON.stringify({ expectedSchedule, userId: 'victim' }),
+    JSON.stringify({ expectedSchedule: { ...expectedSchedule, extra: true } }),
+  ])('rejects an invalid body without queries: %s', async (body) => {
+    expect((await PUT_SCHEDULE(pairRequest(body))).status).toBe(400);
+    expect(mockQuery).not.toHaveBeenCalled();
+    expect(mockOutsideQuery).not.toHaveBeenCalled();
+  });
+
+  it('rejects an absent body', async () => {
+    expect(
+      (
+        await PUT_SCHEDULE(
+          new Request('http://localhost:3000/api/user/delete-account/cancel-schedule', {
+            method: 'PUT',
+          }) as never,
+        )
+      ).status,
+    ).toBe(400);
+    expect(mockQuery).not.toHaveBeenCalled();
+  });
+
+  it.each([expectedSchedule.requestedAt, null])(
+    'binds untouched pair, null-safe equality and fresh deadline: %s',
+    async (requestedAt) => {
+      mockQuery
+        .mockResolvedValueOnce([{ id: 'user_cancelling' }])
+        .mockResolvedValueOnce([state])
+        .mockResolvedValueOnce([{ id: 'user_cancelling' }]);
+      mockRecordAuditEvent.mockImplementation(() => {
+        expect(mockCommitted).toHaveBeenCalledTimes(1);
+      });
+      const response = await PUT_SCHEDULE(
+        pairRequest(JSON.stringify({ expectedSchedule: { ...expectedSchedule, requestedAt } })),
+      );
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ cancelled: true });
+      expect(mockQuery.mock.calls[0]).toEqual([
+        'select id from profiles where id = $1 for update',
+        ['user_cancelling'],
+      ]);
+      const [sql, params] = mockQuery.mock.calls[2]!;
+      expect(sql).toContain('where id = $1');
+      expect(sql).toContain('deletion_scheduled_for = $2::timestamptz');
+      expect(sql).toContain('deletion_requested_at is not distinct from $3::timestamptz');
+      expect(sql).toContain('deletion_scheduled_for > clock_timestamp()');
+      expect(sql).not.toMatch(/\bnow\(/);
+      expect(params).toEqual(['user_cancelling', expectedSchedule.scheduledFor, requestedAt]);
+      expect(mockOutsideQuery).not.toHaveBeenCalled();
+      expect(mockRecordAuditEvent).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each([
+    { ...expectedSchedule, scheduledFor: '2026-11-08T00:00:00.123457Z' },
+    { ...expectedSchedule, requestedAt: '2026-11-07T00:00:00.654322Z' },
+    { ...expectedSchedule, requestedAt: null },
+  ])('refuses either value mismatch, including microseconds: %j', async (pair) => {
+    mockQuery
+      .mockResolvedValueOnce([{ id: 'user_cancelling' }])
+      .mockResolvedValueOnce([{ ...state, pair_matches: false, eligible: false }]);
+    const response = await PUT_SCHEDULE(pairRequest(JSON.stringify({ expectedSchedule: pair })));
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ reason: 'schedule_changed', cancelled: false });
+    expect(mockQuery).toHaveBeenCalledTimes(2);
+    expect(mockQuery.mock.calls[1]![1]).toEqual([
+      'user_cancelling',
+      pair.scheduledFor,
+      pair.requestedAt,
+    ]);
+    expect(mockRecordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it.each(['exact deadline', 'past deadline', 'lock wait across deadline'])(
+    'refuses %s using database eligibility after the lock',
+    async () => {
+      mockQuery
+        .mockResolvedValueOnce([{ id: 'user_cancelling' }])
+        .mockResolvedValueOnce([state])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ ...state, eligible: false }]);
+      const response = await PUT_SCHEDULE(pairRequest());
+      expect(response.status).toBe(409);
+      expect(await response.json()).toMatchObject({ reason: 'grace_window_expired' });
+      expect(mockQuery.mock.calls[3]![0]).toContain('clock_timestamp()');
+      expect(mockRecordAuditEvent).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([[], [{ id: 'user_cancelling' }]])(
+    'does not audit missing or unscheduled rows: %j',
+    async (rows) => {
+      mockQuery
+        .mockResolvedValueOnce(rows)
+        .mockResolvedValueOnce([{ ...state, has_schedule: false }]);
+      const response = await PUT_SCHEDULE(pairRequest());
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ cancelled: false });
+      expect(mockRecordAuditEvent).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    undefined,
+    null,
+    {},
+    [{}],
+    [{ id: 'victim' }],
+    [{ id: 'user_cancelling' }, { id: 'user_cancelling' }],
+  ])('fails closed on malformed lock output: %j', async (rows) => {
+    mockQuery.mockResolvedValueOnce(rows);
+    expect((await PUT_SCHEDULE(pairRequest())).status).toBe(500);
+    expect(mockRecordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it.each([undefined, [], [{}], [{ ...state, pair_matches: null }]])(
+    'fails closed on malformed state: %j',
+    async (rows) => {
+      mockQuery.mockResolvedValueOnce([{ id: 'user_cancelling' }]).mockResolvedValueOnce(rows);
+      expect((await PUT_SCHEDULE(pairRequest())).status).toBe(500);
+      expect(mockRecordAuditEvent).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([undefined, null, [{}], [{ id: 'victim' }]])(
+    'fails closed on malformed update results: %j',
+    async (rows) => {
+      mockQuery
+        .mockResolvedValueOnce([{ id: 'user_cancelling' }])
+        .mockResolvedValueOnce([state])
+        .mockResolvedValueOnce(rows);
+      expect((await PUT_SCHEDULE(pairRequest())).status).toBe(500);
+      expect(mockCommitted).not.toHaveBeenCalled();
+      expect(mockRecordAuditEvent).not.toHaveBeenCalled();
+    },
+  );
+
+  it('does not invent expiry for an unexplained empty update', async () => {
+    mockQuery
+      .mockResolvedValueOnce([{ id: 'user_cancelling' }])
+      .mockResolvedValueOnce([state])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([state]);
+    const response = await PUT_SCHEDULE(pairRequest());
+    expect(response.status).toBe(500);
+    expect(await response.json()).not.toHaveProperty('reason');
+    expect(mockCommitted).not.toHaveBeenCalled();
+    expect(mockRecordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('does not audit a failed transaction', async () => {
+    mockQuery
+      .mockResolvedValueOnce([{ id: 'user_cancelling' }])
+      .mockRejectedValueOnce(new Error('connection terminated'));
+    expect((await PUT_SCHEDULE(pairRequest())).status).toBe(500);
+    expect(mockCommitted).not.toHaveBeenCalled();
+    expect(mockRecordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('does not claim rollback when audit fails after commit', async () => {
+    mockQuery
+      .mockResolvedValueOnce([{ id: 'user_cancelling' }])
+      .mockResolvedValueOnce([state])
+      .mockResolvedValueOnce([{ id: 'user_cancelling' }]);
+    mockRecordAuditEvent.mockRejectedValue(new Error('audit unavailable'));
+    const response = await PUT_SCHEDULE(pairRequest());
+    expect(mockCommitted).toHaveBeenCalledTimes(1);
+    expect(response.status).toBe(500);
+    const body = await response.json();
+    expect(body.cancelled).toBeUndefined();
+    expect(body.error).not.toMatch(/rollback|nothing changed|restored/i);
+  });
+
+  it('legacy mode ignores even malformed bodies', async () => {
+    mockQuery
+      .mockResolvedValueOnce([{ id: 'user_cancelling' }])
+      .mockResolvedValueOnce([state])
+      .mockResolvedValueOnce([{ id: 'user_cancelling' }]);
+    expect((await POST(pairRequest('{'))).status).toBe(200);
+    expect(mockQuery.mock.calls[2]![1]).toEqual(['user_cancelling']);
+    expect(mockQuery.mock.calls[2]![0]).not.toContain('$2');
+  });
+
+  it.each([POST, PUT_SCHEDULE])('uses the same rate bucket and gates', async (post) => {
+    mockWithRateLimit.mockResolvedValueOnce(new Response(null, { status: 429 }));
+    expect((await post(pairRequest())).status).toBe(429);
+    expect(mockWithRateLimit).toHaveBeenCalledWith(expect.anything(), 'account-deletion-cancel');
+    expect(mockRequireCsrfToken).not.toHaveBeenCalled();
+    mockRequireCsrfToken.mockResolvedValueOnce(new Response(null, { status: 403 }));
+    expect((await post(pairRequest())).status).toBe(403);
+    expect(mockGetClerkAuthUser).not.toHaveBeenCalled();
+    mockGetClerkAuthUser.mockRejectedValueOnce(new Error('no session'));
+    expect((await post(pairRequest())).status).toBe(401);
+    expect(mockQuery).not.toHaveBeenCalled();
+  });
+
+  it('preserves preflight behavior', () => {
+    expect(OPTIONS(pairRequest()).status).toBe(204);
+  });
+});
+
+describe('cancellation method export separation (UNRUN, not HTTP-router acceptance)', () => {
+  it('exposes only PUT for required-pair mutation and retains POST only on legacy', () => {
+    expect(protectedRoute.PUT).toBe(PUT_SCHEDULE);
+    expect(protectedRoute).not.toHaveProperty('POST');
+    expect(protectedRoute).not.toHaveProperty('DELETE');
+    expect(legacyRoute.POST).toBe(POST);
+    expect(legacyRoute).not.toHaveProperty('PUT');
   });
 });

@@ -36,17 +36,17 @@ const cancellationAdmission = vi.hoisted(() => vi.fn());
 vi.mock('../sections/AccountSection', () => ({
   AccountSection: ({
     emailEditorActive,
-    cancellationActive,
+    deletionActionsActive,
   }: {
     emailEditorActive?: boolean;
-    cancellationActive?: boolean;
+    deletionActionsActive?: boolean;
   }) => {
     emailAdmission(emailEditorActive);
-    cancellationAdmission(cancellationActive);
+    cancellationAdmission(deletionActionsActive);
     return (
       <>
         <div data-testid="email-editor-admission">{String(emailEditorActive)}</div>
-        <div data-testid="cancellation-admission">{String(cancellationActive)}</div>
+        <div data-testid="cancellation-admission">{String(deletionActionsActive)}</div>
       </>
     );
   },

@@ -1,22 +1,28 @@
 'use client';
 
 import { useLayoutEffect, useMemo, useState } from 'react';
-import { useMutation, useQueryClient, type QueryState } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import {
-  MANAGED_CLOUD_ACCOUNT_DELETION_CANCEL_PATH,
-  NO_PENDING_ACCOUNT_DELETION,
+  MANAGED_CLOUD_ACCOUNT_DELETION_CANCEL_SCHEDULE_PATH,
   parseAccountDeletionCancellationReceipt,
-  type AccountDeletionStatus,
   type AccountDeletionCancellationReceipt,
 } from '@agiworkforce/cloud-contracts';
-import { queryKeys } from '@shared/stores/query-client';
 import { addCsrfHeaders } from '@/lib/client/csrf';
-import { createRequestAuthority, type RequestAuthority } from '@/lib/identity/request-authority';
-import { useSessionSnapshot } from '@/lib/identity/useSessionSnapshot';
+import type { RequestAuthority } from '@/lib/identity/request-authority';
+import {
+  captureAccountDeletionCancellationBody,
+  createAccountDeletionRequest,
+  fenceAccountDeletionCancellation,
+  isAccountDeletionSnapshotCurrent,
+  permitsAccountDeletionAction,
+  refetchAccountDeletionSnapshot,
+  settleAccountDeletionCancellation,
+  type OwnedAccountDeletionSnapshot,
+} from './use-account-deletion-status';
 import { toUserMessage } from '@/lib/user-error-message';
 
 export type CancelAccountDeletionResult = AccountDeletionCancellationReceipt;
-type Snapshot = QueryState<AccountDeletionStatus, Error>;
+type Snapshot = OwnedAccountDeletionSnapshot;
 
 export interface AccountDeletionCancellationIntent {
   isCurrent: () => boolean;
@@ -29,6 +35,7 @@ export interface AccountDeletionCancellationIntent {
 interface Intent {
   generation: object;
   snapshot: Snapshot;
+  readonly body: string;
   request: RequestAuthority;
   consumed: boolean;
   dispatched: boolean;
@@ -39,13 +46,11 @@ interface Intent {
 }
 
 const UNCONFIRMED =
-  'We could not confirm the cancellation outcome. Reload the page, then check Settings > Account before trying again.';
+  'We could not confirm the cancellation outcome. Check the current status, then open a new confirmation before trying again.';
 const NOT_SENT =
   'Cancellation was not sent. Close this dialog, check the current status, and reopen the confirmation.';
 
 export function useCancelAccountDeletion(active = true) {
-  const client = useQueryClient();
-  const capture = useSessionSnapshot();
   const lane = useMemo(
     () => ({ enabled: active, mounted: false, generation: {}, intent: null as Intent | null }),
     [],
@@ -64,6 +69,7 @@ export function useCancelAccountDeletion(active = true) {
     lane.mounted &&
     lane.generation === intent.generation &&
     lane.intent === intent &&
+    isAccountDeletionSnapshotCurrent(intent.snapshot) &&
     intent.request.session.isCurrent();
   const retire = (intent: Intent) => {
     intent.retired = true;
@@ -71,13 +77,7 @@ export function useCancelAccountDeletion(active = true) {
     intent.release();
     if (lane.intent === intent) lane.intent = null;
   };
-  const ready = (snapshot: Snapshot) =>
-    client.getQueryState(queryKeys.settings.accountDeletionStatus()) === snapshot &&
-    snapshot.status === 'success' &&
-    snapshot.fetchStatus === 'idle' &&
-    !snapshot.isInvalidated &&
-    snapshot.data?.pending === true &&
-    snapshot.data.canCancel;
+  const ready = (snapshot: Snapshot) => permitsAccountDeletionAction(snapshot, 'cancel');
   useLayoutEffect(() => {
     lane.mounted = true;
     lane.generation = {};
@@ -104,16 +104,34 @@ export function useCancelAccountDeletion(active = true) {
         try {
           const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
           intent.request.assertCurrent();
-          response = await intent.request.fetch(MANAGED_CLOUD_ACCOUNT_DELETION_CANCEL_PATH, {
-            method: 'POST',
-            headers,
-          });
+          if (!ready(intent.snapshot)) throw new Error(NOT_SENT);
+          response = await intent.request.fetch(
+            MANAGED_CLOUD_ACCOUNT_DELETION_CANCEL_SCHEDULE_PATH,
+            {
+              method: 'PUT',
+              headers,
+              body: intent.body,
+              redirect: 'error',
+            },
+          );
         } catch {
           throw new Error(intent.dispatched ? UNCONFIRMED : NOT_SENT);
         }
         const body: unknown = await response.json().catch(() => null);
         intent.request.assertCurrent();
         if (!response.ok) {
+          if (response.status >= 500) throw new Error(UNCONFIRMED);
+          if (
+            response.status === 409 &&
+            body !== null &&
+            typeof body === 'object' &&
+            'reason' in body &&
+            body.reason === 'schedule_changed'
+          ) {
+            throw new Error(
+              'The deletion schedule changed. Check the current status and open a new confirmation.',
+            );
+          }
           const raw =
             body !== null &&
             typeof body === 'object' &&
@@ -136,14 +154,8 @@ export function useCancelAccountDeletion(active = true) {
           throw new Error(UNCONFIRMED);
         }
         intent.request.assertCurrent();
-        const unchanged =
-          client.getQueryState(queryKeys.settings.accountDeletionStatus()) === intent.snapshot;
-        if (unchanged) {
-          client.setQueryData<AccountDeletionStatus>(
-            queryKeys.settings.accountDeletionStatus(),
-            NO_PENDING_ACCOUNT_DELETION,
-          );
-        }
+        const unchanged = settleAccountDeletionCancellation(intent.snapshot);
+        if (!unchanged) fenceAccountDeletionCancellation(intent.snapshot);
         intent.settled = true;
         if (current(intent))
           setView({
@@ -155,13 +167,14 @@ export function useCancelAccountDeletion(active = true) {
           });
         return receipt;
       } catch (error) {
+        if (intent.dispatched) fenceAccountDeletionCancellation(intent.snapshot);
         intent.settled = true;
         if (current(intent))
           setView({
             intent,
             status: 'error',
             error: error instanceof Error ? error : new Error(UNCONFIRMED),
-            needsStatusCheck: false,
+            needsStatusCheck: intent.dispatched,
           });
         throw error;
       }
@@ -172,25 +185,28 @@ export function useCancelAccountDeletion(active = true) {
     snapshot: Snapshot | null | undefined,
   ): AccountDeletionCancellationIntent | null => {
     if (!lane.enabled || !lane.mounted || !snapshot || !ready(snapshot)) return null;
-    const session = capture();
-    if (!session) return null;
+    const body = captureAccountDeletionCancellationBody(snapshot);
+    if (body === null) return null;
     if (lane.intent) {
       if (lane.intent.consumed && !lane.intent.settled) return null;
       retire(lane.intent);
     }
     let intent: Intent;
-    const request = createRequestAuthority(
-      session,
+    const request = createAccountDeletionRequest(
+      snapshot,
       () => current(intent),
       () => {
         if (!intent.consumed || intent.dispatched || !ready(intent.snapshot))
           throw new Error(NOT_SENT);
+        fenceAccountDeletionCancellation(intent.snapshot);
         intent.dispatched = true;
       },
     );
+    if (!request) return null;
     intent = {
       generation: lane.generation,
       snapshot,
+      body,
       request,
       consumed: false,
       dispatched: false,
@@ -201,7 +217,7 @@ export function useCancelAccountDeletion(active = true) {
     };
     lane.intent = intent;
     const release =
-      session.subscribe?.(() => {
+      request.session.subscribe?.(() => {
         if (lane.intent !== intent || current(intent)) return;
         retire(intent);
         if (lane.mounted)
@@ -230,26 +246,10 @@ export function useCancelAccountDeletion(active = true) {
       checkCurrentStatus: async () => {
         if (!current(intent) || !intent.settled || intent.checking) return;
         intent.checking = true;
-        setView((previous) =>
-          previous.intent === intent ? { ...previous, error: null } : previous,
-        );
+        setView((previous) => (previous.intent === intent ? { ...previous } : previous));
         try {
-          const before = client.getQueryState(queryKeys.settings.accountDeletionStatus());
-          await client.refetchQueries(
-            { queryKey: queryKeys.settings.accountDeletionStatus(), exact: true },
-            { throwOnError: true },
-          );
+          await refetchAccountDeletionSnapshot(intent.snapshot);
           if (!current(intent)) return;
-          const status = client.getQueryState(queryKeys.settings.accountDeletionStatus());
-          if (
-            !status ||
-            status === before ||
-            status.status !== 'success' ||
-            status.fetchStatus !== 'idle' ||
-            status.isInvalidated
-          ) {
-            throw new Error('Deletion status is not ready. Check the current status again.');
-          }
           setView((previous) =>
             current(intent) && previous.intent === intent
               ? { ...previous, needsStatusCheck: false }

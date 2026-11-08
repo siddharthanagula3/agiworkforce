@@ -250,7 +250,7 @@ export function WebSettingsModal({
     account: (
       <AccountSection
         emailEditorActive={open && activeSection === 'account'}
-        cancellationActive={open && activeSection === 'account'}
+        deletionActionsActive={open && activeSection === 'account'}
       />
     ),
     team: (

@@ -19,7 +19,8 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { normalizeDisplayName } from '@agiworkforce/utils/display-name';
 import {
   MANAGED_CLOUD_ACCOUNT_DELETION_PATH,
-  MANAGED_CLOUD_ACCOUNT_DELETION_CANCEL_PATH,
+  MANAGED_CLOUD_ACCOUNT_DELETION_CANCEL_SCHEDULE_PATH,
+  AccountDeletionScheduleCancellationRequestSchema,
   NO_PENDING_ACCOUNT_DELETION,
   parseAccountDeletionStatus,
   parseAccountDeletionScheduleReceipt,
@@ -258,7 +259,9 @@ export default function CloudAccountScreen() {
         ready.ownerId !== userId ||
         (action === 'schedule'
           ? ready.value.pending
-          : !ready.value.pending || !ready.value.canCancel)
+          : !ready.value.pending ||
+            !ready.value.canCancel ||
+            ready.value.cancellationPrecondition !== 'schedule-pair-v1')
       ) {
         return null;
       }
@@ -527,10 +530,21 @@ export default function CloudAccountScreen() {
   const handleCancelDeletion = useCallback(() => {
     const intent = beginDeletionIntent('cancel');
     if (!intent) return;
+    const parsed = AccountDeletionScheduleCancellationRequestSchema.safeParse({
+      expectedSchedule: {
+        scheduledFor: intent.ready.value.scheduledFor,
+        requestedAt: intent.ready.value.requestedAt,
+      },
+    });
+    if (!parsed.success) {
+      finishDeletionIntent(intent);
+      return;
+    }
+    const body = Object.freeze({ expectedSchedule: Object.freeze(parsed.data.expectedSchedule) });
     const account = intent.identity.account;
     Alert.alert(
       'Cancel account deletion?',
-      'Your AGI Cloud account will stay active and its data will not be erased.',
+      'Ask to cancel this scheduled account deletion. This does not restore data already erased or change other account restrictions.',
       [
         {
           text: 'Keep deletion scheduled',
@@ -547,8 +561,9 @@ export default function CloudAccountScreen() {
             setDeletionStatus(null);
             setDeletionStatusError(false);
             api
-              .post<unknown>(MANAGED_CLOUD_ACCOUNT_DELETION_CANCEL_PATH, undefined, {
+              .put<unknown>(MANAGED_CLOUD_ACCOUNT_DELETION_CANCEL_SCHEDULE_PATH, body, {
                 accountEpoch: account,
+                auth401Recovery: 'caller-owned',
               })
               .then((response) => {
                 if (!deletionIntentIsCurrent(intent)) return;
@@ -571,11 +586,21 @@ export default function CloudAccountScreen() {
                   error instanceof ApiHttpError &&
                   error.status === 409 &&
                   error.body?.['reason'] === 'grace_window_expired';
+                const changed =
+                  error instanceof ApiHttpError &&
+                  error.status === 409 &&
+                  error.body?.['reason'] === 'schedule_changed';
                 Alert.alert(
-                  expired ? 'Cancellation window closed' : 'Could not confirm cancellation',
-                  expired
-                    ? 'The server refused cancellation because the grace window has closed. Check the refreshed deletion status. This does not confirm that erasure is complete.'
-                    : 'The cancellation outcome is unknown. Check the refreshed deletion status before taking another action.',
+                  changed
+                    ? 'Deletion schedule changed'
+                    : expired
+                      ? 'Cancellation window closed'
+                      : 'Could not confirm cancellation',
+                  changed
+                    ? 'The server refused to cancel because the deletion schedule changed. Check the refreshed status and open a new confirmation before deciding whether to cancel.'
+                    : expired
+                      ? 'The server refused cancellation because the grace window has closed. Check the refreshed deletion status. This does not confirm that erasure is complete.'
+                      : 'The cancellation outcome is unknown. A later status showing no scheduled deletion does not prove this cancellation succeeded. Check the refreshed status and open a new confirmation before trying again.',
                 );
                 await refreshDeletionStatus(intent.owner, account);
               })
@@ -834,7 +859,9 @@ export default function CloudAccountScreen() {
             deletionStatus.value.scheduledFor
               ? `Cancellation deadline: ${new Date(deletionStatus.value.scheduledFor).toLocaleString()}. ${
                   deletionStatus.value.canCancel
-                    ? 'You can cancel before then.'
+                    ? deletionStatus.value.cancellationPrecondition === 'schedule-pair-v1'
+                      ? 'You can request cancellation before then.'
+                      : 'Protected cancellation is unavailable. Refresh the status before trying again.'
                     : 'The cancellation window has closed.'
                 } Erasure is processed after the deadline and may take longer.`
               : 'Your account is scheduled for deletion.'
@@ -883,16 +910,22 @@ export default function CloudAccountScreen() {
           <SettingsRow
             label={
               deletionStatus.value.canCancel
-                ? cancellingDeletion
-                  ? 'Cancelling…'
-                  : 'Cancel Account Deletion'
+                ? deletionStatus.value.cancellationPrecondition !== 'schedule-pair-v1'
+                  ? 'Protected cancellation unavailable. Refresh'
+                  : cancellingDeletion
+                    ? 'Cancelling…'
+                    : 'Cancel Account Deletion'
                 : 'Cancellation window closed'
             }
             icon={deletionStatus.value.canCancel ? Undo2 : Trash2}
             onPress={
               cancellingDeletion || !deletionStatus.value.canCancel
                 ? undefined
-                : handleCancelDeletion
+                : deletionStatus.value.cancellationPrecondition !== 'schedule-pair-v1'
+                  ? () => {
+                      if (deletionViewOwner) void refreshDeletionStatus(deletionViewOwner);
+                    }
+                  : handleCancelDeletion
             }
             isLast
           />

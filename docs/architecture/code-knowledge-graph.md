@@ -7669,3 +7669,79 @@ not establish the displayed status's original account or a server schedule ID.
 Backend cancel/re-schedule races, scheduling/logout, durable recovery and already
 accepted server effects remain outside this slice. Ten independently reviewed
 source/fixture files; fixtures UNRUN. See WEB-ACCOUNT-DELETION-INTENT-01.
+
+## Cancellation can require the confirmed schedule values
+
+Continuation 70637ca89c8a62d8ad85a37e1ed6550c2ea00ff7 adds a distinct required-pair
+cancellation endpoint and shared fixed-mode handler. Legacy callers keep their
+existing route. Strict parsing cannot fall back to legacy behavior. The scoped
+transaction locks the profile, compares both timestamps in SQL, and retains
+pair/ID/live deadline predicates in UPDATE; refusal classification stays in
+that transaction and audit follows commit.
+
+Status GET emits validated lossless UTC timestamps, bounded to supported AD
+years, with a snapshot-suitability marker and database-time eligibility.
+The value pair is not a unique generation. Same-value recreation, original
+status account ownership and final remote state remain unproved.
+
+Clients are not adopted in this slice. Future clients must require the marker,
+use only the new endpoint, preserve exact values and reject legacy fallback or
+redirect downgrade. Live routing and PostgreSQL behavior remain unverified.
+Ten source/fixture files are independently reviewed; all fixtures UNRUN.
+No migration application. See WEB-ACCOUNT-DELETION-INTENT-01.
+
+## Deletion status carries its original native-session owner
+
+Continuation 2e180a6b144d19f49f4d0c4a96f0bd4bab70dfeb replaces the global ambient
+status read with a private owner-scoped reader. Stable owner incarnation and
+fresh setup generations isolate keys and permanently fence old work. GET uses
+captured Bearer/omit-cookie authority, cancellation/timeout guards and no retry.
+
+Scalar envelopes and opaque WeakMap snapshots bind display and immediate action
+admission to original read provenance plus exact QueryState. Cancellation derives
+authority from that original session, preserves newer cache, and reconciles only
+its original scoped key. Own receipt publication does not retire the intent.
+Account-section activity gates readers/actions without global cache clearing or
+erasing scheduling drafts.
+
+This does not adopt the strict cancellation endpoint or bind later scheduling,
+step-up, Continue/logout effects. No native-subject/product-account ID equality,
+unique schedule identity or final-state guarantee. Twelve independently reviewed
+source/fixture files; all fixtures UNRUN. See WEB-ACCOUNT-DELETION-INTENT-01.
+
+## Web cancellation uses the inspected schedule pair
+
+Continuation 69c2bd0aee7e7ab664810aabd1e314a5413c3d03 adopts the strict
+schedule-value contract for Web only. Dialog-open capture requires the exact
+marker and preserves an immutable pair of timestamp strings/null. The captured
+owner sends PUT to cancel-schedule with browser redirect rejection, omitted
+cookies and after-await checks; no legacy fallback or mutation/auth replay.
+
+PUT-only protected routing is distinct from the inspected legacy POST handler.
+Reader sequencing fences dispatched refusal/uncertainty across close/reopen,
+rejecting pre-outcome reads and cache-state churn as renewed admission. Recovery
+is GET-only plus new confirmation, never proof of ambiguous success. Exact-state
+receipt settlement and lifetime remain separate, preserving newer state and
+allowing the operation's own valid cache write.
+
+Mobile remains legacy. Identical-value schedule recreation, unknown edge
+dispatch, native retries and later scheduling/Continue/logout are not resolved.
+Eleven independently reviewed source/fixture files; all fixtures UNRUN.
+See WEB-ACCOUNT-DELETION-INTENT-01.
+
+## Mobile cancellation adopts the protected schedule-value endpoint
+
+Continuation 460f916f4ca0abfb629c260b3a9779d412a1a11b captures a validated,
+nested frozen schedule pair before Alert creation, requires the exact marker,
+and sends protected PUT with the original account epoch and caller-owned 401
+handling. Existing owner/view/ready, one-shot confirmation and reservation guards
+remain, including awaited failure reconciliation. No legacy POST fallback or
+application auth replay is introduced.
+
+Missing protection offers refresh rather than an invented expiry. Changed
+schedule requires a new confirmation; later absent status does not prove an
+ambiguous cancellation succeeded. Both Web and mobile now adopt the strict
+contract in source. Native redirect rejection, lower-layer retries, arbitrary
+edges and unique schedule identity remain unverified. Three independently
+reviewed source/fixture files; all fixtures UNRUN. No provider/global cleanup
+change. See WEB-ACCOUNT-DELETION-INTENT-01.
