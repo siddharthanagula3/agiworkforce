@@ -1,6 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { NO_PENDING_ACCOUNT_DELETION } from '@agiworkforce/cloud-contracts';
-import { queryKeys } from '@shared/stores/query-client';
 import { render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getBillingPlanPricing } from '@agiworkforce/types';
@@ -32,6 +31,12 @@ vi.mock('@clerk/nextjs', () => ({
   useClerk: () => ({ signOut: vi.fn() }),
 }));
 
+vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/identity/useSessionSnapshot')>()),
+  useSessionSnapshot: () => () => ({ userId: 'native-user-1', sessionId: 'session-1',
+    isCurrent: () => true, getToken: async () => 'captured-token' }),
+}));
+
 vi.mock('@shared/stores/authentication-store', () => ({
   useAuthStore: (selector: (state: unknown) => unknown) =>
     selector({ user: { id: 'user-1' }, logout: vi.fn() }),
@@ -59,13 +64,6 @@ vi.mock('../hooks/use-settings-queries', async (importOriginal) => ({
     data: undefined,
     signOutAfterDeletion: vi.fn(async () => {}),
   }),
-  useAccountDeletionStatus: () => ({
-    data: { pending: false, canCancel: false, requestedAt: null, scheduledFor: null },
-    isLoading: false,
-    isError: false,
-    error: null,
-    refetch: vi.fn(),
-  }),
   useCancelAccountDeletion: () => ({
     mutate: vi.fn(),
     reset: vi.fn(),
@@ -89,8 +87,9 @@ function proPlan(overrides: Partial<MockSubscription> = {}): MockSubscription {
 
 function stubSessions(sessions: unknown[] = []): void {
   vi.spyOn(globalThis, 'fetch').mockImplementation(
-    async () =>
-      new Response(JSON.stringify({ sessions, totalCount: sessions.length }), {
+    async (input) =>
+      new Response(JSON.stringify(String(input) === '/api/user/delete-account'
+        ? NO_PENDING_ACCOUNT_DELETION : { sessions, totalCount: sessions.length }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       }),
@@ -141,7 +140,7 @@ describe('AccountSection delete account while a paid plan is live', () => {
     expect(screen.getByTestId('delete-account-trigger')).toBeDisabled();
   });
 
-  it('keeps Delete open on the Free plan with the scheduling note', () => {
+  it('keeps Delete open on the Free plan with the scheduling note', async () => {
     billing.subscription = {
       tier: 'free',
       display_name: 'Free',
@@ -150,16 +149,16 @@ describe('AccountSection delete account while a paid plan is live', () => {
     };
     renderAccountSection();
 
-    expect(screen.getByTestId('delete-account-trigger')).toBeEnabled();
+    await waitFor(() => expect(screen.getByTestId('delete-account-trigger')).toBeEnabled());
     expect(screen.queryByTestId('delete-account-plan-note')).toBeNull();
     expect(screen.getByText(/Schedule permanent account deletion/)).toBeTruthy();
   });
 
-  it('keeps Delete open once a paid plan has ended', () => {
+  it('keeps Delete open once a paid plan has ended', async () => {
     billing.subscription = proPlan({ status: 'canceled' });
     renderAccountSection();
 
-    expect(screen.getByTestId('delete-account-trigger')).toBeEnabled();
+    await waitFor(() => expect(screen.getByTestId('delete-account-trigger')).toBeEnabled());
   });
 
   it('holds Delete until the plan has been read', () => {
@@ -197,6 +196,5 @@ describe('AccountSection active sessions type scale', () => {
 
 function renderAccountSection() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  client.setQueryData(queryKeys.settings.accountDeletionStatus(), NO_PENDING_ACCOUNT_DELETION);
   return render(<QueryClientProvider client={client}><AccountSection /></QueryClientProvider>);
 }

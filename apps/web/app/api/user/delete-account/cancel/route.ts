@@ -1,106 +1,12 @@
 import 'server-only';
 
-import { NextRequest, NextResponse } from 'next/server';
-import { withRateLimit } from '@/lib/rate-limit';
-import { handleCorsPreflightRequest, getCorsHeaders } from '@/lib/cors';
-import { requireCsrfToken } from '@/lib/csrf';
-import { logger } from '@/lib/logger';
-import { isAuthGateRefusal, unauthorizedResponseFor } from '@/lib/api-auth-response';
-import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { getUserScopedDb } from '@/lib/server/rls-db';
-import { recordAuditEvent } from '@/lib/security-audit';
-import { pseudonymizeIdentifier } from '@/lib/server/pseudonymize';
-import { CONTACT_EMAIL } from '@/lib/legal-constants';
+import type { NextRequest } from 'next/server';
+import { handleAccountDeletionCancellation, accountDeletionCancellationOptions } from '@/lib/server/account-deletion-cancellation';
 
 export const runtime = 'nodejs';
 
-const SECURITY_HEADERS = {
-  'Content-Security-Policy': "default-src 'none'",
-  'X-Content-Type-Options': 'nosniff',
-};
-
 export async function POST(request: NextRequest) {
-  const rateLimitResponse = await withRateLimit(request, 'account-deletion-cancel');
-  if (rateLimitResponse) return rateLimitResponse;
-
-  const csrfError = await requireCsrfToken(request);
-  if (csrfError) {
-    return csrfError as NextResponse;
-  }
-
-  let userId: string;
-  let db: DatabaseAdapter;
-  try {
-    ({ db, userId } = await getUserScopedDb(request, { resolveOrganization: false }));
-  } catch (authError) {
-    if (isAuthGateRefusal(authError)) {
-      return unauthorizedResponseFor(authError);
-    }
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: SECURITY_HEADERS });
-  }
-
-  const subjectRef = pseudonymizeIdentifier(userId, 'delete-account-subject', 16);
-
-  try {
-    const cancelled = await db.query<{ id: string }>(
-      `update profiles
-          set deletion_requested_at = null,
-              deletion_scheduled_for = null
-        where id = $1
-          and deletion_scheduled_for is not null
-          and deletion_scheduled_for > now()
-        returning id`,
-      [userId],
-    );
-
-    if (cancelled.length > 0) {
-      logger.info({ userId }, 'Account deletion cancelled inside the grace window');
-
-      await recordAuditEvent({
-        userId: null,
-        eventType: 'account_deletion_cancelled',
-        severity: 'info',
-        request,
-        detail: { resourceType: 'account', subjectRef, status: 'cancelled' },
-      });
-
-      return NextResponse.json(
-        { message: 'Account deletion cancelled. Your account is fully restored.', cancelled: true },
-        { status: 200, headers: { ...getCorsHeaders(request), ...SECURITY_HEADERS } },
-      );
-    }
-
-    const rows = await db.query<{ deletion_scheduled_for: string | null }>(
-      `select deletion_scheduled_for from profiles where id = $1`,
-      [userId],
-    );
-    const scheduledFor = rows[0]?.deletion_scheduled_for ?? null;
-
-    if (scheduledFor === null) {
-      return NextResponse.json(
-        { message: 'No account deletion is pending.', cancelled: false },
-        { status: 200, headers: { ...getCorsHeaders(request), ...SECURITY_HEADERS } },
-      );
-    }
-
-    logger.warn({ userId }, 'Account deletion cancellation refused: grace window has closed');
-    return NextResponse.json(
-      {
-        error: `The cancellation window has closed. This does not confirm that erasure is complete. Contact ${CONTACT_EMAIL} if you believe this is wrong.`,
-        cancelled: false,
-        reason: 'grace_window_expired',
-      },
-      { status: 409, headers: { ...getCorsHeaders(request), ...SECURITY_HEADERS } },
-    );
-  } catch (err) {
-    logger.error({ userId, err }, 'Unexpected error while cancelling account deletion');
-    return NextResponse.json(
-      { error: `An unexpected error occurred. Please contact ${CONTACT_EMAIL}.` },
-      { status: 500, headers: SECURITY_HEADERS },
-    );
-  }
+  return handleAccountDeletionCancellation(request, { kind: 'legacy' });
 }
 
-export function OPTIONS(request: NextRequest) {
-  return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
-}
+export const OPTIONS = accountDeletionCancellationOptions;

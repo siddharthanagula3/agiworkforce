@@ -33,11 +33,11 @@ vi.mock('../sections/GeneralSection', () => ({ GeneralSection: () => null }));
 const emailAdmission = vi.hoisted(() => vi.fn());
 const cancellationAdmission = vi.hoisted(() => vi.fn());
 vi.mock('../sections/AccountSection', () => ({
-  AccountSection: ({ emailEditorActive, cancellationActive }: { emailEditorActive?: boolean; cancellationActive?: boolean }) => {
+  AccountSection: ({ emailEditorActive, deletionActionsActive }: { emailEditorActive?: boolean; deletionActionsActive?: boolean }) => {
     emailAdmission(emailEditorActive);
-    cancellationAdmission(cancellationActive);
+    cancellationAdmission(deletionActionsActive);
     return <><div data-testid="email-editor-admission">{String(emailEditorActive)}</div>
-      <div data-testid="cancellation-admission">{String(cancellationActive)}</div></>;
+      <div data-testid="cancellation-admission">{String(deletionActionsActive)}</div></>;
   },
   readApiError: (_data: unknown, fallback: string) => fallback,
 }));

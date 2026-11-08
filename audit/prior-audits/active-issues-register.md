@@ -10453,6 +10453,160 @@ generation retirement; they do not establish real browser/auth/React/database
 behavior. No product tests, lint, typechecks, builds, installations, live account
 actions, migration application, push or deployment ran.
 
+Server schedule-value precondition addendum, 2026-11-07: Source-corrected in
+`70637ca89c8a62d8ad85a37e1ed6550c2ea00ff7`. A delayed cancellation based on
+schedule S1 could clear a different S2 created by another device on the same
+account. Client view/session ownership cannot observe every remote replacement.
+The new /api/user/delete-account/cancel-schedule endpoint requires a strict
+complete expectedSchedule pair; absent, malformed, incomplete or unknown fields
+never become legacy cancellation. Existing /cancel remains body-ignoring for
+old clients. Both routes use one fixed-mode server handler and the same rate,
+CSRF, authenticated scoped-database and response security gates.
+
+The callback transaction locks the authenticated profile, then compares both
+timestamps in SQL with null-safe requestedAt equality. The UPDATE independently
+retains ID, pair and live clock_timestamp() deadline predicates, avoiding stale
+transaction-start time after a lock wait. Classification stays inside the same
+transaction; a different pair returns schedule_changed, including an expired
+replacement, while missing/no pending state remains cancelled:false. Malformed
+adapter results fail closed. Audit runs only after an actual cancellation and
+successful transaction return; later audit failure cannot roll back that write.
+Success wording no longer claims the account is fully restored.
+
+Status GET projects lossless six-digit UTC text and database-time eligibility.
+Explicit SQL range checks reject BC, infinity and unsupported years before
+era-less formatting. The optional schedule-pair-v1 marker is emitted only after
+validation; it describes the snapshot values, not every serving instance.
+The strict request schema accepts valid finite UTC calendar timestamps in AD
+years 0001–9999 with at most six fractional digits, without Date normalization.
+
+Both production clients are unchanged and still use the legacy route. Adoption
+must require the marker on the exact confirmed snapshot, transmit its unchanged
+pair only to the new endpoint, reject redirects/fallback to legacy mutation,
+and require refreshed confirmation after refusal. Live edge routing is not
+verified. Identical pair recreation remains indistinguishable; this is not a
+unique generation, original-status account proof, final state or erasure guarantee.
+Global status ownership remains open. No migration was added or applied.
+
+Independent review accepted ten source/fixture files after correcting a stale
+SQL-copy fixture and restoring both wrappers to the existing CSRF coverage scan.
+Contract, malformed input, pair/clock ordering, status precision, callback scope
+and audit fixtures remain UNRUN. Source assertions and deterministic mocks do
+not establish PostgreSQL execution, RLS, locks, concurrency, browser or transport
+behavior. No product tests, lint, typechecks, builds, installations, live account
+actions, migration application or deployment ran.
+
+Web status-provenance addendum, 2026-11-07: Source-corrected in
+`2e180a6b144d19f49f4d0c4a96f0bd4bab70dfeb`. The former global cookie GET/key
+could retain A's status when a document survived an SDK transition to B, then
+admit a new B cancellation from that old snapshot. Late reads and ambient
+retries lacked original-owner checks. Normal hard sign-in navigation and explicit
+workspace cancellation/cache clearing mitigate their respective flows; no live
+cross-tab incident or cross-account database mutation was established.
+
+A focused reader now retains one captured native-session owner per incarnation
+and layout setup. Private instance/incarnation/generation keys isolate observers;
+SDK retirement, inactivity and cleanup abort owned work without global cache
+clearing. Each GET uses captured Bearer authentication with cookies omitted,
+query cancellation plus the existing timeout, and currentness checks around
+response/body parsing. Retry is disabled; explicit refetch stays with its original
+owner. Scalar cache envelopes carry provenance without storing session objects.
+
+WeakMap-backed opaque snapshots bind original owner, scoped key and exact
+QueryState. Rendering and both immediate schedule/cancel admissions use this
+provenance. Cancellation derives its RequestAuthority from the original status
+session, preserving after-CSRF/token dispatch checks, one-shot consumption and
+separate lifetime/state predicates. Exact scoped compare-and-set settlement
+cannot overwrite a newer state; its own successful cache write can still settle.
+Reconciliation refetches only the original reader's key and never repeats the
+cancellation. Actual Account-section/modal activity gates both controllers.
+Stale scheduling confirmation retains its text rather than erasing drafts.
+
+This supersedes earlier global web status-reader ownership limitations for these
+consumers, not all authentication/cache machinery. Native subject is not compared
+with mapped product account ID. Strict endpoint/marker adoption is unchanged:
+clients still use legacy cancellation. Scheduling's later CSRF/step-up replay,
+ambient DELETE, response, Continue/logout/navigation effects remain outside this
+slice. No final remote-state, unique schedule-generation or erasure guarantee.
+
+Independent source review accepted five production and seven fixture files.
+UNRUN fixtures cover stable rerenders, session replacement/A→B→A, delayed work,
+StrictMode, reader isolation, retired handles, cache preservation and
+original-key reconciliation. Source reasoning is not React/SDK/browser/transport
+acceptance. No product tests, lint, typechecks, builds, installations, live account
+actions, migration application or deployment ran.
+
+Web schedule-value adoption addendum, 2026-11-07: Source-corrected in
+`69c2bd0aee7e7ab664810aabd1e314a5413c3d03`. A cancellation confirmation now
+captures an immutable JSON body from its original owned ready snapshot only
+when the exact precondition marker and strict schedule pair are present.
+Timestamp strings, microseconds and explicit null remain unchanged. Dispatch
+uses PUT to the protected cancel-schedule endpoint, captured Bearer authority,
+omitted cookies, browser redirect rejection and final state checks after CSRF
+and token awaits. There is no legacy fallback, mutation retry or auth replay.
+Missing provenance is not presented as an expired cancellation deadline.
+
+The protected endpoint now exports PUT only; the legacy cancellation endpoint
+still exports POST. This separation prevents ordinary method-preserving
+redirects from invoking that inspected legacy POST handler. It is not a claim
+about arbitrary redirects, unknown edge dispatch rules or native transport
+retries. Browser redirect:error is independently requested. Mobile remains on
+the legacy endpoint pending its separate adoption.
+
+Reader-owned read counters fence both dispatch and terminal refusal or
+uncertainty. A status request started before the outcome, or a change to cache
+state alone, cannot restore cancellation admission after close/reopen. A fresh
+successful original-owner status read and a new confirmation are required.
+GET-only recovery does not report an ambiguous mutation as successful merely
+because the later schedule is absent. The fence is distinct from exact-state
+compare-and-set and lifetime: a valid unchanged-state receipt can still settle
+its own cache write, while a newer state is preserved.
+
+Independent source review accepted eleven source/fixture files. UNRUN fixtures
+cover marker absence, exact microseconds/null, refusal and transport uncertainty,
+stale reads, invalidation, recovery, route method exports and fetch options.
+Mock assertions are not router, browser, native-device or database acceptance.
+The pair remains value equality rather than a unique generation; an identical
+recreated schedule is indistinguishable. Later scheduling, step-up,
+Continue/logout, cleanup and durable uncertainty recovery remain open.
+No product tests, lint, typechecks, builds, installations, live account actions,
+migration application or deployment ran. Publication is tracked separately.
+
+Mobile schedule-value adoption addendum, 2026-11-07: Source-corrected in
+`460f916f4ca0abfb629c260b3a9779d412a1a11b`. Mobile now requires the exact
+schedule-pair marker and captures a validated nested frozen request before
+opening the cancellation Alert. Microseconds and nullable requestedAt remain
+unchanged. The original account epoch sends this pair to the protected PUT
+endpoint with caller-owned 401 handling. There is no legacy POST fallback,
+application authentication replay or new automatic mutation retry.
+
+The existing owner/view/ready identity, consumed confirmation and reservation
+remain. Failed-mutation status reconciliation is awaited before releasing that
+reservation. A changed-schedule refusal asks for refreshed status and a new
+confirmation. Markerless status offers a refresh without inventing deadline
+expiry; an unknown marker fails status parsing. Ambiguous failure copy explicitly
+does not attribute a later absent schedule to this cancellation. Confirmation
+copy no longer promises to restore already-erased data or remove other account
+restrictions.
+
+Independent source review accepted one production file and two fixture files.
+UNRUN fixtures cover exact pair/null/microseconds, marker gates, changed schedule
+and new confirmation, ambiguous outcome followed by absent status, PUT rather
+than legacy POST, and no application replay after 401/409/500/network failures.
+Existing lifecycle races remain covered in source fixtures. The SettingsInfo mock
+now exposes deadline copy rather than hiding the assertion's target.
+
+Both Web and mobile now adopt the strict endpoint in source. This does not prove
+native redirect rejection: the inspected native fetch layer does not implement
+the browser redirect:error option, and this change does not pretend otherwise.
+Ordinary PUT routing remains distinct from the inspected legacy POST handler;
+arbitrary edges and lower-layer transport retries remain unverified. No exactly
+one wire-request claim, unique schedule generation or final erasure guarantee.
+Identical-value schedule recreation is indistinguishable. Later Web scheduling,
+Continue/logout and global cleanup remain open; connector-history compatibility
+is still held. No product tests, lint, typechecks, builds, installations, live
+account actions, migration application or deployment ran. Publication is separate.
+
 
 ## WEB-ACCOUNT-CONSENT-RECEIPT-01
 

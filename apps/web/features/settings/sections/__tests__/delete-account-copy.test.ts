@@ -21,6 +21,8 @@ describe('delete-account dialog matches what deletion actually does', () => {
   const dialog = read('features/settings/sections/AccountSection.tsx');
   const privacy = read('app/privacy/page.tsx');
   const cancelRoute = read('app/api/user/delete-account/cancel/route.ts');
+  const cancelScheduleRoute = read('app/api/user/delete-account/cancel-schedule/route.ts');
+  const cancelHandler = read('lib/server/account-deletion-cancellation.ts');
 
   it('does not promise a grace window it cannot honour', () => {
     expect(dialog).not.toMatch(/grace window/i);
@@ -53,14 +55,24 @@ describe('delete-account dialog matches what deletion actually does', () => {
   });
 
   it('the cancel endpoint actually nulls both deletion-schedule columns', () => {
-    expect(cancelRoute).toMatch(/deletion_requested_at\s*=\s*null/i);
-    expect(cancelRoute).toMatch(/deletion_scheduled_for\s*=\s*null/i);
+    expect(cancelHandler).toMatch(/deletion_requested_at\s*=\s*null/i);
+    expect(cancelHandler).toMatch(/deletion_scheduled_for\s*=\s*null/i);
   });
 
   it('the cancel endpoint only clears the schedule while it is still in the future', () => {
     // Cancelling after the grace window closes must not be able to resurrect
     // data the purge cron has already started erasing, the UPDATE has to be
-    // conditioned on the schedule still being ahead of `now()`.
-    expect(cancelRoute).toMatch(/deletion_scheduled_for\s*>\s*now\(\)/i);
+    // conditioned on the schedule still being ahead of the fresh database clock.
+    expect(cancelHandler).toMatch(/update profiles[\s\S]*?where id = \$1[\s\S]*?deletion_scheduled_for\s*>\s*clock_timestamp\(\)[\s\S]*?returning id/i);
   });
+
+  it('keeps both route modes server-selected and delegated to the shared handler', () => {
+    expect(cancelRoute).toContain("from '@/lib/server/account-deletion-cancellation'");
+    expect(cancelScheduleRoute).toContain("from '@/lib/server/account-deletion-cancellation'");
+    expect(cancelScheduleRoute).not.toMatch(/export (?:async function|const|\{)[^\n]*POST/);
+    expect(cancelRoute).not.toMatch(/export (?:async function|const|\{)[^\n]*PUT/);
+    expect(cancelRoute).toMatch(/export async function POST\(request: NextRequest\) \{\s*return handleAccountDeletionCancellation\(request, \{ kind: 'legacy' \}\);\s*\}/);
+    expect(cancelScheduleRoute).toMatch(/export async function PUT\(request: NextRequest\) \{\s*return handleAccountDeletionCancellation\(request, \{ kind: 'required-pair' \}\);\s*\}/);
+  });
+
 });

@@ -28,7 +28,8 @@ vi.mock('@clerk/nextjs', () => ({
 
 vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/identity/useSessionSnapshot')>()),
-  useSessionSnapshot: () => () => null,
+  useSessionSnapshot: () => () => ({ userId: 'native-user-1', sessionId: 'session-1',
+    isCurrent: () => true, getToken: async () => 'captured-token' }),
 }));
 
 vi.mock('@shared/stores/authentication-store', () => ({
@@ -64,7 +65,8 @@ function renderAccountSection() {
 }
 
 async function openAndSubmitDelete() {
-  fireEvent.click(await screen.findByTestId('delete-account-trigger'));
+  await waitFor(() => expect(screen.getByTestId('delete-account-trigger')).toBeEnabled());
+  fireEvent.click(screen.getByTestId('delete-account-trigger'));
   fireEvent.change(screen.getByTestId('delete-confirm-input'), { target: { value: 'DELETE' } });
   fireEvent.click(screen.getByTestId('delete-account-confirm'));
 }
