@@ -1,0 +1,5 @@
+{"$generated":"GENERATED FILE, do not edit. Run `node scripts/generate-agent-context-indexes.mjs`; `pnpm check:agent-context-indexes` byte-compares this against a fresh render."}
+{"path":"infrastructure/sandbox/deploy-target.json","unit":"infrastructure/sandbox","role":"config","lanes":["chat-artifacts"],"unparsed":"notCode"}
+{"path":"infrastructure/sandbox/index.html","unit":"infrastructure/sandbox","role":"other","lanes":["chat-artifacts"],"unparsed":"notCode"}
+{"path":"infrastructure/sandbox/package.json","unit":"infrastructure/sandbox","role":"config","lanes":["chat-artifacts"],"unparsed":"notCode"}
+{"path":"infrastructure/sandbox/vercel.json","unit":"infrastructure/sandbox","role":"config","lanes":["chat-artifacts"],"unparsed":"notCode"}

@@ -1,0 +1,383 @@
+{
+  "date": "2026-11-07",
+  "scope": "Local implementation and verification after the user chose antislop during writing. No production release or measured visibility lift.",
+  "preview_origin": "http://localhost:3017",
+  "user_preference": "Apply antislop while writing",
+  "implemented_paths": [
+    "/",
+    "/web",
+    "/pricing",
+    "/blog",
+    "/blog/multi-model-ai-vs-separate-subscriptions"
+  ],
+  "local_http_observations": [
+    {
+      "path": "/",
+      "http_status": 200,
+      "title": "AGI: ChatGPT, Claude, Gemini and more in one app",
+      "main_h1_count": 1,
+      "canonical": ["http://localhost:3000"],
+      "robots": ["index, follow"],
+      "guide_links": 0
+    },
+    {
+      "path": "/web",
+      "http_status": 200,
+      "title": "AGI Chat: multi-model chat, projects and research | AGI",
+      "main_h1_count": 1,
+      "canonical": ["http://localhost:3000/web"],
+      "robots": ["index, follow"],
+      "guide_links": 1
+    },
+    {
+      "path": "/pricing",
+      "http_status": 200,
+      "title": "Pricing: what each plan and each route costs | AGI",
+      "main_h1_count": 1,
+      "canonical": ["http://localhost:3000/pricing"],
+      "robots": ["index, follow"],
+      "guide_links": 1
+    },
+    {
+      "path": "/blog",
+      "http_status": 200,
+      "title": "Guides to AI models, plans and workflows | AGI",
+      "main_h1_count": 1,
+      "canonical": ["http://localhost:3000/blog"],
+      "robots": ["index, follow"],
+      "guide_links": 1
+    },
+    {
+      "path": "/blog/multi-model-ai-vs-separate-subscriptions",
+      "http_status": 200,
+      "title": "One AI subscription or separate apps? | AGI",
+      "main_h1_count": 1,
+      "canonical": ["http://localhost:3000/blog/multi-model-ai-vs-separate-subscriptions"],
+      "robots": ["index, follow"],
+      "guide_links": 0
+    },
+    {
+      "path": "/sitemap-page",
+      "http_status": 200,
+      "title": "Sitemap | AGI",
+      "main_h1_count": 1,
+      "canonical": ["http://localhost:3000/sitemap-page"],
+      "robots": ["index, follow"],
+      "guide_links": 1
+    }
+  ],
+  "sitemap_urls": 155,
+  "metadata_owner": "apps/web/lib/blog-posts.ts",
+  "article_owner": "apps/web/app/blog/multi-model-ai-vs-separate-subscriptions/page.tsx",
+  "unit_tests": {
+    "files": 8,
+    "passed": 185
+  },
+  "browser_tests": {
+    "passed": 46,
+    "files": ["e2e/seo-content.spec.ts", "e2e/marketing-stage-contrast.spec.ts"],
+    "content_flow_and_layout_cases": 42,
+    "homepage_contrast_cases": 4,
+    "viewport_widths": [1440, 1024, 390, 320],
+    "themes": ["light", "dark"],
+    "runtime_exceptions": "Per-page errors collected before navigation and asserted empty.",
+    "instrument": "Fresh loopback server, separate ignored output directory. Mounted header theme control confirms hydration before interaction and screenshots. Exact-one canonical assertion retained.",
+    "command": "PLAYWRIGHT_REUSE_RUNNING_SERVER=1 PLAYWRIGHT_BASE_URL=http://localhost:3017 pnpm --filter @agiworkforce/web test:e2e seo-content.spec.ts marketing-stage-contrast.spec.ts --project=chromium --grep \"public buying guidance|/ clears WCAG\" --reporter=line --output=/tmp/agi-seo-content-final"
+  },
+  "navigation_repeat": {
+    "runs": 3,
+    "passed": 3,
+    "condition": "Empty browser contexts; header mounted before article navigation; one canonical after navigation."
+  },
+  "remaining_validation_limits": {
+    "web_typecheck": "251 diagnostics outside edited TypeScript paths at the recorded check; no clean full-build claim.",
+    "global_model_literal_guard": "98 occurrences in four untouched files.",
+    "global_em_dash_guard": "Untouched generated skill index and launch QA ledger remain flagged; scoped changed content passes.",
+    "broader_doc_source_assertions": "Two failures against untouched CLI cache and site-sharing source, documented in the original baseline.",
+    "early_hydration_navigation": "Before the header mounted, a navigation probe retained both index and guide canonicals. Preserved as an open framework-navigation edge case; not claimed fixed.",
+    "first_party_analytics": "Unavailable as recorded in the visibility baseline."
+  },
+  "deployment": "not performed",
+  "external_publication_or_outreach": "not performed",
+  "design_gate": {
+    "hard_gates": "PASS for introduced content: sourced claims, labeled hypothetical arithmetic, real links, readable responsive content and no added irreversible control.",
+    "purpose": "PASS: existing public design system, reading-width token, semantic tables and native links; no new assets, palette, framework or motion system.",
+    "liveliness": "PASS: calm editorial direction (energy 1, rhythm 1, motion 1); content-specific hierarchy and purchasing examples.",
+    "craft": "PASS within tested scope: both themes and four widths, metadata/index/navigation/404 checks, runtime assertions and screenshots. This is not a whole-site accessibility or production-performance certification."
+  },
+  "screenshots": {
+    "seo-guide-mobile.png": "/Users/siddhartha/.codex/visualizations/2026/11/07/01a1b86a-7e3c-78b3-a7db-599b997ec007/seo-guide-mobile.png",
+    "seo-guide-desktop.png": "/Users/siddhartha/.codex/visualizations/2026/11/07/01a1b86a-7e3c-78b3-a7db-599b997ec007/seo-guide-desktop.png",
+    "seo-home-mobile.png": "/Users/siddhartha/.codex/visualizations/2026/11/07/01a1b86a-7e3c-78b3-a7db-599b997ec007/seo-home-mobile.png"
+  },
+  "public_style_follow_up": {
+    "date": "2026-11-07",
+    "status": "implemented and verified locally; not deployed",
+    "direction": "Black/white public pages with existing logo colours; sentence-case sans-serif eyebrows without decorative dashes or wide tracking. Energy/rhythm/motion: 1/1/1.",
+    "changes": [
+      "Updated shared public label tokens and all public eyebrow variants; removed the homepage amber palette and light-theme label exception.",
+      "Updated the developer design skill and regenerated its integrity hash to preserve the founder's current direction.",
+      "Grouped shared mockup toolbar modes and action controls; aligned the action group to the right and made its font explicit.",
+      "Corrected the memory mockup's cloud workspace boundary and used the canonical content limit.",
+      "Rebalanced the Team pricing band, paired seat rows and count inputs, and excluded it from the individual-card tail fade. Billing handlers and price owners retained."
+    ],
+    "unit_validation": {
+      "passed": 1033,
+      "pricing_palette_and_shared_styles": 781,
+      "mockup_and_native_correspondence": 252,
+      "logs": [
+        "/tmp/agi-public-style-unit-palette-verified.log",
+        "/tmp/agi-public-mockup-unit-final.log"
+      ]
+    },
+    "browser_validation": {
+      "matrix_passed": 142,
+      "focused_toolbar_checks_passed": 12,
+      "public_page_matrix": "Nine routes at 1440, 1024, 390 and 320 pixels in both themes; hydrated controls, fonts, labels, overflow, content and runtime errors checked.",
+      "mockup_matrix": "Sixteen routes at 320/light, 1440/dark, 1440/light and 390/dark; preview geometry and composer containment checked.",
+      "focused_toolbar_matrix": "Web, Deep Research and Memory at the four mockup profiles; action controls remain inside the composer and the send/stop control aligns to its right padding edge.",
+      "contrast": "Four existing homepage WCAG AA checks at 1440 and 390 pixels in both themes.",
+      "logs": ["/tmp/agi-public-style-browser.log", "/tmp/agi-public-mockup-controls-final.log"],
+      "initial_attempt": "Interrupted broad run: 46 passed, 11 failed, one interrupted, 20 unrun. Empty pseudo-elements were initially misclassified as decoration; live edits/load also produced navigation and hydration timeouts. Final complete matrix passed without retries."
+    },
+    "static_validation": "Scoped ESLint, Prettier, em-dash check, CSS-token guard, theme-only text-colour guard, skill integrity and git diff --check passed.",
+    "typecheck": {
+      "diagnostics": 251,
+      "comparison_to_prior_completed_check": "Identical diagnostic lines: zero added, zero removed; outside changed TypeScript files. No full-build success claim.",
+      "log": "/tmp/agi-public-style-typecheck.log"
+    },
+    "screenshots": {
+      "team_pricing": "/Users/siddhartha/.codex/visualizations/2026/11/07/01a1b86a-7e3c-78b3-a7db-599b997ec007/public-team-pricing.png",
+      "research_composer": "/Users/siddhartha/.codex/visualizations/2026/11/07/01a1b86a-7e3c-78b3-a7db-599b997ec007/public-research-composer.png"
+    },
+    "design_gate": {
+      "hard_gates": "PASS within changed scope: no new assets, fictional claims or irreversible controls; responsive overflow and homepage contrast checks passed.",
+      "purpose": "PASS: plain section labels, existing logo identity, grouped compact controls and usable seat comparisons implement the user's explicit direction.",
+      "liveliness": "PASS: calm 1/1/1 direction, existing logo accent and content-led hierarchy; no new motion or decorative palette.",
+      "craft": "PASS within tested scope: 1033 focused unit checks, 142 browser matrix checks and 12 focused toolbar checks. Not a whole-site accessibility or production readiness certification."
+    }
+  },
+  "pricing_revision": {
+    "date": "2026-11-07",
+    "status": "Implemented and verified locally; not deployed",
+    "display_names": {
+      "free": "Free",
+      "basic": "Basic",
+      "pro": "Premium",
+      "max": "Max",
+      "max_15x": "Ultra"
+    },
+    "retained": "Stored identifiers, price mappings, prices, Free access, weekly and monthly AI allowances, billing ownership and upgrade gates.",
+    "approved_individual_limits": {
+      "basic": {
+        "knowledge_gib": 1,
+        "monthly_download_gib": 1,
+        "concurrent_chats": 1
+      },
+      "pro": {
+        "knowledge_gib": 10,
+        "monthly_download_gib": 3,
+        "concurrent_chats": 3
+      },
+      "max": {
+        "knowledge_gib": 50,
+        "monthly_download_gib": 15,
+        "concurrent_chats": 5
+      },
+      "max_15x": {
+        "knowledge_gib": 100,
+        "monthly_download_gib": 30,
+        "concurrent_chats": 10
+      }
+    },
+    "ultra_session_policy": "Explicitly absent five-hour cap. Reservation and capability responses use null rather than zero; account credits.five_hour is null, the session reset and meter are omitted, and weekly/monthly constraints remain. Revenue scaling preserves the absent cap.",
+    "card_copy": "Descriptive quota summaries, prices and billing controls retained. Exact allowances remain in the audience-specific comparison table. All Ultra feature statements retain the asterisk and usage footnote. Detailed copy remains available to other billing consumers; this final copy change changes no enforced limits.",
+    "layout": "Centered Pricing heading and audience switch. Individual versus Team & Enterprise views, matching comparison columns, business cards side by side on desktop and stacked on phones. Upgrade notice and buying-guide link moved below cards. Seat choices survive switching views.",
+    "other_changes": "Current customer-facing plan references read canonical labels. OpenAPI's obsolete plan-name example was removed without changing its schema. Ultra's exhausted-download message no longer offers a nonexistent higher individual plan. Standard-seat scope is explicit in the Team comparison header.",
+    "unit_validation": {
+      "unique_cases_passed": 532,
+      "contracts": 100,
+      "web_core": 259,
+      "web_additional_policy": 53,
+      "web_referral_auth": 23,
+      "web_concurrency_storage": 45,
+      "web_download_enforcement": 17,
+      "sql_cap_semantics_guards": 13,
+      "desktop": 9,
+      "mobile": 13,
+      "latest_pricing_copy_cases": 65,
+      "note": "The latest 65 pricing cases replace the earlier pricing-file result within the core count; they are not additional unique cases. SQL checks inspect the latest migration definitions, not a live production database.",
+      "logs": [
+        "/tmp/agi-plans-contract-verified.log",
+        "/tmp/agi-plans-policy-web-clean.log",
+        "/tmp/agi-plans-policy-additional-tests.log",
+        "/tmp/agi-plans-referral-auth-final.log",
+        "/tmp/agi-plans-concurrency-storage-tests.log",
+        "/tmp/agi-plans-download-enforcement-tests.log",
+        "/tmp/agi-plans-sql-cap-guard-tests.log",
+        "/tmp/agi-plans-desktop-tests.log",
+        "/tmp/agi-plans-mobile-verified.log",
+        "/tmp/agi-descriptive-pricing-unit-complete.log"
+      ]
+    },
+    "browser_validation": {
+      "passed": 9,
+      "scope": "Both themes at 1440, 1024, 390 and 320 pixels, plus below-card notice/link placement. Tests verify descriptive feature lists contain no digits, exact quota table values, centered controls, business-card orientation, preserved seat selection and runtime errors.",
+      "log": "/tmp/agi-pricing-worded-final.log"
+    },
+    "static_validation": "Contracts package typecheck passed. Scoped lint/format, CSS tokens, theme-colour and locale-parity checks recorded separately. OpenAPI JSON parses.",
+    "verification_instruments": "Updated tests to select the intended audience explicitly and preserve exact numeric table assertions. Nullable session windows remain distinct from missing/invalid payloads and zero caps. A database-error fixture now fails the reservation query it claims to test. Stale fail-open Enterprise assertions now require the existing fail-closed behavior. Mobile usage tests exercise the real public service projection instead of an obsolete private export. Promotion boundaries are mocked without real database requests.",
+    "remaining_validation_limits": {
+      "web_typecheck": "Last completed run returned 254 diagnostics outside the edited paths; no full-workspace green-build claim.",
+      "mock_export_guard": "Guard self-tests passed, but the repository scan reported drift: web 4541 versus baseline 4324 and packages/ui 7 versus 6. The guard and its baseline were not weakened.",
+      "live_paid_execution": "No live paid account usage, purchase, subscription mutation, file deletion or production deployment performed.",
+      "hosted_billing_names": "Provider-hosted checkout/invoice branding was not inspected or changed."
+    },
+    "research": "docs/research/ai-plan-storage-and-usage-2026-11-07.md",
+    "card_copy_validation": {
+      "pricing_cases_passed": 65,
+      "browser_cases_passed": 9,
+      "unit_log": "/tmp/agi-descriptive-pricing-unit-complete.log",
+      "browser_log": "/tmp/agi-pricing-worded-final.log",
+      "locale_parity": "12 locales, 9 namespaces; 2354 keys in the checked catalog",
+      "design_gate": {
+        "hard_gates": "PASS within the changed scope: real links and controls, sourced features, numerical allowances retained in the table, qualified session claim, no new assets or fabricated proof.",
+        "purpose": "PASS: the founder selected qualitative card summaries; actual product capabilities and limits remain canonical.",
+        "liveliness": "PASS: calm public direction, existing logo identity, restrained typography and motion; no added decorative palette.",
+        "craft": "PASS within the stated unit/browser/static scope. Repository-wide typecheck and mock-export drift are still reported separately, not certified green."
+      }
+    },
+    "sources": [
+      "https://chatgpt.com/pricing/",
+      "https://claude.com/pricing",
+      "https://one.google.com/about/google-ai-plans/",
+      "https://www.perplexity.ai/help-center/en/articles/11187416-which-perplexity-subscription-plan-is-right-for-you",
+      "https://help.openai.com/en/articles/20001052-using-library-to-manage-files-in-chatgpt",
+      "https://support.claude.com/en/articles/8241126-upload-files-to-claude",
+      "https://docs.x.ai/grok/faq"
+    ],
+    "screenshots": {
+      "individual": "/Users/siddhartha/.codex/visualizations/2026/11/07/01a1b86a-7e3c-78b3-a7db-599b997ec007/pricing-descriptive-cards.png",
+      "business": "/Users/siddhartha/.codex/visualizations/2026/11/07/01a1b86a-7e3c-78b3-a7db-599b997ec007/pricing-business-final.png"
+    }
+  },
+  "preview_scale_follow_up": {
+    "date": "2026-11-07",
+    "status": "verified locally; not deployed",
+    "change": "The Ask illustration scales the whole content group within its existing frame. The composer is wider than the first reduced-size version, its prompt fits on one line, and control gaps and bottom padding are tighter. Chat, AGI Work, Deep Research and Style retain text labels.",
+    "virtual_canvas": [880, 914],
+    "content_scale": 0.85,
+    "frame_geometry": [520, 540],
+    "owner": "PREVIEW_GEOMETRY.step-wide and the shared APP_CONTENT_WIDTH in AppPreviews.tsx; CSS consumes the preview geometry and content-scale variables.",
+    "unit_tests_passed": 321,
+    "unit_logs": [
+      "/tmp/agi-preview-spacing-scene-final.log",
+      "/tmp/agi-preview-spacing-unit-final.log"
+    ],
+    "unit_note": "The combined run had 320 passes and one CSS selector convention mismatch. Selectors were corrected to use the existing scene root; all 222 scene tests then passed. Other two files contributed 99 passing cases.",
+    "browser_tests_passed": 15,
+    "browser_scope": "Eight Web page cases at 1440, 1024, 390 and 320 pixels in both themes assert one prompt line, one toolbar row and a composer occupying between 60% and 75% of the frame width. Three existing placement cases and four mockup containment cases also passed. The eight Web cases passed again after the CSS selector convention correction.",
+    "browser_log": "/tmp/agi-preview-spacing-browser-final.log",
+    "confirmation_log": "/tmp/agi-preview-spacing-confirmed.log",
+    "static_checks": "Scoped ESLint, formatting, CSS-token and theme-colour guards passed; no new palette or interaction was added.",
+    "screenshot": "/Users/siddhartha/.codex/visualizations/2026/11/07/01a1b86a-7e3c-78b3-a7db-599b997ec007/public-research-composer-tight.png"
+  },
+  "width_review_follow_up": {
+    "change": "Removed the article-only 54ch max-width; use the existing public page container.",
+    "observed_preview_viewport": 1093,
+    "before_column_width_approx": 609,
+    "after_column_width": 1045,
+    "desktop_h1": "one line at observed preview width",
+    "responsive_checks_passed": 8,
+    "viewport_widths": [1440, 1024, 390, 320],
+    "themes": ["light", "dark"],
+    "scoped_lint_and_format": "passed",
+    "screenshot": "/Users/siddhartha/.codex/visualizations/2026/11/07/01a1b86a-7e3c-78b3-a7db-599b997ec007/seo-guide-wide-desktop.png"
+  },
+  "branding_revision": {
+    "date": "2026-11-07",
+    "state": "local implementation and browser verification; not deployed",
+    "visible_labels": {
+      "chat": "Chat",
+      "work": "Work",
+      "code": "Code",
+      "cloud": "Cloud",
+      "copyright": "AGI"
+    },
+    "search_and_accessible_brand": "AGIWORKFORCE",
+    "hero": {
+      "symbol_only": true,
+      "maximum_symbol_size_px": 256,
+      "removed": [
+        "The AI application suite",
+        "eligibility paragraph",
+        "model announcement",
+        "catalogue statistics strip"
+      ]
+    },
+    "motion": "one broad diffuse irregular shine follows the fixed blue ribbon; pausable and static under reduced motion",
+    "shared_footer": "1280px maximum width and footer-owned typography on all public pages; page-content containers retain their own widths",
+    "verification": {
+      "browser_cases": 10,
+      "footer_matrix": {
+        "routes": ["/", "/pricing", "/web", "/blog"],
+        "widths": [1440, 1024, 390, 320],
+        "themes": ["light", "dark"]
+      },
+      "focused_footer_and_design_unit_cases": 710,
+      "shared_mark_unit_cases": 3,
+      "scoped_web_and_mobile_types": "passed",
+      "full_web_typecheck": "254 diagnostics remain, including five in files with copy-only edits; no green full-project claim",
+      "native_visual_motion": "not device-verified"
+    },
+    "artifacts": {
+      "footer": "pricing-footer-final.png",
+      "shine": "ribbon-shine.gif",
+      "recording": "ribbon-shine.webm"
+    }
+  },
+  "ribbon_rotation_revision": {
+    "date": "2026-11-07",
+    "state": "local only; not deployed",
+    "user_selected_motion": "The blue ribbon circulates around the triangular loop while the outline stays fixed, like a conveyor belt.",
+    "implementation": "Original-logo colors are transported continuously around an arc-length-mapped closed ribbon. The original alpha silhouette and surface brightness remain fixed. No jiggle, whole-object rotation or shine overlay in the landing hero.",
+    "routing_order": "Six surfaces, then Routing, then Trust modes",
+    "verification": {
+      "browser_motion_cases": 3,
+      "responsive_landing_cases": 8,
+      "tested_widths": [1440, 1024, 390, 320],
+      "themes": ["light", "dark"],
+      "motion_probe": "Nonzero pixels; identical alpha signature with different color signatures after entry settles; pause screenshots identical; reactive reduced motion; real WebGL context-loss fallback.",
+      "scoped_types": "passed",
+      "full_project_types": "Not claimed; existing baseline failures remain."
+    },
+    "artifacts": ["ribbon-circulation.gif", "ribbon-circulation.webm", "landing-ribbon-final.png"]
+  },
+  "support_revision": {
+    "date": "2026-11-07",
+    "state": "local implementation and verification; not deployed",
+    "model_family": "openai/gpt-fast",
+    "model_selection": "resolved through the canonical family registry; exact selection with no general Auto fallback",
+    "retrieval": "existing BM25 help corpus and maintained support answers, before inference",
+    "scope": "product support only; request-side work/social-chat refusals and response-side program-source rejection",
+    "response_contract": "JSON object, existing schema and citation/grounding validation, reasoning none, no model tools",
+    "billing": "company-funded support; existing per-visitor, per-account and deployment ceilings retained",
+    "prompt_release": "published stable prompt unchanged; internal version 2 not promoted",
+    "local_transport_fix": "Development build projects the effective bot mode into the browser. Production public-mode default, server CSRF, authorization and rate-limit controls remain unchanged.",
+    "verification": {
+      "support_and_api_tests": 497,
+      "support_component_tests": 41,
+      "bot_configuration_and_security_tests": 32,
+      "real_api_browser_cases": 1,
+      "real_api_observation": "CSRF-bearing unrelated-code request returned 200 out_of_scope with no model route or automatic handoff",
+      "manual_browser_observation": "casual chat declined through the support widget",
+      "lint": "passed for edited production code",
+      "prompt_immutability": "passed",
+      "scoped_model_id_guard": "passed; repository-wide guard reports other worktree violations outside these files",
+      "typecheck": "10 diagnostics in dependency files outside edited support code; no green full-project claim",
+      "live_provider_generation": "not run"
+    },
+    "primary_reference": "https://developers.openai.com/api/docs/models",
+    "artifact": "support-only-refusal.png"
+  }
+}

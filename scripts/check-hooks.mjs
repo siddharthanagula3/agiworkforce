@@ -63,7 +63,7 @@ for (const hook of ['.husky/commit-msg', '.husky/pre-commit', '.husky/pre-push']
 }
 
 requireIncludes('.husky/commit-msg', 'pnpm exec commitlint --edit "$1"');
-requireIncludes('.husky/pre-commit', 'pnpm exec lint-staged');
+requireIncludes('.husky/pre-commit', 'pnpm exec lint-staged --no-stash --concurrent false');
 requireIncludes('.husky/pre-commit', 'pnpm check:audit-inventory');
 requireIncludes('.husky/pre-commit', 'pnpm check:executable-docs');
 requireIncludes('.husky/pre-commit', 'pnpm check:structure-conventions');

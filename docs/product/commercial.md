@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + commercial/platform lead
-Last updated: 2026-10-23
+Last updated: 2026-11-07
 
 ## Bootstrap Rule
 
@@ -95,6 +95,30 @@ Precedence and migration are decided by
   effective entitlement survives.
 - Cancellation stays with the channel that sold the subscription. Nothing in this
   policy cancels a live subscription on the user's behalf.
+
+## Plan Presentation And Usage Windows
+
+Public plan names and prices are owned by `packages/contracts/types/src/billing-catalog.ts`.
+The public pricing page separates individual plans from Team and Enterprise; changing
+the visible audience does not change the account, billing channel or entitlement.
+Display-name changes retain stored plan identifiers and existing price mappings.
+
+The `max_15x` tier has no rolling five-hour plan cap. Its weekly and monthly
+allowances remain enforced. `packages/contracts/types/src/managed-usage-limits.ts`
+represents the absent cap explicitly, and `apps/web/lib/server/managed-usage-policy.ts`
+passes a null session ceiling to the reservation path. A zero ceiling continues
+to mean zero permitted usage, including for unknown plans.
+
+The account usage contract returns `credits.five_hour: null` for that tier. Clients
+omit the session meter and use the remaining active windows when calculating
+spendable credits. Revenue scaling preserves the absent session cap. Feature-specific
+limits, file limits and concurrency admission remain separate; the asterisk on the
+pricing card explains that a missing session cap is not unlimited overall usage.
+
+Storage, download and concurrency allowances are owned by
+`BILLING_PLAN_PRODUCT_LIMITS`, not display-only rounding in the pricing page.
+The dated founder decisions and verification evidence are recorded in
+`audit/baselines/seo-content-2026-11-07.json`.
 
 ## Profit Target
 

@@ -1,0 +1,4 @@
+{"$generated":"GENERATED FILE, do not edit. Run `node scripts/generate-agent-context-indexes.mjs`; `pnpm check:agent-context-indexes` byte-compares this against a fresh render."}
+{"path":".husky/commit-msg","unit":".husky","role":"other","unparsed":"notCode"}
+{"path":".husky/pre-commit","unit":".husky","role":"other","unparsed":"notCode"}
+{"path":".husky/pre-push","unit":".husky","role":"other","unparsed":"notCode"}

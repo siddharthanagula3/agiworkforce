@@ -1,0 +1,3552 @@
+{
+  "$generated": "GENERATED FILE, do not edit. Run `node scripts/generate-agent-context-indexes.mjs`; `pnpm check:agent-context-indexes` byte-compares this against a fresh render.",
+  "migrations": [
+    {
+      "path": "apps/web/db/neon/0001_mvp_chat.sql",
+      "tables": ["public.web_conversations", "public.web_messages"],
+      "follows": null
+    },
+    {
+      "path": "apps/web/db/neon/0002_profiles.sql",
+      "tables": ["public.profiles"],
+      "follows": "apps/web/db/neon/0001_mvp_chat.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0003_subscriptions.sql",
+      "tables": ["public.subscriptions"],
+      "follows": "apps/web/db/neon/0002_profiles.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0004_token_credits.sql",
+      "tables": ["public.credit_transactions", "public.token_credits"],
+      "follows": "apps/web/db/neon/0003_subscriptions.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0005_api_keys.sql",
+      "tables": ["public.api_keys"],
+      "follows": "apps/web/db/neon/0004_token_credits.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0006_projects.sql",
+      "tables": ["public.project_knowledge_files", "public.user_projects"],
+      "follows": "apps/web/db/neon/0005_api_keys.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0007_teams.sql",
+      "tables": ["public.team_members", "public.teams"],
+      "follows": "apps/web/db/neon/0006_projects.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0008_connectors.sql",
+      "tables": ["public.connector_tool_permissions"],
+      "follows": "apps/web/db/neon/0007_teams.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0009_scheduling.sql",
+      "tables": ["public.scheduled_task_runs", "public.scheduled_tasks"],
+      "follows": "apps/web/db/neon/0008_connectors.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0010_memory.sql",
+      "tables": ["public.user_memories"],
+      "follows": "apps/web/db/neon/0009_scheduling.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0011_waitlist.sql",
+      "tables": [
+        "public.beta_invites",
+        "public.beta_redemptions",
+        "public.cloud_managed_waitlist",
+        "public.cloud_waitlist",
+        "public.waitlist"
+      ],
+      "follows": "apps/web/db/neon/0010_memory.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0012_stripe.sql",
+      "tables": ["public.credit_idempotency_keys", "public.processed_stripe_events"],
+      "follows": "apps/web/db/neon/0011_waitlist.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0013_devices.sql",
+      "tables": [
+        "public.desktop_devices",
+        "public.device_authorization_codes",
+        "public.mobile_devices",
+        "public.sync_data"
+      ],
+      "follows": "apps/web/db/neon/0012_stripe.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0014_security.sql",
+      "tables": ["public.account_sessions", "public.revoked_jwts", "public.security_audit_logs"],
+      "follows": "apps/web/db/neon/0013_devices.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0015_organizations.sql",
+      "tables": ["public.organization_members", "public.organizations"],
+      "follows": "apps/web/db/neon/0014_security.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0016_misc.sql",
+      "tables": [
+        "public.conversation_tags",
+        "public.email_preferences",
+        "public.feature_flags",
+        "public.feedback",
+        "public.messaging_connections",
+        "public.notifications",
+        "public.referrals",
+        "public.usage_events"
+      ],
+      "follows": "apps/web/db/neon/0015_organizations.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0017_github.sql",
+      "tables": ["public.github_installations", "public.github_pr_review_attempts"],
+      "follows": "apps/web/db/neon/0016_misc.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0018_releases.sql",
+      "tables": ["public.release_channels", "public.release_downloads", "public.releases"],
+      "follows": "apps/web/db/neon/0017_github.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0019_identity_bridge_retired.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0018_releases.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0020_functions.sql",
+      "tables": ["public.account_lockout_attempts", "public.search_history"],
+      "follows": "apps/web/db/neon/0019_identity_bridge_retired.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0021_shared_conversations.sql",
+      "tables": ["public.shared_conversations"],
+      "follows": "apps/web/db/neon/0020_functions.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0022_chat_features.sql",
+      "tables": [
+        "public.bookmarked_messages",
+        "public.chat_folders",
+        "public.conversation_branches",
+        "public.message_bookmarks",
+        "public.message_reactions",
+        "public.user_shortcuts"
+      ],
+      "follows": "apps/web/db/neon/0021_shared_conversations.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0023_api_keys.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0022_chat_features.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0024_support_tickets.sql",
+      "tables": [
+        "public.agent_tool_executions",
+        "public.agent_tools",
+        "public.support_ticket_replies",
+        "public.support_tickets"
+      ],
+      "follows": "apps/web/db/neon/0023_api_keys.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0025_two_factor.sql",
+      "tables": ["public.user_two_factor"],
+      "follows": "apps/web/db/neon/0024_support_tickets.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0026_hash_cloud_managed_waitlist_email.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0025_two_factor.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0027_restore_cloud_managed_waitlist_email.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0026_hash_cloud_managed_waitlist_email.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0028_user_settings.sql",
+      "tables": ["public.user_settings"],
+      "follows": "apps/web/db/neon/0027_restore_cloud_managed_waitlist_email.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0029_device_authorization_contract.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0028_user_settings.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0030_allow_enterprise_subscription_tier.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0029_device_authorization_contract.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0031_drop_legacy_user_id_mapping.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0030_allow_enterprise_subscription_tier.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0032_security_severity_superset.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0031_drop_legacy_user_id_mapping.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0033_auto_economy_trial_usage.sql",
+      "tables": ["public.website_auto_economy_trial_usage"],
+      "follows": "apps/web/db/neon/0032_security_severity_superset.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0034_cloud_managed_waitlist_user_id.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0033_auto_economy_trial_usage.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0035_project_knowledge_file_lifecycle.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0034_cloud_managed_waitlist_user_id.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0036_media_assets.sql",
+      "tables": ["public.media_assets"],
+      "follows": "apps/web/db/neon/0035_project_knowledge_file_lifecycle.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0037_rls_user_isolation.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0036_media_assets.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0038_cloud_sync_versioning.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0037_rls_user_isolation.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0039_artifact_cloud_sync.sql",
+      "tables": ["public.web_artifact_versions", "public.web_artifacts"],
+      "follows": "apps/web/db/neon/0038_cloud_sync_versioning.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0040_memory_cloud_sync.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0039_artifact_cloud_sync.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0041_projects_cloud_sync.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0040_memory_cloud_sync.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0042_settings_cloud_sync.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0041_projects_cloud_sync.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0043_audit_log_immutability.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0042_settings_cloud_sync.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0044_fix_increment_usage_unit_bug.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0043_audit_log_immutability.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0045_fix_popular_searches_user_scope.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0044_fix_increment_usage_unit_bug.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0046_mobile_iap_subscription_columns.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0045_fix_popular_searches_user_scope.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0047_user_memories_pinned.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0046_mobile_iap_subscription_columns.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0048_user_connectors.sql",
+      "tables": ["public.user_connectors"],
+      "follows": "apps/web/db/neon/0047_user_memories_pinned.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0049_artifact_force_rls.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0048_user_connectors.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0050_temporary_chat_retention.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0049_artifact_force_rls.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0051_shared_sessions.sql",
+      "tables": ["public.shared_sessions"],
+      "follows": "apps/web/db/neon/0050_temporary_chat_retention.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0052_user_custom_connectors.sql",
+      "tables": ["public.user_custom_connectors"],
+      "follows": "apps/web/db/neon/0051_shared_sessions.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0053_projects_managed_cloud_contract.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0052_user_custom_connectors.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0054_gateway_user_scope_rls.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0053_projects_managed_cloud_contract.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0055_durable_credit_settlements.sql",
+      "tables": ["public.credit_settlement_jobs"],
+      "follows": "apps/web/db/neon/0054_gateway_user_scope_rls.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0056_managed_usage_request_lifecycle.sql",
+      "tables": ["public.managed_usage_requests"],
+      "follows": "apps/web/db/neon/0055_durable_credit_settlements.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0057_durable_scheduling.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0056_managed_usage_request_lifecycle.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0058_drop_legacy_teams.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0057_durable_scheduling.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0059_conversation_star_archive.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0058_drop_legacy_teams.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0060_free_tier_token_budget.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0059_conversation_star_archive.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0061_cloud_agent_runs.sql",
+      "tables": ["public.cloud_agent_events", "public.cloud_agent_runs"],
+      "follows": "apps/web/db/neon/0060_free_tier_token_budget.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0062_cloud_agent_approval_checkpoints.sql",
+      "tables": ["public.cloud_agent_approval_checkpoints"],
+      "follows": "apps/web/db/neon/0061_cloud_agent_runs.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0063_cloud_agent_execution_operations.sql",
+      "tables": ["public.cloud_agent_execution_operations"],
+      "follows": "apps/web/db/neon/0062_cloud_agent_approval_checkpoints.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0064_project_knowledge_extraction.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0063_cloud_agent_execution_operations.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0065_free_daily_usage_budget.sql",
+      "tables": ["public.free_daily_usage_reservations"],
+      "follows": "apps/web/db/neon/0064_project_knowledge_extraction.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0066_managed_usage_rolling_caps.sql",
+      "tables": ["public.managed_usage_request_extensions"],
+      "follows": "apps/web/db/neon/0065_free_daily_usage_budget.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0067_free_rolling_usage_windows.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0066_managed_usage_rolling_caps.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0068_shared_conversations_owner.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0067_free_rolling_usage_windows.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0069_connector_tool_permissions_rls.sql",
+      "tables": ["public.connector_tool_permissions"],
+      "follows": "apps/web/db/neon/0068_shared_conversations_owner.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0070_managed_usage_cap_semantics.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0069_connector_tool_permissions_rls.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0071_account_deletion_scheduling.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0070_managed_usage_cap_semantics.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0072_github_installation_ownership.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0071_account_deletion_scheduling.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0073_tenancy_foundation.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0072_github_installation_ownership.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0074_allow_max_15x_subscription_tier.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0073_tenancy_foundation.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0075_cloud_code_sessions.sql",
+      "tables": ["public.cloud_code_sessions", "public.cloud_code_terminal_entries"],
+      "follows": "apps/web/db/neon/0074_allow_max_15x_subscription_tier.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0076_enterprise_control_plane_tables.sql",
+      "tables": [
+        "public.directory_sync_connections",
+        "public.enterprise_audit_events",
+        "public.organization_admin_policies",
+        "public.organization_usage_ledger",
+        "public.sso_connections",
+        "public.support_cases"
+      ],
+      "follows": "apps/web/db/neon/0075_cloud_code_sessions.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0077_gateway_compatibility_tables.sql",
+      "tables": [
+        "public.agent_approval_requests",
+        "public.chat_messages",
+        "public.conversations",
+        "public.device_pairings",
+        "public.messages"
+      ],
+      "follows": "apps/web/db/neon/0076_enterprise_control_plane_tables.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0078_conversation_branching_runtime.sql",
+      "tables": ["public.conversation_branch_messages"],
+      "follows": "apps/web/db/neon/0077_gateway_compatibility_tables.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0079_desktop_release_channels.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0078_conversation_branching_runtime.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0080_device_refresh_token_rotation.sql",
+      "tables": ["public.device_refresh_tokens"],
+      "follows": "apps/web/db/neon/0079_desktop_release_channels.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0081_media_assets_conversation_provenance.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0080_device_refresh_token_rotation.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0082_cloud_code_agent_turns.sql",
+      "tables": [
+        "public.cloud_code_agent_approvals",
+        "public.cloud_code_agent_steps",
+        "public.cloud_code_agent_turns"
+      ],
+      "follows": "apps/web/db/neon/0081_media_assets_conversation_provenance.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0083_sso_connections_clerk_link.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0082_cloud_code_agent_turns.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0084_scim_provisioning.sql",
+      "tables": [
+        "public.directory_sync_events",
+        "public.scim_group_members",
+        "public.scim_groups",
+        "public.scim_provisioned_users",
+        "public.scim_tokens"
+      ],
+      "follows": "apps/web/db/neon/0083_sso_connections_clerk_link.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0085_organization_seats_lifecycle.sql",
+      "tables": ["public.organization_invitations"],
+      "follows": "apps/web/db/neon/0084_scim_provisioning.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0086_org_shared_ecosystem.sql",
+      "tables": [
+        "public.organization_project_access",
+        "public.organization_shared_connectors",
+        "public.organization_shared_projects"
+      ],
+      "follows": "apps/web/db/neon/0085_organization_seats_lifecycle.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0087_enterprise_audit_event_writes.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0086_org_shared_ecosystem.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0088_support_action_proposals.sql",
+      "tables": ["public.support_action_proposals"],
+      "follows": "apps/web/db/neon/0087_enterprise_audit_event_writes.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0089_support_live_handoff.sql",
+      "tables": [
+        "public.support_agent_presence",
+        "public.support_handoff_messages",
+        "public.support_handoff_sessions"
+      ],
+      "follows": "apps/web/db/neon/0088_support_action_proposals.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0090_shared_project_knowledge_read_only.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0089_support_live_handoff.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0091_audit_insert_policy_scoping.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0090_shared_project_knowledge_read_only.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0092_sso_domain_uniqueness_on_verified_only.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0091_audit_insert_policy_scoping.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0093_content_reports.sql",
+      "tables": ["public.content_reports"],
+      "follows": "apps/web/db/neon/0092_sso_domain_uniqueness_on_verified_only.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0094_research_reports.sql",
+      "tables": ["public.research_reports"],
+      "follows": "apps/web/db/neon/0093_content_reports.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0095_published_artifacts.sql",
+      "tables": ["public.published_artifacts"],
+      "follows": "apps/web/db/neon/0094_research_reports.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0096_plugin_registry.sql",
+      "tables": ["public.plugin_registry_entries"],
+      "follows": "apps/web/db/neon/0095_published_artifacts.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0097_connector_oauth_broker.sql",
+      "tables": ["public.connector_oauth_authorizations", "public.connector_oauth_grants"],
+      "follows": "apps/web/db/neon/0096_plugin_registry.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0098_project_knowledge_versions.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0097_connector_oauth_broker.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0099_origin_surface_cli.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0098_project_knowledge_versions.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0100_admin_role_helper.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0099_origin_surface_cli.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0101_sync_and_search_indexes.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0100_admin_role_helper.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0102_terms_acceptance.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0101_sync_and_search_indexes.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0103_erasure_tombstones.sql",
+      "tables": ["public.erasure_tombstones"],
+      "follows": "apps/web/db/neon/0102_terms_acceptance.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0104_key_version.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0103_erasure_tombstones.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0105_durable_video_generation_jobs.sql",
+      "tables": ["public.video_generation_jobs"],
+      "follows": "apps/web/db/neon/0104_key_version.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0106_github_webhook_deliveries.sql",
+      "tables": ["public.github_webhook_deliveries"],
+      "follows": "apps/web/db/neon/0105_durable_video_generation_jobs.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0107_media_assets_web_conversation_owner.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0106_github_webhook_deliveries.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0108_profile_deletion_schedule_reconciliation.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0107_media_assets_web_conversation_owner.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0109_web_plugin_installations.sql",
+      "tables": ["public.plugin_installations"],
+      "follows": "apps/web/db/neon/0108_profile_deletion_schedule_reconciliation.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0110_active_workspace_content_scope.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0109_web_plugin_installations.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0111_credit_top_up_carry.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0110_active_workspace_content_scope.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0112_mobile_native_iap.sql",
+      "tables": [
+        "public.mobile_iap_accounts",
+        "public.mobile_iap_notification_receipts",
+        "public.mobile_iap_transactions"
+      ],
+      "follows": "apps/web/db/neon/0111_credit_top_up_carry.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0113_dpdp_consent_records.sql",
+      "tables": ["public.consent_records"],
+      "follows": "apps/web/db/neon/0112_mobile_native_iap.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0114_data_rights_requests.sql",
+      "tables": ["public.data_rights_requests"],
+      "follows": "apps/web/db/neon/0113_dpdp_consent_records.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0115_mcp_oauth_discovery.sql",
+      "tables": ["public.mcp_oauth_clients"],
+      "follows": "apps/web/db/neon/0114_data_rights_requests.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0116_consent_ledger_append_only.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0115_mcp_oauth_discovery.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0117_mcp_discovery_state.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0116_consent_ledger_append_only.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0118_managed_usage_overage.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0117_mcp_discovery_state.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0119_overage_headroom_semantics.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0118_managed_usage_overage.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0120_delete_user_data_execute_narrowing.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0119_overage_headroom_semantics.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0121_artifact_index.sql",
+      "tables": ["public.web_artifact_index"],
+      "follows": "apps/web/db/neon/0120_delete_user_data_execute_narrowing.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0122_copyright_notices.sql",
+      "tables": ["public.copyright_notices"],
+      "follows": "apps/web/db/neon/0121_artifact_index.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0123_audit_log_immutability_trigger.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0122_copyright_notices.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0124_content_report_triage.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0123_audit_log_immutability_trigger.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0125_cloud_agent_run_settled_usage.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0124_content_report_triage.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0126_credit_balance_transferability.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0125_cloud_agent_run_settled_usage.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0127_cogs_ledger.sql",
+      "tables": ["public.cogs_adjustments", "public.provider_cost_events"],
+      "follows": "apps/web/db/neon/0126_credit_balance_transferability.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0128_stripe_event_ordering.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0127_cogs_ledger.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0129_cost_event_task_economics.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0128_stripe_event_ordering.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0130_cogs_token_classes.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0129_cost_event_task_economics.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0131_beta_applications.sql",
+      "tables": ["public.beta_applications"],
+      "follows": "apps/web/db/neon/0130_cogs_token_classes.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0132_operator_bonus_credits.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0131_beta_applications.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0133_device_refresh_token_device_link.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0132_operator_bonus_credits.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0134_user_settings_rls.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0133_device_refresh_token_device_link.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0135_project_scoped_memory.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0134_user_settings_rls.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0136_release_download_ip_pepper.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0135_project_scoped_memory.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0137_user_content_rls_coverage.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0136_release_download_ip_pepper.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0138_retention_enforcement_and_legal_hold.sql",
+      "tables": ["public.legal_holds", "public.organization_retention_sweeps"],
+      "follows": "apps/web/db/neon/0137_user_content_rls_coverage.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0139_organization_model_policy.sql",
+      "tables": ["public.organization_model_policies"],
+      "follows": "apps/web/db/neon/0138_retention_enforcement_and_legal_hold.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0140_external_sharing_policy.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0139_organization_model_policy.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0141_organization_connector_policy.sql",
+      "tables": ["public.organization_connector_policies"],
+      "follows": "apps/web/db/neon/0140_external_sharing_policy.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0142_organization_spend_limits.sql",
+      "tables": ["public.organization_spend_limits"],
+      "follows": "apps/web/db/neon/0141_organization_connector_policy.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0143_audit_event_streaming.sql",
+      "tables": ["public.organization_audit_destinations"],
+      "follows": "apps/web/db/neon/0142_organization_spend_limits.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0144_revoke_write_on_governance_tables.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0143_audit_event_streaming.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0145_web_pack_example_prompts.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0144_revoke_write_on_governance_tables.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0146_repair_github_installation_ownership.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0145_web_pack_example_prompts.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0147_mcp_stateless_cache.sql",
+      "tables": [
+        "public.mcp_app_payloads",
+        "public.mcp_discovery_cache",
+        "public.mcp_response_cache",
+        "public.mcp_task_bindings"
+      ],
+      "follows": "apps/web/db/neon/0146_repair_github_installation_ownership.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0148_mrtr_input_checkpoint.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0147_mcp_stateless_cache.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0149_cloud_code_session_run_lease.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0148_mrtr_input_checkpoint.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0150_cloud_code_session_run_lease_check.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0149_cloud_code_session_run_lease.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0151_web_push_subscriptions.sql",
+      "tables": ["public.web_push_subscriptions"],
+      "follows": "apps/web/db/neon/0150_cloud_code_session_run_lease_check.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0152_restore_null_tolerant_usage_caps.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0151_web_push_subscriptions.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0153_notifications_row_level_security.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0152_restore_null_tolerant_usage_caps.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0154_two_factor_replay_protection.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0153_notifications_row_level_security.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0155_cloud_code_session_runtime.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0154_two_factor_replay_protection.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0156_message_thread_variants.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0155_cloud_code_session_runtime.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0157_user_skills.sql",
+      "tables": ["public.user_skills"],
+      "follows": "apps/web/db/neon/0156_message_thread_variants.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0158_plugin_pack_description_no_em_dash.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0157_user_skills.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0159_plugin_marketplace_sources.sql",
+      "tables": [
+        "public.plugin_marketplace_entries",
+        "public.plugin_marketplace_installations",
+        "public.plugin_marketplace_sources"
+      ],
+      "follows": "apps/web/db/neon/0158_plugin_pack_description_no_em_dash.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0160_plugin_installation_settings.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0159_plugin_marketplace_sources.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0161_presentations_pack.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0160_plugin_installation_settings.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0162_organization_deletion.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0161_presentations_pack.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0163_enterprise_billing_contracts.sql",
+      "tables": ["public.organization_billing_contracts", "public.organization_billing_invoices"],
+      "follows": "apps/web/db/neon/0162_organization_deletion.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0164_memory_policy_and_context_compaction.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0163_enterprise_billing_contracts.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0165_cloud_code_session_extra_hosts.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0164_memory_policy_and_context_compaction.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0166_provider_cost_events_organization.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0165_cloud_code_session_extra_hosts.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0167_retain_audit_events_after_organization_deletion.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0166_provider_cost_events_organization.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0168_scheduled_task_project_scope.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0167_retain_audit_events_after_organization_deletion.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0169_provider_cost_events_tool_capability.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0168_scheduled_task_project_scope.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0170_security_audit_logs_row_level_security.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0169_provider_cost_events_tool_capability.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0171_github_installations_row_level_security.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0170_security_audit_logs_row_level_security.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0172_content_reports_row_level_security.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0171_github_installations_row_level_security.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0173_mcp_app_state_row_level_security.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0172_content_reports_row_level_security.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0174_identities.sql",
+      "tables": ["public.identities"],
+      "follows": "apps/web/db/neon/0173_mcp_app_state_row_level_security.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0175_plugin_marketplace_uploads.sql",
+      "tables": ["public.plugin_marketplace_entry_files"],
+      "follows": "apps/web/db/neon/0174_identities.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0176_cloud_code_session_branch_and_context.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0175_plugin_marketplace_uploads.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0177_cloud_code_session_base_branch.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0176_cloud_code_session_branch_and_context.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0178_managed_usage_lease_renewal.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0177_cloud_code_session_base_branch.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0179_reservation_recovery_cadence_comment.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0178_managed_usage_lease_renewal.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0180_provider_cost_events_customer_and_cogs_split.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0179_reservation_recovery_cadence_comment.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0181_provider_cost_reconciliation_days.sql",
+      "tables": ["public.provider_cost_reconciliation_days"],
+      "follows": "apps/web/db/neon/0180_provider_cost_events_customer_and_cogs_split.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0182_managed_usage_microusd_ledger.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0181_provider_cost_reconciliation_days.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0183_video_generation_completion_notice.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0182_managed_usage_microusd_ledger.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0184_organization_shared_artifacts.sql",
+      "tables": ["public.organization_shared_artifacts"],
+      "follows": "apps/web/db/neon/0183_video_generation_completion_notice.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0185_org_shared_artifact_policy_recursion.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0184_organization_shared_artifacts.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0186_organization_shared_sessions.sql",
+      "tables": ["public.organization_shared_sessions"],
+      "follows": "apps/web/db/neon/0185_org_shared_artifact_policy_recursion.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0187_device_refresh_token_workspace_binding.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0186_organization_shared_sessions.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0188_github_installation_verified_repositories.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0187_device_refresh_token_workspace_binding.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0189_user_memories_per_user_identity.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0188_github_installation_verified_repositories.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0190_device_step_checkpoint.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0189_user_memories_per_user_identity.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0191_research_report_settled_cost.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0190_device_step_checkpoint.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0192_project_knowledge_anchors.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0191_research_report_settled_cost.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0193_user_memories_drop_transition_index.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0192_project_knowledge_anchors.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0194_organization_spend_alerts.sql",
+      "tables": ["public.organization_spend_alerts"],
+      "follows": "apps/web/db/neon/0193_user_memories_drop_transition_index.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0195_provider_cost_events_workload_project_session.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0194_organization_spend_alerts.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0196_work_execution_states_and_pause.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0195_provider_cost_events_workload_project_session.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0197_enterprise_contract_contacts_terms_tax.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0196_work_execution_states_and_pause.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0198_organization_plugin_and_mcp_host_policy.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0197_enterprise_contract_contacts_terms_tax.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0199_notification_feed_targets.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0198_organization_plugin_and_mcp_host_policy.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0200_organization_permission_grid.sql",
+      "tables": [
+        "public.organization_group_managers",
+        "public.organization_group_roles",
+        "public.organization_member_roles",
+        "public.organization_roles"
+      ],
+      "follows": "apps/web/db/neon/0199_notification_feed_targets.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0201_workspace_policy_layers_and_revisions.sql",
+      "tables": ["public.organization_policy_overrides", "public.organization_policy_revisions"],
+      "follows": "apps/web/db/neon/0200_organization_permission_grid.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0202_retrieval_index.sql",
+      "tables": ["public.retrieval_chunks", "public.retrieval_documents"],
+      "follows": "apps/web/db/neon/0201_workspace_policy_layers_and_revisions.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0203_user_memories_lifecycle.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0202_retrieval_index.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0204_sso_jit_provisioning.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0203_user_memories_lifecycle.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0205_domain_retention.sql",
+      "tables": [
+        "public.organization_domain_retention_policies",
+        "public.organization_domain_retention_sweeps"
+      ],
+      "follows": "apps/web/db/neon/0204_sso_jit_provisioning.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0206_organization_admin_api_keys.sql",
+      "tables": ["public.organization_admin_api_keys"],
+      "follows": "apps/web/db/neon/0205_domain_retention.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0207_device_registrations.sql",
+      "tables": ["public.device_registrations"],
+      "follows": "apps/web/db/neon/0206_organization_admin_api_keys.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0208_background_jobs.sql",
+      "tables": ["public.background_jobs"],
+      "follows": "apps/web/db/neon/0207_device_registrations.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0209_scheduled_task_rules_and_policies.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0208_background_jobs.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0210_event_triggers.sql",
+      "tables": ["public.event_trigger_events", "public.event_triggers"],
+      "follows": "apps/web/db/neon/0209_scheduled_task_rules_and_policies.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0211_feature_flag_targeting.sql",
+      "tables": ["public.feature_flag_definitions"],
+      "follows": "apps/web/db/neon/0210_event_triggers.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0212_routing_decision_traces.sql",
+      "tables": ["public.model_rollout_benchmarks", "public.routing_decision_traces"],
+      "follows": "apps/web/db/neon/0211_feature_flag_targeting.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0213_product_analytics_events.sql",
+      "tables": ["public.product_analytics_events", "public.product_metric_days"],
+      "follows": "apps/web/db/neon/0212_routing_decision_traces.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0214_prompt_manifest_stamps.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0213_product_analytics_events.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0215_cogs_full_cost_surface.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0214_prompt_manifest_stamps.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0216_media_assets_content_hash.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0215_cogs_full_cost_surface.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0217_shared_project_editor_write.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0216_media_assets_content_hash.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0218_temporary_chat_attachments.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0217_shared_project_editor_write.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0219_conversation_drafts.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0218_temporary_chat_attachments.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0220_customer_managed_keys_and_data_region.sql",
+      "tables": ["public.organization_encryption_keys"],
+      "follows": "apps/web/db/neon/0219_conversation_drafts.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0221_connector_and_artifact_cost_capabilities.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0220_customer_managed_keys_and_data_region.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0222_support_priority_and_diagnostics.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0221_connector_and_artifact_cost_capabilities.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0223_connector_call_events.sql",
+      "tables": ["public.connector_call_events"],
+      "follows": "apps/web/db/neon/0222_support_priority_and_diagnostics.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0224_research_retention_domain.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0223_connector_call_events.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0225_identity_account_lifecycle.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0224_research_retention_domain.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0226_durable_image_generation_jobs.sql",
+      "tables": ["public.image_generation_job_assets", "public.image_generation_jobs"],
+      "follows": "apps/web/db/neon/0225_identity_account_lifecycle.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0227_payment_provider_subscription_history.sql",
+      "tables": ["public.organization_subscription_state_transitions"],
+      "follows": "apps/web/db/neon/0226_durable_image_generation_jobs.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0228_enterprise_commercial_agreements.sql",
+      "tables": ["public.organization_commercial_agreements"],
+      "follows": "apps/web/db/neon/0227_payment_provider_subscription_history.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0229_support_access_grants.sql",
+      "tables": ["public.support_access_events", "public.support_access_grants"],
+      "follows": "apps/web/db/neon/0228_enterprise_commercial_agreements.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0230_job_origin_region_and_azure_kms.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0229_support_access_grants.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0231_object_backup_replicas.sql",
+      "tables": ["public.object_backup_replicas"],
+      "follows": "apps/web/db/neon/0230_job_origin_region_and_azure_kms.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0232_plugin_package_signing_and_permission_review.sql",
+      "tables": ["public.plugin_package_scans"],
+      "follows": "apps/web/db/neon/0231_object_backup_replicas.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0233_refresh_family_compromise.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0232_plugin_package_signing_and_permission_review.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0234_workspaces_membership_status_and_installations.sql",
+      "tables": [
+        "public.account_security_settings",
+        "public.device_installations",
+        "public.workspaces"
+      ],
+      "follows": "apps/web/db/neon/0233_refresh_family_compromise.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0235_autonomous_tool_approvals_workspace_switch.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0234_workspaces_membership_status_and_installations.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0236_member_roster_read_for_role_and_group_managers.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0235_autonomous_tool_approvals_workspace_switch.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0237_work_plans.sql",
+      "tables": ["public.work_plan_revisions", "public.work_plan_steps", "public.work_plans"],
+      "follows": "apps/web/db/neon/0236_member_roster_read_for_role_and_group_managers.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0238_cmek_key_rewrap_runs.sql",
+      "tables": ["public.organization_key_rewrap_runs"],
+      "follows": "apps/web/db/neon/0237_work_plans.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0239_resource_deletion_semantics.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0238_cmek_key_rewrap_runs.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0240_resource_provenance_columns.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0239_resource_deletion_semantics.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0241_usage_attribution_workspace_and_source_surface.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0240_resource_provenance_columns.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0242_support_ticket_escalations.sql",
+      "tables": ["public.support_ticket_escalations"],
+      "follows": "apps/web/db/neon/0241_usage_attribution_workspace_and_source_surface.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0243_billing_contract_term_ordering.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0242_support_ticket_escalations.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0244_archived_resources_leave_ai_retrieval.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0243_billing_contract_term_ordering.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0245_admin_write_idempotency_and_service_principals.sql",
+      "tables": ["public.admin_request_idempotency", "public.organization_service_principals"],
+      "follows": "apps/web/db/neon/0244_archived_resources_leave_ai_retrieval.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0246_visual_session_cost_capability.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0245_admin_write_idempotency_and_service_principals.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0247_study_sessions.sql",
+      "tables": ["public.study_sessions"],
+      "follows": "apps/web/db/neon/0246_visual_session_cost_capability.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0248_permission_namespaces_and_scim_group_membership_lock.sql",
+      "tables": ["public.organization_permission_aliases"],
+      "follows": "apps/web/db/neon/0247_study_sessions.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0249_background_job_worker_fencing_and_cancellation.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0248_permission_namespaces_and_scim_group_membership_lock.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0250_organization_mcp_servers.sql",
+      "tables": ["public.organization_mcp_servers"],
+      "follows": "apps/web/db/neon/0249_background_job_worker_fencing_and_cancellation.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0251_authentication_and_search_outcomes.sql",
+      "tables": ["public.authentication_attempts"],
+      "follows": "apps/web/db/neon/0250_organization_mcp_servers.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0252_context_manifests_and_source_policy.sql",
+      "tables": ["public.context_manifests"],
+      "follows": "apps/web/db/neon/0251_authentication_and_search_outcomes.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0253_connector_accounts.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0252_context_manifests_and_source_policy.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0254_notebook_runs.sql",
+      "tables": ["public.notebook_runs"],
+      "follows": "apps/web/db/neon/0253_connector_accounts.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0255_identity_risk_signals.sql",
+      "tables": ["public.account_compromise_responses", "public.identity_risk_observations"],
+      "follows": "apps/web/db/neon/0254_notebook_runs.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0256_organization_admin_delegations.sql",
+      "tables": ["public.organization_admin_delegations"],
+      "follows": "apps/web/db/neon/0255_identity_risk_signals.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0257_file_versions_and_lineage.sql",
+      "tables": ["public.file_lineage", "public.published_artifact_versions"],
+      "follows": "apps/web/db/neon/0256_organization_admin_delegations.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0258_cloud_agent_run_budgets.sql",
+      "tables": ["public.cloud_agent_run_budgets"],
+      "follows": "apps/web/db/neon/0257_file_versions_and_lineage.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0259_extension_versions_and_lifecycle.sql",
+      "tables": ["public.plugin_registry_lifecycle_events", "public.plugin_registry_versions"],
+      "follows": "apps/web/db/neon/0258_cloud_agent_run_budgets.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0260_voice_sessions.sql",
+      "tables": ["public.voice_sessions"],
+      "follows": "apps/web/db/neon/0259_extension_versions_and_lifecycle.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0261_legal_hold_custodians_and_resource_scope.sql",
+      "tables": ["public.legal_hold_custodians"],
+      "follows": "apps/web/db/neon/0260_voice_sessions.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0262_ediscovery_export_custody.sql",
+      "tables": ["public.ediscovery_exports"],
+      "follows": "apps/web/db/neon/0261_legal_hold_custodians_and_resource_scope.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0263_release_audit_trail.sql",
+      "tables": ["public.release_events"],
+      "follows": "apps/web/db/neon/0262_ediscovery_export_custody.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0264_erasure_ledger_replays.sql",
+      "tables": ["public.erasure_ledger_replays"],
+      "follows": "apps/web/db/neon/0263_release_audit_trail.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0265_plugin_registry_entry_lifecycle.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0264_erasure_ledger_replays.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0266_automation_audit_events.sql",
+      "tables": ["public.automation_audit_events"],
+      "follows": "apps/web/db/neon/0265_plugin_registry_entry_lifecycle.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0267_admin_read_policies_ask_for_permissions.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0266_automation_audit_events.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0268_conversation_activation.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0267_admin_read_policies_ask_for_permissions.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0269_audit_destination_signing_secret.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0268_conversation_activation.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0270_automation_audit_idempotency.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0269_audit_destination_signing_secret.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0271_feature_flag_governance_metadata.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0270_automation_audit_idempotency.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0272_active_membership_authorization.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0271_feature_flag_governance_metadata.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0273_ediscovery_cascade_delete.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0272_active_membership_authorization.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0274_single_count_beta_invite_redemptions.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0273_ediscovery_cascade_delete.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0275_beta_redemptions_rls.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0274_single_count_beta_invite_redemptions.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0276_resource_row_timestamps.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0275_beta_redemptions_rls.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0277_account_recovery_state.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0276_resource_row_timestamps.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0278_resource_row_versions.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0277_account_recovery_state.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0279_rewritten_row_update_times.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0278_resource_row_versions.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0280_identity_risk_client_and_address_reuse.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0279_rewritten_row_update_times.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0281_managed_usage_overage_classification.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0280_identity_risk_client_and_address_reuse.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0282_compaction_summary_coverage.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0281_managed_usage_overage_classification.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0283_retrieval_index_withdrawal_coverage.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0282_compaction_summary_coverage.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0284_context_manifest_accounting.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0283_retrieval_index_withdrawal_coverage.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0285_user_memories_provenance.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0284_context_manifest_accounting.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0286_commercial_agreement_lifecycle.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0285_user_memories_provenance.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0287_commercial_agreement_procurement_terms.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0286_commercial_agreement_lifecycle.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0288_enterprise_offline_payment_records.sql",
+      "tables": ["public.enterprise_offline_payment_records"],
+      "follows": "apps/web/db/neon/0287_commercial_agreement_procurement_terms.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0289_plugin_version_signatures.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0288_enterprise_offline_payment_records.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0290_key_rewrap_run_store_coverage.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0289_plugin_version_signatures.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0291_tamper_evident_tables_survive_a_regrant.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0290_key_rewrap_run_store_coverage.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0292_retire_device_authorization_token_columns.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0291_tamper_evident_tables_survive_a_regrant.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0293_conversation_provider_route_pin.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0292_retire_device_authorization_token_columns.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0294_semantic_decision_traces.sql",
+      "tables": ["public.semantic_decision_traces"],
+      "follows": "apps/web/db/neon/0293_conversation_provider_route_pin.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0295_bonus_credit_grants.sql",
+      "tables": ["public.bonus_credit_grants"],
+      "follows": "apps/web/db/neon/0294_semantic_decision_traces.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0296_referral_program.sql",
+      "tables": ["public.referral_codes"],
+      "follows": "apps/web/db/neon/0295_bonus_credit_grants.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0297_auto_reload_settings.sql",
+      "tables": ["public.auto_reload_settings"],
+      "follows": "apps/web/db/neon/0296_referral_program.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0298_purchased_credit_lifetime.sql",
+      "tables": ["public.expiring_credit_purchases"],
+      "follows": "apps/web/db/neon/0297_auto_reload_settings.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0299_billing_refunds_and_disputes.sql",
+      "tables": ["public.billing_disputes", "public.billing_refund_requests"],
+      "follows": "apps/web/db/neon/0298_purchased_credit_lifetime.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0300_plan_catalog_version.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0299_billing_refunds_and_disputes.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0301_routine_credit_cap.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0300_plan_catalog_version.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0302_workspace_api_key_namespaced_scopes.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0301_routine_credit_cap.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0303_infrastructure_cost_allocation.sql",
+      "tables": ["public.infrastructure_vendor_bills"],
+      "follows": "apps/web/db/neon/0302_workspace_api_key_namespaced_scopes.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0304_payment_fee_attribution.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0303_infrastructure_cost_allocation.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0305_managed_usage_extension_overage.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0304_payment_fee_attribution.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0306_free_usage_reservation_lease.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0305_managed_usage_extension_overage.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0307_event_trigger_gmail_watch.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0306_free_usage_reservation_lease.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0308_schedule_run_approval.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0307_event_trigger_gmail_watch.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0309_notification_code_session_target.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0308_schedule_run_approval.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0310_project_account_personalization.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0309_notification_code_session_target.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0311_scheduled_task_shares.sql",
+      "tables": ["public.scheduled_task_shares"],
+      "follows": "apps/web/db/neon/0310_project_account_personalization.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0312_content_notice_type.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0311_scheduled_task_shares.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0313_custom_connector_oauth_client.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0312_content_notice_type.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0314_workspace_managed_groups.sql",
+      "tables": ["public.organization_group_members"],
+      "follows": "apps/web/db/neon/0313_custom_connector_oauth_client.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0315_private_shared_projects.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0314_workspace_managed_groups.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0316_project_owner_sharing.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0315_private_shared_projects.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0317_plugin_marketplace_dependencies.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0316_project_owner_sharing.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0318_user_skill_files.sql",
+      "tables": ["public.user_skill_files"],
+      "follows": "apps/web/db/neon/0317_plugin_marketplace_dependencies.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0319_cloud_code_turn_controls.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0318_user_skill_files.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0320_cloud_code_session_sharing.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0319_cloud_code_turn_controls.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0321_developer_projects.sql",
+      "tables": ["public.developer_projects"],
+      "follows": "apps/web/db/neon/0320_cloud_code_session_sharing.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0322_external_resource_references.sql",
+      "tables": ["public.external_resource_references"],
+      "follows": "apps/web/db/neon/0321_developer_projects.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0323_developer_webhooks.sql",
+      "tables": ["public.developer_webhook_deliveries", "public.developer_webhook_endpoints"],
+      "follows": "apps/web/db/neon/0322_external_resource_references.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0324_cloud_agent_run_steer.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0323_developer_webhooks.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0325_published_artifact_storage.sql",
+      "tables": ["public.published_artifact_storage"],
+      "follows": "apps/web/db/neon/0324_cloud_agent_run_steer.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0326_organization_plugins.sql",
+      "tables": [
+        "public.organization_plugin_files",
+        "public.organization_plugin_members",
+        "public.organization_plugins"
+      ],
+      "follows": "apps/web/db/neon/0325_published_artifact_storage.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0327_organization_plugin_group_settings.sql",
+      "tables": ["public.organization_plugin_group_settings"],
+      "follows": "apps/web/db/neon/0326_organization_plugins.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0328_plugin_submissions.sql",
+      "tables": [
+        "public.plugin_submission_files",
+        "public.plugin_submission_installs",
+        "public.plugin_submissions"
+      ],
+      "follows": "apps/web/db/neon/0327_organization_plugin_group_settings.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0329_managed_usage_attempt_record.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0328_plugin_submissions.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0330_slack_app.sql",
+      "tables": [
+        "public.slack_account_links",
+        "public.slack_assistant_runs",
+        "public.slack_installations",
+        "public.slack_link_requests"
+      ],
+      "follows": "apps/web/db/neon/0329_managed_usage_attempt_record.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0331_free_usage_attempt_record.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0330_slack_app.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0332_custom_connector_plugin_source.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0331_free_usage_attempt_record.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0333_slack_run_cancel_and_delete.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0332_custom_connector_plugin_source.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0334_desktop_sign_in_grants.sql",
+      "tables": ["public.desktop_sign_in_grants"],
+      "follows": "apps/web/db/neon/0333_slack_run_cancel_and_delete.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0335_cloud_code_plan_turns.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0334_desktop_sign_in_grants.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0336_workspace_web_domain_policy.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0335_cloud_code_plan_turns.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0337_health_space.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0336_workspace_web_domain_policy.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0338_account_security.sql",
+      "tables": [
+        "public.account_security_challenges",
+        "public.account_security_credentials",
+        "public.account_security_enrollments",
+        "public.account_security_sessions"
+      ],
+      "follows": "apps/web/db/neon/0337_health_space.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0339_temporary_chat_media_jobs.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0338_account_security.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0340_workspace_connector_tool_rules.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0339_temporary_chat_media_jobs.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0341_push_preferences_and_share_conversation.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0340_workspace_connector_tool_rules.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0342_connector_oauth_app_return.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0341_push_preferences_and_share_conversation.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0343_github_install_app_return.sql",
+      "tables": ["public.github_install_authorizations"],
+      "follows": "apps/web/db/neon/0342_connector_oauth_app_return.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0344_conversation_google_user_data.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0343_github_install_app_return.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0345_support_access_grant_purpose.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0344_conversation_google_user_data.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0346_managed_usage_extra_usage_reservation.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0345_support_access_grant_purpose.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0347_managed_usage_headroom_under_lock.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0346_managed_usage_extra_usage_reservation.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0348_workspace_product_analytics_switch.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0347_managed_usage_headroom_under_lock.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0349_mobile_intent_tokens.sql",
+      "tables": ["public.mobile_intent_tokens"],
+      "follows": "apps/web/db/neon/0348_workspace_product_analytics_switch.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0350_bank_account_items.sql",
+      "tables": ["public.bank_account_items"],
+      "follows": "apps/web/db/neon/0349_mobile_intent_tokens.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0351_auth_flow_update_times.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0350_bank_account_items.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0352_feedback_response_rating_index.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0351_auth_flow_update_times.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0353_feedback_ratings_drop_answer_text.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0352_feedback_response_rating_index.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0354_signaling_sessions.sql",
+      "tables": ["public.signaling_sessions"],
+      "follows": "apps/web/db/neon/0353_feedback_ratings_drop_answer_text.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0355_user_memories_purge_deleted_text.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0354_signaling_sessions.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0356_custom_connector_plugin_disabled.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0355_user_memories_purge_deleted_text.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0357_user_skill_description_limit.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0356_custom_connector_plugin_disabled.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0358_shared_project_editor_needs_share_permission.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0357_user_skill_description_limit.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0359_settlement_recovery_binds_job_owner.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0358_shared_project_editor_needs_share_permission.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0360_team_premium_seats.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0359_settlement_recovery_binds_job_owner.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0361_mobile_iap_renewal_state_order.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0360_team_premium_seats.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0362_store_refund_and_pause_states.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0361_mobile_iap_renewal_state_order.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0363_beta_invite_update_time.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0362_store_refund_and_pause_states.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0364_connector_tool_session_grants.sql",
+      "tables": ["public.connector_tool_session_grants"],
+      "follows": "apps/web/db/neon/0363_beta_invite_update_time.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0365_upgrade_waitlist_notice_delivery.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0364_connector_tool_session_grants.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0366_media_jobs_chrome_source_surface.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0365_upgrade_waitlist_notice_delivery.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0367_stripe_reconciliation_cursors_and_overage_pending.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0366_media_jobs_chrome_source_surface.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0368_conversation_instructions.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0367_stripe_reconciliation_cursors_and_overage_pending.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0369_artifact_comments.sql",
+      "tables": ["public.artifact_comments"],
+      "follows": "apps/web/db/neon/0368_conversation_instructions.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0370_user_agents.sql",
+      "tables": [
+        "public.user_agent_access",
+        "public.user_agent_files",
+        "public.user_agent_versions",
+        "public.user_agents"
+      ],
+      "follows": "apps/web/db/neon/0369_artifact_comments.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0371_developer_prompts_and_evals.sql",
+      "tables": [
+        "public.developer_eval_cases",
+        "public.developer_eval_results",
+        "public.developer_eval_runs",
+        "public.developer_prompt_versions",
+        "public.developer_prompts"
+      ],
+      "follows": "apps/web/db/neon/0370_user_agents.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0372_published_site_viewers.sql",
+      "tables": ["public.published_artifact_viewers"],
+      "follows": "apps/web/db/neon/0371_developer_prompts_and_evals.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0373_studio_library_items.sql",
+      "tables": ["public.studio_library_items"],
+      "follows": "apps/web/db/neon/0372_published_site_viewers.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0374_slack_channel_policy_and_agent_credit_cap.sql",
+      "tables": ["public.slack_channel_policies"],
+      "follows": "apps/web/db/neon/0373_studio_library_items.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0375_project_chat_defaults.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0374_slack_channel_policy_and_agent_credit_cap.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0376_invite_code_redemption_unambiguous.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0375_project_chat_defaults.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0377_mobile_app_transactions_and_consent.sql",
+      "tables": ["public.mobile_app_consent_rescissions", "public.mobile_app_transactions"],
+      "follows": "apps/web/db/neon/0376_invite_code_redemption_unambiguous.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0378_personal_spend_limit.sql",
+      "tables": ["public.personal_spend_limits"],
+      "follows": "apps/web/db/neon/0377_mobile_app_transactions_and_consent.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0379_directory_install_counts.sql",
+      "tables": ["public.skill_install_counts"],
+      "follows": "apps/web/db/neon/0378_personal_spend_limit.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0380_live_artifacts.sql",
+      "tables": ["public.live_artifacts"],
+      "follows": "apps/web/db/neon/0379_directory_install_counts.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0381_connector_account_state.sql",
+      "tables": ["public.connector_account_states"],
+      "follows": "apps/web/db/neon/0380_live_artifacts.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0382_cloud_code_session_scan_head.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0381_connector_account_state.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0383_published_artifact_connector_audience.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0382_cloud_code_session_scan_head.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0384_organization_code_tool_decision_days.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0383_published_artifact_connector_audience.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0385_slack_channel_tool_allow_list.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0384_organization_code_tool_decision_days.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0386_organization_code_session_days.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0385_slack_channel_tool_allow_list.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0387_event_trigger_signing_salt.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0386_organization_code_session_days.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0388_agent_web_domain_rules.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0387_event_trigger_signing_salt.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0389_agent_reasoning_effort.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0388_agent_web_domain_rules.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0390_usage_limit_promotions.sql",
+      "tables": ["public.usage_limit_promotion_grants", "public.usage_limit_promotions"],
+      "follows": "apps/web/db/neon/0389_agent_reasoning_effort.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0391_artifact_runtime_usage_cap.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0390_usage_limit_promotions.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0097_connector_oauth_broker.down.sql",
+      "tables": [],
+      "follows": null
+    },
+    {
+      "path": "apps/web/db/neon/down/0098_project_knowledge_versions.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0097_connector_oauth_broker.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0099_origin_surface_cli.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0098_project_knowledge_versions.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0100_admin_role_helper.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0099_origin_surface_cli.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0101_sync_and_search_indexes.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0100_admin_role_helper.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0102_terms_acceptance.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0101_sync_and_search_indexes.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0103_erasure_tombstones.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0102_terms_acceptance.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0104_key_version.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0103_erasure_tombstones.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0105_durable_video_generation_jobs.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0104_key_version.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0106_github_webhook_deliveries.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0105_durable_video_generation_jobs.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0107_media_assets_web_conversation_owner.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0106_github_webhook_deliveries.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0108_profile_deletion_schedule_reconciliation.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0107_media_assets_web_conversation_owner.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0109_web_plugin_installations.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0108_profile_deletion_schedule_reconciliation.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0110_active_workspace_content_scope.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0109_web_plugin_installations.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0111_credit_top_up_carry.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0110_active_workspace_content_scope.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0112_mobile_native_iap.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0111_credit_top_up_carry.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0113_dpdp_consent_records.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0112_mobile_native_iap.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0114_data_rights_requests.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0113_dpdp_consent_records.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0115_mcp_oauth_discovery.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0114_data_rights_requests.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0116_consent_ledger_append_only.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0115_mcp_oauth_discovery.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0117_mcp_discovery_state.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0116_consent_ledger_append_only.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0118_managed_usage_overage.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0117_mcp_discovery_state.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0119_overage_headroom_semantics.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0118_managed_usage_overage.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0120_delete_user_data_execute_narrowing.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0119_overage_headroom_semantics.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0121_artifact_index.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0120_delete_user_data_execute_narrowing.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0122_copyright_notices.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0121_artifact_index.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0123_audit_log_immutability_trigger.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0122_copyright_notices.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0124_content_report_triage.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0123_audit_log_immutability_trigger.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0125_cloud_agent_run_settled_usage.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0124_content_report_triage.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0126_credit_balance_transferability.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0125_cloud_agent_run_settled_usage.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0127_cogs_ledger.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0126_credit_balance_transferability.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0128_stripe_event_ordering.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0127_cogs_ledger.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0129_cost_event_task_economics.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0128_stripe_event_ordering.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0130_cogs_token_classes.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0129_cost_event_task_economics.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0131_beta_applications.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0130_cogs_token_classes.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0132_operator_bonus_credits.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0131_beta_applications.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0133_device_refresh_token_device_link.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0132_operator_bonus_credits.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0134_user_settings_rls.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0133_device_refresh_token_device_link.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0135_project_scoped_memory.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0134_user_settings_rls.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0136_release_download_ip_pepper.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0135_project_scoped_memory.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0137_user_content_rls_coverage.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0136_release_download_ip_pepper.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0138_retention_enforcement_and_legal_hold.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0137_user_content_rls_coverage.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0139_organization_model_policy.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0138_retention_enforcement_and_legal_hold.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0140_external_sharing_policy.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0139_organization_model_policy.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0141_organization_connector_policy.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0140_external_sharing_policy.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0142_organization_spend_limits.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0141_organization_connector_policy.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0143_audit_event_streaming.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0142_organization_spend_limits.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0144_revoke_write_on_governance_tables.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0143_audit_event_streaming.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0145_web_pack_example_prompts.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0144_revoke_write_on_governance_tables.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0146_repair_github_installation_ownership.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0145_web_pack_example_prompts.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0147_mcp_stateless_cache.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0146_repair_github_installation_ownership.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0148_mrtr_input_checkpoint.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0147_mcp_stateless_cache.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0149_cloud_code_session_run_lease.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0148_mrtr_input_checkpoint.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0150_cloud_code_session_run_lease_check.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0149_cloud_code_session_run_lease.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0151_web_push_subscriptions.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0150_cloud_code_session_run_lease_check.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0152_restore_null_tolerant_usage_caps.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0151_web_push_subscriptions.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0153_notifications_row_level_security.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0152_restore_null_tolerant_usage_caps.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0154_two_factor_replay_protection.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0153_notifications_row_level_security.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0155_cloud_code_session_runtime.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0154_two_factor_replay_protection.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0156_message_thread_variants.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0155_cloud_code_session_runtime.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0157_user_skills.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0156_message_thread_variants.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0158_plugin_pack_description_no_em_dash.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0157_user_skills.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0159_plugin_marketplace_sources.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0158_plugin_pack_description_no_em_dash.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0160_plugin_installation_settings.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0159_plugin_marketplace_sources.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0161_presentations_pack.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0160_plugin_installation_settings.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0162_organization_deletion.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0161_presentations_pack.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0163_enterprise_billing_contracts.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0162_organization_deletion.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0164_memory_policy_and_context_compaction.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0163_enterprise_billing_contracts.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0165_cloud_code_session_extra_hosts.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0164_memory_policy_and_context_compaction.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0166_provider_cost_events_organization.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0165_cloud_code_session_extra_hosts.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0167_retain_audit_events_after_organization_deletion.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0166_provider_cost_events_organization.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0168_scheduled_task_project_scope.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0167_retain_audit_events_after_organization_deletion.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0169_provider_cost_events_tool_capability.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0168_scheduled_task_project_scope.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0170_security_audit_logs_row_level_security.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0169_provider_cost_events_tool_capability.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0171_github_installations_row_level_security.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0170_security_audit_logs_row_level_security.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0172_content_reports_row_level_security.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0171_github_installations_row_level_security.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0173_mcp_app_state_row_level_security.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0172_content_reports_row_level_security.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0174_identities.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0173_mcp_app_state_row_level_security.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0175_plugin_marketplace_uploads.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0174_identities.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0176_cloud_code_session_branch_and_context.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0175_plugin_marketplace_uploads.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0177_cloud_code_session_base_branch.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0176_cloud_code_session_branch_and_context.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0178_managed_usage_lease_renewal.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0177_cloud_code_session_base_branch.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0179_reservation_recovery_cadence_comment.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0178_managed_usage_lease_renewal.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0180_provider_cost_events_customer_and_cogs_split.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0179_reservation_recovery_cadence_comment.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0181_provider_cost_reconciliation_days.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0180_provider_cost_events_customer_and_cogs_split.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0182_managed_usage_microusd_ledger.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0181_provider_cost_reconciliation_days.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0183_video_generation_completion_notice.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0182_managed_usage_microusd_ledger.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0184_organization_shared_artifacts.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0183_video_generation_completion_notice.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0185_org_shared_artifact_policy_recursion.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0184_organization_shared_artifacts.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0186_organization_shared_sessions.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0185_org_shared_artifact_policy_recursion.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0187_device_refresh_token_workspace_binding.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0186_organization_shared_sessions.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0188_github_installation_verified_repositories.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0187_device_refresh_token_workspace_binding.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0189_user_memories_per_user_identity.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0188_github_installation_verified_repositories.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0190_device_step_checkpoint.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0189_user_memories_per_user_identity.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0191_research_report_settled_cost.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0190_device_step_checkpoint.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0192_project_knowledge_anchors.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0191_research_report_settled_cost.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0193_user_memories_drop_transition_index.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0192_project_knowledge_anchors.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0194_organization_spend_alerts.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0193_user_memories_drop_transition_index.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0195_provider_cost_events_workload_project_session.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0194_organization_spend_alerts.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0196_work_execution_states_and_pause.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0195_provider_cost_events_workload_project_session.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0197_enterprise_contract_contacts_terms_tax.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0196_work_execution_states_and_pause.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0198_organization_plugin_and_mcp_host_policy.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0197_enterprise_contract_contacts_terms_tax.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0199_notification_feed_targets.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0198_organization_plugin_and_mcp_host_policy.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0200_organization_permission_grid.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0199_notification_feed_targets.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0201_workspace_policy_layers_and_revisions.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0200_organization_permission_grid.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0202_retrieval_index.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0201_workspace_policy_layers_and_revisions.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0203_user_memories_lifecycle.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0202_retrieval_index.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0204_sso_jit_provisioning.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0203_user_memories_lifecycle.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0205_domain_retention.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0204_sso_jit_provisioning.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0206_organization_admin_api_keys.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0205_domain_retention.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0207_device_registrations.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0206_organization_admin_api_keys.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0208_background_jobs.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0207_device_registrations.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0209_scheduled_task_rules_and_policies.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0208_background_jobs.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0210_event_triggers.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0209_scheduled_task_rules_and_policies.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0211_feature_flag_targeting.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0210_event_triggers.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0212_routing_decision_traces.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0211_feature_flag_targeting.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0213_product_analytics_events.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0212_routing_decision_traces.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0214_prompt_manifest_stamps.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0213_product_analytics_events.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0215_cogs_full_cost_surface.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0214_prompt_manifest_stamps.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0216_media_assets_content_hash.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0215_cogs_full_cost_surface.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0217_shared_project_editor_write.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0216_media_assets_content_hash.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0218_temporary_chat_attachments.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0217_shared_project_editor_write.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0219_conversation_drafts.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0218_temporary_chat_attachments.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0220_customer_managed_keys_and_data_region.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0219_conversation_drafts.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0221_connector_and_artifact_cost_capabilities.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0220_customer_managed_keys_and_data_region.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0222_support_priority_and_diagnostics.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0221_connector_and_artifact_cost_capabilities.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0223_connector_call_events.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0222_support_priority_and_diagnostics.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0224_research_retention_domain.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0223_connector_call_events.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0225_identity_account_lifecycle.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0224_research_retention_domain.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0226_durable_image_generation_jobs.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0225_identity_account_lifecycle.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0227_payment_provider_subscription_history.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0226_durable_image_generation_jobs.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0228_enterprise_commercial_agreements.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0227_payment_provider_subscription_history.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0229_support_access_grants.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0228_enterprise_commercial_agreements.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0230_job_origin_region_and_azure_kms.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0229_support_access_grants.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0231_object_backup_replicas.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0230_job_origin_region_and_azure_kms.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0232_plugin_package_signing_and_permission_review.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0231_object_backup_replicas.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0233_refresh_family_compromise.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0232_plugin_package_signing_and_permission_review.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0234_workspaces_membership_status_and_installations.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0233_refresh_family_compromise.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0235_autonomous_tool_approvals_workspace_switch.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0234_workspaces_membership_status_and_installations.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0236_member_roster_read_for_role_and_group_managers.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0235_autonomous_tool_approvals_workspace_switch.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0237_work_plans.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0236_member_roster_read_for_role_and_group_managers.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0238_cmek_key_rewrap_runs.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0237_work_plans.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0239_resource_deletion_semantics.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0238_cmek_key_rewrap_runs.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0240_resource_provenance_columns.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0239_resource_deletion_semantics.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0241_usage_attribution_workspace_and_source_surface.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0240_resource_provenance_columns.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0242_support_ticket_escalations.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0241_usage_attribution_workspace_and_source_surface.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0243_billing_contract_term_ordering.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0242_support_ticket_escalations.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0244_archived_resources_leave_ai_retrieval.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0243_billing_contract_term_ordering.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0245_admin_write_idempotency_and_service_principals.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0244_archived_resources_leave_ai_retrieval.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0246_visual_session_cost_capability.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0245_admin_write_idempotency_and_service_principals.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0247_study_sessions.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0246_visual_session_cost_capability.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0248_permission_namespaces_and_scim_group_membership_lock.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0247_study_sessions.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0249_background_job_worker_fencing_and_cancellation.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0248_permission_namespaces_and_scim_group_membership_lock.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0250_organization_mcp_servers.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0249_background_job_worker_fencing_and_cancellation.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0251_authentication_and_search_outcomes.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0250_organization_mcp_servers.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0252_context_manifests_and_source_policy.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0251_authentication_and_search_outcomes.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0253_connector_accounts.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0252_context_manifests_and_source_policy.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0254_notebook_runs.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0253_connector_accounts.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0255_identity_risk_signals.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0254_notebook_runs.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0256_organization_admin_delegations.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0255_identity_risk_signals.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0257_file_versions_and_lineage.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0256_organization_admin_delegations.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0258_cloud_agent_run_budgets.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0257_file_versions_and_lineage.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0259_extension_versions_and_lifecycle.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0258_cloud_agent_run_budgets.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0260_voice_sessions.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0259_extension_versions_and_lifecycle.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0261_legal_hold_custodians_and_resource_scope.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0260_voice_sessions.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0262_ediscovery_export_custody.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0261_legal_hold_custodians_and_resource_scope.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0263_release_audit_trail.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0262_ediscovery_export_custody.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0264_erasure_ledger_replays.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0263_release_audit_trail.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0265_plugin_registry_entry_lifecycle.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0264_erasure_ledger_replays.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0266_automation_audit_events.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0265_plugin_registry_entry_lifecycle.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0267_admin_read_policies_ask_for_permissions.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0266_automation_audit_events.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0268_conversation_activation.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0267_admin_read_policies_ask_for_permissions.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0269_audit_destination_signing_secret.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0268_conversation_activation.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0270_automation_audit_idempotency.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0269_audit_destination_signing_secret.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0271_feature_flag_governance_metadata.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0270_automation_audit_idempotency.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0272_active_membership_authorization.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0271_feature_flag_governance_metadata.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0273_ediscovery_cascade_delete.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0272_active_membership_authorization.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0274_single_count_beta_invite_redemptions.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0273_ediscovery_cascade_delete.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0275_beta_redemptions_rls.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0274_single_count_beta_invite_redemptions.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0276_resource_row_timestamps.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0275_beta_redemptions_rls.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0277_account_recovery_state.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0276_resource_row_timestamps.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0278_resource_row_versions.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0277_account_recovery_state.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0279_rewritten_row_update_times.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0278_resource_row_versions.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0280_identity_risk_client_and_address_reuse.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0279_rewritten_row_update_times.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0281_managed_usage_overage_classification.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0280_identity_risk_client_and_address_reuse.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0282_compaction_summary_coverage.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0281_managed_usage_overage_classification.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0283_retrieval_index_withdrawal_coverage.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0282_compaction_summary_coverage.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0284_context_manifest_accounting.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0283_retrieval_index_withdrawal_coverage.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0285_user_memories_provenance.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0284_context_manifest_accounting.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0286_commercial_agreement_lifecycle.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0285_user_memories_provenance.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0287_commercial_agreement_procurement_terms.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0286_commercial_agreement_lifecycle.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0288_enterprise_offline_payment_records.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0287_commercial_agreement_procurement_terms.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0289_plugin_version_signatures.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0288_enterprise_offline_payment_records.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0290_key_rewrap_run_store_coverage.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0289_plugin_version_signatures.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0291_tamper_evident_tables_survive_a_regrant.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0290_key_rewrap_run_store_coverage.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0292_retire_device_authorization_token_columns.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0291_tamper_evident_tables_survive_a_regrant.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0293_conversation_provider_route_pin.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0292_retire_device_authorization_token_columns.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0294_semantic_decision_traces.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0293_conversation_provider_route_pin.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0295_bonus_credit_grants.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0294_semantic_decision_traces.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0296_referral_program.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0295_bonus_credit_grants.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0297_auto_reload_settings.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0296_referral_program.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0298_purchased_credit_lifetime.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0297_auto_reload_settings.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0299_billing_refunds_and_disputes.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0298_purchased_credit_lifetime.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0300_plan_catalog_version.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0299_billing_refunds_and_disputes.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0301_routine_credit_cap.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0300_plan_catalog_version.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0302_workspace_api_key_namespaced_scopes.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0301_routine_credit_cap.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0303_infrastructure_cost_allocation.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0302_workspace_api_key_namespaced_scopes.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0304_payment_fee_attribution.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0303_infrastructure_cost_allocation.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0305_managed_usage_extension_overage.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0304_payment_fee_attribution.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0306_free_usage_reservation_lease.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0305_managed_usage_extension_overage.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0307_event_trigger_gmail_watch.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0306_free_usage_reservation_lease.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0308_schedule_run_approval.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0307_event_trigger_gmail_watch.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0309_notification_code_session_target.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0308_schedule_run_approval.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0310_project_account_personalization.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0309_notification_code_session_target.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0311_scheduled_task_shares.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0310_project_account_personalization.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0312_content_notice_type.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0311_scheduled_task_shares.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0313_custom_connector_oauth_client.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0312_content_notice_type.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0314_workspace_managed_groups.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0313_custom_connector_oauth_client.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0315_private_shared_projects.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0314_workspace_managed_groups.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0316_project_owner_sharing.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0315_private_shared_projects.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0317_plugin_marketplace_dependencies.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0316_project_owner_sharing.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0318_user_skill_files.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0317_plugin_marketplace_dependencies.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0319_cloud_code_turn_controls.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0318_user_skill_files.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0320_cloud_code_session_sharing.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0319_cloud_code_turn_controls.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0321_developer_projects.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0320_cloud_code_session_sharing.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0322_external_resource_references.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0321_developer_projects.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0323_developer_webhooks.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0322_external_resource_references.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0324_cloud_agent_run_steer.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0323_developer_webhooks.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0325_published_artifact_storage.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0324_cloud_agent_run_steer.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0326_organization_plugins.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0325_published_artifact_storage.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0327_organization_plugin_group_settings.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0326_organization_plugins.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0328_plugin_submissions.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0327_organization_plugin_group_settings.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0329_managed_usage_attempt_record.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0328_plugin_submissions.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0330_slack_app.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0329_managed_usage_attempt_record.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0331_free_usage_attempt_record.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0330_slack_app.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0332_custom_connector_plugin_source.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0331_free_usage_attempt_record.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0333_slack_run_cancel_and_delete.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0332_custom_connector_plugin_source.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0334_desktop_sign_in_grants.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0333_slack_run_cancel_and_delete.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0335_cloud_code_plan_turns.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0334_desktop_sign_in_grants.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0336_workspace_web_domain_policy.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0335_cloud_code_plan_turns.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0337_health_space.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0336_workspace_web_domain_policy.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0338_account_security.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0337_health_space.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0339_temporary_chat_media_jobs.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0338_account_security.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0340_workspace_connector_tool_rules.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0339_temporary_chat_media_jobs.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0341_push_preferences_and_share_conversation.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0340_workspace_connector_tool_rules.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0342_connector_oauth_app_return.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0341_push_preferences_and_share_conversation.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0343_github_install_app_return.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0342_connector_oauth_app_return.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0344_conversation_google_user_data.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0343_github_install_app_return.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0345_support_access_grant_purpose.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0344_conversation_google_user_data.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0346_managed_usage_extra_usage_reservation.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0345_support_access_grant_purpose.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0347_managed_usage_headroom_under_lock.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0346_managed_usage_extra_usage_reservation.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0348_workspace_product_analytics_switch.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0347_managed_usage_headroom_under_lock.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0349_mobile_intent_tokens.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0348_workspace_product_analytics_switch.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0350_bank_account_items.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0349_mobile_intent_tokens.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0351_auth_flow_update_times.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0350_bank_account_items.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0352_feedback_response_rating_index.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0351_auth_flow_update_times.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0353_feedback_ratings_drop_answer_text.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0352_feedback_response_rating_index.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0354_signaling_sessions.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0353_feedback_ratings_drop_answer_text.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0355_user_memories_purge_deleted_text.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0354_signaling_sessions.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0356_custom_connector_plugin_disabled.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0355_user_memories_purge_deleted_text.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0357_user_skill_description_limit.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0356_custom_connector_plugin_disabled.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0358_shared_project_editor_needs_share_permission.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0357_user_skill_description_limit.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0359_settlement_recovery_binds_job_owner.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0358_shared_project_editor_needs_share_permission.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0360_team_premium_seats.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0359_settlement_recovery_binds_job_owner.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0361_mobile_iap_renewal_state_order.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0360_team_premium_seats.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0362_store_refund_and_pause_states.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0361_mobile_iap_renewal_state_order.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0363_beta_invite_update_time.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0362_store_refund_and_pause_states.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0364_connector_tool_session_grants.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0363_beta_invite_update_time.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0365_upgrade_waitlist_notice_delivery.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0364_connector_tool_session_grants.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0366_media_jobs_chrome_source_surface.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0365_upgrade_waitlist_notice_delivery.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0367_stripe_reconciliation_cursors_and_overage_pending.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0366_media_jobs_chrome_source_surface.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0368_conversation_instructions.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0367_stripe_reconciliation_cursors_and_overage_pending.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0369_artifact_comments.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0368_conversation_instructions.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0370_user_agents.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0369_artifact_comments.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0371_developer_prompts_and_evals.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0370_user_agents.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0372_published_site_viewers.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0371_developer_prompts_and_evals.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0373_studio_library_items.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0372_published_site_viewers.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0374_slack_channel_policy_and_agent_credit_cap.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0373_studio_library_items.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0375_project_chat_defaults.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0374_slack_channel_policy_and_agent_credit_cap.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0376_invite_code_redemption_unambiguous.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0375_project_chat_defaults.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0377_mobile_app_transactions_and_consent.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0376_invite_code_redemption_unambiguous.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0378_personal_spend_limit.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0377_mobile_app_transactions_and_consent.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0379_directory_install_counts.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0378_personal_spend_limit.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0380_live_artifacts.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0379_directory_install_counts.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0381_connector_account_state.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0380_live_artifacts.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0382_cloud_code_session_scan_head.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0381_connector_account_state.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0383_published_artifact_connector_audience.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0382_cloud_code_session_scan_head.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0384_organization_code_tool_decision_days.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0383_published_artifact_connector_audience.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0385_slack_channel_tool_allow_list.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0384_organization_code_tool_decision_days.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0386_organization_code_session_days.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0385_slack_channel_tool_allow_list.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0387_event_trigger_signing_salt.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0386_organization_code_session_days.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0388_agent_web_domain_rules.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0387_event_trigger_signing_salt.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0389_agent_reasoning_effort.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0388_agent_web_domain_rules.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0390_usage_limit_promotions.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0389_agent_reasoning_effort.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0391_artifact_runtime_usage_cap.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0390_usage_limit_promotions.down.sql"
+    }
+  ]
+}

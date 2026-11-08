@@ -1,0 +1,1391 @@
+{
+  "$generated": "GENERATED FILE, do not edit. Run `node scripts/generate-agent-context-indexes.mjs`; `pnpm check:agent-context-indexes` byte-compares this against a fresh render.",
+  "edges": [
+    {
+      "from": "apps/desktop",
+      "to": "packages/ai/model-registry",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/desktop",
+      "to": "packages/ai/providers/lmstudio",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/desktop",
+      "to": "packages/ai/providers/ollama",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/desktop",
+      "to": "packages/ai/routing",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/desktop",
+      "to": "packages/client/client-runtime",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/desktop",
+      "to": "packages/client/desktop-command-client",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/desktop",
+      "to": "packages/client/ide-runtime",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/desktop",
+      "to": "packages/client/sync",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/desktop",
+      "to": "packages/contracts/cloud-contracts",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/desktop",
+      "to": "packages/contracts/local-runtime",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/desktop",
+      "to": "packages/contracts/trust-boundaries",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/desktop",
+      "to": "packages/contracts/types",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/desktop",
+      "to": "packages/platform/artifacts",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/desktop",
+      "to": "packages/platform/observability",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/desktop",
+      "to": "packages/platform/utils",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/desktop",
+      "to": "packages/tools/apply-patch",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/desktop",
+      "to": "packages/tools/mcp",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/desktop",
+      "to": "packages/tools/skills",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/desktop",
+      "to": "packages/ui/design-tokens",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/desktop",
+      "to": "packages/ui/i18n",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/desktop",
+      "to": "packages/ui/ui",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/desktop",
+      "to": "packages/ui/unified-chat",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/extension-vscode",
+      "to": "packages/ai/agent-core",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/extension-vscode",
+      "to": "packages/ai/routing",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/extension-vscode",
+      "to": "packages/client/client-runtime",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/extension-vscode",
+      "to": "packages/client/ide-runtime",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/extension-vscode",
+      "to": "packages/client/sync",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/extension-vscode",
+      "to": "packages/contracts/cloud-contracts",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/extension-vscode",
+      "to": "packages/contracts/local-runtime",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/extension-vscode",
+      "to": "packages/contracts/types",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/extension-vscode",
+      "to": "packages/platform/artifacts",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/extension-vscode",
+      "to": "packages/platform/observability",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/extension-vscode",
+      "to": "packages/platform/utils",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/extension-vscode",
+      "to": "packages/ui/design-tokens",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/extension-vscode",
+      "to": "packages/ui/i18n",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/extension-vscode",
+      "to": "packages/ui/unified-chat",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/extension",
+      "to": "packages/ai/provider-protocol",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/extension",
+      "to": "packages/ai/provider-runtime",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/extension",
+      "to": "packages/ai/routing",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/extension",
+      "to": "packages/client/client-runtime",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/extension",
+      "to": "packages/client/sync",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/extension",
+      "to": "packages/contracts/cloud-contracts",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/extension",
+      "to": "packages/contracts/compliance",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/extension",
+      "to": "packages/contracts/types",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/extension",
+      "to": "packages/platform/artifacts",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/extension",
+      "to": "packages/platform/observability",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/extension",
+      "to": "packages/platform/utils",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/extension",
+      "to": "packages/tools/browser-tool",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/extension",
+      "to": "packages/ui/design-tokens",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/extension",
+      "to": "packages/ui/unified-chat",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/mobile",
+      "to": "packages/ai/agent-core",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/mobile",
+      "to": "packages/ai/provider-runtime",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/mobile",
+      "to": "packages/ai/routing",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/mobile",
+      "to": "packages/ai/search",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/mobile",
+      "to": "packages/client/client-runtime",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/mobile",
+      "to": "packages/client/sync",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/mobile",
+      "to": "packages/contracts/cloud-contracts",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/mobile",
+      "to": "packages/contracts/compliance",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/mobile",
+      "to": "packages/contracts/context",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/mobile",
+      "to": "packages/contracts/trust-boundaries",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/mobile",
+      "to": "packages/contracts/types",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/mobile",
+      "to": "packages/platform/artifacts",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/mobile",
+      "to": "packages/platform/local-llm",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/mobile",
+      "to": "packages/platform/utils",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/mobile",
+      "to": "packages/ui/design-tokens",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/mobile",
+      "to": "packages/ui/i18n",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/mobile",
+      "to": "packages/ui/unified-chat",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/web",
+      "to": "packages/ai/agent-core",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/web",
+      "to": "packages/ai/provider-protocol",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/web",
+      "to": "packages/ai/provider-runtime",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/web",
+      "to": "packages/ai/providers/anthropic",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/web",
+      "to": "packages/ai/providers/factory",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/web",
+      "to": "packages/ai/providers/google",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/web",
+      "to": "packages/ai/providers/openai",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/web",
+      "to": "packages/ai/providers/vercel-gateway",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/web",
+      "to": "packages/ai/routing",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/web",
+      "to": "packages/ai/search",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/web",
+      "to": "packages/client/client-runtime",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/web",
+      "to": "packages/client/sync",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/web",
+      "to": "packages/contracts/cloud-contracts",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/web",
+      "to": "packages/contracts/compliance",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/web",
+      "to": "packages/contracts/context",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/web",
+      "to": "packages/contracts/local-runtime",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/web",
+      "to": "packages/contracts/types",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/web",
+      "to": "packages/platform/artifacts",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/web",
+      "to": "packages/platform/context-engine",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/web",
+      "to": "packages/platform/data-layer",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/web",
+      "to": "packages/platform/identity",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/web",
+      "to": "packages/platform/key-value",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/web",
+      "to": "packages/platform/object-storage",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/web",
+      "to": "packages/platform/observability",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/web",
+      "to": "packages/platform/utils",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/web",
+      "to": "packages/tools/apply-patch",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/web",
+      "to": "packages/tools/mcp",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/web",
+      "to": "packages/tools/skills",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/web",
+      "to": "packages/ui/design-tokens",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/web",
+      "to": "packages/ui/i18n",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/web",
+      "to": "packages/ui/icons",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/web",
+      "to": "packages/ui/ui",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/web",
+      "to": "packages/ui/unified-chat",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/agent-core",
+      "to": "packages/contracts/types",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/provider-protocol",
+      "to": "packages/contracts/types",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/provider-runtime",
+      "to": "packages/ai/agent-core",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/provider-runtime",
+      "to": "packages/contracts/types",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/anthropic",
+      "to": "packages/ai/provider-protocol",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/anthropic",
+      "to": "packages/ai/provider-runtime",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/anthropic",
+      "to": "packages/contracts/types",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/deepseek",
+      "to": "packages/ai/provider-protocol",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/deepseek",
+      "to": "packages/ai/provider-runtime",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/deepseek",
+      "to": "packages/ai/providers/openai",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/deepseek",
+      "to": "packages/contracts/types",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/factory",
+      "to": "packages/ai/providers/anthropic",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/factory",
+      "to": "packages/ai/providers/deepseek",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/factory",
+      "to": "packages/ai/providers/google",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/factory",
+      "to": "packages/ai/providers/groq",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/factory",
+      "to": "packages/ai/providers/lmstudio",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/factory",
+      "to": "packages/ai/providers/minimax",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/factory",
+      "to": "packages/ai/providers/moonshot",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/factory",
+      "to": "packages/ai/providers/nvidia",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/factory",
+      "to": "packages/ai/providers/ollama",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/factory",
+      "to": "packages/ai/providers/openai",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/factory",
+      "to": "packages/ai/providers/openrouter",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/factory",
+      "to": "packages/ai/providers/perplexity",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/factory",
+      "to": "packages/ai/providers/qwen",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/factory",
+      "to": "packages/ai/providers/vercel-gateway",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/factory",
+      "to": "packages/ai/providers/workers-ai",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/factory",
+      "to": "packages/ai/providers/xai",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/factory",
+      "to": "packages/ai/providers/zhipu",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/factory",
+      "to": "packages/contracts/types",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/google",
+      "to": "packages/ai/provider-protocol",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/google",
+      "to": "packages/ai/provider-runtime",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/google",
+      "to": "packages/contracts/types",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/groq",
+      "to": "packages/ai/providers/openai",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/groq",
+      "to": "packages/contracts/types",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/lmstudio",
+      "to": "packages/ai/provider-protocol",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/lmstudio",
+      "to": "packages/ai/provider-runtime",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/lmstudio",
+      "to": "packages/ai/providers/openai",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/lmstudio",
+      "to": "packages/contracts/types",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/minimax",
+      "to": "packages/ai/provider-protocol",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/minimax",
+      "to": "packages/ai/provider-runtime",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/minimax",
+      "to": "packages/ai/providers/openai",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/minimax",
+      "to": "packages/contracts/types",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/moonshot",
+      "to": "packages/ai/provider-protocol",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/moonshot",
+      "to": "packages/ai/provider-runtime",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/moonshot",
+      "to": "packages/ai/providers/openai",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/moonshot",
+      "to": "packages/contracts/types",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/nvidia",
+      "to": "packages/ai/providers/openai",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/nvidia",
+      "to": "packages/contracts/types",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/ollama",
+      "to": "packages/ai/provider-protocol",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/ollama",
+      "to": "packages/ai/provider-runtime",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/ollama",
+      "to": "packages/contracts/types",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/openai",
+      "to": "packages/ai/provider-protocol",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/openai",
+      "to": "packages/ai/provider-runtime",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/openai",
+      "to": "packages/contracts/types",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/openrouter",
+      "to": "packages/ai/provider-protocol",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/openrouter",
+      "to": "packages/ai/provider-runtime",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/openrouter",
+      "to": "packages/ai/providers/openai",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/openrouter",
+      "to": "packages/contracts/types",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/perplexity",
+      "to": "packages/ai/provider-protocol",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/perplexity",
+      "to": "packages/ai/provider-runtime",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/perplexity",
+      "to": "packages/ai/providers/openai",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/perplexity",
+      "to": "packages/contracts/types",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/qwen",
+      "to": "packages/ai/provider-protocol",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/qwen",
+      "to": "packages/ai/provider-runtime",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/qwen",
+      "to": "packages/ai/providers/openai",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/qwen",
+      "to": "packages/contracts/types",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/vercel-gateway",
+      "to": "packages/ai/provider-protocol",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/vercel-gateway",
+      "to": "packages/ai/provider-runtime",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/vercel-gateway",
+      "to": "packages/ai/providers/openai",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/vercel-gateway",
+      "to": "packages/contracts/types",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/workers-ai",
+      "to": "packages/ai/providers/openai",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/workers-ai",
+      "to": "packages/contracts/types",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/xai",
+      "to": "packages/ai/provider-protocol",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/xai",
+      "to": "packages/ai/provider-runtime",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/xai",
+      "to": "packages/ai/providers/openai",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/xai",
+      "to": "packages/contracts/types",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/zhipu",
+      "to": "packages/ai/provider-protocol",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/zhipu",
+      "to": "packages/ai/provider-runtime",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/zhipu",
+      "to": "packages/ai/providers/openai",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/providers/zhipu",
+      "to": "packages/contracts/types",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/routing",
+      "to": "packages/ai/model-registry",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/routing",
+      "to": "packages/contracts/types",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/search",
+      "to": "packages/contracts/types",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/client/client-runtime",
+      "to": "packages/contracts/cloud-contracts",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/client/client-runtime",
+      "to": "packages/contracts/local-runtime",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/client/client-runtime",
+      "to": "packages/contracts/types",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/client/desktop-command-client",
+      "to": "packages/client/client-runtime",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/client/desktop-command-client",
+      "to": "packages/contracts/types",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/client/ide-runtime",
+      "to": "packages/platform/utils",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/client/sync",
+      "to": "packages/contracts/cloud-contracts",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/client/sync",
+      "to": "packages/platform/artifacts",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/contracts/cloud-contracts",
+      "to": "packages/contracts/types",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/contracts/compliance",
+      "to": "packages/contracts/types",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/contracts/local-runtime",
+      "to": "packages/contracts/types",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/contracts/types",
+      "to": "packages/ai/model-registry",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/guardian/core",
+      "to": "packages/platform/utils",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/guardian/github",
+      "to": "packages/guardian/core",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/platform/artifacts",
+      "to": "packages/contracts/cloud-contracts",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/platform/artifacts",
+      "to": "packages/contracts/types",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/platform/context-engine",
+      "to": "packages/contracts/context",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/platform/files",
+      "to": "packages/contracts/types",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/platform/local-llm",
+      "to": "packages/contracts/types",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/platform/utils",
+      "to": "packages/contracts/cloud-contracts",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/platform/utils",
+      "to": "packages/contracts/local-runtime",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/platform/utils",
+      "to": "packages/contracts/types",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/tools/browser-tool",
+      "to": "packages/contracts/types",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ui/ui",
+      "to": "packages/ui/icons",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ui/unified-chat",
+      "to": "packages/ai/routing",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ui/unified-chat",
+      "to": "packages/ai/search",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ui/unified-chat",
+      "to": "packages/client/client-runtime",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ui/unified-chat",
+      "to": "packages/contracts/types",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ui/unified-chat",
+      "to": "packages/platform/utils",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ui/unified-chat",
+      "to": "packages/ui/design-tokens",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ui/unified-chat",
+      "to": "packages/ui/ui",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "services/upload-scanner",
+      "to": "packages/contracts/cloud-contracts",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "services/upload-scanner",
+      "to": "packages/contracts/types",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "crates/agiworkforce-protocol",
+      "to": "packages/contracts/types/src/generated/protocol",
+      "type": "generates",
+      "via": "scripts/generate-protocol-types.mjs"
+    },
+    {
+      "from": "packages/ai/model-registry/catalog/model-families.json",
+      "to": "crates/agiworkforce-model-registry/src/generated/model_registry.json",
+      "type": "generates",
+      "via": "packages/ai/model-registry/scripts/compile.mjs"
+    },
+    {
+      "from": "packages/ai/model-registry/catalog/model-families.json",
+      "to": "crates/agiworkforce-model-registry/src/generated/model_registry.rs",
+      "type": "generates",
+      "via": "packages/ai/model-registry/scripts/compile.mjs"
+    },
+    {
+      "from": "packages/ai/model-registry/catalog/model-families.json",
+      "to": "crates/agiworkforce-protocol/src/generated/model_registry.json",
+      "type": "generates",
+      "via": "packages/ai/model-registry/scripts/compile.mjs"
+    },
+    {
+      "from": "packages/ai/model-registry/catalog/model-families.json",
+      "to": "crates/agiworkforce-protocol/src/generated/model_registry.rs",
+      "type": "generates",
+      "via": "packages/ai/model-registry/scripts/compile.mjs"
+    },
+    {
+      "from": "packages/ai/model-registry/catalog/model-families.json",
+      "to": "packages/ai/model-registry/generated/registry.json",
+      "type": "generates",
+      "via": "packages/ai/model-registry/scripts/compile.mjs"
+    },
+    {
+      "from": "packages/ai/model-registry/catalog/model-families.json",
+      "to": "packages/ai/model-registry/generated/registry.ts",
+      "type": "generates",
+      "via": "packages/ai/model-registry/scripts/compile.mjs"
+    },
+    {
+      "from": "packages/ai/model-registry/catalog/model-families.json",
+      "to": "packages/contracts/types/src/models.json",
+      "type": "generates",
+      "via": "packages/ai/model-registry/scripts/compile.mjs"
+    },
+    {
+      "from": "packages/ai/model-registry/catalog/models.curation.json",
+      "to": "crates/agiworkforce-model-registry/src/generated/model_registry.json",
+      "type": "generates",
+      "via": "packages/ai/model-registry/scripts/compile.mjs"
+    },
+    {
+      "from": "packages/ai/model-registry/catalog/models.curation.json",
+      "to": "crates/agiworkforce-model-registry/src/generated/model_registry.rs",
+      "type": "generates",
+      "via": "packages/ai/model-registry/scripts/compile.mjs"
+    },
+    {
+      "from": "packages/ai/model-registry/catalog/models.curation.json",
+      "to": "crates/agiworkforce-protocol/src/generated/model_registry.json",
+      "type": "generates",
+      "via": "packages/ai/model-registry/scripts/compile.mjs"
+    },
+    {
+      "from": "packages/ai/model-registry/catalog/models.curation.json",
+      "to": "crates/agiworkforce-protocol/src/generated/model_registry.rs",
+      "type": "generates",
+      "via": "packages/ai/model-registry/scripts/compile.mjs"
+    },
+    {
+      "from": "packages/ai/model-registry/catalog/models.curation.json",
+      "to": "packages/ai/model-registry/generated/registry.json",
+      "type": "generates",
+      "via": "packages/ai/model-registry/scripts/compile.mjs"
+    },
+    {
+      "from": "packages/ai/model-registry/catalog/models.curation.json",
+      "to": "packages/ai/model-registry/generated/registry.ts",
+      "type": "generates",
+      "via": "packages/ai/model-registry/scripts/compile.mjs"
+    },
+    {
+      "from": "packages/ai/model-registry/catalog/models.curation.json",
+      "to": "packages/contracts/types/src/models.json",
+      "type": "generates",
+      "via": "packages/ai/model-registry/scripts/compile.mjs"
+    }
+  ]
+}

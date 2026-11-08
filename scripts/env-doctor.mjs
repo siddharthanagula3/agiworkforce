@@ -169,7 +169,12 @@ export const contracts = {
         'CLERK_SYNC_HOST',
       ],
     },
-    urlKeys: ['VITE_AGI_WEB_API_BASE_URL', 'CLERK_FRONTEND_API', 'CLERK_SYNC_HOST'],
+    urlKeys: [
+      'VITE_AGI_WEB_API_BASE_URL',
+      'VITE_ARTIFACT_SANDBOX_ORIGIN',
+      'CLERK_FRONTEND_API',
+      'CLERK_SYNC_HOST',
+    ],
   },
   cli: {
     productionExample: 'apps/cli/.env.example',

@@ -17876,3 +17876,9 @@ Existing recovery prerequisites, unapplied migrations and lost-history limits re
 ## ELECTRON-RUN-AS-NODE-FUSE-ON-01
 
 Source-corrected, packaged/runtime verification pending. The local security commit c9973d99a4 retained during the November7 main integration disables runAsNode in electron-builder.yml and replaces the ELECTRON_RUN_AS_NODE launcher with the AGI_NATIVE_MESSAGING_HOST bootstrap. The old upstream row’s source premise no longer matches the merged code. Verify the actual packaged binary’s fuse and the guarded native-messaging startup during the ordered Electron stage; source configuration alone does not prove installed-binary containment. No Electron host or build was launched for this merge.
+
+## EXT-SCHEDULE-TERMINAL-ACTIONS-01
+
+Chrome fixed and runtime verified 2026-11-07. Actual completed T6N2 Resume returned409 before correction. Web’s existing action policy is now canonical getScheduleActionAvailability in cloud-contracts, consumed by Web and Chrome. Actual rebuilt Chrome disables Resume/Run now/Edit for completed and expired records, disables paused Run now, retains History/Delete, and sends no mutations from disabled controls. Native Pause/Resume and eight viewport/theme captures pass; owned fixtures deleted/global0. Evidence: docs/launch/QA_LEDGER.md CH-SCHED-004 and agi-chrome-schedule-terminal-T6N2-{baseline,fixed}.json.
+
+Still open: Mobile normalization/card, VS Code action handlers and retained Tauri schedule controls received confirmed equivalent source fixes and regression cases but await their ordered app suites/runtime. Electron hosts Web’s behavior-preserving shared-policy extraction. CLI has explicit API commands and server conflict handling instead of row enablement; no speculative CLI change. Keep this row until the remaining affected native consumers are verified. No later app host/build/suite has been started for this fix.

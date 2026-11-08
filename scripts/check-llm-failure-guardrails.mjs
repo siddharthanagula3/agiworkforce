@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -130,22 +130,53 @@ const SKIP_CENSUS_PATTERNS = [
   },
 ];
 
-export function gitFiles(args, cwd = root) {
+const MAX_GIT_OUTPUT_BYTES = 16 * 1024 * 1024;
+
+function gitText(args, cwd = root) {
   try {
-    const out = execSync(`git ${args}`, {
+    return execFileSync('git', args, {
       cwd,
       encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
+      stdio: ['ignore', 'pipe', 'pipe'],
+      maxBuffer: MAX_GIT_OUTPUT_BYTES,
     });
-    return out
-      .split('\n')
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .map((file) => path.join(cwd, file))
-      .filter((file) => existsSync(file));
-  } catch {
-    return [];
+  } catch (error) {
+    throw new Error(`Git ${args[0]} failed (${error.code ?? error.status ?? 'unknown'})`);
   }
+}
+
+export function gitFiles(args, cwd = root) {
+  return gitText(args, cwd)
+    .split('\0')
+    .filter(Boolean)
+    .map((file) => path.join(cwd, file));
+}
+
+const workingReader = {
+  exists: existsSync,
+  read: (file) => readFileSync(file, 'utf8'),
+};
+
+export function stagedReader(cwd = root) {
+  const blobs = new Map();
+  const indexEntries = () => gitText(['ls-files', '--stage', '-z'], cwd);
+  const entries = indexEntries();
+  for (const entry of entries.split('\0').filter(Boolean)) {
+    const match = /^\d+ ([a-f0-9]+) ([0-3])\t([\s\S]+)$/.exec(entry);
+    if (!match || match[2] !== '0') throw new Error('Staged guard requires a fully merged index');
+    blobs.set(path.join(cwd, match[3]), match[1]);
+  }
+  return {
+    exists: (file) => blobs.has(file),
+    assertUnchanged: () => {
+      if (entries !== indexEntries()) throw new Error('Staged index changed during validation');
+    },
+    read: (file) => {
+      const blob = blobs.get(file);
+      if (!blob) throw new Error(`Missing staged input: ${path.relative(cwd, file)}`);
+      return gitText(['cat-file', 'blob', blob], cwd);
+    },
+  };
 }
 
 function rel(file) {
@@ -186,7 +217,11 @@ function isCommentLine(line) {
   );
 }
 
-function collectPatternViolations(files, patterns, { productionOnly = false } = {}) {
+function collectPatternViolations(
+  files,
+  patterns,
+  { productionOnly = false, reader = workingReader } = {},
+) {
   const violations = [];
   for (const file of files) {
     const relativePath = rel(file);
@@ -194,7 +229,7 @@ function collectPatternViolations(files, patterns, { productionOnly = false } = 
     if (isExemptPath(relativePath)) continue;
     if (!SOURCE_EXTENSIONS.has(path.extname(file))) continue;
     if (productionOnly && !isProductionPath(relativePath)) continue;
-    const text = readFileSync(file, 'utf8');
+    const text = reader.read(file);
     const lines = text.split('\n');
     for (const { regex, label } of patterns) {
       regex.lastIndex = 0;
@@ -232,14 +267,14 @@ export function scanSkipSites(relativePath, text) {
   return sites.sort((a, b) => a.line - b.line);
 }
 
-function collectSkipCensus(files) {
+function collectSkipCensus(files, reader = workingReader) {
   const sites = [];
   for (const file of files) {
     const relativePath = rel(file);
     if (EXEMPT_FILES.has(relativePath)) continue;
     if (isExemptPath(relativePath)) continue;
     if (!SOURCE_EXTENSIONS.has(path.extname(file))) continue;
-    sites.push(...scanSkipSites(relativePath, readFileSync(file, 'utf8')));
+    sites.push(...scanSkipSites(relativePath, reader.read(file)));
   }
   return sites.sort((a, b) => a.path.localeCompare(b.path) || a.line - b.line);
 }
@@ -327,12 +362,12 @@ export function diffSkipRatchet(actual, debt, { detectStale = true } = {}) {
   return violations;
 }
 
-function collectSkipRatchetViolations(sites, { detectStale }) {
+function collectSkipRatchetViolations(sites, { detectStale, reader = workingReader }) {
   const full = path.join(root, SKIP_RATCHET_PATH);
-  if (!existsSync(full)) return [`${SKIP_RATCHET_PATH} missing`];
+  if (!reader.exists(full)) return [`${SKIP_RATCHET_PATH} missing`];
   let config;
   try {
-    config = JSON.parse(readFileSync(full, 'utf8'));
+    config = JSON.parse(reader.read(full));
   } catch (error) {
     return [`${SKIP_RATCHET_PATH} invalid JSON: ${error.message}`];
   }
@@ -341,15 +376,16 @@ function collectSkipRatchetViolations(sites, { detectStale }) {
   return diffSkipRatchet(unjustifiedByPath(sites), config.debt, { detectStale });
 }
 
-function collectManifestViolations(files) {
+function collectManifestViolations(files, reader = workingReader) {
   const violations = [];
   for (const file of files) {
     if (!MANIFEST_BASENAMES.has(path.basename(file))) continue;
     const relativePath = rel(file);
     if (path.basename(file) === 'package.json') {
+      const text = reader.read(file);
       let pkg;
       try {
-        pkg = JSON.parse(readFileSync(file, 'utf8'));
+        pkg = JSON.parse(text);
       } catch {
         continue;
       }
@@ -368,15 +404,15 @@ function collectManifestViolations(files) {
   return violations;
 }
 
-function collectTaxonomyViolations() {
+function collectTaxonomyViolations(reader = workingReader) {
   const violations = [];
   const full = path.join(root, TAXONOMY_PATH);
-  if (!existsSync(full)) {
+  if (!reader.exists(full)) {
     return [`${TAXONOMY_PATH} missing`];
   }
   let taxonomy;
   try {
-    taxonomy = JSON.parse(readFileSync(full, 'utf8'));
+    taxonomy = JSON.parse(reader.read(full));
   } catch (error) {
     return [`${TAXONOMY_PATH} invalid JSON: ${error.message}`];
   }
@@ -402,14 +438,15 @@ function collectTaxonomyViolations() {
   return violations;
 }
 
-function collectVitestDrift(files) {
+function collectVitestDrift(files, reader = workingReader) {
   const violations = [];
   for (const file of files) {
     if (path.basename(file) !== 'package.json') continue;
     const relativePath = rel(file);
+    const text = reader.read(file);
     let pkg;
     try {
-      pkg = JSON.parse(readFileSync(file, 'utf8'));
+      pkg = JSON.parse(text);
     } catch {
       continue;
     }
@@ -427,8 +464,8 @@ function collectVitestDrift(files) {
   }
 
   const lockfile = path.join(root, 'pnpm-lock.yaml');
-  if (existsSync(lockfile)) {
-    const lock = readFileSync(lockfile, 'utf8');
+  if (reader.exists(lockfile)) {
+    const lock = reader.read(lockfile);
     const lockPatterns = [/vitest@3\.2\.4/g, /vitest@4\.0\.18/g];
     for (const regex of lockPatterns) {
       regex.lastIndex = 0;
@@ -447,33 +484,40 @@ export function main(argv = process.argv.slice(2)) {
   const stagedMode = argv.includes('--staged');
   const wholeTree = !changedMode && !stagedMode;
 
-  const files = stagedMode
-    ? gitFiles('diff --cached --name-only --diff-filter=ACMRTUXB')
+  const reader = stagedMode ? stagedReader() : workingReader;
+  const discovered = stagedMode
+    ? gitFiles(['diff', '--cached', '--name-only', '-z', '--diff-filter=ACMRTUXB'])
     : changedMode
-      ? gitFiles('diff --name-only --diff-filter=ACMRTUXB HEAD')
-      : gitFiles('ls-files -c -o --exclude-standard');
+      ? gitFiles(['diff', '--name-only', '-z', '--diff-filter=ACMRTUXB', 'HEAD'])
+      : gitFiles(['ls-files', '-c', '-o', '--exclude-standard', '-z']);
 
-  const census = collectSkipCensus(files);
+  const files = stagedMode ? discovered : discovered.filter((file) => reader.exists(file));
+  const census = collectSkipCensus(files, reader);
   const tally = summarizeSkipCensus(census);
 
   const violations = [
-    ...collectTaxonomyViolations(),
-    ...collectPatternViolations(files, TEST_THEATER_PATTERNS),
-    ...collectPatternViolations(files, PRODUCTION_STUB_PATTERNS, { productionOnly: true }),
-    ...collectVitestDrift(files),
-    ...collectSkipRatchetViolations(census, { detectStale: wholeTree }),
+    ...collectTaxonomyViolations(reader),
+    ...collectPatternViolations(files, TEST_THEATER_PATTERNS, { reader }),
+    ...collectPatternViolations(files, PRODUCTION_STUB_PATTERNS, { productionOnly: true, reader }),
+    ...collectVitestDrift(files, reader),
+    ...collectSkipRatchetViolations(census, { detectStale: wholeTree, reader }),
   ];
 
   if (strictMode || changedMode || stagedMode) {
-    violations.push(...collectPatternViolations(files, STRICT_SOURCE_PATTERNS));
+    violations.push(...collectPatternViolations(files, STRICT_SOURCE_PATTERNS, { reader }));
     violations.push(
-      ...collectPatternViolations(files, STRICT_PRODUCTION_PATTERNS, { productionOnly: true }),
+      ...collectPatternViolations(files, STRICT_PRODUCTION_PATTERNS, {
+        productionOnly: true,
+        reader,
+      }),
     );
-    violations.push(...collectManifestViolations(files));
+    violations.push(...collectManifestViolations(files, reader));
   }
 
+  reader.assertUnchanged?.();
+
   console.log(
-    `skip census (${wholeTree ? 'whole tree' : 'changed files'}): ${tally.total} skipped/ignored test site(s), ` +
+    `skip census (${stagedMode ? 'staged index' : wholeTree ? 'whole tree' : 'changed files'}): ${tally.total} skipped/ignored test site(s), ` +
       `${tally.reason} with an inline reason, ${tally.annotated} annotated, ${tally.unjustified} unjustified`,
   );
 

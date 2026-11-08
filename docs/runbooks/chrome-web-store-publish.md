@@ -27,8 +27,7 @@ References:
    - `GCP_WORKLOAD_IDENTITY_PROVIDER`
    - `CWS_SERVICE_ACCOUNT`
    - `CWS_PUBLISHER_ID`
-   - `CWS_EXTENSION_ID`
-5. Configure the public production build values as GitHub repository variables: `CLERK_PUBLISHABLE_KEY`, `CLERK_FRONTEND_API`, `CLERK_SYNC_HOST`, and `CHROME_EXTENSION_PUBLIC_KEY`.
+5. Configure the public production build values as GitHub repository variables: `CLERK_PUBLISHABLE_KEY`, `CLERK_FRONTEND_API`, `CLERK_SYNC_HOST`, `CHROME_EXTENSION_PUBLIC_KEY`, and `CWS_EXTENSION_ID`. The item ID is shared with the artifact-sandbox deployment; keep one repository value rather than separate environment copies. The sandbox deployment uses it for both its framing header and exact renderer parent check and refuses a missing or malformed ID.
 6. In the Developer Dashboard, complete the Store listing and Privacy tabs, verify the stable item ID and public key, enable two-step verification on the owner account, and manually publish any visibility change once before returning publication ownership to CI.
 
 ## Release

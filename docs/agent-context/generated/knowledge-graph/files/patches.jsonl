@@ -1,0 +1,6 @@
+{"$generated":"GENERATED FILE, do not edit. Run `node scripts/generate-agent-context-indexes.mjs`; `pnpm check:agent-context-indexes` byte-compares this against a fresh render."}
+{"path":"patches/braces@3.0.3.patch","unit":"patches","role":"other","unparsed":"notCode"}
+{"path":"patches/bunyamin@1.6.3.patch","unit":"patches","role":"other","unparsed":"notCode"}
+{"path":"patches/detox@20.51.4.patch","unit":"patches","role":"other","unparsed":"notCode"}
+{"path":"patches/http-cache-semantics@4.2.0.patch","unit":"patches","role":"other","unparsed":"notCode"}
+{"path":"patches/next-themes@0.4.6.patch","unit":"patches","role":"other","unparsed":"notCode"}

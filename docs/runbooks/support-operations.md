@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-10-08
+Last updated: 2026-11-07
 
 How a support request reaches a person, how it is prioritised, escalated and
 answered, and what support may say. Written for whoever answers support, and
@@ -33,6 +33,36 @@ Sources: `apps/web/app/support/page.tsx`,
 `apps/web/lib/support/handoff/config.ts`,
 `apps/web/lib/support/handoff/presence-service.ts`,
 `apps/web/features/settings/sections/HelpSection.tsx`.
+
+**Automated support boundary.** The assistant retrieves relevant help articles
+and maintained support answers before it can call a model. The support model is
+resolved from the `openai/gpt-fast` family slot rather than
+the general Chat Auto route. It returns JSON with reasoning disabled and offers
+no model tools. If the selected model is unavailable or a route resolves to a
+different model, support abstains instead of substituting a general assistant.
+The company pays for support inference; it does not consume the asker's plan
+credits. The existing daily ceilings and account privacy admission still apply.
+
+Unrelated coding, writing and casual chat are rejected before model admission,
+including requests wrapped in product or error terminology. Answers must have
+real retrieved citations and pass the existing grounding checks. Program source
+is refused even when an answer names a real citation. Missing documentation,
+malformed answers and provider failures keep the existing help or human-handoff
+path. Actions remain proposals behind the existing confirmation flow.
+
+The published support prompt remains at its existing stable version; version 2
+is still internal in the release ledger and requires its separate evaluation
+before promotion. The server boundary does not rely on that unreleased prompt.
+Sources: `apps/web/lib/support/agent/answer/model-route.ts`,
+`apps/web/lib/support/agent/answer/synthesize.ts`,
+`apps/web/lib/support/agent/policy/out-of-scope.ts`,
+`packages/ai/model-registry/catalog/model-families.json`, and
+[OpenAI's model reference](https://developers.openai.com/api/docs/models).
+
+For local development, `next.config.ts` projects the resolved bot-protection mode
+into the browser so a local server does not initialize an unavailable platform
+challenge. Production keeps its existing public-mode default. The endpoint's
+CSRF, rate-limit and authorization controls are unchanged.
 
 **How a ticket reaches a person.** Raising a ticket stores it and emails the
 support inbox with the ticket id, subject, priority, severity, the account id,

@@ -4,8 +4,8 @@
   "private": true,
   "description": "Cross-origin artifact renderer at sandbox.agiworkforce.com. Single static HTML, no build step.",
   "scripts": {
-    "dev": "npx serve . -p 3001",
+    "dev": "node dev.mjs",
     "build": "echo 'no build, static HTML'",
-    "start": "npx serve . -p 3001"
+    "start": "node dev.mjs"
   }
 }

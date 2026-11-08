@@ -1,0 +1,2 @@
+{"$generated":"GENERATED FILE, do not edit. Run `node scripts/generate-agent-context-indexes.mjs`; `pnpm check:agent-context-indexes` byte-compares this against a fresh render."}
+{"path":".cargo/audit.toml","unit":".cargo","role":"config","unparsed":"notCode"}

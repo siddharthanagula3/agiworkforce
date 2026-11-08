@@ -33,8 +33,8 @@ test('whole-tree discovery includes new source and excludes ignored worktrees', 
       'export const other = true;\n',
     );
 
-    const files = gitFiles('ls-files -c -o --exclude-standard', repository).map((file) =>
-      path.relative(repository, file),
+    const files = gitFiles(['ls-files', '-c', '-o', '--exclude-standard', '-z'], repository).map(
+      (file) => path.relative(repository, file),
     );
 
     assert.deepEqual(files.sort(), ['.gitignore', 'new.ts', 'tracked.ts']);
@@ -163,3 +163,158 @@ test('the checked-in ratchet is valid and every entry records a reason and an ow
   assert.deepEqual(validateSkipRatchet(config), []);
   assert.ok(config.debt.length > 0, 'the seeded inventory must not be empty');
 });
+
+const GUARD = path.join(process.cwd(), 'scripts/check-llm-failure-guardrails.mjs');
+
+function stagedFixture(run) {
+  const repository = mkdtempSync(path.join(os.tmpdir(), 'agi-staged-guard-'));
+  const git = (...args) =>
+    execFileSync('git', args, { cwd: repository, stdio: ['ignore', 'pipe', 'pipe'] });
+  const write = (file, value) => {
+    mkdirSync(path.dirname(path.join(repository, file)), { recursive: true });
+    writeFileSync(path.join(repository, file), value);
+  };
+  try {
+    git('init', '-q');
+    for (const file of [
+      'docs/agent-context/llm-failure-taxonomy.json',
+      'scripts/config/skipped-test-ratchet.json',
+    ]) {
+      write(file, readFileSync(path.join(process.cwd(), file), 'utf8'));
+      git('add', '--', file);
+    }
+    const check = () => {
+      try {
+        return {
+          status: 0,
+          output: execFileSync(process.execPath, [GUARD, '--staged'], {
+            cwd: repository,
+            encoding: 'utf8',
+            stdio: ['ignore', 'pipe', 'pipe'],
+          }),
+        };
+      } catch (error) {
+        return { status: error.status, output: String(error.stdout) + String(error.stderr) };
+      }
+    };
+    run({ repository, git, write, check });
+  } finally {
+    rmSync(repository, { recursive: true, force: true });
+  }
+}
+
+const unsafeFixture = "new Function('return 1')();\n";
+const safeFixture = 'export const value = 1;\n';
+
+test('staged validation refuses bad index content hidden by a safe working copy', () => {
+  stagedFixture(({ git, write, check }) => {
+    write('src/fixture.ts', unsafeFixture);
+    git('add', 'src/fixture.ts');
+    write('src/fixture.ts', safeFixture);
+    const result = check();
+    assert.equal(result.status, 1, result.output);
+    assert.match(result.output, /dynamic code execution sink/);
+  });
+});
+
+test('staged validation accepts good index content despite an unstaged edit', () => {
+  stagedFixture(({ git, write, check }) => {
+    write('src/fixture.ts', safeFixture);
+    git('add', 'src/fixture.ts');
+    write('src/fixture.ts', unsafeFixture);
+    const result = check();
+    assert.equal(result.status, 0, result.output);
+  });
+});
+
+for (const file of ['src/café file.ts', 'src/two\nlines.ts']) {
+  test(`staged validation reads the exact filename ${JSON.stringify(file)}`, () => {
+    stagedFixture(({ git, write, check }) => {
+      write(file, unsafeFixture);
+      git('add', '--', file);
+      assert.equal(check().status, 1);
+    });
+  });
+}
+
+test('a staged source absent from the working tree is still checked', () => {
+  stagedFixture(({ repository, git, write, check }) => {
+    write('src/fixture.ts', unsafeFixture);
+    git('add', 'src/fixture.ts');
+    rmSync(path.join(repository, 'src/fixture.ts'));
+    assert.equal(check().status, 1);
+  });
+});
+
+test('staged snapshots retain their blobs and reject a changing index', async () => {
+  const { stagedReader } = await import('./check-llm-failure-guardrails.mjs');
+  stagedFixture(({ repository, git, write }) => {
+    write('src/fixture.ts', safeFixture);
+    git('add', 'src/fixture.ts');
+    const reader = stagedReader(repository);
+    write('src/fixture.ts', unsafeFixture);
+    git('add', 'src/fixture.ts');
+    assert.equal(reader.read(path.join(repository, 'src/fixture.ts')), safeFixture);
+    assert.throws(() => reader.assertUnchanged(), /index changed/);
+  });
+});
+
+test('production and unannotated test execution sinks remain refused', () => {
+  for (const file of ['src/unsafe.ts', 'src/__tests__/unsafe.test.ts']) {
+    stagedFixture(({ git, write, check }) => {
+      write(file, unsafeFixture);
+      git('add', '--', file);
+      assert.equal(check().status, 1);
+    });
+  }
+});
+
+test('owned vm test harnesses and explicit fixture annotations retain their existing policy', () => {
+  for (const source of [
+    "import { runInNewContext } from 'node:vm'; runInNewContext('1 + 1');\n",
+    '// llm-guardrail-allow: executes repository-owned webview JavaScript in jsdom\n' +
+      unsafeFixture,
+  ]) {
+    stagedFixture(({ git, write, check }) => {
+      write('src/__tests__/owned.test.ts', source);
+      git('add', 'src/__tests__/owned.test.ts');
+      const result = check();
+      assert.equal(result.status, 0, result.output);
+    });
+  }
+});
+
+test('staged snapshots support an index larger than the Node default output buffer', async () => {
+  const { stagedReader } = await import('./check-llm-failure-guardrails.mjs');
+  stagedFixture(({ repository, git, write }) => {
+    write('seed.ts', safeFixture);
+    git('add', 'seed.ts');
+    const blob = git('rev-parse', ':seed.ts').toString().trim();
+    const names = Array.from(
+      { length: 10000 },
+      (_, index) => `virtual/${index}-${'x'.repeat(70)}.ts`,
+    );
+    const input = names.map((file) => `100644 ${blob}\t${file}\0`).join('');
+    assert.ok(Buffer.byteLength(input) > 1024 * 1024);
+    execFileSync('git', ['update-index', '-z', '--index-info'], { cwd: repository, input });
+    const reader = stagedReader(repository);
+    assert.equal(reader.read(path.join(repository, names.at(-1))), safeFixture);
+    reader.assertUnchanged();
+  });
+});
+
+for (const badIndex of [true, false]) {
+  test(`staged taxonomy validation uses the index when badIndex=${badIndex}`, () => {
+    stagedFixture(({ repository, git, write, check }) => {
+      const file = 'docs/agent-context/llm-failure-taxonomy.json';
+      const good = readFileSync(path.join(repository, file), 'utf8');
+      if (badIndex) {
+        write(file, '{}');
+        git('add', '--', file);
+        write(file, good);
+      } else write(file, '{}');
+      const result = check();
+      assert.equal(result.status, badIndex ? 1 : 0, result.output);
+    });
+  });
+}

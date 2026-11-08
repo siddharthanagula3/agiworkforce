@@ -21,6 +21,8 @@ open engineering follow-ups are rows in `registers/known-flaws.md`.
 
 ## Open work, by kind
 
+[`live-check/seo-ai-visibility.md`](live-check/seo-ai-visibility.md) is owned by Web and product content / growth. It records the November 7 search baseline, locally verified discovery changes, finished initial content and the remaining publication, source-review and first-party measurement work. Close it after those actions are verified or explicitly declined; its dated observations live in `baselines/seo-ai-visibility-2026-11-07.json`.
+
 Counts were taken on 2026-10-23.
 
 [`live-check/architecture-edge-case-conformance.md`](live-check/architecture-edge-case-conformance.md)
@@ -28,6 +30,10 @@ is the cross-surface execution queue added on 2026-11-02. Platform and applicati
 maintainers own it. It closes when each pending lifecycle check has reproducible
 acceptance evidence or a decision in its existing feature owner; it does not
 replace feature statuses in the capability ledger.
+The [Chrome assistant live parity audit](live-check/chrome-assistant-parity-2026-11-03.md)
+is owned by Extension + product maintainers. It tracks the current-page,
+context-sharing and execution gaps found against the installed browser assistants;
+close it when its referenced defects and remaining live checks are resolved.
 
 | Tracker                                                                                                                                                                                                                                                                                                                                                                                                                                                              | What it holds                                                                                                                                                                                                                                                   | Owner or generator                        | How an item closes                                                                                  |
 | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- | --------------------------------------------------------------------------------------------------- |
@@ -77,6 +83,7 @@ reads them where they are, or because a feature spec owns its own checklist.
 
 | File                                                                                        | What is open in it                                                                                          | Why it stays there                                                                                              |
 | ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `docs/launch/QA_LEDGER.md`                                                                  | Ordered six-application launch acceptance, environment defects and deferred runtime checks                  | The founder explicitly requires this persistent ledger at this path                                             |
 | `docs/specs/jev-auto-routing/tasks.md`                                                      | The unchecked tasks of the Jev Auto routing feature                                                         | A spec owns its own `tasks.md` (`docs/specs/README.md`)                                                         |
 | `docs/specs/web-ui-parity/tasks.md`                                                         | Rendering, prompt release and conversation acceptance for the owner QA                                      | The existing feature spec owns the checklist; live evidence is indexed above                                    |
 | `docs/specs/guardian-phase-3/tasks.md` and the "Known limitations / risks" of its `spec.md` | Guardian phase 3 tasks and limitations                                                                      | Spec-owned; `.agi-guardian.yml` cites task 4. Its external blockers are in `decisions/open-questions.md`        |

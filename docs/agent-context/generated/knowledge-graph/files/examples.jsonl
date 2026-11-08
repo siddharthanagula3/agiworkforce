@@ -1,0 +1,8 @@
+{"$generated":"GENERATED FILE, do not edit. Run `node scripts/generate-agent-context-indexes.mjs`; `pnpm check:agent-context-indexes` byte-compares this against a fresh render."}
+{"path":"examples/hooks/example-hooks.yaml","unit":"examples","role":"config","unparsed":"notCode"}
+{"path":"examples/hooks/log-all-events.sh","unit":"examples","role":"other","unparsed":"notCode"}
+{"path":"examples/hooks/notify-slack.js","unit":"examples","role":"source","imports":["spec:https"]}
+{"path":"examples/hooks/pre-commit-hook.sh","unit":"examples","role":"other","unparsed":"notCode"}
+{"path":"examples/hooks/session-report.sh","unit":"examples","role":"other","unparsed":"notCode"}
+{"path":"examples/hooks/track-tool-usage.js","unit":"examples","role":"source","imports":["spec:fs","spec:os","spec:path"]}
+{"path":"examples/multi-provider-chat.ts","unit":"examples","role":"source","imports":["packages/ai/providers/anthropic","packages/ai/providers/ollama","packages/ai/providers/openai","packages/contracts/types"]}

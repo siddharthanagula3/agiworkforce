@@ -616,6 +616,7 @@ jobs:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       PRODUCTION_SANDBOX_URL: >-
         ${{ vars.PRODUCTION_SANDBOX_URL || 'https://sandbox.agiworkforce.com' }}
+      CWS_EXTENSION_ID: ${{ vars.CWS_EXTENSION_ID }}
     steps:
       - name: Checkout the CI-verified commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -626,6 +627,9 @@ jobs:
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
+
+      - name: Validate exact artifact parent configuration
+        run: node --test --test-concurrency=1 infrastructure/sandbox/configure.test.mjs
 
       - name: Require the protected Vercel deployment contract
         shell: bash
@@ -692,6 +696,9 @@ jobs:
           # staged tree is served from the public origin. The deploy target is
           # build-time configuration; it has no business being fetchable.
           rm -f "$staging/deploy-target.json"
+          node infrastructure/sandbox/configure.mjs "$staging"
+          rm -f "$staging/configure.mjs" "$staging/configure.test.mjs" "$staging/dev.mjs"
+
           if git -C "$staging" rev-parse --git-dir >/dev/null 2>&1; then
             echo "::error::staged sandbox tree is still inside a git worktree; deploy would be BLOCKED"
             exit 1
@@ -735,7 +742,7 @@ jobs:
           node <<'NODE'
           const fs = require('node:fs');
 
-          const config = JSON.parse(fs.readFileSync('infrastructure/sandbox/vercel.json', 'utf8'));
+          const config = JSON.parse(fs.readFileSync(`${process.env.RUNNER_TEMP}/sandbox-origin/vercel.json`, 'utf8'));
           const expected = new Map(
             config.headers.flatMap((rule) => rule.headers.map(({ key, value }) => [key.toLowerCase(), value])),
           );

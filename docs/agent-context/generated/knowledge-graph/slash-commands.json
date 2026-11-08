@@ -1,0 +1,421 @@
+{
+  "$generated": "GENERATED FILE, do not edit. Run `node scripts/generate-agent-context-indexes.mjs`; `pnpm check:agent-context-indexes` byte-compares this against a fresh render.",
+  "commands": [
+    {
+      "name": "add-dir",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "advisor",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "agents",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "auto-mode-setup",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "autofix-pr",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "background",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "btw",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "budget",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "chrome",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "clear",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "compact",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "config",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "context",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "continue-elsewhere",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "continue-with-byok",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "continue-with-cloud",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "continue",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "control",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "copy",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "cost",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "create-skill",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "debug",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "desktop",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "diff",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "doctor",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "effort",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "exit",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "export",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "extra-usage",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "fallback",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "fast",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "feedback",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "files",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "fork",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "gather",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "help",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "history",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "hooks",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "ide",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "image",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "init",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "insights",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "install-github-app",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "keybindings",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "links",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "login",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "logout",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "mcp",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "memory",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "mobile",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "model",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "models",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "new",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "output-style",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "passes",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "permissions",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "personalize",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "plan",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "plugin",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "powerup",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "pr-comments",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "privacy-mode",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "privacy-settings",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "rate-limit-options",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "recap",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "release-notes",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "reload-plugins",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "remote-control",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "remote-env",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "remove-dir",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "rename",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "replay",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "resume",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "review",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "rewind",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "route",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "sandbox",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "save-routine",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "save-skill",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "save",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "schedule",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "search",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "security-review",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "skills",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "stats",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "status",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "statusline",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "table",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "tag",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "tasks",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "team-onboarding",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "team",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "terminal-setup",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "theme",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "think-back",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "thread",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "threads",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "tools",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "tui",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "ultrareview",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "upgrade",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "usage",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "vim",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    },
+    {
+      "name": "voice",
+      "file": "crates/agiworkforce-command-registry/src/lib.rs"
+    }
+  ]
+}

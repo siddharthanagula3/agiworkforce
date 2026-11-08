@@ -1,0 +1,10 @@
+{
+  "$generated": "GENERATED FILE, do not edit. Run `node scripts/generate-agent-context-indexes.mjs`; `pnpm check:agent-context-indexes` byte-compares this against a fresh render.",
+  "docs": [
+    ".agents/skills/vercel-composition-patterns/AGENTS.md",
+    ".agents/skills/vercel-react-best-practices/AGENTS.md",
+    ".agents/skills/vercel-react-native-skills/AGENTS.md",
+    "AGENTS.md",
+    "apps/web/AGENTS.md"
+  ]
+}

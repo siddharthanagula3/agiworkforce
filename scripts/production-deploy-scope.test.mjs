@@ -235,6 +235,13 @@ test('the sandbox origin has a CI deploy path gated on the CI-verified commit', 
   // outputDirectory is "." for this project, so the staged tree is what the
   // public origin serves. The deploy target is build input, not an asset.
   assert.match(workflow, /rm -f "\$staging\/deploy-target\.json"/);
+  assert.match(workflow, /CWS_EXTENSION_ID: \$\{\{ vars\.CWS_EXTENSION_ID \}\}/);
+  assert.match(workflow, /node infrastructure\/sandbox\/configure\.mjs "\$staging"/);
+  assert.match(
+    workflow,
+    /node --test --test-concurrency=1 infrastructure\/sandbox\/configure\.test\.mjs/,
+  );
+  assert.match(workflow, /\$\{process\.env\.RUNNER_TEMP\}\/sandbox-origin\/vercel\.json/);
 });
 
 test('no CI-executed path reads the git-ignored Vercel link directory', () => {
