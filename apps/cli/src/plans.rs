@@ -12,12 +12,11 @@ const PLAN_ORDER: [&str; 8] = [
     "enterprise",
 ];
 
-const PLAN_WINDOW_CREDITS: [(&str, u32, u32, u32); 7] = [
+const PLAN_WINDOW_CREDITS: [(&str, u32, u32, u32); 6] = [
     ("free", 2, 15, 20),
     ("basic", 10, 100, 400),
     ("pro", 50, 500, 2_000),
     ("max", 250, 2_500, 10_000),
-    ("max_15x", 1_000, 5_000, 20_000),
     ("team", 50, 500, 2_000),
     ("team_premium", 250, 2_500, 10_000),
 ];
@@ -78,7 +77,7 @@ const PLAN_CAPABILITY_TIERS: [(&str, &[&str]); 18] = [
 const PLAN_CAPABILITY_LABELS: [(&str, &str); 18] = [
     (
         "managed_chat",
-        "Managed Cloud chat on web, desktop, mobile and Chrome",
+        "Cloud chat on web, desktop, mobile and Chrome",
     ),
     ("chat_tools", "Chat tools"),
     ("projects", "Projects"),
@@ -91,9 +90,9 @@ const PLAN_CAPABILITY_LABELS: [(&str, &str); 18] = [
     ("deep_research", "Deep Research"),
     ("image_generation", "Image generation"),
     ("video_generation", "Video generation"),
-    ("managed_api", "Managed API access"),
-    ("developer_surfaces", "Managed Cloud in the CLI and VS Code"),
-    ("slack_app", "AGI in Slack"),
+    ("managed_api", "Cloud API access"),
+    ("developer_surfaces", "Cloud in the CLI and VS Code"),
+    ("slack_app", "Chat in Slack"),
     ("artifact_connectors", "Connected apps in published apps"),
     ("team_admin", "Team administration"),
     ("enterprise_controls", "SSO, SCIM and admin controls"),
@@ -255,8 +254,8 @@ mod tests {
 
     #[test]
     fn the_200_dollar_plan_is_named_max_20x_and_every_plan_by_its_catalog_label() {
-        assert_eq!(plan_label("max_15x"), "Max 20x");
-        assert_eq!(plan_label("max"), "Max 5x");
+        assert_eq!(plan_label("max_15x"), "Ultra");
+        assert_eq!(plan_label("max"), "Max");
         let lines = render_plans(None);
         let headings: Vec<&str> = plan_rows(&lines)
             .into_iter()
@@ -267,9 +266,9 @@ mod tests {
             [
                 "Free",
                 "Basic",
-                "Pro",
-                "Max 5x",
-                "Max 20x",
+                "Premium",
+                "Max",
+                "Ultra",
                 "Team",
                 "Team Premium",
                 "Enterprise"
@@ -302,7 +301,7 @@ mod tests {
         );
         assert_eq!(
             rows[4].0,
-            format!("  Max 20x: {}", window_credits("max_15x"))
+            "  Ultra: usage set by your contract"
         );
         assert_eq!(
             rows[5].0,
@@ -335,29 +334,29 @@ mod tests {
         };
 
         assert_eq!(
-            row("Pro"),
+            row("Premium"),
             (
-                format!("  Pro (your plan): {}", window_credits("pro")).as_str(),
+                format!("  Premium (your plan): {}", window_credits("pro")).as_str(),
                 format!("    Includes: {}", labels(&plan_capabilities("pro"))).as_str(),
             )
         );
-        assert_eq!(row("Free").1, "    No features beyond Pro");
-        assert_eq!(row("Max 5x").1, "    No features beyond Pro");
+        assert_eq!(row("Free").1, "    No features beyond Premium");
+        assert_eq!(row("Max").1, "    No features beyond Premium");
         assert_eq!(
-            row("Max 20x").1,
+            row("Ultra").1,
             format!(
-                "    Adds over Pro: {}",
+                "    Adds over Premium: {}",
                 capability_label("video_generation")
             )
         );
         assert_eq!(
             row("Team").1,
-            format!("    Adds over Pro: {}", capability_label("team_admin"))
+            format!("    Adds over Premium: {}", capability_label("team_admin"))
         );
         assert_eq!(
             row("Enterprise").1,
             format!(
-                "    Adds over Pro: {}",
+                "    Adds over Premium: {}",
                 labels(&["video_generation", "team_admin", "enterprise_controls"])
             )
         );
@@ -374,14 +373,13 @@ mod tests {
         let lines = render_plans(Some(&UserTier::Max15x));
         let rows = plan_rows(&lines);
         assert_eq!(
-            rows[4].0,
-            format!("  Max 20x (your plan): {}", window_credits("max_15x"))
+            rows[4].0, "  Ultra (your plan): usage set by your contract"
         );
-        assert_eq!(rows[3].1, "    No features beyond Max 20x");
+        assert_eq!(rows[3].1, "    No features beyond Ultra");
         assert_eq!(
             rows[7].1,
             format!(
-                "    Adds over Max 20x: {}",
+                "    Adds over Ultra: {}",
                 labels(&["team_admin", "enterprise_controls"])
             )
         );

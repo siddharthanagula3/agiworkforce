@@ -213,9 +213,9 @@ impl UserTier {
         match self {
             UserTier::Free => "Free",
             UserTier::Basic => "Basic",
-            UserTier::Pro => "Pro",
-            UserTier::Max => "Max 5x",
-            UserTier::Max15x => "Max 20x",
+            UserTier::Pro => "Premium",
+            UserTier::Max => "Max",
+            UserTier::Max15x => "Ultra",
             UserTier::Team => "Team",
             UserTier::TeamPremium => "Team Premium",
             UserTier::Enterprise => "Enterprise",
@@ -999,8 +999,8 @@ mod tests {
         assert_eq!(parse_tier_str("max_15x"), Some(UserTier::Max15x));
         assert_eq!(UserTier::Basic.label(), "Basic");
         assert_eq!(UserTier::Team.label(), "Team");
-        assert_eq!(UserTier::Max.label(), "Max 5x");
-        assert_eq!(UserTier::Max15x.label(), "Max 20x");
+        assert_eq!(UserTier::Max.label(), "Max");
+        assert_eq!(UserTier::Max15x.label(), "Ultra");
         assert_eq!(tier_to_str(&UserTier::Max15x), "max_15x");
     }
 
@@ -1068,17 +1068,17 @@ mod tests {
         let cached = CachedTier {
             tier: UserTier::Pro,
         };
-        assert_eq!(cached.status_label(), "Pro");
+        assert_eq!(cached.status_label(), "Premium");
 
         let cached = CachedTier {
             tier: UserTier::Max,
         };
-        assert_eq!(cached.status_label(), "Max 5x");
+        assert_eq!(cached.status_label(), "Max");
 
         let cached = CachedTier {
             tier: UserTier::Max15x,
         };
-        assert_eq!(cached.status_label(), "Max 20x");
+        assert_eq!(cached.status_label(), "Ultra");
 
         let cached = CachedTier {
             tier: UserTier::Basic,
