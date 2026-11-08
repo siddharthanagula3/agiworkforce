@@ -8,7 +8,10 @@ import type {
   AgentEventToolCategory,
   AgentTaskState,
 } from '@agiworkforce/types';
-import { skillLoadActivitySummary } from '@agiworkforce/types';
+import {
+  LIFECYCLE_STATUS_BY_AGENT_TASK_STATE,
+  skillLoadActivitySummary,
+} from '@agiworkforce/types';
 import { isScreenDeviceStep } from '@agiworkforce/local-runtime-contract';
 
 export type AgentActivityRunStatus =
@@ -200,7 +203,7 @@ export function hasUnavailableWebSearch(activity: unknown): boolean {
 }
 
 export interface FinishAgentActivityLocallyOptions {
-  status: Extract<AgentActivityRunStatus, 'completed' | 'failed' | 'cancelled'>;
+  status: Extract<AgentActivityRunStatus, 'completed' | 'partial' | 'failed' | 'cancelled'>;
   completedAtMs: number;
   error?: string;
   overrideTerminal?: boolean;
@@ -404,6 +407,23 @@ function toolUnavailableNotice(raw: string | undefined, toolName: string): strin
   const namedTool = TOOL_NOT_AVAILABLE_PATTERN.exec(trimmed);
   if (namedTool) return `${namedTool[1]} was not available for this request.`;
   return undefined;
+}
+
+export function agentActivityStatusForTaskState(state: AgentTaskState): AgentActivityRunStatus {
+  const lifecycle = LIFECYCLE_STATUS_BY_AGENT_TASK_STATE[state];
+  if (lifecycle === 'completed_partial') return 'partial';
+  if (lifecycle === 'completed' || lifecycle === 'failed' || lifecycle === 'cancelled')
+    return lifecycle;
+  if (lifecycle === 'awaiting_input') return state === 'paused' ? 'paused' : 'awaiting-approval';
+  return 'running';
+}
+
+export function isAgentActivityTerminal(
+  status: AgentActivityRunStatus | undefined,
+): status is FinishAgentActivityLocallyOptions['status'] {
+  return (
+    status === 'completed' || status === 'partial' || status === 'failed' || status === 'cancelled'
+  );
 }
 
 function stopStatus(reason: AgentEventStopReason): AgentActivityRunStatus {
@@ -824,23 +844,9 @@ function applyAgentEvent(
     case 'task-state-changed':
       next.taskId = event.taskId;
       next.taskState = event.state;
-      if (event.state === 'awaiting_input') {
-        next.status = 'awaiting-approval';
-      } else if (event.state === 'paused') {
-        next.status = 'paused';
-      } else if (event.state === 'failed') {
-        next.status = 'failed';
-        next.completedAtMs = envelope.emittedAtMs;
-      } else if (event.state === 'cancelled' || event.state === 'archived') {
-        next.status = 'cancelled';
-        next.completedAtMs = envelope.emittedAtMs;
-      } else if (event.state === 'ready_for_review' || event.state === 'completed') {
-        next.status = 'completed';
-        next.completedAtMs = envelope.emittedAtMs;
-      } else {
-        next.status = 'running';
-        delete next.completedAtMs;
-      }
+      next.status = deriveRunOutcome(agentActivityStatusForTaskState(event.state), next.entries);
+      if (isAgentActivityTerminal(next.status)) next.completedAtMs = envelope.emittedAtMs;
+      else delete next.completedAtMs;
       return next;
 
     case 'error':
@@ -864,7 +870,13 @@ function applyAgentEvent(
       return next;
 
     case 'stop': {
-      const status = deriveRunOutcome(stopStatus(event.reason), next.entries);
+      const stopped = stopStatus(event.reason);
+      const taskStatus = next.taskState
+        ? agentActivityStatusForTaskState(next.taskState)
+        : undefined;
+      const outcome =
+        stopped === 'completed' && isAgentActivityTerminal(taskStatus) ? taskStatus : stopped;
+      const status = deriveRunOutcome(outcome, next.entries);
       next.status = status;
       next.stopReason = event.reason;
       if (status !== 'running') {
@@ -1013,25 +1025,22 @@ export function finishAgentActivityLocally(
   current: AgentActivityState,
   options: FinishAgentActivityLocallyOptions,
 ): AgentActivityState {
-  if (
-    !options.overrideTerminal &&
-    (current.status === 'completed' ||
-      current.status === 'failed' ||
-      current.status === 'cancelled')
-  ) {
+  if (!options.overrideTerminal && isAgentActivityTerminal(current.status)) {
     return current;
   }
 
-  const entryStatus = options.status;
+  const entryStatus = options.status === 'partial' ? 'cancelled' : options.status;
   let entries = current.entries.map((entry): AgentActivityEntry => {
     if (entry.kind === 'progress' && entry.status === 'running') {
       const localTerminalSummary =
         entry.progressId === 'local-starting'
-          ? options.status === 'completed'
-            ? 'Response ready'
-            : options.status === 'cancelled'
-              ? 'Response cancelled'
-              : 'Response failed'
+          ? options.status === 'partial'
+            ? 'Response partially completed'
+            : options.status === 'completed'
+              ? 'Response ready'
+              : options.status === 'cancelled'
+                ? 'Response cancelled'
+                : 'Response failed'
           : undefined;
       return {
         ...entry,
@@ -1074,15 +1083,16 @@ export function finishAgentActivityLocally(
     ];
   }
 
+  const status = deriveRunOutcome(options.status, entries);
   return {
     ...current,
-    status: options.status,
+    status,
     stopReason:
-      options.status === 'completed'
-        ? 'end-turn'
-        : options.status === 'failed'
-          ? 'error'
-          : 'cancelled',
+      options.status === 'failed'
+        ? 'error'
+        : options.status === 'cancelled'
+          ? 'cancelled'
+          : 'end-turn',
     updatedAtMs: options.completedAtMs,
     completedAtMs: options.completedAtMs,
     entries,

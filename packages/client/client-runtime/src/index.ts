@@ -32,6 +32,8 @@ export type { EventCallback, UnlistenFn } from './events';
 
 export {
   applyAgentActivityEvent,
+  agentActivityStatusForTaskState,
+  isAgentActivityTerminal,
   finishAgentActivityLocally,
   hasUnavailableWebSearch,
   isGenerationProgressEntry,

@@ -11,6 +11,7 @@
 import { createClerkClient, verifyToken as clerkVerifyToken } from '@clerk/backend';
 import { isClerkAPIResponseError } from '@clerk/backend/errors';
 import * as clerkServer from '@clerk/nextjs/server';
+import { ClerkSessionManager } from './clerk-sessions';
 
 import { APP_URL_ENV, resolveDeploymentOrigin } from '../deployment-origin';
 import { clerkHasBrowserSessionCookie } from '../session-cookie';
@@ -28,7 +29,6 @@ import {
   type IdentityRequestAuth,
   type IdentitySecondFactorRegistration,
   type IdentitySession,
-  type IdentitySessionActivity,
   type IdentitySessionPage,
   type IdentitySessionMiddleware,
   type IdentitySignInRoute,
@@ -58,8 +58,6 @@ const SIGN_IN_REDIRECT_PARAM = 'redirectTo';
 
 type ClerkClient = Awaited<ReturnType<typeof clerkServer.clerkClient>>;
 type ClerkUser = Awaited<ReturnType<ClerkClient['users']['getUser']>>;
-type ClerkSession = Awaited<ReturnType<ClerkClient['sessions']['getSession']>>;
-type ClerkSessionActivity = NonNullable<ClerkSession['latestActivity']>;
 type ClerkEmailAddress = ClerkUser['emailAddresses'][number];
 
 const CLIENT_ERROR_STATUS_MIN = 400;
@@ -207,35 +205,12 @@ function toUser(user: ClerkUser): IdentityUser {
   };
 }
 
-function toActivity(activity: ClerkSessionActivity | undefined): IdentitySessionActivity | null {
-  if (!activity) return null;
-  return {
-    ipAddress: optional(activity.ipAddress),
-    city: optional(activity.city),
-    country: optional(activity.country),
-    browserName: optional(activity.browserName),
-    browserVersion: optional(activity.browserVersion),
-    deviceType: optional(activity.deviceType),
-    isMobile: activity.isMobile,
-  };
-}
-
-function toSession(session: ClerkSession): IdentitySession {
-  return {
-    id: session.id,
-    userId: session.userId,
-    status: session.status,
-    createdAt: session.createdAt,
-    lastActiveAt: session.lastActiveAt,
-    expireAt: session.expireAt,
-    latestActivity: toActivity(session.latestActivity),
-  };
-}
-
 export class ClerkIdentityProvider<Request = unknown> implements IdentityProvider<Request> {
   readonly name = CLERK_PROVIDER_NAME;
 
   private client: Promise<ClerkClient> | null = null;
+
+  private readonly sessions = new ClerkSessionManager(() => this.apiClient());
 
   private reachabilityClient: ReturnType<typeof createClerkClient> | null = null;
 
@@ -363,23 +338,15 @@ export class ClerkIdentityProvider<Request = unknown> implements IdentityProvide
     userId: string,
     options: ListUserSessionsOptions = {},
   ): Promise<IdentitySessionPage> {
-    const response = await (
-      await this.apiClient()
-    ).sessions.getSessionList({
-      userId,
-      ...(options.status ? { status: options.status } : {}),
-      ...(options.limit === undefined ? {} : { limit: options.limit }),
-      ...(options.offset === undefined ? {} : { offset: options.offset }),
-    });
-    return { sessions: response.data.map(toSession), totalCount: response.totalCount };
+    return this.sessions.listUserSessions(userId, options);
   }
 
   async getSession(sessionId: string): Promise<IdentitySession | null> {
-    return toSession(await (await this.apiClient()).sessions.getSession(sessionId));
+    return this.sessions.getSession(sessionId);
   }
 
   async revokeSession(sessionId: string): Promise<void> {
-    await (await this.apiClient()).sessions.revokeSession(sessionId);
+    await this.sessions.revokeSession(sessionId);
   }
 
   async createSignInToken(userId: string, expiresInSeconds: number): Promise<string> {

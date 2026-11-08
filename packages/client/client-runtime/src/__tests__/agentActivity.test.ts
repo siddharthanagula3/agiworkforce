@@ -876,3 +876,114 @@ describe('unavailable tool notices', () => {
     expect(terminated.summary).toBe('Code execution was not available: no sandbox was free.');
   });
 });
+
+describe('canonical task endings in activity', () => {
+  it.each([
+    ['archived', 'completed'],
+    ['ready_for_review', 'completed'],
+    ['partial', 'partial'],
+    ['timed_out', 'failed'],
+    ['failed', 'failed'],
+    ['cancelled', 'cancelled'],
+  ] as const)('preserves %s as %s through a normal stop', (state, expected) => {
+    let activity = applyAgentActivityEvent(
+      undefined,
+      envelope(0, { type: 'task-state-changed', taskId: 'task-1', state }),
+    );
+    expect(activity?.status).toBe(expected);
+    activity = applyAgentActivityEvent(activity, envelope(1, { type: 'stop', reason: 'end-turn' }));
+    expect(activity?.status).toBe(expected);
+  });
+
+  it.each(['error', 'cancelled'] as const)(
+    'keeps an explicit %s stop authoritative after a completed state',
+    (reason) => {
+      let activity = applyAgentActivityEvent(
+        undefined,
+        envelope(0, { type: 'task-state-changed', taskId: 'task-1', state: 'ready_for_review' }),
+      );
+      activity = applyAgentActivityEvent(activity, envelope(1, { type: 'stop', reason }));
+      expect(activity?.status).toBe(reason === 'error' ? 'failed' : 'cancelled');
+    },
+  );
+});
+
+it.each(['ready_for_review', 'archived'] as const)(
+  'does not hide a genuine failed tool behind %s',
+  (state) => {
+    let activity = applyAgentActivityEvent(
+      undefined,
+      envelope(0, {
+        type: 'tool-execution-start',
+        toolCallId: 'failed-1',
+        name: 'browser_fill_form',
+        category: 'computer-use',
+        summary: 'Fill email',
+        input: null,
+      }),
+    );
+    activity = applyAgentActivityEvent(
+      activity,
+      envelope(1, {
+        type: 'tool-execution-end',
+        toolCallId: 'failed-1',
+        name: 'browser_fill_form',
+        isError: true,
+        output: 'The action was refused.',
+      }),
+    );
+    activity = applyAgentActivityEvent(
+      activity,
+      envelope(2, { type: 'task-state-changed', taskId: 'task-1', state }),
+    );
+    expect(activity?.status).toBe('failed');
+    activity = applyAgentActivityEvent(activity, envelope(3, { type: 'stop', reason: 'end-turn' }));
+    expect(activity?.status).toBe('failed');
+  },
+);
+
+it('does not turn a real failed tool into success during local settlement', () => {
+  let activity = applyAgentActivityEvent(
+    undefined,
+    envelope(0, {
+      type: 'tool-execution-start',
+      toolCallId: 'failed-local',
+      name: 'browser_fill_form',
+      category: 'computer-use',
+      summary: 'Fill field',
+      input: null,
+    }),
+  );
+  activity = applyAgentActivityEvent(
+    activity,
+    envelope(1, {
+      type: 'tool-execution-end',
+      toolCallId: 'failed-local',
+      name: 'browser_fill_form',
+      isError: true,
+      output: 'The page refused the value.',
+    }),
+  );
+  const settled = finishAgentActivityLocally(activity!, {
+    status: 'completed',
+    completedAtMs: 2000,
+  });
+  expect(settled.status).toBe('failed');
+  expect(settled.stopReason).toBe('end-turn');
+});
+
+it('preserves an existing partial outcome and closes unfinished partial work without claiming step completion', () => {
+  const pending = startAgentActivityLocally({
+    sessionId: 'local-1',
+    turnId: 'turn-1',
+    summary: 'Working',
+    startedAtMs: 1000,
+  });
+  const partial = finishAgentActivityLocally(pending, { status: 'partial', completedAtMs: 2000 });
+  expect(partial.status).toBe('partial');
+  expect(partial.stopReason).toBe('end-turn');
+  expect(partial.entries[0]).toMatchObject({ kind: 'progress', status: 'cancelled' });
+  expect(finishAgentActivityLocally(partial, { status: 'completed', completedAtMs: 3000 })).toBe(
+    partial,
+  );
+});

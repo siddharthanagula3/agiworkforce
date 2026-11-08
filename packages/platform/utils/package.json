@@ -46,6 +46,10 @@
     "./scheduling/zoned-time": {
       "types": "./src/scheduling/zoned-time.ts",
       "default": "./src/scheduling/zoned-time.ts"
+    },
+    "./scheduling/local-input": {
+      "types": "./src/scheduling/local-input.ts",
+      "default": "./src/scheduling/local-input.ts"
     }
   },
   "typesVersions": {

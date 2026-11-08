@@ -1342,3 +1342,23 @@ describe('cross-module, Indic + classifier independence', () => {
     expect(detectIndicScript('hello').isIndic).toBe(false);
   });
 });
+
+describe('negated orchestration is not an agent execution request', () => {
+  it.each([
+    'Reply only with PINE-EDIT-4826. Do not browse or use tools.',
+    'Answer in one sentence. Do not use tools.',
+    "Don't spawn subagents; just answer hello.",
+    'Summarize this note without autonomous agents.',
+    'Never discover tools for this reply.',
+    'Do not browse, use tools, or spawn agents.',
+  ])('does not add agentic capability requirements for %s', (message) => {
+    expect(classifyTaskLocally(message, []).type).not.toBe('agentic');
+  });
+  it.each([
+    'Use tools but do not browse.',
+    'Do not use tools; instead coordinate agents.',
+    'Never browse. Use autonomous agents for the task.',
+  ])('retains the positive execution request in %s', (message) => {
+    expect(classifyTaskLocally(message, []).type).toBe('agentic');
+  });
+});

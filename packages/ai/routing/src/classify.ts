@@ -91,6 +91,9 @@ const RE_REASONING_MATH = /\b\d+\s*[+\-*/=]\s*\d/;
 const RE_AGENTIC =
   /\b(tool discovery|discover (the )?(best |available )?tools?|multi-agent|parallel agents?|autonomous agents?|subagents?)\b|\b(use|run|coordinate|orchestrate|delegate to|spawn)\s+(multiple\s+|parallel\s+|autonomous\s+)?(agents?|subagents?|tools?)\b/i;
 
+const RE_AGENTIC_CLAUSE_SEPARATOR = /[.!?;\n]|\b(?:but|however|instead)\b/i;
+const RE_AGENTIC_NEGATED_CLAUSE = /\b(?:do\s+not|don['’]t|never|without)\b[^.!?;\n]*/i;
+
 const RE_RESEARCH = /\b(latest|today|2026|current|recent news|search the web|cite sources)\b/i;
 
 const RE_CREATIVE_WRITING =
@@ -190,7 +193,11 @@ export function classifyTaskLocally(
     return { type: 'reasoning', confidence: 0.8 };
   }
 
-  if (RE_AGENTIC.test(message)) {
+  if (
+    message
+      .split(RE_AGENTIC_CLAUSE_SEPARATOR)
+      .some((clause) => RE_AGENTIC.test(clause.replace(RE_AGENTIC_NEGATED_CLAUSE, '')))
+  ) {
     return { type: 'agentic', confidence: 0.85 };
   }
 
