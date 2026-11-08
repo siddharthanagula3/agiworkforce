@@ -7734,3 +7734,20 @@ Mobile remains legacy. Identical-value schedule recreation, unknown edge
 dispatch, native retries and later scheduling/Continue/logout are not resolved.
 Eleven independently reviewed source/fixture files; all fixtures UNRUN.
 See WEB-ACCOUNT-DELETION-INTENT-01.
+
+## Mobile cancellation adopts the protected schedule-value endpoint
+
+Continuation 460f916f4ca0abfb629c260b3a9779d412a1a11b captures a validated,
+nested frozen schedule pair before Alert creation, requires the exact marker,
+and sends protected PUT with the original account epoch and caller-owned 401
+handling. Existing owner/view/ready, one-shot confirmation and reservation guards
+remain, including awaited failure reconciliation. No legacy POST fallback or
+application auth replay is introduced.
+
+Missing protection offers refresh rather than an invented expiry. Changed
+schedule requires a new confirmation; later absent status does not prove an
+ambiguous cancellation succeeded. Both Web and mobile now adopt the strict
+contract in source. Native redirect rejection, lower-layer retries, arbitrary
+edges and unique schedule identity remain unverified. Three independently
+reviewed source/fixture files; all fixtures UNRUN. No provider/global cleanup
+change. See WEB-ACCOUNT-DELETION-INTENT-01.

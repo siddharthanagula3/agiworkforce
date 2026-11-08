@@ -10572,6 +10572,41 @@ Continue/logout, cleanup and durable uncertainty recovery remain open.
 No product tests, lint, typechecks, builds, installations, live account actions,
 migration application or deployment ran. Publication is tracked separately.
 
+Mobile schedule-value adoption addendum, 2026-11-07: Source-corrected in
+`460f916f4ca0abfb629c260b3a9779d412a1a11b`. Mobile now requires the exact
+schedule-pair marker and captures a validated nested frozen request before
+opening the cancellation Alert. Microseconds and nullable requestedAt remain
+unchanged. The original account epoch sends this pair to the protected PUT
+endpoint with caller-owned 401 handling. There is no legacy POST fallback,
+application authentication replay or new automatic mutation retry.
+
+The existing owner/view/ready identity, consumed confirmation and reservation
+remain. Failed-mutation status reconciliation is awaited before releasing that
+reservation. A changed-schedule refusal asks for refreshed status and a new
+confirmation. Markerless status offers a refresh without inventing deadline
+expiry; an unknown marker fails status parsing. Ambiguous failure copy explicitly
+does not attribute a later absent schedule to this cancellation. Confirmation
+copy no longer promises to restore already-erased data or remove other account
+restrictions.
+
+Independent source review accepted one production file and two fixture files.
+UNRUN fixtures cover exact pair/null/microseconds, marker gates, changed schedule
+and new confirmation, ambiguous outcome followed by absent status, PUT rather
+than legacy POST, and no application replay after 401/409/500/network failures.
+Existing lifecycle races remain covered in source fixtures. The SettingsInfo mock
+now exposes deadline copy rather than hiding the assertion's target.
+
+Both Web and mobile now adopt the strict endpoint in source. This does not prove
+native redirect rejection: the inspected native fetch layer does not implement
+the browser redirect:error option, and this change does not pretend otherwise.
+Ordinary PUT routing remains distinct from the inspected legacy POST handler;
+arbitrary edges and lower-layer transport retries remain unverified. No exactly
+one wire-request claim, unique schedule generation or final erasure guarantee.
+Identical-value schedule recreation is indistinguishable. Later Web scheduling,
+Continue/logout and global cleanup remain open; connector-history compatibility
+is still held. No product tests, lint, typechecks, builds, installations, live
+account actions, migration application or deployment ran. Publication is separate.
+
 
 ## WEB-ACCOUNT-CONSENT-RECEIPT-01
 
