@@ -15,5 +15,7 @@ export async function evictOrgSharedConnectorCaches(
   organizationId: string,
   rowId: string,
 ): Promise<void> {
-  orgSharedCatalogCache.delete(orgSharedCacheKey(organizationId, rowId));
+  const key = orgSharedCacheKey(organizationId, rowId);
+  if (!orgSharedCatalogCache.has(key)) return;
+  orgSharedCatalogCache.delete(key);
 }

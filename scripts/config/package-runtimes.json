@@ -166,7 +166,8 @@
     },
     "packages/platform/identity": {
       ".": "universal",
-      "./browser": "browser"
+      "./browser": "browser",
+      "./management": "server"
     },
     "packages/platform/key-value": {
       ".": "universal"
@@ -212,7 +213,8 @@
       "./scheduling/dayparts": "universal",
       "./scheduling/recurrence-rule": "universal",
       "./scheduling/schedule-time": "universal",
-      "./scheduling/zoned-time": "universal"
+      "./scheduling/zoned-time": "universal",
+      "./scheduling/local-input": "universal"
     },
     "packages/tools/apply-patch": {
       ".": "server"

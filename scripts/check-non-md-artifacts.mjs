@@ -118,6 +118,8 @@ const allowedLiveNonMarkdownFiles = new Set([
   'audit/registers/ui-gaps.csv',
   'audit/baselines/theme-only-text-colours.json',
   'audit/baselines/raw-error-to-user.json',
+  'audit/baselines/seo-ai-visibility-2026-11-07.json',
+  'audit/baselines/seo-content-2026-11-07.json',
   'docs/compliance/policy-versions.json',
   'docs/compliance/soc2-controls.json',
   'docs/compliance/trust-claims.json',

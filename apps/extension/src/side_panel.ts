@@ -7202,7 +7202,8 @@ function cancelCurrentManagedStream(preservePartialOutput: boolean): void {
     clearTimeout(_ctx.streamTimeoutHandle);
     _ctx.streamTimeoutHandle = null;
   }
-  if (!expectedRun && pendingManagedAdmissions.delete(streamId)) {
+  if (!expectedRun && pendingManagedAdmissions.has(streamId)) {
+    pendingManagedAdmissions.delete(streamId);
     if (preservePartialOutput) {
       const cancelled =
         stopped ?? ensureStreamingAssistant(streamId, quickModeByStreamId.get(streamId) === true);
