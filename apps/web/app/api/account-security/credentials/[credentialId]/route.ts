@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import { accountSecurityCredentialPath } from '@agiworkforce/cloud-contracts/account-security';
 
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -23,6 +24,9 @@ async function handleRemove(
   if (limited) return limited;
 
   const { credentialId } = await context.params;
+  if (!credentialId.trim() || accountSecurityCredentialPath(credentialId).endsWith('/')) {
+    return NextResponse.json({ error: 'Missing credential' }, { status: 400 });
+  }
   const caller = await accountSecurityCaller(
     request,
     await getUserScopedDb(request, ACCOUNT_SECURITY_SCOPE),

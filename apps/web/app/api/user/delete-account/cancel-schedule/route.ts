@@ -1,6 +1,7 @@
 import 'server-only';
 
-import type { NextRequest } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
+import { MANAGED_CLOUD_ACCOUNT_DELETION_CANCEL_SCHEDULE_PATH } from '@agiworkforce/cloud-contracts';
 import {
   handleAccountDeletionCancellation,
   accountDeletionCancellationOptions,
@@ -9,6 +10,9 @@ import {
 export const runtime = 'nodejs';
 
 export async function PUT(request: NextRequest) {
+  if (new URL(request.url).pathname !== MANAGED_CLOUD_ACCOUNT_DELETION_CANCEL_SCHEDULE_PATH) {
+    return new NextResponse(null, { status: 404 });
+  }
   return handleAccountDeletionCancellation(request, { kind: 'required-pair' });
 }
 
