@@ -1,3 +1,5 @@
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { createSitePolicyPublicationOwner } from '../src/background/site-policy-publication';
@@ -20,12 +22,14 @@ function policyFixture() {
   const cancel = vi.fn();
   const readAdmin = (pending: Promise<string>, startup = false) => {
     const owner = admin.claim();
-    return pending.catch(() => 'unavailable').then((next) => {
-      admin.publish(owner, () => {
-        policy = next;
-        if (!startup && next !== 'allow') cancel();
+    return pending
+      .catch(() => 'unavailable')
+      .then((next) => {
+        admin.publish(owner, () => {
+          policy = next;
+          if (!startup && next !== 'allow') cancel();
+        });
       });
-    });
   };
   return {
     cancel,
@@ -84,28 +88,38 @@ describe('site-policy publication ownership', () => {
     expect(fixture.cancel).toHaveBeenCalledOnce();
   });
 
-  it.each(['local', 'managed'])('shares effective admin ownership across %s events', async (area) => {
-    const fixture = policyFixture();
-    const pending = deferred<string>();
-    const done = fixture.changeAdmin(area, true, pending.promise);
-    await fixture.changeAdmin(area === 'local' ? 'managed' : 'local', true, Promise.resolve('deny'));
-    pending.resolve('allow');
-    await done;
-    expect(fixture.snapshot().policy).toBe('deny');
-    expect(fixture.cancel).toHaveBeenCalledOnce();
-  });
+  it.each(['local', 'managed'])(
+    'shares effective admin ownership across %s events',
+    async (area) => {
+      const fixture = policyFixture();
+      const pending = deferred<string>();
+      const done = fixture.changeAdmin(area, true, pending.promise);
+      await fixture.changeAdmin(
+        area === 'local' ? 'managed' : 'local',
+        true,
+        Promise.resolve('deny'),
+      );
+      pending.resolve('allow');
+      await done;
+      expect(fixture.snapshot().policy).toBe('deny');
+      expect(fixture.cancel).toHaveBeenCalledOnce();
+    },
+  );
 
-  it.each([true, false])('does not cancel for stale reload failure or denial (%s)', async (fails) => {
-    const fixture = policyFixture();
-    const pending = deferred<string>();
-    const done = fixture.changeAdmin('local', true, pending.promise);
-    await fixture.changeAdmin('managed', true, Promise.resolve('allow'));
-    if (fails) pending.reject(new Error('old read failed'));
-    else pending.resolve('deny');
-    await done;
-    expect(fixture.snapshot().policy).toBe('allow');
-    expect(fixture.cancel).not.toHaveBeenCalled();
-  });
+  it.each([true, false])(
+    'does not cancel for stale reload failure or denial (%s)',
+    async (fails) => {
+      const fixture = policyFixture();
+      const pending = deferred<string>();
+      const done = fixture.changeAdmin('local', true, pending.promise);
+      await fixture.changeAdmin('managed', true, Promise.resolve('allow'));
+      if (fails) pending.reject(new Error('old read failed'));
+      else pending.resolve('deny');
+      await done;
+      expect(fixture.snapshot().policy).toBe('allow');
+      expect(fixture.cancel).not.toHaveBeenCalled();
+    },
+  );
 
   it('keeps source ownership independent and ignores unrelated events', async () => {
     const fixture = policyFixture();
@@ -144,37 +158,57 @@ describe('site-policy publication ownership', () => {
 });
 
 describe('background publication wiring', () => {
-  const background = readFileSync(new URL('../src/background.ts', import.meta.url), 'utf8');
+  const background = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), '../src/background.ts'),
+    'utf8',
+  );
   const startup = background.slice(
     background.indexOf('const siteAllowlistPublication ='),
     background.indexOf('function isOriginApprovedForAutomation'),
   );
   const events = background.slice(
-    background.indexOf("chrome.storage.onChanged.addListener((changes, area) => {\n  if (area !== 'local' || !changes[SITE_ALLOWLIST_STORAGE_KEY])"),
+    background.indexOf(
+      "chrome.storage.onChanged.addListener((changes, area) => {\n  if (area !== 'local' || !changes[SITE_ALLOWLIST_STORAGE_KEY])",
+    ),
     background.indexOf('let quickModeCache ='),
   );
 
   it('claims separate startup ownership before starting reads and guards both admin outcomes', () => {
-    expect(startup).toContain('const siteAllowlistPublication = createSitePolicyPublicationOwner();');
-    expect(startup).toContain('const adminSitePolicyPublication = createSitePolicyPublicationOwner();');
+    expect(startup).toContain(
+      'const siteAllowlistPublication = createSitePolicyPublicationOwner();',
+    );
+    expect(startup).toContain(
+      'const adminSitePolicyPublication = createSitePolicyPublicationOwner();',
+    );
     expect(startup).toContain('startupSiteAllowlistOwner = siteAllowlistPublication.claim()');
     expect(startup).toContain('startupAdminSitePolicyOwner = adminSitePolicyPublication.claim()');
     expect(startup).toContain('const siteAllowlistReady');
     expect(startup).toContain('readAdminSitePolicy()');
-    expect(startup.indexOf('startupSiteAllowlistOwner = siteAllowlistPublication.claim()'))
-      .toBeLessThan(startup.indexOf('const siteAllowlistReady'));
-    expect(startup.indexOf('startupAdminSitePolicyOwner = adminSitePolicyPublication.claim()'))
-      .toBeLessThan(startup.indexOf('readAdminSitePolicy()'));
-    expect(startup).toContain('siteAllowlistPublication.publish(startupSiteAllowlistOwner, () => {');
-    expect(startup.match(/adminSitePolicyPublication\.publish\(startupAdminSitePolicyOwner/g))
-      .toHaveLength(2);
+    expect(
+      startup.indexOf('startupSiteAllowlistOwner = siteAllowlistPublication.claim()'),
+    ).toBeLessThan(startup.indexOf('const siteAllowlistReady'));
+    expect(
+      startup.indexOf('startupAdminSitePolicyOwner = adminSitePolicyPublication.claim()'),
+    ).toBeLessThan(startup.indexOf('readAdminSitePolicy()'));
+    expect(startup).toContain(
+      'siteAllowlistPublication.publish(startupSiteAllowlistOwner, () => {',
+    );
+    expect(
+      startup.match(/adminSitePolicyPublication\.publish\(startupAdminSitePolicyOwner/g),
+    ).toHaveLength(2);
     expect(startup).not.toContain('cancelActiveRunUnlessOriginStillApproved(');
     expect(startup).toContain('siteAllowlistLoaded = true;');
   });
 
   it('invalidates user startup before publishing and gates reload cancellation with its publication', () => {
-    expect(events).toMatch(/if \(area !== 'local' \|\| !changes\[SITE_ALLOWLIST_STORAGE_KEY\]\) return;\s+siteAllowlistPublication\.claim\(\);\s+const next/);
-    expect(events).toMatch(/if \(\(area !== 'local' && area !== 'managed'\) \|\| !changes\[ADMIN_SITE_POLICY_STORAGE_KEY\]\) return;\s+const owner = adminSitePolicyPublication\.claim\(\);\s+void readAdminSitePolicy\(\)/);
-    expect(events).toMatch(/adminSitePolicyPublication\.publish\(owner, \(\) => \{\s+adminSitePolicyCache = policy;\s+cancelActiveRunUnlessOriginStillApproved\(isOriginApprovedForAutomation\);\s+\}\);/);
+    expect(events).toMatch(
+      /if \(area !== 'local' \|\| !changes\[SITE_ALLOWLIST_STORAGE_KEY\]\) return;\s+siteAllowlistPublication\.claim\(\);\s+const next/,
+    );
+    expect(events).toMatch(
+      /if \(\(area !== 'local' && area !== 'managed'\) \|\| !changes\[ADMIN_SITE_POLICY_STORAGE_KEY\]\) return;\s+const owner = adminSitePolicyPublication\.claim\(\);\s+void readAdminSitePolicy\(\)/,
+    );
+    expect(events).toMatch(
+      /adminSitePolicyPublication\.publish\(owner, \(\) => \{\s+adminSitePolicyCache = policy;\s+cancelActiveRunUnlessOriginStillApproved\(isOriginApprovedForAutomation\);\s+\}\);/,
+    );
   });
 });

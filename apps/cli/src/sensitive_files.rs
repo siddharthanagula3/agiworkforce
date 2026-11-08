@@ -2,7 +2,7 @@ use once_cell::sync::Lazy;
 use regex::RegexSet;
 
 pub const SENSITIVE_FILE_PATTERNS: &[&str] = &[
-    r"(?i)(^|/)\.env(\..+)?$",
+    r"(?i)(^|/)\.env(\.[\s\S]+)?$",
     r"(?i)(^|/)\.envrc$",
     r"(?i)(^|/)secrets?\.(json|ya?ml|toml|env|txt)$",
     r"(?i)(^|/)[^/]*credentials?(\.(json|ya?ml|toml|txt|ini|db|csv|xml))?$",
@@ -28,9 +28,9 @@ pub const SENSITIVE_FILE_PATTERNS: &[&str] = &[
     // Terraform state holds every resource attribute in plain text, including the
     // secrets a provider generated, and a .tfvars file is where the inputs to it
     // are kept. Both are ordinary-looking project files.
-    r"(?i)(^|/).*\.tfstate(\.backup)?$",
+    r"(?i)(^|/)[^/]*\.tfstate(\.backup)?$",
     r"(?i)(^|/)terraform\.tfstate\.d/",
-    r"(?i)(^|/).*\.auto\.tfvars(\.json)?$",
+    r"(?i)(^|/)[^/]*\.auto\.tfvars(\.json)?$",
     r"(?i)(^|/)terraform\.tfvars(\.json)?$",
     r"(?i)(^|/)\.terraform/terraform\.tfstate$",
     r"(?i)(^|/)\.terraformrc$",

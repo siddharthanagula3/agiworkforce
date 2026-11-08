@@ -45,7 +45,10 @@ export function useWorkspaceQuery<T>(
     ? JSON.stringify([data.scope, data.activeWorkspaceId, data.activeOrganizationId])
     : null;
   const organizationId = data?.activeOrganizationId ?? null;
-  const lifetime = useMemo(() => ({ active: false }), [owner, epoch, scopeKey, resourceKey, enabled]);
+  const lifetime = useMemo(
+    () => ({ scope: { owner, epoch, scopeKey, resourceKey, enabled }, active: false }),
+    [owner, epoch, scopeKey, resourceKey, enabled],
+  );
   useLayoutEffect(() => {
     lifetime.active = true;
     return () => {
@@ -67,7 +70,7 @@ export function useWorkspaceQuery<T>(
     ...(options.staleTime === undefined ? {} : { staleTime: options.staleTime }),
     ...(options.gcTime === undefined ? {} : { gcTime: options.gcTime }),
     refetchInterval: (query) =>
-      enabled && current() ? options.refetchInterval?.(query.state.data) ?? false : false,
+      enabled && current() ? (options.refetchInterval?.(query.state.data) ?? false) : false,
     meta: { silent: true },
     queryFn: async ({ signal }) => {
       if (!owner || !current()) throw new DOMException('Request owner changed', 'AbortError');
@@ -95,11 +98,19 @@ export function useWorkspaceQuery<T>(
   });
   const admitted = enabled && current();
   const isLoading = enabled && (workspace.isLoading || (admitted && query.isPending));
-  const error = !enabled ? null : admitted ? query.error : workspace.isLoading ? null : new Error(
-    workspace.requiresReload
-      ? options.reloadMessage ?? 'Reload this page to confirm your workspace before loading data.'
-      : options.unavailableMessage ?? 'Data is unavailable until your account and workspace are ready.',
-  );
+  const error = !enabled
+    ? null
+    : admitted
+      ? query.error
+      : workspace.isLoading
+        ? null
+        : new Error(
+            workspace.requiresReload
+              ? (options.reloadMessage ??
+                  'Reload this page to confirm your workspace before loading data.')
+              : (options.unavailableMessage ??
+                  'Data is unavailable until your account and workspace are ready.'),
+          );
   return {
     data: admitted ? query.data : undefined,
     error,
@@ -108,7 +119,13 @@ export function useWorkspaceQuery<T>(
     isFetching: admitted && query.isFetching,
     isSuccess: admitted && query.isSuccess,
     refetch: async (): Promise<void> => {
-      if (!enabled || !lifetime.active || !owner || epoch === undefined || !workspaceOwnerIsCurrent(owner, epoch)) {
+      if (
+        !enabled ||
+        !lifetime.active ||
+        !owner ||
+        epoch === undefined ||
+        !workspaceOwnerIsCurrent(owner, epoch)
+      ) {
         return;
       }
       if (!current()) {

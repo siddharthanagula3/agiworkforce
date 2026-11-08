@@ -3,15 +3,26 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { deferred, passkeyFixture } from './passkey-fixture';
 const mocks = vi.hoisted(() => ({ fixture: null as unknown, loaded: true, noUser: false }));
 vi.mock('@clerk/nextjs', async () => ({
-  ...(await vi.importActual<typeof import('@clerk/nextjs')>('@clerk/nextjs')),
-  useUser: () => ({ isLoaded: mocks.loaded, user: mocks.noUser ? null : (mocks.fixture as ReturnType<typeof passkeyFixture>).user }),
+  ...(await vi.importActual('@clerk/nextjs')),
+  useUser: () => ({
+    isLoaded: mocks.loaded,
+    user: mocks.noUser ? null : (mocks.fixture as ReturnType<typeof passkeyFixture>).user,
+  }),
   useClerk: () => (mocks.fixture as ReturnType<typeof passkeyFixture>).clerk,
 }));
 import { usePasskeys } from '../client';
 import { browserSupportsPasskeys } from '../passkey-support';
 let fixture: ReturnType<typeof passkeyFixture>;
-beforeEach(() => { fixture = passkeyFixture(); mocks.fixture = fixture; mocks.loaded = true; mocks.noUser = false; });
-afterEach(() => { fixture.request.retire(); vi.unstubAllGlobals(); });
+beforeEach(() => {
+  fixture = passkeyFixture();
+  mocks.fixture = fixture;
+  mocks.loaded = true;
+  mocks.noUser = false;
+});
+afterEach(() => {
+  fixture.request.retire();
+  vi.unstubAllGlobals();
+});
 const hook = () => renderHook(() => usePasskeys());
 describe('application-owned passkey boundaries', () => {
   it('maps dates, trimmed names and nullable last-used values without inventing data', () => {
@@ -38,7 +49,9 @@ describe('application-owned passkey boundaries', () => {
     const { result, rerender } = hook();
     expect(result.current.isLoaded).toBe(false);
     expect(result.current.passkeys).toEqual([]);
-    mocks.loaded = true; mocks.noUser = true; rerender();
+    mocks.loaded = true;
+    mocks.noUser = true;
+    rerender();
     expect(result.current.isLoaded).toBe(false);
     expect(result.current.passkeys).toEqual([]);
     expect(() => result.current.capture('create', fixture.scope)).toThrow(/account changed/);
@@ -49,7 +62,8 @@ describe('application-owned passkey boundaries', () => {
     const { result, rerender } = hook();
     expect(browserSupportsPasskeys()).toBe(true);
     expect(result.current.isSupported).toBe(true);
-    vi.stubGlobal('PublicKeyCredential', undefined); rerender();
+    vi.stubGlobal('PublicKeyCredential', undefined);
+    rerender();
     expect(browserSupportsPasskeys()).toBe(false);
     expect(result.current.isSupported).toBe(false);
   });
@@ -65,10 +79,14 @@ describe('application-owned passkey boundaries', () => {
   it('latches dispatch before invoking a reentrant dispatch callback', async () => {
     const { result } = hook();
     let nested: Promise<void> | undefined;
-    const operation = result.current.capture('create', { authority: fixture.request,
-      onDispatch: () => { nested = expect(operation.execute()).rejects.toThrow(/already started/); },
+    const operation = result.current.capture('create', {
+      authority: fixture.request,
+      onDispatch: () => {
+        nested = expect(operation.execute()).rejects.toThrow(/already started/);
+      },
     });
-    await operation.execute(); await nested;
+    await operation.execute();
+    await nested;
     expect(fixture.user.createPasskey).toHaveBeenCalledTimes(1);
     expect(fixture.user.reload).toHaveBeenCalledTimes(1);
   });
@@ -89,7 +107,8 @@ describe('application-owned passkey boundaries', () => {
   it('maps the current resource and withholds a mismatched read', () => {
     const { result, rerender } = hook();
     expect(result.current.passkeys[0]?.name).toBe('MacBook');
-    fixture.clerk.user = { ...fixture.user }; rerender();
+    fixture.clerk.user = { ...fixture.user };
+    rerender();
     expect(result.current.isLoaded).toBe(false);
     expect(result.current.passkeys).toEqual([]);
   });
@@ -113,51 +132,73 @@ describe('application-owned passkey boundaries', () => {
   it('does not revive a target removed and restored during editor observation', async () => {
     const { result } = hook();
     const operation = result.current.capture('rename', fixture.scope, 'pk_1');
-    fixture.user.passkeys = []; fixture.emit();
-    fixture.user.passkeys = [fixture.key]; fixture.emit();
+    fixture.user.passkeys = [];
+    fixture.emit();
+    fixture.user.passkeys = [fixture.key];
+    fixture.emit();
     await expect(operation.execute('New')).rejects.toThrow();
     expect(fixture.key.update).not.toHaveBeenCalled();
   });
   it('permits successful deletion to remove the target before reload', async () => {
-    fixture.key.delete.mockImplementation(async () => { fixture.user.passkeys = []; fixture.emit(); });
+    fixture.key.delete.mockImplementation(async () => {
+      fixture.user.passkeys = [];
+      fixture.emit();
+    });
     const { result } = hook();
     await result.current.capture('remove', fixture.scope, 'pk_1').execute();
     expect(fixture.user.reload).toHaveBeenCalledTimes(1);
   });
-  it.each(['create', 'rename', 'remove'] as const)('stops after retired %s dispatch', async (kind) => {
-    const pending = deferred();
-    if (kind === 'create') fixture.user.createPasskey.mockImplementation(() => pending.promise);
-    if (kind === 'rename') fixture.key.update.mockImplementation(async () => { await pending.promise; return fixture.key; });
-    if (kind === 'remove') fixture.key.delete.mockImplementation(() => pending.promise);
-    const { result } = hook();
-    const work = result.current.capture(kind, fixture.scope, 'pk_1').execute('New');
-    const rejected = expect(work).rejects.toThrow();
-    fixture.retire(); pending.resolve(); await rejected;
-    expect(fixture.user.reload).not.toHaveBeenCalled();
-  });
+  it.each(['create', 'rename', 'remove'] as const)(
+    'stops after retired %s dispatch',
+    async (kind) => {
+      const pending = deferred();
+      if (kind === 'create') fixture.user.createPasskey.mockImplementation(() => pending.promise);
+      if (kind === 'rename')
+        fixture.key.update.mockImplementation(async () => {
+          await pending.promise;
+          return fixture.key;
+        });
+      if (kind === 'remove') fixture.key.delete.mockImplementation(() => pending.promise);
+      const { result } = hook();
+      const work = result.current.capture(kind, fixture.scope, 'pk_1').execute('New');
+      const rejected = expect(work).rejects.toThrow();
+      fixture.retire();
+      pending.resolve();
+      await rejected;
+      expect(fixture.user.reload).not.toHaveBeenCalled();
+    },
+  );
   it('rejects settlement after session retirement during reload', async () => {
     const pending = deferred<typeof fixture.user>();
     fixture.user.reload.mockImplementation(() => pending.promise);
     const { result } = hook();
     const work = result.current.capture('create', fixture.scope).execute();
     const rejected = expect(work).rejects.toThrow();
-    await act(async () => { await Promise.resolve(); });
+    await act(async () => {
+      await Promise.resolve();
+    });
     expect(fixture.user.reload).toHaveBeenCalledTimes(1);
-    fixture.retire(); pending.resolve(fixture.user); await rejected;
+    fixture.retire();
+    pending.resolve(fixture.user);
+    await rejected;
   });
   it('fails closed for native user replacement and wrong refresh owner', async () => {
     fixture.user.reload.mockImplementation(async () => ({ ...fixture.user, id: 'other' }));
     const { result } = hook();
-    await expect(result.current.capture('create', fixture.scope).execute()).rejects.toMatchObject({ name: 'AbortError' });
+    await expect(result.current.capture('create', fixture.scope).execute()).rejects.toMatchObject({
+      name: 'AbortError',
+    });
     expect(fixture.request.signal.aborted).toBe(true);
     expect(fixture.user.createPasskey).toHaveBeenCalledTimes(1);
     expect(fixture.user.reload).toHaveBeenCalledTimes(1);
     expect(fixture.scope.onDispatch).toHaveBeenCalledTimes(1);
   });
   it('releases observation when retired', () => {
-    const { result } = hook(); result.current.capture('create', fixture.scope);
+    const { result } = hook();
+    result.current.capture('create', fixture.scope);
     expect(fixture.listeners.size).toBe(1);
-    fixture.request.retire(); expect(fixture.listeners.size).toBe(0);
+    fixture.request.retire();
+    expect(fixture.listeners.size).toBe(0);
   });
   it('reports browser capability without fabricating support', () => {
     vi.stubGlobal('PublicKeyCredential', undefined);

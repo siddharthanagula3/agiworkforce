@@ -4,26 +4,35 @@ import { addCsrfHeaders } from '@/lib/client/csrf';
 import { readPrivacyPreferences, savePrivacyPreference } from './privacy-preferences-client';
 
 vi.mock('@/lib/client/csrf', async (original) => ({
-  ...await original<typeof import('@/lib/client/csrf')>(),
+  ...(await original<MockedModule0>()),
   addCsrfHeaders: vi.fn(async (headers: HeadersInit = {}) => new Headers(headers)),
 }));
 
 const fetchMock = vi.fn<typeof fetch>();
-const authority = () => createRequestAuthority({
-  userId: 'a', sessionId: 'session-a', isCurrent: () => true, getToken: async () => 'token-a',
-});
+const authority = () =>
+  createRequestAuthority({
+    userId: 'a',
+    sessionId: 'session-a',
+    isCurrent: () => true,
+    getToken: async () => 'token-a',
+  });
 
 beforeEach(() => {
   fetchMock.mockReset();
   vi.stubGlobal('fetch', fetchMock);
-  vi.mocked(addCsrfHeaders).mockReset().mockImplementation(async (headers) => new Headers(headers));
+  vi.mocked(addCsrfHeaders)
+    .mockReset()
+    .mockImplementation(async (headers) => new Headers(headers));
 });
 afterEach(() => vi.unstubAllGlobals());
 
 describe('strict privacy snapshots', () => {
   it.each([
-    {}, { settings: null, version: null }, { settings: [], version: null },
-    { settings: {}, version: '' }, { settings: { privacy: null }, version: 'v1' },
+    {},
+    { settings: null, version: null },
+    { settings: [], version: null },
+    { settings: {}, version: '' },
+    { settings: { privacy: null }, version: 'v1' },
     { settings: { privacy: [] }, version: 'v1' },
     { settings: { privacy: { shareTelemetry: 'true' } }, version: 'v1' },
     { settings: { privacy: { keepOutOfProviderTraining: null } }, version: 'v1' },
@@ -34,7 +43,10 @@ describe('strict privacy snapshots', () => {
 
   it('preserves missing first-use values without granting consent', async () => {
     fetchMock.mockResolvedValueOnce(Response.json({ settings: {}, version: null }));
-    await expect(readPrivacyPreferences(authority())).resolves.toEqual({ stored: {}, version: null });
+    await expect(readPrivacyPreferences(authority())).resolves.toEqual({
+      stored: {},
+      version: null,
+    });
   });
 
   it.each([
@@ -55,14 +67,19 @@ describe('strict privacy snapshots', () => {
 
   it('patches one field and publishes the real stored namespace including untouched siblings', async () => {
     const stored = { shareTelemetry: false, keepOutOfProviderTraining: true, sibling: 'preserved' };
-    fetchMock.mockResolvedValueOnce(Response.json({ settings: { privacy: stored }, version: 'v2' }));
+    fetchMock.mockResolvedValueOnce(
+      Response.json({ settings: { privacy: stored }, version: 'v2' }),
+    );
     const event = vi.fn();
     window.addEventListener('agi:preference-namespace-saved', event);
     try {
-      await expect(savePrivacyPreference(authority(), 'keepOutOfProviderTraining', true))
-        .resolves.toEqual({ stored, version: 'v2' });
-      expect(JSON.parse(String(fetchMock.mock.calls[0]![1]!.body)))
-        .toEqual({ namespace: 'privacy', patch: { keepOutOfProviderTraining: true } });
+      await expect(
+        savePrivacyPreference(authority(), 'keepOutOfProviderTraining', true),
+      ).resolves.toEqual({ stored, version: 'v2' });
+      expect(JSON.parse(String(fetchMock.mock.calls[0]![1]!.body))).toEqual({
+        namespace: 'privacy',
+        patch: { keepOutOfProviderTraining: true },
+      });
       expect(event.mock.calls[0]![0].detail).toEqual({ namespace: 'privacy', value: stored });
     } finally {
       window.removeEventListener('agi:preference-namespace-saved', event);
@@ -73,10 +90,17 @@ describe('strict privacy snapshots', () => {
     const operation = authority();
     let resolve!: (body: unknown) => void;
     let parsed!: () => void;
-    const parsing = new Promise<void>((done) => { parsed = done; });
-    const body = new Promise<unknown>((done) => { resolve = done; });
+    const parsing = new Promise<void>((done) => {
+      parsed = done;
+    });
+    const body = new Promise<unknown>((done) => {
+      resolve = done;
+    });
     const response = new Response();
-    vi.spyOn(response, 'json').mockImplementation(() => { parsed(); return body; });
+    vi.spyOn(response, 'json').mockImplementation(() => {
+      parsed();
+      return body;
+    });
     fetchMock.mockResolvedValueOnce(response);
     const event = vi.fn();
     window.addEventListener('agi:preference-namespace-saved', event);
@@ -93,3 +117,5 @@ describe('strict privacy snapshots', () => {
     }
   });
 });
+
+type MockedModule0 = typeof import('@/lib/client/csrf');

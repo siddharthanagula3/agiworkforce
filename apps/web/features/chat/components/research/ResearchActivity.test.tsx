@@ -320,3 +320,9 @@ describe('ResearchActivity completion notification', () => {
     expect(screen.queryByTestId('research-notify-footer')).toBeNull();
   });
 });
+
+type SessionSnapshotModule = typeof import('@/lib/identity/useSessionSnapshot');
+vi.mock('@/lib/identity/useSessionSnapshot', async (original) => ({
+  ...(await original<SessionSnapshotModule>()),
+  useSessionSnapshot: () => () => null,
+}));

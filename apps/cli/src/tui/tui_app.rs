@@ -3978,11 +3978,12 @@ fn resume_session(reference: &str, app: &mut TuiApp) {
     use crate::platform::runtime::session_control as sessions;
 
     let text = match sessions::resolve_managed_session_reference(reference) {
-        Ok(resolved) => match crate::runtime::session::ManagedSession::load_from_path(&resolved.path) {
-            Ok(managed) => {
-                let session_id = managed.session_id.clone();
-                let count = managed.messages.len();
-                match app.session.load_managed_conversation(managed, resolved.path) {
+        Ok(resolved) => {
+            match crate::runtime::session::ManagedSession::load_from_path(&resolved.path) {
+                Ok(managed) => {
+                    let session_id = managed.session_id.clone();
+                    let count = managed.messages.len();
+                    match app.session.load_managed_conversation(managed, resolved.path) {
                     Ok(()) => {
                         app.session.turn_count = app
                             .session
@@ -3998,9 +3999,10 @@ fn resume_session(reference: &str, app: &mut TuiApp) {
                         "Refusing to resume a session with unknown or incompatible routing authority: {error:#}"
                     ),
                 }
+                }
+                Err(error) => format!("Could not load session: {error:#}"),
             }
-            Err(error) => format!("Could not load session: {error:#}"),
-        },
+        }
         Err(error) => format!("No session matches `{reference}`: {error:#}"),
     };
 
@@ -8057,13 +8059,17 @@ mod tests {
         let path = temp.path().join("empty.json");
         let mut app = minimal_app();
         app.session.set_session_persistence(false);
-        app.session.messages.push(crate::models::Message::text("user", "previous conversation"));
+        app.session.messages.push(crate::models::Message::text(
+            "user",
+            "previous conversation",
+        ));
         app.session.total_input_tokens = 7;
         app.session.total_output_tokens = 9;
         app.session.turn_count = 1;
         app.session.recent_tool_calls = vec![17];
         app.session.loop_strike_count = 2;
-        let mut managed = crate::runtime::session::ManagedSession::new("empty-target", chrono::Utc::now());
+        let mut managed =
+            crate::runtime::session::ManagedSession::new("empty-target", chrono::Utc::now());
         managed.model = Some(app.session.model.clone());
         managed.routing_authority = Some(app.session.current_routing_authority());
         managed.save_to_path(&path).expect("save fixture");
@@ -8078,7 +8084,10 @@ mod tests {
         assert_eq!(app.session.total_output_tokens, 9);
         assert!(app.session.recent_tool_calls.is_empty());
         assert_eq!(app.session.loop_strike_count, 0);
-        assert!(app.chat_messages.iter().any(|message| message.text.contains("Resumed session empty-target")));
+        assert!(app
+            .chat_messages
+            .iter()
+            .any(|message| message.text.contains("Resumed session empty-target")));
     }
 
     fn quiet_chrome() -> FrameChrome<'static> {

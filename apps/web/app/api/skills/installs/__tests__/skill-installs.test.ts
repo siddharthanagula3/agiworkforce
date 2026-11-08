@@ -18,7 +18,10 @@ const mocks = vi.hoisted(() => ({
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mocks.requireCsrfToken }));
-vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: mocks.getClerkAuthUser }));
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule0>()),
+  getClerkAuthUser: mocks.getClerkAuthUser,
+}));
 vi.mock('@/lib/workspace-audit', () => ({
   recordWorkspaceAuditEvent: mocks.recordWorkspaceAuditEvent,
 }));
@@ -31,11 +34,11 @@ vi.mock('@/features/plugins/server/directory/installed-skills', () => ({
 }));
 
 vi.mock('@/lib/managed-compute-gate', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/managed-compute-gate')>()),
+  ...(await importOriginal<MockedModule0>()),
   buildWorkspaceFeatureGateResponse: mocks.buildWorkspaceFeatureGateResponse,
 }));
 vi.mock('@/lib/services/workspace-plugin-access', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/workspace-plugin-access')>()),
+  ...(await importOriginal<MockedModule1>()),
   listPermittedPluginIds: mocks.listPermittedPluginIds,
   workspaceAllowsPlugins: mocks.workspaceAllowsPlugins,
 }));
@@ -71,25 +74,29 @@ function fakeDb(initialSettings: Record<string, unknown> | null = null, commitEr
     stored = JSON.parse(String(params[1])) as Record<string, unknown>;
     return [{ settings: stored }];
   });
-  const execute = vi.fn(async () => { throw new Error('Unexpected settings execute'); });
-  const transaction = vi.fn(async <T>(fn: (tx: { query: typeof txQuery; execute: typeof execute }) => Promise<T>) => {
-    const before = stored;
-    events.push('begin');
-    let result: T;
-    try {
-      result = await fn({ query: txQuery, execute });
-    } catch (error) {
-      stored = before;
-      events.push('rollback');
-      throw error;
-    }
-    if (commitError) {
-      events.push('commit-uncertain');
-      throw commitError;
-    }
-    events.push('commit');
-    return result;
+  const execute = vi.fn(async () => {
+    throw new Error('Unexpected settings execute');
   });
+  const transaction = vi.fn(
+    async <T>(fn: (tx: { query: typeof txQuery; execute: typeof execute }) => Promise<T>) => {
+      const before = stored;
+      events.push('begin');
+      let result: T;
+      try {
+        result = await fn({ query: txQuery, execute });
+      } catch (error) {
+        stored = before;
+        events.push('rollback');
+        throw error;
+      }
+      if (commitError) {
+        events.push('commit-uncertain');
+        throw commitError;
+      }
+      events.push('commit');
+      return result;
+    },
+  );
   return { query, execute, transaction, txQuery, events };
 }
 
@@ -280,38 +287,54 @@ describe('/api/skills/installs', () => {
   });
 
   it('respects the workspace feature denial before starting a settings transaction', async () => {
-    mocks.buildWorkspaceFeatureGateResponse.mockResolvedValueOnce(new Response(null, { status: 403 }));
+    mocks.buildWorkspaceFeatureGateResponse.mockResolvedValueOnce(
+      new Response(null, { status: 403 }),
+    );
     const response = await installSkill(postRequest({ name: 'design-review' }));
     expect(response.status).toBe(403);
     expect(sharedDb.transaction).not.toHaveBeenCalled();
     expect(mocks.recordWorkspaceAuditEvent).not.toHaveBeenCalled();
   });
 
-  it.each(['POST', 'DELETE'])('%s exposes exact-size validation without audit or success', async (method) => {
-    Object.assign(sharedDb, fakeDb({ profile: { text: 'x'.repeat(100_000) } }));
-    const response = method === 'POST'
-      ? await installSkill(postRequest({ name: 'design-review' }))
-      : await uninstallSkill(deleteRequest('design-review'), { params: Promise.resolve({ name: 'design-review' }) });
-    expect(response.status).toBe(400);
-    expect(await response.json()).toMatchObject({ error: { code: 'VALIDATION_ERROR', message: 'Settings payload is too large' } });
-    expect(sharedDb.events).toEqual(['begin', 'lock', 'rollback']);
-    expect(sharedDb.query).not.toHaveBeenCalled();
-    expect(mocks.recordWorkspaceAuditEvent).not.toHaveBeenCalled();
-    expect(sharedDb.transaction).toHaveBeenCalledTimes(1);
-  });
+  it.each(['POST', 'DELETE'])(
+    '%s exposes exact-size validation without audit or success',
+    async (method) => {
+      Object.assign(sharedDb, fakeDb({ profile: { text: 'x'.repeat(100_000) } }));
+      const response =
+        method === 'POST'
+          ? await installSkill(postRequest({ name: 'design-review' }))
+          : await uninstallSkill(deleteRequest('design-review'), {
+              params: Promise.resolve({ name: 'design-review' }),
+            });
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({
+        error: { code: 'VALIDATION_ERROR', message: 'Settings payload is too large' },
+      });
+      expect(sharedDb.events).toEqual(['begin', 'lock', 'rollback']);
+      expect(sharedDb.query).not.toHaveBeenCalled();
+      expect(mocks.recordWorkspaceAuditEvent).not.toHaveBeenCalled();
+      expect(sharedDb.transaction).toHaveBeenCalledTimes(1);
+    },
+  );
 
-  it.each(['POST', 'DELETE'])('%s does not audit or return success after uncertain commit failure', async (method) => {
-    Object.assign(sharedDb, fakeDb({}, new Error('Commit acknowledgment lost')));
-    const response = method === 'POST'
-      ? await installSkill(postRequest({ name: 'design-review' }))
-      : await uninstallSkill(deleteRequest('design-review'), { params: Promise.resolve({ name: 'design-review' }) });
-    expect(response.status).toBe(500);
-    expect(await response.json()).not.toHaveProperty('installed');
-    expect(sharedDb.events).toEqual(['begin', 'lock', 'update', 'commit-uncertain']);
-    expect(sharedDb.query).not.toHaveBeenCalled();
-    expect(mocks.recordWorkspaceAuditEvent).not.toHaveBeenCalled();
-    expect(sharedDb.transaction).toHaveBeenCalledTimes(1);
-  });
+  it.each(['POST', 'DELETE'])(
+    '%s does not audit or return success after uncertain commit failure',
+    async (method) => {
+      Object.assign(sharedDb, fakeDb({}, new Error('Commit acknowledgment lost')));
+      const response =
+        method === 'POST'
+          ? await installSkill(postRequest({ name: 'design-review' }))
+          : await uninstallSkill(deleteRequest('design-review'), {
+              params: Promise.resolve({ name: 'design-review' }),
+            });
+      expect(response.status).toBe(500);
+      expect(await response.json()).not.toHaveProperty('installed');
+      expect(sharedDb.events).toEqual(['begin', 'lock', 'update', 'commit-uncertain']);
+      expect(sharedDb.query).not.toHaveBeenCalled();
+      expect(mocks.recordWorkspaceAuditEvent).not.toHaveBeenCalled();
+      expect(sharedDb.transaction).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it('audits only after the settings transaction has committed', async () => {
     mocks.recordWorkspaceAuditEvent.mockImplementationOnce(async () => {
@@ -321,5 +344,9 @@ describe('/api/skills/installs', () => {
     expect(response.status).toBe(200);
     expect(mocks.recordWorkspaceAuditEvent).toHaveBeenCalledTimes(1);
   });
-
 });
+
+type MockedModule0 = typeof import('@/lib/managed-compute-gate');
+type MockedModule1 = typeof import('@/lib/services/workspace-plugin-access');
+
+type CompleteMockModule0 = typeof import('@/lib/api-auth');

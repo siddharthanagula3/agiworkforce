@@ -21,7 +21,8 @@ const { mockQuery, mockRecordAuditEvent } = vi.hoisted(() => ({
 
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule1>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/server/rls-db', () => ({
@@ -31,7 +32,10 @@ vi.mock('@/lib/server/rls-db', () => ({
     organizationId: requestScope.organizationId,
   })),
 }));
-vi.mock('@/lib/server/key-value', () => ({ getKeyValueStore: () => null }));
+vi.mock('@/lib/server/key-value', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule0>()),
+  getKeyValueStore: () => null,
+}));
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: () => ({ query: (...args: unknown[]) => mockQuery(...args) }),
 }));
@@ -378,3 +382,7 @@ describe('service principal route request scope', () => {
     },
   );
 });
+
+type CompleteMockModule0 = typeof import('@/lib/server/key-value');
+
+type RetainedMockModule1 = typeof import('@/lib/logger');

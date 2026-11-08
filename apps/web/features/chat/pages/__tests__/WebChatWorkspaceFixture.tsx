@@ -12,7 +12,10 @@ import { cloudMemoryScopeKey } from '@/features/memory/cloud-memory-controller';
 
 export function createWebChatWorkspaceFixture() {
   const data = ManagedCloudAccountWorkspacesSchema.parse({
-    scope: 'personal', activeWorkspaceId: 'personal', activeOrganizationId: null, workspaces: [],
+    scope: 'personal',
+    activeWorkspaceId: 'personal',
+    activeOrganizationId: null,
+    workspaces: [],
   });
   const scopeKey = cloudMemoryScopeKey(data);
   let client: QueryClient;

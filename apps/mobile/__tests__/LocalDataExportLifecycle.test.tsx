@@ -11,7 +11,9 @@ jest.mock('expo-router', () => ({
   useFocusEffect: (callback: () => () => void) => {
     const React = require('react');
     React.useEffect(() => {
-      mockFocus = () => { mockBlur = callback(); };
+      mockFocus = () => {
+        mockBlur = callback();
+      };
       mockFocus();
       return () => mockBlur?.();
     }, [callback]);
@@ -22,7 +24,9 @@ jest.mock('../services/dsarExport', () => ({
 }));
 jest.mock('../src/features/settings/data-controls/localDataSnapshot', () => ({
   buildLocalDataExportSnapshot: () => mockSnapshot(),
-  LocalExportAuthorityError: class LocalExportAuthorityError extends Error {},
+  LocalExportAuthorityError: class LocalExportAuthorityError extends Error {
+    readonly userMessage = 'Export belongs to another account.';
+  },
 }));
 jest.mock('../src/features/auth/services/cloudAccountSession', () => ({
   subscribeCloudAccountEpochChange: (listener: () => void) => {
@@ -31,11 +35,15 @@ jest.mock('../src/features/auth/services/cloudAccountSession', () => ({
   },
 }));
 import { useLocalDataExport } from '../src/features/settings/data-controls/useLocalDataExport';
+import { LocalExportAuthorityError } from '../src/features/settings/data-controls/localDataSnapshot';
 
 function deferred() {
   let resolve!: () => void;
   let reject!: (error: Error) => void;
-  const promise = new Promise<void>((yes, no) => { resolve = yes; reject = no; });
+  const promise = new Promise<void>((yes, no) => {
+    resolve = yes;
+    reject = no;
+  });
   return { promise, resolve, reject };
 }
 
@@ -47,44 +55,89 @@ describe('local data export caller lifetime', () => {
   });
   afterEach(() => jest.restoreAllMocks());
 
+  it('shows authored authority recovery copy instead of mutable error diagnostics', async () => {
+    const error = new LocalExportAuthorityError();
+    error.message = 'private storage diagnostic';
+    mockSnapshot.mockImplementationOnce(() => {
+      throw error;
+    });
+    const { result } = renderHook(() => useLocalDataExport());
+    await act(async () => {
+      await result.current.handleExport();
+    });
+    expect(Alert.alert).toHaveBeenCalledWith('Export failed', error.userMessage);
+    expect(JSON.stringify(jest.mocked(Alert.alert).mock.calls)).not.toContain(error.message);
+  });
+
   it('retires work on blur and does not let its completion reset a newer export', async () => {
     const old = deferred();
     const next = deferred();
     mockExport.mockReturnValueOnce(old.promise).mockReturnValueOnce(next.promise);
     const { result } = renderHook(() => useLocalDataExport());
     let oldRun!: Promise<void>;
-    act(() => { oldRun = result.current.handleExport(); });
+    act(() => {
+      oldRun = result.current.handleExport();
+    });
     const oldAssert = mockExport.mock.calls[0][2] as () => void;
-    act(() => { mockBlur?.(); mockFocus(); });
+    act(() => {
+      mockBlur?.();
+      mockFocus();
+    });
     expect(oldAssert).toThrow('no longer active');
     let nextRun!: Promise<void>;
-    act(() => { nextRun = result.current.handleExport(); });
-    await act(async () => { old.reject(new Error('late error')); await oldRun; });
+    act(() => {
+      nextRun = result.current.handleExport();
+    });
+    await act(async () => {
+      old.reject(new Error('late error'));
+      await oldRun;
+    });
     expect(result.current.exporting).toBe(true);
     expect(Alert.alert).not.toHaveBeenCalled();
-    await act(async () => { next.resolve(); await nextRun; });
+    await act(async () => {
+      next.resolve();
+      await nextRun;
+    });
     expect(result.current.exporting).toBe(false);
   });
 
   it('retires Cloud-owned work on epoch change but keeps device-only work active', async () => {
     let valid = true;
-    mockSnapshot.mockReturnValueOnce({ assertAuthority: () => {
-      if (!valid) throw new Error('stale');
-    } }).mockReturnValueOnce({});
+    mockSnapshot
+      .mockReturnValueOnce({
+        assertAuthority: () => {
+          if (!valid) throw new Error('stale');
+        },
+      })
+      .mockReturnValueOnce({});
     const cloud = deferred();
     const local = deferred();
     mockExport.mockReturnValueOnce(cloud.promise).mockReturnValueOnce(local.promise);
     const { result } = renderHook(() => useLocalDataExport());
     let cloudRun!: Promise<void>;
-    act(() => { cloudRun = result.current.handleExport(); });
-    act(() => { valid = false; mockEpochChanged(); });
+    act(() => {
+      cloudRun = result.current.handleExport();
+    });
+    act(() => {
+      valid = false;
+      mockEpochChanged();
+    });
     expect(result.current.exporting).toBe(false);
     let localRun!: Promise<void>;
-    act(() => { localRun = result.current.handleExport(); mockEpochChanged(); });
+    act(() => {
+      localRun = result.current.handleExport();
+      mockEpochChanged();
+    });
     expect(result.current.exporting).toBe(true);
-    await act(async () => { cloud.reject(new Error('stale')); await cloudRun; });
+    await act(async () => {
+      cloud.reject(new Error('stale'));
+      await cloudRun;
+    });
     expect(Alert.alert).not.toHaveBeenCalled();
     expect(result.current.exporting).toBe(true);
-    await act(async () => { local.resolve(); await localRun; });
+    await act(async () => {
+      local.resolve();
+      await localRun;
+    });
   });
 });

@@ -1,13 +1,27 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import { vi } from 'vitest';
 import { AVAILABLE_NOW_LABEL, isReleased, SURFACE_STATUS } from '@/lib/surface-status';
 import { NotificationsSection } from './NotificationsSection';
 import { SecuritySection } from './SecuritySection';
 
-vi.mock('@clerk/nextjs', () => ({
-  useUser: () => ({ isLoaded: true, user: { publicMetadata: { role: 'member' } } }),
-  useClerk: () => ({ signOut: vi.fn() }),
-}));
+vi.mock('@clerk/nextjs', async () => {
+  const { createClerkSessionFixture } =
+    await import('@/lib/identity/__tests__/clerk-session-fixture');
+  return {
+    ...createClerkSessionFixture(
+      () => ({
+        isLoaded: true,
+        isSignedIn: false,
+        userId: null,
+        sessionId: null,
+        getToken: async () => null,
+      }),
+      { signOut: vi.fn() },
+    ),
+    useUser: () => ({ isLoaded: true, user: { publicMetadata: { role: 'member' } } }),
+  };
+});
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
@@ -20,7 +34,7 @@ vi.mock('@shared/stores/web-auth-store', () => ({
 }));
 
 vi.mock('@/app/settings/_lib/preferences-client', async (original) => ({
-  ...await original<typeof import('@/app/settings/_lib/preferences-client')>(),
+  ...(await original<MockedModule0>()),
   PREFERENCE_NAMESPACE_SAVED_EVENT: 'agi:preference-namespace-saved',
   fetchStoredPreferenceNamespace: vi.fn(async () => ({})),
   fetchPreferenceNamespace: vi.fn(async () => ({})),
@@ -37,7 +51,7 @@ vi.mock('@features/settings/hooks/use-settings-queries', async (importOriginal) 
 }));
 
 vi.mock('@features/settings/components/Settings/TwoFactor', async (original) => ({
-  ...await original<typeof import('@features/settings/components/Settings/TwoFactor')>(),
+  ...(await original<MockedModule1>()),
   TwoFactorPanel: () => <div>Account controls</div>,
 }));
 
@@ -92,7 +106,7 @@ describe('Web Settings capability boundaries', () => {
   });
 
   it('does not imply unsupported account factors or trusted contacts', () => {
-    render(<SecuritySection />);
+    renderSecurity();
 
     expect(screen.getByText('Current account boundary')).toBeInTheDocument();
     expect(
@@ -105,7 +119,7 @@ describe('Web Settings capability boundaries', () => {
   });
 
   it('leads with the working controls and keeps the boundary notes last', () => {
-    render(<SecuritySection />);
+    renderSecurity();
 
     const controls = screen.getByText('Account controls');
     const boundary = screen.getByText('Current account boundary');
@@ -116,7 +130,7 @@ describe('Web Settings capability boundaries', () => {
   });
 
   it('does not deny cross-device session revocation, which is implemented', () => {
-    render(<SecuritySection />);
+    renderSecurity();
 
     expect(screen.queryByText(/cross-device session revocation/i)).not.toBeInTheDocument();
     expect(
@@ -132,7 +146,7 @@ const notificationOwner = vi.hoisted(() => ({
   session: { userId: 'a', sessionId: 'a', isCurrent: () => true, getToken: async () => 'token-a' },
 }));
 vi.mock('../hooks/use-preference-owner', async (original) => ({
-  ...await original<typeof import('../hooks/use-preference-owner')>(),
+  ...(await original<MockedModule2>()),
   usePreferenceOwner: () => notificationOwner,
 }));
 vi.mock('../services/notification-preferences-client', () => ({
@@ -142,3 +156,18 @@ vi.mock('../services/notification-preferences-client', () => ({
     return { stored: patch, version: 'v2' };
   },
 }));
+
+type MockedModule0 = typeof import('@/app/settings/_lib/preferences-client');
+type MockedModule1 = typeof import('@features/settings/components/Settings/TwoFactor');
+type MockedModule2 = typeof import('../hooks/use-preference-owner');
+
+function renderSecurity() {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false } },
+  });
+  return render(
+    <QueryClientProvider client={client}>
+      <SecuritySection />
+    </QueryClientProvider>,
+  );
+}

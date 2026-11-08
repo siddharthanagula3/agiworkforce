@@ -1,6 +1,9 @@
 /**
  * @vitest-environment jsdom
  */
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -21,32 +24,40 @@ beforeEach(() => {
 });
 
 describe('browser site tools use the canonical approval path', () => {
-  it.each(['read', 'write'] as const)('passes the site-tool requirement for a declared %s tool', async (effect) => {
-    const browserSiteTools = new BrowserAgentSiteTools({
-      signal: new AbortController().signal,
-      currentTabId: () => 1,
-      navigationGeneration: () => 1,
-      assertCurrent: async () => undefined,
-      send: async () => ({ success: false }),
-    });
-    const prepare = vi.spyOn(browserSiteTools, 'prepare').mockResolvedValue({
-      tabId: 1,
-      navigationGeneration: 1,
-      binding: {
-        pageInstanceId: '00000000-0000-0000-0000-000000000001',
-        url: tabs.url,
-        descriptor: { name: 'page_action', description: 'Page action', effect, source: 'imperative' },
-      },
-      arguments: {},
-    });
-    const args = { name: 'page_action', arguments: {} };
-    const requirement = await resolveApprovalRequirement(1, 'call_site_tool', args, {
-      browserSiteTools,
-    });
+  it.each(['read', 'write'] as const)(
+    'passes the site-tool requirement for a declared %s tool',
+    async (effect) => {
+      const browserSiteTools = new BrowserAgentSiteTools({
+        signal: new AbortController().signal,
+        currentTabId: () => 1,
+        navigationGeneration: () => 1,
+        assertCurrent: async () => undefined,
+        send: async () => ({ success: false }),
+      });
+      const prepare = vi.spyOn(browserSiteTools, 'prepare').mockResolvedValue({
+        tabId: 1,
+        navigationGeneration: 1,
+        binding: {
+          pageInstanceId: '00000000-0000-0000-0000-000000000001',
+          url: tabs.url,
+          descriptor: {
+            name: 'page_action',
+            description: 'Page action',
+            effect,
+            source: 'imperative',
+          },
+        },
+        arguments: {},
+      });
+      const args = { name: 'page_action', arguments: {} };
+      const requirement = await resolveApprovalRequirement(1, 'call_site_tool', args, {
+        browserSiteTools,
+      });
 
-    expect(prepare).toHaveBeenCalledWith(args);
-    expect(requirement).toEqual({ alwaysAsk: true, reason: 'site_tool' });
-  });
+      expect(prepare).toHaveBeenCalledWith(args);
+      expect(requirement).toEqual({ alwaysAsk: true, reason: 'site_tool' });
+    },
+  );
 
   it('rejects canonical execution when the task has no bound site-tool service', async () => {
     await expect(
@@ -60,9 +71,9 @@ describe('browser site tools use the canonical approval path', () => {
       siteTools: [{ name: 'site_search', effect: 'read', source: 'imperative' }],
       callSiteTool: vi.fn(),
     };
-    await expect(
-      resolveApprovalRequirement(1, 'site_search', {}, legacyOptions),
-    ).rejects.toThrow('Unsupported browser action');
+    await expect(resolveApprovalRequirement(1, 'site_search', {}, legacyOptions)).rejects.toThrow(
+      'Unsupported browser action',
+    );
     expect(legacyOptions.callSiteTool).not.toHaveBeenCalled();
   });
 
@@ -83,9 +94,12 @@ describe('browser site tools use the canonical approval path', () => {
   });
 
   it('does not restore automatic alias discovery or unbound browser-agent execution', () => {
-    const background = readFileSync(new URL('../src/background.ts', import.meta.url), 'utf8');
+    const background = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), '../src/background.ts'),
+      'utf8',
+    );
     const loop = readFileSync(
-      new URL('../src/features/computer-use/agentLoop.ts', import.meta.url),
+      join(dirname(fileURLToPath(import.meta.url)), '../src/features/computer-use/agentLoop.ts'),
       'utf8',
     );
     expect(background).toContain('browserSiteTools: new BrowserAgentSiteTools(');

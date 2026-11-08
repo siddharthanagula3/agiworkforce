@@ -1,5 +1,5 @@
 vi.mock('@/features/settings/hooks/use-preference-owner', async (original) => ({
-  ...await original<typeof import('@/features/settings/hooks/use-preference-owner')>(),
+  ...(await original<MockedModule0>()),
   usePreferenceOwner: () => null,
 }));
 
@@ -20,7 +20,9 @@ import React from 'react';
 type ScanModule0 = typeof import('@agiworkforce/ui');
 type ScanModule1 = typeof import('@/lib/sentry-shared');
 
-vi.mock('../../components/BulkConversationControls', () => ({ BulkConversationControls: () => null }));
+vi.mock('../../components/BulkConversationControls', () => ({
+  BulkConversationControls: () => null,
+}));
 
 vi.mock('../../components/UsOnlyRoutingPanel', () => ({
   UsOnlyRoutingPanel: () => null,
@@ -62,7 +64,7 @@ vi.mock('@/lib/sentry-shared', async (importOriginal) => ({
 }));
 
 vi.mock('@/app/settings/_lib/preferences-client', async (original) => ({
-  ...await original<typeof import('@/app/settings/_lib/preferences-client')>(),
+  ...(await original<MockedModule1>()),
   fetchPreferenceNamespace: vi.fn(async () => ({})),
   savePreferenceNamespace: vi.fn(async () => ({})),
 }));
@@ -103,3 +105,6 @@ describe('PrivacySection model-training copy', () => {
     expect(screen.queryByRole('switch', { name: /training/i })).toBeNull();
   });
 });
+
+type MockedModule0 = typeof import('@/features/settings/hooks/use-preference-owner');
+type MockedModule1 = typeof import('@/app/settings/_lib/preferences-client');

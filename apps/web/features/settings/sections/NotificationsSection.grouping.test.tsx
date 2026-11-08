@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
 type OriginalNotificationsModule = typeof import('@/features/notifications');
 
 vi.mock('@/app/settings/_lib/preferences-client', async (original) => ({
-  ...await original<typeof import('@/app/settings/_lib/preferences-client')>(),
+  ...(await original<MockedModule0>()),
   fetchPreferenceNamespace: mocks.fetchPreferenceNamespace,
   savePreferenceNamespace: mocks.savePreferenceNamespace,
 }));
@@ -70,8 +70,12 @@ describe('NotificationsSection grouping', () => {
   it('reconciles an unconfirmed write with GET instead of replaying intent', async () => {
     mocks.savePreferenceNamespace.mockRejectedValueOnce(new Error('HTTP 503: Service unavailable'));
     render(<NotificationsSection />);
-    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Reply ready' })).toBeEnabled());
-    fireEvent.change(screen.getByRole('combobox', { name: 'Reply ready' }), { target: { value: 'off' } });
+    await waitFor(() =>
+      expect(screen.getByRole('combobox', { name: 'Reply ready' })).toBeEnabled(),
+    );
+    fireEvent.change(screen.getByRole('combobox', { name: 'Reply ready' }), {
+      target: { value: 'off' },
+    });
     await screen.findByText(/Save could not be confirmed/);
     expect(screen.getByRole('combobox', { name: 'Reply ready' })).toHaveValue('browserReplyReady');
     expect(screen.getByRole('combobox', { name: 'Reply ready' })).toBeEnabled();
@@ -84,17 +88,24 @@ describe('NotificationsSection grouping', () => {
   });
 
   it('locks editing until a failed recovery GET is retried without another PUT', async () => {
-    mocks.fetchPreferenceNamespace.mockResolvedValueOnce({ browserReplyReady: true })
+    mocks.fetchPreferenceNamespace
+      .mockResolvedValueOnce({ browserReplyReady: true })
       .mockRejectedValueOnce(new Error('offline'))
       .mockResolvedValueOnce({ browserReplyReady: false });
     mocks.savePreferenceNamespace.mockRejectedValueOnce(new Error('lost response'));
     render(<NotificationsSection />);
-    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Reply ready' })).toBeEnabled());
-    fireEvent.change(screen.getByRole('combobox', { name: 'Reply ready' }), { target: { value: 'off' } });
+    await waitFor(() =>
+      expect(screen.getByRole('combobox', { name: 'Reply ready' })).toBeEnabled(),
+    );
+    fireEvent.change(screen.getByRole('combobox', { name: 'Reply ready' }), {
+      target: { value: 'off' },
+    });
     const retry = await screen.findByRole('button', { name: 'Retry loading' });
     expect(screen.getByRole('combobox', { name: 'Reply ready' })).toBeDisabled();
     fireEvent.click(retry);
-    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Reply ready' })).toBeEnabled());
+    await waitFor(() =>
+      expect(screen.getByRole('combobox', { name: 'Reply ready' })).toBeEnabled(),
+    );
     expect(screen.getByRole('combobox', { name: 'Reply ready' })).toHaveValue('off');
     expect(mocks.savePreferenceNamespace).toHaveBeenCalledTimes(1);
     expect(mocks.fetchPreferenceNamespace).toHaveBeenCalledTimes(3);
@@ -256,13 +267,19 @@ const notificationOwner = vi.hoisted(() => ({
   session: { userId: 'a', sessionId: 'a', isCurrent: () => true, getToken: async () => 'token-a' },
 }));
 vi.mock('../hooks/use-preference-owner', async (original) => ({
-  ...await original<typeof import('../hooks/use-preference-owner')>(),
+  ...(await original<MockedModule1>()),
   usePreferenceOwner: () => notificationOwner,
 }));
 vi.mock('../services/notification-preferences-client', () => ({
-  readNotificationPreferences: async () => ({ stored: await (mocks.fetchPreferenceNamespace)(), version: 'v1' }),
+  readNotificationPreferences: async () => ({
+    stored: await mocks.fetchPreferenceNamespace(),
+    version: 'v1',
+  }),
   saveNotificationPreferences: async (_authority: unknown, patch: object) => {
-    await (mocks.savePreferenceNamespace)('notifications', patch, { merge: true });
+    await mocks.savePreferenceNamespace('notifications', patch, { merge: true });
     return { stored: patch, version: 'v2' };
   },
 }));
+
+type MockedModule0 = typeof import('@/app/settings/_lib/preferences-client');
+type MockedModule1 = typeof import('../hooks/use-preference-owner');

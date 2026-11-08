@@ -1,3 +1,4 @@
+-- destructive: Explicit caller-owned revocation deletes connector tool session approvals; rolling back the function cannot restore approvals removed by later calls.
 begin;
 
 do $$

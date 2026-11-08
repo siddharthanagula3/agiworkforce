@@ -33,21 +33,23 @@ vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: mocks.getNeonDb,
   getStripeWebhookDb: vi.fn(),
 }));
-vi.mock('@/lib/server/claimed-user-scope-db', () => ({ createClaimedUserScopedDb: mocks.claimScope }));
+vi.mock('@/lib/server/claimed-user-scope-db', () => ({
+  createClaimedUserScopedDb: mocks.claimScope,
+}));
 vi.mock('@/lib/services/active-workspace-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/active-workspace-service')>()),
+  ...(await importOriginal<MockedModule0>()),
   resolveActiveOrganizationId: mocks.resolveOrganization,
 }));
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<MockedModule1>()),
   withRateLimit: mocks.withRateLimit,
 }));
 vi.mock('@/lib/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/csrf')>()),
+  ...(await importOriginal<MockedModule2>()),
   requireCsrfToken: mocks.requireCsrfToken,
 }));
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<MockedModule3>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/security-audit', () => ({
@@ -76,7 +78,7 @@ vi.mock('@/lib/server/identity', () => ({
   verifyIdentitySessionToken: vi.fn(),
 }));
 vi.mock('@/lib/mfa-policy-gate', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/mfa-policy-gate')>()),
+  ...(await importOriginal<MockedModule4>()),
   rememberMfaEnrollment: mocks.rememberEnrollment,
 }));
 vi.mock('@/lib/server/step-up/session-proof', async (importOriginal) => ({
@@ -113,7 +115,9 @@ function request(method: 'GET' | 'POST', body?: unknown, bearer = true) {
     method,
     headers: {
       'content-type': 'application/json',
-      ...(bearer ? { authorization: 'Bearer native-session-token' } : { cookie: '__session=native-cookie' }),
+      ...(bearer
+        ? { authorization: 'Bearer native-session-token' }
+        : { cookie: '__session=native-cookie' }),
       'x-user-id': 'forged-account',
       'x-session-id': 'forged-session',
     },
@@ -138,51 +142,69 @@ beforeEach(() => {
 });
 
 describe('POST /api/auth/step-up', () => {
-  it.each([true, false])('mints product-account proof using native factors, bearer=%s', async (bearer) => {
-    const incoming = request('POST', { action: 'organization.transfer_ownership', resourceId: ORG }, bearer);
+  it.each([true, false])(
+    'mints product-account proof using native factors, bearer=%s',
+    async (bearer) => {
+      const incoming = request(
+        'POST',
+        { action: 'organization.transfer_ownership', resourceId: ORG },
+        bearer,
+      );
 
-    const response = await POST(incoming);
+      const response = await POST(incoming);
 
-    expect(response.status).toBe(200);
-    const body = (await response.json()) as { token: string; method: string };
-    expect(body.method).toBe('second_factor');
-    expect(verifyStepUpGrant(body.token, {
-      userId: ACCOUNT,
-      action: 'organization.transfer_ownership',
-      resourceId: ORG,
-    }).method).toBe('second_factor');
-    expect(() => verifyStepUpGrant(body.token, {
-      userId: SUBJECT,
-      action: 'organization.transfer_ownership',
-      resourceId: ORG,
-    })).toThrow();
-    expect(mocks.authenticate).toHaveBeenCalledExactlyOnceWith(incoming, {
-      mfaEnrollment: true,
-      resolveOrganization: false,
-    });
-    expect(mocks.claimScope).toHaveBeenCalledExactlyOnceWith(SERVICE_DB, {
-      userId: ACCOUNT,
-      organizationId: null,
-    });
-    expect(mocks.resolveOrganization).not.toHaveBeenCalled();
-    expect(mocks.getUser).toHaveBeenCalledExactlyOnceWith(SUBJECT);
-    expect(mocks.query).toHaveBeenCalledWith(expect.stringContaining('from user_two_factor'), [ACCOUNT]);
-    expect(mocks.withRateLimit).toHaveBeenCalledWith(incoming, 'auth-verify', `user:${ACCOUNT}`);
-    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(expect.objectContaining({
-      eventType: 'step_up_satisfied',
-      userId: ACCOUNT,
-      organizationId: null,
-      detail: {
-        resourceType: 'step_up',
-        resourceId: 'organization.transfer_ownership',
-        source: 'second_factor',
-        scope: ORG,
-      },
-    }));
-  });
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as { token: string; method: string };
+      expect(body.method).toBe('second_factor');
+      expect(
+        verifyStepUpGrant(body.token, {
+          userId: ACCOUNT,
+          action: 'organization.transfer_ownership',
+          resourceId: ORG,
+        }).method,
+      ).toBe('second_factor');
+      expect(() =>
+        verifyStepUpGrant(body.token, {
+          userId: SUBJECT,
+          action: 'organization.transfer_ownership',
+          resourceId: ORG,
+        }),
+      ).toThrow();
+      expect(mocks.authenticate).toHaveBeenCalledExactlyOnceWith(incoming, {
+        mfaEnrollment: true,
+        resolveOrganization: false,
+      });
+      expect(mocks.claimScope).toHaveBeenCalledExactlyOnceWith(SERVICE_DB, {
+        userId: ACCOUNT,
+        organizationId: null,
+      });
+      expect(mocks.resolveOrganization).not.toHaveBeenCalled();
+      expect(mocks.getUser).toHaveBeenCalledExactlyOnceWith(SUBJECT);
+      expect(mocks.query).toHaveBeenCalledWith(expect.stringContaining('from user_two_factor'), [
+        ACCOUNT,
+      ]);
+      expect(mocks.withRateLimit).toHaveBeenCalledWith(incoming, 'auth-verify', `user:${ACCOUNT}`);
+      expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: 'step_up_satisfied',
+          userId: ACCOUNT,
+          organizationId: null,
+          detail: {
+            resourceType: 'step_up',
+            resourceId: 'organization.transfer_ownership',
+            source: 'second_factor',
+            scope: ORG,
+          },
+        }),
+      );
+    },
+  );
 
   it('requires a recent second factor even when the first factor was freshly verified', async () => {
-    mocks.readSessionFactorAge.mockResolvedValue({ firstFactorMinutes: 0, secondFactorMinutes: 45 });
+    mocks.readSessionFactorAge.mockResolvedValue({
+      firstFactorMinutes: 0,
+      secondFactorMinutes: 45,
+    });
 
     const response = await POST(request('POST', { action: 'email.change' }));
 
@@ -196,7 +218,10 @@ describe('POST /api/auth/step-up', () => {
 
   it('accepts a recent first factor only after reading the matching unenrolled provider user', async () => {
     mocks.getUser.mockResolvedValue(providerUser(false));
-    mocks.readSessionFactorAge.mockResolvedValue({ firstFactorMinutes: 1, secondFactorMinutes: null });
+    mocks.readSessionFactorAge.mockResolvedValue({
+      firstFactorMinutes: 1,
+      secondFactorMinutes: null,
+    });
 
     const response = await POST(request('POST', { action: 'account.delete' }));
 
@@ -219,7 +244,11 @@ describe('POST /api/auth/step-up', () => {
 
     expect((await POST(request('POST', { action: 'email.change' }))).status).toBe(429);
 
-    expect(mocks.withRateLimit).toHaveBeenCalledWith(expect.anything(), 'auth-verify', `user:${ACCOUNT}`);
+    expect(mocks.withRateLimit).toHaveBeenCalledWith(
+      expect.anything(),
+      'auth-verify',
+      `user:${ACCOUNT}`,
+    );
     expect(mocks.getUser).not.toHaveBeenCalled();
     expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
   });
@@ -254,15 +283,17 @@ describe('GET /api/auth/step-up', () => {
 });
 
 describe.each(['GET', 'POST'] as const)('%s /api/auth/step-up admission failures', (method) => {
-  const call = () => method === 'GET'
-    ? GET(request('GET'))
-    : POST(request('POST', { action: 'email.change' }));
+  const call = () =>
+    method === 'GET' ? GET(request('GET')) : POST(request('POST', { action: 'email.change' }));
 
   it.each([null, { ...providerUser(false), id: 'foreign-native-subject' }])(
     'never downgrades assurance when the provider user is missing or foreign: %j',
     async (user) => {
       mocks.getUser.mockResolvedValue(user);
-      mocks.readSessionFactorAge.mockResolvedValue({ firstFactorMinutes: 0, secondFactorMinutes: null });
+      mocks.readSessionFactorAge.mockResolvedValue({
+        firstFactorMinutes: 0,
+        secondFactorMinutes: null,
+      });
 
       const response = await call();
 
@@ -311,3 +342,9 @@ describe.each(['GET', 'POST'] as const)('%s /api/auth/step-up admission failures
     expect(mocks.claimScope).not.toHaveBeenCalled();
   });
 });
+
+type MockedModule0 = typeof import('@/lib/services/active-workspace-service');
+type MockedModule1 = typeof import('@/lib/rate-limit');
+type MockedModule2 = typeof import('@/lib/csrf');
+type MockedModule3 = typeof import('@/lib/logger');
+type MockedModule4 = typeof import('@/lib/mfa-policy-gate');

@@ -21,6 +21,8 @@ const completed = {
   },
 };
 
+type UploadFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+
 function fixture() {
   const session = {
     uploadId: 'existing-upload',
@@ -34,8 +36,8 @@ function fixture() {
     write: vi.fn(),
     remove: vi.fn(),
   };
-  const fetchImpl = vi.fn<typeof fetch>();
-  const uploadFetchImpl = vi.fn<typeof fetch>();
+  const fetchImpl = vi.fn<UploadFetch>();
+  const uploadFetchImpl = vi.fn<UploadFetch>();
   const client = createManagedCloudResumableUploadClient({
     sessions,
     fetchImpl,

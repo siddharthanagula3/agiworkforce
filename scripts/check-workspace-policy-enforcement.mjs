@@ -45,7 +45,10 @@ const baseline = fs.existsSync(baselinePath)
 
 const effectiveRoutePath = path.join(scanRoot, EFFECTIVE_ROUTE_FILE);
 const served = fs.existsSync(effectiveRoutePath)
-  ? servedFamilies(fs.readFileSync(effectiveRoutePath, 'utf8'))
+  ? servedFamilies(
+      fs.readFileSync(effectiveRoutePath, 'utf8'),
+      fs.readFileSync(path.join(scanRoot, CONTRACT_FILE), 'utf8'),
+    )
   : new Set();
 
 const { grown, fixed, missingReason, unserved } = compareToBaseline(

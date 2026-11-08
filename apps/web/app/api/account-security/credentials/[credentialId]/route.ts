@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import type { AccountSecurityCredential } from '@agiworkforce/cloud-contracts/account-security';
 
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -14,7 +15,7 @@ import {
 
 async function handleRemove(
   request: NextRequest,
-  context: { params: Promise<{ credentialId: string }> },
+  context: { params: Promise<{ credentialId: AccountSecurityCredential['id'] }> },
 ) {
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError;

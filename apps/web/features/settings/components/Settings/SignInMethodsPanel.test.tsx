@@ -17,18 +17,24 @@ const identity = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
-  ...await importOriginal<typeof import('@/lib/identity/useSessionSnapshot')>(),
-  useSessionSnapshot: () => () => identity.signedIn && identity.userLoaded && identity.ownerId === identity.userId ? ({
-    userId: identity.userId, sessionId: 'session', getToken: async () => 'token',
-    isCurrent: () => identity.signedIn && identity.userLoaded && identity.ownerId === identity.userId,
-  }) : null,
+  ...(await importOriginal<MockedModule0>()),
+  useSessionSnapshot: () => () =>
+    identity.signedIn && identity.userLoaded && identity.ownerId === identity.userId
+      ? {
+          userId: identity.userId,
+          sessionId: 'session',
+          getToken: async () => 'token',
+          isCurrent: () =>
+            identity.signedIn && identity.userLoaded && identity.ownerId === identity.userId,
+        }
+      : null,
 }));
 vi.mock('@/lib/identity/native-session-authority', async (importOriginal) => ({
-  ...await importOriginal<typeof import('@/lib/identity/native-session-authority')>(),
+  ...(await importOriginal<MockedModule1>()),
   nativeSessionFor: () => ({ user: identity.nativeUser }),
 }));
 vi.mock('@/lib/identity/client', async (importOriginal) => ({
-  ...await importOriginal<typeof import('@/lib/identity/client')>(),
+  ...(await importOriginal<MockedModule2>()),
   useCurrentUser: () => ({
     isLoaded: identity.userLoaded,
     isSignedIn: identity.signedIn,
@@ -44,12 +50,12 @@ vi.mock('@/lib/identity/client', async (importOriginal) => ({
 }));
 
 vi.mock('@features/settings/hooks/useStepUp', async (importOriginal) => ({
-  ...await importOriginal<typeof import('@features/settings/hooks/useStepUp')>(),
+  ...(await importOriginal<MockedModule3>()),
   useStepUp: () => ({ withStepUp: vi.fn(), dialog: null }),
 }));
 
 vi.mock('@/features/auth/step-up-fetch', async (importOriginal) => ({
-  ...await importOriginal<typeof import('@/features/auth/step-up-fetch')>(),
+  ...(await importOriginal<MockedModule4>()),
   isStepUpCancelled: () => false,
   fetchWithStepUp: vi.fn(),
   requestStepUpGrant: vi.fn(),
@@ -59,17 +65,26 @@ vi.mock('@/features/auth/step-up-fetch', async (importOriginal) => ({
 }));
 
 vi.mock('./use-sign-in-identities', async (importOriginal) => ({
-  ...await importOriginal<typeof import('./use-sign-in-identities')>(),
+  ...(await importOriginal<MockedModule5>()),
   useSignInIdentities: () => ({
     ownerId: identity.ownerId,
-    data: identity.readError || identity.readLoading ? null : {
-      identities: identity.populated ? [1, 2].map((id) => ({
-        id: `00000000-0000-4000-8000-00000000000${id}`, provider: 'backend', creationSource: 'link',
-        createdAt: '2026-01-01T00:00:00.000Z', lastAuthenticatedAt: null, removable: id === 2,
-      })) : [],
-      providers: identity.populated ? [{ id: 'google', label: 'Google' }] : [],
-      consequence: 'You cannot sign in with it.',
-    },
+    data:
+      identity.readError || identity.readLoading
+        ? null
+        : {
+            identities: identity.populated
+              ? [1, 2].map((id) => ({
+                  id: `00000000-0000-4000-8000-00000000000${id}`,
+                  provider: 'backend',
+                  creationSource: 'link',
+                  createdAt: '2026-01-01T00:00:00.000Z',
+                  lastAuthenticatedAt: null,
+                  removable: id === 2,
+                }))
+              : [],
+            providers: identity.populated ? [{ id: 'google', label: 'Google' }] : [],
+            consequence: 'You cannot sign in with it.',
+          },
     error: identity.readError,
     isLoading: identity.readLoading,
     reload: vi.fn(),
@@ -137,18 +152,22 @@ describe('SignInMethodsPanel', () => {
       ),
     ).toBeInTheDocument();
   });
-  it.each(['loading', 'failed'])('preserves current native rows while identities GET is %s', async (state) => {
-    identity.populated = true;
-    identity.readLoading = state === 'loading';
-    identity.readError = state === 'failed' ? 'Your sign-in methods could not be loaded.' : null;
-    render(<SignInMethodsPanel onOpenPassword={vi.fn()} />);
-    expect(await screen.findByRole('button', { name: 'Add password' })).toBeInTheDocument();
-    expect(screen.getByText('person@example.com')).toBeInTheDocument();
-    expect(screen.getByText('None yet. Add one under Passkeys.')).toBeInTheDocument();
-    expect(screen.queryByText('Google')).toBeNull();
-    expect(screen.queryByText('Linked account')).toBeNull();
-    if (state === 'failed') expect(screen.getByRole('alert')).toHaveTextContent(identity.readError!);
-  });
+  it.each(['loading', 'failed'])(
+    'preserves current native rows while identities GET is %s',
+    async (state) => {
+      identity.populated = true;
+      identity.readLoading = state === 'loading';
+      identity.readError = state === 'failed' ? 'Your sign-in methods could not be loaded.' : null;
+      render(<SignInMethodsPanel onOpenPassword={vi.fn()} />);
+      expect(await screen.findByRole('button', { name: 'Add password' })).toBeInTheDocument();
+      expect(screen.getByText('person@example.com')).toBeInTheDocument();
+      expect(screen.getByText('None yet. Add one under Passkeys.')).toBeInTheDocument();
+      expect(screen.queryByText('Google')).toBeNull();
+      expect(screen.queryByText('Linked account')).toBeNull();
+      if (state === 'failed')
+        expect(screen.getByRole('alert')).toHaveTextContent(identity.readError!);
+    },
+  );
 
   it('waits for connected-account readiness before offering provider actions', () => {
     identity.populated = true;
@@ -171,17 +190,27 @@ describe('SignInMethodsPanel', () => {
     expect(screen.getByText('person@example.com')).toBeInTheDocument();
   });
 
-  it.each(['loading', 'signed-out', 'mismatch', 'no-owner'])('hides native statuses for %s', (state) => {
-    identity.populated = true;
-    identity.userLoaded = state !== 'loading';
-    identity.signedIn = state !== 'signed-out';
-    identity.userId = state === 'mismatch' ? 'other' : 'person';
-    identity.ownerId = state === 'no-owner' ? null : 'person';
-    render(<SignInMethodsPanel onOpenPassword={vi.fn()} />);
-    expect(screen.queryByText('person@example.com')).toBeNull();
-    expect(screen.queryByText('Not set')).toBeNull();
-    expect(screen.queryByText('Google')).toBeNull();
-    expect(screen.queryByText('Linked account')).toBeNull();
-    expect(screen.queryByText('None yet. Add one under Passkeys.')).toBeNull();
-  });
+  it.each(['loading', 'signed-out', 'mismatch', 'no-owner'])(
+    'hides native statuses for %s',
+    (state) => {
+      identity.populated = true;
+      identity.userLoaded = state !== 'loading';
+      identity.signedIn = state !== 'signed-out';
+      identity.userId = state === 'mismatch' ? 'other' : 'person';
+      identity.ownerId = state === 'no-owner' ? null : 'person';
+      render(<SignInMethodsPanel onOpenPassword={vi.fn()} />);
+      expect(screen.queryByText('person@example.com')).toBeNull();
+      expect(screen.queryByText('Not set')).toBeNull();
+      expect(screen.queryByText('Google')).toBeNull();
+      expect(screen.queryByText('Linked account')).toBeNull();
+      expect(screen.queryByText('None yet. Add one under Passkeys.')).toBeNull();
+    },
+  );
 });
+
+type MockedModule0 = typeof import('@/lib/identity/useSessionSnapshot');
+type MockedModule1 = typeof import('@/lib/identity/native-session-authority');
+type MockedModule2 = typeof import('@/lib/identity/client');
+type MockedModule3 = typeof import('@features/settings/hooks/useStepUp');
+type MockedModule4 = typeof import('@/features/auth/step-up-fetch');
+type MockedModule5 = typeof import('./use-sign-in-identities');

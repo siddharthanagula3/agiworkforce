@@ -25,8 +25,12 @@ import { api, ApiHttpError } from '@/services/api';
 import type { CloudAccountEpoch } from '@/src/features/auth/services/cloudAccountSession';
 
 export class SiteMutationUncertainError extends Error {
+  readonly userMessage: string;
+
   constructor(operation: 'update' | 'unpublish' | 'version restore') {
-    super(`This site ${operation} could not be confirmed. It may have taken effect. Refresh to check before trying again.`);
+    const userMessage = `This site ${operation} could not be confirmed. It may have taken effect. Refresh to check before trying again.`;
+    super(userMessage);
+    this.userMessage = userMessage;
     this.name = 'SiteMutationUncertainError';
   }
 }
@@ -53,8 +57,9 @@ export interface PublishedSitePage {
 }
 
 const PublishedSitePageResponseSchema = ManagedCloudPublishedArtifactListResponseSchema.extend({
-  artifacts: ManagedCloudPublishedArtifactListResponseSchema.shape.artifacts
-    .max(MANAGED_CLOUD_PUBLISHED_ARTIFACT_PAGE_MAX_ITEMS),
+  artifacts: ManagedCloudPublishedArtifactListResponseSchema.shape.artifacts.max(
+    MANAGED_CLOUD_PUBLISHED_ARTIFACT_PAGE_MAX_ITEMS,
+  ),
 });
 
 export async function listPublishedSitesPage(
@@ -62,11 +67,16 @@ export async function listPublishedSitesPage(
   signal?: AbortSignal,
   authority?: SiteRequestAuthority,
 ): Promise<PublishedSitePage> {
-  if (cursor !== null && (cursor.length === 0 || cursor.length > MANAGED_CLOUD_PUBLISHED_ARTIFACT_CURSOR_MAX_CHARS)) {
+  if (
+    cursor !== null &&
+    (cursor.length === 0 || cursor.length > MANAGED_CLOUD_PUBLISHED_ARTIFACT_CURSOR_MAX_CHARS)
+  ) {
     throw new Error('Invalid publication page cursor');
   }
-  const path = cursor === null ? MANAGED_CLOUD_PUBLISHED_ARTIFACTS_PATH
-    : `${MANAGED_CLOUD_PUBLISHED_ARTIFACTS_PATH}?${new URLSearchParams({ cursor })}`;
+  const path =
+    cursor === null
+      ? MANAGED_CLOUD_PUBLISHED_ARTIFACTS_PATH
+      : `${MANAGED_CLOUD_PUBLISHED_ARTIFACTS_PATH}?${new URLSearchParams({ cursor })}`;
   const raw = await api.get<unknown>(path, authority ? requestOptions(authority) : { signal });
   authority?.assertCurrent();
   const body = PublishedSitePageResponseSchema.parse(raw);
@@ -88,7 +98,10 @@ export async function readPublishedSite(
   token: string,
   signal?: AbortSignal,
   authority?: SiteRequestAuthority,
-): Promise<{ site: ManagedCloudPublishedArtifact; workspace: ManagedCloudPublishedArtifactDetailResponse['workspace'] } | null> {
+): Promise<{
+  site: ManagedCloudPublishedArtifact;
+  workspace: ManagedCloudPublishedArtifactDetailResponse['workspace'];
+} | null> {
   try {
     const raw = await api.get<unknown>(
       managedCloudPublishedArtifactPath(token),
@@ -112,20 +125,29 @@ export async function updatePublishedSite(
 ): Promise<ManagedCloudPublishedArtifactUpdateResponse> {
   const requestedChange = { ...change };
   const raw = authority
-    ? await api.patch<unknown>(managedCloudPublishedArtifactPath(token), requestedChange, requestOptions(authority))
+    ? await api.patch<unknown>(
+        managedCloudPublishedArtifactPath(token),
+        requestedChange,
+        requestOptions(authority),
+      )
     : await api.patch<unknown>(managedCloudPublishedArtifactPath(token), requestedChange);
   authority?.assertCurrent();
   const receipt = ManagedCloudPublishedArtifactUpdateReceiptSchema.safeParse(raw);
   if (
-    !receipt.success || receipt.data.token !== token ||
-    (requestedChange.visibility !== undefined && receipt.data.visibility !== requestedChange.visibility)
+    !receipt.success ||
+    receipt.data.token !== token ||
+    (requestedChange.visibility !== undefined &&
+      receipt.data.visibility !== requestedChange.visibility)
   ) {
     throw new SiteMutationUncertainError('update');
   }
   return receipt.data;
 }
 
-export async function unpublishSite(token: string, authority?: SiteRequestAuthority): Promise<void> {
+export async function unpublishSite(
+  token: string,
+  authority?: SiteRequestAuthority,
+): Promise<void> {
   const raw = authority
     ? await api.delete<unknown>(managedCloudPublishedArtifactPath(token), requestOptions(authority))
     : await api.delete<unknown>(managedCloudPublishedArtifactPath(token));
@@ -142,7 +164,10 @@ export async function listSiteVersions(
   authority?: SiteRequestAuthority,
 ): Promise<ManagedCloudPublishedArtifactVersion[]> {
   return ManagedCloudPublishedArtifactVersionListResponseSchema.parse(
-    await api.get<unknown>(managedCloudPublishedArtifactVersionsPath(token), authority ? requestOptions(authority) : { signal }),
+    await api.get<unknown>(
+      managedCloudPublishedArtifactVersionsPath(token),
+      authority ? requestOptions(authority) : { signal },
+    ),
   ).versions;
 }
 
@@ -169,20 +194,31 @@ export async function readSiteData(
   authority?: SiteRequestAuthority,
 ): Promise<ManagedCloudPublishedArtifactDataResponse> {
   return ManagedCloudPublishedArtifactDataResponseSchema.parse(
-    await api.get<unknown>(managedCloudPublishedArtifactDataPath(token), authority ? requestOptions(authority) : { signal }),
+    await api.get<unknown>(
+      managedCloudPublishedArtifactDataPath(token),
+      authority ? requestOptions(authority) : { signal },
+    ),
   );
 }
 
-export async function clearSiteSharedData(token: string, authority?: SiteRequestAuthority): Promise<number> {
+export async function clearSiteSharedData(
+  token: string,
+  authority?: SiteRequestAuthority,
+): Promise<number> {
   return ManagedCloudPublishedArtifactDataClearResponseSchema.parse(
-    (authority
-      ? await api.delete<unknown>(managedCloudPublishedArtifactDataPath(token), requestOptions(authority))
-      : await api.delete<unknown>(managedCloudPublishedArtifactDataPath(token))),
+    authority
+      ? await api.delete<unknown>(
+          managedCloudPublishedArtifactDataPath(token),
+          requestOptions(authority),
+        )
+      : await api.delete<unknown>(managedCloudPublishedArtifactDataPath(token)),
   ).cleared;
 }
 
 export async function deleteSiteAndData(
-  token: string, hasSharedData: boolean, authority?: SiteRequestAuthority,
+  token: string,
+  hasSharedData: boolean,
+  authority?: SiteRequestAuthority,
 ): Promise<void> {
   if (hasSharedData) await clearSiteSharedData(token, authority);
   await unpublishSite(token, authority);

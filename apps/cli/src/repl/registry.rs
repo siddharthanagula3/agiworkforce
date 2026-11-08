@@ -245,13 +245,17 @@ mod managed_load_tests {
         let temp = tempfile::tempdir().expect("session fixture");
         let path = temp.path().join("empty.json");
         let mut session = test_support::test_session(false);
-        session.messages.push(crate::models::Message::text("user", "previous conversation"));
+        session.messages.push(crate::models::Message::text(
+            "user",
+            "previous conversation",
+        ));
         session.total_input_tokens = 7;
         session.total_output_tokens = 9;
         session.turn_count = 1;
         session.recent_tool_calls = vec![17];
         session.loop_strike_count = 2;
-        let mut managed = crate::runtime::session::ManagedSession::new("empty-target", chrono::Utc::now());
+        let mut managed =
+            crate::runtime::session::ManagedSession::new("empty-target", chrono::Utc::now());
         managed.model = Some(session.model.clone());
         managed.routing_authority = Some(session.current_routing_authority());
         managed.save_to_path(&path).expect("save fixture");

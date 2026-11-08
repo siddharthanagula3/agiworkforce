@@ -32,32 +32,36 @@ vi.mock('@/lib/services/organization-permission-service', () => ({
   resolveOrganizationPermissions: mockResolvePermissions,
   requireMemberPermission: mockRequirePermission,
 }));
-vi.mock('@/lib/services/active-workspace-service', () => ({
+vi.mock('@/lib/services/active-workspace-service', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule0>()),
   resolveActiveOrganizationId: mockResolveActiveOrganizationId,
 }));
-vi.mock('@/lib/services/org-entitlements', () => ({
+vi.mock('@/lib/services/org-entitlements', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule1>()),
   getOrganizationEntitlements: vi.fn(),
   getSharedProjectLimitErrorMessage: vi.fn(),
   isOrgResourceLimitError: vi.fn(),
 }));
-vi.mock('@/lib/error-handler', () => ({
+vi.mock('@/lib/error-handler', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule0>()),
   withErrorHandler:
     (handler: (request: Request) => Promise<Response>) => async (request: Request) => {
       try {
         return await handler(request);
       } catch (error) {
         const failure = error as { statusCode?: number; message?: string };
-        return Response.json(
-          { error: failure.message },
-          { status: failure.statusCode ?? 500 },
-        );
+        return Response.json({ error: failure.message }, { status: failure.statusCode ?? 500 });
       }
     },
 }));
-vi.mock('@/lib/cors', () => ({ handleCorsPreflightRequest: vi.fn(() => null) }));
+vi.mock('@/lib/cors', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule1>()),
+  handleCorsPreflightRequest: vi.fn(() => null),
+}));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mockRateLimit }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mockCsrf }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule3>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mockGetUserScopedDb }));
@@ -117,9 +121,7 @@ function bind({
     const text = String(sql);
     if (/from public\.user_settings/i.test(text)) return [{ organization_id: ORG }];
     if (/from public\.organization_members/i.test(text)) {
-      return params[0] === ORG && params[1] === 'user-1'
-        ? [{ organization_id: ORG, role }]
-        : [];
+      return params[0] === ORG && params[1] === 'user-1' ? [{ organization_id: ORG, role }] : [];
     }
     if (/insert into public\.organization_connector_policies/i.test(text)) {
       return params[0] === ORG ? [written] : [];
@@ -430,90 +432,98 @@ function expectCapturedMembership() {
 }
 
 describe('captured connector-policy workspace', () => {
-  it.each([OTHER_ORG, null])('reads captured B rather than saved A with header %s', async (header) => {
-    const { policies, savedPolicy } = bindCapturedWorkspace({
-      membership: { organization_id: OTHER_ORG, role: 'member' },
-    });
-    const response = await GET(scopedRequest('GET', header) as never);
-    const body = (await response.json()) as ConnectorPolicyResponse;
+  it.each([OTHER_ORG, null])(
+    'reads captured B rather than saved A with header %s',
+    async (header) => {
+      const { policies, savedPolicy } = bindCapturedWorkspace({
+        membership: { organization_id: OTHER_ORG, role: 'member' },
+      });
+      const response = await GET(scopedRequest('GET', header) as never);
+      const body = (await response.json()) as ConnectorPolicyResponse;
 
-    expect(response.status).toBe(200);
-    expect(body.organizationId).toBe(OTHER_ORG);
-    expect(body.currentUserRole).toBe('member');
-    expect(body.canManagePolicy).toBe(false);
-    expect(body.policy.blockedConnectors).toEqual(['captured-b']);
-    expect(body.policy.toolRules).toEqual(policies.get(OTHER_ORG)?.['tool_rules']);
-    expect(mockRequireTeamAdminAccess).toHaveBeenCalledWith(scopedDb, 'user-1', OTHER_ORG);
-    expect(mockResolvePermissions).toHaveBeenCalledWith(OTHER_ORG, 'user-1');
-    expectCapturedMembership();
-    expectNoWrite();
-    expect(JSON.stringify(policies.get(ORG))).toBe(savedPolicy);
-  });
+      expect(response.status).toBe(200);
+      expect(body.organizationId).toBe(OTHER_ORG);
+      expect(body.currentUserRole).toBe('member');
+      expect(body.canManagePolicy).toBe(false);
+      expect(body.policy.blockedConnectors).toEqual(['captured-b']);
+      expect(body.policy.toolRules).toEqual(policies.get(OTHER_ORG)?.['tool_rules']);
+      expect(mockRequireTeamAdminAccess).toHaveBeenCalledWith(scopedDb, 'user-1', OTHER_ORG);
+      expect(mockResolvePermissions).toHaveBeenCalledWith(OTHER_ORG, 'user-1');
+      expectCapturedMembership();
+      expectNoWrite();
+      expect(JSON.stringify(policies.get(ORG))).toBe(savedPolicy);
+    },
+  );
 
-  it.each([OTHER_ORG, null])('writes only captured B with header %s and preserves omitted rules', async (header) => {
-    const { policies, savedPolicy } = bindCapturedWorkspace();
-    const priorRules = policies.get(OTHER_ORG)?.['tool_rules'];
-    const response = await PUT(scopedRequest('PUT', header, {
-      ...BASE,
-      blockedConnectors: [' Fixture-Beta ', 'fixture-beta'],
-      allowedPlugins: ['Acme-Review', 'acme-review'],
-      allowedMcpHosts: ['*.corp.example', '*.corp.example'],
-      allowedWebDomains: ['Example.COM', 'example.com'],
-    }) as never);
-    const body = (await response.json()) as ConnectorPolicyResponse;
+  it.each([OTHER_ORG, null])(
+    'writes only captured B with header %s and preserves omitted rules',
+    async (header) => {
+      const { policies, savedPolicy } = bindCapturedWorkspace();
+      const priorRules = policies.get(OTHER_ORG)?.['tool_rules'];
+      const response = await PUT(
+        scopedRequest('PUT', header, {
+          ...BASE,
+          blockedConnectors: [' Fixture-Beta ', 'fixture-beta'],
+          allowedPlugins: ['Acme-Review', 'acme-review'],
+          allowedMcpHosts: ['*.corp.example', '*.corp.example'],
+          allowedWebDomains: ['Example.COM', 'example.com'],
+        }) as never,
+      );
+      const body = (await response.json()) as ConnectorPolicyResponse;
 
-    expect(response.status).toBe(200);
-    expect(body.organizationId).toBe(OTHER_ORG);
-    expect(body.canManagePolicy).toBe(true);
-    expect(body.policy.blockedConnectors).toEqual(['fixture-beta']);
-    expect(body.policy.toolRules).toEqual(priorRules);
-    expect(mockPrivilegedQuery).toHaveBeenCalledTimes(1);
-    expect(mockPrivilegedQuery).toHaveBeenCalledWith(
-      expect.stringMatching(/insert into public\.organization_connector_policies/i),
-      [
+      expect(response.status).toBe(200);
+      expect(body.organizationId).toBe(OTHER_ORG);
+      expect(body.canManagePolicy).toBe(true);
+      expect(body.policy.blockedConnectors).toEqual(['fixture-beta']);
+      expect(body.policy.toolRules).toEqual(priorRules);
+      expect(mockPrivilegedQuery).toHaveBeenCalledTimes(1);
+      expect(mockPrivilegedQuery).toHaveBeenCalledWith(
+        expect.stringMatching(/insert into public\.organization_connector_policies/i),
+        [
+          OTHER_ORG,
+          [],
+          ['fixture-beta'],
+          true,
+          ['acme-review'],
+          [],
+          ['*.corp.example'],
+          ['example.com'],
+          [],
+          JSON.stringify(priorRules),
+          'user-1',
+        ],
+      );
+      expect(mockRequireTeamAdminAccess).toHaveBeenCalledWith(scopedDb, 'user-1', OTHER_ORG);
+      expect(mockRequirePermission).toHaveBeenCalledWith(
         OTHER_ORG,
-        [],
-        ['fixture-beta'],
-        true,
-        ['acme-review'],
-        [],
-        ['*.corp.example'],
-        ['example.com'],
-        [],
-        JSON.stringify(priorRules),
         'user-1',
-      ],
-    );
-    expect(mockRequireTeamAdminAccess).toHaveBeenCalledWith(scopedDb, 'user-1', OTHER_ORG);
-    expect(mockRequirePermission).toHaveBeenCalledWith(
-      OTHER_ORG,
-      'user-1',
-      'policy.manage',
-      expect.any(String),
-    );
-    expect(mockRecordAuditEvent).toHaveBeenCalledTimes(1);
-    expect(mockRecordAuditEvent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        userId: 'user-1',
-        organizationId: OTHER_ORG,
-        eventType: 'admin_policy_changed',
-        detail: {
-          resourceType: 'organization_connector_policy',
-          resourceId: OTHER_ORG,
-          role: 'admin',
-          status: 'updated',
-          changedKeys: [
-            'blockedConnectors',
-            'allowedPlugins',
-            'allowedMcpHosts',
-            'allowedWebDomains',
-          ],
-        },
-      }),
-    );
-    expectCapturedMembership();
-    expect(JSON.stringify(policies.get(ORG))).toBe(savedPolicy);
-  });
+        'policy.manage',
+        expect.any(String),
+      );
+      expect(mockRecordAuditEvent).toHaveBeenCalledTimes(1);
+      expect(mockRecordAuditEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 'user-1',
+          organizationId: OTHER_ORG,
+          eventType: 'admin_policy_changed',
+          detail: {
+            resourceType: 'organization_connector_policy',
+            resourceId: OTHER_ORG,
+            role: 'admin',
+            status: 'updated',
+            changedKeys: [
+              'blockedConnectors',
+              'allowedPlugins',
+              'allowedMcpHosts',
+              'allowedWebDomains',
+            ],
+          },
+        }),
+      );
+      expectCapturedMembership();
+      expect(JSON.stringify(policies.get(ORG))).toBe(savedPolicy);
+    },
+  );
 
   it.each([
     ['GET', MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE],
@@ -522,9 +532,10 @@ describe('captured connector-policy workspace', () => {
     ['PUT', null],
   ] as const)('refuses canonical Personal for %s with header %s', async (method, header) => {
     bindCapturedWorkspace({ organizationId: null });
-    const response = method === 'GET'
-      ? await GET(scopedRequest('GET', header) as never)
-      : await PUT(scopedRequest('PUT', header, BASE) as never);
+    const response =
+      method === 'GET'
+        ? await GET(scopedRequest('GET', header) as never)
+        : await PUT(scopedRequest('PUT', header, BASE) as never);
 
     expect(response.status).toBe(403);
     expect(mockScopedQuery).not.toHaveBeenCalled();
@@ -538,25 +549,26 @@ describe('captured connector-policy workspace', () => {
     ['PUT', null],
     ['GET', { organization_id: ORG, role: 'owner' }],
     ['PUT', { organization_id: ORG, role: 'owner' }],
-  ] as const)('refuses %s with absent or mismatched B membership %j', async (method, membership) => {
-    bindCapturedWorkspace({ membership });
-    const response = method === 'GET'
-      ? await GET(req('GET') as never)
-      : await PUT(req('PUT', BASE) as never);
+  ] as const)(
+    'refuses %s with absent or mismatched B membership %j',
+    async (method, membership) => {
+      bindCapturedWorkspace({ membership });
+      const response =
+        method === 'GET' ? await GET(req('GET') as never) : await PUT(req('PUT', BASE) as never);
 
-    expect(response.status).toBe(403);
-    expectCapturedMembership();
-    expect(mockScopedQuery).toHaveBeenCalledTimes(1);
-    expect(mockRequireTeamAdminAccess).not.toHaveBeenCalled();
-    expect(mockResolvePermissions).not.toHaveBeenCalled();
-    expectNoWrite();
-  });
+      expect(response.status).toBe(403);
+      expectCapturedMembership();
+      expect(mockScopedQuery).toHaveBeenCalledTimes(1);
+      expect(mockRequireTeamAdminAccess).not.toHaveBeenCalled();
+      expect(mockResolvePermissions).not.toHaveBeenCalled();
+      expectNoWrite();
+    },
+  );
 
   it.each(['GET', 'PUT'])('applies B plan denial to %s despite A entitlement', async (method) => {
     bindCapturedWorkspace({ planAllowed: false });
-    const response = method === 'GET'
-      ? await GET(req('GET') as never)
-      : await PUT(req('PUT', BASE) as never);
+    const response =
+      method === 'GET' ? await GET(req('GET') as never) : await PUT(req('PUT', BASE) as never);
 
     expect(response.status).toBe(403);
     expect(mockRequireTeamAdminAccess).toHaveBeenCalledWith(scopedDb, 'user-1', OTHER_ORG);
@@ -617,13 +629,15 @@ describe('captured connector-policy workspace', () => {
 
   it('normalizes and deduplicates explicit B tool rules using the last level', async () => {
     const { policies, savedPolicy } = bindCapturedWorkspace();
-    const response = await PUT(req('PUT', {
-      ...BASE,
-      toolRules: [
-        { connectorId: ' Fixture-Beta ', toolName: ' write_b ', level: 'allow' },
-        { connectorId: 'fixture-beta', toolName: 'write_b', level: 'deny' },
-      ],
-    }) as never);
+    const response = await PUT(
+      req('PUT', {
+        ...BASE,
+        toolRules: [
+          { connectorId: ' Fixture-Beta ', toolName: ' write_b ', level: 'allow' },
+          { connectorId: 'fixture-beta', toolName: 'write_b', level: 'deny' },
+        ],
+      }) as never,
+    );
     const body = (await response.json()) as ConnectorPolicyResponse;
 
     expect(response.status).toBe(200);
@@ -635,3 +649,10 @@ describe('captured connector-policy workspace', () => {
     expect(JSON.stringify(policies.get(ORG))).toBe(savedPolicy);
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/services/active-workspace-service');
+type CompleteMockModule1 = typeof import('@/lib/services/org-entitlements');
+
+type RetainedMockModule0 = typeof import('@/lib/error-handler');
+type RetainedMockModule1 = typeof import('@/lib/cors');
+type RetainedMockModule3 = typeof import('@/lib/logger');

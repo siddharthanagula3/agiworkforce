@@ -17,7 +17,13 @@ import { clearCsrfToken } from '@/lib/client/csrf';
 const CSRF_ENDPOINT = '/api/csrf';
 const CSRF_TOKEN = 'csrf-token-fixture';
 const TRANSCRIBE_ENDPOINT = '/api/voice/transcribe';
-const newOwner = () => createRequestAuthority({ userId: 'user-a', sessionId: 'session-a', isCurrent: () => true, getToken: async () => 'original-session-token' });
+const newOwner = () =>
+  createRequestAuthority({
+    userId: 'user-a',
+    sessionId: 'session-a',
+    isCurrent: () => true,
+    getToken: async () => 'original-session-token',
+  });
 let owner: RequestAuthority;
 
 function stubFetch(transcribe: () => unknown) {
@@ -114,6 +120,8 @@ describe('voiceInputStore', () => {
   });
 
   afterEach(() => {
+    _resetRuntimeRefs();
+    owner.retire();
     resetStore();
     defineWindowValue('MediaRecorder', undefined);
     vi.unstubAllGlobals();
@@ -315,7 +323,9 @@ describe('voiceInputStore', () => {
       const [, init] = transcribeCall(fetchMock);
       const request = init as RequestInit;
       expect((request.body as FormData).get('model')).toBe(canonicalVoiceModel);
-      expect(new Headers(request.headers).get('Authorization')).toBe('Bearer original-session-token');
+      expect(new Headers(request.headers).get('Authorization')).toBe(
+        'Bearer original-session-token',
+      );
       expect(request.credentials).toBe('omit');
       expect(useVoiceInputStore.getState().transcript).toBe('hello');
       expect(useVoiceInputStore.getState().captureStream).toBeNull();
@@ -479,7 +489,9 @@ describe('voiceInputStore', () => {
       installCapture();
       let grant!: (stream: MediaStream) => void;
       vi.mocked(navigator.mediaDevices.getUserMedia).mockReturnValueOnce(
-        new Promise((resolve) => { grant = resolve; }),
+        new Promise((resolve) => {
+          grant = resolve;
+        }),
       );
       const starting = useVoiceInputStore.getState().startListening(owner);
       await useVoiceInputStore.getState().stopListening(owner);
@@ -517,7 +529,9 @@ describe('voiceInputStore', () => {
       expect(requests).toHaveLength(2);
       for (const [, init] of requests) {
         expect((init.body as FormData).get('language')).toBe('fr');
-        expect(new Headers(init.headers).get('Authorization')).toBe('Bearer original-session-token');
+        expect(new Headers(init.headers).get('Authorization')).toBe(
+          'Bearer original-session-token',
+        );
         expect(init.credentials).toBe('omit');
       }
     });
@@ -527,10 +541,19 @@ describe('voiceInputStore', () => {
       let current = true;
       let release!: (token: string) => void;
       let requested!: () => void;
-      const tokenRequested = new Promise<void>((resolve) => { requested = resolve; });
+      const tokenRequested = new Promise<void>((resolve) => {
+        requested = resolve;
+      });
       owner = createRequestAuthority({
-        userId: 'user-a', sessionId: 'session-a', isCurrent: () => current,
-        getToken: () => { requested(); return new Promise((resolve) => { release = resolve; }); },
+        userId: 'user-a',
+        sessionId: 'session-a',
+        isCurrent: () => current,
+        getToken: () => {
+          requested();
+          return new Promise((resolve) => {
+            release = resolve;
+          });
+        },
       });
       const fetchMock = stubFetch(() => ({ ok: true, json: async () => ({ text: 'stale' }) }));
       await useVoiceInputStore.getState().startListening(owner);

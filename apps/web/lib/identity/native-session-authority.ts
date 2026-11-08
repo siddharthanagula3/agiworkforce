@@ -1,7 +1,7 @@
-import type { useClerk } from '@clerk/nextjs';
+import type { NativeIdentitySession } from './client';
 import type { SessionAuthority } from './request-authority';
 
-type NativeSession = NonNullable<ReturnType<typeof useClerk>['session']>;
+type NativeSession = NativeIdentitySession;
 const nativeSessions = new WeakMap<SessionAuthority, NativeSession>();
 
 export function bindNativeSession(authority: SessionAuthority, session: NativeSession): void {

@@ -34,20 +34,31 @@ const UNCONFIRMED_RECEIPT = 'The webhook action receipt could not be confirmed.'
 
 function record(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown> : null;
+    ? (value as Record<string, unknown>)
+    : null;
 }
 
 function endpointReceipt(value: unknown, expectedId?: string): DeveloperWebhookEndpoint {
-  const endpoint = record(record(value)?.endpoint);
-  if (typeof endpoint?.id !== 'string' || !endpoint.id ||
-    (expectedId !== undefined && endpoint.id !== expectedId)) throw new Error(UNCONFIRMED_RECEIPT);
+  const endpoint = record(record(value)?.['endpoint']);
+  if (
+    typeof endpoint?.['id'] !== 'string' ||
+    !endpoint['id'] ||
+    (expectedId !== undefined && endpoint['id'] !== expectedId)
+  )
+    throw new Error(UNCONFIRMED_RECEIPT);
   return endpoint as unknown as DeveloperWebhookEndpoint;
 }
 
-function deliveryReceipt(value: unknown, redeliveryOf?: string): { delivery: DeveloperWebhookDelivery } {
-  const delivery = record(record(value)?.delivery);
-  if (typeof delivery?.id !== 'string' || !delivery.id ||
-    (redeliveryOf !== undefined && delivery.redeliveryOf !== redeliveryOf)) {
+function deliveryReceipt(
+  value: unknown,
+  redeliveryOf?: string,
+): { delivery: DeveloperWebhookDelivery } {
+  const delivery = record(record(value)?.['delivery']);
+  if (
+    typeof delivery?.['id'] !== 'string' ||
+    !delivery['id'] ||
+    (redeliveryOf !== undefined && delivery['redeliveryOf'] !== redeliveryOf)
+  ) {
     throw new Error(UNCONFIRMED_RECEIPT);
   }
   return { delivery: delivery as unknown as DeveloperWebhookDelivery };
@@ -106,10 +117,16 @@ async function readOwnedJson<T>(
 }
 
 export function useWebhookEndpoints() {
-  return useDeveloperQuery(WEBHOOKS_QUERY_KEY, async (scope) =>
-    (await readOwnedJson<{ endpoints: DeveloperWebhookEndpoint[] }>(
-      scope, WEBHOOKS_PATH, 'Webhook endpoints could not be loaded.',
-    )).endpoints,
+  return useDeveloperQuery(
+    WEBHOOKS_QUERY_KEY,
+    async (scope) =>
+      (
+        await readOwnedJson<{ endpoints: DeveloperWebhookEndpoint[] }>(
+          scope,
+          WEBHOOKS_PATH,
+          'Webhook endpoints could not be loaded.',
+        )
+      ).endpoints,
   );
 }
 
@@ -125,11 +142,15 @@ export function useCreateWebhookEndpoint() {
     // secret receipts in an unobserved mutation cache for the default GC period.
     gcTime: 0,
     mutationFn: async ({ scope, draft }) => {
-      const payload = await writeJson(scope, WEBHOOKS_PATH,
-        { method: 'POST', body: draft }, 'The endpoint could not be added.');
+      const payload = await writeJson(
+        scope,
+        WEBHOOKS_PATH,
+        { method: 'POST', body: draft },
+        'The endpoint could not be added.',
+      );
       scope.request.assertCurrent();
       const endpoint = endpointReceipt(payload);
-      const secret = record(payload)?.secret;
+      const secret = record(payload)?.['secret'];
       if (typeof secret !== 'string' || !secret) throw new Error(UNCONFIRMED_RECEIPT);
       return { endpoint, secret };
     },
@@ -147,7 +168,11 @@ export function useUpdateWebhookEndpoint() {
   return useMutation<
     DeveloperWebhookEndpoint,
     Error,
-    { scope: WebhookMutationScope; endpointId: string; patch: Partial<WebhookEndpointDraft> & { enabled?: boolean } }
+    {
+      scope: WebhookMutationScope;
+      endpointId: string;
+      patch: Partial<WebhookEndpointDraft> & { enabled?: boolean };
+    }
   >({
     retry: false,
     mutationFn: async ({ scope, endpointId, patch }) => {
@@ -171,35 +196,41 @@ export function useUpdateWebhookEndpoint() {
 
 export function useDeleteWebhookEndpoint() {
   const queryClient = useQueryClient();
-  return useMutation<{ deleted: true }, Error, { scope: WebhookMutationScope; endpointId: string }>({
-    retry: false,
-    mutationFn: async ({ scope, endpointId }) => {
-      const payload = await writeJson(
-        scope,
-        endpointPath(endpointId),
-        { method: 'DELETE' },
-        'The endpoint could not be removed.',
-      );
-      scope.request.assertCurrent();
-      if (record(payload)?.deleted !== true) throw new Error(UNCONFIRMED_RECEIPT);
-      return { deleted: true };
+  return useMutation<{ deleted: true }, Error, { scope: WebhookMutationScope; endpointId: string }>(
+    {
+      retry: false,
+      mutationFn: async ({ scope, endpointId }) => {
+        const payload = await writeJson(
+          scope,
+          endpointPath(endpointId),
+          { method: 'DELETE' },
+          'The endpoint could not be removed.',
+        );
+        scope.request.assertCurrent();
+        if (record(payload)?.['deleted'] !== true) throw new Error(UNCONFIRMED_RECEIPT);
+        return { deleted: true };
+      },
+      onSuccess: (_receipt, { scope }) => {
+        if (scope.request.isCurrent()) {
+          void queryClient.invalidateQueries({ queryKey: WEBHOOKS_QUERY_KEY });
+        }
+      },
+      onError: () => undefined,
     },
-    onSuccess: (_receipt, { scope }) => {
-      if (scope.request.isCurrent()) {
-        void queryClient.invalidateQueries({ queryKey: WEBHOOKS_QUERY_KEY });
-      }
-    },
-    onError: () => undefined,
-  });
+  );
 }
 
 export function useWebhookDeliveries(endpointId: string, enabled: boolean) {
   return useDeveloperQuery(
     deliveriesQueryKey(endpointId),
     async (scope) =>
-      (await readOwnedJson<{ deliveries: DeveloperWebhookDelivery[] }>(
-        scope, `${endpointPath(endpointId)}/deliveries`, 'Deliveries could not be loaded.',
-      )).deliveries,
+      (
+        await readOwnedJson<{ deliveries: DeveloperWebhookDelivery[] }>(
+          scope,
+          `${endpointPath(endpointId)}/deliveries`,
+          'Deliveries could not be loaded.',
+        )
+      ).deliveries,
     {
       enabled: enabled && endpointId.trim().length > 0,
       refetchInterval: (data) =>
@@ -212,8 +243,11 @@ export function useWebhookDeliveries(endpointId: string, enabled: boolean) {
 
 export function useSendWebhookTest() {
   const queryClient = useQueryClient();
-  return useMutation<{ delivery: DeveloperWebhookDelivery }, Error,
-    { scope: WebhookMutationScope; endpointId: string }>({
+  return useMutation<
+    { delivery: DeveloperWebhookDelivery },
+    Error,
+    { scope: WebhookMutationScope; endpointId: string }
+  >({
     retry: false,
     mutationFn: async ({ scope, endpointId }) => {
       const payload = await writeJson(
@@ -236,8 +270,11 @@ export function useSendWebhookTest() {
 
 export function useRedeliverWebhook() {
   const queryClient = useQueryClient();
-  return useMutation<{ delivery: DeveloperWebhookDelivery }, Error,
-    { scope: WebhookMutationScope; endpointId: string; deliveryId: string }>({
+  return useMutation<
+    { delivery: DeveloperWebhookDelivery },
+    Error,
+    { scope: WebhookMutationScope; endpointId: string; deliveryId: string }
+  >({
     retry: false,
     mutationFn: async ({ scope, endpointId, deliveryId }) => {
       const payload = await writeJson(

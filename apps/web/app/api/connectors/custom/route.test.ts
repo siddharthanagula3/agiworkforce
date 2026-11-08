@@ -27,7 +27,8 @@ vi.mock('@/lib/auth/email-confirmation', async (importOriginal) => ({
 }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule0>()),
   getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1' })),
 }));
 vi.mock('@/lib/server/neon-db', () => ({
@@ -103,7 +104,8 @@ vi.mock('@/lib/connectors/mcp-runtime-cache', async (importOriginal) => ({
       `user:${userId}:oauth:${connectorId}`,
   },
 }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule1>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@agiworkforce/mcp', () => ({ connectMcpServer: mocks.connect }));
@@ -327,3 +329,7 @@ describe('POST /api/connectors/custom while connectors are coming soon', () => {
     expect(mocks.execute).not.toHaveBeenCalled();
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/api-auth');
+
+type RetainedMockModule1 = typeof import('@/lib/logger');

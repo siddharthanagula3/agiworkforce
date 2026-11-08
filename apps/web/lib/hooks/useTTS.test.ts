@@ -3,9 +3,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useTTS } from './useTTS';
 
-const identity = vi.hoisted(() => ({ generation: 0, session: null as null | {
-  userId: string; sessionId: string; isCurrent: () => boolean; getToken: () => Promise<string | null>;
-} }));
+const identity = vi.hoisted(() => ({
+  generation: 0,
+  session: null as null | {
+    userId: string;
+    sessionId: string;
+    isCurrent: () => boolean;
+    getToken: () => Promise<string | null>;
+  },
+}));
 vi.mock('@/lib/identity/useSessionSnapshot', () => ({
   useSessionSnapshot: () => () => identity.session,
   useReadonlyIdentityLifetime: () => () => {
@@ -229,10 +235,11 @@ describe('useTTS, missing voice', () => {
   });
 });
 
-
 function deferred<T>() {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => { resolve = done; });
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
   return { promise, resolve };
 }
 
@@ -240,7 +247,9 @@ function signedIn() {
   const generation = identity.generation;
   const getToken = vi.fn(async () => 'fixture-session-token');
   identity.session = {
-    userId: 'fixture-user', sessionId: 'fixture-session', getToken,
+    userId: 'fixture-user',
+    sessionId: 'fixture-session',
+    getToken,
     isCurrent: () => identity.generation === generation,
   };
   return getToken;
@@ -250,32 +259,56 @@ function installAudio(state: 'running' | 'suspended' = 'running') {
   const resume = deferred<void>();
   const decode = vi.fn(async () => ({}) as AudioBuffer);
   const sources: Array<{
-    buffer: AudioBuffer | null; onended: (() => void) | null;
-    connect: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn>;
-    start: ReturnType<typeof vi.fn>; stop: ReturnType<typeof vi.fn>;
+    buffer: AudioBuffer | null;
+    onended: (() => void) | null;
+    connect: ReturnType<typeof vi.fn>;
+    disconnect: ReturnType<typeof vi.fn>;
+    start: ReturnType<typeof vi.fn>;
+    stop: ReturnType<typeof vi.fn>;
   }> = [];
   const context = {
-    state, destination: {}, decodeAudioData: decode,
-    resume: vi.fn(() => resume.promise.then(() => { context.state = 'running'; })),
+    state,
+    destination: {},
+    decodeAudioData: decode,
+    resume: vi.fn(() =>
+      resume.promise.then(() => {
+        context.state = 'running';
+      }),
+    ),
     createBufferSource: vi.fn(() => {
       const source = {
-        buffer: null, onended: null, connect: vi.fn(), disconnect: vi.fn(),
-        start: vi.fn(), stop: vi.fn(),
+        buffer: null,
+        onended: null,
+        connect: vi.fn(),
+        disconnect: vi.fn(),
+        start: vi.fn(),
+        stop: vi.fn(),
       };
       sources.push(source);
       return source;
     }),
   };
-  vi.stubGlobal('AudioContext', class { constructor() { return context; } });
+  vi.stubGlobal(
+    'AudioContext',
+    class {
+      constructor() {
+        return context;
+      }
+    },
+  );
   // Each fixture closes its context so the production shared context is not
   // reused by the next fixture. No real audio is created.
-  const close = () => { (context as { state: string }).state = 'closed'; };
+  const close = () => {
+    (context as { state: string }).state = 'closed';
+  };
   audioFixtureCleanups.push(close);
   return { context, resume, decode, sources, close };
 }
 
 async function flush() {
-  await act(async () => { for (let i = 0; i < 12; i += 1) await Promise.resolve(); });
+  await act(async () => {
+    for (let i = 0; i < 12; i += 1) await Promise.resolve();
+  });
 }
 
 describe('useTTS, owner lifetime fixtures', () => {
@@ -299,7 +332,7 @@ describe('useTTS, owner lifetime fixtures', () => {
     act(() => second.result.current.speak('Second', { deviceVoice: true }));
     const cancel = vi.mocked(window.speechSynthesis.cancel);
     cancel.mockClear();
-    act(() => staleEnd?.(undefined as never));
+    act(() => staleEnd?.call(spoken[0]!, undefined as never));
     first.unmount();
     expect(cancel).not.toHaveBeenCalled();
   });
@@ -352,7 +385,10 @@ describe('useTTS, owner lifetime fixtures', () => {
   it('pins bearer transport and stops an owned source on unmount without another chunk', async () => {
     signedIn();
     const audio = installAudio();
-    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(1) }));
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => ({
+      ok: true,
+      arrayBuffer: async () => new ArrayBuffer(1),
+    }));
     vi.stubGlobal('fetch', fetcher);
     const hook = renderHook(() => useTTS());
     act(() => hook.result.current.speak('x'.repeat(4000)));
@@ -392,35 +428,44 @@ describe('useTTS, owner lifetime fixtures', () => {
   });
 });
 
-
 describe('useTTS, asynchronous boundary fixtures', () => {
-  it.each(['body', 'decode'] as const)('does not play or fallback after stop during %s', async (boundary) => {
-    signedIn();
-    const audio = installAudio();
-    const body = deferred<ArrayBuffer>();
-    const decoded = deferred<AudioBuffer>();
-    if (boundary === 'decode') audio.decode.mockImplementation(() => decoded.promise);
-    vi.stubGlobal('fetch', vi.fn(async () => ({
-      ok: true,
-      arrayBuffer: () => boundary === 'body' ? body.promise : Promise.resolve(new ArrayBuffer(1)),
-    })));
-    const hook = renderHook(() => useTTS());
-    act(() => hook.result.current.speak('Delayed content'));
-    await flush();
-    act(() => hook.result.current.stop());
-    body.resolve(new ArrayBuffer(1));
-    decoded.resolve({} as AudioBuffer);
-    await flush();
-    expect(audio.sources).toHaveLength(0);
-    expect(spoken).toHaveLength(0);
-    expect(hook.result.current.isSpeaking).toBe(false);
-    audio.close();
-  });
+  it.each(['body', 'decode'] as const)(
+    'does not play or fallback after stop during %s',
+    async (boundary) => {
+      signedIn();
+      const audio = installAudio();
+      const body = deferred<ArrayBuffer>();
+      const decoded = deferred<AudioBuffer>();
+      if (boundary === 'decode') audio.decode.mockImplementation(() => decoded.promise);
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => ({
+          ok: true,
+          arrayBuffer: () =>
+            boundary === 'body' ? body.promise : Promise.resolve(new ArrayBuffer(1)),
+        })),
+      );
+      const hook = renderHook(() => useTTS());
+      act(() => hook.result.current.speak('Delayed content'));
+      await flush();
+      act(() => hook.result.current.stop());
+      body.resolve(new ArrayBuffer(1));
+      decoded.resolve({} as AudioBuffer);
+      await flush();
+      expect(audio.sources).toHaveLength(0);
+      expect(spoken).toHaveLength(0);
+      expect(hook.result.current.isSpeaking).toBe(false);
+      audio.close();
+    },
+  );
 
   it('preserves the same-owner first chunk device fallback', async () => {
     signedIn();
     const audio = installAudio();
-    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: false })),
+    );
     const hook = renderHook(() => useTTS());
     act(() => hook.result.current.speak('Fallback'));
     await flush();
@@ -449,7 +494,10 @@ describe('useTTS, asynchronous boundary fixtures', () => {
   it('retires an already-playing server source when identity is observed changing', async () => {
     signedIn();
     const audio = installAudio();
-    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(1) })));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(1) })),
+    );
     const hook = renderHook(() => useTTS());
     act(() => hook.result.current.speak('Playing'));
     await flush();
@@ -471,7 +519,6 @@ describe('useTTS, asynchronous boundary fixtures', () => {
   });
 });
 
-
 it('does not let a retained old-scope stop cancel replacement speech', () => {
   const hook = renderHook(({ scope }) => useTTS(scope), { initialProps: { scope: 'a' } });
   const oldStop = hook.result.current.stop;
@@ -482,7 +529,6 @@ it('does not let a retained old-scope stop cancel replacement speech', () => {
   act(() => oldStop());
   expect(cancel).not.toHaveBeenCalled();
 });
-
 
 it('does not claim or cancel unrelated browser speech already in progress', () => {
   Object.defineProperty(window.speechSynthesis, 'speaking', { value: true, configurable: true });
@@ -505,7 +551,6 @@ it('does not let an old identity stop cancel the new identity voice', () => {
   expect(cancel).not.toHaveBeenCalled();
 });
 
-
 describe('useTTS, central content policy fixtures', () => {
   it('refuses before acquiring tokens, creating audio, or speaking device text', () => {
     const token = signedIn();
@@ -524,7 +569,9 @@ describe('useTTS, central content policy fixtures', () => {
   });
 
   it('retires playing speech and rejects retained handlers after Code policy narrows', () => {
-    const hook = renderHook(({ allowed }) => useTTS('same-code', allowed), { initialProps: { allowed: true } });
+    const hook = renderHook(({ allowed }) => useTTS('same-code', allowed), {
+      initialProps: { allowed: true },
+    });
     const staleSpeak = hook.result.current.speak;
     act(() => hook.result.current.speak('Earlier', { deviceVoice: true }));
     const cancel = vi.mocked(window.speechSynthesis.cancel);
@@ -569,9 +616,10 @@ describe('useTTS, central content policy fixtures', () => {
   });
 });
 
-
 it('does not let an old-policy stop cancel a replacement after a policy round trip', () => {
-  const hook = renderHook(({ allowed }) => useTTS('code', allowed), { initialProps: { allowed: true } });
+  const hook = renderHook(({ allowed }) => useTTS('code', allowed), {
+    initialProps: { allowed: true },
+  });
   const oldStop = hook.result.current.stop;
   hook.rerender({ allowed: false });
   hook.rerender({ allowed: true });

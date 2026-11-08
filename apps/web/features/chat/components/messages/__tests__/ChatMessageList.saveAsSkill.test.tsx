@@ -49,3 +49,14 @@ describe('Save as skill from the transcript', () => {
     expect(onSendMessage).not.toHaveBeenCalled();
   });
 });
+
+type ReadonlyIdentityModule = typeof import('@/lib/identity/useSessionSnapshot');
+vi.mock('@/lib/identity/useSessionSnapshot', async (original) => {
+  const lifetime = { isCurrent: () => true };
+  const capture = () => lifetime;
+  return {
+    ...(await original<ReadonlyIdentityModule>()),
+    useReadonlyIdentityLifetime: () => capture,
+    useSessionSnapshot: () => () => null,
+  };
+});

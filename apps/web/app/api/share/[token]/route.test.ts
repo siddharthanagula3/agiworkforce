@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/feature-flags/tenant-lockdown', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/feature-flags/tenant-lockdown')>()),
+  ...(await importOriginal<MockedModule0>()),
   assertTenantNotLockedDown: mocks.lockdown,
 }));
 vi.mock('@/lib/api-auth', () => ({
@@ -233,9 +233,19 @@ describe('GET /api/share/[token] authenticated fallback', () => {
       headers: { 'x-real-ip': '192.0.2.1', 'x-agi-organization-id': 'personal' },
     });
     mocks.cookieReader.mockResolvedValue({ db: { query: mocks.scopedQuery }, userId: 'member' });
-    mocks.scopedQuery.mockResolvedValueOnce([
-      { id: 'share-1', owner_id: 'owner-1', token: TOKEN, title: 'Shared', visibility: 'organization', messages: [], expires_at: FUTURE },
-    ]).mockResolvedValueOnce([{ organization_id: ORG }]);
+    mocks.scopedQuery
+      .mockResolvedValueOnce([
+        {
+          id: 'share-1',
+          owner_id: 'owner-1',
+          token: TOKEN,
+          title: 'Shared',
+          visibility: 'organization',
+          messages: [],
+          expires_at: FUTURE,
+        },
+      ])
+      .mockResolvedValueOnce([{ organization_id: ORG }]);
     const response = await GET(request, context());
     expect(response.status).toBe(200);
     expect(mocks.cookieReader).toHaveBeenCalledWith(request);
@@ -250,9 +260,19 @@ describe('GET /api/share/[token] authenticated fallback', () => {
       headers: { 'x-agi-organization-id': 'personal' },
     });
     mocks.cookieReader.mockResolvedValue({ db: { query: mocks.scopedQuery }, userId: 'member' });
-    mocks.scopedQuery.mockResolvedValueOnce([
-      { id: 'share-1', owner_id: 'owner-1', token: TOKEN, title: 'Secret', visibility: 'organization', messages: [], expires_at: FUTURE },
-    ]).mockResolvedValueOnce([{ organization_id: ORG }]);
+    mocks.scopedQuery
+      .mockResolvedValueOnce([
+        {
+          id: 'share-1',
+          owner_id: 'owner-1',
+          token: TOKEN,
+          title: 'Secret',
+          visibility: 'organization',
+          messages: [],
+          expires_at: FUTURE,
+        },
+      ])
+      .mockResolvedValueOnce([{ organization_id: ORG }]);
     mocks.lockdown.mockRejectedValueOnce(createError.forbidden('Workspace locked down'));
     const response = await GET(request, context());
     expect(response.status).toBe(403);
@@ -272,3 +292,5 @@ describe('GET /api/share/[token] authenticated fallback', () => {
     expect(mocks.scopedQuery).not.toHaveBeenCalled();
   });
 });
+
+type MockedModule0 = typeof import('@/lib/feature-flags/tenant-lockdown');

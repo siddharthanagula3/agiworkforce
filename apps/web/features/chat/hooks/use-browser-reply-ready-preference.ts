@@ -2,13 +2,19 @@
 
 import { useEffect, useState } from 'react';
 import {
-  fetchPreferenceNamespace,
+  fetchOwnedPreferenceNamespace,
   PREFERENCE_NAMESPACE_SAVED_EVENT,
   type PreferenceNamespaceSavedDetail,
+  type PreferenceOwner,
 } from '@/app/settings/_lib/preferences-client';
+import {
+  usePreferenceOwner,
+  usePreferenceView,
+} from '@/features/settings/hooks/use-preference-owner';
+import { NOTIFICATION_DEFAULTS } from '@/features/settings/lib/notification-preferences';
 
 const NOTIFICATIONS_NAMESPACE = 'notifications';
-const DEFAULT_BROWSER_REPLY_READY = true;
+const DEFAULT_BROWSER_REPLY_READY = NOTIFICATION_DEFAULTS.browserReplyReady;
 
 function readBrowserReplyReady(value: unknown): boolean | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
@@ -17,34 +23,47 @@ function readBrowserReplyReady(value: unknown): boolean | undefined {
 }
 
 export function useBrowserReplyReadyPreference(): boolean {
-  const [enabled, setEnabled] = useState(DEFAULT_BROWSER_REPLY_READY);
+  const owner = usePreferenceOwner();
+  const capture = usePreferenceView(owner);
+  const [view, setView] = useState<{ owner: PreferenceOwner; enabled: boolean } | null>(null);
 
   useEffect(() => {
+    if (!owner) return;
     let cancelled = false;
-    void fetchPreferenceNamespace<{ browserReplyReady: boolean }>(NOTIFICATIONS_NAMESPACE, {
-      browserReplyReady: DEFAULT_BROWSER_REPLY_READY,
-    })
+    let revision = 0;
+    const readRevision = revision;
+    const viewCurrent = capture();
+    const current = () => !cancelled && viewCurrent();
+    void fetchOwnedPreferenceNamespace<{ browserReplyReady: boolean }>(
+      owner,
+      NOTIFICATIONS_NAMESPACE,
+    )
       .then((value) => {
-        if (!cancelled) setEnabled(value.browserReplyReady);
+        if (current() && revision === readRevision) {
+          setView({ owner, enabled: readBrowserReplyReady(value) ?? DEFAULT_BROWSER_REPLY_READY });
+        }
       })
       .catch(() => {
         // Non-fatal: preserve the documented default when preferences cannot
         // be read, while the Settings surface reports its own load error.
       });
 
-    function handleSavedPreference(event: Event) {
+    const handleSavedPreference = (event: Event) => {
       const detail = (event as CustomEvent<PreferenceNamespaceSavedDetail>).detail;
-      if (detail?.namespace !== NOTIFICATIONS_NAMESPACE) return;
+      if (!current() || detail?.namespace !== NOTIFICATIONS_NAMESPACE) return;
       const next = readBrowserReplyReady(detail.value);
-      if (next !== undefined) setEnabled(next);
-    }
+      if (next !== undefined) {
+        revision += 1;
+        setView({ owner, enabled: next });
+      }
+    };
 
     window.addEventListener(PREFERENCE_NAMESPACE_SAVED_EVENT, handleSavedPreference);
     return () => {
       cancelled = true;
       window.removeEventListener(PREFERENCE_NAMESPACE_SAVED_EVENT, handleSavedPreference);
     };
-  }, []);
+  }, [owner, capture]);
 
-  return enabled;
+  return owner?.isCurrent() && view?.owner === owner ? view.enabled : DEFAULT_BROWSER_REPLY_READY;
 }

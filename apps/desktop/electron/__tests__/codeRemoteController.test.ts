@@ -1,3 +1,4 @@
+import { isCredentialPath } from '@agiworkforce/local-runtime-contract';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   DeveloperSessionEvent,
@@ -602,6 +603,153 @@ describe('remote control of a developer session', () => {
       },
     });
   });
+
+  it('withholds a CRLF credential header source', async () => {
+    const controller = createCodeRemoteController(deps);
+    await controller.handleControl(
+      'code.session.attach',
+      request('attach', { rootId: 'root-1', threadId: 'thread-1' }),
+    );
+    await controller.handleSessionEvent('root-1', {
+      type: 'turn-diff',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      unifiedDiff: [
+        'diff --git a/config/server.key b/notes.txt',
+        '@@ -1 +1 @@',
+        '+private-key-material',
+      ].join('\r\n'),
+      paths: ['notes.txt'],
+    });
+    expect(JSON.stringify(sent)).not.toContain('private-key-material');
+    expect(JSON.stringify(sent)).toContain(WITHHELD_DIFF);
+  });
+
+  it.each(['--- a/', 'rename from ', 'copy from '])(
+    'withholds Unicode credential metadata %s',
+    async (prefix) => {
+      for (const separator of ['\u2028', '\u2029']) {
+        const source = `config/server${separator}.key`;
+        expect(isCredentialPath(source)).toBe(true);
+        const controller = createCodeRemoteController(deps);
+        await controller.handleControl(
+          'code.session.attach',
+          request('attach', { rootId: 'root-1', threadId: 'thread-1' }),
+        );
+        await controller.handleSessionEvent('root-1', {
+          type: 'turn-diff',
+          threadId: 'thread-1',
+          turnId: 'turn-1',
+          unifiedDiff: [
+            'diff --git a/old.txt b/notes.txt',
+            `${prefix}${source}`,
+            '+++ b/notes.txt',
+            '@@ -1 +1 @@',
+            '+private-key-material',
+          ].join('\n'),
+          paths: ['notes.txt'],
+        });
+        expect(JSON.stringify(sent)).not.toContain('private-key-material');
+        expect(JSON.stringify(sent)).toContain(WITHHELD_DIFF);
+      }
+    },
+  );
+
+  it.each(['--- a/', 'rename from ', 'copy from '])(
+    'withholds CRLF credential metadata %s',
+    async (prefix) => {
+      const controller = createCodeRemoteController(deps);
+      await controller.handleControl(
+        'code.session.attach',
+        request('attach', { rootId: 'root-1', threadId: 'thread-1' }),
+      );
+      await controller.handleSessionEvent('root-1', {
+        type: 'turn-diff',
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        unifiedDiff: [
+          'diff --git a/old.txt b/notes.txt',
+          `${prefix}config/server.key`,
+          '+++ b/notes.txt',
+          '@@ -1 +1 @@',
+          '+private-key-material',
+        ].join('\r\n'),
+        paths: ['notes.txt'],
+      });
+      expect(JSON.stringify(sent)).not.toContain('private-key-material');
+      expect(JSON.stringify(sent)).toContain(WITHHELD_DIFF);
+    },
+  );
+
+  it.each(['\u2028', '\u2029'])(
+    'withholds a credential header source when the destination contains %j',
+    async (separator) => {
+      const destination = `notes${separator}tail.txt`;
+      const controller = createCodeRemoteController(deps);
+      await controller.handleControl(
+        'code.session.attach',
+        request('attach', { rootId: 'root-1', threadId: 'thread-1' }),
+      );
+      await controller.handleSessionEvent('root-1', {
+        type: 'turn-diff',
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        unifiedDiff: `diff --git a/config/server.key b/${destination}\n@@ -1 +1 @@\n+private-key-material`,
+        paths: [destination],
+      });
+      expect(JSON.stringify(sent)).not.toContain('private-key-material');
+      expect(JSON.stringify(sent)).toContain(WITHHELD_DIFF);
+    },
+  );
+
+  it.each(['notes.txt', 'notes b/', 'folder with spaces/notes.txt'])(
+    'withholds a header-only credential source renamed to %s',
+    async (destination) => {
+      const controller = createCodeRemoteController(deps);
+      await controller.handleControl(
+        'code.session.attach',
+        request('attach', { rootId: 'root-1', threadId: 'thread-1' }),
+      );
+      await controller.handleSessionEvent('root-1', {
+        type: 'turn-diff',
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        unifiedDiff: `diff --git a/config/server.key b/${destination}\n+++ b/${destination}\n@@ -1 +1 @@\n+private-key-material`,
+        paths: [destination],
+      });
+      expect(JSON.stringify(sent)).not.toContain('private-key-material');
+      expect(JSON.stringify(sent)).toContain(WITHHELD_DIFF);
+    },
+  );
+
+  it.each(['\r', '\u2028', '\u2029'])(
+    'handles ambiguous malformed diff headers with %j without blocking or hiding later credential sources',
+    async (terminator) => {
+      const controller = createCodeRemoteController(deps);
+      await controller.handleControl(
+        'code.session.attach',
+        request('attach', { rootId: 'root-1', threadId: 'thread-1' }),
+      );
+      const malformed = 'diff --git a/' + 'x b/'.repeat(12_000) + terminator + 'tail';
+      const patch = [
+        'diff --git a/config/server.key b/notes.txt',
+        malformed,
+        '@@ -1 +1 @@',
+        '+private-key-material',
+      ].join('\n');
+      const start = performance.now();
+      await controller.handleSessionEvent('root-1', {
+        type: 'turn-diff',
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        unifiedDiff: patch,
+        paths: ['notes.txt'],
+      });
+      expect(performance.now() - start).toBeLessThan(1_000);
+      expect(JSON.stringify(sent)).not.toContain('private-key-material');
+      expect(JSON.stringify(sent)).toContain(WITHHELD_DIFF);
+    },
+  );
 
   it('names a changed credential file to the phone and withholds its contents, whichever way the diff arrived', async () => {
     const secret = 'STRIPE_SECRET_KEY=sk_live_abc123';

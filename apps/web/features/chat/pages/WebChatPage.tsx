@@ -52,7 +52,10 @@ import { useModelCatalogue } from '../lib/use-model-catalogue';
 import { useTranslation } from 'react-i18next';
 import { useCurrentUser, useSession, useSignOut } from '@/lib/identity/client';
 import { createRequestAuthority, type RequestAuthority } from '@/lib/identity/request-authority';
-import { useSessionSnapshot, type IdentitySessionSnapshot } from '@/lib/identity/useSessionSnapshot';
+import {
+  useSessionSnapshot,
+  type IdentitySessionSnapshot,
+} from '@/lib/identity/useSessionSnapshot';
 import { useRouter, useParams, useSearchParams, usePathname } from 'next/navigation';
 import {
   ToolApprovalProvider,
@@ -298,7 +301,10 @@ import {
 import { toSidebarSessions } from '@shared/components/layout/sidebar-session-rows';
 import { SidebarFreePlanNudge, SidebarPlanBadge } from '@shared/components/layout/SidebarPlanNudge';
 import { useIsWorkspaceAdmin } from '@shared/hooks/use-workspace-admin';
-import { useDisabledWorkspaceFeatures, useWorkspacePolicy } from '@shared/hooks/use-workspace-policy';
+import {
+  useDisabledWorkspaceFeatures,
+  useWorkspacePolicy,
+} from '@shared/hooks/use-workspace-policy';
 import { resolveLimitedFreeMedia } from '../lib/free-media-choice';
 import { useUnreadConversations } from '@shared/hooks/use-unread-conversations';
 import {
@@ -1072,11 +1078,12 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   const sendPageGenerationRef = useRef<object>({});
   useEffect(() => {
     const generation = {};
+    const authorities = prestreamAuthoritiesRef.current;
     sendPageGenerationRef.current = generation;
     return () => {
       sendPageGenerationRef.current = {};
-      for (const authority of prestreamAuthoritiesRef.current) authority.retire();
-      prestreamAuthoritiesRef.current.clear();
+      for (const authority of authorities) authority.retire();
+      authorities.clear();
     };
   }, []);
   const router = useRouter();
@@ -2053,8 +2060,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   const [showNotifBanner, setShowNotifBanner] = useState(false);
   const notifBannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasPendingMediaJob = useMediaStore((state) =>
-    state.jobs.some((job) =>
-      (job.status === 'pending' || job.status === 'generating') && job.owner.isCurrent(),
+    state.jobs.some(
+      (job) => (job.status === 'pending' || job.status === 'generating') && job.owner.isCurrent(),
     ),
   );
   const isLongRunningTaskType =
@@ -2264,10 +2271,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       const shouldActivate = () =>
         sendPageGenerationRef.current === generation && sendPagePathRef.current === pagePath;
       let handedOff = false;
-      const authority = localModelSelection !== null ? undefined : createRequestAuthority(
-        session!,
-        () => handedOff || shouldActivate(),
-      );
+      const authority =
+        localModelSelection !== null
+          ? undefined
+          : createRequestAuthority(session!, () => handedOff || shouldActivate());
       authority?.assertCurrent();
       lastSendGuardBlockedRef.current = false;
       const sendGuardKey =
@@ -2427,10 +2434,14 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           : temporaryIntent;
         const memoryCommandReport =
           !conversationIsTemporary && !localModelTurn
-            ? runExplicitMemoryCommand(content, {
-                conversationId: existingConvId || null,
-                projectId: sendProjectId ?? null,
-              }, authority!)
+            ? runExplicitMemoryCommand(
+                content,
+                {
+                  conversationId: existingConvId || null,
+                  projectId: sendProjectId ?? null,
+                },
+                authority!,
+              )
             : null;
         if (clientConvId) {
           // Register the placeholder itself, not just `sendGuardKey` above: the
@@ -2478,17 +2489,21 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           : undefined;
 
         const resolvedAttachments = options.attachments?.length
-          ? await uploadChatAttachments(options.attachments, {
-              ...(existingConvId ? { conversationId: existingConvId } : {}),
-              temporary: temporaryIntent,
-              signal: uploadController.signal,
-              ...(options.attachmentUploadAttemptId
-                ? {
-                    onStatus: (status) =>
-                      updateAttachmentUploadStatus(options.attachmentUploadAttemptId!, status),
-                  }
-                : {}),
-            }, authority!)
+          ? await uploadChatAttachments(
+              options.attachments,
+              {
+                ...(existingConvId ? { conversationId: existingConvId } : {}),
+                temporary: temporaryIntent,
+                signal: uploadController.signal,
+                ...(options.attachmentUploadAttemptId
+                  ? {
+                      onStatus: (status) =>
+                        updateAttachmentUploadStatus(options.attachmentUploadAttemptId!, status),
+                    }
+                  : {}),
+              },
+              authority!,
+            )
           : undefined;
         authority?.assertCurrent();
         releaseUploadController();
@@ -3121,7 +3136,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             releaseImageTranscriptMutation(mutationIds);
           }
         } catch (error) {
-          if (authority.isCurrent()) toast.error(toUserMessage(error, 'Image generation could not be started.'));
+          if (authority.isCurrent())
+            toast.error(toUserMessage(error, 'Image generation could not be started.'));
         } finally {
           sendingConversationsRef.current.delete(imageGuardKey);
           releaseSendWindow();
@@ -3335,7 +3351,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         throw generationError;
       } finally {
         // A retired session cannot settle a replacement transcript.
-        if (authority.isCurrent()) updateMessage(messageId, { isStreaming: false }, ownerConversationId);
+        if (authority.isCurrent())
+          updateMessage(messageId, { isStreaming: false }, ownerConversationId);
         releaseImageTranscriptMutation([messageId]);
       }
     },
@@ -3484,7 +3501,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       localJobId?: string;
       authority?: RequestAuthority;
     }) => {
-      const existing = videoTaskAuthoritiesRef.current.get(input.taskId) ?? input.authority ??
+      const existing =
+        videoTaskAuthoritiesRef.current.get(input.taskId) ??
+        input.authority ??
         videoMessageAuthoritiesRef.current.get(input.messageId);
       // A restored task is admitted for observation here, not assigned historical provenance.
       const session = existing ? null : captureSessionSnapshot();
@@ -3653,7 +3672,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       },
     ) => {
       const session = videoOptions?.authority ? null : captureSessionSnapshot();
-      const authority = videoOptions?.authority ?? (session ? createRequestAuthority(session) : null);
+      const authority =
+        videoOptions?.authority ?? (session ? createRequestAuthority(session) : null);
       if (!authority?.isCurrent()) return;
       const videoGuardKey = displayedConversationId || NEW_CHAT_SEND_GUARD_KEY;
       if (sendingConversationsRef.current.has(videoGuardKey)) return;
@@ -3928,7 +3948,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             }
           }
         } catch (error) {
-          if (authority.isCurrent()) toast.error(toUserMessage(error, 'Video generation could not be started.'));
+          if (authority.isCurrent())
+            toast.error(toUserMessage(error, 'Video generation could not be started.'));
         } finally {
           sendingConversationsRef.current.delete(videoGuardKey);
           releaseSendWindow();
@@ -4081,9 +4102,12 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       revision: typedImageScopeRef.current.revision + 1,
     };
   }
-  useEffect(() => () => {
-    typedImageScopeRef.current = { key: '', revision: typedImageScopeRef.current.revision + 1 };
-  }, []);
+  useEffect(
+    () => () => {
+      typedImageScopeRef.current = { key: '', revision: typedImageScopeRef.current.revision + 1 };
+    },
+    [],
+  );
   const handleSend = useCallback(
     (
       content: string,
@@ -4265,7 +4289,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         !requestsSeparateImageResources(content) &&
         !conversationHoldsLocalTurns(displayedMessages) &&
         (providerMode === 'ManagedGateway' || providerMode === 'ManagedNative') &&
-        (classifyTaskLocally(content, []).type === 'image_generation' || explicitlyRequestsArtifact(content)) &&
+        (classifyTaskLocally(content, []).type === 'image_generation' ||
+          explicitlyRequestsArtifact(content)) &&
         routeVisualRequest({ prompt: content, hasSourceImage: false }).destination !== 'artifact';
       if (!typedImage) return handleSend(content, attachments, skillId, meta);
       if (!billingPolicyReady) {
@@ -4282,9 +4307,16 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       }
       const scope = typedImageScopeRef.current;
       return resolveLimitedFreeMedia('image').then((lookup) => {
-        if (!session.isCurrent() || typedImageScopeRef.current !== scope || (isCurrent && !isCurrent())) return false;
+        if (
+          !session.isCurrent() ||
+          typedImageScopeRef.current !== scope ||
+          (isCurrent && !isCurrent())
+        )
+          return false;
         if (lookup.status === 'unknown') {
-          toast.error('Free image availability could not be checked. Your draft is unchanged; please retry.');
+          toast.error(
+            'Free image availability could not be checked. Your draft is unchanged; please retry.',
+          );
           return false;
         }
         if (lookup.status === 'not_offered') {
@@ -4300,7 +4332,16 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         });
       });
     },
-    [activeModelId, displayedMessages, billingPolicyReady, subscriptionTier, handleSend, handleOpenUpgradeDialog, captureSessionSnapshot, userId],
+    [
+      activeModelId,
+      displayedMessages,
+      billingPolicyReady,
+      subscriptionTier,
+      handleSend,
+      handleOpenUpgradeDialog,
+      captureSessionSnapshot,
+      userId,
+    ],
   );
 
   const handleAcceptProviderNotice = useCallback(async () => {
@@ -4308,18 +4349,21 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     if (!pending || pendingProviderNoticeRef.current !== pending) return;
     const session = pending.send?.session ?? captureSessionSnapshot();
     if (!session?.isCurrent()) {
-      setPendingProviderNotice((current) => current === pending ? null : current);
+      setPendingProviderNotice((current) => (current === pending ? null : current));
       return;
     }
     const generation = sendPageGenerationRef.current;
-    const authority = createRequestAuthority(session, () =>
-      pendingProviderNoticeRef.current === pending && sendPageGenerationRef.current === generation,
+    const authority = createRequestAuthority(
+      session,
+      () =>
+        pendingProviderNoticeRef.current === pending &&
+        sendPageGenerationRef.current === generation,
     );
     prestreamAuthoritiesRef.current.add(authority);
     try {
       await saveNamedProviderConsent(pending.notice, true, authority);
       authority.assertCurrent();
-      setPendingProviderNotice((current) => current === pending ? null : current);
+      setPendingProviderNotice((current) => (current === pending ? null : current));
       if (!pending.send) return;
       if (pending.send.keptInComposer) setComposerClearSignal((value) => value + 1);
       void sendContent(pending.send.content, {
@@ -4330,7 +4374,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       });
     } catch (error) {
       if (!authority.isCurrent()) {
-        setPendingProviderNotice((current) => current === pending ? null : current);
+        setPendingProviderNotice((current) => (current === pending ? null : current));
         return;
       }
       throw error;
@@ -4342,7 +4386,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
 
   const handleDeclineProviderNotice = useCallback(() => {
     const held = pendingProviderNotice?.send;
-    setPendingProviderNotice((current) => current === pendingProviderNotice ? null : current);
+    setPendingProviderNotice((current) => (current === pendingProviderNotice ? null : current));
     if (!held || !held.session.isCurrent() || held.keptInComposer) return;
     parkUnsentDraft(held.conversationId, held.content);
     toast.error(
@@ -6264,33 +6308,37 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
 
   const voiceTranscriptIdsRef = useRef(new Set<string>());
 
-  const handleVoiceEnsureConversation = useCallback(async (authority: RequestAuthority, bindConversation: (id: string) => void) => {
-    authority.assertCurrent();
-    if (displayedConversationId && conversations.some((c) => c.id === displayedConversationId)) {
-      return displayedConversationId;
-    }
-    const created = await createConversation(NEW_CHAT_TITLE, activeModelId, activeProjectId, {
-      authority, shouldActivate: () => false,
-    });
-    authority.assertCurrent();
-    if (!created) return null;
-    bindConversation(created.id);
-    adoptPendingComposerToggles(created.id);
-    if (!urlConversationId) setBareChatSessionId(created.id);
-    keepVoiceSessionAcrossNavigation();
-    router.replace(surfaceConversationHref(created.id));
-    return created.id;
-  }, [
-    displayedConversationId,
-    conversations,
-    createConversation,
-    activeModelId,
-    activeProjectId,
-    adoptPendingComposerToggles,
-    urlConversationId,
-    router,
-    surfaceConversationHref,
-  ]);
+  const handleVoiceEnsureConversation = useCallback(
+    async (authority: RequestAuthority, bindConversation: (id: string) => void) => {
+      authority.assertCurrent();
+      if (displayedConversationId && conversations.some((c) => c.id === displayedConversationId)) {
+        return displayedConversationId;
+      }
+      const created = await createConversation(NEW_CHAT_TITLE, activeModelId, activeProjectId, {
+        authority,
+        shouldActivate: () => false,
+      });
+      authority.assertCurrent();
+      if (!created) return null;
+      bindConversation(created.id);
+      adoptPendingComposerToggles(created.id);
+      if (!urlConversationId) setBareChatSessionId(created.id);
+      keepVoiceSessionAcrossNavigation();
+      router.replace(surfaceConversationHref(created.id));
+      return created.id;
+    },
+    [
+      displayedConversationId,
+      conversations,
+      createConversation,
+      activeModelId,
+      activeProjectId,
+      adoptPendingComposerToggles,
+      urlConversationId,
+      router,
+      surfaceConversationHref,
+    ],
+  );
 
   const handleVoiceTranscript = useCallback(
     (conversationId: string, turn: VoiceTranscriptTurn, authority: RequestAuthority) => {
@@ -6315,16 +6363,17 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         );
       }
       if (!turn.final) return;
-      void authority.fetch(`/api/chat/conversations/${encodeURIComponent(conversationId)}/messages`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: turn.turnId,
-          role: turn.role,
-          content: turn.text,
-          skipLlm: true,
-        }),
-      })
+      void authority
+        .fetch(`/api/chat/conversations/${encodeURIComponent(conversationId)}/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: turn.turnId,
+            role: turn.role,
+            content: turn.text,
+            skipLlm: true,
+          }),
+        })
         .then((response) => {
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
         })
@@ -6356,10 +6405,16 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   const handleVoiceStartWorkTask = useCallback(
     (goal: string, conversationId: string, authority: RequestAuthority) => {
       if (!authority.isCurrent()) return false;
-      const outcome = handleSend(goal, undefined, undefined, {
-        workMode: AGI_WORK_MODE,
-        agiWorkGoal: buildAgiWorkGoalInput(goal),
-      }, { conversationId, authority });
+      const outcome = handleSend(
+        goal,
+        undefined,
+        undefined,
+        {
+          workMode: AGI_WORK_MODE,
+          agiWorkGoal: buildAgiWorkGoalInput(goal),
+        },
+        { conversationId, authority },
+      );
       return outcome !== false && outcome !== SEND_GUARD_BLOCKED;
     },
     [handleSend],
@@ -6385,7 +6440,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   );
 
   const voiceProviderMode = getProviderModeForModel(activeModelId);
-  const voiceManaged = localModelSelection === null && !conversationHoldsLocalTurns(displayedMessages) &&
+  const voiceManaged =
+    localModelSelection === null &&
+    !conversationHoldsLocalTurns(displayedMessages) &&
     (voiceProviderMode === 'ManagedGateway' || voiceProviderMode === 'ManagedNative');
   const voiceSurfaceProps = {
     managed: voiceManaged,
@@ -7489,8 +7546,11 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         />
       )}
       <NamedProviderNoticeDialog
-        notice={pendingProviderNotice?.send && !pendingProviderNotice.send.session.isCurrent()
-          ? null : pendingProviderNotice?.notice ?? null}
+        notice={
+          pendingProviderNotice?.send && !pendingProviderNotice.send.session.isCurrent()
+            ? null
+            : (pendingProviderNotice?.notice ?? null)
+        }
         alternativeName={
           availableModels.find((model) => model.id === getBestAutoModeForTier(subscriptionTier))
             ?.name

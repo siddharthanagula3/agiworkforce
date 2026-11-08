@@ -19,7 +19,10 @@ const {
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: authUserMock }));
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule0>()),
+  getClerkAuthUser: authUserMock,
+}));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: csrfMock }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: rateLimitMock }));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: getNeonDbMock }));
@@ -131,3 +134,5 @@ describe('PATCH /api/plugins/[id]/settings', () => {
     expect(response.status).toBe(404);
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/api-auth');

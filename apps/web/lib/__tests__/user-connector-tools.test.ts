@@ -17,7 +17,7 @@ vi.mock('server-only', () => ({}));
 
 const gmailAction = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/connectors/gmail-actions', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/connectors/gmail-actions')>()),
+  ...(await importOriginal<MockedModule0>()),
   executeGmailAction: gmailAction,
 }));
 
@@ -537,11 +537,16 @@ describe('makeUserConnectorExecutor', () => {
       gmailAction.mockResolvedValue({ content: 'fixture draft', isError: false });
       const args = { files: ['/api/files/fixture'] };
       const result = await makeUserConnectorExecutor('user-1', organizationId)(
-        'gmail', 'create_draft_with_attachments', args,
+        'gmail',
+        'create_draft_with_attachments',
+        args,
       );
       expect(result.isError).toBe(false);
       expect(gmailAction).toHaveBeenCalledWith(
-        'user-1', 'create_draft_with_attachments', args, organizationId,
+        'user-1',
+        'create_draft_with_attachments',
+        args,
+        organizationId,
       );
     },
   );
@@ -1198,3 +1203,5 @@ vi.mock('@/lib/services/connector-policy-gate', async (importOriginal) => ({
   ...(await importOriginal<DiscoveryPolicyGateModule>()),
   evaluateConnectorPolicyForUser: vi.fn(async () => ({ allowed: true })),
 }));
+
+type MockedModule0 = typeof import('@/lib/connectors/gmail-actions');

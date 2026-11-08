@@ -7,18 +7,24 @@ const mocks = vi.hoisted(() => ({
   setTelemetryConsentCache: vi.fn(),
   initializeSentryAfterConsent: vi.fn(),
   useAuth: vi.fn(),
-  sdk: { loaded: true, user: { id: 'a' },
-    session: { id: 'session-a', user: { id: 'a' }, getToken: async () => 'token-a' } },
+  sdk: {
+    loaded: true,
+    user: { id: 'a' },
+    session: { id: 'session-a', user: { id: 'a' }, getToken: async () => 'token-a' },
+  },
 }));
 
 vi.mock('@clerk/nextjs', () => ({ useAuth: mocks.useAuth, useClerk: () => mocks.sdk }));
 
 vi.mock('@/features/settings/services/privacy-preferences-client', async (original) => ({
-  ...await original<typeof import('@/features/settings/services/privacy-preferences-client')>(),
-  readPrivacyPreferences: async () => ({ stored: await mocks.fetchPreferenceNamespace(), version: 'v1' }),
+  ...(await original<MockedModule0>()),
+  readPrivacyPreferences: async () => ({
+    stored: await mocks.fetchPreferenceNamespace(),
+    version: 'v1',
+  }),
 }));
 vi.mock('@/lib/sentry-shared', async (original) => ({
-  ...await original<typeof import('@/lib/sentry-shared')>(),
+  ...(await original<MockedModule1>()),
   hasTelemetryConsent: mocks.hasTelemetryConsent,
   setTelemetryConsentCache: mocks.setTelemetryConsentCache,
 }));
@@ -38,7 +44,12 @@ beforeEach(() => {
   mocks.sdk.session = { id: 'session-a', user: { id: 'a' }, getToken: async () => 'token-a' };
   mocks.hasTelemetryConsent.mockReturnValue(true);
   mocks.fetchPreferenceNamespace.mockResolvedValue({});
-  mocks.useAuth.mockReturnValue({ isLoaded: true, isSignedIn: true, userId: 'a', sessionId: 'session-a' });
+  mocks.useAuth.mockReturnValue({
+    isLoaded: true,
+    isSignedIn: true,
+    userId: 'a',
+    sessionId: 'session-a',
+  });
 });
 
 afterEach(() => cleanup());
@@ -144,15 +155,23 @@ describe('telemetry consent reaches a device that never opened Settings', () => 
   });
 });
 
-
 describe('exact account and view ownership', () => {
   it('does not apply an old account response after replacement', async () => {
     let resolve!: (value: { shareTelemetry: boolean }) => void;
-    mocks.fetchPreferenceNamespace.mockReturnValueOnce(new Promise((done) => { resolve = done; }));
+    mocks.fetchPreferenceNamespace.mockReturnValueOnce(
+      new Promise((done) => {
+        resolve = done;
+      }),
+    );
     const mounted = render(<TelemetryConsentSync />);
     mocks.sdk.user = { id: 'b' };
     mocks.sdk.session = { id: 'session-b', user: { id: 'b' }, getToken: async () => 'token-b' };
-    mocks.useAuth.mockReturnValue({ isLoaded: true, isSignedIn: true, userId: 'b', sessionId: 'session-b' });
+    mocks.useAuth.mockReturnValue({
+      isLoaded: true,
+      isSignedIn: true,
+      userId: 'b',
+      sessionId: 'session-b',
+    });
     mocks.fetchPreferenceNamespace.mockResolvedValueOnce({});
     mounted.rerender(<TelemetryConsentSync />);
     await act(async () => resolve({ shareTelemetry: true }));
@@ -169,16 +188,25 @@ describe('exact account and view ownership', () => {
     const mounted = render(<TelemetryConsentSync />);
     unmount = mounted.unmount;
     await waitFor(() => expect(mocks.setTelemetryConsentCache).toHaveBeenCalledWith(true));
-    await act(async () => { await import('@/lib/client/initialize-sentry-after-consent'); });
+    await act(async () => {
+      await import('@/lib/client/initialize-sentry-after-consent');
+    });
     expect(mocks.initializeSentryAfterConsent).not.toHaveBeenCalled();
   });
 
   it('does not apply an unmounted response', async () => {
     let resolve!: (value: { shareTelemetry: boolean }) => void;
-    mocks.fetchPreferenceNamespace.mockReturnValueOnce(new Promise((done) => { resolve = done; }));
+    mocks.fetchPreferenceNamespace.mockReturnValueOnce(
+      new Promise((done) => {
+        resolve = done;
+      }),
+    );
     const mounted = render(<TelemetryConsentSync />);
     mounted.unmount();
     await act(async () => resolve({ shareTelemetry: false }));
     expect(mocks.setTelemetryConsentCache).not.toHaveBeenCalled();
   });
 });
+
+type MockedModule0 = typeof import('@/features/settings/services/privacy-preferences-client');
+type MockedModule1 = typeof import('@/lib/sentry-shared');

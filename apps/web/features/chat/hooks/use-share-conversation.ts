@@ -71,6 +71,7 @@ interface InFlightShareRequest {
 }
 
 interface ShareScope {
+  conversationId: string | null | undefined;
   session: SessionAuthority | null;
   selector: string;
   isCurrent: () => boolean;
@@ -174,7 +175,9 @@ async function readLiveShares(
     headers: { [MANAGED_CLOUD_ORGANIZATION_HEADER]: selector },
   });
   if (!res.ok) throw new Error(SHARE_LOOKUP_FAILED);
-  const { shares, workspace, complete } = ConversationShareListResponseSchema.parse(await res.json());
+  const { shares, workspace, complete } = ConversationShareListResponseSchema.parse(
+    await res.json(),
+  );
   authority.assertCurrent();
   return {
     complete,
@@ -241,8 +244,10 @@ export function useShareConversation(
   const renderedScope = useRef<ShareScope | null>(null);
   const scope = useMemo(() => {
     const next: ShareScope = {
+      conversationId,
       session: owner?.session ?? null,
-      selector: workspaceData?.activeOrganizationId ?? MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
+      selector:
+        workspaceData?.activeOrganizationId ?? MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
       isCurrent: () =>
         renderedScope.current === next &&
         open &&
@@ -262,16 +267,17 @@ export function useShareConversation(
   const [sharingRequest, setSharingRequest] = useState<InFlightShareRequest | null>(null);
   const [liveShares, commitLiveShares] = useState<ConversationLiveShares | null>(null);
   const liveSharesRef = useRef<ConversationLiveShares | null>(null);
-  const setLiveShares = useCallback((
-    update: (current: ConversationLiveShares | null) => ConversationLiveShares | null,
-  ) => {
-    const next = update(liveSharesRef.current);
-    if (next === liveSharesRef.current || !next || !viewIsCurrent(next.view)) return;
-    liveSharesRef.current = next;
-    commitLiveShares((current) =>
-      liveSharesRef.current === next && viewIsCurrent(next.view) ? next : current,
-    );
-  }, []);
+  const setLiveShares = useCallback(
+    (update: (current: ConversationLiveShares | null) => ConversationLiveShares | null) => {
+      const next = update(liveSharesRef.current);
+      if (next === liveSharesRef.current || !next || !viewIsCurrent(next.view)) return;
+      liveSharesRef.current = next;
+      commitLiveShares((current) =>
+        liveSharesRef.current === next && viewIsCurrent(next.view) ? next : current,
+      );
+    },
+    [],
+  );
   const [lookupPending, setLookupPending] = useState<ShareView | null>(null);
   const [viewError, setViewError] = useState<{ view: ShareView; message: string } | null>(null);
   const setError = useCallback(
@@ -296,7 +302,7 @@ export function useShareConversation(
         clearTimeout(pending.timeout);
         pending.controller.abort();
         inFlightRef.current = null;
-        setSharingRequest((current) => current === pending ? null : current);
+        setSharingRequest((current) => (current === pending ? null : current));
       }
     };
     const reconcile = () => {
@@ -314,7 +320,8 @@ export function useShareConversation(
   }, [scope]);
   const workspacePending =
     open &&
-    (workspace.isLoading || workspace.isSwitching ||
+    (workspace.isLoading ||
+      workspace.isSwitching ||
       (scope.isCurrent() && (view === null || view.scope !== scope)));
   const workspaceUnavailable = open && !workspacePending && !viewIsCurrent(view);
   const error = workspaceUnavailable
@@ -376,33 +383,47 @@ export function useShareConversation(
     if (!viewIsCurrent(view) || !view.scope.session || !storedConversationId) return;
     const authority = createRequestAuthority(view.scope.session, () => viewIsCurrent(view));
     view.requests.add(authority);
-    setLookupPending((current) => viewIsCurrent(view) ? view : current);
+    setLookupPending((current) => (viewIsCurrent(view) ? view : current));
     setError(null);
-    readLiveShares(storedConversationId, authority, view.scope.selector).then(
-      ({ shares, complete }) => {
-        if (!authority.isCurrent()) return;
-        setLiveShares((current) =>
-          viewIsCurrent(view)
-            ? { view, conversationId: storedConversationId, shares, lookupFailed: false, complete }
-            : current,
-        );
-        setLookupPending((current) => viewIsCurrent(view) && current === view ? null : current);
-        setError(null);
-      },
-      (caught: unknown) => {
-        if (!authority.isCurrent()) return;
-        setLiveShares((current) =>
-          viewIsCurrent(view)
-            ? { view, conversationId: storedConversationId, shares: [], lookupFailed: true, complete: false }
-            : current,
-        );
-        setLookupPending((current) => viewIsCurrent(view) && current === view ? null : current);
-        setError(toUserMessage(caught, SHARE_LOOKUP_FAILED));
-      },
-    ).finally(() => {
-      authority.retire();
-      view.requests.delete(authority);
-    });
+    readLiveShares(storedConversationId, authority, view.scope.selector)
+      .then(
+        ({ shares, complete }) => {
+          if (!authority.isCurrent()) return;
+          setLiveShares((current) =>
+            viewIsCurrent(view)
+              ? {
+                  view,
+                  conversationId: storedConversationId,
+                  shares,
+                  lookupFailed: false,
+                  complete,
+                }
+              : current,
+          );
+          setLookupPending((current) => (viewIsCurrent(view) && current === view ? null : current));
+          setError(null);
+        },
+        (caught: unknown) => {
+          if (!authority.isCurrent()) return;
+          setLiveShares((current) =>
+            viewIsCurrent(view)
+              ? {
+                  view,
+                  conversationId: storedConversationId,
+                  shares: [],
+                  lookupFailed: true,
+                  complete: false,
+                }
+              : current,
+          );
+          setLookupPending((current) => (viewIsCurrent(view) && current === view ? null : current));
+          setError(toUserMessage(caught, SHARE_LOOKUP_FAILED));
+        },
+      )
+      .finally(() => {
+        authority.retire();
+        view.requests.delete(authority);
+      });
     return () => {
       authority.retire();
       view.requests.delete(authority);
@@ -444,12 +465,13 @@ export function useShareConversation(
     request.view.requests.delete(request.authority);
     if (inFlightRef.current !== request) return;
     inFlightRef.current = null;
-    setSharingRequest((current) => current === request ? null : current);
+    setSharingRequest((current) => (current === request ? null : current));
   }, []);
 
   const showRequestError = useCallback(
     (request: InFlightShareRequest, caught: unknown, fallback: string) => {
-      if (request.dismissed || !viewIsCurrent(request.view) || inFlightRef.current !== request) return;
+      if (request.dismissed || !viewIsCurrent(request.view) || inFlightRef.current !== request)
+        return;
       setError(
         request.timedOut
           ? 'The request took too long. Please try again.'
@@ -468,7 +490,7 @@ export function useShareConversation(
     clearTimeout(request.timeout);
     request.controller.abort();
     inFlightRef.current = null;
-    setSharingRequest((current) => current === request ? null : current);
+    setSharingRequest((current) => (current === request ? null : current));
   }, [view]);
 
   const share = useCallback(
@@ -503,7 +525,11 @@ export function useShareConversation(
           messages: snapshotMessages(sharedConversationId, sharedMessages),
         });
         const result = await writeShare(
-          request, CONVERSATION_SHARES_PATH, 'POST', body, 'Failed to share',
+          request,
+          CONVERSATION_SHARES_PATH,
+          'POST',
+          body,
+          'Failed to share',
         );
         request.authority.assertCurrent();
         const created = readCreatedShare(result);
@@ -567,7 +593,10 @@ export function useShareConversation(
         messages: snapshotMessages(sharedConversationId, sharedMessages),
       });
       const result = await writeShare(
-        request, conversationSharesPath(sharedConversationId), 'PUT', body,
+        request,
+        conversationSharesPath(sharedConversationId),
+        'PUT',
+        body,
         'Could not update the link.',
       );
       request.authority.assertCurrent();
@@ -617,29 +646,47 @@ export function useShareConversation(
     if (!request) return false;
     try {
       const result = await writeShare(
-        request, conversationSharesPath(sharedConversationId), 'DELETE', undefined,
+        request,
+        conversationSharesPath(sharedConversationId),
+        'DELETE',
+        undefined,
         'Failed to revoke share link',
       );
       request.authority.assertCurrent();
       ConversationSharesRevokedSchema.parse(result);
       setLiveShares((current) =>
         viewIsCurrent(request.view)
-          ? { view: request.view, conversationId: sharedConversationId, shares: [], lookupFailed: false, complete: false }
+          ? {
+              view: request.view,
+              conversationId: sharedConversationId,
+              shares: [],
+              lookupFailed: false,
+              complete: false,
+            }
           : current,
       );
       try {
         const inventory = await readLiveShares(
-          sharedConversationId, request.authority, request.view.scope.selector,
+          sharedConversationId,
+          request.authority,
+          request.view.scope.selector,
         );
         request.authority.assertCurrent();
         setLiveShares((current) =>
           viewIsCurrent(request.view)
-            ? { view: request.view, conversationId: sharedConversationId, ...inventory, lookupFailed: false }
+            ? {
+                view: request.view,
+                conversationId: sharedConversationId,
+                ...inventory,
+                lookupFailed: false,
+              }
             : current,
         );
       } catch {
         if (!request.dismissed && viewIsCurrent(request.view)) {
-          setError('The revocation request succeeded, but the remaining links could not be checked. Close and reopen this dialog to check again.');
+          setError(
+            'The revocation request succeeded, but the remaining links could not be checked. Close and reopen this dialog to check again.',
+          );
         }
       }
       return true;
@@ -649,7 +696,16 @@ export function useShareConversation(
     } finally {
       finishRequest(request);
     }
-  }, [activeShare, storedConversationId, inventoryIncomplete, beginRequest, finishRequest, showRequestError, setError, setLiveShares]);
+  }, [
+    activeShare,
+    storedConversationId,
+    inventoryIncomplete,
+    beginRequest,
+    finishRequest,
+    showRequestError,
+    setError,
+    setLiveShares,
+  ]);
 
   /**
    * Move every live link of the chat to one audience. Tokens and expiries are
@@ -665,8 +721,11 @@ export function useShareConversation(
         for (const link of shownShares.filter((candidate) => candidate.audience !== audience)) {
           request.authority.assertCurrent();
           const result = await writeShare(
-            request, conversationSharePath(link.token), 'PATCH',
-            JSON.stringify({ visibility: audience }), 'Could not change who can open this.',
+            request,
+            conversationSharePath(link.token),
+            'PATCH',
+            JSON.stringify({ visibility: audience }),
+            'Could not change who can open this.',
           );
           request.authority.assertCurrent();
           const body = ConversationShareAudienceResponseSchema.parse(result);
@@ -689,7 +748,15 @@ export function useShareConversation(
         finishRequest(request);
       }
     },
-    [activeShare, shownShares, shownLiveShares, beginRequest, finishRequest, showRequestError, setLiveShares],
+    [
+      activeShare,
+      shownShares,
+      shownLiveShares,
+      beginRequest,
+      finishRequest,
+      showRequestError,
+      setLiveShares,
+    ],
   );
 
   return {

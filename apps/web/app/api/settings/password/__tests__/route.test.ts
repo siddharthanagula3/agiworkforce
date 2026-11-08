@@ -78,7 +78,7 @@ vi.mock('@/lib/server/neon-db', () => ({
   getStripeWebhookDb: vi.fn(),
 }));
 vi.mock('@/lib/services/active-workspace-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/active-workspace-service')>()),
+  ...(await importOriginal<MockedModule0>()),
   resolveActiveOrganizationId: mocks.resolveOrganization,
 }));
 vi.mock('@/lib/server/claimed-user-scope-db', () => ({
@@ -190,92 +190,146 @@ describe('POST /api/settings/password', () => {
   it.each([
     ['bearer', { authorization: 'Bearer native-session-token' }],
     ['cookie', { cookie: '__session=native-session-cookie' }],
-  ] satisfies Array<[string, Record<string, string>]>)
-  ('keeps mapped account and native identity separate for %s', async (_kind, headers) => {
-    mocks.authenticate.mockResolvedValue({
-      userId: 'product-account-7',
-      sessionIdentity: { subject: 'native-subject-9', sessionId: 'sess-native-9' },
-    });
-    mocks.getUser.mockResolvedValue({ id: 'native-subject-9', passwordEnabled: true });
-    mocks.factors.mockResolvedValue({ anySecondFactor: true, earlierEnrollmentPending: false });
-    mocks.requireStepUp.mockResolvedValue({ method: 'totp' });
-    const incoming = request({ currentPassword: 'old', newPassword: 'longenough' }, {
-      ...headers,
-      'x-user-id': 'forged-account',
-      'x-session-id': 'forged-session',
-    });
+  ] satisfies Array<[string, Record<string, string>]>)(
+    'keeps mapped account and native identity separate for %s',
+    async (_kind, headers) => {
+      mocks.authenticate.mockResolvedValue({
+        userId: 'product-account-7',
+        sessionIdentity: { subject: 'native-subject-9', sessionId: 'sess-native-9' },
+      });
+      mocks.getUser.mockResolvedValue({ id: 'native-subject-9', passwordEnabled: true });
+      mocks.factors.mockResolvedValue({ anySecondFactor: true, earlierEnrollmentPending: false });
+      mocks.requireStepUp.mockResolvedValue({ method: 'totp' });
+      const incoming = request(
+        { currentPassword: 'old', newPassword: 'longenough' },
+        {
+          ...headers,
+          'x-user-id': 'forged-account',
+          'x-session-id': 'forged-session',
+        },
+      );
 
-    const response = await POST(incoming);
+      const response = await POST(incoming);
 
-    expect(response.status).toBe(200);
-    expect(mocks.authenticate).toHaveBeenCalledExactlyOnceWith(incoming, {});
-    expect(mocks.resolveOrganization).toHaveBeenCalledExactlyOnceWith(
-      SERVICE_DB, 'product-account-7', incoming,
-    );
-    expect(mocks.claimScope).toHaveBeenCalledExactlyOnceWith(SERVICE_DB, {
-      userId: 'product-account-7', organizationId: 'org-1',
-    });
-    expect(SERVICE_DB.withUser).not.toHaveBeenCalled();
-    expect(mocks.getUser).toHaveBeenCalledExactlyOnceWith('native-subject-9');
-    expect(mocks.factors).toHaveBeenCalledExactlyOnceWith(DB, 'product-account-7', 'native-subject-9');
-    expect(mocks.requireStepUp).toHaveBeenCalledWith(expect.objectContaining({
-      userId: 'product-account-7', organizationId: 'org-1', action: 'password.change',
-    }));
-    expect(mocks.withRateLimit).toHaveBeenCalledWith(incoming, 'auth-password-reset', 'user:product-account-7');
-    expect(mocks.verifyPassword).toHaveBeenCalledExactlyOnceWith('native-subject-9', 'old');
-    expect(mocks.setPassword).toHaveBeenCalledExactlyOnceWith('native-subject-9', 'longenough');
-    expect(mocks.revoke).toHaveBeenCalledWith(
-      expect.anything(), 'product-account-7', 'sess-native-9', 'native-subject-9',
-    );
-    expect(mocks.revokeDevices).toHaveBeenCalledExactlyOnceWith(DB, 'product-account-7');
-    expect(mocks.finishIntent).toHaveBeenCalledWith(expect.anything(), 'product-account-7');
-    expect(mocks.announce).toHaveBeenCalledWith(expect.objectContaining({
-      userId: 'product-account-7', identitySubject: 'native-subject-9',
-      event: 'password_changed', detail: { source: 'totp', count: 2 },
-    }));
-  });
+      expect(response.status).toBe(200);
+      expect(mocks.authenticate).toHaveBeenCalledExactlyOnceWith(incoming, {});
+      expect(mocks.resolveOrganization).toHaveBeenCalledExactlyOnceWith(
+        SERVICE_DB,
+        'product-account-7',
+        incoming,
+      );
+      expect(mocks.claimScope).toHaveBeenCalledExactlyOnceWith(SERVICE_DB, {
+        userId: 'product-account-7',
+        organizationId: 'org-1',
+      });
+      expect(SERVICE_DB.withUser).not.toHaveBeenCalled();
+      expect(mocks.getUser).toHaveBeenCalledExactlyOnceWith('native-subject-9');
+      expect(mocks.factors).toHaveBeenCalledExactlyOnceWith(
+        DB,
+        'product-account-7',
+        'native-subject-9',
+      );
+      expect(mocks.requireStepUp).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 'product-account-7',
+          organizationId: 'org-1',
+          action: 'password.change',
+        }),
+      );
+      expect(mocks.withRateLimit).toHaveBeenCalledWith(
+        incoming,
+        'auth-password-reset',
+        'user:product-account-7',
+      );
+      expect(mocks.verifyPassword).toHaveBeenCalledExactlyOnceWith('native-subject-9', 'old');
+      expect(mocks.setPassword).toHaveBeenCalledExactlyOnceWith('native-subject-9', 'longenough');
+      expect(mocks.revoke).toHaveBeenCalledWith(
+        expect.anything(),
+        'product-account-7',
+        'sess-native-9',
+        'native-subject-9',
+      );
+      expect(mocks.revokeDevices).toHaveBeenCalledExactlyOnceWith(DB, 'product-account-7');
+      expect(mocks.finishIntent).toHaveBeenCalledWith(expect.anything(), 'product-account-7');
+      expect(mocks.announce).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 'product-account-7',
+          identitySubject: 'native-subject-9',
+          event: 'password_changed',
+          detail: { source: 'totp', count: 2 },
+        }),
+      );
+    },
+  );
 
   it.each([
     ['API key without native identity', { userId: 'product-account-7', apiKeyId: 'key-1' }],
     ['missing native identity', { userId: 'product-account-7' }],
-    ['missing native session', {
-      userId: 'product-account-7', sessionIdentity: { subject: 'native-subject-9', sessionId: null },
-    }],
-    ['empty native session', {
-      userId: 'product-account-7', sessionIdentity: { subject: 'native-subject-9', sessionId: '' },
-    }],
-    ['empty native subject', {
-      userId: 'product-account-7', sessionIdentity: { subject: '', sessionId: 'sess-native-9' },
-    }],
-  ] satisfies Array<[string, AuthResult]>)
-  ('refuses %s before password, factor and revocation work', async (_kind, auth) => {
-    mocks.authenticate.mockResolvedValue(auth);
+    [
+      'missing native session',
+      {
+        userId: 'product-account-7',
+        sessionIdentity: { subject: 'native-subject-9', sessionId: null },
+      },
+    ],
+    [
+      'empty native session',
+      {
+        userId: 'product-account-7',
+        sessionIdentity: { subject: 'native-subject-9', sessionId: '' },
+      },
+    ],
+    [
+      'empty native subject',
+      {
+        userId: 'product-account-7',
+        sessionIdentity: { subject: '', sessionId: 'sess-native-9' },
+      },
+    ],
+  ] satisfies Array<[string, AuthResult]>)(
+    'refuses %s before password, factor and revocation work',
+    async (_kind, auth) => {
+      mocks.authenticate.mockResolvedValue(auth);
 
-    const response = await POST(request({ currentPassword: 'old', newPassword: 'longenough' }, {
-      authorization: 'Bearer credential-without-native-session',
-    }));
+      const response = await POST(
+        request(
+          { currentPassword: 'old', newPassword: 'longenough' },
+          {
+            authorization: 'Bearer credential-without-native-session',
+          },
+        ),
+      );
 
-    expect(response.status).toBe(401);
-    expect(mocks.authenticate).toHaveBeenCalledTimes(1);
-    expect(mocks.getNeonDb).not.toHaveBeenCalled();
-    expect(mocks.claimScope).not.toHaveBeenCalled();
-    expect(mocks.getUser).not.toHaveBeenCalled();
-    expect(mocks.factors).not.toHaveBeenCalled();
-    expect(mocks.verifyPassword).not.toHaveBeenCalled();
-    expect(mocks.setPassword).not.toHaveBeenCalled();
-    expect(mocks.requireStepUp).not.toHaveBeenCalled();
-    expect(mocks.revoke).not.toHaveBeenCalled();
-    expect(mocks.revokeDevices).not.toHaveBeenCalled();
-    expect(mocks.finishIntent).not.toHaveBeenCalled();
-    expect(mocks.announce).not.toHaveBeenCalled();
-  });
+      expect(response.status).toBe(401);
+      expect(mocks.authenticate).toHaveBeenCalledTimes(1);
+      expect(mocks.getNeonDb).not.toHaveBeenCalled();
+      expect(mocks.claimScope).not.toHaveBeenCalled();
+      expect(mocks.getUser).not.toHaveBeenCalled();
+      expect(mocks.factors).not.toHaveBeenCalled();
+      expect(mocks.verifyPassword).not.toHaveBeenCalled();
+      expect(mocks.setPassword).not.toHaveBeenCalled();
+      expect(mocks.requireStepUp).not.toHaveBeenCalled();
+      expect(mocks.revoke).not.toHaveBeenCalled();
+      expect(mocks.revokeDevices).not.toHaveBeenCalled();
+      expect(mocks.finishIntent).not.toHaveBeenCalled();
+      expect(mocks.announce).not.toHaveBeenCalled();
+    },
+  );
 
   it('refuses an authenticated developer credential with 403 before password work', async () => {
-    mocks.authenticate.mockResolvedValue({ userId: 'product-account-7', surfaceClass: 'developer' });
+    mocks.authenticate.mockResolvedValue({
+      userId: 'product-account-7',
+      surfaceClass: 'developer',
+    });
 
-    const response = await POST(request({ currentPassword: 'old', newPassword: 'longenough' }, {
-      authorization: 'Bearer verified-device-credential',
-    }));
+    const response = await POST(
+      request(
+        { currentPassword: 'old', newPassword: 'longenough' },
+        {
+          authorization: 'Bearer verified-device-credential',
+        },
+      ),
+    );
 
     expect(response.status).toBe(403);
     expect(mocks.authenticate).toHaveBeenCalledTimes(1);
@@ -446,3 +500,5 @@ describe('POST /api/settings/password', () => {
     );
   });
 });
+
+type MockedModule0 = typeof import('@/lib/services/active-workspace-service');

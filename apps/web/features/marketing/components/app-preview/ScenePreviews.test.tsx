@@ -533,8 +533,8 @@ describe('memory settings', () => {
   it('the memory settings still ship what the scene shows', () => {
     expectSource('apps/web/features/settings/sections/MemorySection.tsx', [
       'Memory\n        </h2>',
-      'Facts the assistant should remember about you across conversations. Stored on this device,',
-      'and synced to your account across devices when you&apos;re signed in.',
+      'Facts saved in your selected Managed Cloud workspace. Device-local and offline memories',
+      'are separate and are not shown or uploaded here.',
       '<HelpArticleLink docId="memory" label="How memory works" />',
       "'Persistent memory',",
       "'Allow AGI to remember details across conversations',",
@@ -2680,7 +2680,9 @@ describe('every web scene composer shows what the web chat renders in that state
       'rounded-full bg-foreground text-background',
     ]);
     expectSource('apps/web/features/chat/components/messages/MessageBubble.tsx', [
-      "// The turn's SSE connection stays open while a decision is outstanding, so",
+      'const awaitingApproval = hasPendingMessageApproval(message);',
+      'const approvalTurnExpired = Boolean(resolveToolApproval) && !isApprovalTurnLive(message.id);',
+      'void resolveToolApproval?.(message.id, toolCallId, decision);',
     ]);
   });
 });

@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead, with Legal/compliance co-owning section 1
-Last updated: 2026-10-23
+Last updated: 2026-11-08
 Rotation cadence: every 12 months per key, plus immediately on suspected exposure
 
 The single security document for this repository. Four live policies live here as
@@ -265,11 +265,12 @@ origin, and a connector with no remote server reports `unavailable`
 (`describeConnectorSetup` in `lib/connectors/oauth-setup.ts`, mapped to the
 directory state by `lib/connectors/directory/connectable.ts`).
 
-Disconnecting, and erasing an account, destroys the stored tokens in every case
-and asks the provider to revoke only where the connector's descriptor carries a
-`revocationUrl`, so a self-registered or directory-discovered grant is destroyed
-here without an upstream revocation call (`disconnectConnectorOAuthGrant` and
-`revokeAllConnectorTokensAtProviders` in `lib/connectors/oauth-access.ts`).
+OAuth disconnection captures and removes local grants before best-effort provider
+revocation, and reports when the provider does not confirm a requested revocation;
+account erasure also attempts provider cleanup, using descriptor revocation endpoints or
+discovered issuer metadata for self-registered and directory-discovered MCP grants
+(`disconnectConnectorOAuthGrant` and `revokeAllConnectorTokensAtProviders` in
+`lib/connectors/oauth-access.ts`).
 
 `user_connectors` holds only `connector_id + auth_type + is_active`. **No tokens,
 no endpoint URLs.** `POST /api/connectors` writes that row only for an

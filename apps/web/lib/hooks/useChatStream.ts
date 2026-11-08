@@ -38,7 +38,10 @@ import { accountSecurityVerifyPageHref } from '@agiworkforce/cloud-contracts/acc
 import { EXPLICIT_ARTIFACT_DERIVATION_POLICY } from '@agiworkforce/artifacts';
 import { hasExplicitWebSearchIntent } from '@agiworkforce/search';
 import { useSession } from '@/lib/identity/client';
-import { useSessionSnapshot, type IdentitySessionSnapshot } from '@/lib/identity/useSessionSnapshot';
+import {
+  useSessionSnapshot,
+  type IdentitySessionSnapshot,
+} from '@/lib/identity/useSessionSnapshot';
 import { createRequestAuthority, type RequestAuthority } from '@/lib/identity/request-authority';
 import {
   createChatRequestSettlements,
@@ -693,8 +696,9 @@ function assertTokenOwner(getAuthToken: AuthTokenProvider): void {
 }
 
 function tokenOwnerCurrent(getAuthToken: AuthTokenProvider): boolean {
-  return (getAuthToken.authority?.isCurrent() ?? true) &&
-    (getAuthToken.settlement?.isCurrent() ?? true);
+  return (
+    (getAuthToken.authority?.isCurrent() ?? true) && (getAuthToken.settlement?.isCurrent() ?? true)
+  );
 }
 
 function ownerFetch(getAuthToken: AuthTokenProvider): typeof fetch {
@@ -735,9 +739,10 @@ async function saveMessageToDb(
   const id =
     message.id && CLIENT_MESSAGE_ID_PATTERN.test(message.id) ? message.id : crypto.randomUUID();
   const assertWriter = getAuthToken.settlement?.claimMessageWrite(id);
-  const receiptAuthority = getAuthToken.settlement && getAuthToken.authority
-    ? createRequestAuthority(getAuthToken.authority.session, undefined, assertWriter)
-    : undefined;
+  const receiptAuthority =
+    getAuthToken.settlement && getAuthToken.authority
+      ? createRequestAuthority(getAuthToken.authority.session, undefined, assertWriter)
+      : undefined;
   const receiptToken = receiptAuthority?.getToken ?? getAuthToken;
   const client = createManagedCloudChatClient({
     getAuthToken: receiptToken,
@@ -1457,7 +1462,10 @@ async function watchRemoteApproval(
   getAuthToken: AuthTokenProvider,
   isObservationCurrent: () => boolean,
 ): Promise<void> {
-  const client = createManagedCloudAgentRunClient({ getAuthToken, fetchImpl: ownerFetch(getAuthToken) });
+  const client = createManagedCloudAgentRunClient({
+    getAuthToken,
+    fetchImpl: ownerFetch(getAuthToken),
+  });
   let failures = 0;
   for (;;) {
     const delay = Math.min(
@@ -1496,7 +1504,8 @@ async function watchRemoteApproval(
       failures += 1;
       continue;
     }
-    if (!isObservationCurrent() || pendingTurns.get(assistantMessageId) !== turn || turn.resolving) return;
+    if (!isObservationCurrent() || pendingTurns.get(assistantMessageId) !== turn || turn.resolving)
+      return;
     if (!progressed) continue;
     await continueRemotelyAnsweredTurn(assistantMessageId, turn, getAuthToken);
     return;
@@ -1514,10 +1523,14 @@ function followRemoteApproval(assistantMessageId: string, getAuthToken: AuthToke
     isCurrent: () => tokenOwnerCurrent(getAuthToken) && (observation?.isCurrent() ?? true),
   };
   remoteApprovalWatches.set(assistantMessageId, watch);
-  void trackSettlement(getAuthToken, watchRemoteApproval(assistantMessageId, getAuthToken, watch.isCurrent).finally(() => {
-    observation?.release();
-    if (remoteApprovalWatches.get(assistantMessageId) === watch) remoteApprovalWatches.delete(assistantMessageId);
-  }));
+  void trackSettlement(
+    getAuthToken,
+    watchRemoteApproval(assistantMessageId, getAuthToken, watch.isCurrent).finally(() => {
+      observation?.release();
+      if (remoteApprovalWatches.get(assistantMessageId) === watch)
+        remoteApprovalWatches.delete(assistantMessageId);
+    }),
+  );
 }
 
 export interface PendingDeviceStep {
@@ -2715,54 +2728,57 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     );
     if (!fullContent && !hasMeaningfulMetadata) return;
     const save = () => {
-      void trackSettlement(getAuthToken, saveMessageToDb(
-        conversationId,
-        {
-          id: assistantMessageId,
-          role: 'assistant',
-          content: fullContent || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
-          model,
-          metadata,
-          ...(ctx.assistantParentId ? { parentId: ctx.assistantParentId } : {}),
-        },
+      void trackSettlement(
         getAuthToken,
-      )
-        .then((saved) => {
-          if (!tokenOwnerCurrent(getAuthToken)) return;
-          if (saved?.id && saved.id !== assistantMessageId) {
-            updateMessage(assistantMessageId, { id: saved.id }, conversationId);
-          }
-        })
-        .catch((err) => {
-          if (!tokenOwnerCurrent(getAuthToken)) return;
-          notifyPersistenceFailure('assistant', err);
-          if (
-            err instanceof ManagedCloudChatHttpError &&
-            err.reason === ASSISTANT_CONTENT_CHANGED_REASON
-          ) {
+        saveMessageToDb(
+          conversationId,
+          {
+            id: assistantMessageId,
+            role: 'assistant',
+            content: fullContent || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
+            model,
+            metadata,
+            ...(ctx.assistantParentId ? { parentId: ctx.assistantParentId } : {}),
+          },
+          getAuthToken,
+        )
+          .then((saved) => {
+            if (!tokenOwnerCurrent(getAuthToken)) return;
+            if (saved?.id && saved.id !== assistantMessageId) {
+              updateMessage(assistantMessageId, { id: saved.id }, conversationId);
+            }
+          })
+          .catch((err) => {
+            if (!tokenOwnerCurrent(getAuthToken)) return;
+            notifyPersistenceFailure('assistant', err);
+            if (
+              err instanceof ManagedCloudChatHttpError &&
+              err.reason === ASSISTANT_CONTENT_CHANGED_REASON
+            ) {
+              const current = findConversationMessage(conversationId, assistantMessageId);
+              updateMessage(
+                assistantMessageId,
+                {
+                  metadata: { ...current?.metadata, contentSaveConflict: true },
+                },
+                conversationId,
+              );
+              return;
+            }
+            // The retries inside saveMessageToDb are spent. Everything the reader
+            // can see that is not the answer text, the tool timeline, the reasoning
+            // blocks, the generated-file list, exists only in this tab now, and a
+            // reload will show an answer that looks as though it never had any of
+            // it. Say so, rather than let them find out.
+            if (!hasMeaningfulMetadata) return;
             const current = findConversationMessage(conversationId, assistantMessageId);
             updateMessage(
               assistantMessageId,
-              {
-                metadata: { ...current?.metadata, contentSaveConflict: true },
-              },
+              { metadata: { ...current?.metadata, metadataNotSaved: true } },
               conversationId,
             );
-            return;
-          }
-          // The retries inside saveMessageToDb are spent. Everything the reader
-          // can see that is not the answer text, the tool timeline, the reasoning
-          // blocks, the generated-file list, exists only in this tab now, and a
-          // reload will show an answer that looks as though it never had any of
-          // it. Say so, rather than let them find out.
-          if (!hasMeaningfulMetadata) return;
-          const current = findConversationMessage(conversationId, assistantMessageId);
-          updateMessage(
-            assistantMessageId,
-            { metadata: { ...current?.metadata, metadataNotSaved: true } },
-            conversationId,
-          );
-        }));
+          }),
+      );
     };
     if (ctx.retriesEmptyTurn && !suspended && !hasVisibleText(fullContent)) {
       heldEmptyTurnSave = save;
@@ -3735,16 +3751,20 @@ export function useChatStream(
   const cardResponseRuntimeActiveRef = useRef(false);
   const [, refreshCardResponses] = useState(0);
   useEffect(() => {
+    const ownedAuthorities = ownedAuthoritiesRef.current;
+    const requestAuthorities = requestAuthoritiesRef.current;
+    const turnAuthorities = turnAuthoritiesRef.current;
+    const cardResponses = cardResponsesRef.current;
     cardResponseRuntimeActiveRef.current = true;
     return () => {
       cardResponseRuntimeActiveRef.current = false;
-      for (const authority of ownedAuthoritiesRef.current) {
+      for (const authority of ownedAuthorities) {
         authority.retire();
       }
-      ownedAuthoritiesRef.current.clear();
-      requestAuthoritiesRef.current.clear();
-      turnAuthoritiesRef.current.clear();
-      cardResponsesRef.current.clear();
+      ownedAuthorities.clear();
+      requestAuthorities.clear();
+      turnAuthorities.clear();
+      cardResponses.clear();
     };
   }, []);
   useEffect(() => {
@@ -3755,7 +3775,9 @@ export function useChatStream(
     const state = useChatStore.getState();
     const retainedMessages = new Set([
       ...state.messages.map((message) => message.id),
-      ...Object.values(state.messagesByConversation).flatMap((messages) => messages.map((message) => message.id)),
+      ...Object.values(state.messagesByConversation).flatMap((messages) =>
+        messages.map((message) => message.id),
+      ),
     ]);
     for (const [id] of turnAuthoritiesRef.current) {
       if (!retainedMessages.has(id)) turnAuthoritiesRef.current.delete(id);
@@ -3763,11 +3785,14 @@ export function useChatStream(
   });
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
   const activeRunsRef = useRef<
-    Map<string, Pick<ManagedCloudAgentRunHandle, 'runId'> & {
-      assistantMessageId?: string;
-      authority?: RequestAuthority;
-      settlement?: ChatRequestSettlement;
-    }>
+    Map<
+      string,
+      Pick<ManagedCloudAgentRunHandle, 'runId'> & {
+        assistantMessageId?: string;
+        authority?: RequestAuthority;
+        settlement?: ChatRequestSettlement;
+      }
+    >
   >(new Map());
   const recoveryVersionsRef = useRef<Map<string, number>>(new Map());
   const cancellationsRef = useRef<Map<string, 'pending' | 'unconfirmed'>>(new Map());
@@ -3863,7 +3888,8 @@ export function useChatStream(
         const turn = pendingTurns.get(message.id);
         if (!turn) continue;
         const authority = bindPendingTurnAuthority(turn, captureSessionSnapshot);
-        if (authority) followRemoteApproval(message.id, authorityToken(authority, requestSettlements));
+        if (authority)
+          followRemoteApproval(message.id, authorityToken(authority, requestSettlements));
       }
     };
     followRestored(useChatStore.getState().messages);
@@ -3917,12 +3943,17 @@ export function useChatStream(
       const version = recoveryVersionsRef.current.get(conversationId as string) ?? 0;
       let recovery: InFlightTurnRecovery;
       try {
-        recovery = await askWhetherTurnIsRunning(conversationId as string, controller.signal, authority.fetch);
+        recovery = await askWhetherTurnIsRunning(
+          conversationId as string,
+          controller.signal,
+          authority.fetch,
+        );
       } catch {
         recovery = { verdict: 'idle', verified: false };
       }
       if (
-        stopped || !authority.isCurrent() ||
+        stopped ||
+        !authority.isCurrent() ||
         useChatStore.getState().activeConversationId !== conversationId ||
         (recoveryVersionsRef.current.get(conversationId as string) ?? 0) !== version ||
         abortControllersRef.current.has(conversationId as string)
@@ -3943,8 +3974,7 @@ export function useChatStream(
         activeRunsRef.current.set(conversationId as string, { runId, authority });
         ownedAuthoritiesRef.current.add(authority);
         adopted = true;
-      }
-      else if (!activeRunsRef.current.get(conversationId as string)?.assistantMessageId) {
+      } else if (!activeRunsRef.current.get(conversationId as string)?.assistantMessageId) {
         activeRunsRef.current.delete(conversationId as string);
       }
       useChatStore.getState().setLoading(verdict === 'running', conversationId as string);
@@ -3974,7 +4004,11 @@ export function useChatStream(
   }, [activeConversationId, followActiveConversation, userId, isSignedIn, captureSessionSnapshot]);
 
   const resolveToolApproval = useResolveToolApproval(abortControllersRef, requestSettlements);
-  const resolveToolInput = useResolveToolInput(abortControllersRef, resolveToolApproval, requestSettlements);
+  const resolveToolInput = useResolveToolInput(
+    abortControllersRef,
+    resolveToolApproval,
+    requestSettlements,
+  );
 
   const sendMessage = useCallback(
     async (content: string, options: SendMessageOptions = {}): Promise<boolean> => {
@@ -4009,7 +4043,8 @@ export function useChatStream(
       const model = turnRoute.model;
       const localModel = resolveLocalModel(model, selectedLocalModel);
       const session = options.authority ? null : captureSessionSnapshot();
-      const authority = options.authority ?? (session ? createRequestAuthority(session) : undefined);
+      const authority =
+        options.authority ?? (session ? createRequestAuthority(session) : undefined);
       if (!localModel && (!authority || !authority.isCurrent())) return false;
       if (authority) {
         if (!authority.isCurrent()) return false;
@@ -4064,11 +4099,13 @@ export function useChatStream(
               ...(turnRoute.handoffReason ? { freeModelHandoff: turnRoute.handoffReason } : {}),
             }
           : undefined;
-      let getAuthToken: AuthTokenProvider = authority ? authorityToken(authority, requestSettlements) : async () => {
-        const token = await getToken();
-        if (!token) throw new Error('Not authenticated');
-        return token;
-      };
+      let getAuthToken: AuthTokenProvider = authority
+        ? authorityToken(authority, requestSettlements)
+        : async () => {
+            const token = await getToken();
+            if (!token) throw new Error('Not authenticated');
+            return token;
+          };
       void getCsrfToken().catch(() => undefined);
 
       // Regenerate answers a user message that is already here, so this send
@@ -4193,7 +4230,7 @@ export function useChatStream(
         latencyTrace?.cancel();
         authority?.signal.removeEventListener('abort', retireTransport);
         if (!tokenOwnerCurrent(getAuthToken)) {
-          endConversationRequest(conversationId, request);
+          endConversationRequest(turnConversationId, request);
           return;
         }
         stopStreaming(turnConversationId);
@@ -4545,7 +4582,12 @@ export function useChatStream(
             onRunHandle: (handle) => {
               if (!tokenOwnerCurrent(getAuthToken)) return;
               if (handle) {
-                activeRunsRef.current.set(conversationId, { ...handle, assistantMessageId, authority, settlement: request });
+                activeRunsRef.current.set(conversationId, {
+                  ...handle,
+                  assistantMessageId,
+                  authority,
+                  settlement: request,
+                });
                 // AGI Work is the only mode sold as work that outlives the tab,
                 // so it is the only one that owes the reader a correction when
                 // the server could not give it the durable transport.
@@ -4704,7 +4746,8 @@ export function useChatStream(
         authority?.signal.removeEventListener('abort', retireTransport);
         const activeRun = activeRunsRef.current.get(conversationId);
         if (
-          tokenOwnerCurrent(getAuthToken) && activeRun?.settlement === request &&
+          tokenOwnerCurrent(getAuthToken) &&
+          activeRun?.settlement === request &&
           !cancellationsRef.current.has(activeRun.runId)
         ) {
           activeRunsRef.current.delete(conversationId);
@@ -4735,10 +4778,12 @@ export function useChatStream(
     async (assistantMessageId: string) => {
       const store = useChatStore.getState();
       const conversationId = store.activeConversationId;
-      const existingAuthority = turnAuthoritiesRef.current.get(assistantMessageId) ??
+      const existingAuthority =
+        turnAuthoritiesRef.current.get(assistantMessageId) ??
         (conversationId ? requestAuthoritiesRef.current.get(conversationId) : undefined);
       const snapshot = existingAuthority ? null : captureSessionSnapshot();
-      const authority = existingAuthority ?? (snapshot ? createRequestAuthority(snapshot) : undefined);
+      const authority =
+        existingAuthority ?? (snapshot ? createRequestAuthority(snapshot) : undefined);
       if (!authority?.isCurrent()) return;
       if (conversationId && store.streamingConversationIds.includes(conversationId)) return;
       if (conversationId && continuationClaimsRef.current.has(conversationId)) return;
@@ -4758,7 +4803,9 @@ export function useChatStream(
       const request = beginConversationRequest(conversationId, assistantMessageId);
       const abortController = request.controller;
       const getAuthToken = settlementToken(
-        authorityToken(authority, requestSettlements), request, requestSettlements,
+        authorityToken(authority, requestSettlements),
+        request,
+        requestSettlements,
       );
       try {
         const isTemporaryConversation = Boolean(
@@ -4881,7 +4928,12 @@ export function useChatStream(
             onRunHandle: (handle) => {
               if (!tokenOwnerCurrent(getAuthToken)) return;
               if (handle) {
-                activeRunsRef.current.set(conversationId, { ...handle, assistantMessageId, authority, settlement: request });
+                activeRunsRef.current.set(conversationId, {
+                  ...handle,
+                  assistantMessageId,
+                  authority,
+                  settlement: request,
+                });
               } else {
                 activeRunsRef.current.delete(conversationId);
               }
@@ -4939,19 +4991,22 @@ export function useChatStream(
           );
           setError(errorMessage, conversationId);
           if (!isTemporaryConversation) {
-            void trackSettlement(getAuthToken, saveMessageToDb(
-              conversationId,
-              {
-                id: assistantMessageId,
-                role: 'assistant',
-                content: mergedContent,
-                model,
-                metadata: { ...interruptedMetadata, finishReason: undefined },
-              },
+            void trackSettlement(
               getAuthToken,
-            ).catch((err) => {
-              if (tokenOwnerCurrent(getAuthToken)) notifyPersistenceFailure('assistant', err);
-            }));
+              saveMessageToDb(
+                conversationId,
+                {
+                  id: assistantMessageId,
+                  role: 'assistant',
+                  content: mergedContent,
+                  model,
+                  metadata: { ...interruptedMetadata, finishReason: undefined },
+                },
+                getAuthToken,
+              ).catch((err) => {
+                if (tokenOwnerCurrent(getAuthToken)) notifyPersistenceFailure('assistant', err);
+              }),
+            );
           }
           stopStreaming(conversationId);
           setLoading(false, conversationId);
@@ -4959,7 +5014,8 @@ export function useChatStream(
       } finally {
         const activeRun = activeRunsRef.current.get(conversationId);
         if (
-          tokenOwnerCurrent(getAuthToken) && activeRun?.settlement === request &&
+          tokenOwnerCurrent(getAuthToken) &&
+          activeRun?.settlement === request &&
           !cancellationsRef.current.has(activeRun.runId)
         ) {
           activeRunsRef.current.delete(conversationId);
@@ -4975,7 +5031,6 @@ export function useChatStream(
       stopStreaming,
       setLoading,
       setError,
-      getToken,
       beginConversationRequest,
       endConversationRequest,
       captureSessionSnapshot,
@@ -5041,7 +5096,11 @@ export function useChatStream(
         const decoded: unknown = await response.json();
         authority.assertCurrent();
         const settled = parseInteractiveCardDelta(decoded);
-        if (!settled?.recognized || settled.cardId !== binding.cardId || settled.kind !== card.kind) {
+        if (
+          !settled?.recognized ||
+          settled.cardId !== binding.cardId ||
+          settled.kind !== card.kind
+        ) {
           throw new Error('Interactive card response returned a card that failed validation');
         }
         const currentMessage = findConversationMessage(binding.conversationId, binding.messageId);
@@ -5051,8 +5110,8 @@ export function useChatStream(
           {
             metadata: {
               ...currentMessage.metadata,
-              interactiveCards: (currentMessage.metadata?.interactiveCards ?? []).map((candidate) =>
-                candidate.cardId === settled.cardId ? settled : candidate,
+              interactiveCards: (currentMessage.metadata?.interactiveCards ?? []).map(
+                (candidate) => (candidate.cardId === settled.cardId ? settled : candidate),
               ),
             },
           },
@@ -5081,9 +5140,12 @@ export function useChatStream(
       const store = useChatStore.getState();
       const conversationId = store.activeConversationId;
       if (!conversationId) return;
-      const existingAuthority = turnAuthoritiesRef.current.get(assistantMessageId) ?? requestAuthoritiesRef.current.get(conversationId);
+      const existingAuthority =
+        turnAuthoritiesRef.current.get(assistantMessageId) ??
+        requestAuthoritiesRef.current.get(conversationId);
       const snapshot = existingAuthority ? null : captureSessionSnapshot();
-      const authority = existingAuthority ?? (snapshot ? createRequestAuthority(snapshot) : undefined);
+      const authority =
+        existingAuthority ?? (snapshot ? createRequestAuthority(snapshot) : undefined);
       if (!authority?.isCurrent()) return;
       requestAuthoritiesRef.current.set(conversationId, authority);
       turnAuthoritiesRef.current.set(assistantMessageId, authority);
@@ -5094,14 +5156,20 @@ export function useChatStream(
 
       const request = beginConversationRequest(conversationId, assistantMessageId);
       const getAuthToken = settlementToken(
-        authorityToken(authority, requestSettlements), request, requestSettlements,
+        authorityToken(authority, requestSettlements),
+        request,
+        requestSettlements,
       );
       try {
-        const nextMetadata: MessageMetadata = { ...message.metadata, interactiveCardsResumed: true };
+        const nextMetadata: MessageMetadata = {
+          ...message.metadata,
+          interactiveCardsResumed: true,
+        };
         updateMessage(assistantMessageId, { metadata: nextMetadata }, conversationId);
 
         const isTemporaryConversation = Boolean(
-          store.conversations.find((conversation) => conversation.id === conversationId)?.isTemporary,
+          store.conversations.find((conversation) => conversation.id === conversationId)
+            ?.isTemporary,
         );
         if (!isTemporaryConversation) {
           try {
@@ -5131,7 +5199,13 @@ export function useChatStream(
         request.finish();
       }
     },
-    [continueGeneration, updateMessage, captureSessionSnapshot, beginConversationRequest, requestSettlements],
+    [
+      continueGeneration,
+      updateMessage,
+      captureSessionSnapshot,
+      beginConversationRequest,
+      requestSettlements,
+    ],
   );
 
   const stopGeneration = useCallback(
@@ -5140,7 +5214,8 @@ export function useChatStream(
       if (!targetConversationId) return;
 
       const activeRun = activeRunsRef.current.get(targetConversationId);
-      const authority = activeRun?.authority ?? requestAuthoritiesRef.current.get(targetConversationId);
+      const authority =
+        activeRun?.authority ?? requestAuthoritiesRef.current.get(targetConversationId);
       if (authority && !authority.isCurrent()) return;
       if (activeRun && !authority) return;
       if (activeRun && cancellationsRef.current.get(activeRun.runId) === 'pending') return;
@@ -5165,8 +5240,7 @@ export function useChatStream(
           ownerVersionRef.current === ownerVersion &&
           recoveryVersionsRef.current.get(targetConversationId) === version;
         const isCurrentRun = (): boolean =>
-          ownsCancellation() &&
-          activeRunsRef.current.get(targetConversationId) === activeRun;
+          ownsCancellation() && activeRunsRef.current.get(targetConversationId) === activeRun;
         void cancelCloudRunAndConfirm(client, activeRun.runId)
           .then((stopped) => {
             if (!isCurrentRun()) return;
@@ -5201,7 +5275,7 @@ export function useChatStream(
       }
       setLoading(false, targetConversationId);
     },
-    [getToken, stopStreaming, setLoading, abortConversation, invalidateRecovery],
+    [stopStreaming, setLoading, abortConversation, invalidateRecovery],
   );
 
   const steerActiveTurn = useCallback(
@@ -5219,7 +5293,7 @@ export function useChatStream(
       authority.assertCurrent();
       return steer.id;
     },
-    [getToken],
+    [],
   );
 
   return {
@@ -5247,9 +5321,12 @@ export function useResolveToolApproval(
     ownRequests.current = createChatRequestSettlements(abortControllers.current);
   }
   const requests = sharedRequests ?? ownRequests.current!;
-  useEffect(() => () => {
-    if (!sharedRequests) requests.dispose();
-  }, [requests, sharedRequests]);
+  useEffect(
+    () => () => {
+      if (!sharedRequests) requests.dispose();
+    },
+    [requests, sharedRequests],
+  );
 
   return useCallback(
     async function resolveToolApproval(
@@ -5280,7 +5357,9 @@ export function useResolveToolApproval(
         turn.decisions.set(toolCallId, decision);
         const trimmedGuidance = guidance?.trim();
         if (trimmedGuidance) {
-          turn.guidance = turn.guidance ? `${turn.guidance}\n\n${trimmedGuidance}` : trimmedGuidance;
+          turn.guidance = turn.guidance
+            ? `${turn.guidance}\n\n${trimmedGuidance}`
+            : trimmedGuidance;
         }
 
         updateToolEntry(
@@ -5382,7 +5461,8 @@ export function useResolveToolApproval(
               getAuthToken,
             ).catch((error) => notifyPersistenceFailure('assistant', error));
           }
-          if (tokenOwnerCurrent(getAuthToken)) followRemoteApproval(assistantMessageId, getAuthToken);
+          if (tokenOwnerCurrent(getAuthToken))
+            followRemoteApproval(assistantMessageId, getAuthToken);
         };
 
         const closeAnsweredApprovalTurn = async (reason: string) => {
@@ -5420,7 +5500,8 @@ export function useResolveToolApproval(
           if (!tokenOwnerCurrent(getAuthToken)) return;
           await restoreApprovalControls();
           if (!tokenOwnerCurrent(getAuthToken)) return;
-          if (!abortController.signal.aborted) setError('Your session has expired. Please sign in again.', turn.conversationId);
+          if (!abortController.signal.aborted)
+            setError('Your session has expired. Please sign in again.', turn.conversationId);
           return;
         }
 
@@ -5681,7 +5762,8 @@ function useResolveToolInput(
         } catch {
           if (!tokenOwnerCurrent(getAuthToken)) return false;
           restoreInputControls();
-          if (!abortController.signal.aborted) setError('Your session has expired. Please sign in again.', turn.conversationId);
+          if (!abortController.signal.aborted)
+            setError('Your session has expired. Please sign in again.', turn.conversationId);
           return false;
         }
 
@@ -6020,29 +6102,32 @@ async function handleStreamError(error: unknown, ctx: StreamErrorContext): Promi
     if (paywall.freeLimit && !isTemporaryConversation && userMessagePersisted) {
       trackMessageSave(
         assistantMessageId,
-        trackSettlement(getAuthToken, saveMessageToDb(
-          conversationId,
-          {
-            id: assistantMessageId,
-            role: 'assistant',
-            content: errorMessage,
-            model,
-            metadata: refusalMetadata,
-            ...(currentMessage?.parentId ? { parentId: currentMessage.parentId } : {}),
-          },
+        trackSettlement(
           getAuthToken,
-        )
-          .then((saved) => {
-            if (!tokenOwnerCurrent(getAuthToken)) return saved;
-            if (saved?.id && saved.id !== assistantMessageId) {
-              updateMessage(assistantMessageId, { id: saved.id }, conversationId);
-            }
-            return saved;
-          })
-          .catch((err) => {
-            notifyPersistenceFailure('assistant', err);
-            return null;
-          })),
+          saveMessageToDb(
+            conversationId,
+            {
+              id: assistantMessageId,
+              role: 'assistant',
+              content: errorMessage,
+              model,
+              metadata: refusalMetadata,
+              ...(currentMessage?.parentId ? { parentId: currentMessage.parentId } : {}),
+            },
+            getAuthToken,
+          )
+            .then((saved) => {
+              if (!tokenOwnerCurrent(getAuthToken)) return saved;
+              if (saved?.id && saved.id !== assistantMessageId) {
+                updateMessage(assistantMessageId, { id: saved.id }, conversationId);
+              }
+              return saved;
+            })
+            .catch((err) => {
+              notifyPersistenceFailure('assistant', err);
+              return null;
+            }),
+        ),
       );
     }
     // The composer already names an account-wide block with its reset and
@@ -6087,27 +6172,30 @@ async function handleStreamError(error: unknown, ctx: StreamErrorContext): Promi
 
   if (!isTemporaryConversation && userMessagePersisted) {
     const metadata = findConversationMessage(conversationId, assistantMessageId)?.metadata;
-    void trackSettlement(getAuthToken, saveMessageToDb(
-      conversationId,
-      {
-        id: assistantMessageId,
-        role: 'assistant',
-        content: errorContent,
-        model: currentMessage?.model ?? model,
-        metadata,
-        ...(currentMessage?.parentId ? { parentId: currentMessage.parentId } : {}),
-      },
+    void trackSettlement(
       getAuthToken,
-    )
-      .then((saved) => {
-        if (!tokenOwnerCurrent(getAuthToken)) return;
-        if (saved?.id && saved.id !== assistantMessageId) {
-          updateMessage(assistantMessageId, { id: saved.id }, conversationId);
-        }
-      })
-      .catch((err) => {
-        if (tokenOwnerCurrent(getAuthToken)) notifyPersistenceFailure('assistant', err);
-      }));
+      saveMessageToDb(
+        conversationId,
+        {
+          id: assistantMessageId,
+          role: 'assistant',
+          content: errorContent,
+          model: currentMessage?.model ?? model,
+          metadata,
+          ...(currentMessage?.parentId ? { parentId: currentMessage.parentId } : {}),
+        },
+        getAuthToken,
+      )
+        .then((saved) => {
+          if (!tokenOwnerCurrent(getAuthToken)) return;
+          if (saved?.id && saved.id !== assistantMessageId) {
+            updateMessage(assistantMessageId, { id: saved.id }, conversationId);
+          }
+        })
+        .catch((err) => {
+          if (tokenOwnerCurrent(getAuthToken)) notifyPersistenceFailure('assistant', err);
+        }),
+    );
   }
 
   stopStreaming(conversationId);

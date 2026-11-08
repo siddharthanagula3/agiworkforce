@@ -4,7 +4,7 @@ import { SshConnectionControl } from './components/SshConnectionControl';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useAuth } from '@clerk/nextjs';
+import { useSession } from '@/lib/identity/client';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Code2,
@@ -190,7 +190,7 @@ export interface CloudCodePageProps {
 }
 
 export function CloudCodePage(props: CloudCodePageProps) {
-  const { isLoaded, isSignedIn, userId, sessionId } = useAuth();
+  const { isLoaded, isSignedIn, userId, sessionId } = useSession();
   return <OwnedCloudCodePage key={`${isLoaded}:${isSignedIn}:${userId}:${sessionId}`} {...props} />;
 }
 
@@ -279,46 +279,61 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
     setRenaming(false);
     setEntries([]);
   }, []);
-  const setSelectedId = useCallback((id: string | null) => {
-    if (selectionRef.current !== id) {
-      selectionRevision.current += 1;
-      selectionRef.current = id;
-      resetSelectionWork();
-    }
-    publishSelectedId(id);
-  }, [resetSelectionWork]);
-  const setLocalSession = useCallback((next: LocalDeveloperSession | null) => {
-    if (localSelectionRef.current?.rootId !== next?.rootId ||
-        localSelectionRef.current?.id !== next?.id) {
-      selectionRevision.current += 1;
-      localSelectionRef.current = next;
-      resetSelectionWork();
-    }
-    publishLocalSession(next);
-  }, [resetSelectionWork]);
+  const setSelectedId = useCallback(
+    (id: string | null) => {
+      if (selectionRef.current !== id) {
+        selectionRevision.current += 1;
+        selectionRef.current = id;
+        resetSelectionWork();
+      }
+      publishSelectedId(id);
+    },
+    [resetSelectionWork],
+  );
+  const setLocalSession = useCallback(
+    (next: LocalDeveloperSession | null) => {
+      if (
+        localSelectionRef.current?.rootId !== next?.rootId ||
+        localSelectionRef.current?.id !== next?.id
+      ) {
+        selectionRevision.current += 1;
+        localSelectionRef.current = next;
+        resetSelectionWork();
+      }
+      publishLocalSession(next);
+    },
+    [resetSelectionWork],
+  );
   const renderedSelectionRevision = selectionRevision.current;
-  const captureView = useCallback((includeDraft = false) => {
-    const accountCurrent = capture();
-    const routeReady = routeSessionRef.current === (sessionId ?? null);
-    let revision = renderedSelectionRevision;
-    const draftAtStart = draftRevision.current;
-    const isSelected = () => routeReady && accountCurrent() && revision === selectionRevision.current;
-    const isCurrent = () => isSelected() && (!includeDraft || draftAtStart === draftRevision.current);
-    return {
-      accountCurrent,
-      isCurrent,
-      isSelected,
-      followSelection: () => { includeDraft = false; },
-      select: (id: string) => {
-        if (!isCurrent()) return false;
-        const submission = submitLock.current;
-        setSelectedId(id);
-        submitLock.current = submission;
-        revision = selectionRevision.current;
-        return true;
-      },
-    };
-  }, [capture, renderedSelectionRevision, sessionId, setSelectedId]);
+  const captureView = useCallback(
+    (includeDraft = false) => {
+      const accountCurrent = capture();
+      const routeReady = routeSessionRef.current === (sessionId ?? null);
+      let revision = renderedSelectionRevision;
+      const draftAtStart = draftRevision.current;
+      const isSelected = () =>
+        routeReady && accountCurrent() && revision === selectionRevision.current;
+      const isCurrent = () =>
+        isSelected() && (!includeDraft || draftAtStart === draftRevision.current);
+      return {
+        accountCurrent,
+        isCurrent,
+        isSelected,
+        followSelection: () => {
+          includeDraft = false;
+        },
+        select: (id: string) => {
+          if (!isCurrent()) return false;
+          const submission = submitLock.current;
+          setSelectedId(id);
+          submitLock.current = submission;
+          revision = selectionRevision.current;
+          return true;
+        },
+      };
+    },
+    [capture, renderedSelectionRevision, sessionId, setSelectedId],
+  );
   const captureViewRef = useRef(captureView);
   captureViewRef.current = captureView;
   const listRevision = useRef(0);
@@ -412,24 +427,28 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
     setCommitNotice(null);
   }, [sessionId, setSelectedId]);
 
-  const replaceSession = useCallback((next: CloudCodeSession, owner: ReturnType<typeof captureView>) => {
-    if (!owner.accountCurrent()) return;
-    setSessions((current) => {
-      const exists = current.some((session) => session.id === next.id);
-      const updated = exists
-        ? current.map((session) => (session.id === next.id ? next : session))
-        : [next, ...current];
-      return updated.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-    });
-    if (owner.isCurrent()) paneRef.current?.onSessionChange(next);
-  }, []);
+  const replaceSession = useCallback(
+    (next: CloudCodeSession, owner: ReturnType<typeof captureView>) => {
+      if (!owner.accountCurrent()) return;
+      setSessions((current) => {
+        const exists = current.some((session) => session.id === next.id);
+        const updated = exists
+          ? current.map((session) => (session.id === next.id ? next : session))
+          : [next, ...current];
+        return updated.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+      });
+      if (owner.isCurrent()) paneRef.current?.onSessionChange(next);
+    },
+    [],
+  );
 
   const loadChanges = useCallback(
     async (sessionId: string, signal?: AbortSignal) => {
       const owner = captureView();
       if (!owner.isCurrent() || selectionRef.current !== sessionId) return;
       const request = ++changesRevision.current;
-      const current = () => owner.isCurrent() && !signal?.aborted && request === changesRevision.current;
+      const current = () =>
+        owner.isCurrent() && !signal?.aborted && request === changesRevision.current;
       if (!current()) return;
       setChangesLoading(true);
       try {
@@ -453,7 +472,11 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
       if (status !== statusFilterRef.current) return;
       const accountCurrent = capture();
       const request = ++listRevision.current;
-      const current = () => accountCurrent() && !signal?.aborted && request === listRevision.current && status === statusFilterRef.current;
+      const current = () =>
+        accountCurrent() &&
+        !signal?.aborted &&
+        request === listRevision.current &&
+        status === statusFilterRef.current;
       if (!current()) return;
       setPageLoading(true);
       if (owner.isCurrent()) setError(null);
@@ -575,7 +598,9 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
         }
         setError(friendlyError(detailError));
       })
-      .finally(() => { if (current()) setDetailLoading(false); });
+      .finally(() => {
+        if (current()) setDetailLoading(false);
+      });
     return () => controller.abort();
   }, [api, captureView, replaceSession, selectedId, setSelectedId]);
 
@@ -590,7 +615,9 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
     const current = () => owner.isCurrent() && !controller.signal.aborted;
     void api
       .listApprovals(selectedId, controller.signal)
-      .then((value) => { if (current()) setApprovals(value); })
+      .then((value) => {
+        if (current()) setApprovals(value);
+      })
       .catch((approvalsError) => {
         if (!current()) return;
         if (approvalsError instanceof DOMException && approvalsError.name === 'AbortError') return;
@@ -614,7 +641,8 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
     const accountCurrent = capture();
     void Promise.resolve(api.list('all', controller.signal))
       .then((body) => {
-        if (accountCurrent() && !controller.signal.aborted) setHiddenSessionsExist(body.sessions.length > 0);
+        if (accountCurrent() && !controller.signal.aborted)
+          setHiddenSessionsExist(body.sessions.length > 0);
       })
       .catch(() => undefined);
     return () => {
@@ -678,7 +706,12 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
   }, []);
 
   const startTurn = useCallback(
-    async (session: CloudCodeSession, goal: string, mode: CloudCodeTurnMode, owner: ReturnType<typeof captureView>) => {
+    async (
+      session: CloudCodeSession,
+      goal: string,
+      mode: CloudCodeTurnMode,
+      owner: ReturnType<typeof captureView>,
+    ) => {
       if (!owner.isCurrent()) return;
       const taskRevision = draftRevision.current;
       owner.followSelection();
@@ -745,7 +778,11 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
   );
 
   const createSession = useCallback(
-    async (title: string, patch: Partial<CodeDraft> = {}, owner = captureView(true)): Promise<CloudCodeSession | null> => {
+    async (
+      title: string,
+      patch: Partial<CodeDraft> = {},
+      owner = captureView(true),
+    ): Promise<CloudCodeSession | null> => {
       if (!owner.isCurrent()) return null;
       const next = { ...draft, ...patch };
       if (!canCreate || busy) return null;
@@ -824,11 +861,14 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
     routerRef.current.replace(CODE_ROUTES.root);
   }, [local.settled, local.loading, local.groups, setLocalSession]);
 
-  const openLocalSession = useCallback((session: LocalDeveloperSession) => {
-    setLocalSession(session);
-    setRouteNotice(null);
-    if (!paneRef.current) routerRef.current.replace(localSessionPath(session.rootId, session.id));
-  }, [setLocalSession]);
+  const openLocalSession = useCallback(
+    (session: LocalDeveloperSession) => {
+      setLocalSession(session);
+      setRouteNotice(null);
+      if (!paneRef.current) routerRef.current.replace(localSessionPath(session.rootId, session.id));
+    },
+    [setLocalSession],
+  );
 
   const closeLocalSession = useCallback(() => {
     setLocalEditorDirty(false);
@@ -911,7 +951,10 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
   );
 
   const waitForReady = useCallback(
-    async (initial: CloudCodeSession, owner: ReturnType<typeof captureView>): Promise<CloudCodeSession | null> => {
+    async (
+      initial: CloudCodeSession,
+      owner: ReturnType<typeof captureView>,
+    ): Promise<CloudCodeSession | null> => {
       let current = initial;
       for (
         let attempt = 0;
@@ -987,7 +1030,8 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
           setTask(text);
           return;
         }
-        const ready = created.state === 'provisioning' ? await waitForReady(created, owner) : created;
+        const ready =
+          created.state === 'provisioning' ? await waitForReady(created, owner) : created;
         if (!owner.isCurrent() || !ready) return;
         if (ready.state !== 'ready') {
           setTask(text);
@@ -1066,8 +1110,12 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
         // than leaving a card that can no longer be acted on.
         void api
           .listApprovals(selectedSession.id)
-          .then((value) => { if (owner.isCurrent()) setApprovals(value); })
-          .catch(() => { if (owner.isCurrent()) setApprovals([]); });
+          .then((value) => {
+            if (owner.isCurrent()) setApprovals(value);
+          })
+          .catch(() => {
+            if (owner.isCurrent()) setApprovals([]);
+          });
       } finally {
         if (owner.isCurrent()) {
           setBusy(false);
@@ -1811,8 +1859,12 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
                             sessionId={selectedSession.id}
                             sessionReady={selectedSession.state === 'ready'}
                             onSession={(next) => {
-                              if (!notebookIdentity?.isCurrent() || next.id !== notebookSessionId ||
-                                  renderedSelectionRevision !== selectionRevision.current) return;
+                              if (
+                                !notebookIdentity?.isCurrent() ||
+                                next.id !== notebookSessionId ||
+                                renderedSelectionRevision !== selectionRevision.current
+                              )
+                                return;
                               replaceSession(next, captureView());
                             }}
                           />
@@ -1916,13 +1968,22 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
                     </div>
                   ) : (
                     <CodeComposer
-                      dictationDestination={selectedId ? selectedSession?.id ?? null : 'new-cloud-code'}
-                      dictationModel={selectedSession
-                        ? (runtimeRunsOwnAgent(selectedSession.runtimeId)
-                          ? sessionModelsRef.current[selectedSession.id] : undefined) ?? agentModel
-                        : (runtimeRunsOwnAgent(draft.runtimeId) ? draft.harnessModelId : '') || agentModel}
+                      dictationDestination={
+                        selectedId ? (selectedSession?.id ?? null) : 'new-cloud-code'
+                      }
+                      dictationModel={
+                        selectedSession
+                          ? ((runtimeRunsOwnAgent(selectedSession.runtimeId)
+                              ? sessionModelsRef.current[selectedSession.id]
+                              : undefined) ?? agentModel)
+                          : (runtimeRunsOwnAgent(draft.runtimeId) ? draft.harnessModelId : '') ||
+                            agentModel
+                      }
                       value={task}
-                      onChange={(value) => { draftRevision.current += 1; setTask(value); }}
+                      onChange={(value) => {
+                        draftRevision.current += 1;
+                        setTask(value);
+                      }}
                       onSubmit={(text, repository) => void handleSubmit(text, turnMode, repository)}
                       disabled={
                         isLocalDraft && !selectedSession

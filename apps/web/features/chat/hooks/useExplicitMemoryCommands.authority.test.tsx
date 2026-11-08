@@ -3,9 +3,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useMemoryStore } from '@agiworkforce/unified-chat';
 import { createRequestAuthority } from '@/lib/identity/request-authority';
 import { useExplicitMemoryCommands } from './use-explicit-memory-commands';
-import { createCloudMemoryFixture, getCloudMemoryFixtureSession } from '@/features/memory/__tests__/cloud-memory-fixture';
+import {
+  createCloudMemoryFixture,
+  getCloudMemoryFixtureSession,
+} from '@/features/memory/__tests__/CloudMemoryFixture';
 import { cloudMemoryScopeKey } from '@/features/memory/cloud-memory-controller';
-import { admitWorkspace, failWorkspaceRead, retryWorkspaceRead, workspaceQueryKey } from '@/features/workspaces/lib/workspace-admission';
+import {
+  admitWorkspace,
+  failWorkspaceRead,
+  retryWorkspaceRead,
+  workspaceQueryKey,
+} from '@/features/workspaces/lib/workspace-admission';
 
 type UiModule = typeof import('@agiworkforce/ui');
 const mocks = vi.hoisted(() => ({
@@ -18,7 +26,9 @@ vi.mock('@agiworkforce/ui', async (importOriginal) => ({
   ...(await importOriginal<UiModule>()),
   useConfirmAction: () => ({ confirm: mocks.confirm, dialog: null }),
 }));
-vi.mock('sonner', () => ({ toast: Object.assign(mocks.toast, { success: mocks.success, error: mocks.error }) }));
+vi.mock('sonner', () => ({
+  toast: Object.assign(mocks.toast, { success: mocks.success, error: mocks.error }),
+}));
 vi.mock('@/lib/identity/useSessionSnapshot', () => ({
   useSessionSnapshot: () => getCloudMemoryFixtureSession,
   useReadonlyIdentityLifetime: () => () => {
@@ -33,7 +43,11 @@ beforeEach(() => {
   vi.clearAllMocks();
   fixture = createCloudMemoryFixture();
 });
-afterEach(() => { fixture.retire(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+afterEach(() => {
+  fixture.retire();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 function owner() {
   const authority = createRequestAuthority(fixture.session);
@@ -43,23 +57,36 @@ function owner() {
 const scope = { conversationId: null, projectId: null };
 const confirmation = {
   command: { kind: 'forget', subject: 'old address' },
-  status: 'confirmation_required', requiresConfirmation: true,
+  status: 'confirmation_required',
+  requiresConfirmation: true,
   memories: [{ id: 'memory-a', content: 'An old address' }],
 };
 
 describe('explicit memory send authority', () => {
   it('keeps a truthful receipt without hydrating or uploading legacy local memories', async () => {
     const hydrate = vi.spyOn(useMemoryStore.getState(), 'hydrateFromServer');
-    vi.stubGlobal('fetch', vi.fn(async (input) => new Response(JSON.stringify(
-      String(input).startsWith('/api/memory?') ? { memories: [], hasMore: false } : {
-        command: { kind: 'remember', subject: 'a preference' }, status: 'stored',
-      },
-    ))));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async (input) =>
+          new Response(
+            JSON.stringify(
+              String(input).startsWith('/api/memory?')
+                ? { memories: [], hasMore: false }
+                : {
+                    command: { kind: 'remember', subject: 'a preference' },
+                    status: 'stored',
+                  },
+            ),
+          ),
+      ),
+    );
     const { result } = renderHook(() => useExplicitMemoryCommands(), { wrapper: fixture.wrapper });
     const { authority } = owner();
     await act(async () => {
-      await expect(result.current.runExplicitMemoryCommand('remember a preference', scope, authority))
-        .resolves.toEqual({ kind: 'remember', status: 'stored' });
+      await expect(
+        result.current.runExplicitMemoryCommand('remember a preference', scope, authority),
+      ).resolves.toEqual({ kind: 'remember', status: 'stored' });
     });
     expect(mocks.success).toHaveBeenCalledWith('Saved to memory.');
     expect(hydrate).not.toHaveBeenCalled();
@@ -71,27 +98,43 @@ describe('explicit memory send authority', () => {
     const { result } = renderHook(() => useExplicitMemoryCommands(), { wrapper: fixture.wrapper });
     const original = owner();
     await act(async () => {
-      await result.current.runExplicitMemoryCommand('forget my old address', scope, original.authority);
+      await result.current.runExplicitMemoryCommand(
+        'forget my old address',
+        scope,
+        original.authority,
+      );
     });
     const request = mocks.confirm.mock.calls[0]![0] as { onConfirm: () => Promise<void> };
     original.changeSession();
-    await act(async () => { await request.onConfirm(); });
+    await act(async () => {
+      await request.onConfirm();
+    });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(mocks.success).not.toHaveBeenCalled();
     expect(mocks.error).not.toHaveBeenCalled();
   });
 
   it('retires an earlier dialog without allowing its callback to send the replacement command', async () => {
-    const fetchMock = vi.fn().mockImplementation(async () => new Response(JSON.stringify(confirmation)));
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(async () => new Response(JSON.stringify(confirmation)));
     vi.stubGlobal('fetch', fetchMock);
     const { result } = renderHook(() => useExplicitMemoryCommands(), { wrapper: fixture.wrapper });
     const original = owner();
     await act(async () => {
-      await result.current.runExplicitMemoryCommand('forget the old address', scope, original.authority);
+      await result.current.runExplicitMemoryCommand(
+        'forget the old address',
+        scope,
+        original.authority,
+      );
     });
     const first = mocks.confirm.mock.calls[0]![0] as { onConfirm: () => Promise<void> };
     await act(async () => {
-      await result.current.runExplicitMemoryCommand('forget the old phone', scope, original.authority);
+      await result.current.runExplicitMemoryCommand(
+        'forget the old phone',
+        scope,
+        original.authority,
+      );
       await first.onConfirm();
     });
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -99,15 +142,24 @@ describe('explicit memory send authority', () => {
 
   it('reports a blocked memory command without dispatch and never revives an unavailable callback', async () => {
     failWorkspaceRead(fixture.owner, fixture.owner.epoch);
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
-      command: { kind: 'remember', subject: 'a preference' }, status: 'refused',
-    })));
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            command: { kind: 'remember', subject: 'a preference' },
+            status: 'refused',
+          }),
+        ),
+    );
     vi.stubGlobal('fetch', fetchMock);
     const { result } = renderHook(() => useExplicitMemoryCommands(), { wrapper: fixture.wrapper });
     const unavailable = result.current.runExplicitMemoryCommand;
     const authority = createRequestAuthority(fixture.session);
     await act(async () => {
-      await expect(unavailable('remember a preference', scope, authority)).resolves.toEqual({ kind: 'remember', status: 'failed' });
+      await expect(unavailable('remember a preference', scope, authority)).resolves.toEqual({
+        kind: 'remember',
+        status: 'failed',
+      });
     });
     expect(fetchMock).not.toHaveBeenCalled();
     expect(mocks.error).toHaveBeenCalledWith(expect.stringContaining('not sent to memory'));
@@ -117,8 +169,12 @@ describe('explicit memory send authority', () => {
       admitWorkspace(fixture.owner, fixture.owner.epoch, cloudMemoryScopeKey(fixture.data));
     });
     await act(async () => {
-      await expect(unavailable('remember another preference', scope, authority)).resolves.toBeNull();
-      await expect(result.current.runExplicitMemoryCommand('remember a preference', scope, authority)).resolves.toEqual({ kind: 'remember', status: 'refused' });
+      await expect(
+        unavailable('remember another preference', scope, authority),
+      ).resolves.toBeNull();
+      await expect(
+        result.current.runExplicitMemoryCommand('remember a preference', scope, authority),
+      ).resolves.toEqual({ kind: 'remember', status: 'refused' });
     });
     expect(mocks.error).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -134,7 +190,9 @@ describe('explicit memory send authority', () => {
     });
     const request = mocks.confirm.mock.calls[0]![0] as { onConfirm: () => Promise<void> };
     authority.retire();
-    await act(async () => { await request.onConfirm(); });
+    await act(async () => {
+      await request.onConfirm();
+    });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(mocks.success).not.toHaveBeenCalled();
     expect(mocks.error).not.toHaveBeenCalled();
@@ -149,8 +207,12 @@ describe('explicit memory send authority', () => {
       await result.current.runExplicitMemoryCommand('forget my old address', scope, authority);
     });
     const request = mocks.confirm.mock.calls[0]![0] as { onConfirm: () => Promise<void> };
-    await act(async () => { failWorkspaceRead(fixture.owner, fixture.owner.epoch); });
-    await act(async () => { await request.onConfirm(); });
+    await act(async () => {
+      failWorkspaceRead(fixture.owner, fixture.owner.epoch);
+    });
+    await act(async () => {
+      await request.onConfirm();
+    });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(mocks.success).not.toHaveBeenCalled();
     expect(mocks.error).not.toHaveBeenCalled();

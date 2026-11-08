@@ -159,12 +159,7 @@ export async function respondToAccountCompromise(
     });
   }
 
-  const sweep = await revokeEveryOtherSession(
-    identity,
-    input.userId,
-    null,
-    input.identitySubject,
-  );
+  const sweep = await revokeEveryOtherSession(identity, input.userId, null, input.identitySubject);
   const intentRevoked = await finishIntentRevocation(sweep, input.userId);
   const sessionsRevoked = sweep.ended.length;
   const sessionsFailed = sweep.failed.length;
@@ -185,14 +180,14 @@ export async function respondToAccountCompromise(
     !reportReceipt ||
     Array.isArray(reportReceipt) ||
     !sameCompromiseResponseId(reportReceipt.id, responseId) ||
-    typeof reportReceipt.user_id !== 'string' ||
-    reportReceipt.user_id !== input.userId ||
+    typeof reportReceipt['user_id'] !== 'string' ||
+    reportReceipt['user_id'] !== input.userId ||
     !Number.isInteger(sessionsRevoked) ||
     sessionsRevoked < 0 ||
     !Number.isInteger(sessionsFailed) ||
     sessionsFailed < 0 ||
-    reportReceipt.sessions_revoked !== sessionsRevoked ||
-    reportReceipt.sessions_failed !== sessionsFailed
+    reportReceipt['sessions_revoked'] !== sessionsRevoked ||
+    reportReceipt['sessions_failed'] !== sessionsFailed
   ) {
     throw createError
       .serviceUnavailable(
@@ -359,8 +354,8 @@ function confirmsCompromiseResolution(rows: unknown, responseId: string): boolea
   return (
     row !== null &&
     sameCompromiseResponseId(row.id, responseId) &&
-    row.password_reset_required === false &&
-    Number.isFinite(epochMs(row.resolved_at))
+    row['password_reset_required'] === false &&
+    Number.isFinite(epochMs(row['resolved_at']))
   );
 }
 
@@ -393,7 +388,11 @@ export async function resolveCompromiseResponse(
     };
   }
   const row = rows?.[0];
-  if (!singleCompromiseReceipt(rows) || !row || !sameCompromiseResponseId(row.id, input.responseId)) {
+  if (
+    !singleCompromiseReceipt(rows) ||
+    !row ||
+    !sameCompromiseResponseId(row.id, input.responseId)
+  ) {
     throw createError
       .serviceUnavailable('Could not confirm the state of this compromise response.')
       .asUserSafe();
@@ -478,9 +477,11 @@ export async function resolveCompromiseResponse(
     }
   }
   if (!confirmsCompromiseResolution(cleared, input.responseId)) {
-    throw createError.serviceUnavailable(
-      'Could not confirm that this response was resolved. Some sessions may already have been signed out.',
-    ).asUserSafe();
+    throw createError
+      .serviceUnavailable(
+        'Could not confirm that this response was resolved. Some sessions may already have been signed out.',
+      )
+      .asUserSafe();
   }
 
   await recordAuditEvent({

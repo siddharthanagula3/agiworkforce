@@ -51,7 +51,7 @@ vi.mock('@/lib/server/rls-db', () => ({
   })),
 }));
 vi.mock('@/lib/server/request-context-cache', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/request-context-cache')>()),
+  ...(await importOriginal<MockedModule0>()),
   getCachedActiveOrganizationId: vi.fn(async () => undefined),
   setCachedActiveOrganizationId: vi.fn(async () => undefined),
 }));
@@ -124,7 +124,11 @@ beforeEach(() => {
   mocks.rolledBack = 0;
   mocks.commits = 0;
   mocks.outerQuery.mockImplementation((sql: string, params: unknown[]) => {
-    if (/(insert into|delete from|update) public\.(organization_shared_sessions|shared_sessions)/.test(sql)) {
+    if (
+      /(insert into|delete from|update) public\.(organization_shared_sessions|shared_sessions)/.test(
+        sql,
+      )
+    ) {
       throw new Error('Mutation escaped transaction query scope');
     }
     return mocks.scopedQuery(sql, params);
@@ -139,26 +143,26 @@ beforeEach(() => {
     return mocks.scopedQuery(sql, params);
   });
   // This is an explicit in-memory rollback/commit model, not PostgreSQL or RLS verification.
-  mocks.transaction.mockImplementation(async (callback: (tx: {
-    query: typeof mocks.transactionQuery;
-  }) => Promise<unknown>) => {
-    mocks.pending = { ...mocks.committed };
-    try {
-      const result = await callback({ query: mocks.transactionQuery });
-      mocks.callbackFinished?.();
-      await mocks.commitGate;
-      if (mocks.commitFailure === 'rejected') throw new Error('Commit rejected');
-      mocks.committed = { ...mocks.pending! };
-      mocks.commits += 1;
-      if (mocks.commitFailure === 'uncertain') throw new Error('Commit acknowledgement lost');
-      return result;
-    } catch (error) {
-      if (mocks.commitFailure !== 'uncertain') mocks.rolledBack += 1;
-      throw error;
-    } finally {
-      mocks.pending = null;
-    }
-  });
+  mocks.transaction.mockImplementation(
+    async (callback: (tx: { query: typeof mocks.transactionQuery }) => Promise<unknown>) => {
+      mocks.pending = { ...mocks.committed };
+      try {
+        const result = await callback({ query: mocks.transactionQuery });
+        mocks.callbackFinished?.();
+        await mocks.commitGate;
+        if (mocks.commitFailure === 'rejected') throw new Error('Commit rejected');
+        mocks.committed = { ...mocks.pending! };
+        mocks.commits += 1;
+        if (mocks.commitFailure === 'uncertain') throw new Error('Commit acknowledgement lost');
+        return result;
+      } catch (error) {
+        if (mocks.commitFailure !== 'uncertain') mocks.rolledBack += 1;
+        throw error;
+      } finally {
+        mocks.pending = null;
+      }
+    },
+  );
   mocks.stored = {
     conversation_id: CONVERSATION,
     conversation_organization_id: ORG,
@@ -178,7 +182,8 @@ beforeEach(() => {
     if (sql.includes('user_settings')) return [{ organization_id: mocks.savedOrganizationId }];
     if (sql.includes('organization_members'))
       return [{ organization_id: params[0], role: mocks.role }];
-    if (sql.includes('delete from public.organization_shared_sessions')) return mocks.deleteReceipts;
+    if (sql.includes('delete from public.organization_shared_sessions'))
+      return mocks.deleteReceipts;
     if (sql.includes('insert into public.organization_shared_sessions')) {
       return [
         {
@@ -196,7 +201,15 @@ beforeEach(() => {
       ];
     }
     if (sql.includes('update public.shared_sessions')) {
-      return [{ id: SESSION, token: TOKEN, owner_id: 'user-1', visibility: params[2], expires_at: '2026-10-16T00:00:00.000Z' }];
+      return [
+        {
+          id: SESSION,
+          token: TOKEN,
+          owner_id: 'user-1',
+          visibility: params[2],
+          expires_at: '2026-10-16T00:00:00.000Z',
+        },
+      ];
     }
     if (sql.includes('shared_sessions')) return [{ id: SESSION }];
     return [];
@@ -205,9 +218,12 @@ beforeEach(() => {
 
 describe('PATCH /api/share/[token], source fixtures with modeled transaction boundaries', () => {
   function expectTransactionOnlyWrites() {
-    const mutation = /(insert into|delete from|update) public\.(organization_shared_sessions|shared_sessions)/;
+    const mutation =
+      /(insert into|delete from|update) public\.(organization_shared_sessions|shared_sessions)/;
     expect(mocks.outerQuery.mock.calls.some(([sql]) => mutation.test(String(sql)))).toBe(false);
-    expect(mocks.privilegedQuery.mock.calls.some(([sql]) => mutation.test(String(sql)))).toBe(false);
+    expect(mocks.privilegedQuery.mock.calls.some(([sql]) => mutation.test(String(sql)))).toBe(
+      false,
+    );
     expect(mocks.privilegedExecute).not.toHaveBeenCalled();
     expect(mocks.transaction).toHaveBeenCalledTimes(1);
   }
@@ -215,9 +231,16 @@ describe('PATCH /api/share/[token], source fixtures with modeled transaction bou
   for (const visibility of ['organization', 'public']) {
     it(`waits for the outer commit promise before ${visibility} audit or response`, async () => {
       let releaseCommit!: () => void;
-      mocks.commitGate = new Promise<void>((resolve) => { releaseCommit = resolve; });
-      const callbackFinished = new Promise<void>((resolve) => { mocks.callbackFinished = resolve; });
-      mocks.committed = { visibility: visibility === 'public' ? 'organization' : 'public', grant: ORG };
+      mocks.commitGate = new Promise<void>((resolve) => {
+        releaseCommit = resolve;
+      });
+      const callbackFinished = new Promise<void>((resolve) => {
+        mocks.callbackFinished = resolve;
+      });
+      mocks.committed = {
+        visibility: visibility === 'public' ? 'organization' : 'public',
+        grant: ORG,
+      };
       const original = { ...mocks.committed };
       let responded = false;
       const responsePromise = call(visibility).then((response) => {
@@ -243,28 +266,45 @@ describe('PATCH /api/share/[token], source fixtures with modeled transaction bou
 
     for (const failure of ['rejected', 'uncertain'] as const) {
       it(`does not audit or retry ${visibility} after ${failure} commit acknowledgement`, async () => {
-        mocks.committed = { visibility: visibility === 'public' ? 'organization' : 'public', grant: ORG };
+        mocks.committed = {
+          visibility: visibility === 'public' ? 'organization' : 'public',
+          grant: ORG,
+        };
         const original = { ...mocks.committed };
         mocks.commitFailure = failure;
 
         const response = await call(visibility);
 
         expect(response.status).toBe(500);
-        expect((await response.json()).error.message).toBe('Internal server error');
+        expect((await response.json()).error.message).toBe('An unexpected error occurred');
         expect(auditSpy).not.toHaveBeenCalled();
         expect(mocks.transactionQuery).toHaveBeenCalledTimes(2);
-        expect(mocks.committed).toEqual(failure === 'rejected'
-          ? original
-          : { visibility, grant: visibility === 'public' ? null : ORG });
+        expect(mocks.committed).toEqual(
+          failure === 'rejected'
+            ? original
+            : { visibility, grant: visibility === 'public' ? null : ORG },
+        );
         expect(mocks.commits).toBe(failure === 'rejected' ? 0 : 1);
         expect(mocks.rolledBack).toBe(failure === 'rejected' ? 1 : 0);
         expectTransactionOnlyWrites();
       });
     }
 
-    for (const receipt of ['zero', 'multiple', 'id', 'token', 'owner_id', 'visibility', 'missing-visibility', 'error']) {
+    for (const receipt of [
+      'zero',
+      'multiple',
+      'id',
+      'token',
+      'owner_id',
+      'visibility',
+      'missing-visibility',
+      'error',
+    ]) {
       it(`rolls back modeled ${visibility} grant changes on ${receipt} visibility result`, async () => {
-        mocks.committed = { visibility: visibility === 'public' ? 'organization' : 'public', grant: ORG };
+        mocks.committed = {
+          visibility: visibility === 'public' ? 'organization' : 'public',
+          grant: ORG,
+        };
         const original = { ...mocks.committed };
         const defaultQuery = mocks.scopedQuery.getMockImplementation()!;
         mocks.scopedQuery.mockImplementation(async (sql: string, params: unknown[]) => {
@@ -277,7 +317,9 @@ describe('PATCH /api/share/[token], source fixtures with modeled transaction bou
           return [{ ...rows[0], [receipt]: 'different' }];
         });
 
-        expect((await call(visibility)).status).toBe(receipt === 'error' ? 500 : receipt === 'zero' ? 404 : 409);
+        expect((await call(visibility)).status).toBe(
+          receipt === 'error' ? 500 : receipt === 'zero' ? 404 : 409,
+        );
         expect(mocks.transactionQuery).toHaveBeenCalledTimes(2);
         expect(mocks.committed).toEqual(original);
         expect(mocks.pending).toBeNull();
@@ -289,7 +331,14 @@ describe('PATCH /api/share/[token], source fixtures with modeled transaction bou
     }
   }
 
-  for (const receipt of ['zero', 'multiple', 'organization_id', 'shared_session_id', 'shared_by_user_id', 'owner_user_id']) {
+  for (const receipt of [
+    'zero',
+    'multiple',
+    'organization_id',
+    'shared_session_id',
+    'shared_by_user_id',
+    'owner_user_id',
+  ]) {
     it(`rolls back a ${receipt} grant receipt before attempting visibility`, async () => {
       mocks.committed = { visibility: 'public', grant: null };
       const defaultQuery = mocks.scopedQuery.getMockImplementation()!;
@@ -311,7 +360,7 @@ describe('PATCH /api/share/[token], source fixtures with modeled transaction bou
   }
 
   it('commits a public visibility change without inventing a grant or revoke audit', async () => {
-    mocks.stored.grant_organization_id = null;
+    mocks.stored['grant_organization_id'] = null;
     mocks.committed = { visibility: 'public', grant: null };
 
     expect((await call('public')).status).toBe(200);
@@ -391,7 +440,7 @@ describe('PATCH /api/share/[token], workspace audience', () => {
   });
 
   it('records no revoke when the conversation was never shared with the workspace', async () => {
-    mocks.stored.grant_organization_id = null;
+    mocks.stored['grant_organization_id'] = null;
 
     const response = await call('public');
 
@@ -570,7 +619,7 @@ describe('PATCH /api/share/[token], captured audience and confirmed revocation',
 
   for (const explicit of [false, true]) {
     it(`uses captured B, not saved A, for an organization grant (${explicit ? 'explicit' : 'headerless'})`, async () => {
-      mocks.stored.grant_organization_id = null;
+      mocks.stored['grant_organization_id'] = null;
 
       const response = await call(
         'organization',
@@ -579,7 +628,8 @@ describe('PATCH /api/share/[token], captured audience and confirmed revocation',
 
       expect(response.status).toBe(200);
       expect(await response.json()).toMatchObject({
-        visibility: 'organization', organizationId: OTHER_ORG,
+        visibility: 'organization',
+        organizationId: OTHER_ORG,
       });
       expect(callsContaining('organization_members')).toEqual([
         [expect.stringContaining("and status = 'active'"), [OTHER_ORG, 'user-1']],
@@ -589,37 +639,50 @@ describe('PATCH /api/share/[token], captured audience and confirmed revocation',
       );
       expect(callsContaining('user_settings')).toHaveLength(0);
       expect(callsContaining('insert into public.organization_shared_sessions')[0]![1]).toEqual([
-        OTHER_ORG, SESSION, 'user-1',
+        OTHER_ORG,
+        SESSION,
+        'user-1',
       ]);
       expect(mocks.privilegedQuery.mock.calls).toContainEqual([
-        expect.stringContaining('organization_member_permissions'), [OTHER_ORG, 'user-1'],
+        expect.stringContaining('organization_member_permissions'),
+        [OTHER_ORG, 'user-1'],
       ]);
       expect(auditSpy).toHaveBeenCalledWith(expect.objectContaining({ organizationId: OTHER_ORG }));
     });
 
     it(`removes and audits observed grant A while selected B (${explicit ? 'explicit' : 'headerless'})`, async () => {
-      const response = await call(
-        'public',
-        explicit ? { 'x-agi-organization-id': OTHER_ORG } : {},
-      );
+      const response = await call('public', explicit ? { 'x-agi-organization-id': OTHER_ORG } : {});
 
       expect(response.status).toBe(200);
-      expect(await response.json()).toMatchObject({ token: TOKEN, visibility: 'public', organizationId: null });
+      expect(await response.json()).toMatchObject({
+        token: TOKEN,
+        visibility: 'public',
+        organizationId: null,
+      });
       expect(callsContaining('delete from public.organization_shared_sessions')).toEqual([
         [expect.stringContaining('returning shared_session_id'), [ORG, SESSION]],
       ]);
       expect(callsContaining('update public.shared_sessions')).toEqual([
-        [expect.stringContaining('where token = $1 and owner_id = $2 and id = $4'), [TOKEN, 'user-1', 'public', SESSION]],
+        [
+          expect.stringContaining('where token = $1 and owner_id = $2 and id = $4'),
+          [TOKEN, 'user-1', 'public', SESSION],
+        ],
       ]);
-      expect(mocks.privilegedQuery.mock.calls.some(([sql]) =>
-        /(?:delete from|update|insert into) public\.(?:shared_sessions|organization_shared_sessions)/.test(String(sql)),
-      )).toBe(false);
+      expect(
+        mocks.privilegedQuery.mock.calls.some(([sql]) =>
+          /(?:delete from|update|insert into) public\.(?:shared_sessions|organization_shared_sessions)/.test(
+            String(sql),
+          ),
+        ),
+      ).toBe(false);
       expect(auditSpy).toHaveBeenCalledTimes(1);
-      expect(auditSpy).toHaveBeenCalledWith(expect.objectContaining({
-        organizationId: ORG,
-        eventType: 'organization_share_revoked',
-        detail: { resourceType: 'conversation', resourceId: SESSION },
-      }));
+      expect(auditSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          organizationId: ORG,
+          eventType: 'organization_share_revoked',
+          detail: { resourceType: 'conversation', resourceId: SESSION },
+        }),
+      );
     });
   }
 
@@ -657,8 +720,8 @@ describe('PATCH /api/share/[token], captured audience and confirmed revocation',
 
   for (const deniedScope of ['conversation', 'grant']) {
     it(`preserves the stored ${deniedScope} external-sharing denial with selected B`, async () => {
-      mocks.stored.conversation_id = CONVERSATION;
-      mocks.stored.conversation_organization_id = OTHER_ORG;
+      mocks.stored['conversation_id'] = CONVERSATION;
+      mocks.stored['conversation_organization_id'] = OTHER_ORG;
       mocks.savedOrganizationId = OTHER_ORG;
       const deniedOrganizationId = deniedScope === 'conversation' ? OTHER_ORG : ORG;
       const defaultQuery = mocks.privilegedQuery.getMockImplementation()!;
@@ -674,7 +737,8 @@ describe('PATCH /api/share/[token], captured audience and confirmed revocation',
       expect(response.status).toBe(403);
       expect((await response.json()).error.code).toBe('external_sharing_disabled');
       expect(mocks.privilegedQuery.mock.calls).toContainEqual([
-        expect.stringContaining('from public.organization_admin_policies'), [deniedOrganizationId],
+        expect.stringContaining('from public.organization_admin_policies'),
+        [deniedOrganizationId],
       ]);
       expect(callsContaining('delete from public.organization_shared_sessions')).toHaveLength(0);
       expectNoVisibilityWriteOrAudit();
@@ -682,8 +746,8 @@ describe('PATCH /api/share/[token], captured audience and confirmed revocation',
   }
 
   it('keeps a headerless conversation in A out of captured B before any mutation', async () => {
-    mocks.stored.conversation_id = CONVERSATION;
-    mocks.stored.conversation_organization_id = ORG;
+    mocks.stored['conversation_id'] = CONVERSATION;
+    mocks.stored['conversation_organization_id'] = ORG;
 
     expect((await call('public')).status).toBe(403);
     expect(callsContaining('delete from public.organization_shared_sessions')).toHaveLength(0);
@@ -729,16 +793,19 @@ describe('PATCH /api/share/[token], captured audience and confirmed revocation',
     ['zero', []],
     ['mismatched', [{ shared_session_id: CONVERSATION }]],
     ['multiple', [{ shared_session_id: SESSION }, { shared_session_id: SESSION }]],
-  ])('refuses an observed grant with %s delete receipts before publishing', async (_label, receipts) => {
-    mocks.deleteReceipts = receipts as Array<{ shared_session_id: string }>;
+  ])(
+    'refuses an observed grant with %s delete receipts before publishing',
+    async (_label, receipts) => {
+      mocks.deleteReceipts = receipts as Array<{ shared_session_id: string }>;
 
-    expect((await call('public')).status).toBe(409);
-    expect(callsContaining('delete from public.organization_shared_sessions')).toHaveLength(1);
-    expect(mocks.committed).toEqual({ visibility: 'organization', grant: ORG });
-    expect(mocks.rolledBack).toBe(1);
-    expect(mocks.commits).toBe(0);
-    expectNoVisibilityWriteOrAudit();
-  });
+      expect((await call('public')).status).toBe(409);
+      expect(callsContaining('delete from public.organization_shared_sessions')).toHaveLength(1);
+      expect(mocks.committed).toEqual({ visibility: 'organization', grant: ORG });
+      expect(mocks.rolledBack).toBe(1);
+      expect(mocks.commits).toBe(0);
+      expectNoVisibilityWriteOrAudit();
+    },
+  );
 
   it('binds stored scope and the mutable session lookup to owner and token', async () => {
     const defaultQuery = mocks.scopedQuery.getMockImplementation()!;
@@ -795,7 +862,9 @@ describe('PATCH /api/share/[token], captured audience and confirmed revocation',
 
     expect((await call('organization')).status).toBeGreaterThanOrEqual(400);
     expect(callsContaining('insert into public.organization_shared_sessions')[0]![1]).toEqual([
-      OTHER_ORG, SESSION, 'user-1',
+      OTHER_ORG,
+      SESSION,
+      'user-1',
     ]);
     expect(callsContaining('delete from public.organization_shared_sessions')).toHaveLength(0);
     expectNoVisibilityWriteOrAudit();
@@ -828,3 +897,5 @@ describe('PATCH /api/share/[token], captured audience and confirmed revocation',
     expect(mocks.transaction).toHaveBeenCalledTimes(1);
   });
 });
+
+type MockedModule0 = typeof import('@/lib/server/request-context-cache');

@@ -16,7 +16,8 @@ describe('Library picker ownership', () => {
 
   it('revokes old destination callbacks even after returning to the original destination', () => {
     const { result, rerender } = renderHook(
-      ({ destination }) => useLibraryPickerScope(destination),
+      ({ destination }: { destination: Parameters<typeof useLibraryPickerScope>[0] }) =>
+        useLibraryPickerScope(destination),
       { initialProps: { destination: 'first' } },
     );
     const first = result.current;
@@ -34,7 +35,10 @@ describe('Library picker ownership', () => {
     act(() => activateCloudAccount('owner-b'));
     expect(first.isCurrent()).toBe(false);
     const second = result.current;
-    act(() => { invalidateCloudAccount(); activateCloudAccount('owner-b'); });
+    act(() => {
+      invalidateCloudAccount();
+      activateCloudAccount('owner-b');
+    });
     expect(second.isCurrent()).toBe(false);
     expect(result.current.isCurrent()).toBe(true);
   });

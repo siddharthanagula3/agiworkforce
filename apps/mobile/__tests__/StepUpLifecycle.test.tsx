@@ -40,13 +40,24 @@ import { StepUpCancelledError } from '../src/features/auth/services/stepUp';
 function deferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (reason: unknown) => void;
-  const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; });
+  const promise = new Promise<T>((yes, no) => {
+    resolve = yes;
+    reject = no;
+  });
   return { promise, resolve, reject };
 }
 function props(modal: ReactElement | null) {
-  return modal!.props as { onSatisfied: (token: string) => void; onCancel: () => void; challenge: { action: string } };
+  return modal!.props as {
+    onSatisfied: (token: string) => void;
+    onCancel: () => void;
+    challenge: { action: string };
+  };
 }
-const flush = async () => { await act(async () => { await Promise.resolve(); }); };
+const flush = async () => {
+  await act(async () => {
+    await Promise.resolve();
+  });
+};
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -58,23 +69,73 @@ beforeEach(() => {
   mockConsequence.mockResolvedValue('Fixture consequence');
 });
 
+test('independent challenge owners keep distinct modal identities and proofs', async () => {
+  const { result } = renderHook(() => ({ first: useStepUp(), second: useStepUp() }));
+  const firstSend = jest
+    .fn()
+    .mockRejectedValueOnce('step-up-required')
+    .mockResolvedValueOnce('first');
+  const secondSend = jest
+    .fn()
+    .mockRejectedValueOnce('step-up-required')
+    .mockResolvedValueOnce('second');
+  let first!: Promise<unknown>;
+  let second!: Promise<unknown>;
+  act(() => {
+    first = result.current.first.withStepUp('password.change', null, firstSend);
+    second = result.current.second.withStepUp('two_factor.disable', null, secondSend);
+  });
+  await flush();
+  expect(result.current.first.modal).not.toBeNull();
+  expect(result.current.second.modal).not.toBeNull();
+  expect(result.current.first.modal!.key).not.toBe(result.current.second.modal!.key);
+  const firstModal = props(result.current.first.modal);
+  const secondModal = props(result.current.second.modal);
+  await act(async () => {
+    firstModal.onSatisfied('first-proof');
+    await first;
+  });
+  expect(result.current.first.modal).toBeNull();
+  expect(result.current.second.modal).not.toBeNull();
+  await act(async () => {
+    secondModal.onSatisfied('second-proof');
+    await second;
+  });
+  expect(firstSend).toHaveBeenLastCalledWith({ 'x-step-up-token': 'first-proof' });
+  expect(secondSend).toHaveBeenLastCalledWith({ 'x-step-up-token': 'second-proof' });
+  expect(result.current.second.modal).toBeNull();
+});
+
 test('an older acquisition cannot replace the newer challenge or settle its retry', async () => {
   const oldToken = deferred<string>();
   mockToken.mockReturnValueOnce(oldToken.promise);
   const { result } = renderHook(useStepUp);
   const oldSend = jest.fn().mockRejectedValue('step-up-required');
-  const newSend = jest.fn().mockRejectedValueOnce('step-up-required').mockResolvedValue('new-result');
+  const newSend = jest
+    .fn()
+    .mockRejectedValueOnce('step-up-required')
+    .mockResolvedValue('new-result');
   let old!: Promise<unknown>;
   let newer!: Promise<unknown>;
-  act(() => { old = result.current.withStepUp('password.change', null, oldSend).catch((error) => error); });
+  act(() => {
+    old = result.current.withStepUp('password.change', null, oldSend).catch((error) => error);
+  });
   await flush();
-  act(() => { newer = result.current.withStepUp('two_factor.disable', null, newSend); });
+  act(() => {
+    newer = result.current.withStepUp('two_factor.disable', null, newSend);
+  });
   await flush();
   expect(props(result.current.modal).challenge.action).toBe('two_factor.disable');
-  await act(async () => { oldToken.resolve('fixture-old-token'); await old; });
+  await act(async () => {
+    oldToken.resolve('fixture-old-token');
+    await old;
+  });
   expect(await old).toBeInstanceOf(StepUpCancelledError);
   expect(props(result.current.modal).challenge.action).toBe('two_factor.disable');
-  await act(async () => { props(result.current.modal).onSatisfied('fixture-new-grant'); await newer; });
+  await act(async () => {
+    props(result.current.modal).onSatisfied('fixture-new-grant');
+    await newer;
+  });
   expect(newSend).toHaveBeenLastCalledWith({ 'x-step-up-token': 'fixture-new-grant' });
   expect(oldSend).toHaveBeenCalledTimes(1);
 });
@@ -85,15 +146,26 @@ test('retained modal callbacks cannot settle a replacement pending attempt', asy
   const secondSend = jest.fn().mockRejectedValueOnce('step-up-required').mockResolvedValue('done');
   let first!: Promise<unknown>;
   let second!: Promise<unknown>;
-  act(() => { first = result.current.withStepUp('password.change', null, firstSend).catch((error) => error); });
+  act(() => {
+    first = result.current.withStepUp('password.change', null, firstSend).catch((error) => error);
+  });
   await flush();
   const retained = props(result.current.modal);
-  act(() => { second = result.current.withStepUp('two_factor.disable', null, secondSend); });
+  act(() => {
+    second = result.current.withStepUp('two_factor.disable', null, secondSend);
+  });
   await flush();
-  act(() => { retained.onSatisfied('fixture-stale-grant'); retained.onCancel(); });
+  act(() => {
+    retained.onSatisfied('fixture-stale-grant');
+    retained.onCancel();
+  });
   expect(props(result.current.modal).challenge.action).toBe('two_factor.disable');
   expect(secondSend).toHaveBeenCalledTimes(1);
-  await act(async () => { props(result.current.modal).onSatisfied('fixture-current-grant'); await second; await first; });
+  await act(async () => {
+    props(result.current.modal).onSatisfied('fixture-current-grant');
+    await second;
+    await first;
+  });
 });
 
 test('unmount during token acquisition cannot dispatch a grant or resurrect a modal', async () => {
@@ -104,7 +176,10 @@ test('unmount during token acquisition cannot dispatch a grant or resurrect a mo
   const pending = result.current.withStepUp('password.change', null, send).catch((error) => error);
   await flush();
   unmount();
-  await act(async () => { token.resolve('fixture-token'); await pending; });
+  await act(async () => {
+    token.resolve('fixture-token');
+    await pending;
+  });
   expect(await pending).toBeInstanceOf(StepUpCancelledError);
   expect(mockGrant).not.toHaveBeenCalled();
 });
@@ -137,7 +212,10 @@ test('replacement preserves an already-dispatched initial mutation outcome', asy
 test('replacement preserves an already-dispatched retry failure as unknown, not cancelled', async () => {
   const dispatched = deferred<string>();
   const failure = new Error('connection lost after dispatch');
-  const send = jest.fn().mockRejectedValueOnce('step-up-required').mockReturnValueOnce(dispatched.promise);
+  const send = jest
+    .fn()
+    .mockRejectedValueOnce('step-up-required')
+    .mockReturnValueOnce(dispatched.promise);
   const { result } = renderHook(useStepUp);
   const first = result.current.withStepUp('password.change', null, send).catch((error) => error);
   await flush();

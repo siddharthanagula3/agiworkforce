@@ -1,12 +1,19 @@
 import 'server-only';
 
 import type { NextRequest } from 'next/server';
-import { handleAccountDeletionCancellation, accountDeletionCancellationOptions } from '@/lib/server/account-deletion-cancellation';
+import { AccountDeletionScheduleCancellationRequestSchema } from '@agiworkforce/cloud-contracts';
+import {
+  handleAccountDeletionCancellation,
+  accountDeletionCancellationOptions,
+} from '@/lib/server/account-deletion-cancellation';
 
 export const runtime = 'nodejs';
 
 export async function PUT(request: NextRequest) {
-  return handleAccountDeletionCancellation(request, { kind: 'required-pair' });
+  return handleAccountDeletionCancellation(request, {
+    kind: 'required-pair',
+    requestSchema: AccountDeletionScheduleCancellationRequestSchema,
+  });
 }
 
 export const OPTIONS = accountDeletionCancellationOptions;

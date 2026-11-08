@@ -5,17 +5,22 @@ import React from 'react';
 
 const identity = vi.hoisted(() => ({
   auth: { isLoaded: true, isSignedIn: true, userId: 'a', sessionId: 'session-a' },
-  sdk: { loaded: true, user: { id: 'a' },
-    session: { id: 'session-a', user: { id: 'a' }, getToken: async () => 'token-a' } },
+  sdk: {
+    loaded: true,
+    user: { id: 'a' },
+    session: { id: 'session-a', user: { id: 'a' }, getToken: async () => 'token-a' },
+  },
   callbacks: [] as Array<{ label: string; change: (value: boolean) => void }>,
 }));
 vi.mock('@clerk/nextjs', () => ({ useAuth: () => identity.auth, useClerk: () => identity.sdk }));
 vi.mock('@/lib/client/csrf', async (original) => ({
-  ...await original<typeof import('@/lib/client/csrf')>(),
+  ...(await original<MockedModule0>()),
   addCsrfHeaders: vi.fn(async (headers: HeadersInit = {}) => new Headers(headers)),
 }));
 
-vi.mock('../../components/BulkConversationControls', () => ({ BulkConversationControls: () => null }));
+vi.mock('../../components/BulkConversationControls', () => ({
+  BulkConversationControls: () => null,
+}));
 
 vi.mock('../../components/UsOnlyRoutingPanel', () => ({
   UsOnlyRoutingPanel: () => null,
@@ -38,7 +43,7 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('@agiworkforce/ui', async (original) => ({
-  ...await original<typeof import('@agiworkforce/ui')>(),
+  ...(await original<MockedModule1>()),
   Switch: ({
     checked,
     disabled,
@@ -50,7 +55,8 @@ vi.mock('@agiworkforce/ui', async (original) => ({
     onCheckedChange?: (next: boolean) => void;
     'aria-label'?: string;
   }) => {
-    if (onCheckedChange) identity.callbacks.push({ label: ariaLabel ?? '', change: onCheckedChange });
+    if (onCheckedChange)
+      identity.callbacks.push({ label: ariaLabel ?? '', change: onCheckedChange });
     return React.createElement('button', {
       type: 'button',
       disabled,
@@ -86,7 +92,12 @@ import { PrivacySection } from '../PrivacySection';
 
 import { observePreferenceOwner } from '@/app/settings/_lib/preferences-client';
 import { addCsrfHeaders } from '@/lib/client/csrf';
-import { hasPendingTelemetryOptOut, hasTelemetryConsent, requestTelemetryOptOut, setTelemetryConsentCache } from '@/lib/sentry-shared';
+import {
+  hasPendingTelemetryOptOut,
+  hasTelemetryConsent,
+  requestTelemetryOptOut,
+  setTelemetryConsentCache,
+} from '@/lib/sentry-shared';
 
 const fetchMock = vi.fn<typeof fetch>();
 const json = (privacy: unknown, version: string | null = 'v1') =>
@@ -96,11 +107,14 @@ const training = () => screen.getByRole('switch', { name: /Only use models/i });
 const puts = () => fetchMock.mock.calls.filter(([, init]) => init?.method === 'PUT');
 function deferred<T>() {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => { resolve = done; });
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
   return { promise, resolve };
 }
 function retained() {
-  return identity.callbacks.filter(({ label }) => label === 'Share crash and error reports').at(-1)!.change;
+  return identity.callbacks.filter(({ label }) => label === 'Share crash and error reports').at(-1)!
+    .change;
 }
 
 beforeEach(() => {
@@ -115,9 +129,14 @@ beforeEach(() => {
   setTelemetryConsentCache(false);
   fetchMock.mockReset().mockImplementation(async () => json({ shareTelemetry: false }));
   vi.stubGlobal('fetch', fetchMock);
-  vi.mocked(addCsrfHeaders).mockReset().mockImplementation(async (headers) => new Headers(headers));
+  vi.mocked(addCsrfHeaders)
+    .mockReset()
+    .mockImplementation(async (headers) => new Headers(headers));
 });
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 describe('owned privacy preference persistence', () => {
   it('blocks changes before a strict account read and supports legitimate first use', async () => {
@@ -132,10 +151,15 @@ describe('owned privacy preference persistence', () => {
   });
 
   it('offers load retry with disabled controls over an invalid account response', async () => {
-    fetchMock.mockResolvedValueOnce(Response.json({ settings: { privacy: { shareTelemetry: 'yes' } }, version: 'v1' }))
+    fetchMock
+      .mockResolvedValueOnce(
+        Response.json({ settings: { privacy: { shareTelemetry: 'yes' } }, version: 'v1' }),
+      )
       .mockResolvedValueOnce(json({ shareTelemetry: false }));
     render(<PrivacySection />);
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Retry loading' })).toBeVisible());
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Retry loading' })).toBeVisible(),
+    );
     expect(toggle()).toBeDisabled();
     expect(screen.getByRole('alert')).toHaveStyle({ color: 'var(--settings-destructive-text)' });
     expect(screen.getByRole('alert')).not.toHaveTextContent('Saved');
@@ -146,19 +170,34 @@ describe('owned privacy preference persistence', () => {
 
   it('sends one field once in StrictMode and grants only after a stored receipt', async () => {
     const pending = deferred<Response>();
-    fetchMock.mockImplementation(async (_url, init) => init?.method === 'PUT'
-      ? pending.promise : json({ shareTelemetry: puts().length > 0, keepOutOfProviderTraining: true }));
-    render(<React.StrictMode><PrivacySection /></React.StrictMode>);
+    fetchMock.mockImplementation(async (_url, init) =>
+      init?.method === 'PUT'
+        ? pending.promise
+        : json({ shareTelemetry: puts().length > 0, keepOutOfProviderTraining: true }),
+    );
+    render(
+      <React.StrictMode>
+        <PrivacySection />
+      </React.StrictMode>,
+    );
     await waitFor(() => expect(toggle()).toBeEnabled());
     const change = retained();
-    act(() => { change(true); change(true); });
+    act(() => {
+      change(true);
+      change(true);
+    });
     await waitFor(() => expect(puts()).toHaveLength(1));
     expect(hasTelemetryConsent()).toBe(false);
     const init = puts()[0]![1]!;
-    expect(JSON.parse(String(init.body))).toEqual({ namespace: 'privacy', patch: { shareTelemetry: true } });
+    expect(JSON.parse(String(init.body))).toEqual({
+      namespace: 'privacy',
+      patch: { shareTelemetry: true },
+    });
     expect(init.credentials).toBe('omit');
     expect(new Headers(init.headers).get('Authorization')).toBe('Bearer token-a');
-    await act(async () => pending.resolve(json({ shareTelemetry: true, keepOutOfProviderTraining: true })));
+    await act(async () =>
+      pending.resolve(json({ shareTelemetry: true, keepOutOfProviderTraining: true })),
+    );
     await waitFor(() => expect(toggle()).toBeEnabled());
     expect(hasTelemetryConsent()).toBe(true);
     expect(training()).toHaveAttribute('aria-checked', 'true');
@@ -167,14 +206,17 @@ describe('owned privacy preference persistence', () => {
   });
 
   it('reconciles a malformed receipt and retries only a read, never an old payload', async () => {
-    fetchMock.mockResolvedValueOnce(json({ shareTelemetry: false }))
+    fetchMock
+      .mockResolvedValueOnce(json({ shareTelemetry: false }))
       .mockResolvedValueOnce(new Response('not json', { status: 200 }))
       .mockRejectedValueOnce(new Error('offline'))
       .mockResolvedValueOnce(json({ shareTelemetry: false, keepOutOfProviderTraining: true }));
     render(<PrivacySection />);
     await waitFor(() => expect(toggle()).toBeEnabled());
     await userEvent.click(toggle());
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Retry loading' })).toBeVisible());
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Retry loading' })).toBeVisible(),
+    );
     expect(hasTelemetryConsent()).toBe(false);
     expect(toggle()).toBeDisabled();
     await userEvent.click(screen.getByRole('button', { name: 'Retry loading' }));
@@ -184,7 +226,8 @@ describe('owned privacy preference persistence', () => {
   });
 
   it('denies immediately and lets a fresh choice persist denial after reconciliation', async () => {
-    fetchMock.mockResolvedValueOnce(json({ shareTelemetry: true }))
+    fetchMock
+      .mockResolvedValueOnce(json({ shareTelemetry: true }))
       .mockRejectedValueOnce(new Error('offline'))
       .mockResolvedValueOnce(json({ shareTelemetry: true, keepOutOfProviderTraining: true }))
       .mockResolvedValueOnce(json({ shareTelemetry: false, keepOutOfProviderTraining: true }))
@@ -196,30 +239,44 @@ describe('owned privacy preference persistence', () => {
     act(() => retained()(false));
     expect(hasTelemetryConsent()).toBe(false);
     await act(async () => csrf.resolve(new Headers()));
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Keep telemetry off for my account' })).toBeVisible());
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Keep telemetry off for my account' }),
+      ).toBeVisible(),
+    );
     setTelemetryConsentCache(true);
     expect(hasTelemetryConsent()).toBe(false);
-    await userEvent.click(screen.getByRole('button', { name: 'Keep telemetry off for my account' }));
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Keep telemetry off for my account' }),
+    );
     await waitFor(() => expect(toggle()).toBeEnabled());
     expect(puts()).toHaveLength(2);
-    expect(JSON.parse(String(puts()[1]![1]!.body))).toEqual({ namespace: 'privacy', patch: { shareTelemetry: false } });
+    expect(JSON.parse(String(puts()[1]![1]!.body))).toEqual({
+      namespace: 'privacy',
+      patch: { shareTelemetry: false },
+    });
   });
 
   it('patches training alone without confirming a pending telemetry grant from its receipt', async () => {
     requestTelemetryOptOut();
     const reconciliation = deferred<Response>();
-    fetchMock.mockResolvedValueOnce(json({ shareTelemetry: true, keepOutOfProviderTraining: false }))
+    fetchMock
+      .mockResolvedValueOnce(json({ shareTelemetry: true, keepOutOfProviderTraining: false }))
       .mockResolvedValueOnce(json({ shareTelemetry: true, keepOutOfProviderTraining: true }))
       .mockReturnValueOnce(reconciliation.promise);
     render(<PrivacySection />);
     await waitFor(() => expect(training()).toBeEnabled());
     await userEvent.click(training());
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
-    expect(JSON.parse(String(puts()[0]![1]!.body)))
-      .toEqual({ namespace: 'privacy', patch: { keepOutOfProviderTraining: true } });
+    expect(JSON.parse(String(puts()[0]![1]!.body))).toEqual({
+      namespace: 'privacy',
+      patch: { keepOutOfProviderTraining: true },
+    });
     expect(hasPendingTelemetryOptOut()).toBe(true);
     expect(hasTelemetryConsent()).toBe(false);
-    await act(async () => reconciliation.resolve(json({ shareTelemetry: true, keepOutOfProviderTraining: true })));
+    await act(async () =>
+      reconciliation.resolve(json({ shareTelemetry: true, keepOutOfProviderTraining: true })),
+    );
     await waitFor(() => expect(training()).toBeEnabled());
     expect(training()).toHaveAttribute('aria-checked', 'true');
     expect(hasPendingTelemetryOptOut()).toBe(true);
@@ -227,7 +284,8 @@ describe('owned privacy preference persistence', () => {
   });
 
   it('settles pending denial on authoritative false reconciliation and permits later passive true recovery', async () => {
-    fetchMock.mockResolvedValueOnce(json({ shareTelemetry: true }))
+    fetchMock
+      .mockResolvedValueOnce(json({ shareTelemetry: true }))
       .mockResolvedValueOnce(json({ shareTelemetry: false }))
       .mockResolvedValueOnce(json({ shareTelemetry: false }))
       .mockResolvedValueOnce(json({ shareTelemetry: true }));
@@ -272,7 +330,9 @@ describe('owned privacy preference persistence', () => {
 
   it('does not grant, publish or reconcile a late receipt after unmount', async () => {
     const pending = deferred<Response>();
-    fetchMock.mockResolvedValueOnce(json({ shareTelemetry: false })).mockReturnValueOnce(pending.promise);
+    fetchMock
+      .mockResolvedValueOnce(json({ shareTelemetry: false }))
+      .mockReturnValueOnce(pending.promise);
     const event = vi.fn();
     window.addEventListener('agi:preference-namespace-saved', event);
     const mounted = render(<PrivacySection />);
@@ -287,3 +347,6 @@ describe('owned privacy preference persistence', () => {
     window.removeEventListener('agi:preference-namespace-saved', event);
   });
 });
+
+type MockedModule0 = typeof import('@/lib/client/csrf');
+type MockedModule1 = typeof import('@agiworkforce/ui');

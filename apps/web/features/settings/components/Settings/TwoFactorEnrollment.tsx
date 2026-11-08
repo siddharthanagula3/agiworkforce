@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import {
   Alert,
@@ -19,10 +19,19 @@ import { Check, Copy, Download, Printer, ShieldCheck, ShieldOff } from 'lucide-r
 import type { TwoFactorStatus } from '@features/settings/services/user-preferences';
 import { isStepUpCancelled } from '@/features/auth/step-up-fetch';
 import { useStepUp } from '@features/settings/hooks/useStepUp';
-import { createRequestAuthority, type RequestAuthority, type SessionAuthority } from '@/lib/identity/request-authority';
+import {
+  createRequestAuthority,
+  type RequestAuthority,
+  type SessionAuthority,
+} from '@/lib/identity/request-authority';
 import { useSessionSnapshot } from '@/lib/identity/useSessionSnapshot';
 import { invalidateMfaReaders } from '@features/settings/hooks/use-mfa-readers';
-import { readTwoFactorStatus, sendTwoFactorMutation, readTwoFactorReceipt, type TwoFactorAction } from '../../services/two-factor-client';
+import {
+  readTwoFactorStatus,
+  sendTwoFactorMutation,
+  readTwoFactorReceipt,
+  type TwoFactorAction,
+} from '../../services/two-factor-client';
 
 type Stage =
   | { name: 'idle' }
@@ -50,9 +59,16 @@ async function renderQrDataUri(otpauthUrl: string): Promise<string | null> {
   }
 }
 
-const UNCERTAIN = 'We could not confirm the complete two-factor change outcome. Your authenticator or backup codes may have changed. Check your sign-in settings before another change. Missing new backup codes cannot be recovered.';
+const UNCERTAIN =
+  'We could not confirm the complete two-factor change outcome. Your authenticator or backup codes may have changed. Check your sign-in settings before another change. Missing new backup codes cannot be recovered.';
 type Owner = { session: SessionAuthority; id: number; pending: boolean; isCurrent: () => boolean };
-type Intent = { generation: object; action: TwoFactorAction; dispatched: boolean; started: boolean; request: RequestAuthority };
+type Intent = {
+  generation: object;
+  action: TwoFactorAction;
+  dispatched: boolean;
+  started: boolean;
+  request: RequestAuthority;
+};
 
 export function TwoFactorEnrollmentPanel({ active = true }: { active?: boolean }) {
   const capture = useSessionSnapshot();
@@ -63,37 +79,60 @@ export function TwoFactorEnrollmentPanel({ active = true }: { active?: boolean }
   const [, redraw] = useState(0);
   admission.current = active;
   if (slot.current && (!active || !slot.current.session.isCurrent())) {
-    if (slot.current.pending && slot.current.session.isCurrent()) uncertainty.current = slot.current.session;
+    if (slot.current.pending && slot.current.session.isCurrent())
+      uncertainty.current = slot.current.session;
     slot.current = null;
   }
   if (uncertainty.current && !uncertainty.current.isCurrent()) uncertainty.current = null;
   if (active && !slot.current) {
     const session = capture();
     if (session) {
-      const owner: Owner = { session, id: ++sequence.current, pending: false,
-        isCurrent: () => admission.current && slot.current === owner && session.isCurrent() };
+      const owner: Owner = {
+        session,
+        id: ++sequence.current,
+        pending: false,
+        isCurrent: () => admission.current && slot.current === owner && session.isCurrent(),
+      };
       slot.current = owner;
     }
   }
   const owner = slot.current;
-  const replace = (uncertain = false) => {
-    if (!owner || slot.current !== owner) return;
-    if (uncertain && owner.session.isCurrent()) uncertainty.current = owner.session;
-    slot.current = null;
-    redraw((value) => value + 1);
-  };
+  const replace = useCallback(
+    (uncertain = false) => {
+      if (!owner || slot.current !== owner) return;
+      if (uncertain && owner.session.isCurrent()) uncertainty.current = owner.session;
+      slot.current = null;
+      redraw((value) => value + 1);
+    },
+    [owner],
+  );
   if (!active) return null;
   if (!owner) return <p role="status">Sign in to manage your authenticator app.</p>;
-  return <OwnedTwoFactorEnrollment key={owner.id} owner={owner} blocked={uncertainty.current !== null}
-    replace={replace} acknowledge={() => {
-      if (!owner.isCurrent()) return;
-      uncertainty.current = null;
-      replace();
-    }} />;
+  return (
+    <OwnedTwoFactorEnrollment
+      key={owner.id}
+      owner={owner}
+      blocked={uncertainty.current !== null}
+      replace={replace}
+      acknowledge={() => {
+        if (!owner.isCurrent()) return;
+        uncertainty.current = null;
+        replace();
+      }}
+    />
+  );
 }
 
-function OwnedTwoFactorEnrollment({ owner, blocked, replace, acknowledge }: {
-  owner: Owner; blocked: boolean; replace: (uncertain?: boolean) => void; acknowledge: () => void;
+function OwnedTwoFactorEnrollment({
+  owner,
+  blocked,
+  replace,
+  acknowledge,
+}: {
+  owner: Owner;
+  blocked: boolean;
+  replace: (uncertain?: boolean) => void;
+  acknowledge: () => void;
 }) {
   const [status, setStatus] = useState<TwoFactorStatus | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
@@ -106,9 +145,21 @@ function OwnedTwoFactorEnrollment({ owner, blocked, replace, acknowledge }: {
   const [copied, setCopied] = useState<'secret' | 'codes' | null>(null);
   const [printError, setPrintError] = useState<string | null>(null);
   const printFrameRef = useRef<HTMLIFrameElement | null>(null);
-  const lane = useMemo(() => ({ active: false, generation: {} as object, intent: null as Intent | null,
-    requests: new Set<RequestAuthority>(), stage, status: null as TwoFactorStatus | null, statusRead: 0 }), []);
-  const reconcileOwner = () => {
+  const [lane] = useState(() => ({
+    active: false,
+    generation: {} as object,
+    intent: null as Intent | null,
+    requests: new Set<RequestAuthority>(),
+    stage,
+    initialStage: stage,
+    status: null as TwoFactorStatus | null,
+    statusRead: 0,
+  }));
+  const removePrintFrame = useCallback(() => {
+    printFrameRef.current?.remove();
+    printFrameRef.current = null;
+  }, []);
+  const reconcileOwner = useCallback(() => {
     if (!lane.active || owner.session.isCurrent()) return;
     lane.active = false;
     for (const request of lane.requests) request.retire();
@@ -118,20 +169,17 @@ function OwnedTwoFactorEnrollment({ owner, blocked, replace, acknowledge }: {
     lane.stage = { name: 'idle' };
     removePrintFrame();
     replace();
-  };
-  const current = () => {
+  }, [lane, owner, removePrintFrame, replace]);
+  const current = useCallback(() => {
     if (!lane.active) return false;
     if (owner.isCurrent()) return true;
     reconcileOwner();
     return false;
-  };
-  const owns = (intent: Intent) => current() && lane.intent === intent && lane.generation === intent.generation;
+  }, [lane, owner, reconcileOwner]);
+  const owns = (intent: Intent) =>
+    current() && lane.intent === intent && lane.generation === intent.generation;
   const { withStepUp, dialog: stepUpDialog } = useStepUp();
   const { confirm, dialog: confirmDialog } = useConfirmAction();
-  const removePrintFrame = () => {
-    printFrameRef.current?.remove();
-    printFrameRef.current = null;
-  };
   const changeStage = (next: Stage) => {
     if (!current()) return;
     lane.stage = next;
@@ -143,12 +191,15 @@ function OwnedTwoFactorEnrollment({ owner, blocked, replace, acknowledge }: {
     setPrintError(null);
     setAcknowledged(false);
   };
-  const refreshStatus = async () => {
+  const refreshStatus = useCallback(async () => {
     if (!current()) return;
     lane.status = null;
     setStatus(null);
     const version = ++lane.statusRead;
-    const request = createRequestAuthority(owner.session, () => current() && lane.statusRead === version);
+    const request = createRequestAuthority(
+      owner.session,
+      () => current() && lane.statusRead === version,
+    );
     lane.requests.add(request);
     try {
       const result = await readTwoFactorStatus(request);
@@ -162,12 +213,16 @@ function OwnedTwoFactorEnrollment({ owner, blocked, replace, acknowledge }: {
         setStatus(null);
         setStatusError('Your two-factor status could not be loaded.');
       }
-    } finally { lane.requests.delete(request); request.retire(); reconcileOwner(); }
-  };
+    } finally {
+      lane.requests.delete(request);
+      request.retire();
+      reconcileOwner();
+    }
+  }, [current, lane, owner, reconcileOwner]);
   useLayoutEffect(() => {
     lane.active = true;
     lane.generation = {};
-    lane.stage = stage;
+    lane.stage = lane.initialStage;
     const retire = () => {
       lane.active = false;
       for (const request of lane.requests) request.retire();
@@ -178,11 +233,17 @@ function OwnedTwoFactorEnrollment({ owner, blocked, replace, acknowledge }: {
       removePrintFrame();
     };
     const stop = owner.session.subscribe?.(() => {
-      if (!owner.isCurrent()) { retire(); replace(); }
+      if (!owner.isCurrent()) {
+        retire();
+        replace();
+      }
     });
     void refreshStatus();
-    return () => { retire(); stop?.(); };
-  }, [lane, owner]);
+    return () => {
+      retire();
+      stop?.();
+    };
+  }, [lane, owner, removePrintFrame, replace, refreshStatus]);
 
   useEffect(() => {
     if (stage.name !== 'enrolling') return;
@@ -190,8 +251,10 @@ function OwnedTwoFactorEnrollment({ owner, blocked, replace, acknowledge }: {
     void renderQrDataUri(stage.otpauthUrl).then((uri) => {
       if (!retired && current() && lane.stage === stage) setQrDataUri(uri);
     });
-    return () => { retired = true; };
-  }, [stage, lane, owner]);
+    return () => {
+      retired = true;
+    };
+  }, [stage, lane, current]);
 
   const resetFlow = () => {
     if (!current() || lane.intent || lane.stage !== stage) return;
@@ -203,7 +266,9 @@ function OwnedTwoFactorEnrollment({ owner, blocked, replace, acknowledge }: {
     try {
       await navigator.clipboard.writeText(text);
       if (current() && lane.stage === stage) setCopied(what);
-    } catch { if (current() && lane.stage === stage) setCopied(null); }
+    } catch {
+      if (current() && lane.stage === stage) setCopied(null);
+    }
   };
   const release = (intent: Intent) => {
     if (!owns(intent)) return;
@@ -224,10 +289,20 @@ function OwnedTwoFactorEnrollment({ owner, blocked, replace, acknowledge }: {
       setActionError('Enter the current 6-digit code from your authenticator app.');
       return;
     }
-    const intent: Intent = { generation: lane.generation, action, dispatched: false, started: false,
-      request: createRequestAuthority(owner.session, () => owns(intent), () => {
-        intent.dispatched = true; owner.pending = true;
-      }) };
+    const intent: Intent = {
+      generation: lane.generation,
+      action,
+      dispatched: false,
+      started: false,
+      request: createRequestAuthority(
+        owner.session,
+        () => owns(intent),
+        () => {
+          intent.dispatched = true;
+          owner.pending = true;
+        },
+      ),
+    };
     lane.intent = intent;
     setBusy(true);
     setActionError(null);
@@ -235,20 +310,37 @@ function OwnedTwoFactorEnrollment({ owner, blocked, replace, acknowledge }: {
       if (!owns(intent) || intent.started) return;
       intent.started = true;
       try {
-        const send = (headers: Record<string, string>) => sendTwoFactorMutation(intent.request, action, headers, draft);
-        const response = action === 'verify' ? await send({}) : await withStepUp(send, null, {
-          authority: intent.request, onStepUpRequired: () => {
-            if (owns(intent)) { intent.dispatched = false; owner.pending = false; }
-          },
-        });
+        const send = (headers: Record<string, string>) =>
+          sendTwoFactorMutation(intent.request, action, headers, draft);
+        const response =
+          action === 'verify'
+            ? await send({})
+            : await withStepUp(send, null, {
+                authority: intent.request,
+                onStepUpRequired: () => {
+                  if (owns(intent)) {
+                    intent.dispatched = false;
+                    owner.pending = false;
+                  }
+                },
+              });
         intent.request.assertCurrent();
         const receipt = await readTwoFactorReceipt(intent.request, response, action);
         intent.request.assertCurrent();
         owner.pending = false;
         intent.dispatched = false;
-        if ('secret' in receipt) changeStage({ name: 'enrolling', secret: receipt.secret, otpauthUrl: receipt.otpauth_url });
-        else if ('backup_codes' in receipt) changeStage({ name: 'backup-codes', codes: receipt.backup_codes,
-          reason: action === 'verify' ? 'enabled' : 'regenerated' });
+        if ('secret' in receipt)
+          changeStage({
+            name: 'enrolling',
+            secret: receipt.secret,
+            otpauthUrl: receipt.otpauth_url,
+          });
+        else if ('backup_codes' in receipt)
+          changeStage({
+            name: 'backup-codes',
+            codes: receipt.backup_codes,
+            reason: action === 'verify' ? 'enabled' : 'regenerated',
+          });
         else changeStage({ name: 'idle' });
         if (current()) invalidateMfaReaders(owner.session);
         release(intent);
@@ -265,14 +357,30 @@ function OwnedTwoFactorEnrollment({ owner, blocked, replace, acknowledge }: {
       }
     };
     if (action === 'disable' || action === 'regenerate' || action === 'verify') {
-      confirm({ title: action === 'verify' ? 'Enable two-factor authentication?' : action === 'disable' ? 'Turn off two-factor authentication?' : 'Replace your backup codes?',
-        description: action === 'verify'
-          ? 'Sign-in will require your authenticator or a backup code. Save the backup codes shown next; they cannot be recovered if lost. This security change may also sign out sessions and revoke linked-device credentials.'
-          : action === 'disable'
-          ? 'Your authenticator and backup codes will stop protecting sign-in. You will need a new setup to enable them again. This security change may also sign out sessions and revoke linked-device credentials.'
-          : 'Every previous backup code will stop working. The new codes are shown only once and cannot be recovered if lost. This security change may also sign out sessions and revoke linked-device credentials.',
-        confirmLabel: action === 'verify' ? 'Enable two-factor' : action === 'disable' ? 'Turn off two-factor' : 'Replace backup codes',
-        onConfirm: run, onCancel: () => { if (current() && !intent.started) release(intent); } });
+      confirm({
+        title:
+          action === 'verify'
+            ? 'Enable two-factor authentication?'
+            : action === 'disable'
+              ? 'Turn off two-factor authentication?'
+              : 'Replace your backup codes?',
+        description:
+          action === 'verify'
+            ? 'Sign-in will require your authenticator or a backup code. Save the backup codes shown next; they cannot be recovered if lost. This security change may also sign out sessions and revoke linked-device credentials.'
+            : action === 'disable'
+              ? 'Your authenticator and backup codes will stop protecting sign-in. You will need a new setup to enable them again. This security change may also sign out sessions and revoke linked-device credentials.'
+              : 'Every previous backup code will stop working. The new codes are shown only once and cannot be recovered if lost. This security change may also sign out sessions and revoke linked-device credentials.',
+        confirmLabel:
+          action === 'verify'
+            ? 'Enable two-factor'
+            : action === 'disable'
+              ? 'Turn off two-factor'
+              : 'Replace backup codes',
+        onConfirm: run,
+        onCancel: () => {
+          if (current() && !intent.started) release(intent);
+        },
+      });
     } else void run();
   };
   const handleStartSetup = () => begin('setup');
@@ -288,7 +396,10 @@ function OwnedTwoFactorEnrollment({ owner, blocked, replace, acknowledge }: {
     if (!current() || lane.stage !== stage || stage.name !== 'backup-codes' || blocked) return;
     removePrintFrame();
     const frame = document.createElement('iframe');
-    const remove = () => { frame.remove(); if (printFrameRef.current === frame) printFrameRef.current = null; };
+    const remove = () => {
+      frame.remove();
+      if (printFrameRef.current === frame) printFrameRef.current = null;
+    };
     try {
       frame.setAttribute('sandbox', PRINT_FRAME_SANDBOX);
       frame.title = BACKUP_CODES_PRINT_TITLE;
@@ -300,15 +411,25 @@ function OwnedTwoFactorEnrollment({ owner, blocked, replace, acknowledge }: {
       const doc = frame.contentDocument;
       const view = frame.contentWindow;
       if (!doc || !view) throw new Error('Print unavailable');
-      const heading = doc.createElement('h1'); heading.textContent = BACKUP_CODES_PRINT_TITLE;
-      const note = doc.createElement('p'); note.textContent = BACKUP_CODES_PRINT_NOTE;
+      const heading = doc.createElement('h1');
+      heading.textContent = BACKUP_CODES_PRINT_TITLE;
+      const note = doc.createElement('p');
+      note.textContent = BACKUP_CODES_PRINT_NOTE;
       const list = doc.createElement('ul');
-      for (const code of codes) { const item = doc.createElement('li'); item.textContent = code; list.append(item); }
+      for (const code of codes) {
+        const item = doc.createElement('li');
+        item.textContent = code;
+        list.append(item);
+      }
       doc.title = BACKUP_CODES_PRINT_TITLE;
       doc.body.append(heading, note, list);
       view.addEventListener('afterprint', remove, { once: true });
-      if (!current() || lane.stage !== stage) { remove(); return; }
-      view.focus(); view.print();
+      if (!current() || lane.stage !== stage) {
+        remove();
+        return;
+      }
+      view.focus();
+      view.print();
     } catch {
       remove();
       if (current() && lane.stage === stage) setPrintError(BACKUP_CODES_PRINT_FAILED);
@@ -319,19 +440,36 @@ function OwnedTwoFactorEnrollment({ owner, blocked, replace, acknowledge }: {
     let url: string | null = null;
     try {
       url = URL.createObjectURL(new Blob([`${codes.join('\n')}\n`], { type: 'text/plain' }));
-      const link = document.createElement('a'); link.href = url; link.download = 'agiworkforce-backup-codes.txt';
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'agiworkforce-backup-codes.txt';
       if (current() && lane.stage === stage) link.click();
-    } catch { if (current()) setActionError('The codes could not be downloaded. Copy or print them instead.'); }
-    finally { if (url) URL.revokeObjectURL(url); }
+    } catch {
+      if (current())
+        setActionError('The codes could not be downloaded. Copy or print them instead.');
+    } finally {
+      if (url) URL.revokeObjectURL(url);
+    }
   };
 
   const enabled = status?.enabled === true;
   const enrollmentAvailable = status?.enrollmentAvailable === true;
   if (!owner.isCurrent()) return null;
-  if (blocked) return <Alert variant="warning"><AlertDescription>{UNCERTAIN}</AlertDescription>
-    <Button type="button" onClick={() => { if (current()) acknowledge(); }}>I understand; allow another action</Button>
-    <p>This only clears the local warning. It does not confirm recovery or undo a change.</p>
-  </Alert>;
+  if (blocked)
+    return (
+      <Alert variant="warning">
+        <AlertDescription>{UNCERTAIN}</AlertDescription>
+        <Button
+          type="button"
+          onClick={() => {
+            if (current()) acknowledge();
+          }}
+        >
+          I understand; allow another action
+        </Button>
+        <p>This only clears the local warning. It does not confirm recovery or undo a change.</p>
+      </Alert>
+    );
   return (
     <Card className="border-border bg-card">
       <CardHeader>
@@ -347,10 +485,10 @@ function OwnedTwoFactorEnrollment({ owner, blocked, replace, acknowledge }: {
           {status === null
             ? 'Your current authenticator status has not been confirmed.'
             : enabled
-            ? 'Two-factor authentication is on. Every sign-in asks for a code from your authenticator app, and so does turning it off or replacing your backup codes.'
-            : enrollmentAvailable
-              ? 'Add a time-based one-time code (TOTP) from an authenticator app. Every sign-in then asks for a code from it.'
-              : 'Authenticator apps and backup codes are temporarily unavailable. Your password, passkeys and the codes we email you still protect your account.'}
+              ? 'Two-factor authentication is on. Every sign-in asks for a code from your authenticator app, and so does turning it off or replacing your backup codes.'
+              : enrollmentAvailable
+                ? 'Add a time-based one-time code (TOTP) from an authenticator app. Every sign-in then asks for a code from it.'
+                : 'Authenticator apps and backup codes are temporarily unavailable. Your password, passkeys and the codes we email you still protect your account.'}
         </CardDescription>
       </CardHeader>
 
@@ -442,7 +580,9 @@ function OwnedTwoFactorEnrollment({ owner, blocked, replace, acknowledge }: {
               <input
                 type="checkbox"
                 checked={acknowledged}
-                onChange={(event) => { if (current() && lane.stage === stage) setAcknowledged(event.target.checked); }}
+                onChange={(event) => {
+                  if (current() && lane.stage === stage) setAcknowledged(event.target.checked);
+                }}
               />
               I have saved these backup codes somewhere safe
             </label>
@@ -515,7 +655,10 @@ function OwnedTwoFactorEnrollment({ owner, blocked, replace, acknowledge }: {
                 maxLength={6}
                 placeholder="123456"
                 value={code}
-                onChange={(event) => { if (current() && lane.stage === stage && !lane.intent) setCode(event.target.value); }}
+                onChange={(event) => {
+                  if (current() && lane.stage === stage && !lane.intent)
+                    setCode(event.target.value);
+                }}
                 className="max-w-[10rem] border-border bg-background font-mono text-foreground"
               />
               <p className="text-xs text-muted-foreground">

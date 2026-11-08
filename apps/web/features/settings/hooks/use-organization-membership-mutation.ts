@@ -1,6 +1,6 @@
 'use client';
 
-import { useLayoutEffect, useMemo, useState, type ReactElement } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useState, type ReactElement } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   MANAGED_CLOUD_ORGANIZATION_HEADER,
@@ -66,10 +66,12 @@ export interface WorkspaceMembershipMutation<Input, Receipt> {
 }
 
 export type LeaveOrganizationMutation = WorkspaceMembershipMutation<
-  LeaveOrganizationVariables, ManagedCloudWorkspaceLeaveReceipt
+  LeaveOrganizationVariables,
+  ManagedCloudWorkspaceLeaveReceipt
 >;
 export type TransferOwnershipMutation = WorkspaceMembershipMutation<
-  TransferOwnershipVariables, ManagedCloudWorkspaceOwnershipTransferReceipt
+  TransferOwnershipVariables,
+  ManagedCloudWorkspaceOwnershipTransferReceipt
 >;
 
 interface MembershipIntent<Input, Receipt> {
@@ -86,25 +88,33 @@ interface MembershipIntent<Input, Receipt> {
   release: () => void;
 }
 
-const UNKNOWN_OUTCOME = 'We could not confirm whether this workspace action completed. Reload to check your workspace before trying again. Reloading will not repeat the action.';
+const UNKNOWN_OUTCOME =
+  'We could not confirm whether this workspace action completed. Reload to check your workspace before trying again. Reloading will not repeat the action.';
 
 async function readRefusal(response: Response): Promise<Error> {
-  const body = await response.json().catch(() => null) as {
+  const body = (await response.json().catch(() => null)) as {
     error?: string | { message?: unknown };
   } | null;
   const message = typeof body?.error === 'string' ? body.error : body?.error?.message;
-  return new Error(toUserMessage(
-    Object.assign(new Error(typeof message === 'string' ? message : ''), { status: response.status }),
-    'The workspace action was refused. Please try again.',
-  ));
+  return new Error(
+    toUserMessage(
+      Object.assign(new Error(typeof message === 'string' ? message : ''), {
+        status: response.status,
+      }),
+      'The workspace action was refused. Please try again.',
+    ),
+  );
 }
 
-function useWorkspaceMembershipMutation<Input extends { organizationId: string }, Receipt>(config: {
-  path: string;
-  method: 'DELETE' | 'POST';
-  body: (input: Input) => unknown;
-  receipt: (body: unknown, input: Input, accountId: string) => Receipt;
-}, active: boolean): WorkspaceMembershipMutation<Input, Receipt> {
+function useWorkspaceMembershipMutation<Input extends { organizationId: string }, Receipt>(
+  config: {
+    path: string;
+    method: 'DELETE' | 'POST';
+    body: (input: Input) => unknown;
+    receipt: (body: unknown, input: Input, accountId: string) => Receipt;
+  },
+  active: boolean,
+): WorkspaceMembershipMutation<Input, Receipt> {
   const queryClient = useQueryClient();
   const workspaces = useAccountWorkspaces();
   const capture = useSessionSnapshot();
@@ -113,11 +123,22 @@ function useWorkspaceMembershipMutation<Input extends { organizationId: string }
   const scopeKey = owner?.scopeKey;
   const organizationId = workspaces.data?.activeOrganizationId ?? null;
   const accountId = workspaces.data?.accountId ?? null;
-  const workspace = workspaces.data?.workspaces.find((candidate) =>
-    candidate.kind === 'organization' && candidate.organizationId === organizationId);
+  const workspace = workspaces.data?.workspaces.find(
+    (candidate) => candidate.kind === 'organization' && candidate.organizationId === organizationId,
+  );
   const { withStepUp, dialog } = useStepUp();
   type Intent = MembershipIntent<Input, Receipt>;
-  const lane = useMemo(() => ({ active: false, enabled: active, incarnation: 0, accountId: null as string | null, generation: {} as object, intent: null as Intent | null }), []);
+  const lane = useMemo(
+    () => ({
+      active: false,
+      enabled: false,
+      incarnation: 0,
+      accountId: null as string | null,
+      generation: {} as object,
+      intent: null as Intent | null,
+    }),
+    [],
+  );
   lane.enabled = active;
   if (workspaces.data && lane.accountId !== accountId) {
     lane.accountId = accountId;
@@ -130,19 +151,30 @@ function useWorkspaceMembershipMutation<Input extends { organizationId: string }
     error: Error | null;
     status: 'idle' | 'pending' | 'success' | 'error';
   }>({ intent: null, error: null, status: 'idle' });
-  const current = (intent: Intent) => lane.active && lane.enabled && lane.generation === intent.generation &&
-    lane.intent === intent && lane.accountId === intent.accountId && workspaceOwnerIsCurrent(intent.owner, intent.epoch);
-  const releaseTransition = (intent: Intent, uncertain: boolean) => {
+  const current = useCallback(
+    (intent: Intent) =>
+      lane.active &&
+      lane.enabled &&
+      lane.generation === intent.generation &&
+      lane.intent === intent &&
+      lane.accountId === intent.accountId &&
+      workspaceOwnerIsCurrent(intent.owner, intent.epoch),
+    [lane],
+  );
+  const releaseTransition = useCallback((intent: Intent, uncertain: boolean) => {
     if (!intent.transitioned) return;
     intent.transitioned = false;
     finishWorkspaceSwitch(intent.owner, intent.epoch, uncertain);
-  };
-  const retire = (intent: Intent) => {
-    if (lane.intent === intent) lane.intent = null;
-    intent.release();
-    intent.request.retire();
-    releaseTransition(intent, intent.dispatched);
-  };
+  }, []);
+  const retire = useCallback(
+    (intent: Intent) => {
+      if (lane.intent === intent) lane.intent = null;
+      intent.release();
+      intent.request.retire();
+      releaseTransition(intent, intent.dispatched);
+    },
+    [lane, releaseTransition],
+  );
   useLayoutEffect(() => {
     lane.active = active;
     lane.incarnation += 1;
@@ -160,14 +192,14 @@ function useWorkspaceMembershipMutation<Input extends { organizationId: string }
       lane.active = false;
       if (lane.intent) retire(lane.intent);
     };
-  }, [lane, active]);
+  }, [lane, active, current, retire]);
   useLayoutEffect(() => {
     const intent = lane.intent;
     if (intent && !current(intent)) {
       retire(intent);
       setView({ intent: null, error: null, status: 'idle' });
     }
-  }, [lane, accountId, owner]);
+  }, [lane, accountId, owner, current, retire]);
 
   const mutation = useMutation<Receipt, Error, Intent>({
     retry: false,
@@ -176,24 +208,30 @@ function useWorkspaceMembershipMutation<Input extends { organizationId: string }
       const { request, input } = intent;
       try {
         request.assertCurrent();
-        const response = await withStepUp(async (headers) => {
-          request.assertCurrent();
-          const csrfToken = await getCsrfToken();
-          request.assertCurrent();
-          return request.fetch(config.path, {
-            method: config.method,
-            headers: {
-              ...headers,
-              'Content-Type': 'application/json',
-              'x-csrf-token': csrfToken,
-              [MANAGED_CLOUD_ORGANIZATION_HEADER]: input.organizationId,
+        const response = await withStepUp(
+          async (headers) => {
+            request.assertCurrent();
+            const csrfToken = await getCsrfToken();
+            request.assertCurrent();
+            return request.fetch(config.path, {
+              method: config.method,
+              headers: {
+                ...headers,
+                'Content-Type': 'application/json',
+                'x-csrf-token': csrfToken,
+                [MANAGED_CLOUD_ORGANIZATION_HEADER]: input.organizationId,
+              },
+              body: JSON.stringify(config.body(input)),
+            });
+          },
+          input.organizationId,
+          {
+            authority: request,
+            onStepUpRequired: () => {
+              intent.dispatched = false;
             },
-            body: JSON.stringify(config.body(input)),
-          });
-        }, input.organizationId, {
-          authority: request,
-          onStepUpRequired: () => { intent.dispatched = false; },
-        });
+          },
+        );
         request.assertCurrent();
         if (!response.ok) throw await readRefusal(response);
         const body: unknown = await response.json();
@@ -213,9 +251,15 @@ function useWorkspaceMembershipMutation<Input extends { organizationId: string }
           } else {
             intent.dispatched = false;
             retire(intent);
-            setView({ intent, error: isStepUpCancelled(error) ? null :
-              new Error(toUserMessage(error, 'The workspace action could not be started. Try again.')),
-              status: 'error' });
+            setView({
+              intent,
+              error: isStepUpCancelled(error)
+                ? null
+                : new Error(
+                    toUserMessage(error, 'The workspace action could not be started. Try again.'),
+                  ),
+              status: 'error',
+            });
           }
         }
         throw error;
@@ -223,27 +267,57 @@ function useWorkspaceMembershipMutation<Input extends { organizationId: string }
     },
   });
 
-  const admitted = () => lane.active && lane.enabled && lane.incarnation === renderedIncarnation && !!owner && epoch !== undefined &&
-    !!organizationId && !!accountId && lane.accountId === accountId && owner.phase === 'admitted' && owner.scopeKey === scopeKey &&
+  const admitted = () =>
+    lane.active &&
+    lane.enabled &&
+    lane.incarnation === renderedIncarnation &&
+    !!owner &&
+    epoch !== undefined &&
+    !!organizationId &&
+    !!accountId &&
+    lane.accountId === accountId &&
+    owner.phase === 'admitted' &&
+    owner.scopeKey === scopeKey &&
     workspaceOwnerIsCurrent(owner, epoch);
   const prepare = (input: Input): PreparedWorkspaceMembershipAction | null => {
-    if (!admitted() || !owner || !accountId || epoch === undefined || input.organizationId !== organizationId) return null;
+    if (
+      !admitted() ||
+      !owner ||
+      !accountId ||
+      epoch === undefined ||
+      input.organizationId !== organizationId
+    )
+      return null;
     if (lane.intent) {
       if (lane.intent.phase !== 'confirming') return null;
       retire(lane.intent);
     }
-    let intent: Intent;
-    const request = createRequestAuthority(owner.session, () => current(intent), () => {
-      if (intent.phase === 'writing') intent.dispatched = true;
-    });
-    intent = { owner, epoch, generation: lane.generation, input: { ...input }, accountId, request,
-      phase: 'confirming', transitioned: false, dispatched: false, release: () => undefined };
+    const request = createRequestAuthority(
+      owner.session,
+      () => current(intent),
+      () => {
+        if (intent.phase === 'writing') intent.dispatched = true;
+      },
+    );
+    const intent: Intent = {
+      owner,
+      epoch,
+      generation: lane.generation,
+      input: { ...input },
+      accountId,
+      request,
+      phase: 'confirming',
+      transitioned: false,
+      dispatched: false,
+      release: () => undefined,
+    };
     lane.intent = intent;
-    const release = owner.session.subscribe?.(() => {
-      if (lane.intent !== intent || current(intent)) return;
-      retire(intent);
-      if (lane.active) setView({ intent: null, error: null, status: 'idle' });
-    }) ?? (() => undefined);
+    const release =
+      owner.session.subscribe?.(() => {
+        if (lane.intent !== intent || current(intent)) return;
+        retire(intent);
+        if (lane.active) setView({ intent: null, error: null, status: 'idle' });
+      }) ?? (() => undefined);
     if (!current(intent)) {
       release();
       retire(intent);
@@ -274,15 +348,23 @@ function useWorkspaceMembershipMutation<Input extends { organizationId: string }
           if (!intent.transitioned) intent.epoch = expectedEpoch;
           const showError = current(intent);
           retire(intent);
-          if (showError) setView({ intent,
-            error: new Error(toUserMessage(error, 'Workspaces are still resolving. Try again.')),
-            status: 'error' });
+          if (showError)
+            setView({
+              intent,
+              error: new Error(toUserMessage(error, 'Workspaces are still resolving. Try again.')),
+              status: 'error',
+            });
         }
       },
     };
   };
   const displayed = view.intent;
-  const ownsView = !!displayed && lane.active && lane.enabled && displayed.generation === lane.generation && lane.accountId === displayed.accountId &&
+  const ownsView =
+    !!displayed &&
+    lane.active &&
+    lane.enabled &&
+    displayed.generation === lane.generation &&
+    lane.accountId === displayed.accountId &&
     workspaceOwnerIsCurrent(displayed.owner, displayed.epoch);
   const activeIntent = ownsView && lane.intent === displayed ? displayed : null;
   const continueAfterReceipt = async () => {
@@ -297,7 +379,9 @@ function useWorkspaceMembershipMutation<Input extends { organizationId: string }
     intent.phase = 'finishing';
     setView({ intent, error: null, status: 'pending' });
     try {
-      const response = await intent.request.fetch(MANAGED_CLOUD_WORKSPACES_PATH, { cache: 'no-store' });
+      const response = await intent.request.fetch(MANAGED_CLOUD_WORKSPACES_PATH, {
+        cache: 'no-store',
+      });
       if (!response.ok) throw await readRefusal(response);
       const data = ManagedCloudAccountWorkspacesSchema.parse(await response.json());
       intent.request.assertCurrent();
@@ -312,16 +396,28 @@ function useWorkspaceMembershipMutation<Input extends { organizationId: string }
       if (data.accountId !== intent.accountId) {
         throw new Error('The workspace response did not match the confirmed account.');
       }
-      await finalizeWorkspaceSwitch(queryClient, data.activeOrganizationId, intent.request,
-        undefined, intent.accountId);
+      await finalizeWorkspaceSwitch(
+        queryClient,
+        data.activeOrganizationId,
+        intent.request,
+        undefined,
+        intent.accountId,
+      );
     } catch {
       if (!current(intent)) return;
       intent.phase = 'receipt';
-      setView({ intent, error: new Error('The action completed, but the workspace could not be refreshed. Continue again to refresh without repeating the action.'), status: 'success' });
+      setView({
+        intent,
+        error: new Error(
+          'The action completed, but the workspace could not be refreshed. Continue again to refresh without repeating the action.',
+        ),
+        status: 'success',
+      });
     }
   };
   return {
-    ownerKey: owner && epoch !== undefined ? `${owner.incarnation}:${epoch}:${lane.incarnation}` : null,
+    ownerKey:
+      owner && epoch !== undefined ? `${owner.incarnation}:${epoch}:${lane.incarnation}` : null,
     organizationId,
     workspaceName: workspace?.name ?? null,
     currentUserRole: workspace?.role ?? null,
@@ -340,34 +436,46 @@ function useWorkspaceMembershipMutation<Input extends { organizationId: string }
 }
 
 export function useLeaveOrganization(active = true): LeaveOrganizationMutation {
-  return useWorkspaceMembershipMutation({
-    path: '/api/settings/organization/leave',
-    method: 'DELETE',
-    body: (input: LeaveOrganizationVariables) => input.successorUserId
-      ? { successorUserId: input.successorUserId } : {},
-    receipt: (body, input, accountId) => {
-      const receipt = ManagedCloudWorkspaceLeaveReceiptSchema.parse(body);
-      if (receipt.organizationId !== input.organizationId || receipt.userId !== accountId ||
-          receipt.successorUserId !== (input.successorUserId ?? null)) {
-        throw new Error('The leave receipt did not match the confirmed workspace action.');
-      }
-      return receipt;
+  return useWorkspaceMembershipMutation(
+    {
+      path: '/api/settings/organization/leave',
+      method: 'DELETE',
+      body: (input: LeaveOrganizationVariables) =>
+        input.successorUserId ? { successorUserId: input.successorUserId } : {},
+      receipt: (body, input, accountId) => {
+        const receipt = ManagedCloudWorkspaceLeaveReceiptSchema.parse(body);
+        if (
+          receipt.organizationId !== input.organizationId ||
+          receipt.userId !== accountId ||
+          receipt.successorUserId !== (input.successorUserId ?? null)
+        ) {
+          throw new Error('The leave receipt did not match the confirmed workspace action.');
+        }
+        return receipt;
+      },
     },
-  }, active);
+    active,
+  );
 }
 
 export function useTransferOrganizationOwnership(active = true): TransferOwnershipMutation {
-  return useWorkspaceMembershipMutation({
-    path: '/api/settings/organization/transfer-ownership',
-    method: 'POST',
-    body: (input: TransferOwnershipVariables) => input,
-    receipt: (body, input) => {
-      const receipt = ManagedCloudWorkspaceOwnershipTransferReceiptSchema.parse(body);
-      if (receipt.organizationId !== input.organizationId || receipt.ownerUserId !== input.toUserId ||
-          receipt.previousOwnerRole !== input.outgoingOwnerRole) {
-        throw new Error('The transfer receipt did not match the confirmed workspace action.');
-      }
-      return receipt;
+  return useWorkspaceMembershipMutation(
+    {
+      path: '/api/settings/organization/transfer-ownership',
+      method: 'POST',
+      body: (input: TransferOwnershipVariables) => input,
+      receipt: (body, input) => {
+        const receipt = ManagedCloudWorkspaceOwnershipTransferReceiptSchema.parse(body);
+        if (
+          receipt.organizationId !== input.organizationId ||
+          receipt.ownerUserId !== input.toUserId ||
+          receipt.previousOwnerRole !== input.outgoingOwnerRole
+        ) {
+          throw new Error('The transfer receipt did not match the confirmed workspace action.');
+        }
+        return receipt;
+      },
     },
-  }, active);
+    active,
+  );
 }

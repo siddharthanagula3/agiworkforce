@@ -203,45 +203,60 @@ export function PrivacySection() {
     subscription?.status === 'active' && !isFreeBillingPlanTier(subscription.tier);
   const owner = usePreferenceOwner();
   const capture = usePreferenceView(owner);
-  const lane = useMemo<PrivacyLane>(() => ({ active: false, ready: null, operation: null }), [owner]);
+  const lane = useMemo<PrivacyLane>(
+    () => ({ scope: { owner }, active: false, ready: null, operation: null }),
+    [owner],
+  );
   const [view, setView] = useState<PrivacyView | null>(null);
   const displayed = view?.lane === lane ? view : null;
   const ready = displayed?.ready ?? null;
   const state = displayed?.values ?? defaultPrivacyState();
   const laneCurrent = useCallback(() => lane.active && owner?.isCurrent() === true, [lane, owner]);
 
-  const read = useCallback(async (
-    operation: RequestAuthority,
-    message: string | null = null,
-    acknowledged: boolean = false,
-  ) => {
-    const current = () => lane.operation === operation && operation.isCurrent();
-    try {
-      const snapshot = await readPrivacyPreferences(operation);
-      if (!current()) return;
-      const values = { ...defaultPrivacyState(), ...snapshot.stored };
-      setTelemetryConsentCache(values.shareTelemetry);
-      if (!current()) return;
-      const pendingDenial = hasPendingTelemetryOptOut();
-      if (pendingDenial) values.shareTelemetry = false;
-      lane.ready = snapshot;
-      setView({ lane, ready: snapshot, values, busy: false,
-        message: pendingDenial
-          ? 'Telemetry is off on this browser. Review your account setting before choosing again.'
-          : message,
-        failed: pendingDenial || (message !== null && !acknowledged) });
-    } catch {
-      if (!current()) return;
-      lane.ready = null;
-      setView((previous) => ({ lane, ready: null,
-        values: previous?.lane === lane ? previous.values : defaultPrivacyState(), busy: false,
-        message: `${message ? `${message} ` : ''}The latest privacy settings could not be loaded. Retry loading them.`,
-        failed: true }));
-    } finally {
-      if (lane.operation === operation) lane.operation = null;
-      operation.retire();
-    }
-  }, [lane]);
+  const read = useCallback(
+    async (
+      operation: RequestAuthority,
+      message: string | null = null,
+      acknowledged: boolean = false,
+    ) => {
+      const current = () => lane.operation === operation && operation.isCurrent();
+      try {
+        const snapshot = await readPrivacyPreferences(operation);
+        if (!current()) return;
+        const values = { ...defaultPrivacyState(), ...snapshot.stored };
+        setTelemetryConsentCache(values.shareTelemetry);
+        if (!current()) return;
+        const pendingDenial = hasPendingTelemetryOptOut();
+        if (pendingDenial) values.shareTelemetry = false;
+        lane.ready = snapshot;
+        setView({
+          lane,
+          ready: snapshot,
+          values,
+          busy: false,
+          message: pendingDenial
+            ? 'Telemetry is off on this browser. Review your account setting before choosing again.'
+            : message,
+          failed: pendingDenial || (message !== null && !acknowledged),
+        });
+      } catch {
+        if (!current()) return;
+        lane.ready = null;
+        setView((previous) => ({
+          lane,
+          ready: null,
+          values: previous?.lane === lane ? previous.values : defaultPrivacyState(),
+          busy: false,
+          message: `${message ? `${message} ` : ''}The latest privacy settings could not be loaded. Retry loading them.`,
+          failed: true,
+        }));
+      } finally {
+        if (lane.operation === operation) lane.operation = null;
+        operation.retire();
+      }
+    },
+    [lane],
+  );
 
   const load = useCallback(() => {
     const viewCurrent = capture();
@@ -249,7 +264,14 @@ export function PrivacySection() {
     const operation = createRequestAuthority(owner.session, () => laneCurrent() && viewCurrent());
     lane.operation = operation;
     lane.ready = null;
-    setView({ lane, ready: null, values: defaultPrivacyState(), busy: true, message: null, failed: false });
+    setView({
+      lane,
+      ready: null,
+      values: defaultPrivacyState(),
+      busy: true,
+      message: null,
+      failed: false,
+    });
     void read(operation);
   }, [owner, capture, lane, laneCurrent, read]);
 
@@ -266,14 +288,27 @@ export function PrivacySection() {
 
   async function savePrivacy(key: ToggleKey, value: boolean) {
     const viewCurrent = capture();
-    if (!owner || !laneCurrent() || !viewCurrent() || !ready || lane.ready !== ready || lane.operation) return;
+    if (
+      !owner ||
+      !laneCurrent() ||
+      !viewCurrent() ||
+      !ready ||
+      lane.ready !== ready ||
+      lane.operation
+    )
+      return;
     const operation = createRequestAuthority(owner.session, () => laneCurrent() && viewCurrent());
     lane.operation = operation;
     lane.ready = null;
     if (key === 'shareTelemetry' && !value) requestTelemetryOptOut();
-    setView({ lane, ready: null,
+    setView({
+      lane,
+      ready: null,
       values: key === 'shareTelemetry' && !value ? { ...state, shareTelemetry: false } : state,
-      busy: true, message: null, failed: false });
+      busy: true,
+      message: null,
+      failed: false,
+    });
     let acknowledged = false;
     try {
       await savePrivacyPreference(operation, key, value);
@@ -290,10 +325,13 @@ export function PrivacySection() {
       }
     }
     if (lane.operation !== operation || !operation.isCurrent()) return;
-    await read(operation, acknowledged
-      ? 'Your privacy setting was saved.'
-      : 'We could not confirm whether your change was saved. Review the latest settings before choosing again.',
-    acknowledged);
+    await read(
+      operation,
+      acknowledged
+        ? 'Your privacy setting was saved.'
+        : 'We could not confirm whether your change was saved. Review the latest settings before choosing again.',
+      acknowledged,
+    );
   }
 
   return (
@@ -321,14 +359,24 @@ export function PrivacySection() {
             {displayed?.busy ? 'Updating account settings...' : displayed?.message}
           </SaveStatusLine>
         ) : null}
-        {ready && !displayed?.busy && hasPendingTelemetryOptOut() && ready.stored.shareTelemetry === true ? (
-          <button type="button" onClick={() => void savePrivacy('shareTelemetry', false)}
-            className="mt-2 text-sm underline underline-offset-4">
+        {ready &&
+        !displayed?.busy &&
+        hasPendingTelemetryOptOut() &&
+        ready.stored.shareTelemetry === true ? (
+          <button
+            type="button"
+            onClick={() => void savePrivacy('shareTelemetry', false)}
+            className="mt-2 text-sm underline underline-offset-4"
+          >
             Keep telemetry off for my account
           </button>
         ) : null}
         {displayed?.failed && !ready && !displayed.busy ? (
-          <button type="button" onClick={load} className="mt-2 text-sm underline underline-offset-4">
+          <button
+            type="button"
+            onClick={load}
+            className="mt-2 text-sm underline underline-offset-4"
+          >
             Retry loading
           </button>
         ) : null}

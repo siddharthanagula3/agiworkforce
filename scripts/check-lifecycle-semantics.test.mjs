@@ -664,3 +664,46 @@ test('a hard-delete exclusion needs a reason and goes when erasure reaches the t
     errors.join('\n'),
   );
 });
+
+function importedPredicateReads({
+  declaration = "export const predicate = 'c.deleted_at is null'",
+  imported = 'predicate as scope',
+  signature = '',
+} = {}) {
+  const root = fixture(
+    {},
+    {
+      'apps/web/lib/predicate.ts': declaration,
+      'apps/web/lib/read.ts': `
+      // This comment must not move the template's source offsets.
+      import { ${imported} } from '@/lib/predicate';
+      export async function read(db: DatabaseAdapter ${signature}) {
+        return db.query(\`select c.id from web_conversations c where \${scope}\`);
+      }
+    `,
+    },
+  );
+  return findUnfilteredReads({
+    repoRoot: root,
+    files: ['apps/web/lib/read.ts'],
+    contract: contract(),
+    marked: new Map([['web_conversations', { softDeleted: 'deleted_at' }]]),
+  });
+}
+
+test('an imported literal withdrawal predicate preserves its owner and source offsets', () => {
+  assert.deepEqual(importedPredicateReads(), []);
+});
+for (const [label, options] of [
+  ['mutable', { declaration: "export let predicate = 'c.deleted_at is null'" }],
+  ['private', { declaration: "const predicate = 'c.deleted_at is null'" }],
+  ['type-only', { imported: 'type predicate as scope' }],
+  ['shadowed', { signature: ', scope: string' }],
+  ['opaque', { declaration: 'export const predicate = buildPredicate()' }],
+  ['function', { declaration: "export function predicate() { return 'c.deleted_at is null' }" }],
+  ['quoted marker', { declaration: `export const predicate = "'c.deleted_at is null'"` }],
+]) {
+  test(`an imported ${label} withdrawal predicate cannot hide a read`, () => {
+    assert.equal(importedPredicateReads(options).length, 1);
+  });
+}

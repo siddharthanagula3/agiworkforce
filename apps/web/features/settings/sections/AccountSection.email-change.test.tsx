@@ -15,7 +15,7 @@ const fixture = vi.hoisted(() => ({
 }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: vi.fn() }) }));
 vi.mock('@clerk/nextjs', async (original) => ({
-  ...await original<typeof import('@clerk/nextjs')>(),
+  ...(await original()),
   useClerk: () => ({ signOut: vi.fn() }),
 }));
 vi.mock('../components/EmailAddressChange', () => ({
@@ -26,45 +26,99 @@ vi.mock('../components/EmailAddressChange', () => ({
 }));
 vi.mock('../components/Settings/ApiKeys', () => ({ ApiKeysManager: () => null }));
 vi.mock('../hooks/use-settings-queries', async (original) => ({
-  ...await original<typeof import('../hooks/use-settings-queries')>(),
+  ...(await original<MockedModule0>()),
   useUserActivity: () => ({ data: [], isPending: false, error: null, refetch: vi.fn() }),
   useOrganizationOverview: () => ({ data: undefined }),
-  useDeleteAccount: () => ({ mutate: vi.fn(), reset: vi.fn(), isPending: false, isSuccess: false,
-    error: null, data: undefined, signOutAfterDeletion: vi.fn(async () => {}) }),
-  useAccountDeletionStatus: () => ({ data: NO_PENDING_ACCOUNT_DELETION, isError: false, error: null, refetch: vi.fn() }),
-  useCancelAccountDeletion: () => ({ mutate: vi.fn(), reset: vi.fn(), isPending: false, error: null }),
+  useDeleteAccount: () => ({
+    mutate: vi.fn(),
+    reset: vi.fn(),
+    isPending: false,
+    isSuccess: false,
+    error: null,
+    data: undefined,
+    signOutAfterDeletion: vi.fn(async () => {}),
+  }),
+  useAccountDeletionStatus: () => ({
+    data: NO_PENDING_ACCOUNT_DELETION,
+    isError: false,
+    error: null,
+    refetch: vi.fn(),
+  }),
+  useCancelAccountDeletion: () => ({
+    mutate: vi.fn(),
+    reset: vi.fn(),
+    isPending: false,
+    error: null,
+  }),
 }));
 let client: QueryClient;
-const wrapper = ({ children }: { children: React.ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+const wrapper = ({ children }: { children: React.ReactNode }) => (
+  <QueryClientProvider client={client}>{children}</QueryClientProvider>
+);
 beforeEach(() => {
   useAuthStore.setState({ user: { id: 'product-a', email: 'old@example.com', name: 'Original' } });
   fixture.editor = null;
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   client.setQueryData(queryKeys.settings.accountDeletionStatus(), NO_PENDING_ACCOUNT_DELETION);
-  vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ sessions: [], totalCount: 0 }))));
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response(JSON.stringify({ sessions: [], totalCount: 0 }))),
+  );
 });
-afterEach(() => { cleanup(); client.clear(); useAuthStore.setState(initialAuthState, true); vi.unstubAllGlobals(); });
+afterEach(() => {
+  cleanup();
+  client.clear();
+  useAuthStore.setState(initialAuthState, true);
+  vi.unstubAllGlobals();
+});
 
 describe('account email completion ownership', () => {
   it('merges a confirmed email into the latest matching user, not the captured user', () => {
     render(<AccountSection />, { wrapper });
     fireEvent.click(screen.getByRole('button', { name: 'Change email address' }));
     const complete = fixture.editor!.onChanged;
-    act(() => useAuthStore.setState({ user: { id: 'product-a', email: 'old@example.com', name: 'Updated while waiting', preferredName: 'Latest name', plan: 'pro' } }));
+    act(() =>
+      useAuthStore.setState({
+        user: {
+          id: 'product-a',
+          email: 'old@example.com',
+          name: 'Updated while waiting',
+          preferredName: 'Latest name',
+          plan: 'pro',
+        },
+      }),
+    );
     act(() => complete('new@example.com', { accountId: 'product-a', isCurrent: () => true }));
-    expect(useAuthStore.getState().user).toEqual({ id: 'product-a', email: 'new@example.com', name: 'Updated while waiting', preferredName: 'Latest name', plan: 'pro' });
+    expect(useAuthStore.getState().user).toEqual({
+      id: 'product-a',
+      email: 'new@example.com',
+      name: 'Updated while waiting',
+      preferredName: 'Latest name',
+      plan: 'pro',
+    });
   });
 
-  it.each(['replaced-account', 'signed-out', 'retired'] as const)('ignores a completion for %s', (kind) => {
-    render(<AccountSection />, { wrapper });
-    fireEvent.click(screen.getByRole('button', { name: 'Change email address' }));
-    const complete = fixture.editor!.onChanged;
-    if (kind === 'replaced-account') act(() => useAuthStore.setState({ user: { id: 'product-b', email: 'b@example.com', name: 'B' } }));
-    if (kind === 'signed-out') act(() => useAuthStore.setState({ user: null }));
-    const latest = useAuthStore.getState().user;
-    act(() => complete('new@example.com', { accountId: 'product-a', isCurrent: () => kind !== 'retired' }));
-    expect(useAuthStore.getState().user).toBe(latest);
-  });
+  it.each(['replaced-account', 'signed-out', 'retired'] as const)(
+    'ignores a completion for %s',
+    (kind) => {
+      render(<AccountSection />, { wrapper });
+      fireEvent.click(screen.getByRole('button', { name: 'Change email address' }));
+      const complete = fixture.editor!.onChanged;
+      if (kind === 'replaced-account')
+        act(() =>
+          useAuthStore.setState({ user: { id: 'product-b', email: 'b@example.com', name: 'B' } }),
+        );
+      if (kind === 'signed-out') act(() => useAuthStore.setState({ user: null }));
+      const latest = useAuthStore.getState().user;
+      act(() =>
+        complete('new@example.com', {
+          accountId: 'product-a',
+          isCurrent: () => kind !== 'retired',
+        }),
+      );
+      expect(useAuthStore.getState().user).toBe(latest);
+    },
+  );
 
   it('checks completion currentness again after reading the latest store state', () => {
     render(<AccountSection />, { wrapper });
@@ -80,7 +134,9 @@ describe('account email completion ownership', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Change email address' }));
     const latest = useAuthStore.getState().user;
     expect(fixture.editor!.accountId).toBe('product-a');
-    act(() => fixture.editor!.onChanged('new@example.com', { accountId: 'a', isCurrent: () => true }));
+    act(() =>
+      fixture.editor!.onChanged('new@example.com', { accountId: 'a', isCurrent: () => true }),
+    );
     expect(useAuthStore.getState().user).toBe(latest);
   });
 
@@ -115,3 +171,5 @@ describe('account email completion ownership', () => {
     expect(fixture.editor!.active).toBe(true);
   });
 });
+
+type MockedModule0 = typeof import('../hooks/use-settings-queries');

@@ -1,3 +1,4 @@
+import { ManagedCloudPublishedArtifactPublishResponseSchema } from '@agiworkforce/cloud-contracts';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render } from '@testing-library/react';
 import type { PublishResult } from '@agiworkforce/artifacts';
@@ -104,8 +105,25 @@ function managedDescriptor(): Record<string, unknown> {
   };
 }
 
+function publicationReceipt() {
+  const token = 'abcdefghijklmnopqrstuvwx';
+  return ManagedCloudPublishedArtifactPublishResponseSchema.parse({
+    artifactId: ARTIFACT_ID,
+    token,
+    shareUrl: new URL(`/shared-artifact/${token}`, window.location.origin).href,
+    visibility: 'invited',
+    version: 1,
+    publishedAt: '2026-08-21T00:00:00.000Z',
+    kind: 'html',
+    title: 'Private notes',
+    sandboxed: true,
+    workspace: null,
+  });
+}
+
 async function publishAndCaptureFetch() {
-  const fetchMock = vi.fn(async () => Response.json({}, { status: 201 }));
+  const receipt = publicationReceipt();
+  const fetchMock = vi.fn(async () => Response.json(receipt, { status: 201 }));
   vi.stubGlobal('fetch', fetchMock);
   render(<ArtifactsPanel />);
   const result = await capturedPublish!({ content: 'here is your artifact', versionIndex: 0 });
@@ -208,15 +226,8 @@ describe('ArtifactsPanel · publish honors the conversation trust boundary', () 
     ['an explicit managed label', { metadata: { privacyMode: 'managed' as const } }],
     ['a managed model', { model: MANAGED_MODEL_ID }],
   ])('still publishes an artifact from a conversation with %s', async (_label, overrides) => {
-    const fetchMock = vi.fn(async () =>
-      Response.json(
-        {
-          token: 'bbbbbbbbbbbbbbbbbbbbbbbb',
-          shareUrl: 'https://agiworkforce.com/shared-artifact/bbbbbbbbbbbbbbbbbbbbbbbb',
-          publishedAt: '2026-08-21T00:00:00.000Z',
-        },
-        { status: 201 },
-      ),
+    const fetchMock = vi.fn<typeof fetch>(async () =>
+      Response.json(publicationReceipt(), { status: 201 }),
     );
     vi.stubGlobal('fetch', fetchMock);
     seedConversation([message(MESSAGE_ID, overrides)]);
@@ -224,11 +235,7 @@ describe('ArtifactsPanel · publish honors the conversation trust boundary', () 
     render(<ArtifactsPanel />);
     const result = await capturedPublish!({ content: 'here is your artifact', versionIndex: 0 });
 
-    expect(
-      fetchMock.mock.calls.filter(
-        (call) => (call as unknown as [string, RequestInit | undefined])[1]?.method === 'POST',
-      ),
-    ).toHaveLength(1);
+    expect(fetchMock.mock.calls.filter((call) => call[1]?.method === 'POST')).toHaveLength(1);
     expect(result.kind).toBe('cloud');
   });
 });

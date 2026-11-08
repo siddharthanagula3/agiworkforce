@@ -327,7 +327,10 @@ describe('managed usage request service', () => {
       },
     );
     const db = fakeDb([]);
-    (db.query as ReturnType<typeof vi.fn>).mockRejectedValue(failure);
+    vi.mocked(db.query).mockImplementation(async (sql) => {
+      if (sql.includes('reserve_managed_usage_request_with_limits')) throw failure;
+      return [];
+    });
 
     await expect(
       reserveManagedUsageRequest({

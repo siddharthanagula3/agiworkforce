@@ -21,16 +21,23 @@ vi.mock('@/lib/identity/useSessionSnapshot', () => ({
 
 import { useCloudCodeAuthority } from './use-cloud-code-authority';
 
-beforeEach(() => { identity.current = true; });
+beforeEach(() => {
+  identity.current = true;
+});
 
 describe('managed Code pane authority', () => {
   it('never revives the first StrictMode publication guard', () => {
     const captured: Array<() => boolean> = [];
-    const { result, unmount } = renderHook(() => {
-      const authority = useCloudCodeAuthority();
-      useEffect(() => { captured.push(authority.capture()); }, [authority.capture]);
-      return authority;
-    }, { wrapper: StrictMode });
+    const { result, unmount } = renderHook(
+      () => {
+        const authority = useCloudCodeAuthority();
+        useEffect(() => {
+          captured.push(authority.capture());
+        }, [authority]);
+        return authority;
+      },
+      { wrapper: StrictMode },
+    );
     expect(captured).toHaveLength(2);
     expect(captured[0]!()).toBe(false);
     expect(captured[1]!()).toBe(true);
@@ -42,12 +49,20 @@ describe('managed Code pane authority', () => {
   it('retires pending work only in the disposed pane sharing an injected API', async () => {
     type Listing = Awaited<ReturnType<CloudCodeApi['list']>>;
     const resolveCalls: Array<(value: Listing) => void> = [];
-    const list: CloudCodeApi['list'] = vi.fn(() => new Promise<Listing>((resolve) => {
-      resolveCalls.push(resolve);
-    }));
+    const list: CloudCodeApi['list'] = vi.fn(
+      () =>
+        new Promise<Listing>((resolve) => {
+          resolveCalls.push(resolve);
+        }),
+    );
     const injected = { list } as unknown as CloudCodeApi;
     const value: Listing = {
-      availability: { deploymentEnabled: true, planEntitled: true, planTier: 'pro', maxSessions: 5 },
+      availability: {
+        deploymentEnabled: true,
+        planEntitled: true,
+        planTier: 'pro',
+        maxSessions: 5,
+      },
       sessions: [],
       runtimes: [],
     };
@@ -74,18 +89,27 @@ describe('managed Code pane authority', () => {
     second.unmount();
   });
 
-  it.each(['resolve', 'reject'] as const)('rejects injected late %s after pane disposal', async (outcome) => {
-    let resolve!: (value: unknown) => void;
-    let reject!: (reason: unknown) => void;
-    const list = vi.fn(() => new Promise((done, fail) => { resolve = done; reject = fail; }));
-    const injected = { list } as unknown as CloudCodeApi;
-    const { result, unmount } = renderHook(() => useCloudCodeAuthority(injected));
-    const pending = result.current.api.list();
-    unmount();
-    if (outcome === 'resolve') resolve({ sessions: [] });
-    else reject(new Error('Private failure'));
-    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
-  });
+  it.each(['resolve', 'reject'] as const)(
+    'rejects injected late %s after pane disposal',
+    async (outcome) => {
+      let resolve!: (value: unknown) => void;
+      let reject!: (reason: unknown) => void;
+      const list = vi.fn(
+        () =>
+          new Promise((done, fail) => {
+            resolve = done;
+            reject = fail;
+          }),
+      );
+      const injected = { list } as unknown as CloudCodeApi;
+      const { result, unmount } = renderHook(() => useCloudCodeAuthority(injected));
+      const pending = result.current.api.list();
+      unmount();
+      if (outcome === 'resolve') resolve({ sessions: [] });
+      else reject(new Error('Private failure'));
+      await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    },
+  );
 
   it('latches an observed account mismatch for publication', () => {
     const { result, unmount } = renderHook(() => useCloudCodeAuthority());

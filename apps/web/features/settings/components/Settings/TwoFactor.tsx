@@ -111,154 +111,170 @@ interface PasswordPanelProps {
   onToggleShowConfirmPassword: () => void;
 }
 
-export function PasswordPanel({ passwordForm, isChangePasswordPending, blocked, hasPassword,
-  showNewPassword, showConfirmPassword, error, notice, onPasswordSubmit, onReset, onAcknowledge,
-  onToggleShowNewPassword, onToggleShowConfirmPassword }: PasswordPanelProps) {
+export function PasswordPanel({
+  passwordForm,
+  isChangePasswordPending,
+  blocked,
+  hasPassword,
+  showNewPassword,
+  showConfirmPassword,
+  error,
+  notice,
+  onPasswordSubmit,
+  onReset,
+  onAcknowledge,
+  onToggleShowNewPassword,
+  onToggleShowConfirmPassword,
+}: PasswordPanelProps) {
+  // Both proxy reads must run before the disabled expression can short-circuit.
+  const { isValid, isDirty } = passwordForm.formState;
   return (
-      <div className="border-t border-border pt-6">
-        <Form {...passwordForm}>
-          <form onSubmit={onPasswordSubmit} className="space-y-4">
-            <h4 className="font-medium text-foreground">
-              {hasPassword ? 'Change Password' : 'Set a password'}
-            </h4>
+    <div className="border-t border-border pt-6">
+      <Form {...passwordForm}>
+        <form onSubmit={onPasswordSubmit} className="space-y-4">
+          <h4 className="font-medium text-foreground">
+            {hasPassword ? 'Change Password' : 'Set a password'}
+          </h4>
 
-            {hasPassword ? (
-              <FormField
-                control={passwordForm.control}
-                name="currentPassword"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-sm text-muted-foreground">
-                      Current Password
-                    </FormLabel>
-                    <FormControl>
-                      <Input
-                        {...field}
-                        disabled={isChangePasswordPending || blocked}
-                        type="password"
-                        autoComplete="current-password"
-                        className="border-border bg-background text-foreground"
-                        placeholder="Enter current password"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Your account signs in without a password. You confirm it is you before one is set.
-              </p>
+          {hasPassword ? (
+            <FormField
+              control={passwordForm.control}
+              name="currentPassword"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="text-sm text-muted-foreground">Current Password</FormLabel>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      disabled={isChangePasswordPending || blocked}
+                      type="password"
+                      autoComplete="current-password"
+                      className="border-border bg-background text-foreground"
+                      placeholder="Enter current password"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Your account signs in without a password. You confirm it is you before one is set.
+            </p>
+          )}
+
+          <FormField
+            control={passwordForm.control}
+            name="newPassword"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-sm text-muted-foreground">New Password</FormLabel>
+                <FormControl>
+                  <div className="relative">
+                    <Input
+                      {...field}
+                      disabled={isChangePasswordPending || blocked}
+                      type={showNewPassword ? 'text' : 'password'}
+                      autoComplete="new-password"
+                      className="border-border bg-background pe-10 text-foreground"
+                      placeholder="Enter new password"
+                    />
+                    <button
+                      type="button"
+                      disabled={isChangePasswordPending || blocked}
+                      onClick={onToggleShowNewPassword}
+                      aria-label={showNewPassword ? 'Hide new password' : 'Show new password'}
+                      aria-pressed={showNewPassword}
+                      className="absolute end-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center text-muted-foreground hover:text-foreground"
+                    >
+                      {showNewPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
+                </FormControl>
+                <FormDescription className="text-xs">
+                  Min 8 characters with uppercase, lowercase, number, and special character
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
             )}
+          />
 
-            <FormField
-              control={passwordForm.control}
-              name="newPassword"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-sm text-muted-foreground">New Password</FormLabel>
-                  <FormControl>
-                    <div className="relative">
-                      <Input
-                        {...field}
-                        disabled={isChangePasswordPending || blocked}
-                        type={showNewPassword ? 'text' : 'password'}
-                        autoComplete="new-password"
-                        className="border-border bg-background pe-10 text-foreground"
-                        placeholder="Enter new password"
-                      />
-                      <button
-                        type="button"
-                        disabled={isChangePasswordPending || blocked}
-                        onClick={onToggleShowNewPassword}
-                        aria-label={showNewPassword ? 'Hide new password' : 'Show new password'}
-                        aria-pressed={showNewPassword}
-                        className="absolute end-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center text-muted-foreground hover:text-foreground"
-                      >
-                        {showNewPassword ? (
-                          <EyeOff className="h-4 w-4" />
-                        ) : (
-                          <Eye className="h-4 w-4" />
-                        )}
-                      </button>
-                    </div>
-                  </FormControl>
-                  <FormDescription className="text-xs">
-                    Min 8 characters with uppercase, lowercase, number, and special character
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+          <FormField
+            control={passwordForm.control}
+            name="confirmPassword"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-sm text-muted-foreground">Confirm Password</FormLabel>
+                <FormControl>
+                  <div className="relative">
+                    <Input
+                      {...field}
+                      disabled={isChangePasswordPending || blocked}
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      autoComplete="new-password"
+                      className="border-border bg-background pe-10 text-foreground"
+                      placeholder="Confirm new password"
+                    />
+                    <button
+                      type="button"
+                      disabled={isChangePasswordPending || blocked}
+                      onClick={onToggleShowConfirmPassword}
+                      aria-label={
+                        showConfirmPassword ? 'Hide confirmed password' : 'Show confirmed password'
+                      }
+                      aria-pressed={showConfirmPassword}
+                      className="absolute end-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center text-muted-foreground hover:text-foreground"
+                    >
+                      {showConfirmPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-            <FormField
-              control={passwordForm.control}
-              name="confirmPassword"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-sm text-muted-foreground">Confirm Password</FormLabel>
-                  <FormControl>
-                    <div className="relative">
-                      <Input
-                        {...field}
-                        disabled={isChangePasswordPending || blocked}
-                        type={showConfirmPassword ? 'text' : 'password'}
-                        autoComplete="new-password"
-                        className="border-border bg-background pe-10 text-foreground"
-                        placeholder="Confirm new password"
-                      />
-                      <button
-                        type="button"
-                        disabled={isChangePasswordPending || blocked}
-                        onClick={onToggleShowConfirmPassword}
-                        aria-label={
-                          showConfirmPassword
-                            ? 'Hide confirmed password'
-                            : 'Show confirmed password'
-                        }
-                        aria-pressed={showConfirmPassword}
-                        className="absolute end-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center text-muted-foreground hover:text-foreground"
-                      >
-                        {showConfirmPassword ? (
-                          <EyeOff className="h-4 w-4" />
-                        ) : (
-                          <Eye className="h-4 w-4" />
-                        )}
-                      </button>
-                    </div>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {error ? <p role="alert" className="text-sm text-danger">{error}</p> : null}
-            {notice ? <p role="status" className="text-sm text-muted-foreground">{notice}</p> : null}
-            <Button
-              type="submit"
-              disabled={
-                blocked || isChangePasswordPending ||
-                !passwordForm.formState.isValid ||
-                !passwordForm.formState.isDirty
-              }
-              variant="outline"
-              className="w-full border-border"
-            >
-              {isChangePasswordPending ? (
-                <Spinner size="sm" className="me-2" aria-hidden="true" />
-              ) : (
-                <Key className="me-2 h-4 w-4" />
-              )}
-              {hasPassword ? 'Change Password' : 'Set password'}
-            </Button>
-            {blocked ? <Button type="button" variant="outline" onClick={onAcknowledge}>
+          {error ? (
+            <p role="alert" className="text-sm text-danger">
+              {error}
+            </p>
+          ) : null}
+          {notice ? (
+            <p role="status" className="text-sm text-muted-foreground">
+              {notice}
+            </p>
+          ) : null}
+          <Button
+            type="submit"
+            disabled={blocked || isChangePasswordPending || !isValid || !isDirty}
+            variant="outline"
+            className="w-full border-border"
+          >
+            {isChangePasswordPending ? (
+              <Spinner size="sm" className="me-2" aria-hidden="true" />
+            ) : (
+              <Key className="me-2 h-4 w-4" />
+            )}
+            {hasPassword ? 'Change Password' : 'Set password'}
+          </Button>
+          {blocked ? (
+            <Button type="button" variant="outline" onClick={onAcknowledge}>
               I checked my sign-in and sessions
-            </Button> : null}
-            <Button type="button" variant="ghost" onClick={onReset}>
-              {isChangePasswordPending ? 'Cancel waiting' : 'Clear password form'}
             </Button>
-          </form>
-        </Form>
-      </div>
+          ) : null}
+          <Button type="button" variant="ghost" onClick={onReset}>
+            {isChangePasswordPending ? 'Cancel waiting' : 'Clear password form'}
+          </Button>
+        </form>
+      </Form>
+    </div>
   );
 }

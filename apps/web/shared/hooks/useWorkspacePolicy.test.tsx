@@ -1,6 +1,9 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_WORKSPACE_CONTROLS } from '@agiworkforce/types';
+import {
+  DEFAULT_WORKSPACE_CONTROLS,
+  EFFECTIVE_WORKSPACE_POLICY_SCHEMA_VERSION,
+} from '@agiworkforce/types';
 
 vi.mock('@/lib/identity/client', () => ({
   useCurrentUser: () => ({ isLoaded: true, isSignedIn: true, user: { id: 'user-1' } }),
@@ -16,6 +19,7 @@ const ORG = '11111111-1111-4111-8111-111111111111';
 
 function body(revision: number, featureAccess: Record<string, boolean>) {
   return {
+    schemaVersion: EFFECTIVE_WORKSPACE_POLICY_SCHEMA_VERSION,
     organizationId: ORG,
     governed: true,
     revision,

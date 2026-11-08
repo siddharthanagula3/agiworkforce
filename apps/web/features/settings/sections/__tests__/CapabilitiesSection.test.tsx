@@ -1,9 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { createCloudMemoryFixture, getCloudMemoryFixtureSession } from '@/features/memory/__tests__/cloud-memory-fixture';
+import {
+  createCloudMemoryFixture,
+  getCloudMemoryFixtureSession,
+} from '@/features/memory/__tests__/CloudMemoryFixture';
 
 vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/identity/useSessionSnapshot')>()),
+  ...(await importOriginal<MockedModule0>()),
   useSessionSnapshot: () => getCloudMemoryFixtureSession,
 }));
 
@@ -15,18 +18,32 @@ beforeEach(() => {
   version = null;
   fetchPreferenceNamespace.mockReset().mockImplementation(async (_namespace, fallback) => fallback);
   savePreferenceNamespace.mockReset().mockResolvedValue(undefined);
-  transport.mockReset().mockImplementation(async () => new Response(JSON.stringify({ organizationMemoryAllowed: true })));
+  transport
+    .mockReset()
+    .mockImplementation(
+      async () => new Response(JSON.stringify({ organizationMemoryAllowed: true })),
+    );
   vi.stubGlobal('fetch', transport);
 });
-afterEach(() => { cloud.retire(); vi.unstubAllGlobals(); });
+afterEach(() => {
+  cloud.retire();
+  vi.unstubAllGlobals();
+});
 
 const fetchPreferenceNamespace = vi.fn(async (_namespace: string, fallback: unknown) => fallback);
-const savePreferenceNamespace = vi.fn(async (_namespace: string, _value: unknown, _options?: unknown): Promise<{ version: string | null } | undefined> => undefined);
+const savePreferenceNamespace = vi.fn(
+  async (
+    _namespace: string,
+    _value: unknown,
+    _options?: unknown,
+  ): Promise<{ version: string | null } | undefined> => undefined,
+);
 
 vi.mock('@/app/settings/_lib/preferences-client', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/app/settings/_lib/preferences-client')>()),
+  ...(await importOriginal<MockedModule1>()),
   readOwnedPreferences: async () => ({
-    settings: { capabilities: await fetchPreferenceNamespace('capabilities', {}) }, version,
+    settings: { capabilities: await fetchPreferenceNamespace('capabilities', {}) },
+    version,
   }),
   saveOwnedPreferenceNamespace: (_owner: unknown, ...args: unknown[]) =>
     savePreferenceNamespace(...(args as [string, unknown])),
@@ -110,7 +127,11 @@ describe('CapabilitiesSection', () => {
     savePreferenceNamespace.mockRejectedValueOnce(new Error('storage unavailable'));
     render(<CapabilitiesSection />, { wrapper: cloud.wrapper });
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/Synced|Saved/));
-    await waitFor(() => expect(screen.getByRole('switch', { name: 'Cloud code execution and file creation' })).toBeEnabled());
+    await waitFor(() =>
+      expect(
+        screen.getByRole('switch', { name: 'Cloud code execution and file creation' }),
+      ).toBeEnabled(),
+    );
 
     fireEvent.click(screen.getByRole('switch', { name: 'Cloud code execution and file creation' }));
 
@@ -132,25 +153,47 @@ describe('CapabilitiesSection', () => {
 
   it('retries one version conflict with the same account batch and returned revision', async () => {
     version = 'read-version';
-    savePreferenceNamespace.mockRejectedValueOnce(new PreferenceVersionConflictError({
-      message: 'Changed elsewhere', namespace: 'capabilities',
-      settings: { memory: true, cloudCodeExecution: true }, version: 'conflict-version',
-    })).mockResolvedValueOnce({ version: 'saved-version' });
+    savePreferenceNamespace
+      .mockRejectedValueOnce(
+        new PreferenceVersionConflictError({
+          message: 'Changed elsewhere',
+          namespace: 'capabilities',
+          settings: { memory: true, cloudCodeExecution: true },
+          version: 'conflict-version',
+        }),
+      )
+      .mockResolvedValueOnce({ version: 'saved-version' });
     render(<CapabilitiesSection />, { wrapper: cloud.wrapper });
     const toggle = screen.getByRole('switch', { name: 'Cloud code execution and file creation' });
     await waitFor(() => expect(toggle).toBeEnabled());
     fireEvent.click(toggle);
     await waitFor(() => expect(savePreferenceNamespace).toHaveBeenCalledTimes(2));
-    expect(savePreferenceNamespace).toHaveBeenNthCalledWith(1, 'capabilities', { cloudCodeExecution: false }, { merge: true, expectedVersion: 'read-version' });
-    expect(savePreferenceNamespace).toHaveBeenNthCalledWith(2, 'capabilities', { cloudCodeExecution: false }, { merge: true, expectedVersion: 'conflict-version' });
+    expect(savePreferenceNamespace).toHaveBeenNthCalledWith(
+      1,
+      'capabilities',
+      { cloudCodeExecution: false },
+      { merge: true, expectedVersion: 'read-version' },
+    );
+    expect(savePreferenceNamespace).toHaveBeenNthCalledWith(
+      2,
+      'capabilities',
+      { cloudCodeExecution: false },
+      { merge: true, expectedVersion: 'conflict-version' },
+    );
     await waitFor(() => expect(toggle).not.toBeChecked());
   });
 
   it('does not retry a retired account conflict into a replacement account', async () => {
     let rejectSave!: (reason: unknown) => void;
-    savePreferenceNamespace.mockReturnValueOnce(new Promise((_resolve, reject) => { rejectSave = reject; }));
+    savePreferenceNamespace.mockReturnValueOnce(
+      new Promise((_resolve, reject) => {
+        rejectSave = reject;
+      }),
+    );
     const view = render(<CapabilitiesSection />, { wrapper: cloud.wrapper });
-    const oldToggle = screen.getByRole('switch', { name: 'Cloud code execution and file creation' });
+    const oldToggle = screen.getByRole('switch', {
+      name: 'Cloud code execution and file creation',
+    });
     await waitFor(() => expect(oldToggle).toBeEnabled());
     fireEvent.click(oldToggle);
     await waitFor(() => expect(savePreferenceNamespace).toHaveBeenCalledTimes(1));
@@ -158,11 +201,20 @@ describe('CapabilitiesSection', () => {
     view.unmount();
     cloud = createCloudMemoryFixture();
     render(<CapabilitiesSection />, { wrapper: cloud.wrapper });
-    const currentToggle = screen.getByRole('switch', { name: 'Cloud code execution and file creation' });
+    const currentToggle = screen.getByRole('switch', {
+      name: 'Cloud code execution and file creation',
+    });
     await waitFor(() => expect(currentToggle).toBeEnabled());
-    await act(async () => rejectSave(new PreferenceVersionConflictError({
-      message: 'Old conflict', namespace: 'capabilities', settings: {}, version: 'other-account',
-    })));
+    await act(async () =>
+      rejectSave(
+        new PreferenceVersionConflictError({
+          message: 'Old conflict',
+          namespace: 'capabilities',
+          settings: {},
+          version: 'other-account',
+        }),
+      ),
+    );
     expect(savePreferenceNamespace).toHaveBeenCalledTimes(1);
     expect(currentToggle).toBeChecked();
     expect(screen.queryByRole('alert')).toBeNull();
@@ -180,3 +232,6 @@ describe('CapabilitiesSection search index', () => {
     ).toBeInTheDocument();
   });
 });
+
+type MockedModule0 = typeof import('@/lib/identity/useSessionSnapshot');
+type MockedModule1 = typeof import('@/app/settings/_lib/preferences-client');

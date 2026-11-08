@@ -29,7 +29,10 @@ export async function eraseBackupCopies(
       else if (outcome === 'absent') removed.push(key);
     } catch (error) {
       failedKeys.push(key);
-      logger.warn({ key, error }, 'Failed to delete the backup copy of an erased object');
+      logger.warn(
+        { objectKey: key, error },
+        'Failed to delete the backup copy of an erased object',
+      );
     }
   }
 

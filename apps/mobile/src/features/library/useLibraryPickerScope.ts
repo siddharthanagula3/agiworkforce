@@ -25,14 +25,15 @@ export function useLibraryPickerScope(destinationKey: string): LibraryPickerScop
   const current = useRef<LibraryPickerScope | null>(null);
   const scope = useMemo((): LibraryPickerScope => {
     const ownership = captureAccountScopedUiState(mode);
-    const next: LibraryPickerScope = {
-      isCurrent: () =>
+    const next = {
+      accountKey,
+      destinationKey,
+      isCurrent: (): boolean =>
         current.current === next &&
         isAccountScopedUiStateCurrent(ownership, useChatAppModeStore.getState().appMode),
     };
     return next;
   }, [mode, accountKey, destinationKey]);
-  current.current = scope;
   useLayoutEffect(() => {
     current.current = scope;
     return () => {

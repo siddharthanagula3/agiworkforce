@@ -1,10 +1,13 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createCloudMemoryFixture, getCloudMemoryFixtureSession } from '@/features/memory/__tests__/cloud-memory-fixture';
+import {
+  createCloudMemoryFixture,
+  getCloudMemoryFixtureSession,
+} from '@/features/memory/__tests__/CloudMemoryFixture';
 
 vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/identity/useSessionSnapshot')>()),
+  ...(await importOriginal<MockedModule0>()),
   useSessionSnapshot: () => getCloudMemoryFixtureSession,
   useReadonlyIdentityLifetime: () => () => {
     const session = getCloudMemoryFixtureSession();
@@ -13,8 +16,13 @@ vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
 }));
 
 let cloud: ReturnType<typeof createCloudMemoryFixture>;
-beforeEach(() => { cloud = createCloudMemoryFixture(); });
-afterEach(() => { cloud.retire(); vi.unstubAllGlobals(); });
+beforeEach(() => {
+  cloud = createCloudMemoryFixture();
+});
+afterEach(() => {
+  cloud.retire();
+  vi.unstubAllGlobals();
+});
 
 import { ImportMemoryDialog } from '../ImportMemoryDialog';
 
@@ -91,22 +99,37 @@ describe('Unexecuted cloud import says what the never remember list dropped', ()
   it('discards a preview body that arrives after close and reopen', async () => {
     let resolve!: (value: unknown) => void;
     let started!: () => void;
-    const body = new Promise<unknown>((done) => { resolve = done; });
-    const reading = new Promise<void>((done) => { started = done; });
+    const body = new Promise<unknown>((done) => {
+      resolve = done;
+    });
+    const reading = new Promise<void>((done) => {
+      started = done;
+    });
     const reply = new Response('{}');
-    vi.spyOn(reply, 'json').mockImplementation(() => { started(); return body; });
+    vi.spyOn(reply, 'json').mockImplementation(() => {
+      started();
+      return body;
+    });
     const transport = vi.fn<typeof fetch>().mockResolvedValueOnce(reply);
     vi.stubGlobal('fetch', transport);
-    const view = render(<ImportMemoryDialog open onOpenChange={() => {}} />, { wrapper: cloud.wrapper });
+    const view = render(<ImportMemoryDialog open onOpenChange={() => {}} />, {
+      wrapper: cloud.wrapper,
+    });
     fireEvent.change(screen.getByLabelText('Paste memories'), { target: { value: ALLOWED } });
     fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
     await reading;
     view.rerender(<ImportMemoryDialog open={false} onOpenChange={() => {}} />);
     view.rerender(<ImportMemoryDialog open onOpenChange={() => {}} />);
     await act(async () => {
-      resolve({ mode: 'dry-run', sourceName: 'ChatGPT', sourceValue: 'imported:chatgpt', format: 'text',
+      resolve({
+        mode: 'dry-run',
+        sourceName: 'ChatGPT',
+        sourceValue: 'imported:chatgpt',
+        format: 'text',
         items: [{ content: ALLOWED, normalizedKey: ALLOWED.toLowerCase(), duplicate: false }],
-        totalCandidates: 1, itemsTruncated: false });
+        totalCandidates: 1,
+        itemsTruncated: false,
+      });
       await body;
     });
     expect(screen.queryByRole('list', { name: 'Memories to import' })).toBeNull();
@@ -149,3 +172,5 @@ describe('Unexecuted cloud import says what the never remember list dropped', ()
     expect(screen.queryByText(/never remember list/)).toBeNull();
   });
 });
+
+type MockedModule0 = typeof import('@/lib/identity/useSessionSnapshot');

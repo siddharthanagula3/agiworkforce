@@ -33,9 +33,11 @@ vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: mocks.getNeonDb,
   getStripeWebhookDb: vi.fn(),
 }));
-vi.mock('@/lib/server/claimed-user-scope-db', () => ({ createClaimedUserScopedDb: mocks.claimScope }));
+vi.mock('@/lib/server/claimed-user-scope-db', () => ({
+  createClaimedUserScopedDb: mocks.claimScope,
+}));
 vi.mock('@/lib/services/active-workspace-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/active-workspace-service')>()),
+  ...(await importOriginal<MockedModule0>()),
   resolveActiveOrganizationId: mocks.resolveOrganization,
 }));
 vi.mock('@/lib/logger', () => ({
@@ -140,12 +142,15 @@ describe('GET /api/settings/2fa', () => {
     await GET(getRequest());
 
     expect(mocks.claimScope).toHaveBeenCalledExactlyOnceWith(SERVICE_DB, {
-      userId: 'user-1', organizationId: null,
+      userId: 'user-1',
+      organizationId: null,
     });
     expect(mocks.resolveOrganization).not.toHaveBeenCalled();
     expect(SERVICE_DB.withUser).not.toHaveBeenCalled();
     expect(mocks.readSecondFactorStatus).toHaveBeenCalledWith(
-      expect.anything(), 'user-1', 'native-user-1',
+      expect.anything(),
+      'user-1',
+      'native-user-1',
     );
     expect(mocks.authenticate).toHaveBeenCalledWith(expect.anything(), {
       mfaEnrollment: true,
@@ -191,9 +196,9 @@ describe('DELETE /api/settings/2fa', () => {
     await expect(response.json()).resolves.toEqual({ success: true });
     expect(mocks.removeSecondFactor).toHaveBeenCalledWith('native-user-1');
     expect(mocks.rememberMfaEnrollment).toHaveBeenCalledWith('user-1', false);
-    expect(mocks.query).toHaveBeenCalledWith(
-      'delete from user_two_factor where user_id = $1', ['user-1'],
-    );
+    expect(mocks.query).toHaveBeenCalledWith('delete from user_two_factor where user_id = $1', [
+      'user-1',
+    ]);
   });
 
   it('records how the account holder re-verified, and tells them', async () => {
@@ -258,7 +263,8 @@ it('returns 403 for an authenticated device credential before database or factor
     error: { message: 'Use your web account settings to manage sign-in security.' },
   });
   expect(mocks.authenticate).toHaveBeenCalledExactlyOnceWith(incoming, {
-    mfaEnrollment: true, resolveOrganization: false,
+    mfaEnrollment: true,
+    resolveOrganization: false,
   });
   expect(mocks.getNeonDb).not.toHaveBeenCalled();
   expect(mocks.claimScope).not.toHaveBeenCalled();
@@ -267,3 +273,5 @@ it('returns 403 for an authenticated device credential before database or factor
   expect(mocks.removeSecondFactor).not.toHaveBeenCalled();
   expect(mocks.identityEvent).not.toHaveBeenCalled();
 });
+
+type MockedModule0 = typeof import('@/lib/services/active-workspace-service');

@@ -20,7 +20,9 @@ export function makeConsentAwareSentryTransport(
   };
 }
 
-export function clientSentryInitOptions() {
+export function clientSentryInitOptions(): ReturnType<typeof commonInitOptions> & {
+  transport: typeof makeConsentAwareSentryTransport;
+} {
   return {
     ...commonInitOptions(),
     transport: makeConsentAwareSentryTransport,

@@ -77,8 +77,8 @@ function identityStub({
   sessions = ['sess_1', 'sess_2'],
   totalCount = sessions.length,
   listThrows = false,
-  failIds = [] as string[],
-} = {}) {
+  failIds = [],
+}: { sessions?: string[]; totalCount?: number; listThrows?: boolean; failIds?: string[] } = {}) {
   const revoked: string[] = [];
   return {
     revoked,
@@ -295,7 +295,9 @@ describe('deprovisionMember', () => {
           organizationId: ORG,
         });
 
-        expect(identity.identity.listUserSessions).toHaveBeenCalledTimes(invalidOffset === 0 ? 1 : 2);
+        expect(identity.identity.listUserSessions).toHaveBeenCalledTimes(
+          invalidOffset === 0 ? 1 : 2,
+        );
         expect(identity.identity.revokeSession).not.toHaveBeenCalled();
         expect(identity.revoked).toEqual([]);
         expect(result).toEqual({
@@ -537,16 +539,20 @@ describe('deprovisionMember', () => {
     }
   });
 
-  it.each([0, NaN, Infinity, -1])('keeps direct deprovision enumeration independent of count %j', async (totalCount) => {
-    const identity = identityStub({ sessions: ['sess_1'], totalCount });
-    const db = dbStub();
-    const result = await deprovisionMember(db.db, identity.identity, {
-      userId: USER, organizationId: ORG,
-    });
-    expect(result.sessionsRevoked).toBe(1);
-    expect(result.errors).toEqual([]);
-    expect(identity.revoked).toEqual(['sess_1']);
-  });
+  it.each([0, NaN, Infinity, -1])(
+    'keeps direct deprovision enumeration independent of count %j',
+    async (totalCount) => {
+      const identity = identityStub({ sessions: ['sess_1'], totalCount });
+      const db = dbStub();
+      const result = await deprovisionMember(db.db, identity.identity, {
+        userId: USER,
+        organizationId: ORG,
+      });
+      expect(result.sessionsRevoked).toBe(1);
+      expect(result.errors).toEqual([]);
+      expect(identity.revoked).toEqual(['sess_1']);
+    },
+  );
 
   it('pages through more sessions than one request returns', async () => {
     const many = Array.from({ length: 51 }, (_, i) => `sess_${i}`);

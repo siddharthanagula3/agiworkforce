@@ -42,7 +42,8 @@ vi.mock('@/lib/auth/email-confirmation', async (importOriginal) => ({
   ...(await importOriginal()),
   readPrimaryEmailState: vi.fn(async () => ({ confirmed: true, email: 'person@example.com' })),
 }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule0>()),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
@@ -54,11 +55,13 @@ vi.mock('@/lib/security-audit', () => ({
   getClientIp: vi.fn(),
   logRateLimitExceeded: vi.fn(async () => undefined),
 }));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule0>()),
   isAccountUnavailableError: vi.fn(() => false),
   getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1' })),
 }));
-vi.mock('@/lib/cors', () => ({
+vi.mock('@/lib/cors', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule2>()),
   withCorsRoute: <T>(handler: T) => handler,
   handleCorsPreflightRequest: vi.fn(() => null),
 }));
@@ -242,12 +245,19 @@ vi.mock('@/lib/server/neon-db', () => {
       return [];
     }
     if (q.startsWith('update public.connector_oauth_grants set revoked_at')) {
-      const [userId, connectorId, target] = params as [string, string, string[] | string | undefined];
+      const [userId, connectorId, target] = params as [
+        string,
+        string,
+        string[] | string | undefined,
+      ];
       const rows = mocks.grants.filter(
-        (g) => g['user_id'] === userId && g['connector_id'] === connectorId &&
+        (g) =>
+          g['user_id'] === userId &&
+          g['connector_id'] === connectorId &&
           g['revoked_at'] === null &&
-          (Array.isArray(target) ? target.includes(String(g['id'])) :
-            target === undefined || g['account_key'] === target),
+          (Array.isArray(target)
+            ? target.includes(String(g['id']))
+            : target === undefined || g['account_key'] === target),
       );
       for (const row of rows) {
         row['revoked_at'] = new Date().toISOString();
@@ -280,10 +290,15 @@ vi.mock('@/lib/server/neon-db', () => {
     }
     if (q.startsWith('select id, access_token_enc, refresh_token_enc,')) {
       const [userId, connectorId, accountKey] = params as [string, string, string | undefined];
-      return mocks.grants.filter(
-        (g) => g['user_id'] === userId && g['connector_id'] === connectorId &&
-          g['revoked_at'] === null && (accountKey === undefined || g['account_key'] === accountKey),
-      ).map((row) => ({ ...row }));
+      return mocks.grants
+        .filter(
+          (g) =>
+            g['user_id'] === userId &&
+            g['connector_id'] === connectorId &&
+            g['revoked_at'] === null &&
+            (accountKey === undefined || g['account_key'] === accountKey),
+        )
+        .map((row) => ({ ...row }));
     }
     if (q.startsWith('select access_token_enc, refresh_token_enc,')) {
       const [userId, connectorId] = params as [string, string];
@@ -588,3 +603,8 @@ describe('CRIT-001, an available connector completes the whole lifecycle', () =>
     expect(await loadUserConnectorToolDefs('user-1')).toEqual([]);
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/api-auth');
+
+type RetainedMockModule0 = typeof import('@/lib/logger');
+type RetainedMockModule2 = typeof import('@/lib/cors');

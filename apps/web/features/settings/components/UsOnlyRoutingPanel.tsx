@@ -54,44 +54,66 @@ export function UsOnlyRoutingPanel() {
     subscription?.status === 'active' &&
     US_ONLY_TIERS.includes(normalizeSubscriptionAccessTier(subscription.tier));
   const [eligibilityRevision, setEligibilityRevision] = useState(0);
-  const lane = useMemo<RoutingLane>(() => ({ active: false, ready: null, operation: null }),
-    [owner, status, tier, eligibilityRevision]);
+  const lane = useMemo<RoutingLane>(
+    () => ({
+      scope: { owner, status, tier, eligibilityRevision },
+      active: false,
+      ready: null,
+      operation: null,
+    }),
+    [owner, status, tier, eligibilityRevision],
+  );
   const [view, setView] = useState<RoutingView | null>(null);
   const displayed = view?.lane === lane ? view : null;
   const ready = displayed?.ready ?? null;
   const laneCurrent = useCallback(() => {
     const live = useBillingStore.getState().subscription;
-    return lane.active && owner?.isCurrent() === true &&
-      live?.status === status && live?.tier === tier;
+    return (
+      lane.active && owner?.isCurrent() === true && live?.status === status && live?.tier === tier
+    );
   }, [lane, owner, status, tier]);
 
-  const read = useCallback(async (
-    operation: RequestAuthority,
-    message: string | null = null,
-    acknowledged: RoutingPreferences | null = null,
-  ) => {
-    const current = () => lane.operation === operation && operation.isCurrent();
-    try {
-      const response = await operation.fetch(ROUTING_PREFERENCES_PATH, { cache: 'no-store' });
-      if (!response.ok) throw new Error('Routing preferences unavailable');
-      const body = RoutingPreferencesSchema.parse(await response.json());
-      if (!current()) return;
-      lane.ready = body;
-      setView({ lane, ready: body, checked: body.us_only === true, busy: false,
-        message, failed: message !== null && acknowledged === null });
-    } catch {
-      if (!current()) return;
-      lane.ready = null;
-      setView({ lane, ready: null, checked: acknowledged?.us_only === true, busy: false,
-        message: acknowledged
-          ? `Your US-only provider setting was saved as ${acknowledged.us_only ? 'on' : 'off'}, but the latest setting could not be loaded. Retry loading it.`
-          : `${message ? `${message} ` : ''}Your provider location setting could not be loaded. Retry loading it.`,
-        failed: true });
-    } finally {
-      if (lane.operation === operation) lane.operation = null;
-      operation.retire();
-    }
-  }, [lane]);
+  const read = useCallback(
+    async (
+      operation: RequestAuthority,
+      message: string | null = null,
+      acknowledged: RoutingPreferences | null = null,
+    ) => {
+      const current = () => lane.operation === operation && operation.isCurrent();
+      try {
+        const response = await operation.fetch(ROUTING_PREFERENCES_PATH, { cache: 'no-store' });
+        if (!response.ok) throw new Error('Routing preferences unavailable');
+        const body = RoutingPreferencesSchema.parse(await response.json());
+        if (!current()) return;
+        lane.ready = body;
+        setView({
+          lane,
+          ready: body,
+          checked: body.us_only === true,
+          busy: false,
+          message,
+          failed: message !== null && acknowledged === null,
+        });
+      } catch {
+        if (!current()) return;
+        lane.ready = null;
+        setView({
+          lane,
+          ready: null,
+          checked: acknowledged?.us_only === true,
+          busy: false,
+          message: acknowledged
+            ? `Your US-only provider setting was saved as ${acknowledged.us_only ? 'on' : 'off'}, but the latest setting could not be loaded. Retry loading it.`
+            : `${message ? `${message} ` : ''}Your provider location setting could not be loaded. Retry loading it.`,
+          failed: true,
+        });
+      } finally {
+        if (lane.operation === operation) lane.operation = null;
+        operation.retire();
+      }
+    },
+    [lane],
+  );
 
   const load = useCallback(() => {
     const viewCurrent = capture();
@@ -112,20 +134,33 @@ export function UsOnlyRoutingPanel() {
       lane.operation = null;
     };
     const stop = useBillingStore.subscribe((next, previous) => {
-      if (next.subscription?.status !== previous.subscription?.status ||
-        next.subscription?.tier !== previous.subscription?.tier) {
+      if (
+        next.subscription?.status !== previous.subscription?.status ||
+        next.subscription?.tier !== previous.subscription?.tier
+      ) {
         retire();
         setEligibilityRevision((revision) => revision + 1);
       }
     });
     load();
-    return () => { stop(); retire(); };
+    return () => {
+      stop();
+      retire();
+    };
   }, [lane, load]);
 
   const save = async (usOnly: boolean) => {
     const viewCurrent = capture();
-    if (!owner || !eligible || !laneCurrent() || !viewCurrent() ||
-      !ready || lane.ready !== ready || lane.operation) return;
+    if (
+      !owner ||
+      !eligible ||
+      !laneCurrent() ||
+      !viewCurrent() ||
+      !ready ||
+      lane.ready !== ready ||
+      lane.operation
+    )
+      return;
     const next = { ...ready, us_only: usOnly };
     const operation = createRequestAuthority(owner.session, () => laneCurrent() && viewCurrent());
     lane.operation = operation;
@@ -136,7 +171,9 @@ export function UsOnlyRoutingPanel() {
       const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
       operation.assertCurrent();
       const response = await operation.fetch(ROUTING_PREFERENCES_PATH, {
-        method: 'PUT', headers, body: JSON.stringify(next),
+        method: 'PUT',
+        headers,
+        body: JSON.stringify(next),
       });
       if (!response.ok) throw new Error('Write not confirmed');
       const receipt = RoutingPreferencesSchema.parse(await response.json());
@@ -152,9 +189,13 @@ export function UsOnlyRoutingPanel() {
       }
     }
     if (lane.operation !== operation || !operation.isCurrent()) return;
-    await read(operation, acknowledged
-      ? `Your US-only provider setting was saved as ${usOnly ? 'on' : 'off'}.`
-      : 'We could not confirm whether your change was saved.', acknowledged);
+    await read(
+      operation,
+      acknowledged
+        ? `Your US-only provider setting was saved as ${usOnly ? 'on' : 'off'}.`
+        : 'We could not confirm whether your change was saved.',
+      acknowledged,
+    );
   };
 
   return (
@@ -181,9 +222,15 @@ export function UsOnlyRoutingPanel() {
             Updating your latest setting…
           </span>
         ) : null}
-        {displayed?.message ? <SaveStatusLine failed={displayed.failed}>{displayed.message}</SaveStatusLine> : null}
+        {displayed?.message ? (
+          <SaveStatusLine failed={displayed.failed}>{displayed.message}</SaveStatusLine>
+        ) : null}
         {displayed?.failed && !ready && !displayed.busy ? (
-          <button type="button" onClick={load} className="mt-2 text-sm underline underline-offset-4">
+          <button
+            type="button"
+            onClick={load}
+            className="mt-2 text-sm underline underline-offset-4"
+          >
             Retry loading
           </button>
         ) : null}

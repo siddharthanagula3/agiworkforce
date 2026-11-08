@@ -13,8 +13,8 @@ import type { AuthProviderId } from '@agiworkforce/client-runtime';
 import { getHostBridge } from '@agiworkforce/local-runtime-contract';
 import { isAuthPath } from '@agiworkforce/types/product-routes';
 import { AUTH_LOGIN_PATH } from '@/features/auth/authRoutes';
-import type { RequestAuthority } from './request-authority';
-import { nativeSessionFor } from './native-session-authority';
+import type { RequestAuthority, SessionAuthority } from './request-authority';
+import { bindNativeSession, nativeSessionFor } from './native-session-authority';
 import { browserSupportsPasskeys } from '@/lib/identity/passkey-support';
 
 /**
@@ -23,10 +23,13 @@ import { browserSupportsPasskeys } from '@/lib/identity/passkey-support';
  * provider swap replaces this file rather than every component that asks who
  * is signed in.
  */
+export type NativeIdentitySession = NonNullable<ReturnType<typeof useClerk>['session']>;
+
 export interface IdentitySessionState {
   isLoaded: boolean;
   isSignedIn: boolean;
   userId: string | null;
+  sessionId?: string | null;
   getToken: () => Promise<string | null>;
 }
 
@@ -62,12 +65,13 @@ function optional(value: string | null | undefined): string | null {
 }
 
 export function useSession(): IdentitySessionState {
-  const { isLoaded, isSignedIn, userId, getToken } = useAuth();
+  const { isLoaded, isSignedIn, userId, sessionId, getToken } = useAuth();
   const readToken = useCallback(async () => (await getToken()) ?? null, [getToken]);
   return {
     isLoaded,
     isSignedIn: isSignedIn === true,
     userId: userId ?? null,
+    sessionId: sessionId ?? null,
     getToken: readToken,
   };
 }
@@ -165,76 +169,127 @@ export interface IdentityPasskeysState {
   isLoaded: boolean;
   isSupported: boolean;
   passkeys: readonly IdentityPasskey[];
-  capture: (kind: 'create' | 'rename' | 'remove', scope: IdentityPasskeyScope,
-    passkeyId?: string) => IdentityPasskeyOperation;
+  capture: (
+    kind: 'create' | 'rename' | 'remove',
+    scope: IdentityPasskeyScope,
+    passkeyId?: string,
+  ) => IdentityPasskeyOperation;
 }
 
 export function usePasskeys(): IdentityPasskeysState {
   const { isLoaded: userLoaded, user } = useUser();
   const clerk = useClerk();
-  const isLoaded = Boolean(userLoaded && clerk.loaded && user &&
-    clerk.user === user && clerk.session?.user === user);
-  const passkeys: IdentityPasskey[] = isLoaded ? (user?.passkeys ?? []).map((passkey) => ({
-    id: passkey.id, name: optional(passkey.name), createdAt: passkey.createdAt,
-    lastUsedAt: passkey.lastUsedAt,
-  })) : [];
-  const capture = useCallback<IdentityPasskeysState['capture']>((kind, submitted, passkeyId) => {
-    const { authority, onDispatch } = submitted;
-    authority.assertCurrent();
-    const session = nativeSessionFor(authority.session);
-    const capturedUser = session.user;
-    if (!isLoaded || !capturedUser || capturedUser !== user || capturedUser.id !== authority.session.userId) {
-      throw new Error('The account changed. Open passkey settings again.');
-    }
-    const target = kind === 'create' ? null : capturedUser.passkeys.find((key) => key.id === passkeyId);
-    if (kind !== 'create' && !target) throw new Error('That passkey is no longer on this account.');
-    const assertCurrent = () => {
-      if (session.user !== capturedUser || clerk.user !== capturedUser || capturedUser.id !== authority.session.userId) authority.retire();
+  const isLoaded = Boolean(
+    userLoaded && clerk.loaded && user && clerk.user === user && clerk.session?.user === user,
+  );
+  const passkeys: IdentityPasskey[] = isLoaded
+    ? (user?.passkeys ?? []).map((passkey) => ({
+        id: passkey.id,
+        name: optional(passkey.name),
+        createdAt: passkey.createdAt,
+        lastUsedAt: passkey.lastUsedAt,
+      }))
+    : [];
+  const capture = useCallback<IdentityPasskeysState['capture']>(
+    (kind, submitted, passkeyId) => {
+      const { authority, onDispatch } = submitted;
       authority.assertCurrent();
-    };
-    let dispatched = false;
-    let stop: (() => void) | undefined;
-    const release = () => { stop?.(); stop = undefined; };
-    const observe = () => {
-      if (!authority.isCurrent() || session.user !== capturedUser || clerk.user !== capturedUser ||
-          (!dispatched && target && !capturedUser.passkeys.some((key) => key === target && key.id === passkeyId))) authority.retire();
-    };
-    authority.signal.addEventListener('abort', release, { once: true });
-    stop = authority.session.subscribe?.(observe);
-    if (authority.signal.aborted) release();
-    return { isCurrent: () => { observe(); return authority.isCurrent(); }, execute: async (name) => {
-      assertCurrent();
-      if (dispatched) throw new Error('This passkey operation has already started.');
-      if (target && !capturedUser.passkeys.some((key) => key === target && key.id === passkeyId)) {
+      const session = nativeSessionFor(authority.session);
+      const capturedUser = session.user;
+      if (
+        !isLoaded ||
+        !capturedUser ||
+        capturedUser !== user ||
+        capturedUser.id !== authority.session.userId
+      ) {
+        throw new Error('The account changed. Open passkey settings again.');
+      }
+      const target =
+        kind === 'create' ? null : capturedUser.passkeys.find((key) => key.id === passkeyId);
+      if (kind !== 'create' && !target)
         throw new Error('That passkey is no longer on this account.');
-      }
-      const submittedName = name?.trim();
-      if (kind === 'rename' && (!submittedName || submittedName.length > MAX_PASSKEY_NAME_CHARS)) {
-        throw new Error(`Enter a passkey name of 1 to ${MAX_PASSKEY_NAME_CHARS} characters.`);
-      }
-      assertCurrent();
-      dispatched = true;
-      onDispatch();
-      assertCurrent();
-      try {
-        if (kind === 'create') await capturedUser.createPasskey();
-        else if (kind === 'rename' && target) await target.update({ name: submittedName! });
-        else if (target) await target.delete();
-        assertCurrent();
-        const refreshed = await capturedUser.reload();
-        assertCurrent();
-        if (refreshed.id !== authority.session.userId) {
+      const assertCurrent = () => {
+        if (
+          session.user !== capturedUser ||
+          clerk.user !== capturedUser ||
+          capturedUser.id !== authority.session.userId
+        )
           authority.retire();
-          throw new Error('The refreshed account could not be confirmed.');
-        }
-      } catch (cause) {
-        assertCurrent();
-        throw cause;
-      }
-    } };
-  }, [clerk, isLoaded, user]);
-  return { isCurrent: () => Boolean(isLoaded && clerk.loaded && clerk.user === user && clerk.session?.user === user),
-    isLoaded, isSupported: browserSupportsPasskeys(), passkeys, capture };
+        authority.assertCurrent();
+      };
+      let dispatched = false;
+      let stop: (() => void) | undefined;
+      const release = () => {
+        stop?.();
+        stop = undefined;
+      };
+      const observe = () => {
+        if (
+          !authority.isCurrent() ||
+          session.user !== capturedUser ||
+          clerk.user !== capturedUser ||
+          (!dispatched &&
+            target &&
+            !capturedUser.passkeys.some((key) => key === target && key.id === passkeyId))
+        )
+          authority.retire();
+      };
+      authority.signal.addEventListener('abort', release, { once: true });
+      stop = authority.session.subscribe?.(observe);
+      if (authority.signal.aborted) release();
+      return {
+        isCurrent: () => {
+          observe();
+          return authority.isCurrent();
+        },
+        execute: async (name) => {
+          assertCurrent();
+          if (dispatched) throw new Error('This passkey operation has already started.');
+          if (
+            target &&
+            !capturedUser.passkeys.some((key) => key === target && key.id === passkeyId)
+          ) {
+            throw new Error('That passkey is no longer on this account.');
+          }
+          const submittedName = name?.trim();
+          if (
+            kind === 'rename' &&
+            (!submittedName || submittedName.length > MAX_PASSKEY_NAME_CHARS)
+          ) {
+            throw new Error(`Enter a passkey name of 1 to ${MAX_PASSKEY_NAME_CHARS} characters.`);
+          }
+          assertCurrent();
+          dispatched = true;
+          onDispatch();
+          assertCurrent();
+          try {
+            if (kind === 'create') await capturedUser.createPasskey();
+            else if (kind === 'rename' && target) await target.update({ name: submittedName! });
+            else if (target) await target.delete();
+            assertCurrent();
+            const refreshed = await capturedUser.reload();
+            assertCurrent();
+            if (refreshed.id !== authority.session.userId) {
+              authority.retire();
+              throw new Error('The refreshed account could not be confirmed.');
+            }
+          } catch (cause) {
+            assertCurrent();
+            throw cause;
+          }
+        },
+      };
+    },
+    [clerk, isLoaded, user],
+  );
+  return {
+    isCurrent: () =>
+      Boolean(isLoaded && clerk.loaded && clerk.user === user && clerk.session?.user === user),
+    isLoaded,
+    isSupported: browserSupportsPasskeys(),
+    passkeys,
+    capture,
+  };
 }
 
 export type IdentityVerificationLevel = 'first_factor' | 'second_factor';
@@ -319,8 +374,12 @@ export interface IdentityConnectedAccountsState {
   isLoaded: boolean;
   accounts: readonly IdentityConnectedAccount[];
   isCurrent: () => boolean;
-  capture: (selection: { kind: 'connect'; provider: AuthProviderId; returnUrl: string } |
-    { kind: 'disconnect'; accountId: string }, scope: IdentityPasskeyScope) => IdentityPasskeyOperation;
+  capture: (
+    selection:
+      | { kind: 'connect'; provider: AuthProviderId; returnUrl: string }
+      | { kind: 'disconnect'; accountId: string },
+    scope: IdentityPasskeyScope,
+  ) => IdentityPasskeyOperation;
 }
 
 const VERIFIED_EMAIL_STATUS = 'verified';
@@ -338,73 +397,112 @@ const CONNECT_STRATEGIES = {
 export function useConnectedAccounts(): IdentityConnectedAccountsState {
   const { isLoaded: userLoaded, user } = useUser();
   const clerk = useClerk();
-  const isCurrent = () => Boolean(userLoaded && clerk.loaded && user && clerk.user === user && clerk.session?.user === user);
+  const isCurrent = () =>
+    Boolean(
+      userLoaded && clerk.loaded && user && clerk.user === user && clerk.session?.user === user,
+    );
   const isLoaded = isCurrent();
-  const accounts: IdentityConnectedAccount[] =
-      (isLoaded ? user?.externalAccounts ?? [] : []).map((account) => ({
-        id: account.id,
-        provider: account.provider,
-        email: optional(account.emailAddress),
-      }));
-  const capture = useCallback<IdentityConnectedAccountsState['capture']>((selection, { authority, onDispatch }) => {
-    authority.assertCurrent();
-    const native = nativeSessionFor(authority.session);
-    const capturedUser = native.user;
-    if (!isLoaded || !capturedUser || capturedUser !== user || clerk.user !== user || capturedUser.id !== authority.session.userId) {
-      throw new Error('The account changed. Open sign-in settings again.');
-    }
-    const submitted = { ...selection };
-    const targets = submitted.kind === 'disconnect'
-      ? capturedUser.externalAccounts.filter((account) => account.id === submitted.accountId) : [];
-    const target = targets[0] ?? null;
-    if (submitted.kind === 'disconnect' && targets.length !== 1) throw new Error('That account is no longer uniquely connected.');
-    let dispatched = false;
-    const observe = () => {
-      if (native.user !== capturedUser || clerk.user !== capturedUser || capturedUser.id !== authority.session.userId ||
-          (!dispatched && target && submitted.kind === 'disconnect' &&
-            (target.id !== submitted.accountId || !capturedUser.externalAccounts.includes(target) ||
-              capturedUser.externalAccounts.filter((account) => account.id === submitted.accountId).length !== 1))) authority.retire();
-      return authority.isCurrent();
-    };
-    const assertCurrent = () => { observe(); authority.assertCurrent(); };
-    let stop: (() => void) | undefined;
-    const release = () => { stop?.(); stop = undefined; };
-    authority.signal.addEventListener('abort', release, { once: true });
-    stop = authority.session.subscribe?.(observe);
-    if (authority.signal.aborted) release();
-    return { isCurrent: observe, execute: async () => {
-      assertCurrent();
-      if (dispatched) throw new Error('This sign-in change has already started.');
-      if (submitted.kind === 'connect' && capturedUser.primaryEmailAddress?.verification?.status !== VERIFIED_EMAIL_STATUS) {
-        throw new Error(UNCONFIRMED_EMAIL_CONNECT_MESSAGE);
+  const accounts: IdentityConnectedAccount[] = (isLoaded ? (user?.externalAccounts ?? []) : []).map(
+    (account) => ({
+      id: account.id,
+      provider: account.provider,
+      email: optional(account.emailAddress),
+    }),
+  );
+  const capture = useCallback<IdentityConnectedAccountsState['capture']>(
+    (selection, { authority, onDispatch }) => {
+      authority.assertCurrent();
+      const native = nativeSessionFor(authority.session);
+      const capturedUser = native.user;
+      if (
+        !isLoaded ||
+        !capturedUser ||
+        capturedUser !== user ||
+        clerk.user !== user ||
+        capturedUser.id !== authority.session.userId
+      ) {
+        throw new Error('The account changed. Open sign-in settings again.');
       }
-      dispatched = true;
-      onDispatch();
-      assertCurrent();
-      try {
-        if (submitted.kind === 'connect') {
-          const account = await capturedUser.createExternalAccount({
-            strategy: CONNECT_STRATEGIES[submitted.provider], redirectUrl: submitted.returnUrl,
-          });
+      const submitted = { ...selection };
+      const targets =
+        submitted.kind === 'disconnect'
+          ? capturedUser.externalAccounts.filter((account) => account.id === submitted.accountId)
+          : [];
+      const target = targets[0] ?? null;
+      if (submitted.kind === 'disconnect' && targets.length !== 1)
+        throw new Error('That account is no longer uniquely connected.');
+      let dispatched = false;
+      const observe = () => {
+        if (
+          native.user !== capturedUser ||
+          clerk.user !== capturedUser ||
+          capturedUser.id !== authority.session.userId ||
+          (!dispatched &&
+            target &&
+            submitted.kind === 'disconnect' &&
+            (target.id !== submitted.accountId ||
+              !capturedUser.externalAccounts.includes(target) ||
+              capturedUser.externalAccounts.filter((account) => account.id === submitted.accountId)
+                .length !== 1))
+        )
+          authority.retire();
+        return authority.isCurrent();
+      };
+      const assertCurrent = () => {
+        observe();
+        authority.assertCurrent();
+      };
+      let stop: (() => void) | undefined;
+      const release = () => {
+        stop?.();
+        stop = undefined;
+      };
+      authority.signal.addEventListener('abort', release, { once: true });
+      stop = authority.session.subscribe?.(observe);
+      if (authority.signal.aborted) release();
+      return {
+        isCurrent: observe,
+        execute: async () => {
           assertCurrent();
-          const next = account.verification?.externalVerificationRedirectURL;
-          if (!next) throw new Error('The sign-in provider did not start.');
-          const destination = next.toString();
+          if (dispatched) throw new Error('This sign-in change has already started.');
+          if (
+            submitted.kind === 'connect' &&
+            capturedUser.primaryEmailAddress?.verification?.status !== VERIFIED_EMAIL_STATUS
+          ) {
+            throw new Error(UNCONFIRMED_EMAIL_CONNECT_MESSAGE);
+          }
+          dispatched = true;
+          onDispatch();
           assertCurrent();
-          window.location.assign(destination);
-        } else if (target) {
-          await target.destroy();
-          assertCurrent();
-          const refreshed = await capturedUser.reload();
-          assertCurrent();
-          if (refreshed.id !== capturedUser.id) throw new Error('The refreshed account could not be confirmed.');
-        }
-      } catch (cause) {
-        assertCurrent();
-        throw cause;
-      }
-    } };
-  }, [clerk, isLoaded, user]);
+          try {
+            if (submitted.kind === 'connect') {
+              const account = await capturedUser.createExternalAccount({
+                strategy: CONNECT_STRATEGIES[submitted.provider],
+                redirectUrl: submitted.returnUrl,
+              });
+              assertCurrent();
+              const next = account.verification?.externalVerificationRedirectURL;
+              if (!next) throw new Error('The sign-in provider did not start.');
+              const destination = next.toString();
+              assertCurrent();
+              window.location.assign(destination);
+            } else if (target) {
+              await target.destroy();
+              assertCurrent();
+              const refreshed = await capturedUser.reload();
+              assertCurrent();
+              if (refreshed.id !== capturedUser.id)
+                throw new Error('The refreshed account could not be confirmed.');
+            }
+          } catch (cause) {
+            assertCurrent();
+            throw cause;
+          }
+        },
+      };
+    },
+    [clerk, isLoaded, user],
+  );
   return { isLoaded, accounts, isCurrent, capture };
 }
 
@@ -481,12 +579,15 @@ export function useSessionReverification(authority?: RequestAuthority): Identity
     return current;
   }, [authority]);
 
-  const checked = useCallback(async <T,>(operation: () => Promise<T>): Promise<T> => {
-    authority?.assertCurrent();
-    const result = await operation();
-    authority?.assertCurrent();
-    return result;
-  }, [authority]);
+  const checked = useCallback(
+    async <T>(operation: () => Promise<T>): Promise<T> => {
+      authority?.assertCurrent();
+      const result = await operation();
+      authority?.assertCurrent();
+      return result;
+    },
+    [authority],
+  );
 
   const start = useCallback(
     async (level: IdentityVerificationLevel) =>
@@ -573,7 +674,11 @@ export interface EmailAddressVerificationScope {
 
 export interface IdentityEmailAddressVerification {
   sendCode: (emailAddressId: string, scope: EmailAddressVerificationScope) => Promise<void>;
-  verifyCode: (emailAddressId: string, code: string, scope: EmailAddressVerificationScope) => Promise<void>;
+  verifyCode: (
+    emailAddressId: string,
+    code: string,
+    scope: EmailAddressVerificationScope,
+  ) => Promise<void>;
   requireVerified: (emailAddressId: string, scope: EmailAddressVerificationScope) => Promise<void>;
   refresh: (authority: RequestAuthority) => Promise<void>;
 }
@@ -581,8 +686,10 @@ export interface IdentityEmailAddressVerification {
 export function useEmailAddressVerification(): IdentityEmailAddressVerification {
   return useMemo<IdentityEmailAddressVerification>(() => {
     type NativeUser = NonNullable<ReturnType<typeof nativeSessionFor>['user']>;
-    const owned = async <T,>(authority: RequestAuthority,
-      work: (user: NativeUser, assertCurrent: () => void) => Promise<T>): Promise<T> => {
+    const owned = async <T>(
+      authority: RequestAuthority,
+      work: (user: NativeUser, assertCurrent: () => void) => Promise<T>,
+    ): Promise<T> => {
       authority.assertCurrent();
       const session = nativeSessionFor(authority.session);
       const user = session.user;
@@ -592,13 +699,23 @@ export function useEmailAddressVerification(): IdentityEmailAddressVerification 
         throw new Error('You are signed out. Sign in again to continue.');
       }
       const observe = () => {
-        if (!authority.isCurrent() || session.user !== user || user.id !== authority.session.userId) {
+        if (
+          !authority.isCurrent() ||
+          session.user !== user ||
+          user.id !== authority.session.userId
+        ) {
           authority.retire();
         }
       };
-      const assertCurrent = () => { observe(); authority.assertCurrent(); };
+      const assertCurrent = () => {
+        observe();
+        authority.assertCurrent();
+      };
       let stop: (() => void) | undefined;
-      const release = () => { stop?.(); stop = undefined; };
+      const release = () => {
+        stop?.();
+        stop = undefined;
+      };
       authority.signal.addEventListener('abort', release, { once: true });
       stop = authority.session.subscribe?.(observe);
       if (authority.signal.aborted) release();
@@ -612,16 +729,24 @@ export function useEmailAddressVerification(): IdentityEmailAddressVerification 
         authority.signal.removeEventListener('abort', release);
       }
     };
-    const matches = (address: { id: string; emailAddress: string } | null | undefined,
-      emailAddressId: string, scope: EmailAddressVerificationScope) =>
+    const matches = (
+      address: { id: string; emailAddress: string } | null | undefined,
+      emailAddressId: string,
+      scope: EmailAddressVerificationScope,
+    ) =>
       address?.id === emailAddressId &&
       address.emailAddress.trim().toLowerCase() === scope.emailAddress.trim().toLowerCase();
-    const pendingAddress = async (user: NativeUser, assertCurrent: () => void,
-      emailAddressId: string, scope: EmailAddressVerificationScope) => {
+    const pendingAddress = async (
+      user: NativeUser,
+      assertCurrent: () => void,
+      emailAddressId: string,
+      scope: EmailAddressVerificationScope,
+    ) => {
       assertCurrent();
       const reloaded = await user.reload();
       assertCurrent();
-      if (reloaded.id !== scope.authority.session.userId) throw new Error('The account changed. Start again.');
+      if (reloaded.id !== scope.authority.session.userId)
+        throw new Error('The account changed. Start again.');
       const address = reloaded.emailAddresses.find((candidate) => candidate.id === emailAddressId);
       if (!address || !matches(address, emailAddressId, scope)) {
         throw new Error('That address is no longer on your account. Start again.');
@@ -638,7 +763,8 @@ export function useEmailAddressVerification(): IdentityEmailAddressVerification 
           assertCurrent();
           const prepared = await address.prepareVerification({ strategy: 'email_code' });
           assertCurrent();
-          if (!matches(prepared, emailAddressId, scope)) throw new Error('The code delivery could not be confirmed.');
+          if (!matches(prepared, emailAddressId, scope))
+            throw new Error('The code delivery could not be confirmed.');
         });
       },
       verifyCode: (emailAddressId, code, submitted) => {
@@ -650,7 +776,10 @@ export function useEmailAddressVerification(): IdentityEmailAddressVerification 
           assertCurrent();
           const verified = await address.attemptVerification({ code });
           assertCurrent();
-          if (!matches(verified, emailAddressId, scope) || verified.verification?.status !== 'verified') {
+          if (
+            !matches(verified, emailAddressId, scope) ||
+            verified.verification?.status !== 'verified'
+          ) {
             throw new Error('The email address verification could not be confirmed.');
           }
         });
@@ -659,14 +788,134 @@ export function useEmailAddressVerification(): IdentityEmailAddressVerification 
         const scope = { ...submitted };
         return owned(scope.authority, async (user, assertCurrent) => {
           const address = await pendingAddress(user, assertCurrent, emailAddressId, scope);
-          if (address.verification?.status !== 'verified') throw new Error('That email address is not currently verified. Close this dialog and start again.');
+          if (address.verification?.status !== 'verified')
+            throw new Error(
+              'That email address is not currently verified. Close this dialog and start again.',
+            );
         });
       },
-      refresh: (authority) => owned(authority, async (user, assertCurrent) => {
-        const reloaded = await user.reload();
-        assertCurrent();
-        if (reloaded.id !== authority.session.userId) throw new Error('The account changed. Start again.');
-      }),
+      refresh: (authority) =>
+        owned(authority, async (user, assertCurrent) => {
+          const reloaded = await user.reload();
+          assertCurrent();
+          if (reloaded.id !== authority.session.userId)
+            throw new Error('The account changed. Start again.');
+        }),
     };
   }, []);
+}
+
+export type IdentitySessionSnapshot = SessionAuthority;
+
+function useIdentityObservation() {
+  const clerk = useClerk();
+  const { isLoaded, isSignedIn, userId, sessionId } = useAuth();
+  const current = useRef({ clerk, isLoaded, isSignedIn, userId, sessionId });
+  const generation = useRef(0);
+  const renderedIdentity = `${isLoaded}:${isSignedIn}:${userId}:${sessionId}`;
+  const observed = useRef({
+    clerk,
+    loaded: clerk.loaded,
+    session: clerk.session,
+    sessionId: clerk.session?.id,
+    sessionUserId: clerk.session?.user?.id,
+    userId: clerk.user?.id,
+    renderedIdentity,
+  });
+  const observe = useCallback(() => {
+    const sdk = current.current.clerk;
+    const previous = observed.current;
+    const rendered = current.current;
+    const identity = `${rendered.isLoaded}:${rendered.isSignedIn}:${rendered.userId}:${rendered.sessionId}`;
+    if (
+      previous.clerk !== sdk ||
+      previous.loaded !== sdk.loaded ||
+      previous.session !== sdk.session ||
+      previous.sessionId !== sdk.session?.id ||
+      previous.sessionUserId !== sdk.session?.user?.id ||
+      previous.userId !== sdk.user?.id ||
+      previous.renderedIdentity !== identity
+    ) {
+      generation.current += 1;
+      observed.current = {
+        clerk: sdk,
+        loaded: sdk.loaded,
+        session: sdk.session,
+        sessionId: sdk.session?.id,
+        sessionUserId: sdk.session?.user?.id,
+        userId: sdk.user?.id,
+        renderedIdentity: identity,
+      };
+    }
+  }, []);
+  current.current = { clerk, isLoaded, isSignedIn, userId, sessionId };
+  observe();
+  return { current, generation, observe };
+}
+
+export function useReadonlyIdentityLifetime(): () => { isCurrent: () => boolean } {
+  const { generation, observe } = useIdentityObservation();
+  return useCallback(() => {
+    observe();
+    const capturedGeneration = generation.current;
+    let retired = false;
+    return {
+      isCurrent: () => {
+        observe();
+        if (generation.current !== capturedGeneration) retired = true;
+        return !retired;
+      },
+    };
+  }, [generation, observe]);
+}
+
+export function useSessionSnapshot(): () => IdentitySessionSnapshot | null {
+  const { current, generation, observe } = useIdentityObservation();
+  return useCallback(() => {
+    const rendered = current.current;
+    const sdk = rendered.clerk;
+    const session = sdk.session;
+    const ownerId = rendered.userId;
+    const incarnation = rendered.sessionId;
+    const capturedGeneration = generation.current;
+    let retired = false;
+    const isCurrent = () => {
+      observe();
+      const latest = current.current;
+      const matches = Boolean(
+        capturedGeneration === generation.current &&
+        ownerId &&
+        incarnation &&
+        session &&
+        latest.clerk === sdk &&
+        latest.isLoaded &&
+        latest.isSignedIn === true &&
+        latest.userId === ownerId &&
+        latest.sessionId === incarnation &&
+        sdk.loaded &&
+        sdk.session === session &&
+        session.id === incarnation &&
+        sdk.user?.id === ownerId &&
+        session.user?.id === ownerId,
+      );
+      if (!matches) retired = true;
+      return !retired;
+    };
+    if (!isCurrent() || !ownerId || !incarnation || !session) return null;
+    const snapshot: SessionAuthority = {
+      userId: ownerId,
+      sessionId: incarnation,
+      isCurrent,
+      subscribe: (listener) => sdk.addListener(() => listener()),
+      getToken: async (options) => {
+        if (!isCurrent()) return null;
+        const token = await (options === undefined
+          ? session.getToken()
+          : session.getToken(options));
+        return isCurrent() ? token : null;
+      },
+    };
+    bindNativeSession(snapshot, session);
+    return snapshot;
+  }, [current, generation, observe]);
 }

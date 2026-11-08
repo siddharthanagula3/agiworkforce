@@ -583,5 +583,10 @@ vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => {
   return {
     ...(await importOriginal<ReadonlyIdentityModule>()),
     useReadonlyIdentityLifetime: () => capture,
+    useSessionSnapshot: () => () => null,
   };
 });
+
+vi.mock('@shared/hooks/use-workspace-policy', () => ({
+  useWorkspacePolicy: () => ({ policy: null, source: 'none', stale: false, checkedAt: null }),
+}));

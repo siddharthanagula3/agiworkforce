@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -15,16 +16,32 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: mocks.routerReplace }),
 }));
 
-vi.mock('@clerk/nextjs', () => ({
-  useUser: () => ({ isLoaded: true, isSignedIn: true, user: mocks.user }),
-  useClerk: () => ({ signOut: mocks.signOut }),
-}));
+vi.mock('@clerk/nextjs', async () => {
+  const { createClerkSessionFixture } =
+    await import('@/lib/identity/__tests__/clerk-session-fixture');
+  return {
+    ...createClerkSessionFixture(
+      () => ({
+        isLoaded: true,
+        isSignedIn: true,
+        userId: mocks.user.id,
+        sessionId: 'session-1',
+        getToken: async () => 'token',
+      }),
+      { signOut: mocks.signOut },
+    ),
+    useUser: () => ({ isLoaded: true, isSignedIn: true, user: mocks.user }),
+  };
+});
 
 vi.mock('@/lib/identity/useSessionSnapshot', async (original) => {
-  const session = { userId: 'user-1', sessionId: 'session-1',
-    isCurrent: () => true, getToken: async () => 'token' };
-  return { ...await original<typeof import('@/lib/identity/useSessionSnapshot')>(),
-    useSessionSnapshot: () => () => session };
+  const session = {
+    userId: 'user-1',
+    sessionId: 'session-1',
+    isCurrent: () => true,
+    getToken: async () => 'token',
+  };
+  return { ...(await original<MockedModule0>()), useSessionSnapshot: () => () => session };
 });
 
 vi.mock('@shared/stores/authentication-store', () => ({
@@ -37,7 +54,8 @@ vi.mock('@/lib/client/csrf', async (importOriginal) => ({
   addCsrfHeaders: mocks.addCsrfHeaders,
 }));
 
-vi.mock('@features/settings/services/user-preferences', () => ({
+vi.mock('@features/settings/services/user-preferences', async (importOriginal) => ({
+  ...(await importOriginal()),
   default: { get2FAStatus: mocks.get2FAStatus },
   settingsService: { get2FAStatus: mocks.get2FAStatus },
 }));
@@ -86,6 +104,12 @@ function stubSessionsDelete(response: () => Response) {
   const requests: Array<{ url: string; method: string }> = [];
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
     const request = { url: String(input), method: init?.method ?? 'GET' };
+    if (request.url === '/api/settings/2fa' && request.method === 'GET') {
+      return jsonResponse({ enabled: false, backupCodesRemaining: 0 });
+    }
+    if (request.url === '/api/settings/2fa/requirement' && request.method === 'GET') {
+      return jsonResponse({ required: false });
+    }
     requests.push(request);
     if (request.url === '/api/settings/sessions' && request.method === 'DELETE') return response();
     throw new Error(`Unexpected request: ${request.url} ${request.method}`);
@@ -102,7 +126,7 @@ describe('SecuritySection sessions', () => {
   });
 
   it('renders a Sessions block that links to the session list in Account', () => {
-    render(<SecuritySection />);
+    renderSecurity();
 
     expect(screen.getByRole('heading', { level: 2, name: 'Sessions' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Active sessions/ })).toHaveAttribute(
@@ -117,7 +141,7 @@ describe('SecuritySection sessions', () => {
       jsonResponse({ message: 'All active sessions revoked', revokedCount: 2 }),
     );
 
-    render(<SecuritySection />);
+    renderSecurity();
     fireEvent.click(screen.getByRole('button', { name: 'Log out of all devices' }));
     expect(await screen.findByText('Log out of all devices?')).toBeInTheDocument();
     expect(requests).toEqual([]);
@@ -132,7 +156,7 @@ describe('SecuritySection sessions', () => {
   it('ends no session when the confirmation is dismissed', async () => {
     const requests = stubSessionsDelete(() => jsonResponse({}));
 
-    render(<SecuritySection />);
+    renderSecurity();
     fireEvent.click(screen.getByRole('button', { name: 'Log out of all devices' }));
     expect(
       await screen.findByText(/Every signed-in session on every device ends immediately/),
@@ -158,7 +182,7 @@ describe('SecuritySection sessions', () => {
       ),
     );
 
-    render(<SecuritySection />);
+    renderSecurity();
     fireEvent.click(screen.getByRole('button', { name: 'Log out of all devices' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Log out everywhere' }));
 
@@ -169,7 +193,7 @@ describe('SecuritySection sessions', () => {
   });
 
   it('moves focus to the password form from the sign-in methods row', async () => {
-    render(<SecuritySection />);
+    renderSecurity();
 
     fireEvent.click(screen.getByRole('button', { name: 'Add password' }));
 
@@ -178,3 +202,16 @@ describe('SecuritySection sessions', () => {
     );
   });
 });
+
+type MockedModule0 = typeof import('@/lib/identity/useSessionSnapshot');
+
+function renderSecurity() {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false } },
+  });
+  return render(
+    <QueryClientProvider client={client}>
+      <SecuritySection />
+    </QueryClientProvider>,
+  );
+}

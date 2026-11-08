@@ -3,12 +3,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PreferenceOwner } from '@/app/settings/_lib/preferences-client';
 import type { RequestAuthority } from '@/lib/identity/request-authority';
 import type { NotificationSnapshot } from '../services/notification-preferences-client';
-import { AVAILABLE_NOW_LABEL, SURFACE_STATUS } from '@/lib/surface-status';
+import { AVAILABLE_NOW_LABEL, SURFACE_STATUS, type SurfaceStatusMap } from '@/lib/surface-status';
 import { NotificationsSection } from './NotificationsSection';
 
-const mocks = vi.hoisted(() => ({ owner: null as PreferenceOwner | null, read: vi.fn(), save: vi.fn(), browserMount: vi.fn(), browserUnmount: vi.fn(), browserOperation: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  owner: null as PreferenceOwner | null,
+  read: vi.fn(),
+  save: vi.fn(),
+  browserMount: vi.fn(),
+  browserUnmount: vi.fn(),
+  browserOperation: vi.fn(),
+}));
 vi.mock('../hooks/use-preference-owner', async (original) => ({
-  ...await original<typeof import('../hooks/use-preference-owner')>(),
+  ...(await original<MockedModule0>()),
   usePreferenceOwner: () => mocks.owner,
 }));
 vi.mock('../services/notification-preferences-client', () => ({
@@ -18,12 +25,20 @@ vi.mock('../services/notification-preferences-client', () => ({
 vi.mock('@/features/notifications', async (original) => {
   const React = await import('react');
   return {
-    ...await original<typeof import('@/features/notifications')>(),
+    ...(await original<MockedModule1>()),
     useWebPushToggle: function useBrowserToggle() {
       const [busy, setBusy] = React.useState(false);
-      React.useEffect(() => { mocks.browserMount(); return () => { mocks.browserUnmount(); }; }, []);
+      React.useEffect(() => {
+        mocks.browserMount();
+        return () => {
+          mocks.browserUnmount();
+        };
+      }, []);
       return {
-        checked: false, disabled: busy, unavailable: false, description: '',
+        checked: false,
+        disabled: busy,
+        unavailable: false,
+        description: '',
         onCheckedChange: async () => {
           setBusy(true);
           await mocks.browserOperation();
@@ -37,26 +52,39 @@ vi.mock('@/features/notifications', async (original) => {
 function owner(incarnation: number): PreferenceOwner {
   const candidate: PreferenceOwner = {
     incarnation,
-    session: { userId: String(incarnation), sessionId: String(incarnation), isCurrent: () => mocks.owner === candidate, getToken: async () => 'token' },
+    session: {
+      userId: String(incarnation),
+      sessionId: String(incarnation),
+      isCurrent: () => mocks.owner === candidate,
+      getToken: async () => 'token',
+    },
     isCurrent: () => mocks.owner === candidate,
   };
   return candidate;
 }
 function deferred<T>() {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => { resolve = done; });
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
   return { promise, resolve };
 }
 function retainChange(label: string) {
   const node = screen.getByRole('combobox', { name: label });
   const key = Object.keys(node).find((candidate) => candidate.startsWith('__reactProps$'));
   if (!key) throw new Error('Rendered React select props are unavailable');
-  const props = (node as unknown as Record<string, { onChange: (event: { target: { value: string } }) => void }>)[key];
+  const props = (
+    node as unknown as Record<string, { onChange: (event: { target: { value: string } }) => void }>
+  )[key];
   if (!props) throw new Error('Rendered React select props are missing');
   return props.onChange;
 }
-const ready = () => waitFor(() => expect(screen.getByRole('combobox', { name: 'Reply ready' })).toBeEnabled());
-const snapshot = (enabled: boolean): NotificationSnapshot => ({ stored: { browserReplyReady: enabled }, version: 'v1' });
+const ready = () =>
+  waitFor(() => expect(screen.getByRole('combobox', { name: 'Reply ready' })).toBeEnabled());
+const snapshot = (enabled: boolean): NotificationSnapshot => ({
+  stored: { browserReplyReady: enabled },
+  version: 'v1',
+});
 
 beforeEach(() => {
   mocks.owner = owner(1);
@@ -77,13 +105,18 @@ describe('notification view admission', () => {
     fireEvent.click(toggle);
     expect(toggle).toBeDisabled();
     mocks.owner = owner(2);
-    view.rerender(<NotificationsSection surfaceStatus={{ ...SURFACE_STATUS, mobile: AVAILABLE_NOW_LABEL }} />);
+    view.rerender(
+      <NotificationsSection surfaceStatus={{ ...SURFACE_STATUS, mobile: AVAILABLE_NOW_LABEL }} />,
+    );
     await ready();
     expect(screen.getByRole('switch', { name: 'Agent run updates' })).toBe(toggle);
     expect(toggle).toBeDisabled();
     expect(mocks.browserMount).toHaveBeenCalledTimes(1);
     expect(mocks.browserUnmount).not.toHaveBeenCalled();
-    await act(async () => { browser.resolve(); await browser.promise; });
+    await act(async () => {
+      browser.resolve();
+      await browser.promise;
+    });
     expect(toggle).toBeEnabled();
     expect(mocks.browserOperation).toHaveBeenCalledTimes(1);
   });
@@ -107,7 +140,9 @@ describe('notification view admission', () => {
     act(() => oldChange({ target: { value: 'browserReplyReady' } }));
     expect(mocks.save).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('combobox', { name: 'Reply ready' })).toHaveValue('off');
-    fireEvent.change(screen.getByRole('combobox', { name: 'Reply ready' }), { target: { value: 'browserReplyReady' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Reply ready' }), {
+      target: { value: 'browserReplyReady' },
+    });
     await waitFor(() => expect(mocks.save).toHaveBeenCalledTimes(2));
   });
 
@@ -116,7 +151,10 @@ describe('notification view admission', () => {
     render(<NotificationsSection />);
     await ready();
     const change = retainChange('Reply ready');
-    act(() => { change({ target: { value: 'off' } }); change({ target: { value: 'off' } }); });
+    act(() => {
+      change({ target: { value: 'off' } });
+      change({ target: { value: 'off' } });
+    });
     expect(mocks.save).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('combobox', { name: 'Reply ready' })).toBeDisabled();
   });
@@ -133,7 +171,7 @@ describe('notification view admission', () => {
   });
 
   it('does not revive a retained mobile option after an observed hide/show cycle', async () => {
-    const released = { ...SURFACE_STATUS, mobile: AVAILABLE_NOW_LABEL };
+    const released: SurfaceStatusMap = { ...SURFACE_STATUS, mobile: AVAILABLE_NOW_LABEL };
     const view = render(<NotificationsSection surfaceStatus={released} />);
     await ready();
     const oldChange = retainChange('Scheduled task finished');
@@ -145,8 +183,13 @@ describe('notification view admission', () => {
     await ready();
     act(() => oldChange({ target: { value: 'emailScheduleDone+mobilePushScheduleDone' } }));
     expect(mocks.save).not.toHaveBeenCalled();
-    fireEvent.change(screen.getByRole('combobox', { name: 'Scheduled task finished' }), { target: { value: 'emailScheduleDone+mobilePushScheduleDone' } });
-    expect(mocks.save).toHaveBeenCalledWith(expect.anything(), { emailScheduleDone: true, mobilePushScheduleDone: true });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Scheduled task finished' }), {
+      target: { value: 'emailScheduleDone+mobilePushScheduleDone' },
+    });
+    expect(mocks.save).toHaveBeenCalledWith(expect.anything(), {
+      emailScheduleDone: true,
+      mobilePushScheduleDone: true,
+    });
   });
 
   it('does not apply an old account read to its replacement', async () => {
@@ -157,7 +200,10 @@ describe('notification view admission', () => {
     mocks.owner = owner(2);
     view.rerender(<NotificationsSection />);
     await ready();
-    await act(async () => { old.resolve(snapshot(true)); await old.promise; });
+    await act(async () => {
+      old.resolve(snapshot(true));
+      await old.promise;
+    });
     expect(authority.isCurrent()).toBe(false);
     expect(screen.getByRole('combobox', { name: 'Reply ready' })).toHaveValue('off');
   });
@@ -173,7 +219,10 @@ describe('notification view admission', () => {
     view.unmount();
     render(<NotificationsSection />);
     await ready();
-    await act(async () => { write.resolve(snapshot(false)); await write.promise; });
+    await act(async () => {
+      write.resolve(snapshot(false));
+      await write.promise;
+    });
     act(() => oldChange({ target: { value: 'off' } }));
     expect(authority.isCurrent()).toBe(false);
     expect(mocks.read).toHaveBeenCalledTimes(2);
@@ -181,3 +230,6 @@ describe('notification view admission', () => {
     expect(screen.queryByText('Saved')).toBeNull();
   });
 });
+
+type MockedModule0 = typeof import('../hooks/use-preference-owner');
+type MockedModule1 = typeof import('@/features/notifications');

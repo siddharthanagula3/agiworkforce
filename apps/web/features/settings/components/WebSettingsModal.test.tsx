@@ -26,46 +26,86 @@ vi.mock('@/lib/client/csrf', async (importOriginal) => ({
 
 const getTokenMock = vi.fn(async () => 'session-token');
 vi.mock('@clerk/nextjs', async (original) => ({
-  ...await original<typeof import('@clerk/nextjs')>(), useAuth: () => ({ getToken: getTokenMock }),
+  ...(await original()),
+  useAuth: () => ({ getToken: getTokenMock }),
 }));
 
 vi.mock('../sections/GeneralSection', () => ({ GeneralSection: () => null }));
 const emailAdmission = vi.hoisted(() => vi.fn());
 const cancellationAdmission = vi.hoisted(() => vi.fn());
 vi.mock('../sections/AccountSection', () => ({
-  AccountSection: ({ emailEditorActive, deletionActionsActive }: { emailEditorActive?: boolean; deletionActionsActive?: boolean }) => {
+  AccountSection: ({
+    emailEditorActive,
+    deletionActionsActive,
+  }: {
+    emailEditorActive?: boolean;
+    deletionActionsActive?: boolean;
+  }) => {
     emailAdmission(emailEditorActive);
     cancellationAdmission(deletionActionsActive);
-    return <><div data-testid="email-editor-admission">{String(emailEditorActive)}</div>
-      <div data-testid="cancellation-admission">{String(deletionActionsActive)}</div></>;
+    return (
+      <>
+        <div data-testid="email-editor-admission">{String(emailEditorActive)}</div>
+        <div data-testid="cancellation-admission">{String(deletionActionsActive)}</div>
+      </>
+    );
   },
   readApiError: (_data: unknown, fallback: string) => fallback,
 }));
 const membershipAdmission = vi.hoisted(() => vi.fn());
-vi.mock('../sections/TeamSection', () => ({ TeamSection: ({ active }: { active?: boolean }) => {
-  membershipAdmission(active);
-  return <div>Team settings content<span data-testid="membership-editor-admission">{String(active)}</span></div>;
-} }));
+vi.mock('../sections/TeamSection', () => ({
+  TeamSection: ({ active }: { active?: boolean }) => {
+    membershipAdmission(active);
+    return (
+      <div>
+        Team settings content<span data-testid="membership-editor-admission">{String(active)}</span>
+      </div>
+    );
+  },
+}));
 const passwordAdmission = vi.hoisted(() => vi.fn());
 const signInAdmission = vi.hoisted(() => vi.fn());
 const twoFactorAdmission = vi.hoisted(() => vi.fn());
 const retainedSettings = vi.hoisted(() => ({ enabled: false, retainSecurity: false }));
 vi.mock('@agiworkforce/ui', async (original) => {
-  const actual = await original<typeof import('@agiworkforce/ui')>();
-  return { ...actual, SettingsModal: (props: ComponentProps<typeof actual.SettingsModal>) =>
-    retainedSettings.enabled ? <>{props.sectionContent[retainedSettings.retainSecurity ? 'security' : props.activeSection]}</> : <actual.SettingsModal {...props} /> };
+  const actual = await original<MockedModule0>();
+  return {
+    ...actual,
+    SettingsModal: (props: ComponentProps<typeof actual.SettingsModal>) =>
+      retainedSettings.enabled ? (
+        <>
+          {props.sectionContent[retainedSettings.retainSecurity ? 'security' : props.activeSection]}
+        </>
+      ) : (
+        <actual.SettingsModal {...props} />
+      ),
+  };
 });
 
 vi.mock('../sections/SecuritySection', async (original) => ({
-  ...await original<typeof import('../sections/SecuritySection')>(),
-  SecuritySection: ({ passwordEditorActive, signInMethodsActive, twoFactorActive, deviceSignInActive }: { passwordEditorActive?: boolean; signInMethodsActive?: boolean; twoFactorActive?: boolean; deviceSignInActive?: boolean }) => {
+  ...(await original<MockedModule1>()),
+  SecuritySection: ({
+    passwordEditorActive,
+    signInMethodsActive,
+    twoFactorActive,
+    deviceSignInActive,
+  }: {
+    passwordEditorActive?: boolean;
+    signInMethodsActive?: boolean;
+    twoFactorActive?: boolean;
+    deviceSignInActive?: boolean;
+  }) => {
     passwordAdmission(passwordEditorActive);
     signInAdmission(signInMethodsActive);
     twoFactorAdmission(twoFactorActive);
-    return <><div data-testid="password-editor-admission">{String(passwordEditorActive)}</div>
-      <div data-testid="sign-in-methods-admission">{String(signInMethodsActive)}</div>
-      <div data-testid="two-factor-admission">{String(twoFactorActive)}</div>
-      <div data-testid="device-sign-in-admission">{String(deviceSignInActive)}</div></>;
+    return (
+      <>
+        <div data-testid="password-editor-admission">{String(passwordEditorActive)}</div>
+        <div data-testid="sign-in-methods-admission">{String(signInMethodsActive)}</div>
+        <div data-testid="two-factor-admission">{String(twoFactorActive)}</div>
+        <div data-testid="device-sign-in-admission">{String(deviceSignInActive)}</div>
+      </>
+    );
   },
 }));
 vi.mock('../sections/SafetySection', () => ({ SafetySection: () => null }));
@@ -915,10 +955,15 @@ it('withdraws password editor admission when Settings closes and restores it on 
   retainedSettings.enabled = false;
 });
 
-afterEach(() => { retainedSettings.enabled = false; retainedSettings.retainSecurity = false; });
+afterEach(() => {
+  retainedSettings.enabled = false;
+  retainedSettings.retainSecurity = false;
+});
 
 it('withdraws sign-in method admission before retained Settings content unmounts', async () => {
-  stubFetch({}); signInAdmission.mockClear(); retainedSettings.enabled = true;
+  stubFetch({});
+  signInAdmission.mockClear();
+  retainedSettings.enabled = true;
   const props = { onClose: vi.fn(), initialSection: 'security' as const };
   const mounted = render(<WebSettingsModal {...props} open />);
   await waitFor(() => expect(signInAdmission).toHaveBeenLastCalledWith(true));
@@ -942,7 +987,6 @@ it('withdraws workspace membership admission on Settings close before retained T
   mounted.rerender(<WebSettingsModal {...props} open />);
   await waitFor(() => expect(membershipAdmission).toHaveBeenLastCalledWith(true));
 });
-
 
 it('withdraws email editor admission on Settings close before retained content unmounts', async () => {
   emailAdmission.mockClear();
@@ -971,7 +1015,6 @@ it('withdraws cancellation admission on Settings close before retained content u
   retainedSettings.enabled = false;
 });
 
-
 it('composes TOTP admission from open and the selected section without changing other admission rules', async () => {
   stubFetch();
   retainedSettings.enabled = true;
@@ -979,7 +1022,9 @@ it('composes TOTP admission from open and the selected section without changing 
   const onClose = vi.fn();
   const mounted = render(<WebSettingsModal open onClose={onClose} initialSection="security" />);
   await waitFor(() => expect(screen.getByTestId('two-factor-admission')).toHaveTextContent('true'));
-  await waitFor(() => expect(screen.getByTestId('device-sign-in-admission')).toHaveTextContent('true'));
+  await waitFor(() =>
+    expect(screen.getByTestId('device-sign-in-admission')).toHaveTextContent('true'),
+  );
   mounted.rerender(<WebSettingsModal open={false} onClose={onClose} initialSection="security" />);
   expect(screen.getByTestId('two-factor-admission')).toHaveTextContent('false');
   expect(screen.getByTestId('device-sign-in-admission')).toHaveTextContent('false');
@@ -987,13 +1032,24 @@ it('composes TOTP admission from open and the selected section without changing 
   expect(screen.getByTestId('sign-in-methods-admission')).toHaveTextContent('false');
   mounted.rerender(<WebSettingsModal open onClose={onClose} initialSection="security" />);
   await waitFor(() => expect(screen.getByTestId('two-factor-admission')).toHaveTextContent('true'));
-  await waitFor(() => expect(screen.getByTestId('device-sign-in-admission')).toHaveTextContent('true'));
+  await waitFor(() =>
+    expect(screen.getByTestId('device-sign-in-admission')).toHaveTextContent('true'),
+  );
   mounted.rerender(<WebSettingsModal open onClose={onClose} initialSection="general" />);
-  await waitFor(() => expect(screen.getByTestId('two-factor-admission')).toHaveTextContent('false'));
-  await waitFor(() => expect(screen.getByTestId('device-sign-in-admission')).toHaveTextContent('false'));
+  await waitFor(() =>
+    expect(screen.getByTestId('two-factor-admission')).toHaveTextContent('false'),
+  );
+  await waitFor(() =>
+    expect(screen.getByTestId('device-sign-in-admission')).toHaveTextContent('false'),
+  );
   expect(screen.getByTestId('password-editor-admission')).toHaveTextContent('true');
   expect(screen.getByTestId('sign-in-methods-admission')).toHaveTextContent('false');
   mounted.rerender(<WebSettingsModal open onClose={onClose} initialSection="security" />);
   await waitFor(() => expect(screen.getByTestId('two-factor-admission')).toHaveTextContent('true'));
-  await waitFor(() => expect(screen.getByTestId('device-sign-in-admission')).toHaveTextContent('true'));
+  await waitFor(() =>
+    expect(screen.getByTestId('device-sign-in-admission')).toHaveTextContent('true'),
+  );
 });
+
+type MockedModule0 = typeof import('@agiworkforce/ui');
+type MockedModule1 = typeof import('../sections/SecuritySection');

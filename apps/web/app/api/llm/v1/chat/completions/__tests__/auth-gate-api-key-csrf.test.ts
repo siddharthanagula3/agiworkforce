@@ -70,9 +70,15 @@ function makeTransactionAdapter() {
           if (!open) throw new Error('Transaction handle escaped');
           return mockNeonExecute(...args);
         },
-        transaction: () => { throw new Error('Nested transaction'); },
-        withUser: () => { throw new Error('Transaction scope escape'); },
-        withOrg: () => { throw new Error('Transaction scope escape'); },
+        transaction: () => {
+          throw new Error('Nested transaction');
+        },
+        withUser: () => {
+          throw new Error('Transaction scope escape');
+        },
+        withOrg: () => {
+          throw new Error('Transaction scope escape');
+        },
       };
       try {
         return await callback(tx);
@@ -81,18 +87,29 @@ function makeTransactionAdapter() {
         active = false;
       }
     },
-    withUser: () => { throw new Error('Unexpected fixture scope change'); },
-    withOrg: () => { throw new Error('Unexpected fixture scope change'); },
+    withUser: () => {
+      throw new Error('Unexpected fixture scope change');
+    },
+    withOrg: () => {
+      throw new Error('Unexpected fixture scope change');
+    },
     dispose: vi.fn(),
   };
 }
 
 function normalizedLookupSql(sql: string): string {
-  return sql.toLowerCase().replace(/\s+/g, ' ').replace(/\(\s+/g, '(').replace(/\s+\)/g, ')').trim();
+  return sql
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/\(\s+/g, '(')
+    .replace(/\s+\)/g, ')')
+    .trim();
 }
 
 function expectProjectAdmissionLookup() {
-  const lookups = mockNeonQuery.mock.calls.filter(([sql]) => String(sql).includes('key_prefix = $1'));
+  const lookups = mockNeonQuery.mock.calls.filter(([sql]) =>
+    String(sql).includes('key_prefix = $1'),
+  );
   expect(lookups.length).toBeGreaterThan(0);
   for (const [sql, params] of lookups) {
     expect(normalizedLookupSql(String(sql))).toBe(
@@ -166,9 +183,13 @@ function makeFakeDb() {
           r['key_prefix'] === keyPrefix &&
           (!s.includes('revoked_at is null') || r['revoked_at'] == null) &&
           (!s.includes('(expires_at is null or expires_at > now())') ||
-            r['expires_at'] == null || Date.parse(String(r['expires_at'])) > Date.now()) &&
-          (!hasProjectGate || r['project_id'] == null ||
-            (project?.user_id === r['user_id'] && project.archived_at === null))
+            r['expires_at'] == null ||
+            Date.parse(String(r['expires_at'])) > Date.now()) &&
+          (!hasProjectGate ||
+            r['project_id'] == null ||
+            (project !== undefined &&
+              project.user_id === r['user_id'] &&
+              project.archived_at === null))
         );
       });
     }
@@ -246,13 +267,26 @@ describe('runAuthGate · verified API key clears CSRF + auth (WEB-APIKEY-CSRF-BL
   });
 
   // This models one lookup statement, not PostgreSQL/RLS or an archive racing a request.
-  it.each(['null', 'live', 'archived', 'foreign', 'missing', 'revoked', 'expired', 'lookup-error'] as const)(
+  it.each([
+    'null',
+    'live',
+    'archived',
+    'foreign',
+    'missing',
+    'revoked',
+    'expired',
+    'lookup-error',
+  ] as const)(
     'requires canonical project admission for %s authentication and CSRF exemption',
     async (state) => {
       const fakeDb = makeFakeDb();
       fakeDb.projects.set(PROJECT_ID, { user_id: 'completions-user', archived_at: null });
       const { apiKey, rawKey } = await ApiKeyService.createApiKey(
-        getNeonDb(), 'completions-user', 'project admission', ['inference:write'], null,
+        getNeonDb(),
+        'completions-user',
+        'project admission',
+        ['inference:write'],
+        null,
         state === 'null' ? null : PROJECT_ID,
       );
       const admissions = mockNeonQuery.mock.calls.filter(([sql]) =>
@@ -277,8 +311,9 @@ describe('runAuthGate · verified API key clears CSRF + auth (WEB-APIKEY-CSRF-BL
       const verify = vi.spyOn(argon2, 'verify');
       const admitted = state === 'null' || state === 'live';
       try {
-        await expect(validateCsrfFromRequest(makeCompletionsRequest(rawKey), 'fixture-session'))
-          .resolves.toBe(admitted);
+        await expect(
+          validateCsrfFromRequest(makeCompletionsRequest(rawKey), 'fixture-session'),
+        ).resolves.toBe(admitted);
         const result = await runAuthGate(makeCompletionsRequest(rawKey));
         expect(result.ok).toBe(admitted);
         if (result.ok) {
@@ -286,7 +321,8 @@ describe('runAuthGate · verified API key clears CSRF + auth (WEB-APIKEY-CSRF-BL
           expect(result.apiKeyId).toBe(apiKey.id);
           expect(verify).toHaveBeenCalled();
           expect(mockNeonExecute).toHaveBeenCalledWith(
-            'UPDATE api_keys SET last_used_at = $1 WHERE id = $2', [expect.any(String), apiKey.id],
+            'UPDATE api_keys SET last_used_at = $1 WHERE id = $2',
+            [expect.any(String), apiKey.id],
           );
           row['scopes'] = ['models:read'];
           const insufficientScope = await runAuthGate(makeCompletionsRequest(rawKey));
@@ -296,13 +332,17 @@ describe('runAuthGate · verified API key clears CSRF + auth (WEB-APIKEY-CSRF-BL
           expect(result.response.status).toBe(401);
           const withCsrfProof = makeCompletionsRequest(rawKey);
           withCsrfProof.headers.set('x-csrf-token', generateCsrfToken('fixture-session'));
-          await expect(validateCsrfFromRequest(withCsrfProof, 'fixture-session')).resolves.toBe(true);
+          await expect(validateCsrfFromRequest(withCsrfProof, 'fixture-session')).resolves.toBe(
+            true,
+          );
           const stillUnauthenticated = await runAuthGate(withCsrfProof);
           expect(stillUnauthenticated.ok).toBe(false);
           if (!stillUnauthenticated.ok) expect(stillUnauthenticated.response.status).toBe(401);
           expect(mockResolveEffectiveSubscription).not.toHaveBeenCalled();
           expect(verify).not.toHaveBeenCalled();
-          expect(mockNeonExecute.mock.calls.some(([sql]) => String(sql).includes('SET last_used_at'))).toBe(false);
+          expect(
+            mockNeonExecute.mock.calls.some(([sql]) => String(sql).includes('SET last_used_at')),
+          ).toBe(false);
         }
         expectProjectAdmissionLookup();
         expect(mockVerifyToken).not.toHaveBeenCalled();

@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { createError } from '@/lib/errors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { recordAuditEvent } from '@/lib/security-audit';
 import { preparePublishedArtifactPublication } from '@/lib/services/published-artifact-publication-policy';
 import {
   readPublishedArtifactRestoreSource,
@@ -23,11 +24,16 @@ vi.mock('@/lib/error-handler', () => ({ withErrorHandler: <T>(handler: T): T => 
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn() }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn() }));
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: vi.fn() }));
+type SecurityAuditModule = typeof import('@/lib/security-audit');
+vi.mock('@/lib/security-audit', async (importOriginal) => ({
+  ...(await importOriginal<SecurityAuditModule>()),
+  recordAuditEvent: vi.fn(),
+}));
 vi.mock('@/lib/services/published-artifact-publication-policy', () => ({
   preparePublishedArtifactPublication: vi.fn(),
 }));
 vi.mock('@/lib/services/published-artifact-service', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/services/published-artifact-service')>();
+  const actual = await importOriginal<MockedModule0>();
   return {
     ...actual,
     readPublishedArtifactRestoreSource: vi.fn(),
@@ -40,22 +46,32 @@ vi.mock('@/lib/services/published-artifact-service', async (importOriginal) => {
 const token = 'a'.repeat(24);
 const db = { query: vi.fn() } as unknown as DatabaseAdapter;
 const publication = {
-  id: 'publication-id', token, artifactId: 'stored-artifact', conversationId: 'stored-conversation',
-  title: 'Current renamed title', kind: 'html' as const, language: null, content: 'current',
-  userId: 'owner', visibility: 'organization' as const,
-  createdAt: '2026-11-01T00:00:00.000Z', updatedAt: '2026-11-07T00:00:00.000Z',
+  id: 'publication-id',
+  token,
+  artifactId: 'stored-artifact',
+  conversationId: 'stored-conversation',
+  title: 'Current renamed title',
+  kind: 'html' as const,
+  language: null,
+  content: 'current',
+  userId: 'owner',
+  visibility: 'organization' as const,
+  createdAt: '2026-11-01T00:00:00.000Z',
+  updatedAt: '2026-11-07T00:00:00.000Z',
 };
 const snapshot = {
-  version: 3, title: 'Historical title', kind: 'html' as const, language: null,
+  version: 3,
+  title: 'Historical title',
+  kind: 'html' as const,
+  language: null,
   content: '<h1>Historical secret</h1>',
 };
 const restored = { ...publication, content: 'persisted redacted content', version: 9 };
 const context = (version = '3', requestedToken = token) => ({
   params: Promise.resolve({ token: requestedToken, version }),
 });
-const request = () => new NextRequest(
-  `https://app.agiworkforce.test/api/artifacts/publish/${token}/versions/3`,
-  {
+const request = () =>
+  new NextRequest(`https://app.agiworkforce.test/api/artifacts/publish/${token}/versions/3`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -67,15 +83,17 @@ const request = () => new NextRequest(
       content: 'attacker-content',
       visibility: 'public',
     }),
-  },
-);
+  });
 
 beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(requireCsrfToken).mockResolvedValue(null);
   vi.mocked(withRateLimit).mockResolvedValue(null);
   vi.mocked(getUserScopedDb).mockResolvedValue({
-    db, userId: 'owner', organizationId: 'active-org', surface: 'web',
+    db,
+    userId: 'owner',
+    organizationId: 'active-org',
+    surface: 'web',
   });
   vi.mocked(readPublishedArtifactRestoreSource).mockResolvedValue({ publication, snapshot });
   vi.mocked(preparePublishedArtifactPublication).mockResolvedValue({
@@ -87,6 +105,7 @@ beforeEach(() => {
 function expectNoWrites() {
   expect(restorePublishedArtifactRecord).not.toHaveBeenCalled();
   expect(publishArtifactRecord).not.toHaveBeenCalled();
+  expect(recordAuditEvent).not.toHaveBeenCalled();
 }
 
 describe('version POST restore handler', () => {
@@ -101,7 +120,9 @@ describe('version POST restore handler', () => {
   );
 
   it('rejects malformed tokens before gates', async () => {
-    await expect(POST(request(), context('3', '../invalid'))).rejects.toMatchObject({ statusCode: 404 });
+    await expect(POST(request(), context('3', '../invalid'))).rejects.toMatchObject({
+      statusCode: 404,
+    });
     expect(requireCsrfToken).not.toHaveBeenCalled();
     expectNoWrites();
   });
@@ -117,7 +138,7 @@ describe('version POST restore handler', () => {
 
   it('uses share-create rate limiting before authentication', async () => {
     const req = request();
-    const refusal = new Response('rate limit', { status: 429 });
+    const refusal = new NextResponse('rate limit', { status: 429 });
     vi.mocked(withRateLimit).mockResolvedValue(refusal);
     await expect(POST(req, context())).resolves.toBe(refusal);
     expect(withRateLimit).toHaveBeenCalledExactlyOnceWith(req, 'share-create');
@@ -136,7 +157,9 @@ describe('version POST restore handler', () => {
     vi.mocked(readPublishedArtifactRestoreSource).mockResolvedValue(null);
     await expect(POST(request(), context())).rejects.toMatchObject({ statusCode: 404 });
     expect(readPublishedArtifactRestoreSource).toHaveBeenCalledExactlyOnceWith(db, {
-      userId: 'owner', token, version: 3,
+      userId: 'owner',
+      token,
+      version: 3,
     });
     expect(preparePublishedArtifactPublication).not.toHaveBeenCalled();
     expectNoWrites();
@@ -163,25 +186,52 @@ describe('version POST restore handler', () => {
     const response = await POST(req, context());
     expect(json).not.toHaveBeenCalled();
     expect(preparePublishedArtifactPublication).toHaveBeenCalledExactlyOnceWith(db, {
-      request: req, userId: 'owner', organizationId: 'active-org',
-      artifactId: publication.artifactId, conversationId: publication.conversationId,
-      title: snapshot.title, content: snapshot.content,
+      request: req,
+      userId: 'owner',
+      organizationId: 'active-org',
+      artifactId: publication.artifactId,
+      conversationId: publication.conversationId,
+      title: snapshot.title,
+      content: snapshot.content,
     });
     expect(restorePublishedArtifactRecord).toHaveBeenCalledExactlyOnceWith(db, {
-      userId: 'owner', publishedArtifactId: publication.id, token,
-      artifactId: publication.artifactId, conversationId: publication.conversationId,
+      userId: 'owner',
+      publishedArtifactId: publication.id,
+      token,
+      artifactId: publication.artifactId,
+      conversationId: publication.conversationId,
       title: snapshot.title,
       kind: snapshot.kind,
       language: snapshot.language,
       content: 'prepared redacted content',
     });
-    const order = [requireCsrfToken, withRateLimit, getUserScopedDb, readPublishedArtifactRestoreSource,
-      preparePublishedArtifactPublication, restorePublishedArtifactRecord]
-      .map((mock) => vi.mocked(mock).mock.invocationCallOrder[0]!);
+    const order = [
+      requireCsrfToken,
+      withRateLimit,
+      getUserScopedDb,
+      readPublishedArtifactRestoreSource,
+      preparePublishedArtifactPublication,
+      restorePublishedArtifactRecord,
+    ].map((mock) => vi.mocked(mock).mock.invocationCallOrder[0]!);
     expect(order).toEqual([...order].sort((left, right) => left - right));
     expect(publishArtifactRecord).not.toHaveBeenCalled();
+    expect(recordAuditEvent).toHaveBeenCalledExactlyOnceWith({
+      userId: 'owner',
+      organizationId: 'active-org',
+      eventType: 'share_link_updated',
+      request: req,
+      detail: {
+        resourceType: 'published_artifact',
+        resourceId: publication.id,
+        status: 'version_restored',
+      },
+    });
     expect(await response.json()).toMatchObject({
-      token, title: restored.title, visibility: 'organization', version: 9, sandboxed: true,
+      token,
+      title: restored.title,
+      visibility: 'organization',
+      version: 9,
+      sandboxed: true,
     });
   });
 
@@ -190,6 +240,7 @@ describe('version POST restore handler', () => {
     await expect(POST(request(), context())).rejects.toMatchObject({ statusCode: 409 });
     expect(restorePublishedArtifactRecord).toHaveBeenCalledTimes(1);
     expect(publishArtifactRecord).not.toHaveBeenCalled();
+    expect(recordAuditEvent).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -201,6 +252,7 @@ describe('version POST restore handler', () => {
     await expect(POST(request(), context())).rejects.toMatchObject({ statusCode });
     expect(restorePublishedArtifactRecord).toHaveBeenCalledTimes(1);
     expect(publishArtifactRecord).not.toHaveBeenCalled();
+    expect(recordAuditEvent).not.toHaveBeenCalled();
   });
 
   it.each(['history unavailable', 'commit outcome unknown'])(
@@ -210,6 +262,7 @@ describe('version POST restore handler', () => {
       await expect(POST(request(), context())).rejects.toThrow(message);
       expect(restorePublishedArtifactRecord).toHaveBeenCalledTimes(1);
       expect(publishArtifactRecord).not.toHaveBeenCalled();
+      expect(recordAuditEvent).not.toHaveBeenCalled();
     },
   );
 
@@ -234,9 +287,11 @@ describe('version POST restore handler', () => {
     await entered;
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(settled).toBe(false);
+    expect(recordAuditEvent).not.toHaveBeenCalled();
     finishService(restored);
     expect(await (await response).json()).toMatchObject({ version: restored.version });
     expect(restorePublishedArtifactRecord).toHaveBeenCalledTimes(1);
+    expect(recordAuditEvent).toHaveBeenCalledTimes(1);
     expect(publishArtifactRecord).not.toHaveBeenCalled();
   }, 1_000);
 });
@@ -244,12 +299,16 @@ describe('version POST restore handler', () => {
 describe('version GET remains read-only', () => {
   it('uses owner-scoped version read and chat-conversation limit without restore gates', async () => {
     vi.mocked(readPublishedArtifactVersion).mockResolvedValue(snapshot);
-    const req = new NextRequest(`https://app.agiworkforce.test/api/artifacts/publish/${token}/versions/3`);
+    const req = new NextRequest(
+      `https://app.agiworkforce.test/api/artifacts/publish/${token}/versions/3`,
+    );
     const response = await GET(req, context());
     expect(await response.json()).toEqual(snapshot);
     expect(withRateLimit).toHaveBeenCalledExactlyOnceWith(req, 'chat-conversation');
     expect(readPublishedArtifactVersion).toHaveBeenCalledExactlyOnceWith(db, {
-      userId: 'owner', token, version: 3,
+      userId: 'owner',
+      token,
+      version: 3,
     });
     expect(requireCsrfToken).not.toHaveBeenCalled();
     expect(preparePublishedArtifactPublication).not.toHaveBeenCalled();
@@ -258,8 +317,11 @@ describe('version GET remains read-only', () => {
 
   it('retains missing-version 404', async () => {
     vi.mocked(readPublishedArtifactVersion).mockResolvedValue(null);
-    await expect(GET(new NextRequest('https://app.agiworkforce.test'), context()))
-      .rejects.toMatchObject({ statusCode: 404 });
+    await expect(
+      GET(new NextRequest('https://app.agiworkforce.test'), context()),
+    ).rejects.toMatchObject({ statusCode: 404 });
     expectNoWrites();
   });
 });
+
+type MockedModule0 = typeof import('@/lib/services/published-artifact-service');

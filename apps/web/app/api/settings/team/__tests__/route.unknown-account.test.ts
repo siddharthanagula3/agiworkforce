@@ -36,11 +36,13 @@ vi.mock('@/lib/csrf', () => ({
   requireCsrfToken: vi.fn(async () => null),
 }));
 
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule1>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule0>()),
   getClerkAuthUser: vi.fn(async () => ({ userId: 'owner-user' })),
 }));
 
@@ -135,3 +137,7 @@ describe('POST /api/settings/team unknown account honesty', () => {
     expect(body.error.message).toMatch(/no email was sent/i);
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/api-auth');
+
+type RetainedMockModule1 = typeof import('@/lib/logger');

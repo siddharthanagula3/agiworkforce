@@ -106,7 +106,9 @@ export function readVendorAuthError(error: unknown): VendorAuthError | null {
 }
 
 function kindFromCode(code: string): AuthErrorKind | null {
-  const mapped = CODE_KINDS[code];
+  const mapped = Object.prototype.hasOwnProperty.call(CODE_KINDS, code)
+    ? CODE_KINDS[code]
+    : undefined;
   if (mapped) return mapped;
   if (code.includes('already_verified') || code.includes('already_used'))
     return 'link_already_used';
@@ -136,7 +138,7 @@ export function classifyAuthError(error: unknown): AuthErrorDescriptor {
   if (!vendor) return { kind: 'unexpected' };
 
   const status = vendor.status;
-  const code = vendor.code ?? '';
+  const code = typeof vendor.code === 'string' ? vendor.code : '';
   const kind =
     (status === RATE_LIMIT_STATUS ? 'rate_limited' : null) ??
     kindFromCode(code) ??

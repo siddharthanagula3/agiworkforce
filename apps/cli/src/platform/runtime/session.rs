@@ -78,10 +78,15 @@ fn session_digest(bytes: &[u8]) -> [u8; 32] {
 }
 
 fn session_target(path: &Path) -> Result<PathBuf> {
-    let name = path.file_name().context("Managed session path has no filename")?;
-    let parent = path.parent().filter(|parent| !parent.as_os_str().is_empty())
+    let name = path
+        .file_name()
+        .context("Managed session path has no filename")?;
+    let parent = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
         .unwrap_or_else(|| Path::new("."));
-    Ok(parent.canonicalize()
+    Ok(parent
+        .canonicalize()
         .with_context(|| format!("Failed to resolve session directory {}", parent.display()))?
         .join(name))
 }
@@ -92,27 +97,43 @@ fn read_session_bytes(path: &Path) -> Result<Option<Vec<u8>>> {
     let metadata = match fs::symlink_metadata(path) {
         Ok(metadata) => metadata,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(error) => return Err(error).with_context(||
-            format!("Failed to inspect managed session file {}", path.display())),
+        Err(error) => {
+            return Err(error).with_context(|| {
+                format!("Failed to inspect managed session file {}", path.display())
+            })
+        }
     };
     if !metadata.file_type().is_file() {
-        bail!("Managed session path {} is not a regular file", path.display());
+        bail!(
+            "Managed session path {} is not a regular file",
+            path.display()
+        );
     }
     if metadata.len() > MANAGED_SESSION_FILE_MAX_BYTES as u64 {
-        bail!("Managed session file {} exceeds the {} byte limit",
-            path.display(), MANAGED_SESSION_FILE_MAX_BYTES);
+        bail!(
+            "Managed session file {} exceeds the {} byte limit",
+            path.display(),
+            MANAGED_SESSION_FILE_MAX_BYTES
+        );
     }
     let file = fs::File::open(path)
         .with_context(|| format!("Failed to open managed session file {}", path.display()))?;
     if !file.metadata()?.is_file() {
-        bail!("Managed session path {} is not a regular file", path.display());
+        bail!(
+            "Managed session path {} is not a regular file",
+            path.display()
+        );
     }
     let mut bytes = Vec::new();
-    file.take((MANAGED_SESSION_FILE_MAX_BYTES + 1) as u64).read_to_end(&mut bytes)
+    file.take((MANAGED_SESSION_FILE_MAX_BYTES + 1) as u64)
+        .read_to_end(&mut bytes)
         .with_context(|| format!("Failed to read managed session file {}", path.display()))?;
     if bytes.len() > MANAGED_SESSION_FILE_MAX_BYTES {
-        bail!("Managed session file {} exceeds the {} byte limit",
-            path.display(), MANAGED_SESSION_FILE_MAX_BYTES);
+        bail!(
+            "Managed session file {} exceeds the {} byte limit",
+            path.display(),
+            MANAGED_SESSION_FILE_MAX_BYTES
+        );
     }
     Ok(Some(bytes))
 }
@@ -138,15 +159,25 @@ pub(crate) fn session_fingerprint(path: &Path) -> Option<SessionFingerprint> {
 /// Make an exclusively-created recovery COPY; never move the original and
 /// never replace an older recovery file. Failure leaves the original in place.
 fn preserve_conflicting_session(path: &Path, contents: &[u8]) -> Result<PathBuf> {
-    let dir = path.parent().context("Managed session path has no parent")?;
-    let mut prefix = path.file_name().context("Managed session path has no filename")?
+    let dir = path
+        .parent()
+        .context("Managed session path has no parent")?;
+    let mut prefix = path
+        .file_name()
+        .context("Managed session path has no filename")?
         .to_os_string();
     prefix.push(".conflict-");
-    let mut copy = tempfile::Builder::new().prefix(&prefix).tempfile_in(dir)
+    let mut copy = tempfile::Builder::new()
+        .prefix(&prefix)
+        .tempfile_in(dir)
         .context("Failed to create exclusive session recovery copy")?;
-    copy.write_all(contents).context("Failed to write session recovery copy")?;
-    copy.as_file().sync_all().context("Failed to sync session recovery copy")?;
-    let (_, kept) = copy.keep()
+    copy.write_all(contents)
+        .context("Failed to write session recovery copy")?;
+    copy.as_file()
+        .sync_all()
+        .context("Failed to sync session recovery copy")?;
+    let (_, kept) = copy
+        .keep()
         .map_err(|error| anyhow::anyhow!("Failed to retain session recovery copy: {error}"))?;
     Ok(kept)
 }
@@ -1527,15 +1558,20 @@ impl ManagedSession {
 
         // JSON serialization clones the snapshot. Do not hold its baseline
         // mutex until serialization has finished, or that clone would deadlock.
-        let _writes = SESSION_WRITES.lock()
+        let _writes = SESSION_WRITES
+            .lock()
             .map_err(|_| anyhow::anyhow!("Session write lock is poisoned"))?;
         let target = session_target(path)?;
-        let mut baseline = self.persistence.baseline.lock()
+        let mut baseline = self
+            .persistence
+            .baseline
+            .lock()
             .map_err(|_| anyhow::anyhow!("Session snapshot baseline is poisoned"))?;
         let known = baseline.as_ref().filter(|known| known.path == target);
         match read_session_bytes(&target)? {
             Some(current) => {
-                if known.is_none_or(|known| !known.complete || known.digest != session_digest(&current))
+                if known
+                    .is_none_or(|known| !known.complete || known.digest != session_digest(&current))
                 {
                     preserve_conflicting_session(&target, &current)
                         .context("Could not preserve changed session; refusing to overwrite it")?;
@@ -1543,7 +1579,10 @@ impl ManagedSession {
                 }
             }
             None if known.is_some() => {
-                bail!("Managed session file {} disappeared; refusing to recreate it", target.display());
+                bail!(
+                    "Managed session file {} disappeared; refusing to recreate it",
+                    target.display()
+                );
             }
             None => {}
         }
@@ -1551,7 +1590,11 @@ impl ManagedSession {
         // still change the target between the read above and this replacement.
         atomic_write_session(&target, &buf)
             .with_context(|| format!("Failed to write session file {}", target.display()))?;
-        *baseline = Some(SessionBaseline { path: target, digest: session_digest(&buf), complete: true });
+        *baseline = Some(SessionBaseline {
+            path: target,
+            digest: session_digest(&buf),
+            complete: true,
+        });
         Ok(())
     }
 
@@ -1634,13 +1677,20 @@ impl ManagedSession {
             .with_context(|| format!("Managed session file {} does not exist", target.display()))?;
         let contents = std::str::from_utf8(&bytes)
             .with_context(|| format!("Failed to read managed session file {}", target.display()))?;
-        let mut session = Self::from_serialized_str(contents)
-            .with_context(|| format!("Failed to parse managed session file {}", target.display()))?;
+        let mut session = Self::from_serialized_str(contents).with_context(|| {
+            format!("Failed to parse managed session file {}", target.display())
+        })?;
         let complete = !session.persistence.incomplete;
-        *session.persistence.baseline.get_mut()
+        *session
+            .persistence
+            .baseline
+            .get_mut()
             .map_err(|_| anyhow::anyhow!("Session snapshot baseline is poisoned"))? =
-            Some(SessionBaseline { path: target, digest: session_digest(&bytes),
-                complete });
+            Some(SessionBaseline {
+                path: target,
+                digest: session_digest(&bytes),
+                complete,
+            });
         Ok(session)
     }
 
@@ -3141,9 +3191,15 @@ mod tests {
     }
 
     fn recovery_bytes(dir: &std::path::Path) -> Vec<Vec<u8>> {
-        std::fs::read_dir(dir).expect("read directory")
+        std::fs::read_dir(dir)
+            .expect("read directory")
             .map(|entry| entry.expect("entry").path())
-            .filter(|path| path.file_name().unwrap().to_string_lossy().contains(".conflict-"))
+            .filter(|path| {
+                path.file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .contains(".conflict-")
+            })
             .map(|path| std::fs::read(path).expect("read recovery"))
             .collect()
     }
@@ -3189,7 +3245,9 @@ mod tests {
     fn partial_jsonl_load_preserves_original_once_before_repair() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("snapshot.jsonl");
-        ManagedSession::new("snapshot", Utc::now()).save_to_path(&path).unwrap();
+        ManagedSession::new("snapshot", Utc::now())
+            .save_to_path(&path)
+            .unwrap();
         let mut damaged = std::fs::read(&path).unwrap();
         damaged.extend_from_slice(b"unreadable record\n");
         std::fs::write(&path, &damaged).unwrap();

@@ -8,11 +8,14 @@ import { useSessionSnapshot } from '@/lib/identity/useSessionSnapshot';
 import { createRequestAuthority, type RequestAuthority } from '@/lib/identity/request-authority';
 import { useAccountWorkspaces } from '@/features/workspaces/hooks/use-workspaces';
 import {
-  observeWorkspaceOwner, subscribeWorkspaceAdmission, workspaceOwnerIsCurrent,
+  observeWorkspaceOwner,
+  subscribeWorkspaceAdmission,
+  workspaceOwnerIsCurrent,
   type WorkspaceOwner,
 } from '@/features/workspaces/lib/workspace-admission';
 import {
-  applyBulkConversationAction, fetchConversationHistoryStats,
+  applyBulkConversationAction,
+  fetchConversationHistoryStats,
 } from '../services/conversation-data-service';
 
 type Action = 'archive_all' | 'delete_all';
@@ -25,71 +28,146 @@ type Intent = {
   dispatched: boolean;
   ids: string[];
 };
-type View = { ready: object | null; intent: Intent | null; error: string | null; notice: string | null };
+type View = {
+  ready: object | null;
+  intent: Intent | null;
+  error: string | null;
+  notice: string | null;
+};
 const EMPTY: View = { ready: null, intent: null, error: null, notice: null };
 const STREAMING_ERROR = 'Finish or stop active replies before deleting all chats.';
 
 function confirmationDescription(action: Action, count: number | null): string {
   if (action === 'archive_all') {
-    const scope = count === null ? 'Every chat in the current workspace will move out of the sidebar'
-      : translateUiPlural('settings', 'counts.chatsToArchive', count, {
-        one: '{{count}} chat in the current workspace will move out of the sidebar',
-        other: 'All {{count}} chats in the current workspace will move out of the sidebar',
-      });
+    const scope =
+      count === null
+        ? 'Every chat in the current workspace will move out of the sidebar'
+        : translateUiPlural('settings', 'counts.chatsToArchive', count, {
+            one: '{{count}} chat in the current workspace will move out of the sidebar',
+            other: 'All {{count}} chats in the current workspace will move out of the sidebar',
+          });
     return `${scope}. You can restore them from Archived chats at any time; this does not delete anything.`;
   }
-  const scope = count === null
-    ? 'Every chat in the current workspace, active and archived, will be removed from your history'
-    : translateUiPlural('settings', 'counts.allChatsRemoved', count, {
-      one: 'All {{count}} chat in the current workspace, active and archived, will be removed from your history',
-      other: 'All {{count}} chats in the current workspace, active and archived, will be removed from your history',
-    });
+  const scope =
+    count === null
+      ? 'Every chat in the current workspace, active and archived, will be removed from your history'
+      : translateUiPlural('settings', 'counts.allChatsRemoved', count, {
+          one: 'All {{count}} chat in the current workspace, active and archived, will be removed from your history',
+          other:
+            'All {{count}} chats in the current workspace, active and archived, will be removed from your history',
+        });
   return `${scope}. You can restore them from Settings > Privacy > Recently deleted for 30 days. Memories learned from these chats stay until you delete them in Settings > Personalization.`;
 }
 
-function BulkRows({ ready, action, writing = false, streaming, onChoose }: {
-  ready: boolean; action: Action | null; writing?: boolean; streaming: boolean; onChoose: (action: Action) => void;
+function BulkRows({
+  ready,
+  action,
+  writing = false,
+  streaming,
+  onChoose,
+}: {
+  ready: boolean;
+  action: Action | null;
+  writing?: boolean;
+  streaming: boolean;
+  onChoose: (action: Action) => void;
 }) {
-  return <>{(['archive_all', 'delete_all'] as const).map((item) => {
-    const deleting = item === 'delete_all';
-    const disabled = !ready || (deleting && streaming);
-    return <div key={item} style={{ padding: 'var(--space-4) 0',
-      borderBottom: '1px solid var(--settings-border)', display: 'flex', alignItems: 'center',
-      justifyContent: 'space-between', gap: 'var(--space-4)' }}>
-      <div>
-        <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>
-          {deleting ? 'Delete all chats in this workspace' : 'Archive all chats in this workspace'}
-        </div>
-        <div style={{ fontSize: 14, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
-          {deleting
-            ? 'Remove every active and archived conversation in this workspace from history. Restore them from Recently deleted within 30 days.'
-            : 'Move every chat out of the sidebar. You can restore them later.'}
-        </div>
-      </div>
-      <button type="button" onClick={() => onChoose(item)} disabled={disabled}
-        style={{ padding: 'var(--space-2) var(--space-4)', fontSize: 14, fontWeight: 600,
-          color: deleting ? 'var(--settings-destructive-text)' : 'var(--text-1)',
-          background: 'transparent', border: `1px solid ${deleting ? 'var(--settings-destructive-text)' : 'var(--settings-border)'}`,
-          borderRadius: 'var(--radius-md)', cursor: disabled ? 'not-allowed' : 'pointer' }}>
-        {action === item ? writing ? deleting ? 'Deleting…' : 'Archiving…' : 'Preparing…'
-          : deleting ? 'Delete all' : 'Archive all'}
-      </button>
-    </div>;
-  })}</>;
+  return (
+    <>
+      {(['archive_all', 'delete_all'] as const).map((item) => {
+        const deleting = item === 'delete_all';
+        const disabled = !ready || (deleting && streaming);
+        return (
+          <div
+            key={item}
+            style={{
+              padding: 'var(--space-4) 0',
+              borderBottom: '1px solid var(--settings-border)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 'var(--space-4)',
+            }}
+          >
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>
+                {deleting
+                  ? 'Delete all chats in this workspace'
+                  : 'Archive all chats in this workspace'}
+              </div>
+              <div style={{ fontSize: 14, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
+                {deleting
+                  ? 'Remove every active and archived conversation in this workspace from history. Restore them from Recently deleted within 30 days.'
+                  : 'Move every chat out of the sidebar. You can restore them later.'}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => onChoose(item)}
+              disabled={disabled}
+              style={{
+                padding: 'var(--space-2) var(--space-4)',
+                fontSize: 14,
+                fontWeight: 600,
+                color: deleting ? 'var(--settings-destructive-text)' : 'var(--text-1)',
+                background: 'transparent',
+                border: `1px solid ${deleting ? 'var(--settings-destructive-text)' : 'var(--settings-border)'}`,
+                borderRadius: 'var(--radius-md)',
+                cursor: disabled ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {action === item
+                ? writing
+                  ? deleting
+                    ? 'Deleting…'
+                    : 'Archiving…'
+                  : 'Preparing…'
+                : deleting
+                  ? 'Delete all'
+                  : 'Archive all'}
+            </button>
+          </div>
+        );
+      })}
+    </>
+  );
 }
 
-function OwnedBulkControls({ owner, epoch, scopeKey, organizationId }: {
-  owner: WorkspaceOwner; epoch: number; scopeKey: string; organizationId: string | null;
+function OwnedBulkControls({
+  owner,
+  epoch,
+  scopeKey,
+  organizationId,
+}: {
+  owner: WorkspaceOwner;
+  epoch: number;
+  scopeKey: string;
+  organizationId: string | null;
 }) {
   const router = useRouter();
   const streaming = useChatStore((state) => state.streamingConversationIds.length > 0);
-  const lane = useMemo(() => ({ active: false, generation: {} as object,
-    ready: null as object | null, intent: null as Intent | null }), []);
+  const lane = useMemo(
+    () => ({
+      active: false,
+      generation: {} as object,
+      ready: null as object | null,
+      intent: null as Intent | null,
+    }),
+    [],
+  );
   const [view, setView] = useState<View>(EMPTY);
-  const ownerCurrent = useCallback(() => owner.phase === 'admitted' && owner.scopeKey === scopeKey &&
-    workspaceOwnerIsCurrent(owner, epoch), [owner, epoch, scopeKey]);
-  const current = (intent: Intent) => lane.active && lane.generation === intent.generation &&
-    lane.intent === intent && ownerCurrent();
+  const ownerCurrent = useCallback(
+    () =>
+      owner.phase === 'admitted' &&
+      owner.scopeKey === scopeKey &&
+      workspaceOwnerIsCurrent(owner, epoch),
+    [owner, epoch, scopeKey],
+  );
+  const current = (intent: Intent) =>
+    lane.active &&
+    lane.generation === intent.generation &&
+    lane.intent === intent &&
+    ownerCurrent();
 
   useLayoutEffect(() => {
     lane.active = true;
@@ -103,9 +181,15 @@ function OwnedBulkControls({ owner, epoch, scopeKey, organizationId }: {
       lane.intent = null;
     };
     const stop = subscribeWorkspaceAdmission(() => {
-      if (!ownerCurrent()) { retire(); setView(EMPTY); }
+      if (!ownerCurrent()) {
+        retire();
+        setView(EMPTY);
+      }
     });
-    return () => { stop(); retire(); };
+    return () => {
+      stop();
+      retire();
+    };
   }, [lane, ownerCurrent]);
 
   const finish = (intent: Intent, error: string | null = null, notice: string | null = null) => {
@@ -125,19 +209,30 @@ function OwnedBulkControls({ owner, epoch, scopeKey, organizationId }: {
       setView({ ...EMPTY, ready: lane.ready, error: STREAMING_ERROR });
       return;
     }
-    let intent: Intent;
-    const request = createRequestAuthority(owner.session, () => current(intent), () => {
-      if (intent.phase !== 'writing') return;
-      const store = useChatStore.getState();
-      if (action === 'delete_all' && store.streamingConversationIds.length > 0) {
-        throw new Error(STREAMING_ERROR);
-      }
-      intent.ids = store.conversations.filter((row) => action === 'delete_all' || !row.isArchived)
-        .map((row) => row.id);
-      intent.dispatched = true;
-    });
-    intent = { action, phase: 'counting', generation: lane.generation, request,
-      description: '', dispatched: false, ids: [] };
+    const request = createRequestAuthority(
+      owner.session,
+      () => current(intent),
+      () => {
+        if (intent.phase !== 'writing') return;
+        const store = useChatStore.getState();
+        if (action === 'delete_all' && store.streamingConversationIds.length > 0) {
+          throw new Error(STREAMING_ERROR);
+        }
+        intent.ids = store.conversations
+          .filter((row) => action === 'delete_all' || !row.isArchived)
+          .map((row) => row.id);
+        intent.dispatched = true;
+      },
+    );
+    const intent: Intent = {
+      action,
+      phase: 'counting',
+      generation: lane.generation,
+      request,
+      description: '',
+      dispatched: false,
+      ids: [],
+    };
     lane.intent = intent;
     lane.ready = null;
     setView({ ...EMPTY, intent });
@@ -162,13 +257,19 @@ function OwnedBulkControls({ owner, epoch, scopeKey, organizationId }: {
     if (!current(intent) || intent.phase !== 'confirming') return;
     intent.phase = 'writing';
     setView({ ...EMPTY, intent });
-    if (intent.action === 'delete_all' && useChatStore.getState().streamingConversationIds.length > 0) {
+    if (
+      intent.action === 'delete_all' &&
+      useChatStore.getState().streamingConversationIds.length > 0
+    ) {
       finish(intent, STREAMING_ERROR);
       return;
     }
     let acknowledged: number | null = null;
     try {
-      const count = await applyBulkConversationAction(intent.action, { request: intent.request, organizationId });
+      const count = await applyBulkConversationAction(intent.action, {
+        request: intent.request,
+        organizationId,
+      });
       if (!intent.request.isCurrent()) return;
       acknowledged = count;
       // Only reconcile rows present at dispatch. A later-created chat is not a
@@ -176,46 +277,87 @@ function OwnedBulkControls({ owner, epoch, scopeKey, organizationId }: {
       for (const id of intent.ids) {
         if (!intent.request.isCurrent()) return;
         const store = useChatStore.getState();
-        if (intent.action === 'archive_all') store.updateConversation(id, { isArchived: true, isPinned: false });
+        if (intent.action === 'archive_all')
+          store.updateConversation(id, { isArchived: true, isPinned: false });
         else store.deleteConversation(id);
       }
       if (!intent.request.isCurrent()) return;
       if (intent.action === 'delete_all') router.replace('/chat');
-      finish(intent, null, intent.action === 'archive_all'
-        ? translateUiPlural('settings', 'counts.archivedChats', count, {
-          one: 'Archived {{count}} chat.', other: 'Archived {{count}} chats.',
-        })
-        : translateUiPlural('settings', 'counts.deletedChats', count, {
-          one: 'Deleted {{count}} chat.', other: 'Deleted {{count}} chats.',
-        }));
+      finish(
+        intent,
+        null,
+        intent.action === 'archive_all'
+          ? translateUiPlural('settings', 'counts.archivedChats', count, {
+              one: 'Archived {{count}} chat.',
+              other: 'Archived {{count}} chats.',
+            })
+          : translateUiPlural('settings', 'counts.deletedChats', count, {
+              one: 'Deleted {{count}} chat.',
+              other: 'Deleted {{count}} chats.',
+            }),
+      );
     } catch (error) {
       if (!intent.request.isCurrent()) return;
-      finish(intent, acknowledged !== null
-        ? 'Your chat update was confirmed, but this view could not refresh. Reload this workspace to see the saved result.'
-        : intent.dispatched
-        ? 'We could not confirm whether your chats were updated. Check your chat history before starting another bulk action.'
-        : error instanceof Error && error.message === STREAMING_ERROR ? STREAMING_ERROR
-          : 'The chat update could not be started. Try again.');
+      finish(
+        intent,
+        acknowledged !== null
+          ? 'Your chat update was confirmed, but this view could not refresh. Reload this workspace to see the saved result.'
+          : intent.dispatched
+            ? 'We could not confirm whether your chats were updated. Check your chat history before starting another bulk action.'
+            : error instanceof Error && error.message === STREAMING_ERROR
+              ? STREAMING_ERROR
+              : 'The chat update could not be started. Try again.',
+      );
     }
   };
 
   const intent = view.intent;
-  return <>
-    <BulkRows ready={view.ready !== null} action={intent?.action ?? null} writing={intent?.phase === 'writing'} streaming={streaming}
-      onChoose={(action) => { void choose(action); }} />
-    {intent?.phase === 'confirming' ? <ConfirmDialog open
-      title={intent.action === 'archive_all' ? 'Archive all chats in this workspace?' : 'Delete all chats in this workspace?'}
-      description={intent.description}
-      confirmText={intent.action === 'archive_all' ? 'Archive all' : 'Delete all chats'}
-      variant={intent.action === 'archive_all' ? 'default' : 'destructive'}
-      onConfirm={() => { void confirm(intent); }} onCancel={() => cancel(intent)}
-      onOpenChange={(open) => { if (!open) cancel(intent); }} /> : null}
-    {view.error || view.notice ? <div role={view.error ? 'alert' : 'status'}
-      style={{ padding: 'var(--space-3) var(--space-5)', borderBottom: '1px solid var(--settings-border)',
-        color: view.error ? 'var(--chat-accent-primary)' : 'var(--text-2)', fontSize: 14 }}>
-      {view.error ?? view.notice}
-    </div> : null}
-  </>;
+  return (
+    <>
+      <BulkRows
+        ready={view.ready !== null}
+        action={intent?.action ?? null}
+        writing={intent?.phase === 'writing'}
+        streaming={streaming}
+        onChoose={(action) => {
+          void choose(action);
+        }}
+      />
+      {intent?.phase === 'confirming' ? (
+        <ConfirmDialog
+          open
+          title={
+            intent.action === 'archive_all'
+              ? 'Archive all chats in this workspace?'
+              : 'Delete all chats in this workspace?'
+          }
+          description={intent.description}
+          confirmText={intent.action === 'archive_all' ? 'Archive all' : 'Delete all chats'}
+          variant={intent.action === 'archive_all' ? 'default' : 'destructive'}
+          onConfirm={() => {
+            void confirm(intent);
+          }}
+          onCancel={() => cancel(intent)}
+          onOpenChange={(open) => {
+            if (!open) cancel(intent);
+          }}
+        />
+      ) : null}
+      {view.error || view.notice ? (
+        <div
+          role={view.error ? 'alert' : 'status'}
+          style={{
+            padding: 'var(--space-3) var(--space-5)',
+            borderBottom: '1px solid var(--settings-border)',
+            color: view.error ? 'var(--chat-accent-primary)' : 'var(--text-2)',
+            fontSize: 14,
+          }}
+        >
+          {view.error ?? view.notice}
+        </div>
+      ) : null}
+    </>
+  );
 }
 
 export function BulkConversationControls() {
@@ -223,19 +365,45 @@ export function BulkConversationControls() {
   const capture = useSessionSnapshot();
   const owner = observeWorkspaceOwner(capture());
   const data = workspace.data;
-  const scopeKey = data ? JSON.stringify([data.scope, data.activeWorkspaceId, data.activeOrganizationId]) : null;
-  if (!owner || owner.phase !== 'admitted' || !data || scopeKey === null ||
-    owner.scopeKey !== scopeKey || !workspaceOwnerIsCurrent(owner, owner.epoch)) {
-    return <>
-      <BulkRows ready={false} action={null} streaming={false} onChoose={() => undefined} />
-      <p style={{ color: 'var(--text-3)', fontSize: 14 }}>
-        {workspace.requiresReload ? 'Reload this page to confirm the current workspace before managing chats.'
-          : 'Your current workspace must finish loading before you can manage all chats.'}
-        {workspace.isUnavailable && !workspace.requiresReload && !workspace.isSwitching ?
-          <button type="button" onClick={() => { void workspace.refetch(); }}>Retry loading workspace</button> : null}
-      </p>
-    </>;
+  const scopeKey = data
+    ? JSON.stringify([data.scope, data.activeWorkspaceId, data.activeOrganizationId])
+    : null;
+  if (
+    !owner ||
+    owner.phase !== 'admitted' ||
+    !data ||
+    scopeKey === null ||
+    owner.scopeKey !== scopeKey ||
+    !workspaceOwnerIsCurrent(owner, owner.epoch)
+  ) {
+    return (
+      <>
+        <BulkRows ready={false} action={null} streaming={false} onChoose={() => undefined} />
+        <p style={{ color: 'var(--text-3)', fontSize: 14 }}>
+          {workspace.requiresReload
+            ? 'Reload this page to confirm the current workspace before managing chats.'
+            : 'Your current workspace must finish loading before you can manage all chats.'}
+          {workspace.isUnavailable && !workspace.requiresReload && !workspace.isSwitching ? (
+            <button
+              type="button"
+              onClick={() => {
+                void workspace.refetch();
+              }}
+            >
+              Retry loading workspace
+            </button>
+          ) : null}
+        </p>
+      </>
+    );
   }
-  return <OwnedBulkControls key={`${owner.incarnation}:${owner.epoch}:${scopeKey}`}
-    owner={owner} epoch={owner.epoch} scopeKey={scopeKey} organizationId={data.activeOrganizationId} />;
+  return (
+    <OwnedBulkControls
+      key={`${owner.incarnation}:${owner.epoch}:${scopeKey}`}
+      owner={owner}
+      epoch={owner.epoch}
+      scopeKey={scopeKey}
+      organizationId={data.activeOrganizationId}
+    />
+  );
 }

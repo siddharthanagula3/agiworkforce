@@ -22,7 +22,9 @@ const {
 } = vi.hoisted(() => ({
   mockQuery: vi.fn(),
   mockGetCachedActiveOrganizationId: vi.fn(),
-  mockSetCachedActiveOrganizationId: vi.fn<(...args: unknown[]) => Promise<void>>(async () => undefined),
+  mockSetCachedActiveOrganizationId: vi.fn<(...args: unknown[]) => Promise<void>>(
+    async () => undefined,
+  ),
   mockGetTeamAdminAccess: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
   mockLeaveOrganization: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
   mockDeprovisionMember: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
@@ -152,20 +154,17 @@ describe('DELETE /api/settings/organization/leave deprovisions the departing mem
     'null',
     '[]',
     '{"successorUserId":1}',
-  ])(
-    'refuses invalid input %j before membership or deprovisioning actions',
-    async (body) => {
-      const response = await DELETE(
-        new Request('http://localhost:3000/api/settings/organization/leave', {
-          method: 'DELETE',
-          body,
-        }) as never,
-      );
+  ])('refuses invalid input %j before membership or deprovisioning actions', async (body) => {
+    const response = await DELETE(
+      new Request('http://localhost:3000/api/settings/organization/leave', {
+        method: 'DELETE',
+        body,
+      }) as never,
+    );
 
-      expect(response.status).toBe(400);
-      expectNoLeave();
-    },
-  );
+    expect(response.status).toBe(400);
+    expectNoLeave();
+  });
 
   it('propagates a failed body read before membership or deprovisioning actions', async () => {
     const unreadable = new Request('http://localhost:3000/api/settings/organization/leave', {
@@ -261,7 +260,7 @@ describe('DELETE /api/settings/organization/leave deprovisions the departing mem
     const NONMEMBER_ORGANIZATION_ID = '44444444-4444-4444-8444-444444444444';
 
     beforeEach(async () => {
-      const actual = await vi.importActual<typeof import('@/lib/services/active-workspace-service')>(
+      const actual = await vi.importActual<MockedModule0>(
         '@/lib/services/active-workspace-service',
       );
       mockResolveActiveOrganizationId.mockImplementation((...args) => {
@@ -291,13 +290,16 @@ describe('DELETE /api/settings/organization/leave deprovisions the departing mem
       expect(mockGetCachedActiveOrganizationId).not.toHaveBeenCalled();
       expect(mockQuery).toHaveBeenCalledTimes(1);
       expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining("status = 'active'"), [
-        ORGANIZATION_ID, LEAVING_USER,
+        ORGANIZATION_ID,
+        LEAVING_USER,
       ]);
       expect(mockLeaveOrganization).toHaveBeenCalledWith(expect.anything(), {
-        userId: LEAVING_USER, organizationId: ORGANIZATION_ID,
+        userId: LEAVING_USER,
+        organizationId: ORGANIZATION_ID,
       });
       expect(mockDeprovisionMember).toHaveBeenCalledWith(expect.anything(), expect.anything(), {
-        userId: LEAVING_USER, organizationId: ORGANIZATION_ID,
+        userId: LEAVING_USER,
+        organizationId: ORGANIZATION_ID,
       });
     });
 
@@ -313,7 +315,8 @@ describe('DELETE /api/settings/organization/leave deprovisions the departing mem
       if (selector === NONMEMBER_ORGANIZATION_ID) {
         expect(mockQuery).toHaveBeenCalledTimes(1);
         expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining("status = 'active'"), [
-          NONMEMBER_ORGANIZATION_ID, LEAVING_USER,
+          NONMEMBER_ORGANIZATION_ID,
+          LEAVING_USER,
         ]);
       } else {
         expect(mockQuery).not.toHaveBeenCalled();
@@ -338,14 +341,19 @@ describe('DELETE /api/settings/organization/leave deprovisions the departing mem
       expect(response.status).toBe(200);
       expect(mockGetCachedActiveOrganizationId).toHaveBeenCalledWith(LEAVING_USER);
       expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining("status = 'active'"), [
-        OTHER_ORGANIZATION_ID, LEAVING_USER,
+        OTHER_ORGANIZATION_ID,
+        LEAVING_USER,
       ]);
       expect(mockLeaveOrganization).toHaveBeenCalledWith(expect.anything(), {
-        userId: LEAVING_USER, organizationId: OTHER_ORGANIZATION_ID,
+        userId: LEAVING_USER,
+        organizationId: OTHER_ORGANIZATION_ID,
       });
       expect(mockDeprovisionMember).toHaveBeenCalledWith(expect.anything(), expect.anything(), {
-        userId: LEAVING_USER, organizationId: OTHER_ORGANIZATION_ID,
+        userId: LEAVING_USER,
+        organizationId: OTHER_ORGANIZATION_ID,
       });
     });
   });
 });
+
+type MockedModule0 = typeof import('@/lib/services/active-workspace-service');

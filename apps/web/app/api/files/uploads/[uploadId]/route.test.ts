@@ -35,7 +35,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule1>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/server/rls-db', () => ({
@@ -57,7 +58,8 @@ vi.mock('@/lib/server/project-knowledge-files', () => ({
   registerProjectKnowledgeFile: (...args: unknown[]) =>
     mocks.registerProjectKnowledgeFile(...(args as [])),
 }));
-vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
+vi.mock('@/lib/server/project-knowledge-object-storage', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule0>()),
   deleteProjectKnowledgeObject: (...args: unknown[]) =>
     mocks.deleteProjectKnowledgeObject(...(args as [])),
   sealProjectKnowledgeObject: vi.fn(),
@@ -205,3 +207,7 @@ describe('POST to complete', () => {
     expect(mocks.completeChatAttachmentUpload).not.toHaveBeenCalled();
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/server/project-knowledge-object-storage');
+
+type RetainedMockModule1 = typeof import('@/lib/logger');

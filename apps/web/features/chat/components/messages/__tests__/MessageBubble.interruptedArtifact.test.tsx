@@ -87,7 +87,6 @@ describe('WEB-USE-STREAMING-ARTIFACT-INTERRUPTING-01 · transcript card', () => 
   });
 });
 
-
 type BubbleMessage = Parameters<typeof MessageBubble>[0]['message'];
 type Metadata = NonNullable<BubbleMessage['metadata']>;
 const pendingTool: NonNullable<Metadata['tools']>[number] = {
@@ -120,9 +119,13 @@ describe('partial artifact approval presentation', () => {
     storeArtifact(true);
     const snapshot = useArtifactsStore.getState().getMessageArtifacts(MESSAGE_ID);
     const onRegenerate = vi.fn();
-    render(<MessageBubble message={{ ...assistantMessage(), metadata }} onRegenerate={onRegenerate} />);
+    render(
+      <MessageBubble message={{ ...assistantMessage(), metadata }} onRegenerate={onRegenerate} />,
+    );
     const notice = screen.getByTestId(NOTICE);
-    expect(notice).toHaveTextContent('This saved artifact is partial. The response awaits approval');
+    expect(notice).toHaveTextContent(
+      'This saved artifact is partial. The response awaits approval',
+    );
     expect(notice).toHaveTextContent('may not include later output');
     expect(notice).not.toHaveTextContent(/stopped|regenerate/i);
     expect(within(notice).queryByRole('button')).toBeNull();
@@ -156,7 +159,9 @@ describe('partial artifact approval presentation', () => {
         />,
       );
       expect(screen.getByTestId(NOTICE)).toHaveTextContent('saved from a partial response');
-      await userEvent.click(within(screen.getByTestId(NOTICE)).getByRole('button', { name: 'Regenerate' }));
+      await userEvent.click(
+        within(screen.getByTestId(NOTICE)).getByRole('button', { name: 'Regenerate' }),
+      );
       expect(onRegenerate).toHaveBeenCalledWith(MESSAGE_ID);
       expect(pending.metadata.cloudApproval.calls[0]).not.toHaveProperty('approvalDecision');
     },
@@ -169,26 +174,35 @@ describe('partial artifact approval presentation', () => {
   ])('keeps ordinary recovery without pending approval %j', (metadata) => {
     storeArtifact(true);
     render(<MessageBubble message={{ ...assistantMessage(), metadata }} onRegenerate={vi.fn()} />);
-    expect(within(screen.getByTestId(NOTICE)).getByRole('button', { name: 'Regenerate' })).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId(NOTICE)).getByRole('button', { name: 'Regenerate' }),
+    ).toBeInTheDocument();
   });
 
   it('does not invent partial evidence for a finished artifact awaiting approval', () => {
     storeArtifact(false);
-    render(<MessageBubble message={{ ...assistantMessage(), metadata: { cloudApproval: projection } }} />);
+    render(
+      <MessageBubble
+        message={{ ...assistantMessage(), metadata: { cloudApproval: projection } }}
+      />,
+    );
     expect(screen.queryByTestId(NOTICE)).toBeNull();
   });
 
   it('does not reconstruct interrupted evidence on a cold open-fence message', () => {
-    render(<MessageBubble message={{
-      ...assistantMessage(),
-      content: '```html\n<div>partial',
-      metadata: { cloudApproval: projection },
-    }} />);
+    render(
+      <MessageBubble
+        message={{
+          ...assistantMessage(),
+          content: '```html\n<div>partial',
+          metadata: { cloudApproval: projection },
+        }}
+      />,
+    );
     expect(screen.queryByTestId(NOTICE)).toBeNull();
     expect(useArtifactsStore.getState().getMessageArtifacts(MESSAGE_ID)).toHaveLength(0);
   });
 });
-
 
 describe('partial artifact lifecycle boundaries (characterization)', () => {
   it('does not infer a partial marker from the shared snapshot used after rehydration', () => {
@@ -196,25 +210,48 @@ describe('partial artifact lifecycle boundaries (characterization)', () => {
     const shared = _sharedArtifactStore.getState().artifacts[0]!;
     expect(shared).not.toHaveProperty('interrupted');
     useArtifactsStore.getState().reset();
-    useArtifactsStore.getState().addArtifactForMessage(MESSAGE_ID, shared, CONVERSATION_ID);
-    render(<MessageBubble message={{ ...assistantMessage(), metadata: { cloudApproval: projection } }} />);
+    if (shared.type !== 'html') throw new Error('Expected the HTML fixture');
+    _sharedArtifactStore.setState({
+      artifacts: [shared],
+      versionsById: { [shared.id]: [shared] },
+    });
+    render(
+      <MessageBubble
+        message={{ ...assistantMessage(), metadata: { cloudApproval: projection } }}
+      />,
+    );
     expect(screen.queryByTestId(NOTICE)).toBeNull();
-    expect(useArtifactsStore.getState().getMessageArtifacts(MESSAGE_ID)[0]?.content).toBe(shared.content);
+    expect(useArtifactsStore.getState().getMessageArtifacts(MESSAGE_ID)[0]?.content).toBe(
+      shared.content,
+    );
+    expect(
+      useArtifactsStore.getState().getMessageArtifacts(MESSAGE_ID)[0]?.createdAt.toISOString(),
+    ).toBe(shared.createdAt);
   });
 
   it('characterizes an existing partial winning over parsed completion after the fence closes', () => {
     const id = computeDerivedArtifactId(CONVERSATION_ID, MESSAGE_ID, 0);
     useArtifactsStore.getState().upsertArtifact({
-      id, messageId: MESSAGE_ID, conversationId: CONVERSATION_ID,
-      type: 'html', language: 'html', title: 'My draft', content: '<!DOCTYPE html>\n<html>\n<body>', interrupted: true,
+      id,
+      messageId: MESSAGE_ID,
+      conversationId: CONVERSATION_ID,
+      type: 'html',
+      language: 'html',
+      title: 'My draft',
+      content: '<!DOCTYPE html>\n<html>\n<body>',
+      interrupted: true,
     });
     const message = {
       ...assistantMessage(),
-      content: '```html\n<!DOCTYPE html>\n<html>\n<head><title>Finished page</title></head>\n<body><main><h1>Complete</h1><p>The complete document.</p></main></body>\n</html>\n```',
+      content:
+        '```html\n<!DOCTYPE html>\n<html>\n<head><title>Finished page</title></head>\n<body><main><h1>Complete</h1><p>The complete document.</p></main></body>\n</html>\n```',
     };
     render(<MessageBubble message={message} onRegenerate={vi.fn()} />);
     expect(screen.getByTestId(NOTICE)).toHaveTextContent('saved from a partial response');
-    const artifact = useArtifactsStore.getState().getMessageArtifacts(MESSAGE_ID).find((item) => item.id === id);
+    const artifact = useArtifactsStore
+      .getState()
+      .getMessageArtifacts(MESSAGE_ID)
+      .find((item) => item.id === id);
     expect(artifact?.content).toBe('<!DOCTYPE html>\n<html>\n<body>');
     expect(artifact?.interrupted).toBe(true);
     expect(artifact?.title).toBe('My draft');

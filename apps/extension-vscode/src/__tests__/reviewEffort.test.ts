@@ -11,7 +11,7 @@ const realpath = vi.hoisted(() => vi.fn<(path: string) => string>());
 vi.mock('../utils/api', () => ({ chatCompletion }));
 
 vi.mock('node:fs', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('node:fs')>()),
+  ...(await importOriginal<MockedModule0>()),
   realpathSync: realpath,
 }));
 
@@ -169,3 +169,5 @@ describe('reviewing code at an effort', () => {
     expect(chatCompletion).toHaveBeenCalledOnce();
   });
 });
+
+type MockedModule0 = typeof import('node:fs');

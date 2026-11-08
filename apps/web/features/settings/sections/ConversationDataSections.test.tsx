@@ -1,6 +1,6 @@
 vi.mock('@/features/settings/hooks/use-preference-owner', async (original) => ({
-  ...await original<typeof import('@/features/settings/hooks/use-preference-owner')>(),
-  usePreferenceOwner: () => null,
+  ...(await original<MockedModule0>()),
+  usePreferenceOwner: vi.fn<MockedModule0['usePreferenceOwner']>(() => null),
 }));
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -9,9 +9,18 @@ import { useChatStore } from '@shared/stores/web-chat-store';
 import { ArchivedChatsSection } from './ArchivedChatsSection';
 import { DeletedChatsSection } from './DeletedChatsSection';
 import { PrivacySection } from './PrivacySection';
+import { usePreferenceOwner } from '@/features/settings/hooks/use-preference-owner';
+import { observePreferenceOwner } from '@/app/settings/_lib/preferences-client';
+import {
+  MANAGED_CLOUD_DATA_EXPORT_PATH,
+  MANAGED_CLOUD_DATA_EXPORT_ARCHIVES_PATH,
+} from '@agiworkforce/cloud-contracts';
 import { SharedLinksSection } from './SharedLinksSection';
 import type { RequestAuthority } from '@/lib/identity/request-authority';
-import { admitWorkspace, observeWorkspaceOwner } from '@/features/workspaces/lib/workspace-admission';
+import {
+  admitWorkspace,
+  observeWorkspaceOwner,
+} from '@/features/workspaces/lib/workspace-admission';
 type Original0 = typeof import('@features/sites/services/sites-service');
 type ScanModule0 = typeof import('@/lib/sentry-shared');
 type ScanModule1 = typeof import('@agiworkforce/ui');
@@ -31,26 +40,41 @@ const mocks = vi.hoisted(() => ({
   historyStats: vi.fn(),
 }));
 
-const session = { userId: 'manager-a', sessionId: 'manager-session', isCurrent: () => true,
-  getToken: async () => 'manager-token' };
+const session = {
+  userId: 'manager-a',
+  sessionId: 'manager-session',
+  isCurrent: () => true,
+  getToken: async () => 'manager-token',
+};
 vi.mock('@/lib/identity/useSessionSnapshot', () => ({ useSessionSnapshot: () => () => session }));
 vi.mock('@/features/workspaces/hooks/use-workspaces', async (original) => ({
-  ...await original<typeof import('@/features/workspaces/hooks/use-workspaces')>(),
+  ...(await original<MockedModule1>()),
   useAccountWorkspaces: () => {
     const owner = observeWorkspaceOwner(session)!;
     admitWorkspace(owner, owner.epoch, JSON.stringify(['personal', 'personal', null]));
-    return { data: { scope: 'personal', activeWorkspaceId: 'personal', activeOrganizationId: null },
-      refetch: vi.fn(), requiresReload: false, isSwitching: false };
+    return {
+      data: { scope: 'personal', activeWorkspaceId: 'personal', activeOrganizationId: null },
+      refetch: vi.fn(),
+      requiresReload: false,
+      isSwitching: false,
+    };
   },
 }));
 
 // Bulk intent behavior lives in BulkConversationControls.test.tsx, using the
 // actual owner/admission/transport stack. This suite checks section reachability.
 vi.mock('../components/BulkConversationControls', () => ({
-  BulkConversationControls: () => <><button>Archive all</button><button>Delete all</button></>,
+  BulkConversationControls: () => (
+    <>
+      <button>Archive all</button>
+      <button>Delete all</button>
+    </>
+  ),
 }));
 vi.mock('../components/UsOnlyRoutingPanel', () => ({ UsOnlyRoutingPanel: () => null }));
-vi.mock('../components/ProductAnalyticsConsentRow', () => ({ ProductAnalyticsConsentRow: () => null }));
+vi.mock('../components/ProductAnalyticsConsentRow', () => ({
+  ProductAnalyticsConsentRow: () => null,
+}));
 vi.mock('../components/MarketingEmailConsentRow', () => ({ MarketingEmailConsentRow: () => null }));
 vi.mock('../components/NamedProviderConsentRows', () => ({ NamedProviderConsentRows: () => null }));
 
@@ -89,7 +113,7 @@ vi.mock('@shared/stores/web-auth-store', () => ({
 }));
 
 vi.mock('@/app/settings/_lib/preferences-client', async (original) => ({
-  ...await original<typeof import('@/app/settings/_lib/preferences-client')>(),
+  ...(await original<MockedModule2>()),
   fetchPreferenceNamespace: vi.fn(async () => ({ shareTelemetry: false })),
   savePreferenceNamespace: vi.fn(async () => undefined),
 }));
@@ -139,6 +163,7 @@ const storeConversation = {
 describe('Web conversation data settings', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(usePreferenceOwner).mockReturnValue(null);
     observeWorkspaceOwner(null);
     mocks.listArchived.mockResolvedValue({
       conversations: [archivedConversation],
@@ -172,6 +197,7 @@ describe('Web conversation data settings', () => {
   });
 
   afterEach(() => {
+    observePreferenceOwner(null);
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
@@ -182,7 +208,12 @@ describe('Web conversation data settings', () => {
     expect(await screen.findByText('Archived planning')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
 
-    await waitFor(() => expect(mocks.restoreArchived).toHaveBeenCalledWith('conversation-1', expect.objectContaining({ organizationId: null })));
+    await waitFor(() =>
+      expect(mocks.restoreArchived).toHaveBeenCalledWith(
+        'conversation-1',
+        expect.objectContaining({ organizationId: null }),
+      ),
+    );
     expect(screen.getByText('Restored “Archived planning”.')).toBeInTheDocument();
     expect(useChatStore.getState().conversations[0]?.isArchived).toBe(false);
   });
@@ -203,7 +234,13 @@ describe('Web conversation data settings', () => {
 
   it('rebuilds a readable archived snapshot before admitting another page after restore', async () => {
     const next = { ...archivedConversation, id: 'conversation-2', title: 'Next chat' };
-    mocks.listArchived.mockReset().mockResolvedValueOnce({ conversations: [archivedConversation], hasMore: true, nextOffset: 1 })
+    mocks.listArchived
+      .mockReset()
+      .mockResolvedValueOnce({
+        conversations: [archivedConversation],
+        hasMore: true,
+        nextOffset: 1,
+      })
       .mockResolvedValueOnce({ conversations: [next], hasMore: true, nextOffset: 1 })
       .mockResolvedValue({ conversations: [], hasMore: false, nextOffset: 1 });
     render(<ArchivedChatsSection />);
@@ -211,7 +248,9 @@ describe('Web conversation data settings', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
     await screen.findByText('Next chat');
     fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
-    await waitFor(() => expect(mocks.listArchived).toHaveBeenLastCalledWith(1, undefined, expect.any(Object)));
+    await waitFor(() =>
+      expect(mocks.listArchived).toHaveBeenLastCalledWith(1, undefined, expect.any(Object)),
+    );
     expect(mocks.listArchived.mock.calls[1]?.[0]).toBe(0);
   });
 
@@ -221,7 +260,12 @@ describe('Web conversation data settings', () => {
     await screen.findByText('Archived planning');
     fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
 
-    await waitFor(() => expect(mocks.restoreDeleted).toHaveBeenCalledWith('conversation-1', expect.objectContaining({ organizationId: null })));
+    await waitFor(() =>
+      expect(mocks.restoreDeleted).toHaveBeenCalledWith(
+        'conversation-1',
+        expect.objectContaining({ organizationId: null }),
+      ),
+    );
     const rows = useChatStore.getState().conversations.filter(({ id }) => id === 'conversation-1');
     expect(rows).toHaveLength(1);
     expect(rows[0]?.isArchived).toBe(false);
@@ -229,7 +273,13 @@ describe('Web conversation data settings', () => {
 
   it('rebuilds deleted pagination after a confirmed restore', async () => {
     const next = { ...archivedConversation, id: 'conversation-2', title: 'Next deleted chat' };
-    mocks.listDeleted.mockReset().mockResolvedValueOnce({ conversations: [archivedConversation], hasMore: true, nextOffset: 1 })
+    mocks.listDeleted
+      .mockReset()
+      .mockResolvedValueOnce({
+        conversations: [archivedConversation],
+        hasMore: true,
+        nextOffset: 1,
+      })
       .mockResolvedValueOnce({ conversations: [next], hasMore: true, nextOffset: 1 })
       .mockResolvedValue({ conversations: [], hasMore: false, nextOffset: 1 });
     render(<DeletedChatsSection />);
@@ -237,7 +287,9 @@ describe('Web conversation data settings', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
     await screen.findByText('Next deleted chat');
     fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
-    await waitFor(() => expect(mocks.listDeleted).toHaveBeenLastCalledWith(1, undefined, expect.any(Object)));
+    await waitFor(() =>
+      expect(mocks.listDeleted).toHaveBeenLastCalledWith(1, undefined, expect.any(Object)),
+    );
     expect(mocks.listDeleted.mock.calls[1]?.[0]).toBe(0);
   });
 
@@ -251,38 +303,57 @@ describe('Web conversation data settings', () => {
     mocks.listArchived.mockResolvedValue({ conversations: [], hasMore: false, nextOffset: 0 });
     const buttons = screen.getAllByRole('button', { name: 'Delete all archived' });
     fireEvent.click(buttons[buttons.length - 1]!);
-    await waitFor(() => expect(mocks.bulkAction).toHaveBeenCalledWith('delete_archived', expect.objectContaining({ organizationId: null })));
+    await waitFor(() =>
+      expect(mocks.bulkAction).toHaveBeenCalledWith(
+        'delete_archived',
+        expect.objectContaining({ organizationId: null }),
+      ),
+    );
     expect(await screen.findByText('No archived chats')).toBeInTheDocument();
   });
 
   it('lists and revokes account-owned shared links', async () => {
-    mocks.listShares.mockResolvedValue({ complete: true, shares: [
-      {
-        token: 'share-token',
-        title: 'Shared planning',
-        shareUrl: 'https://agiworkforce.com/share/share-token',
-        modelId: null,
-        provider: null,
-        messageCount: 3,
-        createdAt: '2026-07-01T00:00:00.000Z',
-        expiresAt: '2026-08-01T00:00:00.000Z',
-        expired: false,
-      },
-    ] });
+    mocks.listShares.mockResolvedValue({
+      complete: true,
+      shares: [
+        {
+          token: 'share-token',
+          title: 'Shared planning',
+          shareUrl: 'https://agiworkforce.com/share/share-token',
+          modelId: null,
+          provider: null,
+          messageCount: 3,
+          createdAt: '2026-07-01T00:00:00.000Z',
+          expiresAt: '2026-08-01T00:00:00.000Z',
+          expired: false,
+        },
+      ],
+    });
 
     render(<SharedLinksSection />);
 
     expect(await screen.findByText('Shared planning')).toBeInTheDocument();
     const open = vi.spyOn(window, 'open').mockReturnValue(null);
     fireEvent.click(screen.getByRole('button', { name: 'Open' }));
-    expect(open).toHaveBeenCalledWith('https://agiworkforce.com/share/share-token', '_blank', 'noopener,noreferrer');
-    expect(mocks.listShares).toHaveBeenCalledWith(expect.objectContaining({ session, assertCurrent: expect.any(Function) }));
+    expect(open).toHaveBeenCalledWith(
+      'https://agiworkforce.com/share/share-token',
+      '_blank',
+      'noopener,noreferrer',
+    );
+    expect(mocks.listShares).toHaveBeenCalledWith(
+      expect.objectContaining({ session, assertCurrent: expect.any(Function) }),
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Revoke' }));
 
     expect(mocks.revokeShare).not.toHaveBeenCalled();
     fireEvent.click(await screen.findByRole('button', { name: 'Revoke link' }));
 
-    await waitFor(() => expect(mocks.revokeShare).toHaveBeenCalledWith('share-token', expect.objectContaining({ session, assertCurrent: expect.any(Function) })));
+    await waitFor(() =>
+      expect(mocks.revokeShare).toHaveBeenCalledWith(
+        'share-token',
+        expect.objectContaining({ session, assertCurrent: expect.any(Function) }),
+      ),
+    );
     expect(screen.getByText('No shared links')).toBeInTheDocument();
   });
 
@@ -300,12 +371,23 @@ describe('Web conversation data settings', () => {
     const shareUrl = 'https://agiworkforce.com/share/share-token';
     const writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal('navigator', { clipboard: { writeText } });
-    mocks.listShares.mockResolvedValue({ complete: false, shares: [{
-      token: 'share-token', title: 'Shared planning', shareUrl,
-      modelId: null, provider: null, messageCount: 3, visibility: 'public',
-      createdAt: '2026-07-01T00:00:00.000Z', expiresAt: '2026-08-01T00:00:00.000Z',
-      expired: false,
-    }] });
+    mocks.listShares.mockResolvedValue({
+      complete: false,
+      shares: [
+        {
+          token: 'share-token',
+          title: 'Shared planning',
+          shareUrl,
+          modelId: null,
+          provider: null,
+          messageCount: 3,
+          visibility: 'public',
+          createdAt: '2026-07-01T00:00:00.000Z',
+          expiresAt: '2026-08-01T00:00:00.000Z',
+          expired: false,
+        },
+      ],
+    });
 
     render(<SharedLinksSection />);
 
@@ -322,7 +404,10 @@ describe('Web conversation data settings', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Revoke link' }));
 
     expect(await screen.findByText('No shared links shown')).toBeInTheDocument();
-    expect(mocks.revokeShare).toHaveBeenCalledWith('share-token', expect.objectContaining({ session, assertCurrent: expect.any(Function) }));
+    expect(mocks.revokeShare).toHaveBeenCalledWith(
+      'share-token',
+      expect.objectContaining({ session, assertCurrent: expect.any(Function) }),
+    );
     expect(screen.getByText(/This list may not show every shared link/)).toBeInTheDocument();
     expect(screen.queryByText('No shared links')).toBeNull();
     expect(mocks.listShares).toHaveBeenCalledTimes(1);
@@ -348,34 +433,43 @@ describe('Web conversation data settings', () => {
   });
 
   it('asks for the export archive and says the download link is emailed when it will be', async () => {
-    const fetchMock = vi.spyOn(global, 'fetch').mockImplementation(async (input) =>
-      String(input) === '/api/user/export'
-        ? new Response(
-            JSON.stringify({
-              archive: {
-                id: 'export-1',
-                status: 'preparing',
-                delivery: 'email',
-                requestedAt: '2026-09-28T10:00:00.000Z',
-                readyAt: null,
-                expiresAt: null,
-                volumes: [],
-              },
-            }),
-            { headers: { 'Content-Type': 'application/json' } },
-          )
-        : new Response('{}', { headers: { 'Content-Type': 'application/json' } }),
-    );
+    vi.mocked(usePreferenceOwner).mockReturnValue(observePreferenceOwner(session));
+    const fetchMock = vi
+      .spyOn(global, 'fetch')
+      .mockImplementation(async (input, _init?: RequestInit) =>
+        String(input) === MANAGED_CLOUD_DATA_EXPORT_PATH
+          ? new Response(
+              JSON.stringify({
+                archive: {
+                  id: 'export-1',
+                  status: 'preparing',
+                  delivery: 'email',
+                  requestedAt: '2026-09-28T10:00:00.000Z',
+                  readyAt: null,
+                  expiresAt: null,
+                  volumes: [],
+                },
+              }),
+              { headers: { 'Content-Type': 'application/json' } },
+            )
+          : new Response(
+              JSON.stringify(
+                String(input) === MANAGED_CLOUD_DATA_EXPORT_ARCHIVES_PATH ? { archive: null } : {},
+              ),
+              { headers: { 'Content-Type': 'application/json' } },
+            ),
+      );
 
     render(<PrivacySection />);
     expect(
       screen.getByText(/get a copy of your account data and the files you stored/i),
     ).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Export data' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Export data' }));
 
     await waitFor(() =>
       expect(fetchMock).toHaveBeenCalledWith(
-        '/api/user/export',
+        MANAGED_CLOUD_DATA_EXPORT_PATH,
         expect.objectContaining({ method: 'POST' }),
       ),
     );
@@ -383,5 +477,14 @@ describe('Web conversation data settings', () => {
       await screen.findByText(/email you a download link when it's ready/i),
     ).toBeInTheDocument();
   });
-
 });
+
+type MockedModule0 = typeof import('@/features/settings/hooks/use-preference-owner');
+type MockedModule1 = typeof import('@/features/workspaces/hooks/use-workspaces');
+type MockedModule2 = typeof import('@/app/settings/_lib/preferences-client');
+
+type CsrfModule = typeof import('@/lib/client/csrf');
+vi.mock('@/lib/client/csrf', async (importOriginal) => ({
+  ...(await importOriginal<CsrfModule>()),
+  addCsrfHeaders: vi.fn(async () => ({ 'x-csrf-token': 'fixture-csrf' })),
+}));

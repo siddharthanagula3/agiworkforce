@@ -13,15 +13,15 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<MockedModule0>()),
   withRateLimit: (...args: unknown[]) => mocks.rateLimit(...args),
 }));
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  ...(await importOriginal<MockedModule1>()),
   getUserScopedDb: (...args: unknown[]) => mocks.scopedDb(...args),
 }));
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<MockedModule2>()),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 
@@ -37,18 +37,28 @@ describe('GET /api/artifacts/publish/lookup', () => {
     mocks.rateLimit.mockResolvedValue(null);
     mocks.scopedDb.mockResolvedValue({
       db: { query: (...args: unknown[]) => mocks.query(...args) },
-      userId: 'user-1', organizationId: null,
+      userId: 'user-1',
+      organizationId: null,
     });
   });
 
   it('returns a bounded exact owner summary for an older restricted publication', async () => {
     const artifactId = 'Older/Artifact?x=1+#片';
-    mocks.query.mockResolvedValue([{
-      token: 'aaaaaaaaaaaaaaaaaaaaaaaa', artifact_id: artifactId, conversation_id: null,
-      title: 'Older artifact', kind: 'html', language: null, content_chars: 12, version: 3,
-      visibility: 'organization', created_at: '2020-01-01T00:00:00.000Z',
-      updated_at: '2020-01-01T00:00:00.000Z',
-    }]);
+    mocks.query.mockResolvedValue([
+      {
+        token: 'aaaaaaaaaaaaaaaaaaaaaaaa',
+        artifact_id: artifactId,
+        conversation_id: null,
+        title: 'Older artifact',
+        kind: 'html',
+        language: null,
+        content_chars: 12,
+        version: 3,
+        visibility: 'organization',
+        created_at: '2020-01-01T00:00:00.000Z',
+        updated_at: '2020-01-01T00:00:00.000Z',
+      },
+    ]);
     const response = await call(`?${new URLSearchParams({ artifactId: ` ${artifactId} ` })}`);
     expect(response.status).toBe(200);
     expect(response.headers.get('Cache-Control')).toBe('private, no-store');
@@ -75,13 +85,17 @@ describe('GET /api/artifacts/publish/lookup', () => {
     expect(mocks.query).toHaveBeenCalledTimes(1);
   });
 
-  it.each(['', '?artifactId=', '?artifactId=%20', '?artifactId=a&artifactId=b', `?artifactId=${'a'.repeat(201)}`])(
-    'rejects invalid identity %s without querying', async (query) => {
-      expect((await call(query)).status).toBe(400);
-      expect(mocks.scopedDb).not.toHaveBeenCalled();
-      expect(mocks.query).not.toHaveBeenCalled();
-    },
-  );
+  it.each([
+    '',
+    '?artifactId=',
+    '?artifactId=%20',
+    '?artifactId=a&artifactId=b',
+    `?artifactId=${'a'.repeat(201)}`,
+  ])('rejects invalid identity %s without querying', async (query) => {
+    expect((await call(query)).status).toBe(400);
+    expect(mocks.scopedDb).not.toHaveBeenCalled();
+    expect(mocks.query).not.toHaveBeenCalled();
+  });
 
   it('requires authentication and does not turn authorization failures into absence', async () => {
     const { createError } = await import('@/lib/errors');
@@ -110,3 +124,7 @@ describe('GET /api/artifacts/publish/lookup', () => {
     expect(mocks.query).not.toHaveBeenCalled();
   });
 });
+
+type MockedModule0 = typeof import('@/lib/rate-limit');
+type MockedModule1 = typeof import('@/lib/server/rls-db');
+type MockedModule2 = typeof import('@/lib/logger');

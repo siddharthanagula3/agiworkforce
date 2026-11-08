@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type ReactElement } from 'react';
 import { StepUpDialog } from '@/features/auth/StepUpDialog';
 import {
   fetchWithStepUp,
@@ -28,12 +28,17 @@ interface PendingChallenge {
 
 export interface UseStepUp {
   /** Runs `send`, and on a STEP_UP_REQUIRED refusal replays it once with a fresh proof. */
-  withStepUp: (send: StepUpSend, resourceId?: string | null, owned?: OwnedStepUpOptions) => Promise<Response>;
+  withStepUp: (
+    send: StepUpSend,
+    resourceId?: string | null,
+    owned?: OwnedStepUpOptions,
+  ) => Promise<Response>;
   /** Render this next to the control; the challenge has no other way to reach the page. */
   dialog: ReactElement | null;
 }
 
 export function useStepUp(): UseStepUp {
+  const dialogOwnerId = useId();
   const [pending, setPending] = useState<PendingChallenge | null>(null);
   const pendingRef = useRef<PendingChallenge | null>(null);
   const nextChallengeId = useRef(0);
@@ -54,10 +59,11 @@ export function useStepUp(): UseStepUp {
       setPending(null);
     }
     const lifetime = lifetimeRef.current;
+    const requests = ownedRequests.current;
     return () => {
       lifetime.active = false;
-      for (const request of ownedRequests.current) request.retire();
-      ownedRequests.current.clear();
+      for (const request of requests) request.retire();
+      requests.clear();
       const current = pendingRef.current;
       if (current?.lifetime === lifetime) {
         pendingRef.current = null;
@@ -68,7 +74,11 @@ export function useStepUp(): UseStepUp {
   }, []);
 
   const withStepUp = useCallback(
-    (send: StepUpSend, resourceId: string | null = null, owned?: OwnedStepUpOptions): Promise<Response> => {
+    (
+      send: StepUpSend,
+      resourceId: string | null = null,
+      owned?: OwnedStepUpOptions,
+    ): Promise<Response> => {
       const authority = owned
         ? createRequestAuthority(owned.authority.session, owned.authority.isCurrent)
         : undefined;
@@ -86,14 +96,16 @@ export function useStepUp(): UseStepUp {
       const cancelPending = () => {
         releaseObservation();
         const current = pendingRef.current;
-        if (current?.authority === authority && authority) {
+        if (current && authority && current.authority === authority) {
           pendingRef.current = null;
           current.settle(null);
           if (lifetimeRef.current.active) setPending(null);
         }
       };
       authority?.signal.addEventListener('abort', cancelPending, { once: true });
-      unsubscribe = authority?.session.subscribe?.(() => { authority.isCurrent(); });
+      unsubscribe = authority?.session.subscribe?.(() => {
+        authority.isCurrent();
+      });
       if (authority?.signal.aborted) releaseObservation();
       // Re-setup admits new calls, but never revives an earlier invocation.
       const lifetime = lifetimeRef.current;
@@ -144,7 +156,7 @@ export function useStepUp(): UseStepUp {
 
   const dialog = pending ? (
     <StepUpDialog
-      key={pending.id}
+      key={`${dialogOwnerId}:${pending.id}`}
       open
       action={pending.challenge.action}
       consequence={pending.challenge.consequence}

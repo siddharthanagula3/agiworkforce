@@ -123,13 +123,21 @@ export default function AccountSecurityScreen() {
     account: CloudAccountEpoch;
     value: AccountSecurityStatus;
   } | null>(null);
-  const status = ownedStatus && isCloudAccountEpochCurrent(ownedStatus.account)
-    && ownedStatus.account.ownerId === clerkUserId ? ownedStatus.value : null;
+  const status =
+    ownedStatus &&
+    isCloudAccountEpochCurrent(ownedStatus.account) &&
+    ownedStatus.account.ownerId === clerkUserId
+      ? ownedStatus.value
+      : null;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const preferences = useSecurityPreferences();
   const {
-    owner: settingsOwner, timeout: sessionTimeout, savingTimeout, lockdown, savingLockdown,
+    owner: settingsOwner,
+    timeout: sessionTimeout,
+    savingTimeout,
+    lockdown,
+    savingLockdown,
   } = preferences;
   const [auditEntries, setAuditEntries] = useState<AuditLogEntry[] | null>(null);
   const [changingPassword, setChangingPassword] = useState(false);
@@ -137,8 +145,10 @@ export default function AccountSecurityScreen() {
   const [accountRevision, setAccountRevision] = useState(0);
   const passwordRequest = useRef(0);
   const revokeRequest = useRef(0);
-  const passwordModalOpen = isCloudAccountEpochCurrent(passwordAccount)
-    && passwordAccount.ownerId === clerkUserId && clerkUser?.id === passwordAccount.ownerId;
+  const passwordModalOpen =
+    isCloudAccountEpochCurrent(passwordAccount) &&
+    passwordAccount.ownerId === clerkUserId &&
+    clerkUser?.id === passwordAccount.ownerId;
   const closePassword = useCallback(() => {
     passwordRequest.current += 1;
     setPasswordAccount(null);
@@ -165,8 +175,12 @@ export default function AccountSecurityScreen() {
     owner: SecuritySettingsOwner;
     value: AccountSessions;
   } | null>(null);
-  const sessions = ownedSessions && ownedSessions.owner === settingsOwner &&
-    isSecuritySettingsOwnerCurrent(ownedSessions.owner) ? ownedSessions.value : null;
+  const sessions =
+    ownedSessions &&
+    ownedSessions.owner === settingsOwner &&
+    isSecuritySettingsOwnerCurrent(ownedSessions.owner)
+      ? ownedSessions.value
+      : null;
   const [sessionsError, setSessionsError] = useState<string | null>(null);
   const [revokingSessionId, setRevokingSessionId] = useState<string | null>(null);
   const [revokingAll, setRevokingAll] = useState(false);
@@ -210,7 +224,8 @@ export default function AccountSecurityScreen() {
       const owner = settingsOwner;
       if (!isSecuritySettingsOwnerCurrent(owner)) return;
       const request = ++sessionsRequest.current;
-      const current = () => request === sessionsRequest.current && isSecuritySettingsOwnerCurrent(owner);
+      const current = () =>
+        request === sessionsRequest.current && isSecuritySettingsOwnerCurrent(owner);
       try {
         const next = await fetchAccountSessions(signal ?? owner.controller.signal, owner.account);
         if (!current() || signal?.aborted) return;
@@ -232,10 +247,12 @@ export default function AccountSecurityScreen() {
       if (
         singleRevokeIntent.current &&
         isSecuritySettingsOwnerCurrent(singleRevokeIntent.current.owner)
-      ) return;
+      )
+        return;
       const intent = { owner, phase: 'prompt' as 'prompt' | 'request' };
       singleRevokeIntent.current = intent;
-      const current = () => singleRevokeIntent.current === intent && isSecuritySettingsOwnerCurrent(owner);
+      const current = () =>
+        singleRevokeIntent.current === intent && isSecuritySettingsOwnerCurrent(owner);
       const cancel = () => {
         if (singleRevokeIntent.current === intent && intent.phase === 'prompt') {
           singleRevokeIntent.current = null;
@@ -332,9 +349,16 @@ export default function AccountSecurityScreen() {
   const handleChangePassword = useCallback(
     (change: PasswordChange) => {
       const account = passwordAccount;
-      if (passwordIntentVersion !== passwordRequest.current || !isCloudAccountEpochCurrent(account) || account.ownerId !== clerkUserId || clerkUser?.id !== account.ownerId) return;
+      if (
+        passwordIntentVersion !== passwordRequest.current ||
+        !isCloudAccountEpochCurrent(account) ||
+        account.ownerId !== clerkUserId ||
+        clerkUser?.id !== account.ownerId
+      )
+        return;
       const request = ++passwordRequest.current;
-      const current = () => request === passwordRequest.current && isCloudAccountEpochCurrent(account);
+      const current = () =>
+        request === passwordRequest.current && isCloudAccountEpochCurrent(account);
       void (async () => {
         setChangingPassword(true);
         try {
@@ -348,7 +372,8 @@ export default function AccountSecurityScreen() {
             'Password changed',
             'Your account password has been updated and your other sessions were signed out.',
           );
-          if (current() && clerkUser?.id === account.ownerId) await clerkUser.reload().catch(() => undefined);
+          if (current() && clerkUser?.id === account.ownerId)
+            await clerkUser.reload().catch(() => undefined);
         } catch (changeError) {
           if (!current() || isStepUpCancelled(changeError)) return;
           Alert.alert('Could not change password', toUserMessage(changeError, 'Please try again.'));
@@ -427,7 +452,11 @@ export default function AccountSecurityScreen() {
     >
       {passwordModalOpen ? null : stepUpModal}
       <ChangePasswordModal
-        key={passwordAccount ? `${passwordAccount.ownerId}:${passwordAccount.epoch}` : 'closed'}
+        key={
+          passwordAccount
+            ? `password:${passwordAccount.ownerId}:${passwordAccount.epoch}`
+            : 'password:closed'
+        }
         visible={passwordModalOpen}
         hasPassword={hasPassword}
         saving={changingPassword}
@@ -444,7 +473,11 @@ export default function AccountSecurityScreen() {
 
       {appMode === 'cloud' ? <AskFromSiriSetting /> : null}
       <TwoFactorSection
-        key={ownedStatus ? `${ownedStatus.account.ownerId}:${ownedStatus.account.epoch}` : 'unavailable'}
+        key={
+          ownedStatus
+            ? `two-factor:${ownedStatus.account.ownerId}:${ownedStatus.account.epoch}`
+            : 'two-factor:unavailable'
+        }
         account={appMode === 'cloud' && status ? ownedStatus!.account : null}
         status={appMode === 'cloud' ? status : null}
         statusLabel={twoFactorValue}
@@ -518,13 +551,22 @@ export default function AccountSecurityScreen() {
           label={hasPassword ? 'Change password' : 'Set a password'}
           icon={KeyRound}
           value={changingPassword ? 'Saving…' : hasPassword ? 'Change' : 'Set'}
-          onPress={appMode === 'cloud' ? () => {
-            const account = captureCloudAccountEpoch();
-            if (!account || account.ownerId !== clerkUserId || clerkUser?.id !== account.ownerId) return;
-            passwordRequest.current += 1;
-            setChangingPassword(false);
-            setPasswordAccount(account);
-          } : undefined}
+          onPress={
+            appMode === 'cloud'
+              ? () => {
+                  const account = captureCloudAccountEpoch();
+                  if (
+                    !account ||
+                    account.ownerId !== clerkUserId ||
+                    clerkUser?.id !== account.ownerId
+                  )
+                    return;
+                  passwordRequest.current += 1;
+                  setChangingPassword(false);
+                  setPasswordAccount(account);
+                }
+              : undefined
+          }
           isLast
         />
       </SettingsGroup>
@@ -544,16 +586,21 @@ export default function AccountSecurityScreen() {
               : preferences.timeoutError && sessionTimeout === null
                 ? 'Unavailable'
                 : sessionTimeout === null
-                ? 'Checking…'
-                : savingTimeout
-                  ? 'Saving…'
-                  : formatTimeout(sessionTimeout)
+                  ? 'Checking…'
+                  : savingTimeout
+                    ? 'Saving…'
+                    : formatTimeout(sessionTimeout)
           }
-          onPress={appMode === 'cloud' && sessionTimeout !== null && !savingTimeout ? () => void preferences.cycleTimeout() : undefined}
+          onPress={
+            appMode === 'cloud' && sessionTimeout !== null && !savingTimeout
+              ? () => void preferences.cycleTimeout()
+              : undefined
+          }
         />
         {preferences.timeoutError ? (
           <SettingsRow
             label={preferences.timeoutError}
+            icon={Timer}
             value="Retry"
             onPress={savingTimeout ? undefined : preferences.retryTimeout}
           />
@@ -678,6 +725,7 @@ export default function AccountSecurityScreen() {
         <SettingsGroup>
           <SettingsRow
             label={preferences.lockdownError}
+            icon={Lock}
             value="Retry lockdown"
             onPress={savingLockdown ? undefined : preferences.retryLockdown}
           />

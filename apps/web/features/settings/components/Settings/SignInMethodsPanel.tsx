@@ -7,7 +7,11 @@ import { Spinner, useConfirmAction } from '@agiworkforce/ui';
 
 import { isStepUpCancelled } from '@/features/auth/step-up-fetch';
 import { getCsrfToken } from '@/lib/client/csrf';
-import { createRequestAuthority, type RequestAuthority, type SessionAuthority } from '@/lib/identity/request-authority';
+import {
+  createRequestAuthority,
+  type RequestAuthority,
+  type SessionAuthority,
+} from '@/lib/identity/request-authority';
 import { useSessionSnapshot } from '@/lib/identity/useSessionSnapshot';
 import { nativeSessionFor } from '@/lib/identity/native-session-authority';
 import { useStepUp } from '@features/settings/hooks/useStepUp';
@@ -147,13 +151,30 @@ function MethodRow({
   );
 }
 
-const UNCERTAIN = 'The sign-in change outcome could not be confirmed. It may already have completed. Review your sign-in methods before trying again.';
-type PanelOwner = { id: number; session: SessionAuthority; pending: boolean; isCurrent: () => boolean };
-type SignInIntent = { request: RequestAuthority; operation: IdentityPasskeyOperation | null;
-  generation: object; key: string; phase: 'confirming' | 'running'; dispatched: boolean;
-  identityId?: string; body?: string; readCurrent: () => boolean };
+const UNCERTAIN =
+  'The sign-in change outcome could not be confirmed. It may already have completed. Review your sign-in methods before trying again.';
+type PanelOwner = {
+  id: number;
+  session: SessionAuthority;
+  pending: boolean;
+  isCurrent: () => boolean;
+};
+type SignInIntent = {
+  request: RequestAuthority;
+  operation: IdentityPasskeyOperation | null;
+  generation: object;
+  key: string;
+  phase: 'confirming' | 'running';
+  dispatched: boolean;
+  identityId?: string;
+  body?: string;
+  readCurrent: () => boolean;
+};
 
-export function SignInMethodsPanel({ onOpenPassword, active = true }: { onOpenPassword?: () => void; active?: boolean } = {}) {
+export function SignInMethodsPanel({
+  onOpenPassword,
+  active = true,
+}: { onOpenPassword?: () => void; active?: boolean } = {}) {
   const capture = useSessionSnapshot();
   const connected = useConnectedAccounts();
   const admission = useRef(active);
@@ -171,27 +192,64 @@ export function SignInMethodsPanel({ onOpenPassword, active = true }: { onOpenPa
     if (session) {
       const native = nativeSessionFor(session);
       const user = native.user;
-      const owner: PanelOwner = { id: ++nextId.current, session, pending: false,
-        isCurrent: () => slot.current === owner && admission.current && session.isCurrent() && native.user === user };
+      const owner: PanelOwner = {
+        id: ++nextId.current,
+        session,
+        pending: false,
+        isCurrent: () =>
+          slot.current === owner &&
+          admission.current &&
+          session.isCurrent() &&
+          native.user === user,
+      };
       slot.current = owner;
     }
   }
   const owner = slot.current;
-  const replace = useMemo(() => () => {
-    if (slot.current === owner) {
-      if (owner?.pending) notice.current = owner.session;
-      slot.current = null; redraw((n) => n + 1);
-    }
-  }, [owner]);
-  return owner ? <OwnedSignInMethodsPanel key={owner.id} owner={owner} connected={connected}
-    replace={replace} onOpenPassword={onOpenPassword} uncertain={notice.current?.isCurrent() === true}
-    markUncertain={() => { if (slot.current === owner) notice.current = owner.session; }}
-    acknowledge={() => { if (slot.current === owner) notice.current = null; }} /> : null;
+  const replace = useMemo(
+    () => () => {
+      if (slot.current === owner) {
+        if (owner?.pending) notice.current = owner.session;
+        slot.current = null;
+        redraw((n) => n + 1);
+      }
+    },
+    [owner],
+  );
+  return owner ? (
+    <OwnedSignInMethodsPanel
+      key={owner.id}
+      owner={owner}
+      connected={connected}
+      replace={replace}
+      onOpenPassword={onOpenPassword}
+      uncertain={notice.current?.isCurrent() === true}
+      markUncertain={() => {
+        if (slot.current === owner) notice.current = owner.session;
+      }}
+      acknowledge={() => {
+        if (slot.current === owner) notice.current = null;
+      }}
+    />
+  ) : null;
 }
 
-function OwnedSignInMethodsPanel({ owner, connected, replace, onOpenPassword, uncertain, markUncertain, acknowledge }: {
-  owner: PanelOwner; connected: IdentityConnectedAccountsState; replace: () => void;
-  onOpenPassword?: () => void; uncertain: boolean; markUncertain: () => void; acknowledge: () => void;
+function OwnedSignInMethodsPanel({
+  owner,
+  connected,
+  replace,
+  onOpenPassword,
+  uncertain,
+  markUncertain,
+  acknowledge,
+}: {
+  owner: PanelOwner;
+  connected: IdentityConnectedAccountsState;
+  replace: () => void;
+  onOpenPassword?: () => void;
+  uncertain: boolean;
+  markUncertain: () => void;
+  acknowledge: () => void;
 }) {
   const { user, isLoaded: userLoaded, isSignedIn } = useCurrentUser();
   const { passkeys, isLoaded: passkeysLoaded } = usePasskeys();
@@ -201,29 +259,57 @@ function OwnedSignInMethodsPanel({ owner, connected, replace, onOpenPassword, un
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(uncertain ? UNCERTAIN : null);
   const [blocked, setBlocked] = useState(uncertain);
-  const lane = useMemo(() => ({ active: false, generation: {} as object, intent: null as SignInIntent | null, blocked: uncertain }), []);
+  const [lane] = useState(() => ({
+    active: false,
+    generation: {} as object,
+    intent: null as SignInIntent | null,
+    blocked: uncertain,
+  }));
   const rendered = {};
-  const latestRender = useRef(rendered);
-  latestRender.current = rendered;
+  const latestRender = useRef<object | null>(null);
+  useLayoutEffect(() => {
+    latestRender.current = rendered;
+    return () => {
+      if (latestRender.current === rendered) latestRender.current = null;
+    };
+  });
   const current = () => lane.active && owner.isCurrent();
-  const reconcile = () => { if (lane.active && !owner.isCurrent()) replace(); };
+  const reconcile = () => {
+    if (lane.active && !owner.isCurrent()) replace();
+  };
   const acceptsEvent = () => {
     if (current() && latestRender.current === rendered) return true;
-    reconcile(); return false;
+    reconcile();
+    return false;
   };
-  const owns = (intent: SignInIntent) => current() && lane.intent === intent && lane.generation === intent.generation;
+  const owns = (intent: SignInIntent) =>
+    current() && lane.intent === intent && lane.generation === intent.generation;
   useLayoutEffect(() => {
-    lane.active = true; lane.generation = {};
+    lane.active = true;
+    lane.generation = {};
     let stop: (() => void) | undefined;
     const retire = () => {
-      lane.active = false; lane.intent?.request.retire(); lane.intent = null;
-      stop?.(); stop = undefined;
+      lane.active = false;
+      lane.intent?.request.retire();
+      lane.intent = null;
+      stop?.();
+      stop = undefined;
     };
-    stop = owner.session.subscribe?.(() => { if (lane.active && !owner.isCurrent()) { retire(); replace(); } });
-    if (!lane.active) { stop?.(); stop = undefined; }
+    stop = owner.session.subscribe?.(() => {
+      if (lane.active && !owner.isCurrent()) {
+        retire();
+        replace();
+      }
+    });
+    if (!lane.active) {
+      stop?.();
+      stop = undefined;
+    }
     return retire;
   }, [lane, owner, replace]);
-  useLayoutEffect(() => { lane.intent?.operation?.isCurrent(); });
+  useLayoutEffect(() => {
+    lane.intent?.operation?.isCurrent();
+  });
 
   const identities = useSignInIdentities(owner.isCurrent());
   const loaded = identities.data;
@@ -235,44 +321,86 @@ function OwnedSignInMethodsPanel({ owner, connected, replace, onOpenPassword, un
 
   const release = (intent: SignInIntent) => {
     if (!owns(intent)) return;
-    lane.intent = null; owner.pending = false; intent.request.retire();
-    latestRender.current = {}; setBusy(null);
+    lane.intent = null;
+    owner.pending = false;
+    intent.request.retire();
+    latestRender.current = {};
+    setBusy(null);
   };
   function open(key: string, phase: SignInIntent['phase']) {
     if (!acceptsEvent() || lane.intent || lane.blocked || !identities.isCurrent()) return null;
-    const intent: SignInIntent = { key, phase, generation: lane.generation, dispatched: false,
-      operation: null, readCurrent: identities.isCurrent,
-      request: createRequestAuthority(owner.session, () => owns(intent), () => { intent.dispatched = true; owner.pending = true; }) };
-    lane.intent = intent; latestRender.current = {};
-    intent.request.signal.addEventListener('abort', () => {
-      if (lane.active && lane.intent === intent && lane.generation === intent.generation) replace();
-    }, { once: true });
-    setError(null); setBusy(key);
+    const intent: SignInIntent = {
+      key,
+      phase,
+      generation: lane.generation,
+      dispatched: false,
+      operation: null,
+      readCurrent: identities.isCurrent,
+      request: createRequestAuthority(
+        owner.session,
+        () => owns(intent),
+        () => {
+          intent.dispatched = true;
+          owner.pending = true;
+        },
+      ),
+    };
+    lane.intent = intent;
+    latestRender.current = {};
+    intent.request.signal.addEventListener(
+      'abort',
+      () => {
+        if (lane.active && lane.intent === intent && lane.generation === intent.generation)
+          replace();
+      },
+      { once: true },
+    );
+    setError(null);
+    setBusy(key);
     return intent;
   }
   async function run(intent: SignInIntent) {
-    if (!owns(intent)) { reconcile(); return; }
+    if (!owns(intent)) {
+      reconcile();
+      return;
+    }
     try {
       intent.request.assertCurrent();
       if (!intent.readCurrent()) throw new Error('Sign-in methods changed. Review them again.');
       if (intent.operation) await intent.operation.execute();
       else {
-        const response = await withStepUp(async (headers) => {
-          intent.request.assertCurrent();
-          const csrf = await getCsrfToken();
-          intent.request.assertCurrent();
-          return intent.request.fetch(IDENTITIES_PATH, { method: 'DELETE', body: intent.body,
-            headers: { ...headers, 'Content-Type': 'application/json', 'x-csrf-token': csrf } });
-        }, intent.identityId, { authority: intent.request, onStepUpRequired: () => {
-          intent.dispatched = false; owner.pending = false;
-        } });
+        const response = await withStepUp(
+          async (headers) => {
+            intent.request.assertCurrent();
+            const csrf = await getCsrfToken();
+            intent.request.assertCurrent();
+            return intent.request.fetch(IDENTITIES_PATH, {
+              method: 'DELETE',
+              body: intent.body,
+              headers: { ...headers, 'Content-Type': 'application/json', 'x-csrf-token': csrf },
+            });
+          },
+          intent.identityId,
+          {
+            authority: intent.request,
+            onStepUpRequired: () => {
+              intent.dispatched = false;
+              owner.pending = false;
+            },
+          },
+        );
         intent.request.assertCurrent();
         const body: unknown = await response.json();
         intent.request.assertCurrent();
         if (!response.ok) {
           throw new Error('That sign-in method could not be removed.');
         }
-        if (!body || typeof body !== 'object' || !('removed' in body) || body.removed !== intent.identityId) {
+        if (
+          !body ||
+          typeof body !== 'object' ||
+          !('removed' in body) ||
+          body.removed !== intent.identityId
+        ) {
           throw new Error('The removed sign-in method could not be confirmed.');
         }
       }
@@ -280,48 +408,100 @@ function OwnedSignInMethodsPanel({ owner, connected, replace, onOpenPassword, un
       owner.pending = false;
       reloadIdentities();
     } catch (cause) {
-      if (!owns(intent)) { reconcile(); return; }
+      if (!owns(intent)) {
+        reconcile();
+        return;
+      }
       if (intent.dispatched) {
-        lane.blocked = true; markUncertain(); setBlocked(true); setError(UNCERTAIN);
-      } else if (!isStepUpCancelled(cause)) setError(toUserMessage(cause, 'That sign-in method could not be changed.'));
-    } finally { release(intent); }
+        lane.blocked = true;
+        markUncertain();
+        setBlocked(true);
+        setError(UNCERTAIN);
+      } else if (!isStepUpCancelled(cause))
+        setError(toUserMessage(cause, 'That sign-in method could not be changed.'));
+    } finally {
+      release(intent);
+    }
   }
 
   function handleConnect(provider: AuthProviderId) {
     const intent = open(`connect:${provider}`, 'running');
     if (!intent) return;
     try {
-      intent.operation = capture({ kind: 'connect', provider, returnUrl: window.location.href }, {
-        authority: intent.request, onDispatch: () => { intent.request.assertCurrent(); intent.dispatched = true; owner.pending = true; },
-      });
+      intent.operation = capture(
+        { kind: 'connect', provider, returnUrl: window.location.href },
+        {
+          authority: intent.request,
+          onDispatch: () => {
+            intent.request.assertCurrent();
+            intent.dispatched = true;
+            owner.pending = true;
+          },
+        },
+      );
       void run(intent);
-    } catch (cause) { if (owns(intent)) { setError(toUserMessage(cause, 'That account could not be connected.')); release(intent); } }
+    } catch (cause) {
+      if (owns(intent)) {
+        setError(toUserMessage(cause, 'That account could not be connected.'));
+        release(intent);
+      }
+    }
   }
 
   function handleDisconnect(accountId: string, label: string) {
     const intent = open(`disconnect:${accountId}`, 'confirming');
     if (!intent) return;
     try {
-      intent.operation = capture({ kind: 'disconnect', accountId }, {
-        authority: intent.request, onDispatch: () => { intent.request.assertCurrent(); intent.dispatched = true; owner.pending = true; },
-      });
-      ask(intent, `Disconnect ${label}?`, `You will no longer be able to sign in with ${label}. You can connect it again later.`, 'Disconnect');
-    } catch (cause) { if (owns(intent)) { setError(toUserMessage(cause, 'That account could not be disconnected.')); release(intent); } }
+      intent.operation = capture(
+        { kind: 'disconnect', accountId },
+        {
+          authority: intent.request,
+          onDispatch: () => {
+            intent.request.assertCurrent();
+            intent.dispatched = true;
+            owner.pending = true;
+          },
+        },
+      );
+      ask(
+        intent,
+        `Disconnect ${label}?`,
+        `You will no longer be able to sign in with ${label}. You can connect it again later.`,
+        'Disconnect',
+      );
+    } catch (cause) {
+      if (owns(intent)) {
+        setError(toUserMessage(cause, 'That account could not be disconnected.'));
+        release(intent);
+      }
+    }
   }
 
   function handleUnlink(identityId: string, label: string) {
     const intent = open(`unlink:${identityId}`, 'confirming');
     if (!intent) return;
-    intent.identityId = identityId; intent.body = JSON.stringify({ identityId });
+    intent.identityId = identityId;
+    intent.body = JSON.stringify({ identityId });
     ask(intent, `Remove this ${label.toLowerCase()}?`, loaded!.consequence, 'Remove');
   }
   function ask(intent: SignInIntent, title: string, description: string, confirmLabel: string) {
-    confirm({ title, description, confirmLabel, destructive: true,
-      onCancel: () => { if (owns(intent) && intent.phase === 'confirming') release(intent); else reconcile(); },
+    confirm({
+      title,
+      description,
+      confirmLabel,
+      destructive: true,
+      onCancel: () => {
+        if (owns(intent) && intent.phase === 'confirming') release(intent);
+        else reconcile();
+      },
       onConfirm: () => {
-        if (!owns(intent)) { reconcile(); return; }
+        if (!owns(intent)) {
+          reconcile();
+          return;
+        }
         if (intent.phase !== 'confirming') return;
-        intent.phase = 'running'; return run(intent);
+        intent.phase = 'running';
+        return run(intent);
       },
     });
   }
@@ -355,7 +535,7 @@ function OwnedSignInMethodsPanel({ owner, connected, replace, onOpenPassword, un
         Every way you can sign in to this account. Keep at least one you can still reach.
       </p>
 
-      {(!nativeReady || !passkeysLoaded || !isLoaded || identities.isLoading) ? (
+      {!nativeReady || !passkeysLoaded || !isLoaded || identities.isLoading ? (
         <div style={{ paddingTop: 'var(--space-3)' }}>
           <Spinner size="sm" aria-label="Loading sign-in methods" />
         </div>
@@ -370,42 +550,52 @@ function OwnedSignInMethodsPanel({ owner, connected, replace, onOpenPassword, un
             label="Password"
             detail={user?.hasPassword ? 'Set' : 'Not set'}
             value={user?.hasPassword ? 'Change' : 'Add'}
-            onOpen={onOpenPassword ? () => { if (acceptsEvent()) onOpenPassword(); } : undefined}
-          />
-          {passkeysLoaded ? <MethodRow label="Passkeys" detail={describePasskeys(passkeys)} /> : null}
-          {isLoaded ? providers.map((provider) => {
-            const account = accounts.find((candidate) => candidate.provider === provider.id);
-            const key = account ? `disconnect:${account.id}` : `connect:${provider.id}`;
-            return (
-              <MethodRow
-                key={provider.id}
-                label={provider.label}
-                detail={
-                  account
-                    ? `Connected${account.email ? ` as ${account.email}` : ''}`
-                    : 'Not connected'
-                }
-              >
-                <button
-                  type="button"
-                  disabled={busy !== null || blocked}
-                  onClick={() =>
-                    account
-                      ? handleDisconnect(account.id, provider.label)
-                      : handleConnect(provider.id)
+            onOpen={
+              onOpenPassword
+                ? () => {
+                    if (acceptsEvent()) onOpenPassword();
                   }
-                  style={{
-                    ...secondaryButtonStyle,
-                    color: account ? 'var(--settings-destructive-text)' : 'var(--text-1)',
-                    cursor: busy !== null ? 'default' : 'pointer',
-                  }}
-                >
-                  {busy === key ? <Spinner size="sm" aria-hidden="true" /> : null}
-                  {account ? 'Disconnect' : 'Connect'}
-                </button>
-              </MethodRow>
-            );
-          }) : null}
+                : undefined
+            }
+          />
+          {passkeysLoaded ? (
+            <MethodRow label="Passkeys" detail={describePasskeys(passkeys)} />
+          ) : null}
+          {isLoaded
+            ? providers.map((provider) => {
+                const account = accounts.find((candidate) => candidate.provider === provider.id);
+                const key = account ? `disconnect:${account.id}` : `connect:${provider.id}`;
+                return (
+                  <MethodRow
+                    key={provider.id}
+                    label={provider.label}
+                    detail={
+                      account
+                        ? `Connected${account.email ? ` as ${account.email}` : ''}`
+                        : 'Not connected'
+                    }
+                  >
+                    <button
+                      type="button"
+                      disabled={busy !== null || blocked}
+                      onClick={() =>
+                        account
+                          ? handleDisconnect(account.id, provider.label)
+                          : handleConnect(provider.id)
+                      }
+                      style={{
+                        ...secondaryButtonStyle,
+                        color: account ? 'var(--settings-destructive-text)' : 'var(--text-1)',
+                        cursor: busy !== null ? 'default' : 'pointer',
+                      }}
+                    >
+                      {busy === key ? <Spinner size="sm" aria-hidden="true" /> : null}
+                      {account ? 'Disconnect' : 'Connect'}
+                    </button>
+                  </MethodRow>
+                );
+              })
+            : null}
           {linked.length > 1
             ? linked.map((identity) => {
                 const label = CREATION_SOURCE_LABEL[identity.creationSource] ?? 'Sign-in account';
@@ -443,15 +633,41 @@ function OwnedSignInMethodsPanel({ owner, connected, replace, onOpenPassword, un
         </ul>
       ) : null}
 
-      {blocked ? <button type="button" style={secondaryButtonStyle} onClick={() => {
-        if (acceptsEvent() && !lane.intent) reloadIdentities();
-      }}>Refresh sign-in methods</button> : null}
-      {blocked ? <button type="button" style={secondaryButtonStyle}
-        disabled={busy !== null || !identities.isCurrent() || !connected.isCurrent()}
-        onClick={() => {
-          if (!acceptsEvent() || lane.intent || !lane.blocked || !identities.isCurrent() || !connected.isCurrent()) return;
-          latestRender.current = {}; lane.blocked = false; acknowledge(); setBlocked(false); setError(null);
-        }}>I have reviewed my sign-in methods</button> : null}
+      {blocked ? (
+        <button
+          type="button"
+          style={secondaryButtonStyle}
+          onClick={() => {
+            if (acceptsEvent() && !lane.intent) reloadIdentities();
+          }}
+        >
+          Refresh sign-in methods
+        </button>
+      ) : null}
+      {blocked ? (
+        <button
+          type="button"
+          style={secondaryButtonStyle}
+          disabled={busy !== null || !identities.isCurrent() || !connected.isCurrent()}
+          onClick={() => {
+            if (
+              !acceptsEvent() ||
+              lane.intent ||
+              !lane.blocked ||
+              !identities.isCurrent() ||
+              !connected.isCurrent()
+            )
+              return;
+            latestRender.current = {};
+            lane.blocked = false;
+            acknowledge();
+            setBlocked(false);
+            setError(null);
+          }}
+        >
+          I have reviewed my sign-in methods
+        </button>
+      ) : null}
       {loadError || error ? (
         <p
           role="alert"

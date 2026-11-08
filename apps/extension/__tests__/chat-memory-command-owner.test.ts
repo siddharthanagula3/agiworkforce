@@ -1,4 +1,7 @@
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
+import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { sameManagedCloudOwner } from '../src/features/cloud-bridge/managedCloudAuthority';
@@ -6,7 +9,10 @@ import type { ManagedCloudOwner } from '../src/features/cloud-bridge/managedClou
 import type { MemoryCommandResult } from '../src/features/cloud-bridge/memoryClient';
 import { UUID_PATTERN } from '../src/lib/uuid';
 
-const source = readFileSync(new URL('../src/side_panel.ts', import.meta.url), 'utf8');
+const source = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), '../src/side_panel.ts'),
+  'utf8',
+);
 const program = ts.createSourceFile('side_panel.ts', source, ts.ScriptTarget.Latest, true);
 const functions = program.statements
   .filter(
@@ -67,16 +73,24 @@ function harness() {
     UUID_PATTERN,
     cancelComposerImageIntake: vi.fn(),
     t: (key: string) => key,
-    tPlural: (key: string, count: number, values: string[]) => `${key}:${count}:${values.join(' ')}`,
+    tPlural: (key: string, count: number, values: string[]) =>
+      `${key}:${count}:${values.join(' ')}`,
   };
   const compiled = ts.transpileModule(
     `let currentMemoryNotice = null;
      ${functions}
-     return { runChatMemoryCommand, renderMemoryNotice, advanceConversationGeneration,
-       getNotice: () => currentMemoryNotice };`,
+     ({ runChatMemoryCommand, renderMemoryNotice, advanceConversationGeneration,
+       getNotice: () => currentMemoryNotice });`,
     { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } },
   ).outputText;
-  const api = new Function(...Object.keys(dependencies), compiled)(...Object.values(dependencies)) as {
+  const api = runInNewContext(
+    compiled,
+    { ...dependencies, document },
+    {
+      contextCodeGeneration: { strings: false, wasm: false },
+      timeout: 1000,
+    },
+  ) as {
     runChatMemoryCommand(
       message: string,
       streamId: string,
@@ -126,7 +140,8 @@ describe('chat memory command ownership', () => {
   });
 
   it.each(['owner', 'session', 'conversation', 'generation', 'project', 'stream'])(
-    'does not request memory when %s changes during authentication', async (changed) => {
+    'does not request memory when %s changes during authentication',
+    async (changed) => {
       const h = harness();
       const pending = deferred<{ token: string; owner: ManagedCloudOwner }>();
       h.auth.mockReturnValueOnce(pending.promise);
@@ -153,7 +168,9 @@ describe('chat memory command ownership', () => {
         token: 'other-token',
         owner: {
           ...OWNER,
-          ...(changed === 'account' ? { accountId: 'account-b' } : { authIncarnation: 'session-b' }),
+          ...(changed === 'account'
+            ? { accountId: 'account-b' }
+            : { authIncarnation: 'session-b' }),
         },
       });
       await h.run();
@@ -166,9 +183,7 @@ describe('chat memory command ownership', () => {
     const pending = deferred<MemoryCommandResult | null>();
     h.command.mockReturnValueOnce(pending.promise);
     const running = h.run();
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(h.command).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(h.command).toHaveBeenCalledTimes(1));
     h.context.currentStreamId = null;
     if (outcome === 'success') pending.resolve(FORGET);
     else pending.reject(new Error('Old request failed'));
@@ -202,7 +217,8 @@ describe('chat memory command ownership', () => {
   });
 
   it.each(['dismiss', 'replace', 'owner'])(
-    'does not confirm after %s during fresh authentication', async (changed) => {
+    'does not confirm after %s during fresh authentication',
+    async (changed) => {
       const h = harness();
       await h.run();
       const pending = deferred<{ token: string; owner: ManagedCloudOwner }>();
@@ -231,22 +247,24 @@ describe('chat memory command ownership', () => {
     expect(h.getNotice()).toBeNull();
   });
 
-  it.each(['success', 'failure'])('cannot replace a newer notice with confirmation %s', async (outcome) => {
-    const h = harness();
-    await h.run();
-    const pending = deferred<MemoryCommandResult | null>();
-    h.command.mockReturnValueOnce(pending.promise);
-    const retained = h.getNotice()!.confirmForget!;
-    const confirming = retained();
-    await Promise.resolve();
-    expect(h.command).toHaveBeenCalledTimes(2);
-    await retained();
-    expect(h.command).toHaveBeenCalledTimes(2);
-    const replacement = { text: 'New notice' };
-    h.renderMemoryNotice(replacement);
-    if (outcome === 'success') pending.resolve({ ...FORGET, message: 'Forgotten', matches: [] });
-    else pending.reject(new Error('Old confirmation failed'));
-    await confirming;
-    expect(h.getNotice()).toBe(replacement);
-  });
+  it.each(['success', 'failure'])(
+    'cannot replace a newer notice with confirmation %s',
+    async (outcome) => {
+      const h = harness();
+      await h.run();
+      const pending = deferred<MemoryCommandResult | null>();
+      h.command.mockReturnValueOnce(pending.promise);
+      const retained = h.getNotice()!.confirmForget!;
+      const confirming = retained();
+      await vi.waitFor(() => expect(h.command).toHaveBeenCalledTimes(2));
+      await retained();
+      expect(h.command).toHaveBeenCalledTimes(2);
+      const replacement = { text: 'New notice' };
+      h.renderMemoryNotice(replacement);
+      if (outcome === 'success') pending.resolve({ ...FORGET, message: 'Forgotten', matches: [] });
+      else pending.reject(new Error('Old confirmation failed'));
+      await confirming;
+      expect(h.getNotice()).toBe(replacement);
+    },
+  );
 });

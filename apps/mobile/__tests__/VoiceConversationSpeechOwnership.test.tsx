@@ -24,7 +24,12 @@ jest.mock('expo-haptics', () => ({
 }));
 jest.mock('@/src/features/voice/services/voiceInput', () => ({
   VoiceCaptureError: class extends Error {
-    constructor(readonly code: string, message: string) { super(message); }
+    constructor(
+      readonly code: string,
+      message: string,
+    ) {
+      super(message);
+    }
   },
   isCapturing: jest.fn().mockReturnValue(false),
   startCaptureSession: jest.fn(),
@@ -35,7 +40,10 @@ jest.mock('@/src/features/voice/services/voiceInput', () => ({
 function deferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (error: Error) => void;
-  const promise = new Promise<T>((accept, refuse) => { resolve = accept; reject = refuse; });
+  const promise = new Promise<T>((accept, refuse) => {
+    resolve = accept;
+    reject = refuse;
+  });
   return { promise, resolve, reject };
 }
 
@@ -49,7 +57,9 @@ function createOwner() {
     const completion = deferred<VoiceOutputOutcome>();
     const handle = {
       done: completion.promise,
-      stop: jest.fn(async () => { completion.resolve({ status: 'stopped' }); }),
+      stop: jest.fn(async () => {
+        completion.resolve({ status: 'stopped' });
+      }),
     };
     playback.push({ handle, resolve: completion.resolve });
     return handle;
@@ -59,7 +69,10 @@ function createOwner() {
     isCurrent: () => !disposed,
     start,
     stop: () => playback[playback.length - 1]?.handle.stop() ?? Promise.resolve(),
-    dispose: async () => { disposed = true; await owner.stop(); },
+    dispose: async () => {
+      disposed = true;
+      await owner.stop();
+    },
   };
   return { owner, start, playback };
 }
@@ -82,9 +95,25 @@ function Harness({
   });
   return (
     <View>
-      <Text testID="submit" onPress={() => { void conversation.submitText('question'); }}>Send</Text>
-      <Text testID="end" onPress={() => { void conversation.endConversation(); }}>End</Text>
-      <Text testID="orb" onPress={conversation.handleOrbPress}>Listen</Text>
+      <Text
+        testID="submit"
+        onPress={() => {
+          void conversation.submitText('question');
+        }}
+      >
+        Send
+      </Text>
+      <Text
+        testID="end"
+        onPress={() => {
+          void conversation.endConversation();
+        }}
+      >
+        End
+      </Text>
+      <Text testID="orb" onPress={conversation.handleOrbPress}>
+        Listen
+      </Text>
       <Text testID="phase">{conversation.phase}</Text>
     </View>
   );
@@ -98,7 +127,9 @@ describe('voice response and capture owner boundaries', () => {
     startCapture.mockReset();
   });
 
-  afterEach(() => { jest.restoreAllMocks(); });
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
 
   it('never hands an old response to a replacement speech owner', async () => {
     const oldSend = deferred<string>();
@@ -110,13 +141,17 @@ describe('voice response and capture owner boundaries', () => {
     fireEvent.press(view.getByTestId('submit'));
     await waitFor(() => expect(sendFirst).toHaveBeenCalledTimes(1));
     view.rerender(<Harness owner={second.owner} send={sendSecond} />);
-    await act(async () => { oldSend.resolve('Old response'); });
+    await act(async () => {
+      oldSend.resolve('Old response');
+    });
     expect(first.start).not.toHaveBeenCalled();
     expect(second.start).not.toHaveBeenCalled();
     expect(view.getByTestId('phase').props.children).toBe('idle');
 
     fireEvent.press(view.getByTestId('submit'));
-    await waitFor(() => expect(second.start).toHaveBeenCalledWith('New response', expect.any(Object)));
+    await waitFor(() =>
+      expect(second.start).toHaveBeenCalledWith('New response', expect.any(Object)),
+    );
     expect(view.getByTestId('phase').props.children).toBe('speaking');
   });
 
@@ -132,8 +167,13 @@ describe('voice response and capture owner boundaries', () => {
     const view = render(<Harness owner={source.owner} send={send} />);
     fireEvent.press(view.getByTestId('submit'));
     await waitFor(() => expect(send).toHaveBeenCalledTimes(1));
-    act(() => { listener('background'); listener('active'); });
-    await act(async () => { pending.resolve('Old foreground response'); });
+    act(() => {
+      listener('background');
+      listener('active');
+    });
+    await act(async () => {
+      pending.resolve('Old foreground response');
+    });
     expect(source.start).not.toHaveBeenCalled();
   });
 
@@ -159,7 +199,9 @@ describe('voice response and capture owner boundaries', () => {
     fireEvent.press(view.getByTestId('submit'));
     await waitFor(() => expect(second.start).toHaveBeenCalledTimes(1));
     const replacement = second.playback[0].handle;
-    await act(async () => { captureCancelled.resolve(); });
+    await act(async () => {
+      captureCancelled.resolve();
+    });
     expect(replacement.stop).not.toHaveBeenCalled();
     expect(view.getByTestId('phase').props.children).toBe('speaking');
     expect(VoiceInput.cancelCapture).not.toHaveBeenCalled();
@@ -179,7 +221,9 @@ describe('voice response and capture owner boundaries', () => {
     const signal = startCapture.mock.calls[0][2].signal as AbortSignal;
     view.rerender(<Harness owner={second.owner} send={send} onCaptureError={newError} />);
     expect(signal.aborted).toBe(true);
-    await act(async () => { pending.reject(new Error('Old startup failure')); });
+    await act(async () => {
+      pending.reject(new Error('Old startup failure'));
+    });
     expect(oldError).not.toHaveBeenCalled();
     expect(newError).not.toHaveBeenCalled();
     expect(view.getByTestId('phase').props.children).toBe('idle');

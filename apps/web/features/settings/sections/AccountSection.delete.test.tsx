@@ -27,9 +27,13 @@ vi.mock('@clerk/nextjs', () => ({
 }));
 
 vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/identity/useSessionSnapshot')>()),
-  useSessionSnapshot: () => () => ({ userId: 'native-user-1', sessionId: 'session-1',
-    isCurrent: () => true, getToken: async () => 'captured-token' }),
+  ...(await importOriginal<MockedModule0>()),
+  useSessionSnapshot: () => () => ({
+    userId: 'native-user-1',
+    sessionId: 'session-1',
+    isCurrent: () => true,
+    getToken: async () => 'captured-token',
+  }),
 }));
 
 vi.mock('@shared/stores/authentication-store', () => ({
@@ -212,34 +216,54 @@ describe('AccountSection · delete account (useDeleteAccount, real hook)', () =>
   it.each([
     { label: 'empty body', reply: () => new Response(null, { status: 204 }) },
     { label: 'invalid JSON', reply: () => new Response('{', { status: 200 }) },
-    { label: 'incomplete receipt', reply: () => jsonResponse({ message: 'Account deletion scheduled.' }) },
-    { label: 'contradictory receipt', reply: () => jsonResponse({
-      message: 'Account deletion scheduled.', scheduledFor: '2026-08-16T12:00:00.000Z',
-      status: 'pending', statusReason: 'Scheduled.', error: 'Nothing was scheduled.',
-    }) },
-  ])('keeps scheduling unconfirmed after a successful HTTP response with $label', async ({ reply }) => {
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
-      const url = String(input);
-      if (url === '/api/settings/sessions' && init?.method === 'GET') {
-        return jsonResponse({ sessions: [], totalCount: 0 });
-      }
-      if (url === '/api/user/delete-account' && init?.method === 'GET') {
-        return jsonResponse({ pending: false, canCancel: false, requestedAt: null, scheduledFor: null });
-      }
-      if (url === '/api/user/delete-account' && init?.method === 'DELETE') return reply();
-      throw new Error(`Unexpected request: ${url} ${init?.method ?? 'GET'}`);
-    });
-    renderAccountSection();
-    await openAndSubmitDelete();
-    expect(await screen.findByText(
-      'We could not confirm whether deletion was scheduled. Reload the page, then check Settings > Account before trying again.',
-    )).toBeInTheDocument();
-    expect(screen.queryByTestId('delete-account-success-title')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('delete-account-success-continue')).not.toBeInTheDocument();
-    expect(mockLogout).not.toHaveBeenCalled();
-    expect(mockSignOut).not.toHaveBeenCalled();
-    expect(mockRouterReplace).not.toHaveBeenCalled();
-  });
+    {
+      label: 'incomplete receipt',
+      reply: () => jsonResponse({ message: 'Account deletion scheduled.' }),
+    },
+    {
+      label: 'contradictory receipt',
+      reply: () =>
+        jsonResponse({
+          message: 'Account deletion scheduled.',
+          scheduledFor: '2026-08-16T12:00:00.000Z',
+          status: 'pending',
+          statusReason: 'Scheduled.',
+          error: 'Nothing was scheduled.',
+        }),
+    },
+  ])(
+    'keeps scheduling unconfirmed after a successful HTTP response with $label',
+    async ({ reply }) => {
+      vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+        const url = String(input);
+        if (url === '/api/settings/sessions' && init?.method === 'GET') {
+          return jsonResponse({ sessions: [], totalCount: 0 });
+        }
+        if (url === '/api/user/delete-account' && init?.method === 'GET') {
+          return jsonResponse({
+            pending: false,
+            canCancel: false,
+            requestedAt: null,
+            scheduledFor: null,
+          });
+        }
+        if (url === '/api/user/delete-account' && init?.method === 'DELETE') return reply();
+        throw new Error(`Unexpected request: ${url} ${init?.method ?? 'GET'}`);
+      });
+      renderAccountSection();
+      await openAndSubmitDelete();
+      expect(
+        await screen.findByText(
+          'We could not confirm whether deletion was scheduled. Reload the page, then check Settings > Account before trying again.',
+        ),
+      ).toBeInTheDocument();
+      expect(screen.queryByTestId('delete-account-success-title')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('delete-account-success-continue')).not.toBeInTheDocument();
+      expect(mockLogout).not.toHaveBeenCalled();
+      expect(mockSignOut).not.toHaveBeenCalled();
+      expect(mockRouterReplace).not.toHaveBeenCalled();
+    },
+  );
 
   it('does not expose operator details from a failed deletion', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
@@ -268,3 +292,5 @@ describe('AccountSection · delete account (useDeleteAccount, real hook)', () =>
     expect(screen.queryByText(/0xdeadbeef/i)).not.toBeInTheDocument();
   });
 });
+
+type MockedModule0 = typeof import('@/lib/identity/useSessionSnapshot');

@@ -636,7 +636,9 @@ mod tests {
         let mut bundle = bundle_with("INSTRUCTIONS.md", "different remote instructions");
         bundle.files.get_mut("INSTRUCTIONS.md").unwrap().sha256 =
             ConfigSync::sha256_hex(b"local instructions");
-        bundle.files.extend(bundle_with("projects.json", "{}").files);
+        bundle
+            .files
+            .extend(bundle_with("projects.json", "{}").files);
 
         let error = ConfigSync::import(home.path(), &bundle).err().unwrap();
 
@@ -651,7 +653,9 @@ mod tests {
     fn a_later_invalid_destination_prevents_earlier_bundle_writes() {
         let home = tempfile::tempdir().unwrap();
         let mut bundle = bundle_with("INSTRUCTIONS.md", "incoming instructions");
-        bundle.files.extend(bundle_with("projects.json", "{}").files);
+        bundle
+            .files
+            .extend(bundle_with("projects.json", "{}").files);
         let first = bundle.files.keys().next().unwrap().clone();
         let last = bundle.files.keys().last().unwrap().clone();
         fs::create_dir(home.path().join(&last)).unwrap();
@@ -668,7 +672,9 @@ mod tests {
     fn a_later_invalid_conflict_copy_prevents_earlier_planned_writes() {
         let home = tempfile::tempdir().unwrap();
         let mut bundle = bundle_with("INSTRUCTIONS.md", "incoming instructions");
-        bundle.files.extend(bundle_with("projects.json", "{}").files);
+        bundle
+            .files
+            .extend(bundle_with("projects.json", "{}").files);
         let first = bundle.files.keys().next().unwrap().clone();
         let last = bundle.files.keys().last().unwrap().clone();
         fs::write(home.path().join(&last), "local content").unwrap();
@@ -755,10 +761,8 @@ mod tests {
             }
             symlink(&target, home.path().join("INSTRUCTIONS.md")).unwrap();
 
-            let result = ConfigSync::import(
-                home.path(),
-                &bundle_with("INSTRUCTIONS.md", "incoming"),
-            );
+            let result =
+                ConfigSync::import(home.path(), &bundle_with("INSTRUCTIONS.md", "incoming"));
 
             assert!(result.is_err());
             assert!(!home.path().join(ConfigSync::MANIFEST_FILE).exists());
@@ -787,7 +791,9 @@ mod tests {
                 let copy = home.path().join(format!("{path}.imported"));
                 symlink(&target, &copy).unwrap();
                 let mut bundle = bundle_with(path, "remote content");
-                bundle.files.extend(bundle_with("projects.json", "{}").files);
+                bundle
+                    .files
+                    .extend(bundle_with("projects.json", "{}").files);
 
                 let result = ConfigSync::import(home.path(), &bundle);
 
@@ -823,10 +829,8 @@ mod tests {
             }
             symlink(&target, home.path().join(ConfigSync::MANIFEST_FILE)).unwrap();
 
-            let result = ConfigSync::import(
-                home.path(),
-                &bundle_with("INSTRUCTIONS.md", "incoming"),
-            );
+            let result =
+                ConfigSync::import(home.path(), &bundle_with("INSTRUCTIONS.md", "incoming"));
 
             assert!(result.is_err());
             assert!(!home.path().join("INSTRUCTIONS.md").exists());
@@ -849,10 +853,7 @@ mod tests {
         fs::write(&target, "outside content").unwrap();
         symlink(&target, home.path().join("mcp.json")).unwrap();
 
-        let result = ConfigSync::import(
-            home.path(),
-            &bundle_with("INSTRUCTIONS.md", "incoming"),
-        );
+        let result = ConfigSync::import(home.path(), &bundle_with("INSTRUCTIONS.md", "incoming"));
 
         assert!(result.is_err());
         assert!(!home.path().join("INSTRUCTIONS.md").exists());
@@ -912,11 +913,9 @@ mod tests {
         fs::write(home.path().join("INSTRUCTIONS.md"), "local instructions").unwrap();
         fs::write(home.path().join("INSTRUCTIONS.md.imported"), "older import").unwrap();
 
-        let report = ConfigSync::import(
-            home.path(),
-            &bundle_with("INSTRUCTIONS.md", "newer import"),
-        )
-        .unwrap();
+        let report =
+            ConfigSync::import(home.path(), &bundle_with("INSTRUCTIONS.md", "newer import"))
+                .unwrap();
 
         assert_eq!(report.conflicts, vec!["INSTRUCTIONS.md".to_string()]);
         assert_eq!(
@@ -932,7 +931,11 @@ mod tests {
     #[test]
     fn successful_config_merges_do_not_validate_unused_conflict_copies() {
         for (path, local, remote) in [
-            ("config.toml", "[local]\nkept = true\n", "[remote]\nadded = true\n"),
+            (
+                "config.toml",
+                "[local]\nkept = true\n",
+                "[remote]\nadded = true\n",
+            ),
             (
                 "mcp.json",
                 r#"{"mcpServers":{"local":{"command":"kept"}}}"#,

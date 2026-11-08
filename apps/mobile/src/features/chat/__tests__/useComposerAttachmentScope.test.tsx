@@ -25,7 +25,8 @@ describe('composer attachment operation ownership', () => {
 
   it('retires destination ABA and retained capture methods', () => {
     const { result, rerender } = renderHook(
-      ({ destination }) => useScope(destination, cloud),
+      ({ destination }: { destination: Parameters<typeof useScope>[0] }) =>
+        useScope(destination, cloud),
       { initialProps: { destination: 'first' } },
     );
     const captureFirst = result.current;
@@ -59,7 +60,10 @@ describe('composer attachment operation ownership', () => {
     act(() => activateCloudAccount('owner-a'));
     expect(first.isCurrent()).toBe(false);
     const second = result.current('cloud')!;
-    act(() => { invalidateCloudAccount(); activateCloudAccount('owner-a'); });
+    act(() => {
+      invalidateCloudAccount();
+      activateCloudAccount('owner-a');
+    });
     expect(second.isCurrent()).toBe(false);
   });
 
@@ -67,7 +71,10 @@ describe('composer attachment operation ownership', () => {
     useChatAppModeStore.setState({ appMode: 'local' });
     const { result } = renderHook(() => useScope('first', local));
     const first = result.current('local')!;
-    act(() => { invalidateCloudAccount(); activateCloudAccount('owner-b'); });
+    act(() => {
+      invalidateCloudAccount();
+      activateCloudAccount('owner-b');
+    });
     expect(first.isCurrent()).toBe(true);
   });
 

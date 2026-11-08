@@ -22,7 +22,7 @@ vi.mock('@/lib/server/identity', () => ({
   }),
 }));
 vi.mock('@/lib/mfa-policy-gate', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/mfa-policy-gate')>()),
+  ...(await importOriginal<MockedModule0>()),
   rememberMfaEnrollment: mocks.rememberEnrollment,
 }));
 vi.mock('@/lib/crypto/totp-envelope', () => ({
@@ -30,7 +30,7 @@ vi.mock('@/lib/crypto/totp-envelope', () => ({
   sealTotpSecret: vi.fn(),
 }));
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<MockedModule1>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
@@ -93,22 +93,27 @@ describe('second factor lookup identity', () => {
     await expect(stepUpLevelFor(DB, ACCOUNT)).resolves.toBe('second_factor');
 
     expect(mocks.getUser).toHaveBeenCalledExactlyOnceWith(ACCOUNT);
-    expect(mocks.query).toHaveBeenCalledWith(expect.stringContaining('from user_two_factor'), [ACCOUNT]);
+    expect(mocks.query).toHaveBeenCalledWith(expect.stringContaining('from user_two_factor'), [
+      ACCOUNT,
+    ]);
   });
 
   it.each([
     ['missing', null],
     ['foreign', { ...user(), id: 'foreign-subject' }],
     ['product account substituted for native subject', { ...user(), id: ACCOUNT }],
-  ])('refuses a %s provider user before selecting a lower assurance level', async (_label, providerUser) => {
-    mocks.getUser.mockResolvedValue(providerUser);
+  ])(
+    'refuses a %s provider user before selecting a lower assurance level',
+    async (_label, providerUser) => {
+      mocks.getUser.mockResolvedValue(providerUser);
 
-    await expect(stepUpLevelFor(DB, ACCOUNT, SUBJECT)).rejects.toMatchObject({ statusCode: 401 });
+      await expect(stepUpLevelFor(DB, ACCOUNT, SUBJECT)).rejects.toMatchObject({ statusCode: 401 });
 
-    expect(mocks.query).not.toHaveBeenCalled();
-    expect(mocks.registerSecondFactor).not.toHaveBeenCalled();
-    expect(mocks.rememberEnrollment).not.toHaveBeenCalled();
-  });
+      expect(mocks.query).not.toHaveBeenCalled();
+      expect(mocks.registerSecondFactor).not.toHaveBeenCalled();
+      expect(mocks.rememberEnrollment).not.toHaveBeenCalled();
+    },
+  );
 
   it('propagates provider failure rather than interpreting it as no enrolled factors', async () => {
     const failure = new Error('Identity provider unavailable');
@@ -138,7 +143,8 @@ describe('earlier authenticator enrollment registration', () => {
       totpSecret: 'fixture-decrypted-totp-secret',
     });
     expect(mocks.rememberEnrollment).toHaveBeenCalledExactlyOnceWith(ACCOUNT, true);
-    expect(mocks.query).toHaveBeenNthCalledWith(2,
+    expect(mocks.query).toHaveBeenNthCalledWith(
+      2,
       'delete from user_two_factor where user_id = $1 and enabled = true',
       [ACCOUNT],
     );
@@ -179,24 +185,24 @@ describe('earlier authenticator enrollment registration', () => {
     );
   });
 
-  it.each([
-    null,
-    user(),
-    { ...user(true), id: 'foreign-subject' },
-    { ...user(true), id: ACCOUNT },
-  ])('retains unconfirmed enrollment without downgrading: %j', async (afterFailure) => {
-    mocks.getUser.mockResolvedValueOnce(user()).mockResolvedValueOnce(afterFailure);
-    mocks.registerSecondFactor.mockRejectedValue(new Error('Registration unavailable'));
+  it.each([null, user(), { ...user(true), id: 'foreign-subject' }, { ...user(true), id: ACCOUNT }])(
+    'retains unconfirmed enrollment without downgrading: %j',
+    async (afterFailure) => {
+      mocks.getUser.mockResolvedValueOnce(user()).mockResolvedValueOnce(afterFailure);
+      mocks.registerSecondFactor.mockRejectedValue(new Error('Registration unavailable'));
 
-    await expect(stepUpLevelFor(DB, ACCOUNT, SUBJECT)).rejects.toMatchObject({ statusCode: 503 });
+      await expect(stepUpLevelFor(DB, ACCOUNT, SUBJECT)).rejects.toMatchObject({ statusCode: 503 });
 
-    expect(mocks.getUser.mock.calls).toEqual([[SUBJECT], [SUBJECT]]);
-    expect(mocks.query).toHaveBeenCalledTimes(1);
-    expect(mocks.rememberEnrollment).not.toHaveBeenCalled();
-  });
+      expect(mocks.getUser.mock.calls).toEqual([[SUBJECT], [SUBJECT]]);
+      expect(mocks.query).toHaveBeenCalledTimes(1);
+      expect(mocks.rememberEnrollment).not.toHaveBeenCalled();
+    },
+  );
 
   it('keeps enrollment pending when the registration recheck itself fails', async () => {
-    mocks.getUser.mockResolvedValueOnce(user()).mockRejectedValueOnce(new Error('Provider unavailable'));
+    mocks.getUser
+      .mockResolvedValueOnce(user())
+      .mockRejectedValueOnce(new Error('Provider unavailable'));
     mocks.registerSecondFactor.mockRejectedValue(new Error('Registration unavailable'));
 
     await expect(readSecondFactorStatus(DB, ACCOUNT, SUBJECT)).resolves.toMatchObject({
@@ -208,3 +214,6 @@ describe('earlier authenticator enrollment registration', () => {
     expect(mocks.rememberEnrollment).not.toHaveBeenCalled();
   });
 });
+
+type MockedModule0 = typeof import('@/lib/mfa-policy-gate');
+type MockedModule1 = typeof import('@/lib/logger');

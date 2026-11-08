@@ -40,7 +40,9 @@ function Harness({
 describe('speech owner source leases', () => {
   const speech = Speech.speak as jest.Mock;
   let latest: VoiceOutputOwner | null;
-  const observe = (owner: VoiceOutputOwner | null) => { latest = owner; };
+  const observe = (owner: VoiceOutputOwner | null) => {
+    latest = owner;
+  };
   const currentOwner = () => {
     if (!latest) throw new Error('Speech owner was not created');
     return latest;
@@ -91,7 +93,9 @@ describe('speech owner source leases', () => {
 
   it('creates a live owner after StrictMode setup replay and disposes the exact owner', async () => {
     const view = render(
-      <StrictMode><Harness contextKey="route-a" onOwner={observe} /></StrictMode>,
+      <StrictMode>
+        <Harness contextKey="route-a" onOwner={observe} />
+      </StrictMode>,
     );
     await waitFor(() => expect(currentOwner().isCurrent()).toBe(true));
     const owner = currentOwner();
@@ -106,7 +110,9 @@ describe('speech owner source leases', () => {
     activateCloudAccount('account-a');
     render(<Harness scope="cloud" contextKey="cloud-route" onOwner={observe} />);
     const first = currentOwner();
-    await act(async () => { activateCloudAccount('account-b'); });
+    await act(async () => {
+      activateCloudAccount('account-b');
+    });
     const second = currentOwner();
     expect(first.isCurrent()).toBe(false);
     expect(second).not.toBe(first);

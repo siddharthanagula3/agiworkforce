@@ -27,7 +27,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
-vi.mock('@/lib/cors', () => ({
+vi.mock('@/lib/cors', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule1>()),
   handleCorsPreflightRequest: vi.fn(() => null),
   getCorsHeaders: vi.fn(() => ({})),
   getSecurityHeaders: vi.fn(() => ({})),
@@ -38,14 +39,17 @@ vi.mock('@/lib/managed-compute-gate', () => ({
   buildModelPolicyGateResponse: vi.fn(async () => null),
   buildSpendLimitGateResponse: vi.fn(async () => null),
 }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule2>()),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
-vi.mock('@shared/utils/env', () => ({
+vi.mock('@shared/utils/env', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule3>()),
   requireEnv: vi.fn(() => 'sk-test-openai-key'),
   getOptionalEnv: vi.fn(() => undefined),
 }));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule0>()),
   getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1' })),
 }));
 vi.mock('@/lib/server/rls-db', () => ({
@@ -614,3 +618,9 @@ describe('POST /api/llm/v1/audio/transcriptions, outside the proxy', () => {
     expect(served.status).toBe(200);
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/api-auth');
+
+type RetainedMockModule1 = typeof import('@/lib/cors');
+type RetainedMockModule2 = typeof import('@/lib/logger');
+type RetainedMockModule3 = typeof import('@shared/utils/env');

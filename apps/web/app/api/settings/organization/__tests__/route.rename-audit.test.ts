@@ -16,8 +16,12 @@ vi.mock('server-only', () => ({}));
 const ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
 
 const {
-  mockQuery, mockExecute, mockRecordAuditEvent, mockResolveActiveOrganizationId,
-  mockGetCachedActiveOrganizationId, mockSetCachedActiveOrganizationId,
+  mockQuery,
+  mockExecute,
+  mockRecordAuditEvent,
+  mockResolveActiveOrganizationId,
+  mockGetCachedActiveOrganizationId,
+  mockSetCachedActiveOrganizationId,
 } = vi.hoisted(() => ({
   mockQuery: vi.fn(),
   mockExecute: vi.fn(),
@@ -55,7 +59,7 @@ vi.mock('@/lib/services/active-workspace-service', async (importOriginal) => ({
   resolveActiveOrganizationId: mockResolveActiveOrganizationId,
 }));
 vi.mock('@/lib/server/request-context-cache', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/request-context-cache')>()),
+  ...(await importOriginal<MockedModule0>()),
   getCachedActiveOrganizationId: mockGetCachedActiveOrganizationId,
   setCachedActiveOrganizationId: mockSetCachedActiveOrganizationId,
 }));
@@ -188,7 +192,8 @@ describe('PATCH /api/settings/organization leaves an audit record', () => {
       expect(response.status).toBe(200);
       expect(mockGetCachedActiveOrganizationId).not.toHaveBeenCalled();
       expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining("status = 'active'"), [
-        ORGANIZATION_ID, 'owner-user',
+        ORGANIZATION_ID,
+        'owner-user',
       ]);
       expect(mockExecute).toHaveBeenCalledWith(expect.any(String), [ORGANIZATION_ID, 'Research']);
       expect(mockRecordAuditEvent).toHaveBeenCalledWith(
@@ -218,3 +223,5 @@ describe('PATCH /api/settings/organization leaves an audit record', () => {
     });
   });
 });
+
+type MockedModule0 = typeof import('@/lib/server/request-context-cache');

@@ -41,11 +41,13 @@ vi.mock('@/lib/rate-limit', () => ({
   acquireManagedTurnSlot: vi.fn(async () => admitManagedTurnSlot()),
 }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn().mockResolvedValue(null) }));
-vi.mock('@/lib/error-handler', () => ({
+vi.mock('@/lib/error-handler', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule1>()),
   withErrorHandler: <T extends (...args: never[]) => unknown>(handler: T) => handler,
 }));
 vi.mock('@/lib/model-tiers', () => ({ canAccessModel: () => true }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule2>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/prompt-cache-helper', () => ({
@@ -56,13 +58,15 @@ vi.mock('@/lib/prompt-cache-helper', () => ({
   })),
   logCacheAnalytics: vi.fn(),
 }));
-vi.mock('@/lib/cors', () => ({
+vi.mock('@/lib/cors', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule3>()),
   handleCorsPreflightRequest: vi.fn().mockReturnValue(null),
   getCorsHeaders: vi.fn().mockReturnValue({}),
   getSecurityHeaders: vi.fn().mockReturnValue({}),
   withCorsRoute: (handler: (...args: unknown[]) => unknown) => handler,
 }));
-vi.mock('@shared/utils/env', () => ({
+vi.mock('@shared/utils/env', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule4>()),
   requireEnv: vi.fn((key: string) => `mock-${key}`),
   getOptionalEnv: vi.fn((key: string) => `mock-${key}`),
 }));
@@ -82,7 +86,8 @@ vi.mock('@agiworkforce/providers-zhipu', () => ({
 }));
 
 const mockGetClerkAuthUser = vi.fn();
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule0>()),
   isAccountUnavailableError: vi.fn(() => false),
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
@@ -322,6 +327,7 @@ function arrangePaidTurn(): void {
   rlsMocks.getUserScopedDb.mockResolvedValue({
     db: { query: vi.fn(async () => []) },
     userId: USER_ID,
+    organizationId: null,
   });
   mockCheckAvailable.mockResolvedValue(true);
   mockDeductCredits.mockResolvedValue({ success: true, remaining_cents: 10000 });
@@ -416,3 +422,10 @@ describe('WEB-CONNECTORS-NO-RUNTIME-EFFECT-01 · connectors reach the turn', () 
     expect(toolPolicyMocks.loadTurn).not.toHaveBeenCalled();
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/api-auth');
+
+type RetainedMockModule1 = typeof import('@/lib/error-handler');
+type RetainedMockModule2 = typeof import('@/lib/logger');
+type RetainedMockModule3 = typeof import('@/lib/cors');
+type RetainedMockModule4 = typeof import('@shared/utils/env');

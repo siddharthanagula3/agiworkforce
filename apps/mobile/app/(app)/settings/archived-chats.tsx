@@ -37,6 +37,7 @@ interface ArchivedList {
 }
 
 interface ArchivedSession {
+  revision: number;
   account: CloudAccountEpoch;
   active: boolean;
   controller: AbortController;
@@ -75,10 +76,15 @@ export default function ArchivedChatsScreen() {
 
   const isCurrent = useCallback((owner: ArchivedSession) => {
     const auth = useAuthStore.getState();
-    return sessionRef.current === owner && owner.active &&
+    return (
+      sessionRef.current === owner &&
+      owner.active &&
       isCloudAccountEpochCurrent(owner.account) &&
       useChatAppModeStore.getState().appMode === 'cloud' &&
-      auth.isClerkLoaded && auth.isClerkSignedIn && auth.clerkUserId === owner.account.ownerId;
+      auth.isClerkLoaded &&
+      auth.isClerkSignedIn &&
+      auth.clerkUserId === owner.account.ownerId
+    );
   }, []);
 
   const retire = useCallback(() => {
@@ -93,53 +99,63 @@ export default function ArchivedChatsScreen() {
     }
   }, []);
 
-  const load = useCallback(async (owner: ArchivedSession, refresh = false, more = false, expectedList?: ArchivedList) => {
-    if (!isCurrent(owner) || owner.mutation) return;
-    const base = owner.list;
-    if (more && (!base?.hasMore || owner.read || base !== expectedList)) return;
-    owner.read?.controller.abort();
-    const request = { controller: new AbortController() };
-    owner.read = request;
-    setRefreshing(refresh);
-    setLoadingMore(more);
-    if (!more) {
-      owner.list = null;
-      setState({ kind: 'loading', owner });
-    }
-    const ownsRead = () => isCurrent(owner) && owner.read === request &&
-      (!more || owner.list === base);
-    try {
-      const page = await fetchArchivedConversations(more && base ? base.nextOffset : 0,
-        owner.account, request.controller.signal);
-      if (!ownsRead()) return;
-      const seen = new Set(base?.conversations.map((conversation) => conversation.id));
-      const next: ArchivedList = {
-        ...page,
-        conversations: more && base
-          ? [...base.conversations, ...page.conversations.filter((conversation) => !seen.has(conversation.id))]
-          : page.conversations,
-      };
-      owner.list = next;
-      owner.read = null;
-      setRefreshing(false);
-      setLoadingMore(false);
-      setState({ kind: 'ready', owner, list: next, ...next });
-    } catch {
-      if (!ownsRead()) return;
-      if (more) {
-        Alert.alert('Could not load more', 'Refresh archived chats and try again.');
-      } else {
+  const load = useCallback(
+    async (owner: ArchivedSession, refresh = false, more = false, expectedList?: ArchivedList) => {
+      if (!isCurrent(owner) || owner.mutation) return;
+      const base = owner.list;
+      if (more && (!base?.hasMore || owner.read || base !== expectedList)) return;
+      owner.read?.controller.abort();
+      const request = { controller: new AbortController() };
+      owner.read = request;
+      setRefreshing(refresh);
+      setLoadingMore(more);
+      if (!more) {
         owner.list = null;
-        setState({ kind: 'error', owner, message: 'Could not load archived chats. Retry.' });
+        setState({ kind: 'loading', owner });
       }
-    } finally {
-      if (ownsRead()) {
+      const ownsRead = () =>
+        isCurrent(owner) && owner.read === request && (!more || owner.list === base);
+      try {
+        const page = await fetchArchivedConversations(
+          more && base ? base.nextOffset : 0,
+          owner.account,
+          request.controller.signal,
+        );
+        if (!ownsRead()) return;
+        const seen = new Set(base?.conversations.map((conversation) => conversation.id));
+        const next: ArchivedList = {
+          ...page,
+          conversations:
+            more && base
+              ? [
+                  ...base.conversations,
+                  ...page.conversations.filter((conversation) => !seen.has(conversation.id)),
+                ]
+              : page.conversations,
+        };
+        owner.list = next;
         owner.read = null;
         setRefreshing(false);
         setLoadingMore(false);
+        setState({ kind: 'ready', owner, list: next, ...next });
+      } catch {
+        if (!ownsRead()) return;
+        if (more) {
+          Alert.alert('Could not load more', 'Refresh archived chats and try again.');
+        } else {
+          owner.list = null;
+          setState({ kind: 'error', owner, message: 'Could not load archived chats. Retry.' });
+        }
+      } finally {
+        if (ownsRead()) {
+          owner.read = null;
+          setRefreshing(false);
+          setLoadingMore(false);
+        }
       }
-    }
-  }, [isCurrent]);
+    },
+    [isCurrent],
+  );
 
   useEffect(() => {
     const invalidate = () => {
@@ -155,9 +171,12 @@ export default function ArchivedChatsScreen() {
       if (next.appMode !== previous.appMode) invalidate();
     });
     const stopAuth = useAuthStore.subscribe((next, previous) => {
-      if (next.clerkUserId !== previous.clerkUserId ||
+      if (
+        next.clerkUserId !== previous.clerkUserId ||
         next.isClerkSignedIn !== previous.isClerkSignedIn ||
-        next.isClerkLoaded !== previous.isClerkLoaded) invalidate();
+        next.isClerkLoaded !== previous.isClerkLoaded
+      )
+        invalidate();
     });
     return () => {
       stopEpoch();
@@ -167,24 +186,38 @@ export default function ArchivedChatsScreen() {
     };
   }, [retire]);
 
-  useFocusEffect(useCallback(() => {
-    retire();
-    setRefreshing(false);
-    setLoadingMore(false);
-    setBusyId(null);
-    setState({ kind: 'loading', owner: null });
-    const account = captureCloudAccountEpoch();
-    if (appMode !== 'cloud' || !isClerkLoaded || !isClerkSignedIn ||
-      !account || account.ownerId !== clerkUserId) return;
-    const owner: ArchivedSession = {
-      account, active: true, controller: new AbortController(), read: null, mutation: null, list: null,
-    };
-    sessionRef.current = owner;
-    void load(owner);
-    return () => {
-      if (sessionRef.current === owner) retire();
-    };
-  }, [appMode, isClerkLoaded, isClerkSignedIn, clerkUserId, scopeRevision, load, retire]));
+  useFocusEffect(
+    useCallback(() => {
+      retire();
+      setRefreshing(false);
+      setLoadingMore(false);
+      setBusyId(null);
+      setState({ kind: 'loading', owner: null });
+      const account = captureCloudAccountEpoch();
+      if (
+        appMode !== 'cloud' ||
+        !isClerkLoaded ||
+        !isClerkSignedIn ||
+        !account ||
+        account.ownerId !== clerkUserId
+      )
+        return;
+      const owner: ArchivedSession = {
+        revision: scopeRevision,
+        account,
+        active: true,
+        controller: new AbortController(),
+        read: null,
+        mutation: null,
+        list: null,
+      };
+      sessionRef.current = owner;
+      void load(owner);
+      return () => {
+        if (sessionRef.current === owner) retire();
+      };
+    }, [appMode, isClerkLoaded, isClerkSignedIn, clerkUserId, scopeRevision, load, retire]),
+  );
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) {
@@ -199,90 +232,137 @@ export default function ArchivedChatsScreen() {
     if (owner) void load(owner, true);
   }, [load, state.owner]);
 
-  const mutate = useCallback((owner: ArchivedSession, kind: 'restore' | 'delete' | 'bulk', id?: string) => {
-    if (!isCurrent(owner) || owner.mutation || (kind !== 'bulk' && !id)) return;
-    const mutation = {};
-    owner.mutation = mutation;
-    owner.read?.controller.abort();
-    owner.read = null;
-    setRefreshing(false);
-    setLoadingMore(false);
-    setBusyId(id ?? '*');
-    const ownsMutation = () => isCurrent(owner) && owner.mutation === mutation;
-    void (async () => {
-      let restored = false;
-      try {
-        if (kind === 'restore' && id) {
-          await restoreArchivedConversation(id, owner.account, owner.controller.signal);
-          restored = true;
-        } else if (kind === 'delete' && id) {
-          await deleteArchivedConversation(id, owner.account, owner.controller.signal);
-        } else {
-          const deleted = await deleteAllArchivedConversations(owner.account, owner.controller.signal);
+  const mutate = useCallback(
+    (owner: ArchivedSession, kind: 'restore' | 'delete' | 'bulk', id?: string) => {
+      if (!isCurrent(owner) || owner.mutation || (kind !== 'bulk' && !id)) return;
+      const mutation = {};
+      owner.mutation = mutation;
+      owner.read?.controller.abort();
+      owner.read = null;
+      setRefreshing(false);
+      setLoadingMore(false);
+      setBusyId(id ?? '*');
+      const ownsMutation = () => isCurrent(owner) && owner.mutation === mutation;
+      void (async () => {
+        let restored = false;
+        try {
+          if (kind === 'restore' && id) {
+            await restoreArchivedConversation(id, owner.account, owner.controller.signal);
+            restored = true;
+          } else if (kind === 'delete' && id) {
+            await deleteArchivedConversation(id, owner.account, owner.controller.signal);
+          } else {
+            const deleted = await deleteAllArchivedConversations(
+              owner.account,
+              owner.controller.signal,
+            );
+            if (ownsMutation()) {
+              Alert.alert(
+                'Archived chats deleted',
+                translatePlural('settings', 'counts.deletedArchivedChats', deleted, {
+                  one: 'Deleted {{count}} archived chat.',
+                  other: 'Deleted {{count}} archived chats.',
+                }),
+              );
+            }
+          }
+        } catch {
           if (ownsMutation()) {
-            Alert.alert('Archived chats deleted',
-              translatePlural('settings', 'counts.deletedArchivedChats', deleted, {
-                one: 'Deleted {{count}} archived chat.', other: 'Deleted {{count}} archived chats.',
-              }));
+            Alert.alert(
+              kind === 'restore' ? 'Could not restore' : 'Could not delete',
+              kind === 'restore'
+                ? 'Could not confirm the restore. Refresh archived chats before trying again.'
+                : 'Could not confirm the deletion. Refresh archived chats before trying again.',
+            );
+          }
+        } finally {
+          if (ownsMutation()) {
+            owner.mutation = null;
+            setBusyId(null);
+            void load(owner);
           }
         }
-      } catch {
-        if (ownsMutation()) {
-          Alert.alert(kind === 'restore' ? 'Could not restore' : 'Could not delete',
-            kind === 'restore'
-              ? 'Could not confirm the restore. Refresh archived chats before trying again.'
-              : 'Could not confirm the deletion. Refresh archived chats before trying again.');
+        if (!restored || !isCurrent(owner)) return;
+        try {
+          await loadConversations();
+        } catch {
+          if (isCurrent(owner))
+            Alert.alert('Chat restored', 'Refresh your chats to see it in the list.');
         }
-      } finally {
-        if (ownsMutation()) {
-          owner.mutation = null;
-          setBusyId(null);
-          void load(owner);
-        }
-      }
-      if (!restored || !isCurrent(owner)) return;
-      try {
-        await loadConversations();
-      } catch {
-        if (isCurrent(owner)) Alert.alert('Chat restored', 'Refresh your chats to see it in the list.');
-      }
-    })();
-  }, [isCurrent, load, loadConversations]);
+      })();
+    },
+    [isCurrent, load, loadConversations],
+  );
 
-  const handleRestore = useCallback((conversation: ArchivedConversation, owner: ArchivedSession) => {
-    mutate(owner, 'restore', conversation.id);
-  }, [mutate]);
+  const handleRestore = useCallback(
+    (conversation: ArchivedConversation, owner: ArchivedSession) => {
+      mutate(owner, 'restore', conversation.id);
+    },
+    [mutate],
+  );
 
-  const handleDelete = useCallback((conversation: ArchivedConversation, owner: ArchivedSession) => {
-    if (!isCurrent(owner) || owner.mutation) return;
-    let consumed = false;
-    Alert.alert('Delete this chat?',
-      `"${conversation.title}" is removed from every device; restore it from Recently deleted on the web.`, [
-        { text: 'Cancel', style: 'cancel', onPress: () => { consumed = true; } },
-        { text: 'Delete', style: 'destructive', onPress: () => {
-          if (consumed) return;
-          consumed = true;
-          mutate(owner, 'delete', conversation.id);
-        } },
-      ]);
-  }, [isCurrent, mutate]);
+  const handleDelete = useCallback(
+    (conversation: ArchivedConversation, owner: ArchivedSession) => {
+      if (!isCurrent(owner) || owner.mutation) return;
+      let consumed = false;
+      Alert.alert(
+        'Delete this chat?',
+        `"${conversation.title}" is removed from every device; restore it from Recently deleted on the web.`,
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+            onPress: () => {
+              consumed = true;
+            },
+          },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: () => {
+              if (consumed) return;
+              consumed = true;
+              mutate(owner, 'delete', conversation.id);
+            },
+          },
+        ],
+      );
+    },
+    [isCurrent, mutate],
+  );
 
-  const handleDeleteAll = useCallback((owner: ArchivedSession) => {
-    if (!isCurrent(owner) || owner.mutation) return;
-    let consumed = false;
-    Alert.alert('Delete all archived chats?',
-      'Every archived chat is removed from every device; restore them from Recently deleted on the web.', [
-        { text: 'Cancel', style: 'cancel', onPress: () => { consumed = true; } },
-        { text: 'Delete all', style: 'destructive', onPress: () => {
-          if (consumed) return;
-          consumed = true;
-          mutate(owner, 'bulk');
-        } },
-      ]);
-  }, [isCurrent, mutate]);
+  const handleDeleteAll = useCallback(
+    (owner: ArchivedSession) => {
+      if (!isCurrent(owner) || owner.mutation) return;
+      let consumed = false;
+      Alert.alert(
+        'Delete all archived chats?',
+        'Every archived chat is removed from every device; restore them from Recently deleted on the web.',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+            onPress: () => {
+              consumed = true;
+            },
+          },
+          {
+            text: 'Delete all',
+            style: 'destructive',
+            onPress: () => {
+              if (consumed) return;
+              consumed = true;
+              mutate(owner, 'bulk');
+            },
+          },
+        ],
+      );
+    },
+    [isCurrent, mutate],
+  );
 
-  const visibleState: LoadState = state.owner && isCurrent(state.owner)
-    ? state : { kind: 'loading', owner: null };
+  const visibleState: LoadState =
+    state.owner && isCurrent(state.owner) ? state : { kind: 'loading', owner: null };
 
   const header = (
     <View style={{ height: 58, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8 }}>
@@ -382,7 +462,9 @@ export default function ArchivedChatsScreen() {
               {visibleState.message}
             </Text>
             <Pressable
-              onPress={() => { if (state.owner) void load(state.owner); }}
+              onPress={() => {
+                if (state.owner) void load(state.owner);
+              }}
               accessibilityRole="button"
               accessibilityLabel="Retry loading archived chats"
               style={{ marginTop: 10, alignSelf: 'flex-start' }}

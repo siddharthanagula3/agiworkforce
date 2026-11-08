@@ -9,12 +9,18 @@ const mockAppendVoiceTurn = jest.fn();
 jest.mock('@clerk/expo', () => ({ useSession: () => ({ session: mockSessionIdentity }) }));
 jest.mock('@/services/remoteChatGate', () => ({ getRemoteChatDisabledReason: () => null }));
 jest.mock('@/stores/chat/conversationRepository', () => ({
-  getConversationMessageStore: () => ({ getState: () => ({ conversations: [
-    { id: 'conv-1', executionMode: 'cloud' }, { id: 'conv-2', executionMode: 'cloud' },
-  ] }) }),
+  getConversationMessageStore: () => ({
+    getState: () => ({
+      conversations: [
+        { id: 'conv-1', executionMode: 'cloud' },
+        { id: 'conv-2', executionMode: 'cloud' },
+      ],
+    }),
+  }),
 }));
 jest.mock('@/src/features/chat/utils/conversationMode', () => ({
-  executionModeForConversation: (conversation: { executionMode: string }) => conversation.executionMode,
+  executionModeForConversation: (conversation: { executionMode: string }) =>
+    conversation.executionMode,
 }));
 jest.mock('@/src/features/auth/services/cloudAccountSession', () => ({
   subscribeCloudAccountEpochChange: () => () => undefined,
@@ -25,9 +31,15 @@ jest.mock('@/src/features/voice/services/liveVoiceAuthority', () => ({
     const controller = new AbortController();
     const isCurrent = () => !controller.signal.aborted && mockIdentity.current && isOwner();
     return {
-      signal: controller.signal, isCurrent, isIdentityCurrent: () => mockIdentity.current,
-      assertCurrent: () => { if (!isCurrent()) throw new Error('retired'); },
-      retire: () => controller.abort(), fetch: jest.fn(), closeCreated: jest.fn(),
+      signal: controller.signal,
+      isCurrent,
+      isIdentityCurrent: () => mockIdentity.current,
+      assertCurrent: () => {
+        if (!isCurrent()) throw new Error('retired');
+      },
+      retire: () => controller.abort(),
+      fetch: jest.fn(),
+      closeCreated: jest.fn(),
     };
   },
 }));
@@ -64,7 +76,13 @@ jest.mock('@/stores/chatStore', () => ({
     selector({ appendVoiceTurn: mockAppendVoiceTurn }),
 }));
 
-function Harness({ onEnded, conversationId = 'conv-1' }: { onEnded: (message: string | null) => void; conversationId?: string }) {
+function Harness({
+  onEnded,
+  conversationId = 'conv-1',
+}: {
+  onEnded: (message: string | null) => void;
+  conversationId?: string;
+}) {
   const controller = useLiveVoiceSession({
     active: true,
     executionMode: 'cloud',
@@ -116,10 +134,12 @@ describe('live voice session backgrounded mid-connect', () => {
 
   it('ends the original call instead of starting implicitly in a replacement destination', async () => {
     const captured: Array<Record<string, (value?: unknown) => void>> = [];
-    mockStart.mockImplementation(async (options: { callbacks: Record<string, (value?: unknown) => void> }) => {
-      captured.push(options.callbacks);
-      return fakeSession(`session-${captured.length}`);
-    });
+    mockStart.mockImplementation(
+      async (options: { callbacks: Record<string, (value?: unknown) => void> }) => {
+        captured.push(options.callbacks);
+        return fakeSession(`session-${captured.length}`);
+      },
+    );
     const onEnded = jest.fn();
     const view = render(<Harness onEnded={onEnded} />);
     await waitFor(() => expect(mockStart).toHaveBeenCalledTimes(1));
@@ -148,6 +168,21 @@ describe('live voice session backgrounded mid-connect', () => {
       original['onTranscript']?.({ turnId: 'private', role: 'user', text: 'private', final: true });
     });
     expect(mockAppendVoiceTurn).not.toHaveBeenCalled();
+  });
+
+  it('reconciles a retired account on an otherwise unchanged render', async () => {
+    mockStart.mockImplementation(async () => fakeSession('retired-account'));
+    const onEnded = jest.fn();
+    const view = render(<Harness onEnded={onEnded} />);
+    await waitFor(() => expect(mockStart).toHaveBeenCalledTimes(1));
+    expect(view.getByTestId('status').props.children).toBe('connecting');
+
+    mockIdentity.current = false;
+    view.rerender(<Harness onEnded={onEnded} />);
+
+    await waitFor(() => expect(view.getByTestId('status').props.children).toBe('idle'));
+    expect(onEnded).toHaveBeenCalledWith('ended');
+    expect(mockStart).toHaveBeenCalledTimes(1);
   });
 
   it('closes a session that resolves after backgrounding and never attaches it', async () => {

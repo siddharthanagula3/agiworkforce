@@ -38,11 +38,23 @@ const endpoint = {
 const delivery = { id: 'delivery-id', redeliveryOf: 'delivery-id' };
 
 const fetchMock = vi.fn<typeof fetch>();
-async function withMutationScope<T>(run: (scope: { request: ReturnType<typeof createRequestAuthority>; organizationId: null }) => Promise<T>) {
-  const request = createRequestAuthority({ userId: 'owner', sessionId: 'session',
-    isCurrent: () => true, getToken: async () => 'captured-token' });
-  try { return await run({ request, organizationId: null }); }
-  finally { request.retire(); }
+async function withMutationScope<T>(
+  run: (scope: {
+    request: ReturnType<typeof createRequestAuthority>;
+    organizationId: null;
+  }) => Promise<T>,
+) {
+  const request = createRequestAuthority({
+    userId: 'owner',
+    sessionId: 'session',
+    isCurrent: () => true,
+    getToken: async () => 'captured-token',
+  });
+  try {
+    return await run({ request, organizationId: null });
+  } finally {
+    request.retire();
+  }
 }
 const transportCalls = () => fetchMock.mock.calls.length;
 
@@ -53,7 +65,10 @@ const operations = [
     invalidations: 1,
     useAttempt() {
       const mutation = useCreateDeveloperProject();
-      return () => withMutationScope((scope) => mutation.mutateAsync({ scope, draft: { name: 'Project', monthlyCreditLimit: null } }));
+      return () =>
+        withMutationScope((scope) =>
+          mutation.mutateAsync({ scope, draft: { name: 'Project', monthlyCreditLimit: null } }),
+        );
     },
   },
   {
@@ -62,7 +77,10 @@ const operations = [
     invalidations: 1,
     useAttempt() {
       const mutation = useUpdateDeveloperProject();
-      return () => withMutationScope((scope) => mutation.mutateAsync({ scope, projectId: project.id, patch: { name: 'Renamed' } }));
+      return () =>
+        withMutationScope((scope) =>
+          mutation.mutateAsync({ scope, projectId: project.id, patch: { name: 'Renamed' } }),
+        );
     },
   },
   {
@@ -71,7 +89,8 @@ const operations = [
     invalidations: 2,
     useAttempt() {
       const mutation = useArchiveDeveloperProject();
-      return () => withMutationScope((scope) => mutation.mutateAsync({ scope, projectId: project.id }));
+      return () =>
+        withMutationScope((scope) => mutation.mutateAsync({ scope, projectId: project.id }));
     },
   },
   {
@@ -80,11 +99,17 @@ const operations = [
     invalidations: 1,
     useAttempt() {
       const mutation = useCreateWebhookEndpoint();
-      return () => withMutationScope((scope) => mutation.mutateAsync({ scope, draft: {
-        url: endpoint.url,
-        description: null,
-        eventTypes: endpoint.eventTypes,
-      } }));
+      return () =>
+        withMutationScope((scope) =>
+          mutation.mutateAsync({
+            scope,
+            draft: {
+              url: endpoint.url,
+              description: null,
+              eventTypes: endpoint.eventTypes,
+            },
+          }),
+        );
     },
   },
   {
@@ -93,7 +118,10 @@ const operations = [
     invalidations: 1,
     useAttempt() {
       const mutation = useUpdateWebhookEndpoint();
-      return () => withMutationScope((scope) => mutation.mutateAsync({ scope, endpointId: endpoint.id, patch: { enabled: false } }));
+      return () =>
+        withMutationScope((scope) =>
+          mutation.mutateAsync({ scope, endpointId: endpoint.id, patch: { enabled: false } }),
+        );
     },
   },
   {
@@ -102,7 +130,8 @@ const operations = [
     invalidations: 1,
     useAttempt() {
       const mutation = useDeleteWebhookEndpoint();
-      return () => withMutationScope((scope) => mutation.mutateAsync({ scope, endpointId: endpoint.id }));
+      return () =>
+        withMutationScope((scope) => mutation.mutateAsync({ scope, endpointId: endpoint.id }));
     },
   },
   {
@@ -111,7 +140,8 @@ const operations = [
     invalidations: 1,
     useAttempt() {
       const mutation = useSendWebhookTest();
-      return () => withMutationScope((scope) => mutation.mutateAsync({ scope, endpointId: endpoint.id }));
+      return () =>
+        withMutationScope((scope) => mutation.mutateAsync({ scope, endpointId: endpoint.id }));
     },
   },
   {
@@ -120,7 +150,10 @@ const operations = [
     invalidations: 1,
     useAttempt() {
       const mutation = useRedeliverWebhook();
-      return () => withMutationScope((scope) => mutation.mutateAsync({ scope, endpointId: endpoint.id, deliveryId: delivery.id }));
+      return () =>
+        withMutationScope((scope) =>
+          mutation.mutateAsync({ scope, endpointId: endpoint.id, deliveryId: delivery.id }),
+        );
     },
   },
 ];
@@ -177,10 +210,14 @@ describe.each(operations)('$name', ({ useAttempt, response, invalidations }) => 
     fetchMock.mockImplementation(async () => Response.json(response));
     const { result, unmount, client, invalidate } = mount();
     try {
-      await act(async () => { await result.current(); });
+      await act(async () => {
+        await result.current();
+      });
       expect(transportCalls()).toBe(1);
       expect(invalidate).toHaveBeenCalledTimes(invalidations);
-      await act(async () => { await result.current(); });
+      await act(async () => {
+        await result.current();
+      });
       expect(transportCalls()).toBe(2);
       expect(invalidate).toHaveBeenCalledTimes(invalidations * 2);
     } finally {

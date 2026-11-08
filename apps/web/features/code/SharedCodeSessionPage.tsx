@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useAuth } from '@clerk/nextjs';
+import { useSession } from '@/lib/identity/client';
 import Link from 'next/link';
 import { Globe, Share2, TerminalSquare } from '@agiworkforce/icons';
 import { Spinner } from '@agiworkforce/ui';
@@ -33,7 +33,7 @@ export interface SharedCodeSessionPageProps {
 }
 
 export function SharedCodeSessionPage(props: SharedCodeSessionPageProps) {
-  const { isLoaded, isSignedIn, userId, sessionId } = useAuth();
+  const { isLoaded, isSignedIn, userId, sessionId } = useSession();
   return (
     <OwnedSharedCodeSessionPage
       key={JSON.stringify([isLoaded, isSignedIn, userId, sessionId, props.token])}

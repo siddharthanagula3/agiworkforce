@@ -106,7 +106,9 @@ function deferredResponse() {
 
 function deferredBody(status = 200) {
   let resolve!: (value: unknown) => void;
-  const promise = new Promise<unknown>((done) => { resolve = done; });
+  const promise = new Promise<unknown>((done) => {
+    resolve = done;
+  });
   const response = new Response(null, { status });
   vi.spyOn(response, 'json').mockImplementation(() => promise);
   return { response, resolve };
@@ -169,10 +171,17 @@ describe('useConversations.createConversation', () => {
     await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalled());
     let decode!: (value: unknown) => void;
     const response = new Response(null, { status: 200 });
-    vi.spyOn(response, 'json').mockImplementation(() => new Promise((resolve) => { decode = resolve; }));
+    vi.spyOn(response, 'json').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          decode = resolve;
+        }),
+    );
     vi.mocked(fetch).mockResolvedValueOnce(response);
     const authority = createRequestAuthority({
-      userId: 'user-1', sessionId: 'session-1', isCurrent: () => true,
+      userId: 'user-1',
+      sessionId: 'session-1',
+      isCurrent: () => true,
       getToken: async () => 'original-session-token',
     });
     await act(async () => {
@@ -194,9 +203,13 @@ describe('useConversations.createConversation', () => {
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     const earlierResponse = deferredResponse();
     const laterResponse = deferredResponse();
-    vi.mocked(fetch).mockReturnValueOnce(earlierResponse.promise).mockReturnValueOnce(laterResponse.promise);
+    vi.mocked(fetch)
+      .mockReturnValueOnce(earlierResponse.promise)
+      .mockReturnValueOnce(laterResponse.promise);
     const earlierAuthority = createRequestAuthority({
-      userId: 'user-1', sessionId: 'session-1', isCurrent: () => true,
+      userId: 'user-1',
+      sessionId: 'session-1',
+      isCurrent: () => true,
       getToken: async () => 'original-session-token',
     });
     const laterAuthority = createRequestAuthority(earlierAuthority.session);
@@ -204,15 +217,25 @@ describe('useConversations.createConversation', () => {
     let later!: Promise<Conversation | null>;
     let rejected!: Promise<void>;
     await act(async () => {
-      earlier = result.current.createConversation('Earlier', 'auto', null, { authority: earlierAuthority });
+      earlier = result.current.createConversation('Earlier', 'auto', null, {
+        authority: earlierAuthority,
+      });
       rejected = expect(earlier).rejects.toMatchObject({ name: 'AbortError' });
-      await vi.waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalledWith(
-        '/api/chat/conversations', expect.objectContaining({ body: expect.stringContaining('Earlier') }),
-      ));
-      later = result.current.createConversation('Later', 'auto', null, { authority: laterAuthority });
-      await vi.waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalledWith(
-        '/api/chat/conversations', expect.objectContaining({ body: expect.stringContaining('Later') }),
-      ));
+      await vi.waitFor(() =>
+        expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+          '/api/chat/conversations',
+          expect.objectContaining({ body: expect.stringContaining('Earlier') }),
+        ),
+      );
+      later = result.current.createConversation('Later', 'auto', null, {
+        authority: laterAuthority,
+      });
+      await vi.waitFor(() =>
+        expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+          '/api/chat/conversations',
+          expect.objectContaining({ body: expect.stringContaining('Later') }),
+        ),
+      );
     });
     expect(result.current.isLoading).toBe(true);
     await act(async () => {
@@ -235,23 +258,31 @@ describe('useConversations.createConversation', () => {
     const response = deferredResponse();
     vi.mocked(fetch).mockReturnValueOnce(response.promise);
     const authority = createRequestAuthority({
-      userId: 'user-1', sessionId: 'session-1', isCurrent: () => true,
+      userId: 'user-1',
+      sessionId: 'session-1',
+      isCurrent: () => true,
       getToken: async () => 'original-session-token',
     });
     let foreground = true;
     await act(async () => {
       const creating = result.current.createConversation('New Chat', 'auto', null, {
-        authority, shouldActivate: () => foreground,
+        authority,
+        shouldActivate: () => foreground,
       });
-      await vi.waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalledWith(
-        '/api/chat/conversations', expect.objectContaining({ method: 'POST' }),
-      ));
+      await vi.waitFor(() =>
+        expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+          '/api/chat/conversations',
+          expect.objectContaining({ method: 'POST' }),
+        ),
+      );
       foreground = false;
       useChatStore.getState().setActiveConversation('different-chat');
       response.resolve(new Response(JSON.stringify({ conversation: WIRE_CONVERSATION })));
       await expect(creating).resolves.toMatchObject({ id: WIRE_CONVERSATION.id });
     });
-    expect(useChatStore.getState().conversations.some((item) => item.id === WIRE_CONVERSATION.id)).toBe(true);
+    expect(
+      useChatStore.getState().conversations.some((item) => item.id === WIRE_CONVERSATION.id),
+    ).toBe(true);
     expect(useChatStore.getState().activeConversationId).toBe('different-chat');
     expect(authority.isCurrent()).toBe(true);
   });
@@ -577,12 +608,17 @@ describe('useConversations.loadConversation pagination races', () => {
       expect(await result.current.loadConversation(DEEP_LINK_CONVERSATION.id)).toBe(true);
     });
     expect(
-      await saveConversationDraft(DEEP_LINK_CONVERSATION.id, 'edited draft', {
-        userId: authMocks.userId,
-        sessionId: authMocks.sessionId,
-        isCurrent: () => true,
-        getToken: authMocks.getToken,
-      }, () => true),
+      await saveConversationDraft(
+        DEEP_LINK_CONVERSATION.id,
+        'edited draft',
+        {
+          userId: authMocks.userId,
+          sessionId: authMocks.sessionId,
+          isCurrent: () => true,
+          getToken: authMocks.getToken,
+        },
+        () => true,
+      ),
     ).toBe('saved');
 
     const putCall = fetchMock.mock.calls.find(([, init]) => init?.method === 'PUT');
@@ -1080,7 +1116,9 @@ describe('useConversations list rate limiting', () => {
       const { result } = renderHook(() => useConversations());
 
       let loading!: Promise<void>;
-      await act(async () => { loading = result.current.fetchConversations(); });
+      await act(async () => {
+        loading = result.current.fetchConversations();
+      });
       expect(result.current.listError).toBeNull();
 
       await act(async () => {
@@ -1277,7 +1315,11 @@ describe('useConversations session-owned reads', () => {
 
   it('does not dispatch a delayed original token after the live account changes', async () => {
     let resolveToken!: (token: string) => void;
-    authMocks.getToken.mockReturnValueOnce(new Promise<string>((resolve) => { resolveToken = resolve; }));
+    authMocks.getToken.mockReturnValueOnce(
+      new Promise<string>((resolve) => {
+        resolveToken = resolve;
+      }),
+    );
     const fetchMock = vi.fn(async () => conversationListResponse([WIRE_CONVERSATION]));
     vi.stubGlobal('fetch', fetchMock);
     const hook = renderHook(() => useConversations());
@@ -1288,13 +1330,18 @@ describe('useConversations session-owned reads', () => {
       switchSession('user-2', 'session-2', nextToken);
       resolveToken('token-a');
     });
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(nextToken).not.toHaveBeenCalled();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+    expect(nextToken).toHaveBeenCalledOnce();
+    for (const [, init] of vi.mocked(fetch).mock.calls) {
+      expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer token-b');
+    }
 
     hook.rerender();
     await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
     expect(fetchMock).toHaveBeenCalledOnce();
-    expect(new Headers(vi.mocked(fetch).mock.calls[0]?.[1]?.headers).get('Authorization')).toBe('Bearer token-b');
+    expect(new Headers(vi.mocked(fetch).mock.calls[0]?.[1]?.headers).get('Authorization')).toBe(
+      'Bearer token-b',
+    );
     expect(vi.mocked(fetch).mock.calls[0]?.[1]?.credentials).toBe('omit');
   });
 
@@ -1302,32 +1349,46 @@ describe('useConversations session-owned reads', () => {
     ['user-2', 'session-2'],
     ['user-1', 'session-new'],
     ['user-1', 'session-1'],
-  ])('does not join or publish the old session body after switching to %s/%s', async (userId, sessionId) => {
-    const oldBody = deferredBody();
-    const currentConversation = { ...WIRE_CONVERSATION, id: DEEP_LINK_CONVERSATION.id, title: 'Current account' };
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(oldBody.response)
-      .mockImplementation(async () => conversationListResponse([currentConversation]));
-    vi.stubGlobal('fetch', fetchMock);
-    const hook = renderHook(() => useConversations());
-    await waitFor(() => expect(oldBody.response.json).toHaveBeenCalled());
+  ])(
+    'does not join or publish the old session body after switching to %s/%s',
+    async (userId, sessionId) => {
+      const oldBody = deferredBody();
+      const currentConversation = {
+        ...WIRE_CONVERSATION,
+        id: DEEP_LINK_CONVERSATION.id,
+        title: 'Current account',
+      };
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(oldBody.response)
+        .mockImplementation(async () => conversationListResponse([currentConversation]));
+      vi.stubGlobal('fetch', fetchMock);
+      const hook = renderHook(() => useConversations());
+      await waitFor(() => expect(oldBody.response.json).toHaveBeenCalled());
 
-    switchSession(userId, sessionId, vi.fn(async () => 'token-new'));
-    hook.rerender();
-    await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+      switchSession(
+        userId,
+        sessionId,
+        vi.fn(async () => 'token-new'),
+      );
+      hook.rerender();
+      await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
+      expect(fetchMock).toHaveBeenCalledTimes(2);
 
-    await act(async () => {
-      oldBody.resolve({ conversations: [WIRE_CONVERSATION], hasMore: true, nextOffset: 99 });
-    });
-    expect(hook.result.current.conversations.map(({ id }) => id)).toEqual([currentConversation.id]);
-    expect(hook.result.current.hasMoreConversations).toBe(false);
-    expect(hook.result.current.listError).toBeNull();
-    hook.unmount();
-    const remount = renderHook(() => useConversations());
-    await waitFor(() => expect(remount.result.current.isLoading).toBe(false));
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-  });
+      await act(async () => {
+        oldBody.resolve({ conversations: [WIRE_CONVERSATION], hasMore: true, nextOffset: 99 });
+      });
+      expect(hook.result.current.conversations.map(({ id }) => id)).toEqual([
+        currentConversation.id,
+      ]);
+      expect(hook.result.current.hasMoreConversations).toBe(false);
+      expect(hook.result.current.listError).toBeNull();
+      hook.unmount();
+      const remount = renderHook(() => useConversations());
+      await waitFor(() => expect(remount.result.current.isLoading).toBe(false));
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    },
+  );
 
   it('keeps a shared request alive when its initiating hook unmounts', async () => {
     const pending = deferredResponse();
@@ -1339,132 +1400,191 @@ describe('useConversations session-owned reads', () => {
     const signal = vi.mocked(fetch).mock.calls[0]?.[1]?.signal;
     first.unmount();
     expect(signal?.aborted).toBe(false);
-    await act(async () => { pending.resolve(conversationListResponse([WIRE_CONVERSATION])); });
+    await act(async () => {
+      pending.resolve(conversationListResponse([WIRE_CONVERSATION]));
+    });
     await waitFor(() => expect(second.result.current.isLoading).toBe(false));
     expect(second.result.current.conversations).toHaveLength(1);
     expect(second.result.current.listError).toBeNull();
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 
-  it.each([200, 500])('does not let a superseded same-chat %s completion clear the new opening', async (status) => {
-    vi.stubGlobal('fetch', vi.fn(async () => conversationListResponse()));
-    const hook = renderHook(() => useConversations());
-    await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
-    const earlier = deferredBody(status);
-    const later = deferredResponse();
-    vi.mocked(fetch).mockResolvedValueOnce(earlier.response).mockReturnValueOnce(later.promise);
-    let first!: Promise<boolean>;
-    let second!: Promise<boolean>;
-    await act(async () => { first = hook.result.current.loadConversation(DEEP_LINK_CONVERSATION.id); });
-    await waitFor(() => expect(earlier.response.json).toHaveBeenCalled());
-    await act(async () => { second = hook.result.current.loadConversation(DEEP_LINK_CONVERSATION.id); });
-    await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalledTimes(3));
-    await act(async () => {
-      earlier.resolve(status === 200
-        ? { conversation: DEEP_LINK_CONVERSATION, messages: [], total: 0, hasMore: false }
-        : { error: 'Original request failed' });
-      expect(await first).toBe(true);
-    });
-    expect(hook.result.current.isLoading).toBe(true);
-    expect(hook.result.current.getConversationLoadError()).toBeNull();
-    expect(useChatStore.getState().error).toBeNull();
-    expect(useChatStore.getState().activeConversationId).toBeNull();
-    await act(async () => {
-      later.resolve(conversationDetailResponse());
-      expect(await second).toBe(true);
-    });
-    expect(hook.result.current.isLoading).toBe(false);
-    expect(useChatStore.getState().activeConversationId).toBe(DEEP_LINK_CONVERSATION.id);
-  });
-
-  it.each([false, true])('stops detail pagination and draft hydration after live signout, quiet=%s', async (quiet) => {
-    vi.stubGlobal('fetch', vi.fn(async () => conversationListResponse()));
-    const hook = renderHook(() => useConversations());
-    await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
-    if (quiet) useChatStore.getState().setActiveConversation(DEEP_LINK_CONVERSATION.id);
-    const body = deferredBody();
-    vi.mocked(fetch).mockResolvedValueOnce(body.response);
-    let loading!: Promise<boolean>;
-    await act(async () => {
-      loading = quiet
-        ? hook.result.current.refreshOpenConversation(DEEP_LINK_CONVERSATION.id)
-        : hook.result.current.loadConversation(DEEP_LINK_CONVERSATION.id);
-    });
-    await waitFor(() => expect(body.response.json).toHaveBeenCalled());
-    await act(async () => {
-      authMocks.sdk.session = null;
-      authMocks.sdk.user = null;
-      body.resolve({
-        conversation: { ...DEEP_LINK_CONVERSATION, draft: 'private old draft' },
-        messages: [{
-          id: '10000000-0000-4000-8000-000000000031', role: 'assistant', content: 'private old turn',
-          model: null, provider: null, input_tokens: 0, output_tokens: 0,
-          created_at: WIRE_CONVERSATION.created_at, metadata: null,
-        }],
-        total: 2,
-        hasMore: true,
+  it.each([200, 500])(
+    'does not let a superseded same-chat %s completion clear the new opening',
+    async (status) => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => conversationListResponse()),
+      );
+      const hook = renderHook(() => useConversations());
+      await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
+      const earlier = deferredBody(status);
+      const later = deferredResponse();
+      vi.mocked(fetch).mockResolvedValueOnce(earlier.response).mockReturnValueOnce(later.promise);
+      let first!: Promise<boolean>;
+      let second!: Promise<boolean>;
+      await act(async () => {
+        first = hook.result.current.loadConversation(DEEP_LINK_CONVERSATION.id);
       });
-      expect(await loading).toBe(true);
-    });
-    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2);
-    expect(useChatStore.getState().conversations).toHaveLength(0);
-    expect(useChatStore.getState().getDraftContent(DEEP_LINK_CONVERSATION.id)).toBe('');
-    expect(useChatStore.getState().messagesByConversation[DEEP_LINK_CONVERSATION.id]).toBeUndefined();
-    expect(useChatStore.getState().error).toBeNull();
-    expect(hook.result.current.getConversationLoadError()).toBeNull();
-  });
+      await waitFor(() => expect(earlier.response.json).toHaveBeenCalled());
+      await act(async () => {
+        second = hook.result.current.loadConversation(DEEP_LINK_CONVERSATION.id);
+      });
+      await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalledTimes(3));
+      await act(async () => {
+        earlier.resolve(
+          status === 200
+            ? { conversation: DEEP_LINK_CONVERSATION, messages: [], total: 0, hasMore: false }
+            : { error: 'Original request failed' },
+        );
+        expect(await first).toBe(true);
+      });
+      expect(hook.result.current.isLoading).toBe(true);
+      expect(hook.result.current.getConversationLoadError()).toBeNull();
+      expect(useChatStore.getState().error).toBeNull();
+      expect(useChatStore.getState().activeConversationId).toBeNull();
+      await act(async () => {
+        later.resolve(conversationDetailResponse());
+        expect(await second).toBe(true);
+      });
+      expect(hook.result.current.isLoading).toBe(false);
+      expect(useChatStore.getState().activeConversationId).toBe(DEEP_LINK_CONVERSATION.id);
+    },
+  );
+
+  it.each([false, true])(
+    'stops detail pagination and draft hydration after live signout, quiet=%s',
+    async (quiet) => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => conversationListResponse()),
+      );
+      const hook = renderHook(() => useConversations());
+      await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
+      if (quiet) useChatStore.getState().setActiveConversation(DEEP_LINK_CONVERSATION.id);
+      const body = deferredBody();
+      vi.mocked(fetch).mockResolvedValueOnce(body.response);
+      let loading!: Promise<boolean>;
+      await act(async () => {
+        loading = quiet
+          ? hook.result.current.refreshOpenConversation(DEEP_LINK_CONVERSATION.id)
+          : hook.result.current.loadConversation(DEEP_LINK_CONVERSATION.id);
+      });
+      await waitFor(() => expect(body.response.json).toHaveBeenCalled());
+      await act(async () => {
+        authMocks.sdk.session = null;
+        authMocks.sdk.user = null;
+        body.resolve({
+          conversation: { ...DEEP_LINK_CONVERSATION, draft: 'private old draft' },
+          messages: [
+            {
+              id: '10000000-0000-4000-8000-000000000031',
+              role: 'assistant',
+              content: 'private old turn',
+              model: null,
+              provider: null,
+              input_tokens: 0,
+              output_tokens: 0,
+              created_at: WIRE_CONVERSATION.created_at,
+              metadata: null,
+            },
+          ],
+          total: 2,
+          hasMore: true,
+        });
+        expect(await loading).toBe(true);
+      });
+      expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2);
+      expect(useChatStore.getState().conversations).toHaveLength(0);
+      expect(useChatStore.getState().getDraftContent(DEEP_LINK_CONVERSATION.id)).toBe('');
+      expect(
+        useChatStore.getState().messagesByConversation[DEEP_LINK_CONVERSATION.id],
+      ).toBeUndefined();
+      expect(useChatStore.getState().error).toBeNull();
+      expect(hook.result.current.getConversationLoadError()).toBeNull();
+    },
+  );
 
   it('does not publish an unmounted detail read', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => conversationListResponse()));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => conversationListResponse()),
+    );
     const hook = renderHook(() => useConversations());
     await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
     const body = deferredBody();
     vi.mocked(fetch).mockResolvedValueOnce(body.response);
     let loading!: Promise<boolean>;
-    await act(async () => { loading = hook.result.current.loadConversation(DEEP_LINK_CONVERSATION.id); });
+    await act(async () => {
+      loading = hook.result.current.loadConversation(DEEP_LINK_CONVERSATION.id);
+    });
     await waitFor(() => expect(body.response.json).toHaveBeenCalled());
     hook.unmount();
     await act(async () => {
-      body.resolve({ conversation: DEEP_LINK_CONVERSATION, messages: [], total: 0, hasMore: false });
+      body.resolve({
+        conversation: DEEP_LINK_CONVERSATION,
+        messages: [],
+        total: 0,
+        hasMore: false,
+      });
       expect(await loading).toBe(true);
     });
     expect(useChatStore.getState().conversations).toHaveLength(0);
     expect(useChatStore.getState().activeConversationId).toBeNull();
   });
 
-  it.each([200, 503])('ignores an old account pagination %s body without clearing the new request', async (status) => {
-    const list = () => new Response(JSON.stringify({ conversations: [WIRE_CONVERSATION], hasMore: true, nextOffset: 1 }));
-    vi.stubGlobal('fetch', vi.fn(async () => list()));
-    const hook = renderHook(() => useConversations());
-    await waitFor(() => expect(hook.result.current.hasMoreConversations).toBe(true));
-    const oldPage = deferredBody(status);
-    vi.mocked(fetch).mockResolvedValueOnce(oldPage.response);
-    let loading!: Promise<void>;
-    await act(async () => { loading = hook.result.current.loadMoreConversations(); });
-    await waitFor(() => expect(oldPage.response.json).toHaveBeenCalled());
-    switchSession('user-2', 'session-2', vi.fn(async () => 'token-b'));
-    hook.rerender();
-    await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
-    const currentPage = deferredResponse();
-    vi.mocked(fetch).mockReturnValueOnce(currentPage.promise);
-    let currentLoading!: Promise<void>;
-    await act(async () => { currentLoading = hook.result.current.loadMoreConversations(); });
-    await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalledTimes(4));
-    await act(async () => {
-      oldPage.resolve(status === 200
-        ? { conversations: [DEEP_LINK_CONVERSATION], hasMore: false, nextOffset: 2 }
-        : { error: 'Old account page failed' });
-      await loading;
-    });
-    expect(hook.result.current.isLoadingMoreConversations).toBe(true);
-    expect(hook.result.current.conversations.map(({ id }) => id)).toEqual([WIRE_CONVERSATION.id]);
-    expect(useChatStore.getState().error).toBeNull();
-    await act(async () => {
-      currentPage.resolve(conversationListResponse());
-      await currentLoading;
-    });
-    expect(hook.result.current.isLoadingMoreConversations).toBe(false);
-  });
+  it.each([200, 503])(
+    'ignores an old account pagination %s body without clearing the new request',
+    async (status) => {
+      const list = () =>
+        new Response(
+          JSON.stringify({ conversations: [WIRE_CONVERSATION], hasMore: true, nextOffset: 1 }),
+        );
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => list()),
+      );
+      const hook = renderHook(() => useConversations());
+      await waitFor(() => expect(hook.result.current.hasMoreConversations).toBe(true));
+      const oldPage = deferredBody(status);
+      vi.mocked(fetch).mockResolvedValueOnce(oldPage.response);
+      let loading!: Promise<void>;
+      await act(async () => {
+        loading = hook.result.current.loadMoreConversations();
+      });
+      await waitFor(() => expect(oldPage.response.json).toHaveBeenCalled());
+      switchSession(
+        'user-2',
+        'session-2',
+        vi.fn(async () => 'token-b'),
+      );
+      hook.rerender();
+      await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
+      const currentPage = deferredResponse();
+      vi.mocked(fetch).mockReturnValueOnce(currentPage.promise);
+      let currentLoading!: Promise<void>;
+      await act(async () => {
+        currentLoading = hook.result.current.loadMoreConversations();
+      });
+      await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalledTimes(4));
+      await act(async () => {
+        oldPage.resolve(
+          status === 200
+            ? { conversations: [DEEP_LINK_CONVERSATION], hasMore: false, nextOffset: 2 }
+            : { error: 'Old account page failed' },
+        );
+        await loading;
+      });
+      expect(hook.result.current.isLoadingMoreConversations).toBe(true);
+      expect(hook.result.current.conversations.map(({ id }) => id)).toEqual([WIRE_CONVERSATION.id]);
+      expect(useChatStore.getState().error).toBeNull();
+      await act(async () => {
+        currentPage.resolve(conversationListResponse());
+        await currentLoading;
+      });
+      expect(hook.result.current.isLoadingMoreConversations).toBe(false);
+    },
+  );
 
   it('does not retry a captured session after live signout', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
@@ -1473,10 +1593,14 @@ describe('useConversations session-owned reads', () => {
     try {
       const hook = renderHook(() => useConversations());
       await waitFor(() => expect(limited.response.json).toHaveBeenCalled());
-      await act(async () => { limited.resolve({ error: 'Rate limited' }); });
+      await act(async () => {
+        limited.resolve({ error: 'Rate limited' });
+      });
       expect(hook.result.current.listError).toBeNull();
       authMocks.sdk.session = null;
-      await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30_000);
+      });
       expect(vi.mocked(fetch)).toHaveBeenCalledOnce();
       expect(authMocks.getToken).toHaveBeenCalledOnce();
       expect(hook.result.current.isLoading).toBe(false);
@@ -1491,15 +1615,19 @@ describe('useConversations session-owned reads', () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const limited = deferredBody(429);
     const retried = deferredResponse();
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(limited.response)
-      .mockReturnValueOnce(retried.promise));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValueOnce(limited.response).mockReturnValueOnce(retried.promise),
+    );
     try {
       const first = renderHook(() => useConversations());
       await waitFor(() => expect(limited.response.json).toHaveBeenCalled());
       let settled = false;
       let loading!: Promise<void>;
       await act(async () => {
-        loading = first.result.current.fetchConversations().then(() => { settled = true; });
+        loading = first.result.current.fetchConversations().then(() => {
+          settled = true;
+        });
         limited.resolve({ error: 'Rate limited' });
       });
       expect(first.result.current.isLoading).toBe(false);
@@ -1507,7 +1635,9 @@ describe('useConversations session-owned reads', () => {
       const second = renderHook(() => useConversations());
       expect(second.result.current.isLoading).toBe(false);
       first.unmount();
-      await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_000);
+      });
       expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2);
       expect(second.result.current.isLoading).toBe(true);
       expect(settled).toBe(false);
@@ -1531,39 +1661,64 @@ describe('useProjectConversations session-owned reads', () => {
     authMocks.getToken.mockResolvedValue('token-a');
   });
 
-  it.each([200, 503])('ignores an old account project %s body and retains the current loading owner', async (status) => {
-    const original = deferredBody(status);
-    const current = deferredResponse();
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(original.response).mockReturnValueOnce(current.promise));
-    const hook = renderHook(() => useProjectConversations('project-1'));
-    await waitFor(() => expect(original.response.json).toHaveBeenCalled());
-    switchSession('user-2', 'session-2', vi.fn(async () => 'token-b'));
-    hook.rerender();
-    await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2));
-    await act(async () => {
-      original.resolve(status === 200
-        ? { conversations: [WIRE_CONVERSATION], hasMore: true, nextOffset: 1 }
-        : { error: 'Private old project error' });
-    });
-    expect(hook.result.current.isLoading).toBe(true);
-    expect(hook.result.current.conversations).toHaveLength(0);
-    expect(hook.result.current.error).toBeNull();
-    await act(async () => { current.resolve(conversationListResponse([DEEP_LINK_CONVERSATION])); });
-    expect(hook.result.current.isLoading).toBe(false);
-    expect(hook.result.current.conversations.map(({ id }) => id)).toEqual([DEEP_LINK_CONVERSATION.id]);
-  });
+  it.each([200, 503])(
+    'ignores an old account project %s body and retains the current loading owner',
+    async (status) => {
+      const original = deferredBody(status);
+      const current = deferredResponse();
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValueOnce(original.response).mockReturnValueOnce(current.promise),
+      );
+      const hook = renderHook(() => useProjectConversations('project-1'));
+      await waitFor(() => expect(original.response.json).toHaveBeenCalled());
+      switchSession(
+        'user-2',
+        'session-2',
+        vi.fn(async () => 'token-b'),
+      );
+      hook.rerender();
+      await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2));
+      await act(async () => {
+        original.resolve(
+          status === 200
+            ? { conversations: [WIRE_CONVERSATION], hasMore: true, nextOffset: 1 }
+            : { error: 'Private old project error' },
+        );
+      });
+      expect(hook.result.current.isLoading).toBe(true);
+      expect(hook.result.current.conversations).toHaveLength(0);
+      expect(hook.result.current.error).toBeNull();
+      await act(async () => {
+        current.resolve(conversationListResponse([DEEP_LINK_CONVERSATION]));
+      });
+      expect(hook.result.current.isLoading).toBe(false);
+      expect(hook.result.current.conversations.map(({ id }) => id)).toEqual([
+        DEEP_LINK_CONVERSATION.id,
+      ]);
+    },
+  );
 
   it('does not dispatch a project request whose token resolves after navigation', async () => {
     let resolveToken!: (token: string) => void;
-    authMocks.getToken.mockReturnValueOnce(new Promise<string>((resolve) => { resolveToken = resolve; }));
-    vi.stubGlobal('fetch', vi.fn(async () => conversationListResponse()));
+    authMocks.getToken.mockReturnValueOnce(
+      new Promise<string>((resolve) => {
+        resolveToken = resolve;
+      }),
+    );
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => conversationListResponse()),
+    );
     const hook = renderHook(({ projectId }) => useProjectConversations(projectId), {
       initialProps: { projectId: 'project-1' },
     });
     await waitFor(() => expect(authMocks.getToken).toHaveBeenCalledOnce());
     hook.rerender({ projectId: 'project-2' });
     await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
-    await act(async () => { resolveToken('token-a'); });
+    await act(async () => {
+      resolveToken('token-a');
+    });
     expect(vi.mocked(fetch)).toHaveBeenCalledOnce();
     expect(String(vi.mocked(fetch).mock.calls[0]?.[0])).toContain('projectId=project-2');
   });
@@ -1576,7 +1731,9 @@ describe('useProjectConversations session-owned reads', () => {
     const signal = vi.mocked(fetch).mock.calls[0]?.[1]?.signal;
     hook.unmount();
     expect(signal?.aborted).toBe(true);
-    await act(async () => { pending.resolve({ conversations: [WIRE_CONVERSATION], hasMore: false, nextOffset: 0 }); });
+    await act(async () => {
+      pending.resolve({ conversations: [WIRE_CONVERSATION], hasMore: false, nextOffset: 0 });
+    });
     expect(vi.mocked(fetch)).toHaveBeenCalledOnce();
   });
 });

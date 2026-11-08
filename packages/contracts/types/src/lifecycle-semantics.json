@@ -609,12 +609,6 @@
       "why": "Resolves the workspace that stores a shared chat so that workspace's external sharing policy applies to the link. A soft-deleted chat keeps its workspace, so including it keeps the stricter policy; this probe returns only the organization id, never conversation content."
     },
     {
-      "file": "apps/web/app/api/artifacts/publish/route.ts",
-      "table": "web_conversations",
-      "class": "ownership-check",
-      "why": "Resolves the workspace that stores the chat an artifact is published from so that workspace's external sharing policy applies to the publication. A soft-deleted chat keeps its workspace, so including it keeps the stricter policy; this probe returns only the organization id, never conversation content."
-    },
-    {
       "file": "apps/web/app/api/artifacts/publish/[token]/route.ts",
       "table": "web_conversations",
       "class": "ownership-check",
@@ -631,6 +625,12 @@
       "table": "web_messages",
       "class": "write-path",
       "why": "countAgentTurnsToday counts the turns a person sent an agent today against the agent's daily turn limit. A chat or message deleted after it was sent still counts, or deleting would reset the limit."
+    },
+    {
+      "file": "apps/web/lib/services/published-artifact-publication-policy.ts",
+      "table": "web_conversations",
+      "class": "ownership-check",
+      "why": "Resolves the workspace that stores the chat an artifact is published from so that workspace's external sharing policy applies to the publication. A soft-deleted chat keeps its workspace, so including it keeps the stricter policy; this probe returns only the organization id, never conversation content."
     }
   ],
   "hardDeleteStores": {

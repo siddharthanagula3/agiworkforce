@@ -33,9 +33,10 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mocks.requireCsrfToken }));
-vi.mock('@/lib/error-handler', () => ({
-  withErrorHandler: (handler: (request: Request) => Promise<Response>) =>
-    async (request: Request) => {
+vi.mock('@/lib/error-handler', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule1>()),
+  withErrorHandler:
+    (handler: (request: Request) => Promise<Response>) => async (request: Request) => {
       try {
         return await handler(request);
       } catch (error) {
@@ -47,20 +48,22 @@ vi.mock('@/lib/error-handler', () => ({
 vi.mock('@/lib/services/active-workspace-service', () => ({
   resolveActiveOrganizationId: mocks.resolveActiveOrganizationId,
 }));
-vi.mock('@/lib/services/org-entitlements', () => ({
+vi.mock('@/lib/services/org-entitlements', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule0>()),
   getOrganizationEntitlements: vi.fn(),
   getSharedProjectLimitErrorMessage: vi.fn(),
   isOrgResourceLimitError: vi.fn(),
 }));
 vi.mock('node:crypto', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('node:crypto')>()),
+  ...(await importOriginal<MockedModule0>()),
   randomBytes: mocks.randomBytes,
 }));
 vi.mock('@/lib/services/audit-streaming-proxy', () => ({
   buildBoundedDeliveryBody: vi.fn(),
   deliverAuditBatch: vi.fn(),
 }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule2>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/server/key-value', () => ({
@@ -86,7 +89,8 @@ vi.mock('@/lib/security-audit', () => ({
 vi.mock('@/app/api/settings/team/team-admin-access', () => ({
   requireTeamAdminAccess: mocks.requireTeamAdminAccess,
 }));
-vi.mock('@/lib/egress-policy', () => ({
+vi.mock('@/lib/egress-policy', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule1>()),
   EgressPolicyError: class EgressPolicyError extends Error {},
   assertResolvedPublicHostname: mocks.assertResolvedPublicHostname,
 }));
@@ -209,13 +213,15 @@ beforeEach(() => {
   mocks.getNeonDb.mockReturnValue(privilegedDb);
   mocks.resolveActiveOrganizationId.mockResolvedValue(ORG);
   mocks.requireTeamAdminAccess.mockResolvedValue({ plan: 'enterprise', canManageTeam: true });
-  vi.mocked(requireMemberPermission).mockImplementation(async (_org, _user, permission, message) => {
-    const permissions = permissionsForRole(permissionRole.value);
-    if (!permissions.has(permission)) {
-      throw createError.forbidden(message).asUserSafe();
-    }
-    return permissions;
-  });
+  vi.mocked(requireMemberPermission).mockImplementation(
+    async (_org, _user, permission, message) => {
+      const permissions = permissionsForRole(permissionRole.value);
+      if (!permissions.has(permission)) {
+        throw createError.forbidden(message).asUserSafe();
+      }
+      return permissions;
+    },
+  );
   mocks.withRateLimit.mockResolvedValue(null);
   mocks.requireCsrfToken.mockResolvedValue(null);
   mocks.assertResolvedPublicHostname.mockResolvedValue(undefined);
@@ -430,7 +436,10 @@ describe('captured audit destination organization with saved workspace A', () =>
           expect(params[0]).toBe(ORG_B);
         }
         if (method === 'GET') {
-          expect(payload.destination).toMatchObject({ organizationId: ORG_B, endpointUrl: ENDPOINT });
+          expect(payload.destination).toMatchObject({
+            organizationId: ORG_B,
+            endpointUrl: ENDPOINT,
+          });
           expect(mocks.privilegedQuery).not.toHaveBeenCalled();
           expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
         } else {
@@ -635,3 +644,11 @@ describe('captured audit destination organization with saved workspace A', () =>
     },
   );
 });
+
+type MockedModule0 = typeof import('node:crypto');
+
+type CompleteMockModule0 = typeof import('@/lib/services/org-entitlements');
+type CompleteMockModule1 = typeof import('@/lib/egress-policy');
+
+type RetainedMockModule1 = typeof import('@/lib/error-handler');
+type RetainedMockModule2 = typeof import('@/lib/logger');

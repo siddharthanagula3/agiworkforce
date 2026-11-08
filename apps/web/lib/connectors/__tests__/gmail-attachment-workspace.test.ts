@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/connectors/oauth-access', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/connectors/oauth-access')>()),
+  ...(await importOriginal<MockedModule0>()),
   resolveConnectorAccessToken: mocks.access,
 }));
 vi.mock('@/lib/services/active-workspace-service', () => ({
@@ -24,9 +24,13 @@ vi.mock('@/lib/services/active-workspace-service', () => ({
 vi.mock('@/lib/server/media-assets', () => ({
   getActiveWorkspaceMediaAssetById: mocks.asset,
 }));
-vi.mock('@/lib/server/media-storage', () => ({ readStoredMedia: mocks.read }));
+vi.mock('@/lib/server/media-storage', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule0>()),
+  readStoredMedia: mocks.read,
+}));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => mocks.db }));
-vi.mock('@/lib/url-fetch/guarded-fetch', () => ({
+vi.mock('@/lib/url-fetch/guarded-fetch', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule1>()),
   createDeadline: () => ({ release: vi.fn() }),
   credentialedFetch: mocks.fetch,
 }));
@@ -81,7 +85,10 @@ beforeEach(() => {
 describe('Gmail draft attachment workspace authority', () => {
   it('keeps the admitted organization despite a different saved selection', async () => {
     const result = await executeGmailAction(
-      USER_ID, GMAIL_CREATE_DRAFT_WITH_ATTACHMENTS_ACTION, args, ORGANIZATION_ID,
+      USER_ID,
+      GMAIL_CREATE_DRAFT_WITH_ATTACHMENTS_ACTION,
+      args,
+      ORGANIZATION_ID,
     );
     expect(result.isError).toBe(false);
     expect(mocks.activeOrganization).not.toHaveBeenCalled();
@@ -96,7 +103,10 @@ describe('Gmail draft attachment workspace authority', () => {
   it('keeps explicit Personal authority without consulting saved selection', async () => {
     mocks.asset.mockResolvedValue(asset(null));
     const result = await executeGmailAction(
-      USER_ID, GMAIL_CREATE_DRAFT_WITH_ATTACHMENTS_ACTION, args, null,
+      USER_ID,
+      GMAIL_CREATE_DRAFT_WITH_ATTACHMENTS_ACTION,
+      args,
+      null,
     );
     expect(result.isError).toBe(false);
     expect(mocks.activeOrganization).not.toHaveBeenCalled();
@@ -107,7 +117,8 @@ describe('Gmail draft attachment workspace authority', () => {
   it('resolves omitted legacy context once for the entire draft', async () => {
     mocks.asset.mockResolvedValue(asset(OTHER_ORGANIZATION_ID));
     const result = await executeGmailAction(USER_ID, GMAIL_CREATE_DRAFT_WITH_ATTACHMENTS_ACTION, {
-      ...args, files: [...args.files, ...args.files],
+      ...args,
+      files: [...args.files, ...args.files],
     });
     expect(result.isError).toBe(false);
     expect(mocks.activeOrganization).toHaveBeenCalledExactlyOnceWith(mocks.db, USER_ID);
@@ -127,7 +138,10 @@ describe('Gmail draft attachment workspace authority', () => {
   ])('refuses %s before reading bytes or creating a draft', async (_label, row) => {
     mocks.asset.mockResolvedValue(row);
     const result = await executeGmailAction(
-      USER_ID, GMAIL_CREATE_DRAFT_WITH_ATTACHMENTS_ACTION, args, ORGANIZATION_ID,
+      USER_ID,
+      GMAIL_CREATE_DRAFT_WITH_ATTACHMENTS_ACTION,
+      args,
+      ORGANIZATION_ID,
     );
     expect(result.isError).toBe(true);
     expect(mocks.read).not.toHaveBeenCalled();
@@ -136,7 +150,10 @@ describe('Gmail draft attachment workspace authority', () => {
 
   it('does not attach an organization asset to a Personal draft', async () => {
     const result = await executeGmailAction(
-      USER_ID, GMAIL_CREATE_DRAFT_WITH_ATTACHMENTS_ACTION, args, null,
+      USER_ID,
+      GMAIL_CREATE_DRAFT_WITH_ATTACHMENTS_ACTION,
+      args,
+      null,
     );
     expect(result.isError).toBe(true);
     expect(mocks.activeOrganization).not.toHaveBeenCalled();
@@ -148,7 +165,10 @@ describe('Gmail draft attachment workspace authority', () => {
     if (failure === 'revoked') mocks.membership.mockResolvedValue(null);
     else mocks.membership.mockRejectedValue(new Error('membership unavailable'));
     const result = await executeGmailAction(
-      USER_ID, GMAIL_CREATE_DRAFT_WITH_ATTACHMENTS_ACTION, args, ORGANIZATION_ID,
+      USER_ID,
+      GMAIL_CREATE_DRAFT_WITH_ATTACHMENTS_ACTION,
+      args,
+      ORGANIZATION_ID,
     );
     expect(result.isError).toBe(true);
     expect(mocks.activeOrganization).not.toHaveBeenCalled();
@@ -180,7 +200,10 @@ describe('Gmail aggregate attachment read budget', () => {
     mocks.read.mockResolvedValueOnce({ data: Buffer.from('first') });
     mocks.read.mockResolvedValueOnce({ data: Buffer.from('second') });
     const result = await executeGmailAction(
-      USER_ID, GMAIL_CREATE_DRAFT_WITH_ATTACHMENTS_ACTION, twoFiles, ORGANIZATION_ID,
+      USER_ID,
+      GMAIL_CREATE_DRAFT_WITH_ATTACHMENTS_ACTION,
+      twoFiles,
+      ORGANIZATION_ID,
     );
     expect(result.isError).toBe(false);
     expect(mocks.read).toHaveBeenNthCalledWith(1, 'media/fixture.txt', limit);
@@ -188,24 +211,36 @@ describe('Gmail aggregate attachment read budget', () => {
     expect(mocks.fetch).toHaveBeenCalledOnce();
   });
 
-  it.each([undefined, limit + 1])('refuses unknown or oversized storage without posting: %s', async (size) => {
-    mocks.read.mockRejectedValue(new StoredObjectTooLargeError('media/fixture.txt', limit, size));
-    const result = await executeGmailAction(
-      USER_ID, GMAIL_CREATE_DRAFT_WITH_ATTACHMENTS_ACTION, twoFiles, ORGANIZATION_ID,
-    );
-    expect(result.isError).toBe(true);
-    expect(result.content).toContain(`${limit}-byte limit`);
-    expect(result.content).not.toContain('add up to');
-    expect(mocks.read).toHaveBeenCalledOnce();
-    expect(mocks.fetch).not.toHaveBeenCalled();
-  });
+  it.each([undefined, limit + 1])(
+    'refuses unknown or oversized storage without posting: %s',
+    async (size) => {
+      mocks.read.mockRejectedValue(new StoredObjectTooLargeError('media/fixture.txt', limit, size));
+      const result = await executeGmailAction(
+        USER_ID,
+        GMAIL_CREATE_DRAFT_WITH_ATTACHMENTS_ACTION,
+        twoFiles,
+        ORGANIZATION_ID,
+      );
+      expect(result.isError).toBe(true);
+      expect(result.content).toContain(`${limit}-byte limit`);
+      expect(result.content).not.toContain('add up to');
+      expect(mocks.read).toHaveBeenCalledOnce();
+      expect(mocks.fetch).not.toHaveBeenCalled();
+    },
+  );
 
   it('stops on cumulative overflow without loading subsequent files or posting', async () => {
     mocks.read.mockResolvedValueOnce({ data: Buffer.from('first') });
     mocks.read.mockRejectedValueOnce(new StoredObjectTooLargeError('media/fixture.txt', limit - 5));
-    const result = await executeGmailAction(USER_ID, GMAIL_CREATE_DRAFT_WITH_ATTACHMENTS_ACTION, {
-      ...args, files: [...twoFiles.files, ...args.files],
-    }, ORGANIZATION_ID);
+    const result = await executeGmailAction(
+      USER_ID,
+      GMAIL_CREATE_DRAFT_WITH_ATTACHMENTS_ACTION,
+      {
+        ...args,
+        files: [...twoFiles.files, ...args.files],
+      },
+      ORGANIZATION_ID,
+    );
     expect(result.isError).toBe(true);
     expect(mocks.read).toHaveBeenCalledTimes(2);
     expect(mocks.read).toHaveBeenNthCalledWith(2, 'media/fixture.txt', limit - 5);
@@ -216,10 +251,18 @@ describe('Gmail aggregate attachment read budget', () => {
     mocks.read.mockResolvedValueOnce({ data: Buffer.alloc(limit) });
     mocks.read.mockResolvedValueOnce({ data: Buffer.alloc(0) });
     const result = await executeGmailAction(
-      USER_ID, GMAIL_CREATE_DRAFT_WITH_ATTACHMENTS_ACTION, twoFiles, ORGANIZATION_ID,
+      USER_ID,
+      GMAIL_CREATE_DRAFT_WITH_ATTACHMENTS_ACTION,
+      twoFiles,
+      ORGANIZATION_ID,
     );
     expect(result.isError).toBe(false);
     expect(mocks.read).toHaveBeenNthCalledWith(2, 'media/fixture.txt', 0);
     expect(mocks.fetch).toHaveBeenCalledOnce();
   });
 });
+
+type MockedModule0 = typeof import('@/lib/connectors/oauth-access');
+
+type CompleteMockModule0 = typeof import('@/lib/server/media-storage');
+type CompleteMockModule1 = typeof import('@/lib/url-fetch/guarded-fetch');

@@ -82,7 +82,11 @@ describe('POST /api/auth/device/code', () => {
         controller.error(new Error('Body transport failed'));
       },
     });
-    const init: RequestInit & { duplex: 'half' } = { method: 'POST', body, duplex: 'half' };
+    const init: ConstructorParameters<typeof NextRequest>[1] & { duplex: 'half' } = {
+      method: 'POST',
+      body,
+      duplex: 'half',
+    };
 
     const response = await POST(new NextRequest(url, init));
 
@@ -107,7 +111,11 @@ describe('POST /api/auth/device/code', () => {
       },
       cancel,
     });
-    const init: RequestInit & { duplex: 'half' } = { method: 'POST', body, duplex: 'half' };
+    const init: ConstructorParameters<typeof NextRequest>[1] & { duplex: 'half' } = {
+      method: 'POST',
+      body,
+      duplex: 'half',
+    };
 
     const response = await POST(new NextRequest(url, init));
 

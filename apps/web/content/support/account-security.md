@@ -4,7 +4,7 @@ title: Passkeys, two-factor and active sessions
 path: /security
 category: account
 tags: passkey, two factor, 2fa, mfa, totp, authenticator, backup codes, recovery codes, advanced account security, security key, recovery key, change password, forgot password, sessions, log out all devices, revoke session, api keys
-updated: 2026-10-15
+updated: 2026-11-08
 description: How to manage passkeys, two-factor authentication, your password, active sessions and API keys.
 scope: public
 ---
@@ -85,8 +85,7 @@ with **Forgot password?**.
 
 Settings, Account changes the email address on the account. The new address gets
 a code to prove you own it, then you confirm it is you and it becomes the
-address on the account. The previous address is removed unless a sign-in method
-still uses it. Password resets and security notices go to the new address.
+address on the account. The result tells you whether the previous address was removed, and asks you to check your sign-in methods if it was kept. Password resets and security notices go to the new address.
 
 ## Confirming it is you
 

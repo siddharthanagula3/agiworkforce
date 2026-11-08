@@ -10,9 +10,13 @@ jest.mock('expo-file-system', () => {
     constructor(...parts: unknown[]) {
       this.uri = `file:///cache/${String(parts[parts.length - 1])}`;
     }
-    create() { this.exists = true; }
+    create() {
+      this.exists = true;
+    }
     write() {}
-    delete() { this.exists = false; }
+    delete() {
+      this.exists = false;
+    }
   }
   return { File, Paths: { cache: 'cache' } };
 });
@@ -74,7 +78,10 @@ function owner(scope: 'local' | 'cloud' = 'cloud') {
 function deferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (error: Error) => void;
-  const promise = new Promise<T>((accept, refuse) => { resolve = accept; reject = refuse; });
+  const promise = new Promise<T>((accept, refuse) => {
+    resolve = accept;
+    reject = refuse;
+  });
   return { promise, resolve, reject };
 }
 
@@ -160,10 +167,11 @@ describe('owned read aloud', () => {
   });
 
   it('does not create playback if onStart stops its operation', async () => {
-    let speaking!: VoiceOutput.VoiceOutputHandle;
-    speaking = owner().start('Stop at start.', {
+    const speaking = owner().start('Stop at start.', {
       serverVoice: true,
-      onStart: () => { void speaking.stop(); },
+      onStart: () => {
+        void speaking.stop();
+      },
     });
     await expect(speaking.done).resolves.toEqual({ status: 'stopped' });
     expect(playerMock).not.toHaveBeenCalled();
@@ -212,7 +220,9 @@ describe('owned read aloud', () => {
     expect(player.remove).toHaveBeenCalledTimes(1);
     expect(speechMock).not.toHaveBeenCalled();
     for (const [, , options] of fetchMock.mock.calls) {
-      expect(options.accountEpoch).toEqual(source.source?.scope === 'cloud' && source.source.account);
+      expect(options.accountEpoch).toEqual(
+        source.source?.scope === 'cloud' && source.source.account,
+      );
     }
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
@@ -256,8 +266,9 @@ describe('owned read aloud', () => {
   });
 
   it('does not let a Local owner opt into server speech', async () => {
-    await expect(owner('local').start('Local only.', { serverVoice: true }).done)
-      .resolves.toEqual({ status: 'stopped' });
+    await expect(owner('local').start('Local only.', { serverVoice: true }).done).resolves.toEqual({
+      status: 'stopped',
+    });
     expect(fetchMock).not.toHaveBeenCalled();
     expect(speechMock).not.toHaveBeenCalled();
   });
@@ -316,7 +327,9 @@ describe('owned read aloud', () => {
     await expect(first.done).resolves.toEqual({ status: 'stopped' });
     expect(onStopped).toHaveBeenCalledTimes(1);
 
-    speechMock.mockImplementation((_text: string, callbacks: NativeCallbacks) => callbacks.onDone());
+    speechMock.mockImplementation((_text: string, callbacks: NativeCallbacks) =>
+      callbacks.onDone(),
+    );
     const second = owner('local').start('Second.');
     await expect(second.done).resolves.toEqual({ status: 'done' });
     expect(speechMock.mock.calls.map(([text]) => text)).toEqual(['First.', 'Second.']);
@@ -324,9 +337,12 @@ describe('owned read aloud', () => {
 
   it('settles even when a completion callback throws', async () => {
     jest.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const onDone = jest.fn(() => { throw new Error('caller failed'); });
-    await expect(owner('local').start('Hello.', { onDone }).done)
-      .resolves.toEqual({ status: 'done' });
+    const onDone = jest.fn(() => {
+      throw new Error('caller failed');
+    });
+    await expect(owner('local').start('Hello.', { onDone }).done).resolves.toEqual({
+      status: 'done',
+    });
     expect(onDone).toHaveBeenCalledTimes(1);
   });
 
@@ -334,7 +350,9 @@ describe('owned read aloud', () => {
     speechMock.mockImplementation(() => undefined);
     let newest: VoiceOutput.VoiceOutputHandle | undefined;
     const first = owner('local').start('First.', {
-      onStopped: () => { newest = owner('local').start('Newest.'); },
+      onStopped: () => {
+        newest = owner('local').start('Newest.');
+      },
     });
     await waitForNative();
     const second = owner('local').start('Second.');

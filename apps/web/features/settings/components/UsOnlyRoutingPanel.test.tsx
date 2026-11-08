@@ -1,4 +1,5 @@
-import React, { StrictMode } from 'react';
+import type { WebFetch } from '@/test/fetch';
+import { StrictMode } from 'react';
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { modelRegistry } from '@agiworkforce/model-registry';
@@ -16,24 +17,33 @@ const fixture = vi.hoisted(() => ({
 
 vi.mock('@clerk/nextjs', () => ({ useAuth: () => fixture.auth, useClerk: () => fixture.sdk }));
 vi.mock('@/lib/clerk-session', async (original) => ({
-  ...await original<typeof import('@/lib/clerk-session')>(),
+  ...(await original<MockedModule0>()),
   hasClerkSessionCookie: () => false,
   hasUsableClerkSessionToken: () => false,
   subscribeToClerkSessionChange: () => () => undefined,
 }));
 vi.mock('@/lib/client/csrf', async (original) => ({
-  ...await original<typeof import('@/lib/client/csrf')>(),
+  ...(await original<MockedModule1>()),
   addCsrfHeaders: vi.fn(async (headers: HeadersInit = {}) => headers),
 }));
 vi.mock('@agiworkforce/ui', async (original) => ({
-  ...await original<typeof import('@agiworkforce/ui')>(),
+  ...(await original<MockedModule2>()),
   Switch: (props: {
-    checked: boolean; disabled: boolean; onCheckedChange: (value: boolean) => void;
+    checked: boolean;
+    disabled: boolean;
+    onCheckedChange: (value: boolean) => void;
     'aria-label': string;
   }) => {
     fixture.callbacks.push(props.onCheckedChange);
-    return <button role="switch" aria-label={props['aria-label']} aria-checked={props.checked}
-      disabled={props.disabled} onClick={() => props.onCheckedChange(!props.checked)} />;
+    return (
+      <button
+        role="switch"
+        aria-label={props['aria-label']}
+        aria-checked={props.checked}
+        disabled={props.disabled}
+        onClick={() => props.onCheckedChange(!props.checked)}
+      />
+    );
   },
 }));
 
@@ -45,14 +55,19 @@ import { UsOnlyRoutingPanel } from './UsOnlyRoutingPanel';
 function deferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (reason: unknown) => void;
-  const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; });
+  const promise = new Promise<T>((yes, no) => {
+    resolve = yes;
+    reject = no;
+  });
   return { promise, resolve, reject };
 }
 
-const json = (body: unknown) => new Response(JSON.stringify(body), {
-  status: 200, headers: { 'Content-Type': 'application/json' },
-});
-const fetchMock = vi.fn<typeof fetch>();
+const json = (body: unknown) =>
+  new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
+const fetchMock = vi.fn<WebFetch>();
 const control = () => screen.getByRole('switch');
 const retained = () => fixture.callbacks[fixture.callbacks.length - 1]!;
 const puts = () => fetchMock.mock.calls.filter(([, init]) => init?.method === 'PUT');
@@ -64,28 +79,45 @@ beforeEach(() => {
   fixture.sdk.loaded = true;
   fixture.sdk.user = { id: 'a' };
   fixture.sdk.session = { id: 'session-a', user: { id: 'a' }, getToken: async () => 'token-a' };
-  const tier = modelRegistry.policies.auto.providerPolicies.usOnly.allowedTiers.find(isBillingPlanTier);
+  const tier =
+    modelRegistry.policies.auto.providerPolicies.usOnly.allowedTiers.find(isBillingPlanTier);
   if (!tier) throw new Error('Registry has no eligible billing tier');
-  useBillingStore.setState({ isLoading: false, subscription: {
-    tier, status: 'active', display_name: tier, plan_name: tier, current_period_end: null,
-  } });
+  useBillingStore.setState({
+    isLoading: false,
+    subscription: {
+      tier,
+      status: 'active',
+      display_name: tier,
+      plan_name: tier,
+      current_period_end: null,
+    },
+  });
   fetchMock.mockReset();
   vi.stubGlobal('fetch', fetchMock);
-  vi.mocked(addCsrfHeaders).mockReset().mockImplementation(async (headers) => new Headers(headers));
+  vi.mocked(addCsrfHeaders)
+    .mockReset()
+    .mockImplementation(async (headers) => new Headers(headers));
 });
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 describe('US-only routing preference ownership', () => {
   it('owns one write, preserves geo overlay and uses captured bearer authority', async () => {
     const pending = deferred<Response>();
-    fetchMock.mockResolvedValueOnce(json({ us_only: false, geo_overlay: 'in' }))
+    fetchMock
+      .mockResolvedValueOnce(json({ us_only: false, geo_overlay: 'in' }))
       .mockReturnValueOnce(pending.promise)
       .mockResolvedValueOnce(json({ us_only: true, geo_overlay: 'in' }));
     render(<UsOnlyRoutingPanel />);
     await waitFor(() => expect(control()).toBeEnabled());
     const save = retained();
-    act(() => { save(true); save(true); });
+    act(() => {
+      save(true);
+      save(true);
+    });
     await waitFor(() => expect(puts()).toHaveLength(1));
     const init = puts()[0]![1]!;
     expect(JSON.parse(String(init.body))).toEqual({ us_only: true, geo_overlay: 'in' });
@@ -192,7 +224,9 @@ describe('US-only routing preference ownership', () => {
     const body = deferred<unknown>();
     const response = json({});
     const parse = vi.spyOn(response, 'json').mockReturnValue(body.promise);
-    fetchMock.mockResolvedValueOnce(json({})).mockResolvedValueOnce(response)
+    fetchMock
+      .mockResolvedValueOnce(json({}))
+      .mockResolvedValueOnce(response)
       .mockResolvedValueOnce(json({ us_only: false }));
     const old = render(<UsOnlyRoutingPanel />);
     await waitFor(() => expect(control()).toBeEnabled());
@@ -253,44 +287,56 @@ describe('US-only routing preference ownership', () => {
   });
 
   it.each([
-    { body: null }, { body: [] }, { body: { us_only: 'true' } },
+    { body: null },
+    { body: [] },
+    { body: { us_only: 'true' } },
     { body: { geo_overlay: 'invalid' } },
-  ])(
-    'refuses malformed read $body and offers only a read retry', async ({ body }) => {
-      fetchMock.mockResolvedValueOnce(json(body)).mockResolvedValueOnce(json({}));
-      render(<UsOnlyRoutingPanel />);
-      await waitFor(() => expect(screen.getByRole('button', { name: 'Retry loading' })).toBeVisible());
-      expect(control()).toBeDisabled();
-      act(() => retained()(true));
-      expect(puts()).toHaveLength(0);
-      act(() => screen.getByRole('button', { name: 'Retry loading' }).click());
-      await waitFor(() => expect(control()).toBeEnabled());
-      expect(puts()).toHaveLength(0);
-    },
-  );
+  ])('refuses malformed read $body and offers only a read retry', async ({ body }) => {
+    fetchMock.mockResolvedValueOnce(json(body)).mockResolvedValueOnce(json({}));
+    render(<UsOnlyRoutingPanel />);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Retry loading' })).toBeVisible(),
+    );
+    expect(control()).toBeDisabled();
+    act(() => retained()(true));
+    expect(puts()).toHaveLength(0);
+    act(() => screen.getByRole('button', { name: 'Retry loading' }).click());
+    await waitFor(() => expect(control()).toBeEnabled());
+    expect(puts()).toHaveLength(0);
+  });
 
   it.each([{}, { us_only: false }, { us_only: 'true' }])(
-    'does not acknowledge a missing, mismatched or malformed receipt %j', async (receipt) => {
-      fetchMock.mockResolvedValueOnce(json({ us_only: false }))
-        .mockResolvedValueOnce(json(receipt)).mockResolvedValueOnce(json({ us_only: true }));
+    'does not acknowledge a missing, mismatched or malformed receipt %j',
+    async (receipt) => {
+      fetchMock
+        .mockResolvedValueOnce(json({ us_only: false }))
+        .mockResolvedValueOnce(json(receipt))
+        .mockResolvedValueOnce(json({ us_only: true }));
       render(<UsOnlyRoutingPanel />);
       await waitFor(() => expect(control()).toBeEnabled());
       act(() => retained()(true));
-      await waitFor(() => expect(screen.getByText('We could not confirm whether your change was saved.')).toBeVisible());
+      await waitFor(() =>
+        expect(
+          screen.getByText('We could not confirm whether your change was saved.'),
+        ).toBeVisible(),
+      );
       expect(control()).toHaveAttribute('aria-checked', 'true');
       expect(puts()).toHaveLength(1);
     },
   );
 
   it('keeps an uncertain write locked when reconciliation fails and retries only GET', async () => {
-    fetchMock.mockResolvedValueOnce(json({ us_only: false }))
+    fetchMock
+      .mockResolvedValueOnce(json({ us_only: false }))
       .mockRejectedValueOnce(new Error('Connection lost'))
       .mockRejectedValueOnce(new Error('Read unavailable'))
       .mockResolvedValueOnce(json({ us_only: true }));
     render(<UsOnlyRoutingPanel />);
     await waitFor(() => expect(control()).toBeEnabled());
     act(() => retained()(true));
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Retry loading' })).toBeVisible());
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Retry loading' })).toBeVisible(),
+    );
     expect(control()).toBeDisabled();
     act(() => screen.getByRole('button', { name: 'Retry loading' }).click());
     await waitFor(() => expect(control()).toBeEnabled());
@@ -299,24 +345,40 @@ describe('US-only routing preference ownership', () => {
   });
 
   it('preserves acknowledgement without claiming latest readiness when readback fails', async () => {
-    fetchMock.mockResolvedValueOnce(json({})).mockResolvedValueOnce(json({ us_only: true }))
+    fetchMock
+      .mockResolvedValueOnce(json({}))
+      .mockResolvedValueOnce(json({ us_only: true }))
       .mockRejectedValueOnce(new Error('Read unavailable'));
     render(<UsOnlyRoutingPanel />);
     await waitFor(() => expect(control()).toBeEnabled());
     act(() => retained()(true));
-    await waitFor(() => expect(screen.getByText(/was saved as on, but the latest setting/)).toBeVisible());
+    await waitFor(() =>
+      expect(screen.getByText(/was saved as on, but the latest setting/)).toBeVisible(),
+    );
     expect(control()).toBeDisabled();
     expect(control()).toHaveAttribute('aria-checked', 'true');
   });
 
   it('reacquires a usable view after StrictMode effect cleanup and setup', async () => {
-    fetchMock.mockImplementation(async (_input, init) => json(
-      init?.method === 'PUT' ? { us_only: true } : {},
-    ));
-    render(<StrictMode><UsOnlyRoutingPanel /></StrictMode>);
+    fetchMock.mockImplementation(async (_input, init) =>
+      json(init?.method === 'PUT' ? { us_only: true } : {}),
+    );
+    render(
+      <StrictMode>
+        <UsOnlyRoutingPanel />
+      </StrictMode>,
+    );
     await waitFor(() => expect(control()).toBeEnabled());
-    act(() => { const save = retained(); save(true); save(true); });
+    act(() => {
+      const save = retained();
+      save(true);
+      save(true);
+    });
     await waitFor(() => expect(screen.getByText(/was saved as on/)).toBeVisible());
     expect(puts()).toHaveLength(1);
   });
 });
+
+type MockedModule0 = typeof import('@/lib/clerk-session');
+type MockedModule1 = typeof import('@/lib/client/csrf');
+type MockedModule2 = typeof import('@agiworkforce/ui');

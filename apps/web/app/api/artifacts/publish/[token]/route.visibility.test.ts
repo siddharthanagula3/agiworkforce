@@ -67,7 +67,7 @@ vi.mock('@/lib/logger', async (importOriginal) => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 vi.mock('@/lib/security/outbound-content-inspection', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/security/outbound-content-inspection')>()),
+  ...(await importOriginal<MockedModule0>()),
   inspectOutboundContent: (...args: unknown[]) => mocks.inspect(...args),
 }));
 
@@ -83,7 +83,10 @@ function call(body: unknown, token = TOKEN, organizationId?: string) {
     new NextRequest(`https://agiworkforce.com/api/artifacts/publish/${token}`, {
       method: 'PATCH',
       body: JSON.stringify(body),
-      headers: { 'Content-Type': 'application/json', ...(organizationId ? { [MANAGED_CLOUD_ORGANIZATION_HEADER]: organizationId } : {}) },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(organizationId ? { [MANAGED_CLOUD_ORGANIZATION_HEADER]: organizationId } : {}),
+      },
     }),
     { params: Promise.resolve({ token }) },
   );
@@ -107,7 +110,10 @@ function artifactRow(visibility: 'public' | 'organization' | 'invited') {
 }
 
 // This SQL model does not establish PostgreSQL RLS or concurrent transaction behavior.
-function respond(visibility: 'public' | 'organization' | 'invited', existingGrant: string | null = ORG) {
+function respond(
+  visibility: 'public' | 'organization' | 'invited',
+  existingGrant: string | null = ORG,
+) {
   let grant = existingGrant;
   return (sql: string, params: unknown[] = []) => {
     const text = String(sql);
@@ -144,9 +150,17 @@ beforeEach(() => {
   mocks.usesConnectors = false;
   mocks.sharingGate.mockResolvedValue(null);
   mocks.query.mockImplementation(respond('organization', null));
-  mocks.rootQuery.mockImplementation(() => { throw new Error('Audience query escaped transaction'); });
-  mocks.transaction.mockImplementation(async (work: (tx: unknown) => Promise<unknown>) => work({ query: mocks.query }));
-  mocks.inspect.mockImplementation(async ({ value }: { value: string }) => ({ action: 'allowed', value, findings: [] }));
+  mocks.rootQuery.mockImplementation(() => {
+    throw new Error('Audience query escaped transaction');
+  });
+  mocks.transaction.mockImplementation(async (work: (tx: unknown) => Promise<unknown>) =>
+    work({ query: mocks.query }),
+  );
+  mocks.inspect.mockImplementation(async ({ value }: { value: string }) => ({
+    action: 'allowed',
+    value,
+    findings: [],
+  }));
   mocks.scopedDb.mockResolvedValue({
     db: { query: mocks.rootQuery, transaction: mocks.transaction },
     userId: 'user-1',
@@ -201,7 +215,11 @@ describe('PATCH /api/artifacts/publish/[token]', () => {
 
     expect(response.status).toBe(403);
     const statements = mocks.query.mock.calls.map(([sql]) => String(sql));
-    expect(statements.some((sql) => /(?:insert into|delete from) public.organization_shared_artifacts/.test(sql))).toBe(false);
+    expect(
+      statements.some((sql) =>
+        /(?:insert into|delete from) public.organization_shared_artifacts/.test(sql),
+      ),
+    ).toBe(false);
     expect(statements.some((sql) => sql.includes('update public.published_artifacts'))).toBe(false);
   });
 
@@ -245,14 +263,20 @@ describe('PATCH /api/artifacts/publish/[token]', () => {
   it('lets someone outside any workspace share with invited people', async () => {
     mocks.query.mockImplementation(respond('invited', null));
     mocks.scopedDb.mockResolvedValue({
-      db: { query: mocks.rootQuery, transaction: mocks.transaction }, userId: 'user-1', organizationId: null,
+      db: { query: mocks.rootQuery, transaction: mocks.transaction },
+      userId: 'user-1',
+      organizationId: null,
     });
 
     const response = await call({ visibility: 'invited' });
 
     expect(response.status).toBe(200);
     const statements = mocks.query.mock.calls.map(([sql]) => String(sql));
-    expect(statements.some((sql) => /(?:insert into|delete from) public.organization_shared_artifacts/.test(sql))).toBe(false);
+    expect(
+      statements.some((sql) =>
+        /(?:insert into|delete from) public.organization_shared_artifacts/.test(sql),
+      ),
+    ).toBe(false);
   });
 
   it('rejects an audience the schema does not model', async () => {
@@ -268,7 +292,9 @@ describe('PATCH /api/artifacts/publish/[token]', () => {
 
   it('refuses when the caller belongs to no workspace', async () => {
     mocks.scopedDb.mockResolvedValue({
-      db: { query: mocks.rootQuery, transaction: mocks.transaction }, userId: 'user-1', organizationId: null,
+      db: { query: mocks.rootQuery, transaction: mocks.transaction },
+      userId: 'user-1',
+      organizationId: null,
     });
     expect((await call({ visibility: 'organization' })).status).toBe(403);
   });
@@ -306,7 +332,11 @@ describe('PATCH /api/artifacts/publish/[token]', () => {
       'not available on publicly shared artifacts',
     );
     const statements = mocks.query.mock.calls.map(([sql]) => String(sql));
-    expect(statements.some((sql) => /(?:insert into|delete from) public.organization_shared_artifacts/.test(sql))).toBe(false);
+    expect(
+      statements.some((sql) =>
+        /(?:insert into|delete from) public.organization_shared_artifacts/.test(sql),
+      ),
+    ).toBe(false);
     expect(statements.some((sql) => sql.includes('update public.published_artifacts'))).toBe(false);
   });
 
@@ -321,15 +351,26 @@ describe('PATCH /api/artifacts/publish/[token]', () => {
     mocks.query.mockImplementation(respond('organization', ORG));
     mocks.scopedDb.mockImplementation(async (request: NextRequest) => {
       expect(request.headers.get(MANAGED_CLOUD_ORGANIZATION_HEADER)).toBe(OTHER_ORG);
-      return { db: { query: mocks.rootQuery, transaction: mocks.transaction }, userId: 'user-1', organizationId: OTHER_ORG };
+      return {
+        db: { query: mocks.rootQuery, transaction: mocks.transaction },
+        userId: 'user-1',
+        organizationId: OTHER_ORG,
+      };
     });
     const response = await call({ visibility: 'organization' }, TOKEN, OTHER_ORG);
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ organizationId: OTHER_ORG });
     expect(mocks.canShareArtifacts).toHaveBeenCalledWith(OTHER_ORG);
-    expect(mocks.permission).toHaveBeenCalledWith('user-1', OTHER_ORG, 'content.share', expect.any(String));
+    expect(mocks.permission).toHaveBeenCalledWith(
+      'user-1',
+      OTHER_ORG,
+      'content.share',
+      expect.any(String),
+    );
     expect(mocks.rootQuery).not.toHaveBeenCalled();
-    expect(mocks.query.mock.calls.some(([sql]) => /user_settings|organization_members/.test(sql))).toBe(false);
+    expect(
+      mocks.query.mock.calls.some(([sql]) => /user_settings|organization_members/.test(sql)),
+    ).toBe(false);
   });
 
   it('puts an inspected combined rename in the audience transaction with no separate rename', async () => {
@@ -338,7 +379,9 @@ describe('PATCH /api/artifacts/publish/[token]', () => {
     const response = await call({ visibility: 'invited', title: 'Unsafe name' });
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ title: 'Safe name', visibility: 'invited' });
-    const writes = mocks.query.mock.calls.filter(([sql]) => sql.includes('update public.published_artifacts'));
+    const writes = mocks.query.mock.calls.filter(([sql]) =>
+      sql.includes('update public.published_artifacts'),
+    );
     expect(writes).toHaveLength(1);
     expect(writes[0]?.[1]).toEqual([ARTIFACT, TOKEN, 'user-1', 'invited', 'Safe name']);
     expect(mocks.transaction).toHaveBeenCalledTimes(1);
@@ -363,3 +406,5 @@ describe('PATCH /api/artifacts/publish/[token]', () => {
     expect(outcomes).toEqual(['rollback']);
   });
 });
+
+type MockedModule0 = typeof import('@/lib/security/outbound-content-inspection');

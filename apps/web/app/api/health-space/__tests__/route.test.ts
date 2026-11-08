@@ -45,7 +45,8 @@ vi.mock('@/lib/logger', () => ({
   shouldUsePrettyLogTransport: vi.fn(),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule0>()),
   getClerkAuthUser: vi.fn(),
   getClerkAuthorizedParties: vi.fn(),
   getOptionalAuthUser: vi.fn(),
@@ -162,3 +163,5 @@ describe('/api/health-space', () => {
     expect(mocks.ensureHealthSpace).toHaveBeenCalledWith(db, 'user-1');
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/api-auth');

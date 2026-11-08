@@ -208,7 +208,9 @@ describe('POST /api/artifacts/publish', () => {
     expect(response.status).toBe(201);
 
     const body = await response.json();
-    expect(ManagedCloudPublishedArtifactPublishResponseSchema.parse(body).artifactId).toBe('artifact-1');
+    expect(ManagedCloudPublishedArtifactPublishResponseSchema.parse(body).artifactId).toBe(
+      'artifact-1',
+    );
     expect(body.token).toBe(TOKEN);
     expect(body.shareUrl).toContain(`/shared-artifact/${TOKEN}`);
     expect(body.sandboxed).toBe(true);
@@ -235,7 +237,7 @@ describe('POST /api/artifacts/publish', () => {
     const stripeKey = `sk_live_${'a'.repeat(30)}`;
     await POST(postRequest({ ...VALID_BODY, content: `key='${stripeKey}'` }));
 
-    expect(mocks.recordAuditEvent).toHaveBeenCalledTimes(1);
+    expect(mocks.recordAuditEvent).toHaveBeenCalledTimes(2);
     const event = mocks.recordAuditEvent.mock.calls[0]![0] as {
       eventType: string;
       detail: Record<string, unknown>;
@@ -245,9 +247,20 @@ describe('POST /api/artifacts/publish', () => {
     expect(JSON.stringify(event)).not.toContain(stripeKey);
   });
 
-  it('does not record an audit event when the content is clean', async () => {
-    await POST(postRequest(VALID_BODY));
-    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+  it('audits clean publication using server identity without content or link credentials', async () => {
+    const request = postRequest(VALID_BODY);
+    await POST(request);
+    expect(mocks.recordAuditEvent).toHaveBeenCalledExactlyOnceWith({
+      userId: 'user-1',
+      organizationId: null,
+      eventType: 'share_link_updated',
+      request,
+      detail: {
+        resourceType: 'published_artifact',
+        resourceId: 'row-1',
+        status: 'published',
+      },
+    });
     expect(mocks.secretMode).not.toHaveBeenCalled();
   });
 
@@ -358,7 +371,9 @@ describe('POST /api/artifacts/publish', () => {
 
   it('refuses a publish past the per-user cap with an actionable 409', async () => {
     const { MAX_PUBLISHED_PER_USER } = await import('@/lib/services/published-artifact-service');
-    mocks.txQuery.mockImplementation(routeVersionQueries({ publishedCount: MAX_PUBLISHED_PER_USER }));
+    mocks.txQuery.mockImplementation(
+      routeVersionQueries({ publishedCount: MAX_PUBLISHED_PER_USER }),
+    );
 
     const response = await POST(postRequest(VALID_BODY));
 
@@ -379,18 +394,20 @@ describe('POST /api/artifacts/publish', () => {
 
   it('republishes an existing page over the cap without changing its URL', async () => {
     const { MAX_PUBLISHED_PER_USER } = await import('@/lib/services/published-artifact-service');
-    mocks.txQuery.mockImplementation(routeVersionQueries({
-      publishedCount: MAX_PUBLISHED_PER_USER + 1,
-      existingRows: [{ id: 'row-1', user_id: 'user-1', artifact_id: 'artifact-1' }],
-    }));
+    mocks.txQuery.mockImplementation(
+      routeVersionQueries({
+        publishedCount: MAX_PUBLISHED_PER_USER + 1,
+        existingRows: [{ id: 'row-1', user_id: 'user-1', artifact_id: 'artifact-1' }],
+      }),
+    );
 
     const response = await POST(postRequest(VALID_BODY));
 
     expect(response.status).toBe(201);
     expect((await response.json()).token).toBe(TOKEN);
-    expect(mocks.txQuery.mock.calls.some(([sql]) =>
-      String(sql).includes('as published_count'),
-    )).toBe(false);
+    expect(
+      mocks.txQuery.mock.calls.some(([sql]) => String(sql).includes('as published_count')),
+    ).toBe(false);
   });
 
   it('does not return success until the transaction commit promise resolves', async () => {
@@ -416,6 +433,7 @@ describe('POST /api/artifacts/publish', () => {
     await reachedCommit;
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(settled).toBe(false);
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
     expect(
       mocks.txQuery.mock.calls.filter(([sql]) =>
         String(sql).includes('insert into public.published_artifact_versions'),
@@ -423,6 +441,7 @@ describe('POST /api/artifacts/publish', () => {
     ).toHaveLength(1);
     finishCommit();
     expect((await response).status).toBe(201);
+    expect(mocks.recordAuditEvent).toHaveBeenCalledTimes(1);
     expect(mocks.transaction).toHaveBeenCalledTimes(1);
   }, 1_000);
 
@@ -435,6 +454,7 @@ describe('POST /api/artifacts/publish', () => {
     const response = await POST(postRequest(VALID_BODY));
 
     expect(response.status).toBe(500);
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
     expect(mocks.transaction).toHaveBeenCalledTimes(1);
     expect(mocks.txQuery.mock.calls.filter(([sql]) => isInsert(sql))).toHaveLength(1);
   });
@@ -647,10 +667,12 @@ describe('published artifact version history', () => {
   });
 
   it('does not append a version when the republish says the same thing', async () => {
-    mocks.txQuery.mockImplementation(routeVersionQueries({
-      newest: [versionRow({ version: 4 })],
-      existingRows: [{ id: 'row-1', user_id: 'user-1', artifact_id: 'artifact-1' }],
-    }));
+    mocks.txQuery.mockImplementation(
+      routeVersionQueries({
+        newest: [versionRow({ version: 4 })],
+        existingRows: [{ id: 'row-1', user_id: 'user-1', artifact_id: 'artifact-1' }],
+      }),
+    );
     const response = await POST(postRequest({ ...VALID_BODY, content: '<h1>v1</h1>' }));
 
     expect((await response.json()).version).toBe(4);
@@ -732,36 +754,61 @@ describe('GET published artifact page validation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.rateLimit.mockResolvedValue(null);
-    mocks.scopedDb.mockResolvedValue({ db: scopedDatabase(), userId: 'user-1', organizationId: null });
+    mocks.scopedDb.mockResolvedValue({
+      db: scopedDatabase(),
+      userId: 'user-1',
+      organizationId: null,
+    });
     mocks.query.mockResolvedValue([]);
   });
 
-  it.each(['limit=0', 'limit=201', 'limit=1.5', 'limit=NaN', 'limit=1&limit=2', 'cursor=', 'cursor=x&cursor=y'])
-    ('rejects invalid page query before any publication read: %s', async (query) => {
-      const response = await GET(new NextRequest(`https://agiworkforce.com/api/artifacts/publish?${query}`));
-      expect(response.status).toBe(400);
-      expect(mocks.query).not.toHaveBeenCalled();
-    });
+  it.each([
+    'limit=0',
+    'limit=201',
+    'limit=1.5',
+    'limit=NaN',
+    'limit=1&limit=2',
+    'cursor=',
+    'cursor=x&cursor=y',
+  ])('rejects invalid page query before any publication read: %s', async (query) => {
+    const response = await GET(
+      new NextRequest(`https://agiworkforce.com/api/artifacts/publish?${query}`),
+    );
+    expect(response.status).toBe(400);
+    expect(mocks.query).not.toHaveBeenCalled();
+  });
 
   it('adds explicit exhaustion metadata while retaining legacy keys', async () => {
     const response = await GET(new NextRequest('https://agiworkforce.com/api/artifacts/publish'));
-    expect(await response.json()).toEqual({ artifacts: [], workspace: null, pageInfo: { nextCursor: null } });
+    expect(await response.json()).toEqual({
+      artifacts: [],
+      workspace: null,
+      pageInfo: { nextCursor: null },
+    });
     expect(response.headers.get('Cache-Control')).toBe('private, no-store');
   });
 
   it('returns a continuation for the last displayed row and follows it without anchor lookup', async () => {
     const first = {
       ...publishRow({ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }),
-      content_chars: 10, cursor_created_at: '2026-11-07T12:34:56.123456Z',
+      content_chars: 10,
+      cursor_created_at: '2026-11-07T12:34:56.123456Z',
     };
-    mocks.query.mockResolvedValueOnce([first, { ...first, id: '99999999-9999-4999-8999-999999999999' }]);
-    const response = await GET(new NextRequest('https://agiworkforce.com/api/artifacts/publish?limit=1'));
+    mocks.query.mockResolvedValueOnce([
+      first,
+      { ...first, id: '99999999-9999-4999-8999-999999999999' },
+    ]);
+    const response = await GET(
+      new NextRequest('https://agiworkforce.com/api/artifacts/publish?limit=1'),
+    );
     const body = await response.json();
     expect(body.artifacts).toHaveLength(1);
     expect(body.artifacts[0]).not.toHaveProperty('content');
     const cursor = body.pageInfo.nextCursor;
     expect(typeof cursor).toBe('string');
-    const next = await GET(new NextRequest(`https://agiworkforce.com/api/artifacts/publish?limit=1&cursor=${cursor}`));
+    const next = await GET(
+      new NextRequest(`https://agiworkforce.com/api/artifacts/publish?limit=1&cursor=${cursor}`),
+    );
     expect((await next.json()).pageInfo).toEqual({ nextCursor: null });
     expect(mocks.query).toHaveBeenCalledTimes(2);
     expect(mocks.query.mock.calls[1]![1]).toEqual(['user-1', 2, first.cursor_created_at, first.id]);

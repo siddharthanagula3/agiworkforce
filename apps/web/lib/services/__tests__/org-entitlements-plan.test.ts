@@ -12,6 +12,7 @@ vi.mock('@/lib/services/subscription-service', () => ({
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb }));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { createDatabaseAdapterFake } from '@/test/database-adapter-fake';
 import {
   resolveOrganizationEntitlementPlan,
   resolveUserPersonalPlanTier,
@@ -156,7 +157,10 @@ describe("entitlement never depends on the caller's row visibility", () => {
 });
 
 describe('resolveUserPersonalPlanTier', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getNeonDb.mockReturnValue(createDatabaseAdapterFake());
+  });
 
   it.each([
     ['team', 'active', 'team'],

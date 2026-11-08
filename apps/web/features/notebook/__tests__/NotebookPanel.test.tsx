@@ -7,16 +7,24 @@ import { NotebookPanel as Panel, type NotebookPanelProps } from '../NotebookPane
 import type { NotebookApi } from '../services/notebook-api';
 import { createNotebookWorkspace } from '../services/notebook-workspace';
 
-function NotebookPanel({ api, ...props }: Omit<NotebookPanelProps, 'workspace'> & { api: NotebookApi }) {
-  const [workspace] = useState(() => createNotebookWorkspace(
-    () => ({ api, isCurrent: () => true, retire: () => undefined }), () => true,
-  ));
+function NotebookPanel({
+  api,
+  ...props
+}: Omit<NotebookPanelProps, 'workspace'> & { api: NotebookApi }) {
+  const [workspace] = useState(() =>
+    createNotebookWorkspace(
+      () => ({ api, isCurrent: () => true, retire: () => undefined }),
+      () => true,
+    ),
+  );
   return <Panel {...props} workspace={workspace} />;
 }
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => { resolve = done; });
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
   return { promise, resolve };
 }
 
@@ -48,7 +56,7 @@ const session: CloudCodeSession = {
 function createApi(overrides: Partial<NotebookApi> = {}): NotebookApi {
   return {
     execute: vi.fn(async () => ({ session, ok: true, outputs: [] as NotebookCellOutput[] })),
-    runAll: vi.fn(async () => ({
+    runAll: vi.fn<NotebookApi['runAll']>(async () => ({
       session,
       runId: '22222222-2222-4222-8222-222222222222',
       fromTop: true,
@@ -152,25 +160,30 @@ describe('NotebookPanel', () => {
 
     const file = new File(['a,b\n1,2'], 'data.csv', { type: 'text/csv' });
     const input = screen.getByLabelText('Upload file', { selector: 'input' });
+    await waitFor(() => expect(input).toBeEnabled());
     await user.upload(input, file);
 
     await waitFor(() => expect(api.uploadFile).toHaveBeenCalledWith(session.id, file, 'data.csv'));
     const row = await screen.findByText('data.csv');
-    expect(within(row.closest('li')!).getByRole('link', { name: 'Download data.csv' })).toHaveAttribute(
-      'href', `/api/code/sessions/${session.id}/notebook/files/data.csv`,
-    );
+    expect(
+      within(row.closest('li')!).getByRole('link', { name: 'Download data.csv' }),
+    ).toHaveAttribute('href', `/api/code/sessions/${session.id}/notebook/files/data.csv`);
   });
 
   it('runs every code cell in one recorded run and reports what it covered', async () => {
     const user = userEvent.setup();
     const api = createApi({
-      runAll: vi.fn(async (_sessionId, input) => ({
+      runAll: vi.fn<NotebookApi['runAll']>(async (_sessionId, input) => ({
         session,
         runId: '22222222-2222-4222-8222-222222222222',
         fromTop: true,
         networkAccess: 'none' as const,
         completed: true,
-        results: input.cells.map((cell) => ({ cellId: cell.id, ok: true, outputs: [] as NotebookCellOutput[] })),
+        results: input.cells.map((cell) => ({
+          cellId: cell.id,
+          ok: true,
+          outputs: [] as NotebookCellOutput[],
+        })),
       })),
     });
 
@@ -225,13 +238,32 @@ describe('NotebookPanel', () => {
       listFiles: vi.fn(async (id) => ({ session: { ...session, id }, files: [] })),
     });
     const onSession = vi.fn();
-    const workspace = createNotebookWorkspace(() => ({ api, isCurrent: () => true, retire: () => undefined }), () => true);
+    const workspace = createNotebookWorkspace(
+      () => ({ api, isCurrent: () => true, retire: () => undefined }),
+      () => true,
+    );
     const otherId = '33333333-3333-4333-8333-333333333333';
-    const { rerender } = render(<Panel sessionId={session.id} sessionReady workspace={workspace} onSession={onSession} selectionRevision={1} />);
+    const { rerender } = render(
+      <Panel
+        sessionId={session.id}
+        sessionReady
+        workspace={workspace}
+        onSession={onSession}
+        selectionRevision={1}
+      />,
+    );
     await user.type(screen.getByLabelText('Cell 1 code'), 'input A');
     await waitFor(() => expect(screen.getByRole('button', { name: 'Run cell 1' })).toBeEnabled());
     await user.click(screen.getByRole('button', { name: 'Run cell 1' }));
-    rerender(<Panel sessionId={otherId} sessionReady workspace={workspace} onSession={onSession} selectionRevision={2} />);
+    rerender(
+      <Panel
+        sessionId={otherId}
+        sessionReady
+        workspace={workspace}
+        onSession={onSession}
+        selectionRevision={2}
+      />,
+    );
     expect(screen.getByLabelText('Cell 1 code')).toHaveValue('');
     await user.type(screen.getByLabelText('Cell 1 code'), 'input B');
     await act(async () => {
@@ -241,7 +273,15 @@ describe('NotebookPanel', () => {
     expect(screen.queryByText('output A')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Cell 1 code')).toHaveValue('input B');
     expect(onSession).not.toHaveBeenCalled();
-    rerender(<Panel sessionId={session.id} sessionReady workspace={workspace} onSession={onSession} selectionRevision={3} />);
+    rerender(
+      <Panel
+        sessionId={session.id}
+        sessionReady
+        workspace={workspace}
+        onSession={onSession}
+        selectionRevision={3}
+      />,
+    );
     expect(screen.getByLabelText('Cell 1 code')).toHaveValue('input A');
     expect(screen.getByText('output A')).toBeInTheDocument();
   });
@@ -250,7 +290,10 @@ describe('NotebookPanel', () => {
     const user = userEvent.setup();
     const run = deferred<Awaited<ReturnType<NotebookApi['execute']>>>();
     const api = createApi({ execute: vi.fn(() => run.promise) });
-    const workspace = createNotebookWorkspace(() => ({ api, isCurrent: () => true, retire: () => undefined }), () => true);
+    const workspace = createNotebookWorkspace(
+      () => ({ api, isCurrent: () => true, retire: () => undefined }),
+      () => true,
+    );
     const props = { sessionId: session.id, sessionReady: true, workspace, onSession: vi.fn() };
     const { rerender } = render(<Panel {...props} />);
     await user.type(screen.getByLabelText('Cell 1 code'), 'original input');
@@ -271,7 +314,11 @@ describe('NotebookPanel', () => {
 
   it('renders uncertain single-cell execution errors and keeps the submitted input', async () => {
     const user = userEvent.setup();
-    const api = createApi({ execute: vi.fn(async () => { throw new Error('connection lost'); }) });
+    const api = createApi({
+      execute: vi.fn(async () => {
+        throw new Error('connection lost');
+      }),
+    });
     render(<NotebookPanel sessionId={session.id} sessionReady api={api} onSession={vi.fn()} />);
     await user.type(screen.getByLabelText('Cell 1 code'), 'expensive_work()');
     await user.click(screen.getByRole('button', { name: 'Run cell 1' }));
@@ -282,34 +329,54 @@ describe('NotebookPanel', () => {
 
   it('rechecks selection inside the deferred advance-focus callback', async () => {
     const user = userEvent.setup();
-    const api = createApi({ listFiles: vi.fn(async (id) => ({ session: { ...session, id }, files: [] })) });
-    const workspace = createNotebookWorkspace(() => ({ api, isCurrent: () => true, retire: () => undefined }), () => true);
+    const api = createApi({
+      listFiles: vi.fn(async (id) => ({ session: { ...session, id }, files: [] })),
+    });
+    const workspace = createNotebookWorkspace(
+      () => ({ api, isCurrent: () => true, retire: () => undefined }),
+      () => true,
+    );
     const props = { sessionReady: true, workspace, onSession: vi.fn() };
     const { rerender } = render(<Panel {...props} sessionId={session.id} selectionRevision={1} />);
     await user.type(screen.getByLabelText('Cell 1 code'), '1 + 1');
     await waitFor(() => expect(screen.getByRole('button', { name: 'Run cell 1' })).toBeEnabled());
     const frames: FrameRequestCallback[] = [];
-    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => { frames.push(callback); return frames.length; });
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      frames.push(callback);
+      return frames.length;
+    });
     await user.keyboard('{Shift>}{Enter}{/Shift}');
     await waitFor(() => expect(frames.length).toBeGreaterThan(0));
-    rerender(<Panel {...props} sessionId="33333333-3333-4333-8333-333333333333" selectionRevision={2} />);
+    rerender(
+      <Panel {...props} sessionId="33333333-3333-4333-8333-333333333333" selectionRevision={2} />,
+    );
     const focus = vi.spyOn(HTMLTextAreaElement.prototype, 'focus');
-    act(() => { frames.forEach((callback) => callback(0)); });
+    act(() => {
+      frames.forEach((callback) => callback(0));
+    });
     expect(focus).not.toHaveBeenCalled();
   });
 
   it('offers an explicit refresh after an interrupted initial listing without retrying automatically', async () => {
     const user = userEvent.setup();
     const initial = deferred<Awaited<ReturnType<NotebookApi['listFiles']>>>();
-    const api = createApi({ listFiles: vi.fn()
-      .mockImplementationOnce(() => initial.promise)
-      .mockResolvedValue({ session, files: [{ path: 'fresh.txt', name: 'fresh.txt', byteSize: 1, isDir: false }] }),
+    const api = createApi({
+      listFiles: vi
+        .fn()
+        .mockImplementationOnce(() => initial.promise)
+        .mockResolvedValue({
+          session,
+          files: [{ path: 'fresh.txt', name: 'fresh.txt', byteSize: 1, isDir: false }],
+        }),
     });
     let generation = 1;
-    const workspace = createNotebookWorkspace(() => {
-      const captured = generation;
-      return { api, isCurrent: () => captured === generation, retire: () => undefined };
-    }, () => true);
+    const workspace = createNotebookWorkspace(
+      () => {
+        const captured = generation;
+        return { api, isCurrent: () => captured === generation, retire: () => undefined };
+      },
+      () => true,
+    );
     render(<Panel sessionId={session.id} sessionReady workspace={workspace} onSession={vi.fn()} />);
     await waitFor(() => expect(api.listFiles).toHaveBeenCalledTimes(1));
     expect(screen.getByRole('button', { name: 'Refresh files' })).toBeDisabled();

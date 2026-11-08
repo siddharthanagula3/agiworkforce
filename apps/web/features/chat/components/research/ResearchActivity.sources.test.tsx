@@ -188,3 +188,9 @@ describe('choosing what a research run may read', () => {
     ).toEqual(['web', 'web-excluded', 'files']);
   });
 });
+
+type SessionSnapshotModule = typeof import('@/lib/identity/useSessionSnapshot');
+vi.mock('@/lib/identity/useSessionSnapshot', async (original) => ({
+  ...(await original<SessionSnapshotModule>()),
+  useSessionSnapshot: () => () => null,
+}));

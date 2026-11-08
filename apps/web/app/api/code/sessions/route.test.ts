@@ -463,3 +463,14 @@ describe('POST /api/code/sessions, the workspace Code policy', () => {
     expect(response.status).toBe(403);
   });
 });
+
+vi.mock('@/lib/server/neon-db', async () => {
+  const { createDatabaseAdapterFake } = await import('@/test/database-adapter-fake');
+  const privilegedDb = createDatabaseAdapterFake();
+  return {
+    getNeonDb: () => privilegedDb,
+    getStripeWebhookDb: () => {
+      throw new Error('Unexpected Stripe webhook database access');
+    },
+  };
+});

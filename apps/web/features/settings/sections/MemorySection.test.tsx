@@ -2,10 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-import { createCloudMemoryFixture, getCloudMemoryFixtureSession } from '@/features/memory/__tests__/cloud-memory-fixture';
+import {
+  createCloudMemoryFixture,
+  getCloudMemoryFixtureSession,
+} from '@/features/memory/__tests__/CloudMemoryFixture';
 
 vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/identity/useSessionSnapshot')>()),
+  ...(await importOriginal<MockedModule0>()),
   useSessionSnapshot: () => getCloudMemoryFixtureSession,
   useReadonlyIdentityLifetime: () => () => {
     const session = getCloudMemoryFixtureSession();
@@ -14,8 +17,13 @@ vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
 }));
 
 let cloud: ReturnType<typeof createCloudMemoryFixture>;
-beforeEach(() => { cloud = createCloudMemoryFixture(); });
-afterEach(() => { cloud.retire(); vi.unstubAllGlobals(); });
+beforeEach(() => {
+  cloud = createCloudMemoryFixture();
+});
+afterEach(() => {
+  cloud.retire();
+  vi.unstubAllGlobals();
+});
 
 const { mockCapabilities, memoryState, openImport } = vi.hoisted(() => ({
   mockCapabilities: vi.fn(),
@@ -46,11 +54,20 @@ const transport = vi.fn<typeof fetch>();
 function memoryResponse(input: RequestInfo | URL) {
   const path = String(input);
   const rows = Array.from({ length: memoryState.count }, (_, index) => ({
-    id: `cloud-${index}`, content: `Saved fact ${index}`, category: null, source: 'web',
-    createdAt: '2026-10-01', updatedAt: '2026-10-01',
+    id: `cloud-${index}`,
+    content: `Saved fact ${index}`,
+    category: null,
+    source: 'web',
+    createdAt: '2026-10-01',
+    updatedAt: '2026-10-01',
   }));
-  return new Response(JSON.stringify(path.startsWith('/api/memory?') ? { memories: rows, hasMore: false }
-    : { summary: { about: [], preferences: [] }, memoryCount: rows.length, generatedAt: null }));
+  return new Response(
+    JSON.stringify(
+      path.startsWith('/api/memory?')
+        ? { memories: rows, hasMore: false }
+        : { summary: { about: [], preferences: [] }, memoryCount: rows.length, generatedAt: null },
+    ),
+  );
 }
 beforeEach(() => {
   memoryState.count = 0;
@@ -221,7 +238,9 @@ describe('Unexecuted cloud MemorySection controls', () => {
           },
         }),
     );
-    transport.mockImplementation(async (input, init) => String(input) === '/api/memory/export' ? fetchMock(input, init) : memoryResponse(input));
+    transport.mockImplementation(async (input, init) =>
+      String(input) === '/api/memory/export' ? fetchMock(input, init) : memoryResponse(input),
+    );
     const downloads: string[] = [];
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
       this: HTMLAnchorElement,
@@ -230,25 +249,38 @@ describe('Unexecuted cloud MemorySection controls', () => {
     });
     render(<MemorySection />, { wrapper: cloud.wrapper });
 
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Export memories' })).toBeEnabled());
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Export memories' })).toBeEnabled(),
+    );
     await userEvent.click(screen.getByRole('button', { name: 'Export memories' }));
 
     await waitFor(() => expect(downloads).toHaveLength(1));
-    expect(fetchMock).toHaveBeenCalledWith('/api/memory/export', expect.objectContaining({ credentials: 'omit', cache: 'no-store' }));
-    expect(new Headers(fetchMock.mock.calls[0]?.[1]?.headers).get('Authorization')).toMatch(/^Bearer fixture-token-/);
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/memory/export',
+      expect.objectContaining({ credentials: 'omit', cache: 'no-store' }),
+    );
+    expect(new Headers(fetchMock.mock.calls[0]?.[1]?.headers).get('Authorization')).toMatch(
+      /^Bearer fixture-token-/,
+    );
     expect(downloads).toEqual(['memories-2026-10-22.json']);
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:memories');
     expect(screen.getByRole('button', { name: 'Export memories' })).toBeEnabled();
   });
 
   it('says the export failed instead of downloading an error page', async () => {
-    transport.mockImplementation(async (input) => String(input) === '/api/memory/export'
-      ? new Response(JSON.stringify({ error: { message: 'Rate limit exceeded' } }), { status: 429 })
-      : memoryResponse(input));
+    transport.mockImplementation(async (input) =>
+      String(input) === '/api/memory/export'
+        ? new Response(JSON.stringify({ error: { message: 'Rate limit exceeded' } }), {
+            status: 429,
+          })
+        : memoryResponse(input),
+    );
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click');
     render(<MemorySection />, { wrapper: cloud.wrapper });
 
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Export memories' })).toBeEnabled());
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Export memories' })).toBeEnabled(),
+    );
     await userEvent.click(screen.getByRole('button', { name: 'Export memories' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Rate limit exceeded');
@@ -308,3 +340,5 @@ const MEMORY_FIELD_LABELS = [
   'Include sensitive topics in memory',
   'Allow memory generation from tool-assisted chats',
 ];
+
+type MockedModule0 = typeof import('@/lib/identity/useSessionSnapshot');

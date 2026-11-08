@@ -171,8 +171,8 @@ impl SchedulesClient {
         limit: u32,
         offset: u32,
     ) -> Result<Vec<EventTrigger>, ScheduleError> {
-        let body: TriggerListBody =
-            Self::send(self.request(reqwest::Method::GET, TRIGGERS_PATH).query(&[
+        let body: TriggerListBody = self
+            .send(self.request(reqwest::Method::GET, TRIGGERS_PATH).query(&[
                 ("taskId", schedule_id.to_string()),
                 ("limit", limit.to_string()),
                 ("offset", offset.to_string()),
@@ -185,7 +185,7 @@ impl SchedulesClient {
         &self,
         request: &TriggerCreateRequest,
     ) -> Result<CreatedTrigger, ScheduleError> {
-        Self::send(
+        self.send(
             self.request(reqwest::Method::POST, TRIGGERS_PATH)
                 .json(request),
         )
@@ -197,11 +197,12 @@ impl SchedulesClient {
         trigger_id: &str,
         enabled: bool,
     ) -> Result<EventTrigger, ScheduleError> {
-        let body: TriggerBody = Self::send(
-            self.request(reqwest::Method::PATCH, &trigger_path(trigger_id))
-                .json(&serde_json::json!({ "isEnabled": enabled })),
-        )
-        .await?;
+        let body: TriggerBody = self
+            .send(
+                self.request(reqwest::Method::PATCH, &trigger_path(trigger_id))
+                    .json(&serde_json::json!({ "isEnabled": enabled })),
+            )
+            .await?;
         Ok(body.trigger)
     }
 
@@ -209,17 +210,19 @@ impl SchedulesClient {
         &self,
         trigger_id: &str,
     ) -> Result<EventTrigger, ScheduleError> {
-        let body: TriggerBody = Self::send(self.request(
-            reqwest::Method::POST,
-            &format!("{}/watch", trigger_path(trigger_id)),
-        ))
-        .await?;
+        let body: TriggerBody = self
+            .send(self.request(
+                reqwest::Method::POST,
+                &format!("{}/watch", trigger_path(trigger_id)),
+            ))
+            .await?;
         Ok(body.trigger)
     }
 
     pub async fn delete_trigger(&self, trigger_id: &str) -> Result<(), ScheduleError> {
-        let _: serde_json::Value =
-            Self::send(self.request(reqwest::Method::DELETE, &trigger_path(trigger_id))).await?;
+        let _: serde_json::Value = self
+            .send(self.request(reqwest::Method::DELETE, &trigger_path(trigger_id)))
+            .await?;
         Ok(())
     }
 

@@ -27,13 +27,20 @@ const fixture = vi.hoisted(() => {
       session,
       addListener: (listener: () => void) => {
         listeners.add(listener);
-        return () => { listeners.delete(listener); };
+        return () => {
+          listeners.delete(listener);
+        };
       },
     },
   };
 });
 vi.mock('@clerk/nextjs', () => ({
-  useAuth: () => ({ isLoaded: true, isSignedIn: true, userId: 'account-a', sessionId: 'session-a' }),
+  useAuth: () => ({
+    isLoaded: true,
+    isSignedIn: true,
+    userId: 'account-a',
+    sessionId: 'session-a',
+  }),
   useClerk: () => fixture.sdk,
   useSession: () => ({ session: fixture.providerSession }),
   useSignUp: vi.fn(),
@@ -49,7 +56,9 @@ beforeEach(() => {
 function owned() {
   const snapshot = renderHook(useSessionSnapshot).result.current()!;
   const authority = createRequestAuthority(snapshot);
-  const unsubscribe = snapshot.subscribe?.(() => { authority.isCurrent(); });
+  const unsubscribe = snapshot.subscribe?.(() => {
+    authority.isCurrent();
+  });
   authority.signal.addEventListener('abort', () => unsubscribe?.(), { once: true });
   const result = renderHook(() => useSessionReverification(authority)).result;
   return { authority, result };
@@ -93,7 +102,8 @@ describe('native session bound reverification', () => {
       () => result.current.verifySecondFactor('backup_code', 'fake-code'),
       () => result.current.freshToken(),
     ];
-    for (const action of actions) await expect(action()).rejects.toMatchObject({ name: 'AbortError' });
+    for (const action of actions)
+      await expect(action()).rejects.toMatchObject({ name: 'AbortError' });
     for (const value of Object.values(original)) {
       if (vi.isMockFunction(value)) expect(value).not.toHaveBeenCalled();
     }
@@ -101,7 +111,12 @@ describe('native session bound reverification', () => {
 
   it('rejects verification completion after owner retirement', async () => {
     let finish!: (value: { status: string }) => void;
-    fixture.sdk.session.attemptFirstFactorVerification.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    fixture.sdk.session.attemptFirstFactorVerification.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
     const { authority, result } = owned();
     const operation = result.current.verifyPassword('fake-password');
     authority.retire();
@@ -110,9 +125,13 @@ describe('native session bound reverification', () => {
   });
 });
 
-
 it('fails closed when an authority has no canonical native session binding', async () => {
-  const authority = createRequestAuthority({ userId: 'account-a', sessionId: 'session-a', isCurrent: () => true, getToken: async () => 'fake-token' });
+  const authority = createRequestAuthority({
+    userId: 'account-a',
+    sessionId: 'session-a',
+    isCurrent: () => true,
+    getToken: async () => 'fake-token',
+  });
   const { result } = renderHook(() => useSessionReverification(authority));
   await expect(result.current.verifyPasskey()).rejects.toMatchObject({ name: 'AbortError' });
   expect(fixture.sdk.session.verifyWithPasskey).not.toHaveBeenCalled();

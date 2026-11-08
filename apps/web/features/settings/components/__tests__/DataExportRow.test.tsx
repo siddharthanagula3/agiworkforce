@@ -1,7 +1,19 @@
 import { Children, isValidElement, StrictMode, type MouseEvent, type ReactNode } from 'react';
-import { act, cleanup, createEvent, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  createEvent,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { MANAGED_CLOUD_ORGANIZATION_HEADER, type DataExportArchive } from '@agiworkforce/cloud-contracts';
+import {
+  MANAGED_CLOUD_ORGANIZATION_HEADER,
+  type DataExportArchive,
+} from '@agiworkforce/cloud-contracts';
 import { DataExportRow } from '../DataExportRow';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { observePreferenceOwner } from '@/app/settings/_lib/preferences-client';
@@ -9,13 +21,15 @@ import type { SessionAuthority } from '@/lib/identity/request-authority';
 
 const identity = vi.hoisted(() => ({ session: null as SessionAuthority | null }));
 vi.mock('@/lib/identity/useSessionSnapshot', async (original) => ({
-  ...await original<typeof import('@/lib/identity/useSessionSnapshot')>(),
+  ...(await original<MockedModule0>()),
   useSessionSnapshot: () => () => identity.session,
 }));
 
 function session(userId = 'export-owner', sessionId = 'export-session'): SessionAuthority {
   const owner: SessionAuthority = {
-    userId, sessionId, isCurrent: () => identity.session === owner,
+    userId,
+    sessionId,
+    isCurrent: () => identity.session === owner,
     getToken: vi.fn(async () => `token-${sessionId}`),
   };
   return owner;
@@ -24,7 +38,10 @@ function session(userId = 'export-owner', sessionId = 'export-session'): Session
 function deferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (error: unknown) => void;
-  const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; });
+  const promise = new Promise<T>((yes, no) => {
+    resolve = yes;
+    reject = no;
+  });
   return { promise, resolve, reject };
 }
 
@@ -325,8 +342,11 @@ describe('DataExportRow polling', () => {
     const body = deferred<unknown>();
     const response = json({ archive: null });
     vi.spyOn(response, 'json').mockImplementation(() => body.promise);
-    const fetchMock = vi.fn().mockResolvedValueOnce(json({ archive: archive() }))
-      .mockResolvedValueOnce(response).mockResolvedValue(json({ archive: null }));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(json({ archive: archive() }))
+      .mockResolvedValueOnce(response)
+      .mockResolvedValue(json({ archive: null }));
     vi.stubGlobal('fetch', fetchMock);
     const rendered = render(<DataExportRow />);
     await advance(0);
@@ -352,33 +372,48 @@ describe('DataExportRow request ownership', () => {
     expect(fetchMock).not.toHaveBeenCalled();
     identity.session = session();
     rendered.rerender(<DataExportRow />);
-    expect(await screen.findByRole('link')).toHaveAttribute('href', readyArchive(1).volumes[0]!.downloadPath);
+    expect(await screen.findByRole('link')).toHaveAttribute(
+      'href',
+      readyArchive(1).volumes[0]!.downloadPath,
+    );
     const init = fetchMock.mock.calls[0]![1]!;
     expect(init.credentials).toBe('omit');
     expect(new Headers(init.headers).get('authorization')).toBe('Bearer token-export-session');
     expect(new Headers(init.headers).has(MANAGED_CLOUD_ORGANIZATION_HEADER)).toBe(false);
   });
 
-  it.each([null, readyArchive(1)])('ignores an initial read that finishes after POST acceptance (%j)', async (old) => {
-    const initial = deferred<Response>();
-    const fetchMock = vi.fn(async (path: RequestInfo | URL) => String(path) === ARCHIVES_PATH
-      ? initial.promise : json({ archive: archive({ id: 'new-export' }) }, 202));
-    vi.stubGlobal('fetch', fetchMock);
-    render(<DataExportRow />);
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    fireEvent.click(screen.getByRole('button', { name: 'Export data' }));
-    await screen.findByText(/We're preparing your export/);
-    await act(async () => initial.resolve(json({ archive: old })));
-    expect(screen.queryByRole('link')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Preparing…' })).toBeDisabled();
-  });
+  it.each([null, readyArchive(1)])(
+    'ignores an initial read that finishes after POST acceptance (%j)',
+    async (old) => {
+      const initial = deferred<Response>();
+      const fetchMock = vi.fn(async (path: RequestInfo | URL) =>
+        String(path) === ARCHIVES_PATH
+          ? initial.promise
+          : json({ archive: archive({ id: 'new-export' }) }, 202),
+      );
+      vi.stubGlobal('fetch', fetchMock);
+      render(<DataExportRow />);
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+      fireEvent.click(screen.getByRole('button', { name: 'Export data' }));
+      await screen.findByText(/We're preparing your export/);
+      await act(async () => initial.resolve(json({ archive: old })));
+      expect(screen.queryByRole('link')).toBeNull();
+      expect(screen.getByRole('button', { name: 'Preparing…' })).toBeDisabled();
+    },
+  );
 
   it('ignores initial JSON parsing that completes after POST acceptance', async () => {
     const body = deferred<unknown>();
     const response = json({ archive: null });
     vi.spyOn(response, 'json').mockImplementation(() => body.promise);
-    vi.stubGlobal('fetch', vi.fn(async (path: RequestInfo | URL) => String(path) === ARCHIVES_PATH
-      ? response : json({ archive: archive({ id: 'new-export' }) }, 202)));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (path: RequestInfo | URL) =>
+        String(path) === ARCHIVES_PATH
+          ? response
+          : json({ archive: archive({ id: 'new-export' }) }, 202),
+      ),
+    );
     render(<DataExportRow />);
     await waitFor(() => expect(response.json).toHaveBeenCalled());
     fireEvent.click(screen.getByRole('button', { name: 'Export data' }));
@@ -425,51 +460,65 @@ describe('DataExportRow request ownership', () => {
     const click = createEvent.click(link, { bubbles: true, cancelable: true });
     fireEvent(link, click);
     expect(click.defaultPrevented).toBe(true);
-    const auxiliary = createEvent.auxClick(link, { bubbles: true, cancelable: true, button: 1 });
+    const auxiliary = new MouseEvent('auxclick', { bubbles: true, cancelable: true, button: 1 });
     fireEvent(link, auxiliary);
     expect(auxiliary.defaultPrevented).toBe(true);
-    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => {})));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => new Promise<Response>(() => {})),
+    );
     rendered.rerender(<DataExportRow />);
     expect(screen.queryByRole('link')).toBeNull();
     expect(screen.queryByText('Your export is ready.')).toBeNull();
   });
 
-  it.each(['different-account', 'new-session', 'return-to-account'])('retires old bodies across %s', async (transition) => {
-    const body = deferred<unknown>();
-    const oldResponse = json({ archive: null });
-    vi.spyOn(oldResponse, 'json').mockImplementation(() => body.promise);
-    const fetchMock = vi.fn().mockResolvedValueOnce(oldResponse).mockResolvedValue(json({ archive: null }));
-    vi.stubGlobal('fetch', fetchMock);
-    const original = identity.session!;
-    const rendered = render(<DataExportRow />);
-    await waitFor(() => expect(oldResponse.json).toHaveBeenCalled());
-    identity.session = transition === 'new-session'
-      ? session(original.userId, 'new-session') : session('second-owner', 'second-session');
-    rendered.rerender(<DataExportRow />);
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    if (transition === 'return-to-account') {
-      identity.session = session(original.userId, original.sessionId);
+  it.each(['different-account', 'new-session', 'return-to-account'])(
+    'retires old bodies across %s',
+    async (transition) => {
+      const body = deferred<unknown>();
+      const oldResponse = json({ archive: null });
+      vi.spyOn(oldResponse, 'json').mockImplementation(() => body.promise);
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(oldResponse)
+        .mockResolvedValue(json({ archive: null }));
+      vi.stubGlobal('fetch', fetchMock);
+      const original = identity.session!;
+      const rendered = render(<DataExportRow />);
+      await waitFor(() => expect(oldResponse.json).toHaveBeenCalled());
+      identity.session =
+        transition === 'new-session'
+          ? session(original.userId, 'new-session')
+          : session('second-owner', 'second-session');
       rendered.rerender(<DataExportRow />);
-      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
-    }
-    await act(async () => body.resolve({ archive: readyArchive(1) }));
-    expect(screen.queryByRole('link')).toBeNull();
-  });
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+      if (transition === 'return-to-account') {
+        identity.session = session(original.userId, original.sessionId);
+        rendered.rerender(<DataExportRow />);
+        await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+      }
+      await act(async () => body.resolve({ archive: readyArchive(1) }));
+      expect(screen.queryByRole('link')).toBeNull();
+    },
+  );
 
-  it.each(['close', 'switch'])('does not dispatch after CSRF preparation outlives %s', async (transition) => {
-    const headers = deferred<HeadersInit>();
-    vi.mocked(addCsrfHeaders).mockReturnValue(headers.promise);
-    const fetchMock = installFetch({ reads: [null] });
-    const rendered = render(<DataExportRow />);
-    fireEvent.click(screen.getByRole('button', { name: 'Export data' }));
-    if (transition === 'close') rendered.unmount();
-    else {
-      identity.session = session('second-owner', 'second-session');
-      rendered.rerender(<DataExportRow />);
-    }
-    await act(async () => headers.resolve({ 'x-csrf-token': 'new-token' }));
-    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
-  });
+  it.each(['close', 'switch'])(
+    'does not dispatch after CSRF preparation outlives %s',
+    async (transition) => {
+      const headers = deferred<HeadersInit>();
+      vi.mocked(addCsrfHeaders).mockReturnValue(headers.promise);
+      const fetchMock = installFetch({ reads: [null] });
+      const rendered = render(<DataExportRow />);
+      fireEvent.click(screen.getByRole('button', { name: 'Export data' }));
+      if (transition === 'close') rendered.unmount();
+      else {
+        identity.session = session('second-owner', 'second-session');
+        rendered.rerender(<DataExportRow />);
+      }
+      await act(async () => headers.resolve({ 'x-csrf-token': 'new-token' }));
+      expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
+    },
+  );
 
   it('does not dispatch a POST after its captured session token retires', async () => {
     const token = deferred<string | null>();
@@ -491,13 +540,18 @@ describe('DataExportRow request ownership', () => {
     const fetchMock = installFetch({ reads: [null] });
     const { result } = renderHook(() => DataExportRow());
     const click = hostProps<{ onClick: () => void }>(result.current, 'button')!.onClick;
-    act(() => { click(); click(); });
+    act(() => {
+      click();
+      click();
+    });
     expect(addCsrfHeaders).toHaveBeenCalledTimes(1);
     await act(async () => headers.resolve({ 'x-csrf-token': 'token' }));
     const posts = fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST');
     expect(posts).toHaveLength(1);
     expect(posts[0]![1]?.credentials).toBe('omit');
-    expect(new Headers(posts[0]![1]?.headers).get('authorization')).toBe('Bearer token-export-session');
+    expect(new Headers(posts[0]![1]?.headers).get('authorization')).toBe(
+      'Bearer token-export-session',
+    );
   });
 
   it('permits an explicit retry when header preparation definitely never dispatched', async () => {
@@ -513,35 +567,51 @@ describe('DataExportRow request ownership', () => {
     expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1);
   });
 
-  it.each([null, readyArchive(1)])('keeps uncertainty after reconciliation returns %j and only checks again', async (existing) => {
-    const fetchMock = installFetch({ reads: [existing], post: () => { throw new Error('network interrupted'); } });
-    render(<DataExportRow />);
-    await waitFor(() => expect(archiveReads(fetchMock)).toBe(1));
-    fireEvent.click(screen.getByRole('button', { name: 'Export data' }));
-    await waitFor(() => expect(archiveReads(fetchMock)).toBe(2));
-    expect(screen.getByRole('alert')).toHaveTextContent('confirm whether your export was started');
-    expect(screen.getByRole('button', { name: 'Export data' })).toBeDisabled();
-    fireEvent.click(screen.getByRole('button', { name: 'Check again' }));
-    await waitFor(() => expect(archiveReads(fetchMock)).toBe(3));
-    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1);
-    expect(screen.getByRole('alert')).toHaveTextContent('latest one we could find');
-  });
+  it.each([null, readyArchive(1)])(
+    'keeps uncertainty after reconciliation returns %j and only checks again',
+    async (existing) => {
+      const fetchMock = installFetch({
+        reads: [existing],
+        post: () => {
+          throw new Error('network interrupted');
+        },
+      });
+      render(<DataExportRow />);
+      await waitFor(() => expect(archiveReads(fetchMock)).toBe(1));
+      fireEvent.click(screen.getByRole('button', { name: 'Export data' }));
+      await waitFor(() => expect(archiveReads(fetchMock)).toBe(2));
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'confirm whether your export was started',
+      );
+      expect(screen.getByRole('button', { name: 'Export data' })).toBeDisabled();
+      fireEvent.click(screen.getByRole('button', { name: 'Check again' }));
+      await waitFor(() => expect(archiveReads(fetchMock)).toBe(3));
+      expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1);
+      expect(screen.getByRole('alert')).toHaveTextContent('latest one we could find');
+    },
+  );
 
   it.each([
     [archive({ status: 'failed' }), 'The latest export could not be prepared.'],
     [archive({ status: 'expired' }), 'The download link for the latest export has expired.'],
     [readyArchive(0), 'The latest export finished without any files to download.'],
-  ] as const)('does not promise another POST when uncertainty reads terminal archive %j', async (existing, message) => {
-    const fetchMock = installFetch({ reads: [existing], post: () => json({ error: 'unknown' }, 500) });
-    render(<DataExportRow />);
-    await waitFor(() => expect(archiveReads(fetchMock)).toBe(1));
-    fireEvent.click(screen.getByRole('button', { name: 'Export data' }));
-    await waitFor(() => expect(archiveReads(fetchMock)).toBe(2));
-    expect(screen.getByText(message)).toBeInTheDocument();
-    expect(screen.queryByText(/Request a new export|Try again\./)).toBeNull();
-    expect(screen.getByRole('button', { name: 'Export data' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Check again' })).toBeEnabled();
-  });
+  ] as const)(
+    'does not promise another POST when uncertainty reads terminal archive %j',
+    async (existing, message) => {
+      const fetchMock = installFetch({
+        reads: [existing],
+        post: () => json({ error: 'unknown' }, 500),
+      });
+      render(<DataExportRow />);
+      await waitFor(() => expect(archiveReads(fetchMock)).toBe(1));
+      fireEvent.click(screen.getByRole('button', { name: 'Export data' }));
+      await waitFor(() => expect(archiveReads(fetchMock)).toBe(2));
+      expect(screen.getByText(message)).toBeInTheDocument();
+      expect(screen.queryByText(/Request a new export|Try again\./)).toBeNull();
+      expect(screen.getByRole('button', { name: 'Export data' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Check again' })).toBeEnabled();
+    },
+  );
 
   it('does not let an old POST body or finally affect a reopened view', async () => {
     const body = deferred<unknown>();
@@ -588,10 +658,16 @@ describe('DataExportRow request ownership', () => {
     const firstToken = deferred<string | null>();
     vi.mocked(identity.session!.getToken).mockReturnValueOnce(firstToken.promise);
     const fetchMock = installFetch({ reads: [readyArchive(1)] });
-    render(<StrictMode><DataExportRow /></StrictMode>);
+    render(
+      <StrictMode>
+        <DataExportRow />
+      </StrictMode>,
+    );
     await screen.findByRole('link');
     await act(async () => firstToken.resolve('retired-token'));
     expect(archiveReads(fetchMock)).toBe(1);
     expect(screen.getByRole('link')).toBeInTheDocument();
   });
 });
+
+type MockedModule0 = typeof import('@/lib/identity/useSessionSnapshot');

@@ -1,3 +1,4 @@
+import { CONTEXT_POLICY_SNAPSHOT_KEY } from '@/lib/services/context-policy-snapshot';
 import { contextPolicySnapshotFixture } from '@/lib/services/__tests__/fixtures/context-policy-snapshot';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
@@ -275,20 +276,31 @@ describe('POST /api/llm/v1/chat/completions/approve, durable checkpoint boundary
     { ...contextPolicySnapshotFixture(), version: 2 },
     contextPolicySnapshotFixture('other-user'),
     contextPolicySnapshotFixture('user-1', 'other-org'),
-    { ...contextPolicySnapshotFixture(), policy: { ...contextPolicySnapshotFixture().policy, allowMemory: false } },
-  ])('releases the claim before processing an invalid or changed policy snapshot: %j', async (snapshot) => {
-    const original = claimedCheckpoint;
-    checkpointMocks.claim.mockResolvedValue({
-      ...original,
-      checkpoint: { ...original.checkpoint, request: { ...original.checkpoint.request, x_context_policy_snapshot: snapshot } },
-    });
-    const response = await POST(makeRequest(resumeBody()));
-    expect(response.status).toBe(409);
-    expect(await response.json()).toMatchObject({ error: { code: 'context_policy_restart_required' } });
-    expect(checkpointMocks.release).toHaveBeenCalledOnce();
-    expect(mockProcessRequest).not.toHaveBeenCalled();
-    expect(workflowMocks.start).not.toHaveBeenCalled();
-  });
+    {
+      ...contextPolicySnapshotFixture(),
+      policy: { ...contextPolicySnapshotFixture().policy, allowMemory: false },
+    },
+  ])(
+    'releases the claim before processing an invalid or changed policy snapshot: %j',
+    async (snapshot) => {
+      const original = claimedCheckpoint;
+      checkpointMocks.claim.mockResolvedValue({
+        ...original,
+        checkpoint: {
+          ...original.checkpoint,
+          request: { ...original.checkpoint.request, x_context_policy_snapshot: snapshot },
+        },
+      });
+      const response = await POST(makeRequest(resumeBody()));
+      expect(response.status).toBe(409);
+      expect(await response.json()).toMatchObject({
+        error: { code: 'context_policy_restart_required' },
+      });
+      expect(checkpointMocks.release).toHaveBeenCalledOnce();
+      expect(mockProcessRequest).not.toHaveBeenCalled();
+      expect(workflowMocks.start).not.toHaveBeenCalled();
+    },
+  );
 
   it('releases the checkpoint when the current processor refuses a resumed Google-data model route', async () => {
     const refusal = NextResponse.json(
@@ -475,6 +487,7 @@ describe('POST /api/llm/v1/chat/completions/approve, durable checkpoint boundary
       checkpoint: {
         ...claimedCheckpoint.checkpoint,
         request: {
+          [CONTEXT_POLICY_SNAPSHOT_KEY]: contextPolicySnapshotFixture(),
           conversation_id: CONVERSATION_ID,
           model: 'claude-test',
           stream: true,

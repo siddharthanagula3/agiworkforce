@@ -98,7 +98,11 @@ function settleCapture(attempt: CaptureAttempt, error?: VoiceCaptureError): void
   if (attempt.stopTimer !== null) clearTimeout(attempt.stopTimer);
   attempt.removeAbort();
   for (const listener of attempt.listeners) {
-    try { listener.remove(); } catch {}
+    try {
+      listener.remove();
+    } catch {
+      console.warn('Speech recognition listener cleanup failed.');
+    }
   }
   attempt.listeners = [];
   if (error) attempt.reject(error);
@@ -111,12 +115,15 @@ function cancelAttempt(attempt: CaptureAttempt): void {
   if (shouldAbort) {
     try {
       ExpoSpeechRecognitionModule.abort();
-    } catch {}
+    } catch {
+      console.warn('Speech recognition cancellation failed.');
+    }
   }
 }
 
 function createCapture(signal?: AbortSignal): CaptureAttempt {
-  if (activeCapture) throw new VoiceCaptureError('already-active', 'Voice capture already in progress');
+  if (activeCapture)
+    throw new VoiceCaptureError('already-active', 'Voice capture already in progress');
   let resolve!: CaptureAttempt['resolve'];
   let reject!: CaptureAttempt['reject'];
   const result = new Promise<OnDeviceTranscriptResult>((accept, refuse) => {
@@ -125,9 +132,18 @@ function createCapture(signal?: AbortSignal): CaptureAttempt {
   });
   void result.catch(() => undefined);
   const attempt: CaptureAttempt = {
-    result, resolve, reject, listeners: [], startedAt: 0, started: false,
-    settled: false, partial: '', confidence: -1, durationTimer: null,
-    stopTimer: null, removeAbort: () => undefined,
+    result,
+    resolve,
+    reject,
+    listeners: [],
+    startedAt: 0,
+    started: false,
+    settled: false,
+    partial: '',
+    confidence: -1,
+    durationTimer: null,
+    stopTimer: null,
+    removeAbort: () => undefined,
   };
   activeCapture = attempt;
   if (signal) {
@@ -152,14 +168,26 @@ function stopAttempt(attempt: CaptureAttempt, maximumDuration = false): void {
   attempt.stopTimer = setTimeout(() => {
     attempt.stopTimer = null;
     if (!ownsCapture(attempt)) return;
-    settleCapture(attempt, maximumDuration && !attempt.partial.trim()
-      ? new VoiceCaptureError('max-duration-reached', 'Listening stopped after a minute. Tap the microphone to start again.')
-      : undefined);
-    try { ExpoSpeechRecognitionModule.abort(); } catch {}
+    settleCapture(
+      attempt,
+      maximumDuration && !attempt.partial.trim()
+        ? new VoiceCaptureError(
+            'max-duration-reached',
+            'Listening stopped after a minute. Tap the microphone to start again.',
+          )
+        : undefined,
+    );
+    try {
+      ExpoSpeechRecognitionModule.abort();
+    } catch {
+      console.warn('Speech recognition timeout cleanup failed.');
+    }
   }, STOP_GRACE_MS);
   try {
     ExpoSpeechRecognitionModule.stop();
-  } catch {}
+  } catch {
+    console.warn('Speech recognition stop failed.');
+  }
 }
 
 export function getPlatformSTTBackend(): 'ios-speech' | 'android-speech-recognizer' | 'expo-av' {
@@ -247,45 +275,61 @@ function listenToCapture(
   onMetering?: MeteringCallback,
   onPartial?: PartialCallback,
 ): void {
-  attempt.listeners.push(ExpoSpeechRecognitionModule.addListener('result', (event) => {
-    if (!ownsCapture(attempt)) return;
-    const top = event.results?.[0];
-    if (!top) return;
-    attempt.partial = top.transcript;
-    attempt.confidence = top.confidence ?? -1;
-    onPartial?.({ text: top.transcript, isFinal: event.isFinal });
-    if (event.isFinal && ownsCapture(attempt)) settleCapture(attempt);
-  }));
-  attempt.listeners.push(ExpoSpeechRecognitionModule.addListener('end', () => {
-    if (ownsCapture(attempt)) settleCapture(attempt);
-  }));
-  attempt.listeners.push(ExpoSpeechRecognitionModule.addListener('error', (event) => {
-    if (!ownsCapture(attempt)) return;
-    const codes: Record<string, VoiceCaptureErrorCode> = {
-      'not-allowed': 'mic-permission-denied',
-      'service-not-allowed': 'on-device-recognition-unavailable',
-      'language-not-supported': 'on-device-recognition-unavailable',
-      aborted: 'aborted',
-    };
-    settleCapture(attempt, new VoiceCaptureError(
-      codes[event.error] ?? 'recognition-error', event.message || event.error, event.error,
-    ));
-  }));
-  if (onMetering) {
-    attempt.listeners.push(ExpoSpeechRecognitionModule.addListener('volumechange', (event) => {
+  attempt.listeners.push(
+    ExpoSpeechRecognitionModule.addListener('result', (event) => {
       if (!ownsCapture(attempt)) return;
-      onMetering({
-        metering: Math.max(-160, Math.min(0, event.value * 16 - 160)),
-        durationMillis: Date.now() - attempt.startedAt,
-      });
-    }));
+      const top = event.results?.[0];
+      if (!top) return;
+      attempt.partial = top.transcript;
+      attempt.confidence = top.confidence ?? -1;
+      onPartial?.({ text: top.transcript, isFinal: event.isFinal });
+      if (event.isFinal && ownsCapture(attempt)) settleCapture(attempt);
+    }),
+  );
+  attempt.listeners.push(
+    ExpoSpeechRecognitionModule.addListener('end', () => {
+      if (ownsCapture(attempt)) settleCapture(attempt);
+    }),
+  );
+  attempt.listeners.push(
+    ExpoSpeechRecognitionModule.addListener('error', (event) => {
+      if (!ownsCapture(attempt)) return;
+      const codes: Record<string, VoiceCaptureErrorCode> = {
+        'not-allowed': 'mic-permission-denied',
+        'service-not-allowed': 'on-device-recognition-unavailable',
+        'language-not-supported': 'on-device-recognition-unavailable',
+        aborted: 'aborted',
+      };
+      settleCapture(
+        attempt,
+        new VoiceCaptureError(
+          codes[event.error] ?? 'recognition-error',
+          event.message || event.error,
+          event.error,
+        ),
+      );
+    }),
+  );
+  if (onMetering) {
+    attempt.listeners.push(
+      ExpoSpeechRecognitionModule.addListener('volumechange', (event) => {
+        if (!ownsCapture(attempt)) return;
+        onMetering({
+          metering: Math.max(-160, Math.min(0, event.value * 16 - 160)),
+          durationMillis: Date.now() - attempt.startedAt,
+        });
+      }),
+    );
   }
 }
 
 function captureError(error: unknown): VoiceCaptureError {
-  return error instanceof VoiceCaptureError ? error : new VoiceCaptureError(
-    'recognition-error', error instanceof Error ? error.message : 'Failed to start recognizer',
-  );
+  return error instanceof VoiceCaptureError
+    ? error
+    : new VoiceCaptureError(
+        'recognition-error',
+        error instanceof Error ? error.message : 'Failed to start recognizer',
+      );
 }
 
 export async function startCaptureSession(
@@ -298,7 +342,8 @@ export async function startCaptureSession(
     assertCapture(attempt);
     const granted = await requestMicPermission();
     assertCapture(attempt);
-    if (!granted) throw new VoiceCaptureError('mic-permission-denied', 'Microphone permission denied');
+    if (!granted)
+      throw new VoiceCaptureError('mic-permission-denied', 'Microphone permission denied');
     const lang = resolveRecognitionLocale(options?.lang);
     await assertOnDeviceRecognition(lang);
     assertCapture(attempt);
@@ -323,7 +368,11 @@ export async function startCaptureSession(
     const shouldAbort = ownsCapture(attempt) && attempt.started;
     settleCapture(attempt, failure);
     if (shouldAbort) {
-      try { ExpoSpeechRecognitionModule.abort(); } catch {}
+      try {
+        ExpoSpeechRecognitionModule.abort();
+      } catch {
+        console.warn('Speech recognition failure cleanup failed.');
+      }
     }
     throw failure;
   }
@@ -370,7 +419,11 @@ export async function transcribeAudioFile(
     const shouldAbort = ownsCapture(attempt) && attempt.started;
     settleCapture(attempt, failure);
     if (shouldAbort) {
-      try { ExpoSpeechRecognitionModule.abort(); } catch {}
+      try {
+        ExpoSpeechRecognitionModule.abort();
+      } catch {
+        console.warn('Speech recognition file cleanup failed.');
+      }
     }
     throw failure;
   }

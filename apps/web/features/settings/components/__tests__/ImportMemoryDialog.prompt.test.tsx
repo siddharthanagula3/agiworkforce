@@ -1,10 +1,13 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createCloudMemoryFixture, getCloudMemoryFixtureSession } from '@/features/memory/__tests__/cloud-memory-fixture';
+import {
+  createCloudMemoryFixture,
+  getCloudMemoryFixtureSession,
+} from '@/features/memory/__tests__/CloudMemoryFixture';
 
 vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/identity/useSessionSnapshot')>()),
+  ...(await importOriginal<MockedModule0>()),
   useSessionSnapshot: () => getCloudMemoryFixtureSession,
   useReadonlyIdentityLifetime: () => () => {
     const session = getCloudMemoryFixtureSession();
@@ -13,8 +16,13 @@ vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
 }));
 
 let cloud: ReturnType<typeof createCloudMemoryFixture>;
-beforeEach(() => { cloud = createCloudMemoryFixture(); });
-afterEach(() => { cloud.retire(); vi.unstubAllGlobals(); });
+beforeEach(() => {
+  cloud = createCloudMemoryFixture();
+});
+afterEach(() => {
+  cloud.retire();
+  vi.unstubAllGlobals();
+});
 
 const clipboard = vi.hoisted(() => ({ writeText: vi.fn<(text: string) => Promise<boolean>>() }));
 
@@ -29,7 +37,10 @@ type BrowserUtilsModule = typeof import('@shared/utils/browser-utils');
 
 beforeEach(() => {
   clipboard.writeText.mockReset();
-  vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockRejectedValue(new Error('Prompt must not request memory data')));
+  vi.stubGlobal(
+    'fetch',
+    vi.fn<typeof fetch>().mockRejectedValue(new Error('Prompt must not request memory data')),
+  );
 });
 
 describe('Unexecuted cloud ImportMemoryDialog prompt', () => {
@@ -76,3 +87,5 @@ describe('Unexecuted cloud ImportMemoryDialog prompt', () => {
     expect(screen.getByRole('button', { name: 'Copy prompt' })).toBeVisible();
   });
 });
+
+type MockedModule0 = typeof import('@/lib/identity/useSessionSnapshot');

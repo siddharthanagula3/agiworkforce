@@ -29,7 +29,12 @@ vi.mock('../../services/sites-service', async (importOriginal) => ({
 }));
 
 const { SitesPage } = await import('../SitesPage');
-const { usePublishedSite, usePublishedSitesStore, beginPublicationCleanup, capturePublicationLease } = await import('../../stores/published-sites-store');
+const {
+  usePublishedSite,
+  usePublishedSitesStore,
+  beginPublicationCleanup,
+  capturePublicationLease,
+} = await import('../../stores/published-sites-store');
 
 function site(overrides: Partial<PublishedSite> = {}): PublishedSite {
   return {
@@ -72,7 +77,8 @@ function PublicationProbe() {
 afterEach(async () => {
   cleanup();
   beginPublicationCleanup()();
-  for (const pending of pendingLists) pending.resolve({ sites: [], workspace: null, nextCursor: null });
+  for (const pending of pendingLists)
+    pending.resolve({ sites: [], workspace: null, nextCursor: null });
   await act(async () => {
     await Promise.allSettled(pendingLists.map((pending) => pending.promise));
   });
@@ -104,7 +110,8 @@ describe('SitesPage', () => {
           title: 'Pricing page',
         }),
       ],
-      workspace: null, nextCursor: null,
+      workspace: null,
+      nextCursor: null,
     });
 
     render(<SitesPage />);
@@ -125,7 +132,11 @@ describe('SitesPage', () => {
   });
 
   it('explains how a site is made when the account has none', async () => {
-    mocks.listPublishedSitesPage.mockResolvedValue({ sites: [], workspace: null, nextCursor: null });
+    mocks.listPublishedSitesPage.mockResolvedValue({
+      sites: [],
+      workspace: null,
+      nextCursor: null,
+    });
 
     render(<SitesPage />);
 
@@ -151,7 +162,8 @@ describe('SitesPage', () => {
           shareUrl: 'https://agiworkforce.com/shared-artifact/bbbbbbbbbbbbbbbbbbbbbbbb',
         }),
       ],
-      workspace: { memberCount: 4 }, nextCursor: null,
+      workspace: { memberCount: 4 },
+      nextCursor: null,
     });
 
     render(<SitesPage />);
@@ -187,7 +199,11 @@ describe('SitesPage', () => {
   });
 
   it('renders thumbnails that cannot take focus or pointer input', async () => {
-    mocks.listPublishedSitesPage.mockResolvedValue({ sites: [site()], workspace: null, nextCursor: null });
+    mocks.listPublishedSitesPage.mockResolvedValue({
+      sites: [site()],
+      workspace: null,
+      nextCursor: null,
+    });
 
     render(<SitesPage />);
 
@@ -206,7 +222,11 @@ describe('SitesPage', () => {
   it('copies the site link', async () => {
     const writeText = vi.fn(async () => undefined);
     Object.assign(navigator, { clipboard: { writeText } });
-    mocks.listPublishedSitesPage.mockResolvedValue({ sites: [site()], workspace: null, nextCursor: null });
+    mocks.listPublishedSitesPage.mockResolvedValue({
+      sites: [site()],
+      workspace: null,
+      nextCursor: null,
+    });
 
     render(<SitesPage />);
 
@@ -216,11 +236,19 @@ describe('SitesPage', () => {
   });
 
   it('asks before unpublishing and names what is lost', async () => {
-    mocks.listPublishedSitesPage.mockResolvedValue({ sites: [site()], workspace: null, nextCursor: null });
-    usePublishedSitesStore.getState().record('artifact-1', {
-      shareUrl: site().shareUrl,
-      visibility: 'public',
-    }, capturePublicationLease()!);
+    mocks.listPublishedSitesPage.mockResolvedValue({
+      sites: [site()],
+      workspace: null,
+      nextCursor: null,
+    });
+    usePublishedSitesStore.getState().record(
+      'artifact-1',
+      {
+        shareUrl: site().shareUrl,
+        visibility: 'public',
+      },
+      capturePublicationLease()!,
+    );
 
     render(<SitesPage />);
 
@@ -288,7 +316,11 @@ describe('SitesPage', () => {
   });
 
   it('keeps the site listed when the unpublish is cancelled', async () => {
-    mocks.listPublishedSitesPage.mockResolvedValue({ sites: [site()], workspace: null, nextCursor: null });
+    mocks.listPublishedSitesPage.mockResolvedValue({
+      sites: [site()],
+      workspace: null,
+      nextCursor: null,
+    });
 
     render(<SitesPage />);
 
@@ -307,7 +339,11 @@ describe('SitesPage', () => {
   });
 
   it('renames a site from the menu', async () => {
-    mocks.listPublishedSitesPage.mockResolvedValue({ sites: [site()], workspace: null, nextCursor: null });
+    mocks.listPublishedSitesPage.mockResolvedValue({
+      sites: [site()],
+      workspace: null,
+      nextCursor: null,
+    });
     mocks.updatePublishedSite.mockResolvedValue({
       token: site().token,
       shareUrl: site().shareUrl,
@@ -338,7 +374,11 @@ describe('SitesPage', () => {
 
   it('offers a retry when the list cannot be loaded', async () => {
     mocks.listPublishedSitesPage.mockRejectedValueOnce(new Error('Server unavailable'));
-    mocks.listPublishedSitesPage.mockResolvedValueOnce({ sites: [], workspace: null, nextCursor: null });
+    mocks.listPublishedSitesPage.mockResolvedValueOnce({
+      sites: [],
+      workspace: null,
+      nextCursor: null,
+    });
 
     render(<SitesPage />);
 
@@ -347,7 +387,6 @@ describe('SitesPage', () => {
     expect(await screen.findByTestId('sites-empty')).toBeInTheDocument();
   });
 });
-
 
 describe('SitesPage bounded read ownership (source fixtures; router transitions modeled)', () => {
   it.each(['success', 'error'] as const)(
@@ -384,7 +423,8 @@ describe('SitesPage bounded read ownership (source fixtures; router transitions 
       expect(usePublishedSitesStore.getState().byArtifactId['artifact-1']).toBeUndefined();
 
       await act(async () => {
-        if (outcome === 'success') refresh.resolve({ sites: [site()], workspace: null, nextCursor: null });
+        if (outcome === 'success')
+          refresh.resolve({ sites: [site()], workspace: null, nextCursor: null });
         else refresh.reject(new Error('Retired refresh failed'));
         await Promise.allSettled([refresh.promise]);
       });
@@ -424,16 +464,22 @@ describe('SitesPage bounded read ownership (source fixtures; router transitions 
     const dialog = await screen.findByRole('dialog', { name: 'Sharing' });
     fireEvent.click(within(dialog).getByRole('radio', { name: /Your workspace/ }));
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
-    await waitFor(() => expect(mocks.updatePublishedSite).toHaveBeenCalledWith(site().token, {
-      visibility: 'organization',
-    }));
+    await waitFor(() =>
+      expect(mocks.updatePublishedSite).toHaveBeenCalledWith(site().token, {
+        visibility: 'organization',
+      }),
+    );
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    expect(usePublishedSitesStore.getState().byArtifactId['artifact-1']?.visibility).toBe('organization');
+    expect(usePublishedSitesStore.getState().byArtifactId['artifact-1']?.visibility).toBe(
+      'organization',
+    );
     await act(async () => {
       refresh.resolve({ sites: [site()], workspace: null, nextCursor: null });
       await refresh.promise;
     });
-    expect(usePublishedSitesStore.getState().byArtifactId['artifact-1']?.visibility).toBe('organization');
+    expect(usePublishedSitesStore.getState().byArtifactId['artifact-1']?.visibility).toBe(
+      'organization',
+    );
     expect(screen.getByTestId('site-visibility')).toHaveTextContent('Organization');
   });
 
@@ -447,13 +493,18 @@ describe('SitesPage bounded read ownership (source fixtures; router transitions 
       expect(signal).toBeInstanceOf(AbortSignal);
       view.unmount();
       expect(signal.aborted).toBe(true);
-      usePublishedSitesStore.getState().hydrate([site({ visibility: 'invited' })], capturePublicationLease()!);
+      usePublishedSitesStore
+        .getState()
+        .hydrate([site({ visibility: 'invited' })], capturePublicationLease()!);
       await act(async () => {
-        if (outcome === 'success') initial.resolve({ sites: [site()], workspace: null, nextCursor: null });
+        if (outcome === 'success')
+          initial.resolve({ sites: [site()], workspace: null, nextCursor: null });
         else initial.reject(new Error('Retired initial read failed'));
         await Promise.allSettled([initial.promise]);
       });
-      expect(usePublishedSitesStore.getState().byArtifactId['artifact-1']?.visibility).toBe('invited');
+      expect(usePublishedSitesStore.getState().byArtifactId['artifact-1']?.visibility).toBe(
+        'invited',
+      );
       expect(usePublishedSitesStore.getState().status).toBe('ready');
     },
   );
@@ -496,7 +547,8 @@ describe('SitesPage bounded read ownership (source fixtures; router transitions 
       expect(signal.aborted).toBe(true);
       usePublishedSitesStore.getState().hydrate([], capturePublicationLease()!);
       await act(async () => {
-        if (outcome === 'success') retry.resolve({ sites: [site()], workspace: null, nextCursor: null });
+        if (outcome === 'success')
+          retry.resolve({ sites: [site()], workspace: null, nextCursor: null });
         else retry.reject(new Error('Retired retry failed'));
         await Promise.allSettled([retry.promise]);
       });
@@ -513,7 +565,11 @@ describe('SitesPage bounded read ownership (source fixtures; router transitions 
       mocks.listPublishedSitesPage
         .mockReturnValueOnce(retired.promise)
         .mockReturnValueOnce(current.promise);
-      render(<StrictMode><SitesPage /></StrictMode>);
+      render(
+        <StrictMode>
+          <SitesPage />
+        </StrictMode>,
+      );
       expect(mocks.listPublishedSitesPage).toHaveBeenCalledTimes(2);
       const firstSignal = mocks.listPublishedSitesPage.mock.calls[0]?.[1] as AbortSignal;
       const secondSignal = mocks.listPublishedSitesPage.mock.calls[1]?.[1] as AbortSignal;
@@ -521,15 +577,22 @@ describe('SitesPage bounded read ownership (source fixtures; router transitions 
       expect(secondSignal.aborted).toBe(false);
       expect(secondSignal).not.toBe(firstSignal);
       await act(async () => {
-        current.resolve({ sites: [site({ visibility: 'invited' })], workspace: null, nextCursor: null });
+        current.resolve({
+          sites: [site({ visibility: 'invited' })],
+          workspace: null,
+          nextCursor: null,
+        });
         await current.promise;
       });
       await act(async () => {
-        if (outcome === 'success') retired.resolve({ sites: [site()], workspace: null, nextCursor: null });
+        if (outcome === 'success')
+          retired.resolve({ sites: [site()], workspace: null, nextCursor: null });
         else retired.reject(new Error('Retired StrictMode setup failed'));
         await Promise.allSettled([retired.promise]);
       });
-      expect(usePublishedSitesStore.getState().byArtifactId['artifact-1']?.visibility).toBe('invited');
+      expect(usePublishedSitesStore.getState().byArtifactId['artifact-1']?.visibility).toBe(
+        'invited',
+      );
       expect(screen.getByTestId('site-visibility')).toHaveTextContent('Invited');
       expect(screen.queryByRole('alert')).toBeNull();
     },
@@ -563,7 +626,9 @@ describe('SitesPage bounded read ownership (source fixtures; router transitions 
       retireOnRecord = false;
       // Replacing the selected record function models synchronous subscriber retirement.
       flushSync(() => {
-        usePublishedSitesStore.setState({ record: (artifactId, details, lease) => originalRecord(artifactId, details, lease) });
+        usePublishedSitesStore.setState({
+          record: (artifactId, details, lease) => originalRecord(artifactId, details, lease),
+        });
       });
     });
     try {
@@ -578,11 +643,17 @@ describe('SitesPage bounded read ownership (source fixtures; router transitions 
       const replacementSignal = mocks.listPublishedSitesPage.mock.calls[1]?.[1] as AbortSignal;
       expect(replacementSignal.aborted).toBe(false);
       await act(async () => {
-        replacement.resolve({ sites: [site({ visibility: 'invited' })], workspace: null, nextCursor: null });
+        replacement.resolve({
+          sites: [site({ visibility: 'invited' })],
+          workspace: null,
+          nextCursor: null,
+        });
         await replacement.promise;
       });
       expect(screen.getByTestId('site-visibility')).toHaveTextContent('Invited');
-      expect(usePublishedSitesStore.getState().byArtifactId['artifact-1']?.visibility).toBe('invited');
+      expect(usePublishedSitesStore.getState().byArtifactId['artifact-1']?.visibility).toBe(
+        'invited',
+      );
     } finally {
       unsubscribe();
       cleanup();
@@ -593,7 +664,12 @@ describe('SitesPage bounded read ownership (source fixtures; router transitions 
 
 describe('SitesPage bounded page navigation (UNRUN source fixtures)', () => {
   it('replaces one page at a time, keeps unrelated cache entries, and scopes search to the page', async () => {
-    const older = site({ token: 'b'.repeat(24), artifactId: 'artifact-2', title: 'Older page', shareUrl: `https://agiworkforce.com/shared-artifact/${'b'.repeat(24)}` });
+    const older = site({
+      token: 'b'.repeat(24),
+      artifactId: 'artifact-2',
+      title: 'Older page',
+      shareUrl: `https://agiworkforce.com/shared-artifact/${'b'.repeat(24)}`,
+    });
     mocks.listPublishedSitesPage
       .mockResolvedValueOnce({ sites: [site()], workspace: null, nextCursor: 'cursor-2' })
       .mockResolvedValueOnce({ sites: [older], workspace: null, nextCursor: 'cursor-3' })
@@ -601,23 +677,32 @@ describe('SitesPage bounded page navigation (UNRUN source fixtures)', () => {
     render(<SitesPage />);
     await screen.findByTestId('site-card');
     expect(mocks.listPublishedSitesPage).toHaveBeenCalledTimes(1);
-    expect(screen.getByText(/Search and updated-date sorting apply to this page only/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Search and updated-date sorting apply to this page only/),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Back to newest' })).toBeDisabled();
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'Older page' } });
     expect(screen.getByTestId('sites-no-match')).toBeInTheDocument();
     expect(mocks.listPublishedSitesPage).toHaveBeenCalledTimes(1);
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: '' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Older', exact: true }));
-    await screen.findByRole('link', { name: 'Older page', exact: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Older' }));
+    await screen.findByRole('link', { name: 'Older page' });
     expect(screen.getAllByTestId('site-card')).toHaveLength(1);
-    expect(screen.queryByRole('link', { name: 'Team scoreboard', exact: true })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Team scoreboard' })).toBeNull();
     expect(usePublishedSitesStore.getState().byArtifactId['artifact-1']?.token).toBe(site().token);
     expect(usePublishedSitesStore.getState().byArtifactId['artifact-2']?.token).toBe(older.token);
-    expect(mocks.listPublishedSitesPage.mock.calls.map(([cursor]) => cursor)).toEqual([null, 'cursor-2']);
+    expect(mocks.listPublishedSitesPage.mock.calls.map(([cursor]) => cursor)).toEqual([
+      null,
+      'cursor-2',
+    ]);
     fireEvent.click(screen.getByRole('button', { name: 'Back to newest' }));
-    await screen.findByRole('link', { name: 'Team scoreboard', exact: true });
-    expect(screen.queryByRole('link', { name: 'Older page', exact: true })).toBeNull();
-    expect(mocks.listPublishedSitesPage.mock.calls.map(([cursor]) => cursor)).toEqual([null, 'cursor-2', null]);
+    await screen.findByRole('link', { name: 'Team scoreboard' });
+    expect(screen.queryByRole('link', { name: 'Older page' })).toBeNull();
+    expect(mocks.listPublishedSitesPage.mock.calls.map(([cursor]) => cursor)).toEqual([
+      null,
+      'cursor-2',
+      null,
+    ]);
     expect(mocks.listPublishedSites).not.toHaveBeenCalled();
   });
 
@@ -630,9 +715,9 @@ describe('SitesPage bounded page navigation (UNRUN source fixtures)', () => {
       .mockResolvedValueOnce({ sites: [site()], workspace: null, nextCursor: 'cursor-2' });
     render(<SitesPage />);
     await screen.findByTestId('site-card');
-    fireEvent.click(screen.getByRole('button', { name: 'Older', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Older' }));
     expect(screen.getByTestId('site-card')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Older', exact: true })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Older' })).toBeDisabled();
     await act(async () => continuation.reject(new Error('Continuation unavailable')));
     expect(screen.getByRole('alert')).toBeInTheDocument();
     expect(screen.getByTestId('site-card')).toBeInTheDocument();
@@ -640,8 +725,12 @@ describe('SitesPage bounded page navigation (UNRUN source fixtures)', () => {
     await screen.findByText('No sites on this page.');
     expect(screen.queryByTestId('sites-empty')).toBeNull();
     expect(screen.getByRole('button', { name: 'Back to newest' })).toBeEnabled();
-    expect(screen.getByRole('button', { name: 'Older', exact: true })).toBeDisabled();
-    expect(mocks.listPublishedSitesPage.mock.calls.map(([cursor]) => cursor)).toEqual([null, 'cursor-2', 'cursor-2']);
+    expect(screen.getByRole('button', { name: 'Older' })).toBeDisabled();
+    expect(mocks.listPublishedSitesPage.mock.calls.map(([cursor]) => cursor)).toEqual([
+      null,
+      'cursor-2',
+      'cursor-2',
+    ]);
     fireEvent.click(screen.getByRole('button', { name: 'Refresh sites' }));
     await screen.findByTestId('site-card');
     expect(mocks.listPublishedSitesPage.mock.lastCall![0]).toBeNull();
@@ -650,7 +739,12 @@ describe('SitesPage bounded page navigation (UNRUN source fixtures)', () => {
 
   it('stops a page record loop when its first synchronous subscriber starts cleanup', async () => {
     const page = deferredList();
-    const second = site({ token: 'b'.repeat(24), artifactId: 'artifact-2', title: 'Must not record', shareUrl: `https://agiworkforce.com/shared-artifact/${'b'.repeat(24)}` });
+    const second = site({
+      token: 'b'.repeat(24),
+      artifactId: 'artifact-2',
+      title: 'Must not record',
+      shareUrl: `https://agiworkforce.com/shared-artifact/${'b'.repeat(24)}`,
+    });
     mocks.listPublishedSitesPage.mockReturnValueOnce(page.promise);
     const mounted = render(<SitesPage />);
     let finish = () => {};
@@ -661,7 +755,9 @@ describe('SitesPage bounded page navigation (UNRUN source fixtures)', () => {
       finish = beginPublicationCleanup();
     });
     try {
-      await act(async () => page.resolve({ sites: [site(), second], workspace: null, nextCursor: 'cursor-2' }));
+      await act(async () =>
+        page.resolve({ sites: [site(), second], workspace: null, nextCursor: 'cursor-2' }),
+      );
       expect(retired).toBe(true);
       expect(usePublishedSitesStore.getState().byArtifactId).toEqual({});
       expect(screen.queryByText('Must not record')).toBeNull();
@@ -680,19 +776,35 @@ describe('SitesPage common cleanup ownership model', () => {
   it('does not refill a mounted list or cache with an old read after cleanup release', async () => {
     const oldRead = deferredList();
     const newRead = deferredList();
-    mocks.listPublishedSitesPage.mockReturnValueOnce(oldRead.promise).mockReturnValueOnce(newRead.promise);
+    mocks.listPublishedSitesPage
+      .mockReturnValueOnce(oldRead.promise)
+      .mockReturnValueOnce(newRead.promise);
     render(<SitesPage />);
     const signal = mocks.listPublishedSitesPage.mock.calls[0]![1] as AbortSignal;
     let finish = () => {};
     try {
-      act(() => { finish = beginPublicationCleanup(); });
+      act(() => {
+        finish = beginPublicationCleanup();
+      });
       expect(signal.aborted).toBe(true);
       expect(usePublishedSitesStore.getState().lease).toBeNull();
       act(() => finish());
-      await act(async () => oldRead.resolve({ sites: [site({ title: 'Retired card' })], workspace: null, nextCursor: null }));
+      await act(async () =>
+        oldRead.resolve({
+          sites: [site({ title: 'Retired card' })],
+          workspace: null,
+          nextCursor: null,
+        }),
+      );
       expect(screen.queryByText('Retired card')).not.toBeInTheDocument();
       expect(usePublishedSitesStore.getState().byArtifactId).toEqual({});
-      await act(async () => newRead.resolve({ sites: [site({ title: 'Current card' })], workspace: null, nextCursor: null }));
+      await act(async () =>
+        newRead.resolve({
+          sites: [site({ title: 'Current card' })],
+          workspace: null,
+          nextCursor: null,
+        }),
+      );
       expect(screen.getByTestId('site-card')).toHaveTextContent('Current card');
       expect(mocks.listPublishedSitesPage).toHaveBeenCalledTimes(2);
     } finally {

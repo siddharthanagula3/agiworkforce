@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
+import { retainedPress } from '@/test-utils/retainedPress';
 import { Alert } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
@@ -10,8 +11,12 @@ const mockFetchSessionTimeout = jest.fn();
 const mockSaveSessionTimeout = jest.fn();
 const mockFetchLockdown = jest.fn();
 const mockSaveLockdown = jest.fn();
-const mockAuthListeners = new Set<(next: typeof mockAuthState, previous: typeof mockAuthState) => void>();
-const mockModeListeners = new Set<(next: { appMode: string }, previous: { appMode: string }) => void>();
+const mockAuthListeners = new Set<
+  (next: typeof mockAuthState, previous: typeof mockAuthState) => void
+>();
+const mockModeListeners = new Set<
+  (next: { appMode: string }, previous: { appMode: string }) => void
+>();
 const mockFetchAuditLog = jest.fn();
 const mockFetchAccountSessions = jest.fn();
 const mockRevokeAccountSession = jest.fn();
@@ -33,7 +38,11 @@ let mockAuthState = {
   clerkUserId: 'account-a' as string | null,
 };
 
-jest.mock('expo-clipboard', () => ({ setStringAsync: (...args: unknown[]) => mockCopySecret(...args) }));
+jest.mock('../src/features/siri', () => ({ AskFromSiriSetting: () => null }));
+
+jest.mock('expo-clipboard', () => ({
+  setStringAsync: (...args: unknown[]) => mockCopySecret(...args),
+}));
 
 jest.mock('../src/features/auth/hooks/useStepUp', () => ({
   useStepUp: () => ({ withStepUp: mockWithStepUp, modal: null }),
@@ -64,7 +73,9 @@ jest.mock('../src/features/auth/store', () => ({
     (selector: (state: typeof mockAuthState) => unknown) => selector(mockAuthState),
     {
       getState: () => mockAuthState,
-      subscribe: (listener: (next: typeof mockAuthState, previous: typeof mockAuthState) => void) => {
+      subscribe: (
+        listener: (next: typeof mockAuthState, previous: typeof mockAuthState) => void,
+      ) => {
         mockAuthListeners.add(listener);
         return () => mockAuthListeners.delete(listener);
       },
@@ -74,7 +85,8 @@ jest.mock('../src/features/auth/store', () => ({
 
 jest.mock('../src/features/auth/services/cloudAccountSession', () => ({
   captureCloudAccountEpoch: () => ({ ownerId: mockOwnerId, epoch: mockEpoch }),
-  isCloudAccountEpochCurrent: (snapshot: { ownerId: string; epoch: number } | null) => Boolean(snapshot && snapshot.ownerId === mockOwnerId && snapshot.epoch === mockEpoch),
+  isCloudAccountEpochCurrent: (snapshot: { ownerId: string; epoch: number } | null) =>
+    Boolean(snapshot && snapshot.ownerId === mockOwnerId && snapshot.epoch === mockEpoch),
   subscribeCloudAccountEpochChange: (listener: () => void) => {
     mockEpochListeners.add(listener);
     return () => mockEpochListeners.delete(listener);
@@ -185,10 +197,22 @@ jest.mock('../src/features/settings/Common', () => {
         <Text>Chat is set to Local Mode</Text>
       </Pressable>
     ),
-    SettingsSwitchRow: ({ label, value, onValueChange, disabled }: {
-      label: string; value: boolean; onValueChange: (next: boolean) => void; disabled?: boolean;
+    SettingsSwitchRow: ({
+      label,
+      value,
+      onValueChange,
+      disabled,
+    }: {
+      label: string;
+      value: boolean;
+      onValueChange: (next: boolean) => void;
+      disabled?: boolean;
     }) => (
-      <Pressable disabled={disabled} onPress={() => onValueChange(!value)} accessibilityLabel={`${label}. ${value ? 'On' : 'Off'}`}>
+      <Pressable
+        disabled={disabled}
+        onPress={() => onValueChange(!value)}
+        accessibilityLabel={`${label}. ${value ? 'On' : 'Off'}`}
+      >
         <Text>{label}</Text>
       </Pressable>
     ),
@@ -316,7 +340,12 @@ describe('Mobile Account Security screen', () => {
     await waitFor(() => expect(screen.getByText('1 hr')).toBeTruthy());
     fireEvent.press(screen.getByText('Session timeout'));
 
-    await waitFor(() => expect(mockSaveSessionTimeout).toHaveBeenCalledWith(120, expect.objectContaining({ accountEpoch: { ownerId: 'account-a', epoch: 1 } })));
+    await waitFor(() =>
+      expect(mockSaveSessionTimeout).toHaveBeenCalledWith(
+        120,
+        expect.objectContaining({ accountEpoch: { ownerId: 'account-a', epoch: 1 } }),
+      ),
+    );
     await waitFor(() => expect(screen.getByText('1 hr')).toBeTruthy());
   });
 
@@ -346,7 +375,13 @@ describe('Mobile Account Security screen', () => {
       buttons.find((button) => button.text === 'Sign out')?.onPress?.();
     });
 
-    await waitFor(() => expect(mockRevokeAccountSession).toHaveBeenCalledWith('sess_laptop', { ownerId: 'account-a', epoch: 1 }, expect.anything()));
+    await waitFor(() =>
+      expect(mockRevokeAccountSession).toHaveBeenCalledWith(
+        'sess_laptop',
+        { ownerId: 'account-a', epoch: 1 },
+        expect.anything(),
+      ),
+    );
     await waitFor(() => expect(mockFetchAccountSessions).toHaveBeenCalledTimes(2));
     alertSpy.mockRestore();
   });
@@ -429,7 +464,9 @@ describe('Mobile Account Security screen', () => {
     const screen = render(<AccountSecurityScreen />);
     await waitFor(() => expect(screen.getByText('Log out of all devices')).toBeTruthy());
     fireEvent.press(screen.getByText('Log out of all devices'));
-    const confirm = alertSpy.mock.calls.at(-1)?.[2]?.find((button) => button.text === 'Log out everywhere');
+    const confirm = alertSpy.mock.calls
+      .at(-1)?.[2]
+      ?.find((button) => button.text === 'Log out everywhere');
     expect(confirm?.onPress).toBeDefined();
     await act(async () => {
       mockEpoch += 2;
@@ -473,7 +510,9 @@ describe('Mobile Account Security screen', () => {
 
   it('does not resend a factor mutation after its step-up wait crosses an epoch', async () => {
     let resume!: () => void;
-    const gate = new Promise<void>((resolve) => { resume = resolve; });
+    const gate = new Promise<void>((resolve) => {
+      resume = resolve;
+    });
     mockWithStepUp.mockImplementation(async (_action, _resource, send) => {
       await gate;
       return send({ 'x-step-up-token': 'fixture-grant' });
@@ -483,7 +522,10 @@ describe('Mobile Account Security screen', () => {
     await waitFor(() => expect(screen.getByText('Turn off two-factor')).toBeTruthy());
     fireEvent.press(screen.getByText('Turn off two-factor'));
     await act(async () => {
-      alertSpy.mock.calls.at(-1)?.[2]?.find((button) => button.text === 'Turn off')?.onPress?.();
+      alertSpy.mock.calls
+        .at(-1)?.[2]
+        ?.find((button) => button.text === 'Turn off')
+        ?.onPress?.();
     });
     expect(mockWithStepUp).toHaveBeenCalledTimes(1);
     await act(async () => {
@@ -497,9 +539,17 @@ describe('Mobile Account Security screen', () => {
   });
 
   it('does not publish a setup secret returned to an obsolete account stage', async () => {
-    mockFetchStatus.mockResolvedValue({ twoFactorEnabled: false, backupCodesReady: false, enrollmentAvailable: true });
+    mockFetchStatus.mockResolvedValue({
+      twoFactorEnabled: false,
+      backupCodesReady: false,
+      enrollmentAvailable: true,
+    });
     let finish!: (value: { secret: string; otpauthUrl: string }) => void;
-    mockStartSetup.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+    mockStartSetup.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
     const screen = render(<AccountSecurityScreen />);
     await waitFor(() => expect(screen.getByText('Set up authenticator app')).toBeTruthy());
     fireEvent.press(screen.getByText('Set up authenticator app'));
@@ -514,11 +564,18 @@ describe('Mobile Account Security screen', () => {
   });
 
   it('does not copy a setup secret through an obsolete stage callback', async () => {
-    mockFetchStatus.mockResolvedValue({ twoFactorEnabled: false, backupCodesReady: false, enrollmentAvailable: true });
-    mockStartSetup.mockResolvedValueOnce({ secret: 'fixture-setup-secret', otpauthUrl: 'fixture-url' });
+    mockFetchStatus.mockResolvedValue({
+      twoFactorEnabled: false,
+      backupCodesReady: false,
+      enrollmentAvailable: true,
+    });
+    mockStartSetup.mockResolvedValueOnce({
+      secret: 'fixture-setup-secret',
+      otpauthUrl: 'fixture-url',
+    });
     const screen = render(<AccountSecurityScreen />);
     fireEvent.press(await screen.findByText('Set up authenticator app'));
-    const copy = (await screen.findByLabelText('Copy setup key')).props.onPress as () => void;
+    const copy = retainedPress(await screen.findByLabelText('Copy setup key'));
     await act(async () => {
       mockEpoch += 2;
       mockEpochListeners.forEach((listener) => listener());
@@ -537,7 +594,11 @@ describe('Mobile Account Security screen', () => {
 
   it('does not roll an old timeout failure into the replacement account', async () => {
     let reject!: (error: Error) => void;
-    mockSaveSessionTimeout.mockReturnValueOnce(new Promise((_resolve, fail) => { reject = fail; }));
+    mockSaveSessionTimeout.mockReturnValueOnce(
+      new Promise((_resolve, fail) => {
+        reject = fail;
+      }),
+    );
     const screen = render(<AccountSecurityScreen />);
     fireEvent.press(await screen.findByLabelText('Session timeout. 1 hr'));
     await act(async () => {
@@ -548,23 +609,35 @@ describe('Mobile Account Security screen', () => {
       mockEpochListeners.forEach((listener) => listener());
     });
     await waitFor(() => expect(screen.getByLabelText('Session timeout. 15 min')).toBeTruthy());
-    await act(async () => { reject(new Error('old write failed')); });
+    await act(async () => {
+      reject(new Error('old write failed'));
+    });
     expect(screen.getByLabelText('Session timeout. 15 min')).toBeTruthy();
     fireEvent.press(screen.getByText('Session timeout'));
-    await waitFor(() => expect(mockSaveSessionTimeout).toHaveBeenLastCalledWith(30,
-      expect.objectContaining({ accountEpoch: { ownerId: 'account-b', epoch: 2 } })));
+    await waitFor(() =>
+      expect(mockSaveSessionTimeout).toHaveBeenLastCalledWith(
+        30,
+        expect.objectContaining({ accountEpoch: { ownerId: 'account-b', epoch: 2 } }),
+      ),
+    );
   });
 
   it('serializes timeout saves and uses the read receipt rather than optimistic rollback', async () => {
     let finish!: () => void;
-    mockSaveSessionTimeout.mockReturnValueOnce(new Promise<void>((resolve) => { finish = resolve; }));
+    mockSaveSessionTimeout.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      }),
+    );
     const screen = render(<AccountSecurityScreen />);
     const row = await screen.findByLabelText('Session timeout. 1 hr');
     fireEvent.press(row);
     fireEvent.press(screen.getByText('Session timeout'));
     expect(mockSaveSessionTimeout).toHaveBeenCalledTimes(1);
     mockFetchSessionTimeout.mockResolvedValue(480);
-    await act(async () => { finish(); });
+    await act(async () => {
+      finish();
+    });
     await waitFor(() => expect(screen.getByLabelText('Session timeout. 8 hr')).toBeTruthy());
   });
 
@@ -582,38 +655,49 @@ describe('Mobile Account Security screen', () => {
     expect(screen.queryByText('Lockdown mode')).toBeNull();
   });
 
-  it.each(['epoch', 'mode', 'auth', 'unmount'])('retires a single-device confirmation on %s', async (boundary) => {
-    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
-    const screen = render(<AccountSecurityScreen />);
-    fireEvent.press(await screen.findByLabelText('Macintosh · Chrome 141. 3h ago'));
-    const confirm = alertSpy.mock.calls.at(-1)?.[2]?.find((button) => button.text === 'Sign out');
-    await act(async () => {
+  it.each(['epoch', 'mode', 'auth', 'unmount'])(
+    'retires a single-device confirmation on %s',
+    async (boundary) => {
+      const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+      const screen = render(<AccountSecurityScreen />);
+      fireEvent.press(await screen.findByLabelText('Macintosh · Chrome 141. 3h ago'));
+      const confirm = alertSpy.mock.calls.at(-1)?.[2]?.find((button) => button.text === 'Sign out');
       if (boundary === 'unmount') screen.unmount();
-      else if (boundary === 'epoch') {
-        mockEpoch += 2;
-        mockEpochListeners.forEach((listener) => listener());
-      } else if (boundary === 'auth') {
-        const previous = mockAuthState;
-        mockAuthState = { ...previous, isClerkLoaded: false };
-        mockAuthListeners.forEach((listener) => listener(mockAuthState, previous));
-        const unloaded = mockAuthState;
-        mockAuthState = previous;
-        mockAuthListeners.forEach((listener) => listener(mockAuthState, unloaded));
-      } else {
-        mockAppMode = 'local';
-        mockModeListeners.forEach((listener) => listener({ appMode: 'local' }, { appMode: 'cloud' }));
-        mockAppMode = 'cloud';
-        mockModeListeners.forEach((listener) => listener({ appMode: 'cloud' }, { appMode: 'local' }));
-      }
-      confirm?.onPress?.();
-    });
-    expect(mockRevokeAccountSession).not.toHaveBeenCalled();
-    alertSpy.mockRestore();
-  });
+      await act(async () => {
+        if (boundary === 'epoch') {
+          mockEpoch += 2;
+          mockEpochListeners.forEach((listener) => listener());
+        } else if (boundary === 'auth') {
+          const previous = mockAuthState;
+          mockAuthState = { ...previous, isClerkLoaded: false };
+          mockAuthListeners.forEach((listener) => listener(mockAuthState, previous));
+          const unloaded = mockAuthState;
+          mockAuthState = previous;
+          mockAuthListeners.forEach((listener) => listener(mockAuthState, unloaded));
+        } else if (boundary === 'mode') {
+          mockAppMode = 'local';
+          mockModeListeners.forEach((listener) =>
+            listener({ appMode: 'local' }, { appMode: 'cloud' }),
+          );
+          mockAppMode = 'cloud';
+          mockModeListeners.forEach((listener) =>
+            listener({ appMode: 'cloud' }, { appMode: 'local' }),
+          );
+        }
+        confirm?.onPress?.();
+      });
+      expect(mockRevokeAccountSession).not.toHaveBeenCalled();
+      alertSpy.mockRestore();
+    },
+  );
 
   it('does not let an obsolete lockdown failure overwrite the new owner', async () => {
     let reject!: (error: Error) => void;
-    mockSaveLockdown.mockReturnValueOnce(new Promise((_resolve, fail) => { reject = fail; }));
+    mockSaveLockdown.mockReturnValueOnce(
+      new Promise((_resolve, fail) => {
+        reject = fail;
+      }),
+    );
     const screen = render(<AccountSecurityScreen />);
     fireEvent.press(await screen.findByLabelText('Lockdown mode. Off'));
     await act(async () => {
@@ -624,7 +708,9 @@ describe('Mobile Account Security screen', () => {
       mockEpochListeners.forEach((listener) => listener());
     });
     await screen.findByLabelText('Lockdown mode. On');
-    await act(async () => { reject(new Error('old write')); });
+    await act(async () => {
+      reject(new Error('old write'));
+    });
     expect(screen.getByLabelText('Lockdown mode. On')).toBeTruthy();
   });
 
@@ -638,7 +724,11 @@ describe('Mobile Account Security screen', () => {
     fireEvent.press(screen.getByText('Session timeout'));
     expect(mockSaveSessionTimeout).toHaveBeenCalledTimes(1);
     mockFetchSessionTimeout.mockResolvedValue(120);
-    fireEvent.press(screen.getByText('The save could not be confirmed. Retry loading the setting before changing it.'));
+    fireEvent.press(
+      screen.getByText(
+        'The save could not be confirmed. Retry loading the setting before changing it.',
+      ),
+    );
     await screen.findByLabelText('Session timeout. 2 hr');
     expect(mockSaveSessionTimeout).toHaveBeenCalledTimes(1);
   });
@@ -646,18 +736,31 @@ describe('Mobile Account Security screen', () => {
   it('admits one native revoke prompt and consumes its confirmation once', async () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
     let finish!: () => void;
-    mockRevokeAccountSession.mockReturnValueOnce(new Promise<void>((resolve) => { finish = resolve; }));
+    mockRevokeAccountSession.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      }),
+    );
     const screen = render(<AccountSecurityScreen />);
     const row = await screen.findByLabelText('Macintosh · Chrome 141. 3h ago');
-    const press = row.props.onPress as () => void;
-    act(() => { press(); press(); });
+    const press = retainedPress(row);
+    act(() => {
+      press();
+      press();
+    });
     expect(alertSpy).toHaveBeenCalledTimes(1);
     const buttons = alertSpy.mock.calls[0]?.[2];
     const confirm = buttons?.find((button) => button.text === 'Sign out');
-    await act(async () => { confirm?.onPress?.(); confirm?.onPress?.(); press(); });
+    await act(async () => {
+      confirm?.onPress?.();
+      confirm?.onPress?.();
+      press();
+    });
     expect(mockRevokeAccountSession).toHaveBeenCalledTimes(1);
     expect(alertSpy).toHaveBeenCalledTimes(1);
-    await act(async () => { finish(); });
+    await act(async () => {
+      finish();
+    });
     alertSpy.mockRestore();
   });
 
@@ -667,11 +770,12 @@ describe('Mobile Account Security screen', () => {
     const row = await screen.findByLabelText('Macintosh · Chrome 141. 3h ago');
     fireEvent.press(row);
     const buttons = alertSpy.mock.calls.at(-1)?.[2];
-    act(() => { buttons?.find((button) => button.text === 'Cancel')?.onPress?.(); });
+    act(() => {
+      buttons?.find((button) => button.text === 'Cancel')?.onPress?.();
+    });
     fireEvent.press(row);
     expect(alertSpy).toHaveBeenCalledTimes(2);
     expect(mockRevokeAccountSession).not.toHaveBeenCalled();
     alertSpy.mockRestore();
   });
-
 });

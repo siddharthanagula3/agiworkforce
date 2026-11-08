@@ -1,12 +1,18 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MANAGED_CLOUD_ORGANIZATION_HEADER, MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE } from '@agiworkforce/cloud-contracts';
+import {
+  MANAGED_CLOUD_ORGANIZATION_HEADER,
+  MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
+} from '@agiworkforce/cloud-contracts';
 
-import { createCloudMemoryFixture, getCloudMemoryFixtureSession } from '@/features/memory/__tests__/cloud-memory-fixture';
+import {
+  createCloudMemoryFixture,
+  getCloudMemoryFixtureSession,
+} from '@/features/memory/__tests__/CloudMemoryFixture';
 
 vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/identity/useSessionSnapshot')>()),
+  ...(await importOriginal<MockedModule0>()),
   useSessionSnapshot: () => getCloudMemoryFixtureSession,
   useReadonlyIdentityLifetime: () => () => {
     const session = getCloudMemoryFixtureSession();
@@ -15,8 +21,13 @@ vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
 }));
 
 let cloud: ReturnType<typeof createCloudMemoryFixture>;
-beforeEach(() => { cloud = createCloudMemoryFixture(); });
-afterEach(() => { cloud.retire(); vi.unstubAllGlobals(); });
+beforeEach(() => {
+  cloud = createCloudMemoryFixture();
+});
+afterEach(() => {
+  cloud.retire();
+  vi.unstubAllGlobals();
+});
 
 import type { ManagedMemoryRecord } from '@agiworkforce/types';
 let rows: ManagedMemoryRecord[] = [];
@@ -26,9 +37,10 @@ const fetchPreferenceNamespace = vi.fn(async (_namespace: string, fallback: unkn
 const savePreferenceNamespace = vi.fn(async (_namespace: string, _value: unknown) => undefined);
 
 vi.mock('@/app/settings/_lib/preferences-client', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/app/settings/_lib/preferences-client')>()),
+  ...(await importOriginal<MockedModule1>()),
   readOwnedPreferences: async () => ({
-    settings: { capabilities: await fetchPreferenceNamespace('capabilities', {}) }, version: null,
+    settings: { capabilities: await fetchPreferenceNamespace('capabilities', {}) },
+    version: null,
   }),
   saveOwnedPreferenceNamespace: (_owner: unknown, ...args: unknown[]) =>
     savePreferenceNamespace(...(args as [string, unknown])),
@@ -43,8 +55,14 @@ import { MemorySection } from '../MemorySection';
 
 let factSequence = 0;
 function fact(): ManagedMemoryRecord {
-  return { id: `fact-${++factSequence}`, content: 'Ships on Fridays.', category: null, source: 'web',
-    createdAt: '2026-08-20T00:00:00.000Z', updatedAt: '2026-08-20T00:00:00.000Z' };
+  return {
+    id: `fact-${++factSequence}`,
+    content: 'Ships on Fridays.',
+    category: null,
+    source: 'web',
+    createdAt: '2026-08-20T00:00:00.000Z',
+    updatedAt: '2026-08-20T00:00:00.000Z',
+  };
 }
 
 describe('Unexecuted cloud MemorySection top-level settings entry', () => {
@@ -63,10 +81,17 @@ describe('Unexecuted cloud MemorySection top-level settings entry', () => {
         rows = [];
         return new Response(JSON.stringify({ deleted }));
       }
-      const body = path.startsWith('/api/memory?') ? { memories: rows, hasMore: false }
-        : path === '/api/memory/conflicts' ? { conflicts: [] }
-        : path === '/api/memory/summary' ? { summary: { about: [], preferences: [] }, memoryCount: rows.length, generatedAt: null }
-        : {};
+      const body = path.startsWith('/api/memory?')
+        ? { memories: rows, hasMore: false }
+        : path === '/api/memory/conflicts'
+          ? { conflicts: [] }
+          : path === '/api/memory/summary'
+            ? {
+                summary: { about: [], preferences: [] },
+                memoryCount: rows.length,
+                generatedAt: null,
+              }
+            : {};
       return new Response(JSON.stringify(body));
     });
     vi.stubGlobal('fetch', transport);
@@ -79,9 +104,13 @@ describe('Unexecuted cloud MemorySection top-level settings entry', () => {
     const toggle = await screen.findByRole('switch', { name: 'Persistent memory' });
     await waitFor(() => expect(toggle).toBeEnabled());
     expect(toggle).not.toBeChecked();
-    const policyRequest = transport.mock.calls.find(([input]) => String(input) === '/api/settings/preferences?namespace=capabilities');
+    const policyRequest = transport.mock.calls.find(
+      ([input]) => String(input) === '/api/settings/preferences?namespace=capabilities',
+    );
     expect(policyRequest?.[1]).toMatchObject({ credentials: 'omit', cache: 'no-store' });
-    expect(new Headers(policyRequest?.[1]?.headers).get(MANAGED_CLOUD_ORGANIZATION_HEADER)).toBe(MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE);
+    expect(new Headers(policyRequest?.[1]?.headers).get(MANAGED_CLOUD_ORGANIZATION_HEADER)).toBe(
+      MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
+    );
 
     await user.click(toggle);
 
@@ -176,7 +205,9 @@ describe('Unexecuted cloud MemorySection top-level settings entry', () => {
     const user = userEvent.setup();
     render(<MemorySection />, { wrapper: cloud.wrapper });
 
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Clear all memories' })).toBeEnabled());
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Clear all memories' })).toBeEnabled(),
+    );
     await user.click(screen.getByRole('button', { name: 'Clear all memories' }));
 
     const dialog = await screen.findByRole('alertdialog');
@@ -186,8 +217,13 @@ describe('Unexecuted cloud MemorySection top-level settings entry', () => {
 
     await user.click(screen.getByRole('button', { name: 'Forget everything' }));
 
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Clear all memories' })).toBeDisabled());
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Clear all memories' })).toBeDisabled(),
+    );
     expect(rows).toHaveLength(0);
     expect(transport.mock.calls.filter(([, init]) => init?.method === 'DELETE')).toHaveLength(1);
   });
 });
+
+type MockedModule0 = typeof import('@/lib/identity/useSessionSnapshot');
+type MockedModule1 = typeof import('@/app/settings/_lib/preferences-client');

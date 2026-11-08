@@ -186,7 +186,9 @@ pub async fn discover_gateway_models() -> Result<GatewayCatalog> {
     discover_gateway_models_for(&context).await
 }
 
-pub(crate) async fn discover_gateway_models_for(context: &crate::tier_cache::ManagedRequestContext) -> Result<GatewayCatalog> {
+pub(crate) async fn discover_gateway_models_for(
+    context: &crate::tier_cache::ManagedRequestContext,
+) -> Result<GatewayCatalog> {
     let endpoint = models_endpoint(&context.base)?;
     let client = reqwest::Client::builder()
         .timeout(FETCH_TIMEOUT)
@@ -194,7 +196,8 @@ pub(crate) async fn discover_gateway_models_for(context: &crate::tier_cache::Man
         .context("failed to initialize managed model discovery client")?;
     let mut catalog = fetch_from_endpoint(&client, &endpoint, context.jwt.as_deref()).await?;
     catalog.cache_owner = context.owner.clone();
-    context.with_current(|| catalog)
+    context
+        .with_current(|| catalog)
         .ok_or_else(|| anyhow::anyhow!("Managed account changed; retry model discovery"))
 }
 
@@ -272,36 +275,55 @@ pub fn picker_models(catalog: &GatewayCatalog) -> Vec<Model> {
 static LIVE_CATALOG: Mutex<Option<GatewayCatalog>> = Mutex::new(None);
 
 pub(crate) fn clear_live_catalog() {
-    if let Ok(mut slot) = LIVE_CATALOG.lock() { *slot = None; }
+    if let Ok(mut slot) = LIVE_CATALOG.lock() {
+        *slot = None;
+    }
 }
 
 pub fn current_discovery(catalog: GatewayCatalog) -> Result<GatewayCatalog> {
     let context = crate::tier_cache::ManagedRequestContext::capture()?;
-    anyhow::ensure!(catalog.cache_owner.is_some() && catalog.cache_owner == context.owner,
-        "Managed account changed or cannot be identified; retry model discovery");
-    context.with_current(|| catalog)
+    anyhow::ensure!(
+        catalog.cache_owner.is_some() && catalog.cache_owner == context.owner,
+        "Managed account changed or cannot be identified; retry model discovery"
+    );
+    context
+        .with_current(|| catalog)
         .ok_or_else(|| anyhow::anyhow!("Managed account changed; retry model discovery"))
 }
 
 pub fn store_live_catalog(catalog: GatewayCatalog) {
-    let Ok(context) = crate::tier_cache::ManagedRequestContext::capture() else { return; };
-    if catalog.cache_owner.is_none() || catalog.cache_owner != context.owner { return; }
+    let Ok(context) = crate::tier_cache::ManagedRequestContext::capture() else {
+        return;
+    };
+    if catalog.cache_owner.is_none() || catalog.cache_owner != context.owner {
+        return;
+    }
     context.with_current(|| {
-        if let Ok(mut slot) = LIVE_CATALOG.lock() { *slot = Some(catalog); }
+        if let Ok(mut slot) = LIVE_CATALOG.lock() {
+            *slot = Some(catalog);
+        }
     });
 }
 
 fn current_catalog() -> Option<GatewayCatalog> {
     let context = crate::tier_cache::ManagedRequestContext::capture().ok()?;
     let owner = context.owner.as_ref()?;
-    context.with_current(|| {
-        LIVE_CATALOG.lock().ok()?.as_ref()
-            .filter(|catalog| catalog.cache_owner.as_ref() == Some(owner)).cloned()
-    }).flatten()
+    context
+        .with_current(|| {
+            LIVE_CATALOG
+                .lock()
+                .ok()?
+                .as_ref()
+                .filter(|catalog| catalog.cache_owner.as_ref() == Some(owner))
+                .cloned()
+        })
+        .flatten()
 }
 
 pub async fn ensure_live_catalog() {
-    if current_catalog().is_some() { return; }
+    if current_catalog().is_some() {
+        return;
+    }
     match discover_gateway_models().await {
         Ok(catalog) => store_live_catalog(catalog),
         Err(error) => tracing::debug!("managed model list not read: {error}"),
@@ -309,7 +331,10 @@ pub async fn ensure_live_catalog() {
 }
 
 pub fn cached_picker_models() -> Vec<Model> {
-    current_catalog().as_ref().map(picker_models).unwrap_or_default()
+    current_catalog()
+        .as_ref()
+        .map(picker_models)
+        .unwrap_or_default()
 }
 
 pub fn catalog_user_tier(catalog: &GatewayCatalog) -> UserTier {
@@ -317,7 +342,9 @@ pub fn catalog_user_tier(catalog: &GatewayCatalog) -> UserTier {
 }
 
 pub fn cached_routing_profiles() -> Vec<RoutingProfileOption> {
-    current_catalog().map(|catalog| catalog.routing_profiles).unwrap_or_default()
+    current_catalog()
+        .map(|catalog| catalog.routing_profiles)
+        .unwrap_or_default()
 }
 
 pub fn cached_user_tier() -> Option<UserTier> {
@@ -325,7 +352,9 @@ pub fn cached_user_tier() -> Option<UserTier> {
 }
 
 pub fn cached_model_is_available(model_id: &str) -> bool {
-    cached_picker_models().iter().any(|model| model.id == model_id)
+    cached_picker_models()
+        .iter()
+        .any(|model| model.id == model_id)
 }
 
 #[cfg(test)]

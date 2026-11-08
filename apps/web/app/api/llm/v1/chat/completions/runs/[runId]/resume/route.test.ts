@@ -130,7 +130,12 @@ const claim = {
     turnId: 'original-turn-1',
     nextEventSequence: 9,
     completedSteps: 3,
-    request: { model: 'claude-test', stream: true, work_mode: 'agiwork', x_context_policy_snapshot: contextPolicySnapshotFixture() },
+    request: {
+      model: 'claude-test',
+      stream: true,
+      work_mode: 'agiwork',
+      x_context_policy_snapshot: contextPolicySnapshotFixture(),
+    },
     messages: pausedMessages,
     pendingToolCalls: [],
     state: 'resuming',
@@ -190,20 +195,31 @@ describe('POST /api/llm/v1/chat/completions/runs/[runId]/resume', () => {
     { ...contextPolicySnapshotFixture(), version: 2 },
     contextPolicySnapshotFixture('other-user'),
     contextPolicySnapshotFixture('user-1', 'other-org'),
-    { ...contextPolicySnapshotFixture(), policy: { ...contextPolicySnapshotFixture().policy, allowMemory: false } },
-  ])('releases the claim before processing an invalid or changed policy snapshot: %j', async (snapshot) => {
-    const original = claim;
-    runMocks.claim.mockResolvedValue({
-      ...original,
-      checkpoint: { ...original.checkpoint, request: { ...original.checkpoint.request, x_context_policy_snapshot: snapshot } },
-    });
-    const response = await POST(makeRequest({}), context);
-    expect(response.status).toBe(409);
-    expect(await response.json()).toMatchObject({ error: { code: 'context_policy_restart_required' } });
-    expect(runMocks.release).toHaveBeenCalledOnce();
-    expect(mockProcessRequest).not.toHaveBeenCalled();
-    expect(workflowMocks.start).not.toHaveBeenCalled();
-  });
+    {
+      ...contextPolicySnapshotFixture(),
+      policy: { ...contextPolicySnapshotFixture().policy, allowMemory: false },
+    },
+  ])(
+    'releases the claim before processing an invalid or changed policy snapshot: %j',
+    async (snapshot) => {
+      const original = claim;
+      runMocks.claim.mockResolvedValue({
+        ...original,
+        checkpoint: {
+          ...original.checkpoint,
+          request: { ...original.checkpoint.request, x_context_policy_snapshot: snapshot },
+        },
+      });
+      const response = await POST(makeRequest({}), context);
+      expect(response.status).toBe(409);
+      expect(await response.json()).toMatchObject({
+        error: { code: 'context_policy_restart_required' },
+      });
+      expect(runMocks.release).toHaveBeenCalledOnce();
+      expect(mockProcessRequest).not.toHaveBeenCalled();
+      expect(workflowMocks.start).not.toHaveBeenCalled();
+    },
+  );
 
   it('withdraws a pause the run has not reached instead of starting it again', async () => {
     runMocks.withdraw.mockResolvedValue({ id: RUN_ID, state: 'running', pauseRequestedAt: null });
@@ -353,7 +369,11 @@ describe('POST /api/llm/v1/chat/completions/runs/[runId]/resume', () => {
     const response = await POST(makeRequest({}), context);
     await response.text();
 
-    expect(mockProcessRequest.mock.calls[0]![2]).toEqual({ workspaceControls: controls });
+    expect(mockProcessRequest.mock.calls[0]![2]).toEqual({
+      workspaceControls: controls,
+      turnToolProhibition: undefined,
+      contextPolicySnapshot: contextPolicySnapshotFixture(),
+    });
   });
 
   it('returns the pause to the user when the workspace controls refuse the resume', async () => {

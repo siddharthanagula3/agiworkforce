@@ -70,9 +70,11 @@ export interface MemoryEditorDataAdapter {
 }
 
 export function MemoryEditor(props: MemoryEditorProps) {
-  return props.adapter
-    ? <MemoryEditorContent {...props} adapter={props.adapter} />
-    : <LegacyMemoryEditor {...props} />;
+  return props.adapter ? (
+    <MemoryEditorContent {...props} adapter={props.adapter} />
+  ) : (
+    <LegacyMemoryEditor {...props} />
+  );
 }
 
 function LegacyMemoryEditor(props: MemoryEditorProps) {
@@ -96,12 +98,15 @@ function MemoryEditorContent({
   useEffect(() => {
     const generation = {};
     lifetime.current = generation;
-    return () => { lifetime.current = null; };
+    return () => {
+      lifetime.current = null;
+    };
   }, []);
   const capture = useCallback(() => {
     const generation = lifetime.current;
-    return () => generation !== null && lifetime.current === generation && (adapter.isCurrent?.() ?? true);
-  }, [adapter.isCurrent]);
+    return () =>
+      generation !== null && lifetime.current === generation && (adapter.isCurrent?.() ?? true);
+  }, [adapter]);
 
   const [draft, setDraft] = useState('');
   const draftRevision = useRef(0);
@@ -127,21 +132,35 @@ function MemoryEditorContent({
   );
   const groups = useMemo(() => (query ? [] : groupFacts(visibleFacts)), [query, visibleFacts]);
 
-  const runMutation = useCallback(async (action: () => Promise<unknown> | unknown) => {
-    const current = capture();
-    if (!current() || adapter.mutationBlocked || (isAccountScoped && cloudMutationPending.current)) return;
-    if (isAccountScoped) cloudMutationPending.current = true;
-    setMutating(true);
-    setMutationError(null);
-    try {
-      await action();
-    } catch (error) {
-      if (current()) setMutationError(toUserMessage(error, 'Could not confirm the memory change. Check your saved memories before trying again.'));
-    } finally {
-      cloudMutationPending.current = false;
-      if (current()) setMutating(false);
-    }
-  }, [capture, adapter.mutationBlocked, isAccountScoped]);
+  const runMutation = useCallback(
+    async (action: () => Promise<unknown> | unknown) => {
+      const current = capture();
+      if (
+        !current() ||
+        adapter.mutationBlocked ||
+        (isAccountScoped && cloudMutationPending.current)
+      )
+        return;
+      if (isAccountScoped) cloudMutationPending.current = true;
+      setMutating(true);
+      setMutationError(null);
+      try {
+        await action();
+      } catch (error) {
+        if (current())
+          setMutationError(
+            toUserMessage(
+              error,
+              'Could not confirm the memory change. Check your saved memories before trying again.',
+            ),
+          );
+      } finally {
+        cloudMutationPending.current = false;
+        if (current()) setMutating(false);
+      }
+    },
+    [capture, adapter.mutationBlocked, isAccountScoped],
+  );
 
   const onSubmit = useCallback(
     (event: FormEvent<HTMLFormElement>) => {
@@ -316,7 +335,12 @@ function MemoryEditorContent({
                     if (!setPinned || fact.pending) return;
                     void runMutation(() => setPinned(fact.id, !fact.pinned));
                   }}
-                  disabled={!setPinned || fact.pending || adapter.mutationBlocked || (isAccountScoped && mutating)}
+                  disabled={
+                    !setPinned ||
+                    fact.pending ||
+                    adapter.mutationBlocked ||
+                    (isAccountScoped && mutating)
+                  }
                   aria-describedby={!setPinned ? pinUnavailableDescriptionId : undefined}
                   aria-pressed={fact.pinned === true}
                   aria-label={fact.pinned ? 'Unpin memory' : 'Pin memory'}
@@ -344,7 +368,9 @@ function MemoryEditorContent({
                       onConfirm: () => runMutation(() => remove(fact.id)),
                     })
                   }
-                  disabled={fact.pending || adapter.mutationBlocked || (isAccountScoped && mutating)}
+                  disabled={
+                    fact.pending || adapter.mutationBlocked || (isAccountScoped && mutating)
+                  }
                   className="rounded-compact p-1 text-[var(--chat-text-muted)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-destructive-text)]"
                   aria-label={`Delete memory fact`}
                 >
@@ -368,20 +394,33 @@ function MemoryEditorContent({
           {description ? (
             <p className="max-w-prose text-sm text-[var(--chat-text-secondary)]">{description}</p>
           ) : null}
-          {!isAccountScoped ? <p className="text-xs text-[var(--chat-text-muted)]">
-            {syncStatusLabel(syncStatus, isAccountScoped)}
-          </p> : null}
+          {!isAccountScoped ? (
+            <p className="text-xs text-[var(--chat-text-muted)]">
+              {syncStatusLabel(syncStatus, isAccountScoped)}
+            </p>
+          ) : null}
         </div>
       ) : null}
 
       {isAccountScoped ? (
         <div role="status" className="text-xs text-[var(--chat-text-muted)]">
           <p>{syncStatusLabel(syncStatus, true)}</p>
-          {adapter.mutationBlocked ? <p>A change could not be confirmed. Check your saved memories and reload before making another change.</p> : null}
+          {adapter.mutationBlocked ? (
+            <p>
+              A change could not be confirmed. Check your saved memories and reload before making
+              another change.
+            </p>
+          ) : null}
           {syncStatus === 'error' ? (
-            <button type="button" onClick={() => {
-              if (capture()()) void hydrateFromServer().catch(() => undefined);
-            }} className="rounded-compact px-2 py-1 text-[var(--chat-text-primary)]">Reload memories</button>
+            <button
+              type="button"
+              onClick={() => {
+                if (capture()()) void hydrateFromServer().catch(() => undefined);
+              }}
+              className="rounded-compact px-2 py-1 text-[var(--chat-text-primary)]"
+            >
+              Reload memories
+            </button>
           ) : null}
         </div>
       ) : null}
@@ -447,12 +486,21 @@ function MemoryEditorContent({
       {/* Existing facts */}
       {isAccountScoped && editingId !== null && !editingFact ? (
         <div className="flex flex-col gap-2">
-          <p className="text-xs text-[var(--chat-text-muted)]">The saved fact is no longer in the loaded list. Your unsaved edit is kept here.</p>
-          <textarea aria-label="Unsaved memory edit" value={editDraft} onChange={(event) => {
-            editRevision.current += 1;
-            setEditDraft(event.target.value.slice(0, MAX_FACT_CHARS));
-          }} className="rounded-md border bg-[var(--chat-surface-base)] p-2 text-[var(--chat-text-primary)]" />
-          <button type="button" onClick={onCancelEdit}>Discard edit</button>
+          <p className="text-xs text-[var(--chat-text-muted)]">
+            The saved fact is no longer in the loaded list. Your unsaved edit is kept here.
+          </p>
+          <textarea
+            aria-label="Unsaved memory edit"
+            value={editDraft}
+            onChange={(event) => {
+              editRevision.current += 1;
+              setEditDraft(event.target.value.slice(0, MAX_FACT_CHARS));
+            }}
+            className="rounded-md border bg-[var(--chat-surface-base)] p-2 text-[var(--chat-text-primary)]"
+          />
+          <button type="button" onClick={onCancelEdit}>
+            Discard edit
+          </button>
         </div>
       ) : null}
       <div className="flex flex-1 flex-col gap-2 overflow-y-auto">

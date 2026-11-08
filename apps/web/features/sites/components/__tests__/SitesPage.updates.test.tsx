@@ -82,7 +82,11 @@ function readRecord() {
 beforeEach(() => {
   mocks.onUpdated = undefined;
   beginPublicationCleanup()();
-  mocks.listPublishedSitesPage.mockResolvedValue({ sites: [{ ...original }], workspace: null, nextCursor: null });
+  mocks.listPublishedSitesPage.mockResolvedValue({
+    sites: [{ ...original }],
+    workspace: null,
+    nextCursor: null,
+  });
 });
 
 afterEach(() => {
@@ -118,7 +122,11 @@ describe('SitesPage update callback boundary', () => {
   });
 
   it('does not insert a site into a ready empty list', async () => {
-    mocks.listPublishedSitesPage.mockResolvedValue({ sites: [], workspace: null, nextCursor: null });
+    mocks.listPublishedSitesPage.mockResolvedValue({
+      sites: [],
+      workspace: null,
+      nextCursor: null,
+    });
     render(<SitesPage />);
     await screen.findByTestId('sites-empty');
     emit(rename);
@@ -128,9 +136,11 @@ describe('SitesPage update callback boundary', () => {
 
   it('retires a loading refresh when an exact current-row mutation completes', async () => {
     let finish!: (value: { sites: PublishedSite[]; workspace: null; nextCursor: null }) => void;
-    const refresh = new Promise<{ sites: PublishedSite[]; workspace: null; nextCursor: null }>((resolve) => {
-      finish = resolve;
-    });
+    const refresh = new Promise<{ sites: PublishedSite[]; workspace: null; nextCursor: null }>(
+      (resolve) => {
+        finish = resolve;
+      },
+    );
     render(<SitesPage />);
     await screen.findByTestId('site-record');
     mocks.listPublishedSitesPage.mockReturnValueOnce(refresh);
@@ -156,9 +166,25 @@ describe('SitesPage update callback boundary', () => {
   });
 
   it('keeps a later-page mutation ahead of an interrupted newest refresh without accepting an off-page callback', async () => {
-    const older = { ...original, token: 'b'.repeat(24), artifactId: 'artifact-2', title: 'Older site', shareUrl: `https://agiworkforce.com/shared-artifact/${'b'.repeat(24)}` };
-    let finish!: (value: { sites: PublishedSite[]; workspace: null; nextCursor: string | null }) => void;
-    const refresh = new Promise<{ sites: PublishedSite[]; workspace: null; nextCursor: string | null }>((resolve) => { finish = resolve; });
+    const older = {
+      ...original,
+      token: 'b'.repeat(24),
+      artifactId: 'artifact-2',
+      title: 'Older site',
+      shareUrl: `https://agiworkforce.com/shared-artifact/${'b'.repeat(24)}`,
+    };
+    let finish!: (value: {
+      sites: PublishedSite[];
+      workspace: null;
+      nextCursor: string | null;
+    }) => void;
+    const refresh = new Promise<{
+      sites: PublishedSite[];
+      workspace: null;
+      nextCursor: string | null;
+    }>((resolve) => {
+      finish = resolve;
+    });
     mocks.listPublishedSitesPage
       .mockResolvedValueOnce({ sites: [original], workspace: null, nextCursor: 'older-cursor' })
       .mockResolvedValueOnce({ sites: [older], workspace: null, nextCursor: null })
@@ -166,7 +192,7 @@ describe('SitesPage update callback boundary', () => {
     render(<SitesPage />);
     await screen.findByTestId('site-record');
     const originalPageCallback = mocks.onUpdated!;
-    fireEvent.click(screen.getByRole('button', { name: 'Older', exact: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'Older' }));
     await screen.findByText(/Older site/);
     expect(readRecord()).toEqual(older);
     fireEvent.click(screen.getByRole('button', { name: 'Refresh sites' }));
@@ -179,10 +205,16 @@ describe('SitesPage update callback boundary', () => {
     emit(update);
     expect(signal.aborted).toBe(true);
     expect(readRecord()).toEqual({ ...older, ...rename.changes });
-    await act(async () => finish({ sites: [original], workspace: null, nextCursor: 'older-cursor' }));
+    await act(async () =>
+      finish({ sites: [original], workspace: null, nextCursor: 'older-cursor' }),
+    );
     expect(readRecord()).toEqual({ ...older, ...rename.changes });
     expect(screen.getByRole('button', { name: 'Back to newest' })).toBeEnabled();
-    expect(mocks.listPublishedSitesPage.mock.calls.map(([cursor]) => cursor)).toEqual([null, 'older-cursor', null]);
+    expect(mocks.listPublishedSitesPage.mock.calls.map(([cursor]) => cursor)).toEqual([
+      null,
+      'older-cursor',
+      null,
+    ]);
   });
 });
 

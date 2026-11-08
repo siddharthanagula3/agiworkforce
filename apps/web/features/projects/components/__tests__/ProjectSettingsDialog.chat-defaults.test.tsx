@@ -10,6 +10,7 @@ vi.mock('@/features/projects/services/managed-cloud-projects', () => ({
   webManagedCloudProjects: { updateProject, deleteProject: vi.fn() },
 }));
 vi.mock('../KnowledgeFilesPanel', () => ({ KnowledgeFilesPanel: () => null }));
+vi.mock('../ProjectMemoryPanel', () => ({ ProjectMemoryPanel: () => null }));
 vi.mock('@features/chat/hooks/use-skills-list', () => ({
   useSkillsList: () => ({
     skills: [

@@ -257,3 +257,168 @@ test('a function body starts after its parameter list, not at a default value', 
 test('a return of null is not a principal', () => {
   assert.deepEqual(ungatedReturns('function f() {\n  return null;\n}\n', 'f'), []);
 });
+
+const DELEGATED_GATE = `
+async function checkLifecycle(userId: string) {
+  const status = await readAccountStatus(userId);
+  const decision = accountAccessDecision(status);
+  if (!decision.allowed) throw new Error('refused');
+}
+async function assertAccountActive(userId: string) {
+  await checkLifecycle(userId);
+  await workspaceCheck(userId);
+}
+async function checkForAuth(userId: string, options: Options) {
+  if (!options.owner) {
+    await assertAccountActive(userId);
+    return undefined;
+  }
+  await checkLifecycle(userId);
+  return { organizationId: 'owned' };
+}
+async function cookie(request: Request) {
+  const userId = await identityFor(request);
+  await checkForAuth(userId, {});
+  return { userId };
+}
+export async function entry(request: Request) {
+  if (request.bearer) {
+    const userId = await verifyBearerToken(request.bearer);
+    const scope = await checkForAuth(userId, {});
+    return { userId, scope };
+  }
+  return cookie(request);
+}
+`;
+
+test('delegated account checks: checked branches and cookie delegation pass', () => {
+  assert.deepEqual(ungatedReturns(DELEGATED_GATE, 'entry'), []);
+});
+
+const DELEGATION_BYPASSES = [
+  [
+    'unchecked owner branch',
+    DELEGATED_GATE.replace(
+      '  await checkLifecycle(userId);\n  return { organizationId:',
+      '  return { organizationId:',
+    ),
+  ],
+  [
+    'unchecked early void return',
+    DELEGATED_GATE.replace('    await assertAccountActive(userId);\n', ''),
+  ],
+  ['unchecked cookie delegate', DELEGATED_GATE.replace('  await checkForAuth(userId, {});\n', '')],
+  ['unawaited check', DELEGATED_GATE.replaceAll('await checkForAuth', 'checkForAuth')],
+  [
+    'conditional expression',
+    DELEGATED_GATE.replace(
+      'await checkForAuth(userId, {});',
+      'false && await checkForAuth(userId, {});',
+    ),
+  ],
+  [
+    'single statement conditional',
+    DELEGATED_GATE.replace(
+      'await checkForAuth(userId, {});',
+      'if (request.ready) await checkForAuth(userId, {});',
+    ),
+  ],
+  [
+    'single statement loop',
+    DELEGATED_GATE.replace(
+      'await checkForAuth(userId, {});',
+      'while (request.ready) await checkForAuth(userId, {});',
+    ),
+  ],
+  [
+    'unused callback',
+    DELEGATED_GATE.replace(
+      'await checkForAuth(userId, {});',
+      'const unused = async () => { await checkForAuth(userId, {}); };',
+    ),
+  ],
+  [
+    'parameter shadow',
+    DELEGATED_GATE.replace(
+      'cookie(request: Request)',
+      'cookie(request: Request, checkForAuth: Function)',
+    ),
+  ],
+  [
+    'local shadow',
+    DELEGATED_GATE.replace(
+      'async function cookie(request: Request) {',
+      'async function cookie(request: Request) { const checkForAuth = async () => undefined;',
+    ),
+  ],
+  [
+    'destructured shadow',
+    DELEGATED_GATE.replace(
+      'async function cookie(request: Request) {',
+      'async function cookie(request: Request) { const { checkForAuth } = request;',
+    ),
+  ],
+  [
+    'nested declaration shadow',
+    DELEGATED_GATE.replace(
+      'async function cookie(request: Request) {',
+      'async function cookie(request: Request) { async function checkForAuth() {}',
+    ),
+  ],
+  [
+    'cycle without a check',
+    DELEGATED_GATE.replace(
+      '  await checkForAuth(userId, {});\n  return { userId };',
+      '  return cookie(request);',
+    ),
+  ],
+  [
+    'catch fallback',
+    DELEGATED_GATE.replace(
+      '  await checkForAuth(userId, {});\n  return { userId };',
+      '  try { await checkForAuth(userId, {}); return { userId }; } catch { return { userId }; }',
+    ),
+  ],
+  [
+    'conditional lifecycle anchor',
+    DELEGATED_GATE.replace(
+      '  await checkLifecycle(userId);\n  await workspaceCheck',
+      '  if (userId) await checkLifecycle(userId);\n  await workspaceCheck',
+    ),
+  ],
+  [
+    'wrong account anchor',
+    DELEGATED_GATE.replace(
+      '  await checkLifecycle(userId);\n  await workspaceCheck',
+      "  await checkLifecycle('someone-else');\n  await workspaceCheck",
+    ),
+  ],
+  [
+    'optional bypass parameter',
+    DELEGATED_GATE.replace(
+      'checkLifecycle(userId: string)',
+      'checkLifecycle(userId: string, skip = false)',
+    ),
+  ],
+  [
+    'principal string spoof',
+    DELEGATED_GATE.replace(
+      '  await checkForAuth(userId, {});',
+      "  const message = 'await checkForAuth(userId, {});';",
+    ),
+  ],
+];
+for (const [label, source] of DELEGATION_BYPASSES) {
+  test(`delegated account checks: ${label} stays refused`, () => {
+    assert.ok(ungatedReturns(source, 'entry')?.some((statement) => statement.includes('return')));
+  });
+}
+
+test('delegated account checks: an unchecked fallthrough cannot guard a principal', () => {
+  const source = `
+  async function assertAccountActive(id: string) {}
+  async function conditional(id: string) { if (id) { await assertAccountActive(id); return; } }
+  async function entry() { await conditional('id'); return { userId: 'id' }; }
+  `;
+  assert.equal(ungatedReturns(source, 'entry').length, 1);
+});

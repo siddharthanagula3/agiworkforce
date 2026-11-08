@@ -12,7 +12,10 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('next/server', () => ({ after: mocks.after }));
-vi.mock('@/lib/logger', () => ({ logger: { error: mocks.error, warn: mocks.warn } }));
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule0>()),
+  logger: { error: mocks.error, warn: mocks.warn },
+}));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: mocks.forbidden }));
 vi.mock('@/lib/server/claimed-user-scope-db', () => ({
   createClaimedUserScopedDb: mocks.forbidden,
@@ -22,8 +25,12 @@ vi.mock('@/lib/egress-policy', () => ({
   assertResolvedPublicHostname: mocks.forbidden,
   pinnedPublicFetch: mocks.forbidden,
 }));
-vi.mock('@/lib/crypto/cmek', () => ({ platformTenantKeyRing: mocks.forbidden }));
-vi.mock('@/lib/crypto/envelope', () => ({
+vi.mock('@/lib/crypto/cmek', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule0>()),
+  platformTenantKeyRing: mocks.forbidden,
+}));
+vi.mock('@/lib/crypto/envelope', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule1>()),
   openEnvelope: mocks.forbidden,
   sealEnvelope: mocks.forbidden,
 }));
@@ -73,18 +80,22 @@ type Fault = 'insert-throw' | 'insert-no-row' | 'enqueue-throw' | 'enqueue-confl
 
 function deferred() {
   let resolve!: () => void;
-  const promise = new Promise<void>((done) => { resolve = done; });
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
   return { promise, resolve };
 }
 
 // Staging models a transaction with a known rollback outcome, not PostgreSQL/RLS or commit ambiguity.
-function fixture(options: {
-  endpointIds?: string[];
-  fault?: Fault;
-  failAt?: number;
-  commitGate?: ReturnType<typeof deferred>;
-  failBeforeCommit?: boolean;
-} = {}) {
+function fixture(
+  options: {
+    endpointIds?: string[];
+    fault?: Fault;
+    failAt?: number;
+    commitGate?: ReturnType<typeof deferred>;
+    failBeforeCommit?: boolean;
+  } = {},
+) {
   const endpointIds = options.endpointIds ?? [ENDPOINT_ID];
   const committed = { deliveries: [] as Delivery[], jobs: [] as Job[] };
   const staged = { deliveries: [] as Delivery[], jobs: [] as Job[] };
@@ -97,7 +108,9 @@ function fixture(options: {
   let active = false;
   let deliveryAttempts = 0;
   let jobAttempts = 0;
-  const forbidden = vi.fn((): never => { throw new Error('Unexpected adapter operation'); });
+  const forbidden = vi.fn((): never => {
+    throw new Error('Unexpected adapter operation');
+  });
   const failAt = options.failAt ?? 1;
 
   const tx: DatabaseAdapter = {
@@ -120,16 +133,18 @@ function fixture(options: {
         };
         staged.deliveries.push(delivery);
         timeline.push(`delivery:${delivery.id}`);
-        return [{
-          ...delivery,
-          status: 'pending',
-          attempts: 0,
-          response_status: null,
-          error: null,
-          last_attempt_at: null,
-          delivered_at: null,
-          created_at: CREATED_AT,
-        }] as T[];
+        return [
+          {
+            ...delivery,
+            status: 'pending',
+            attempts: 0,
+            response_status: null,
+            error: null,
+            last_attempt_at: null,
+            delivered_at: null,
+            created_at: CREATED_AT,
+          },
+        ] as T[];
       }
       if (normalized.startsWith('insert into public.background_jobs')) {
         jobAttempts += 1;
@@ -154,7 +169,7 @@ function fixture(options: {
     withOrg: forbidden,
     dispose: forbidden,
   };
-  const transaction = vi.fn(async <T>(fn: (adapter: DatabaseAdapter) => Promise<T>): Promise<T> => {
+  const transaction = async <T>(fn: (adapter: DatabaseAdapter) => Promise<T>): Promise<T> => {
     if (active) throw new Error('Nested transaction');
     active = true;
     timeline.push('begin');
@@ -176,7 +191,7 @@ function fixture(options: {
       staged.jobs.length = 0;
       active = false;
     }
-  });
+  };
   const db: DatabaseAdapter = {
     async query<T>(sql: string, params: unknown[] = []): Promise<T[]> {
       if (active) throw new Error('Outer adapter used inside transaction');
@@ -205,19 +220,34 @@ function fixture(options: {
     withOrg: forbidden,
     dispose: forbidden,
   };
+  const transactionSpy = vi.spyOn(db, 'transaction');
   mocks.after.mockImplementation((callback: unknown) => {
     expect(typeof callback).toBe('function');
     expect(timeline.at(-1)).toBe('commit');
     timeline.push('after');
   });
   return {
-    db, tx, committed, staged, outerCalls, txCalls, timeline, transaction,
-    callbackDone, failure, commitFailure, forbidden,
+    db,
+    tx,
+    committed,
+    staged,
+    outerCalls,
+    txCalls,
+    timeline,
+    transaction: transactionSpy,
+    callbackDone,
+    failure,
+    commitFailure,
+    forbidden,
   };
 }
 
-beforeEach(() => { vi.clearAllMocks(); });
-afterEach(() => { expect(mocks.forbidden).not.toHaveBeenCalled(); });
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+afterEach(() => {
+  expect(mocks.forbidden).not.toHaveBeenCalled();
+});
 
 function expectRolledBack(harness: ReturnType<typeof fixture>) {
   expect(harness.transaction).toHaveBeenCalledTimes(1);
@@ -256,19 +286,30 @@ describe('developer webhook enqueue transaction with the canonical job service',
     expect(first!.payload).toEqual(second!.payload);
     expect(first!.event_id).toBe(second!.event_id);
     expect(first!.payload).toEqual({
-      object: 'event', id: first!.event_id, type: EVENT_TYPE,
-      created_at: expect.any(Number), data,
+      object: 'event',
+      id: first!.event_id,
+      type: EVENT_TYPE,
+      created_at: expect.any(Number),
+      data,
     });
     for (const [index, delivery] of h.committed.deliveries.entries()) {
       expect(delivery).toMatchObject({
-        endpoint_id: [ENDPOINT_ID, 'endpoint-two'][index], user_id: USER_ID,
-        event_type: EVENT_TYPE, redelivery_of: null,
+        endpoint_id: [ENDPOINT_ID, 'endpoint-two'][index],
+        user_id: USER_ID,
+        event_type: EVENT_TYPE,
+        redelivery_of: null,
       });
       expectJobMatchesDelivery(h.committed.jobs[index]!, delivery);
     }
     expect(h.timeline).toEqual([
-      'begin', 'delivery:delivery-1', 'job:job-1', 'delivery:delivery-2', 'job:job-2',
-      'callback-done', 'commit', 'after',
+      'begin',
+      'delivery:delivery-1',
+      'job:job-1',
+      'delivery:delivery-2',
+      'job:job-2',
+      'callback-done',
+      'commit',
+      'after',
     ]);
     expect(mocks.after).toHaveBeenCalledTimes(1);
     expect(h.forbidden).not.toHaveBeenCalled();
@@ -279,21 +320,28 @@ describe('developer webhook enqueue transaction with the canonical job service',
     'rolls back earlier endpoints on late %s and retains best-effort error logging',
     async (fault) => {
       const h = fixture({ endpointIds: [ENDPOINT_ID, 'endpoint-two'], fault, failAt: 2 });
-      await expect(queueDeveloperWebhookEvent(h.db, USER_ID, EVENT_TYPE, {})).resolves.toBeUndefined();
+      await expect(
+        queueDeveloperWebhookEvent(h.db, USER_ID, EVENT_TYPE, {}),
+      ).resolves.toBeUndefined();
       expectRolledBack(h);
       expect(h.timeline).toContain('job:job-1');
       expect(mocks.error).toHaveBeenCalledTimes(1);
-      const expectedError = fault === 'insert-no-row'
-        ? expect.objectContaining({ message: 'The webhook delivery could not be queued.' })
-        : fault === 'enqueue-conflict'
-          ? expect.objectContaining({ message: 'Job enqueue conflicted with a job owned by another subject' })
-          : h.failure;
+      const expectedError =
+        fault === 'insert-no-row'
+          ? expect.objectContaining({ message: 'The webhook delivery could not be queued.' })
+          : fault === 'enqueue-conflict'
+            ? expect.objectContaining({
+                message: 'Job enqueue conflicted with a job owned by another subject',
+              })
+            : h.failure;
       expect(mocks.error).toHaveBeenCalledWith(
         { error: expectedError, userId: USER_ID, type: EVENT_TYPE },
         'Developer webhook event was not queued',
       );
       if (fault === 'insert-no-row' || fault === 'insert-throw') {
-        expect(h.txCalls.filter((call) => call.sql.startsWith('insert into public.background_jobs'))).toHaveLength(1);
+        expect(
+          h.txCalls.filter((call) => call.sql.startsWith('insert into public.background_jobs')),
+        ).toHaveLength(1);
       }
       if (fault === 'enqueue-conflict') {
         expect(h.txCalls.at(-1)!.sql).toContain('select id, status from public.background_jobs');
@@ -313,7 +361,10 @@ describe('developer webhook enqueue transaction with the canonical job service',
       const commitGate = deferred();
       const h = fixture({ commitGate });
       let settled = false;
-      const pending = operations[operation](h.db).then((value) => { settled = true; return value; });
+      const pending = operations[operation](h.db).then((value) => {
+        settled = true;
+        return value;
+      });
       await Promise.race([h.callbackDone.promise, pending]);
       expect(settled).toBe(false);
       expect(h.committed).toEqual({ deliveries: [], jobs: [] });
@@ -347,7 +398,11 @@ describe('developer webhook enqueue transaction with the canonical job service',
         expect(mocks.error).not.toHaveBeenCalled();
       }
       expect(h.timeline).toEqual([
-        'begin', 'delivery:delivery-1', 'job:job-1', 'callback-done', 'rollback',
+        'begin',
+        'delivery:delivery-1',
+        'job:job-1',
+        'callback-done',
+        'rollback',
       ]);
       expectRolledBack(h);
     },
@@ -358,11 +413,12 @@ describe('developer webhook enqueue transaction with the canonical job service',
       `${operation} rejects %s rather than swallowing the transaction failure`,
       async (fault) => {
         const h = fixture({ fault });
-        const expected = fault === 'insert-no-row'
-          ? 'The webhook delivery could not be queued.'
-          : fault === 'enqueue-conflict'
-            ? 'Job enqueue conflicted with a job owned by another subject'
-            : h.failure.message;
+        const expected =
+          fault === 'insert-no-row'
+            ? 'The webhook delivery could not be queued.'
+            : fault === 'enqueue-conflict'
+              ? 'Job enqueue conflicted with a job owned by another subject'
+              : h.failure.message;
         await expect(operations[operation](h.db)).rejects.toThrow(expected);
         expectRolledBack(h);
         expect(mocks.error).not.toHaveBeenCalled();
@@ -374,11 +430,15 @@ describe('developer webhook enqueue transaction with the canonical job service',
     const h = fixture();
     const delivery = await sendWebhookTestEvent(h.db, USER_ID, ENDPOINT_ID);
     expect(delivery).toMatchObject({
-      id: h.committed.deliveries[0]!.id, eventType: DEVELOPER_WEBHOOK_TEST_EVENT,
-      redeliveryOf: null, createdAt: CREATED_AT,
+      id: h.committed.deliveries[0]!.id,
+      eventType: DEVELOPER_WEBHOOK_TEST_EVENT,
+      redeliveryOf: null,
+      createdAt: CREATED_AT,
     });
     expect(h.committed.deliveries[0]!.payload).toMatchObject({
-      id: delivery.eventId, type: DEVELOPER_WEBHOOK_TEST_EVENT, data: { endpoint_id: ENDPOINT_ID },
+      id: delivery.eventId,
+      type: DEVELOPER_WEBHOOK_TEST_EVENT,
+      data: { endpoint_id: ENDPOINT_ID },
     });
     expectJobMatchesDelivery(h.committed.jobs[0]!, h.committed.deliveries[0]!);
     expect(mocks.error).not.toHaveBeenCalled();
@@ -389,10 +449,14 @@ describe('developer webhook enqueue transaction with the canonical job service',
     const delivery = await redeliverWebhook(h.db, USER_ID, ENDPOINT_ID, original.id);
     expect(delivery.id).not.toBe(original.id);
     expect(delivery).toMatchObject({
-      eventId: original.event_id, eventType: original.event_type, redeliveryOf: original.id,
+      eventId: original.event_id,
+      eventType: original.event_type,
+      redeliveryOf: original.id,
     });
     expect(h.committed.deliveries[0]).toMatchObject({
-      endpoint_id: ENDPOINT_ID, user_id: USER_ID, payload: original.payload,
+      endpoint_id: ENDPOINT_ID,
+      user_id: USER_ID,
+      payload: original.payload,
       redelivery_of: original.id,
     });
     expectJobMatchesDelivery(h.committed.jobs[0]!, h.committed.deliveries[0]!);
@@ -401,7 +465,13 @@ describe('developer webhook enqueue transaction with the canonical job service',
 
   it('commits jobs but registers no callback when attemptAfterResponse is false', async () => {
     const h = fixture();
-    await queueDeveloperWebhookEvent(h.db, USER_ID, EVENT_TYPE, {}, { attemptAfterResponse: false });
+    await queueDeveloperWebhookEvent(
+      h.db,
+      USER_ID,
+      EVENT_TYPE,
+      {},
+      { attemptAfterResponse: false },
+    );
     expect(h.timeline.at(-1)).toBe('commit');
     expect(h.committed.deliveries).toHaveLength(1);
     expect(h.committed.jobs).toHaveLength(1);
@@ -419,3 +489,8 @@ describe('developer webhook enqueue transaction with the canonical job service',
     expect(mocks.error).not.toHaveBeenCalled();
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/crypto/cmek');
+type CompleteMockModule1 = typeof import('@/lib/crypto/envelope');
+
+type RetainedMockModule0 = typeof import('@/lib/logger');

@@ -22,7 +22,7 @@ const deleteCloudMemory = vi.fn();
 const observeMemoryAdapter = vi.fn();
 
 vi.mock('@agiworkforce/unified-chat', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/unified-chat')>();
+  const actual = await importOriginal<MockedModule0>();
   return {
     ...actual,
     MemoryEditor: (props: ComponentProps<typeof actual.MemoryEditor>) => {
@@ -86,18 +86,30 @@ async function acceptDeleteConfirmation(user: User) {
 describe('cloud memory hydration', () => {
   it('retains loaded facts and shows refresh failure when a later list is incomplete', async () => {
     await renderCloudMemory();
-    await screen.findByText('Saved to your Managed Cloud account, available on every signed-in device.');
+    await screen.findByText(
+      'Saved to your Managed Cloud account, available on every signed-in device.',
+    );
     const adapter = observeMemoryAdapter.mock.calls.at(-1)?.[0] as MemoryEditorDataAdapter;
-    listCloudMemories.mockRejectedValueOnce(new Error('The complete cloud memory list could not be loaded.'));
+    listCloudMemories.mockRejectedValueOnce(
+      new Error('The complete cloud memory list could not be loaded.'),
+    );
 
     await act(async () => {
       await expect(adapter.hydrateFromServer()).rejects.toThrow('complete cloud memory list');
     });
 
     expect(screen.getByText('likes espresso')).toBeTruthy();
-    expect(screen.getByText('Couldn’t refresh your Managed Cloud memory. The loaded list may be out of date. Device-local memory was not used.')).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Couldn’t refresh your Managed Cloud memory. The loaded list may be out of date. Device-local memory was not used.',
+      ),
+    ).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Reload memories' })).toBeTruthy();
-    expect(screen.queryByText('Saved to your Managed Cloud account, available on every signed-in device.')).toBeNull();
+    expect(
+      screen.queryByText(
+        'Saved to your Managed Cloud account, available on every signed-in device.',
+      ),
+    ).toBeNull();
     expect(screen.queryByText(/No cloud memory facts yet/)).toBeNull();
   });
 });
@@ -215,3 +227,5 @@ describe('cloud memory edit', () => {
     expect(screen.queryByText('likes decaf')).toBeNull();
   });
 });
+
+type MockedModule0 = typeof import('@agiworkforce/unified-chat');

@@ -7,7 +7,10 @@ import {
 vi.mock('server-only', () => ({}));
 
 const {
-  mockQuery, mockExecute, mockGetClerkAuthUser, mockRecordAuditEvent,
+  mockQuery,
+  mockExecute,
+  mockGetClerkAuthUser,
+  mockRecordAuditEvent,
   mockGetCachedActiveOrganizationId,
 } = vi.hoisted(() => ({
   mockQuery: vi.fn(),
@@ -18,7 +21,7 @@ const {
 }));
 
 vi.mock('@/lib/server/request-context-cache', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/request-context-cache')>()),
+  ...(await importOriginal<MockedModule0>()),
   getCachedActiveOrganizationId: mockGetCachedActiveOrganizationId,
   setCachedActiveOrganizationId: vi.fn(async () => undefined),
 }));
@@ -300,9 +303,13 @@ describe('DELETE /api/settings/organization', () => {
       expect(response.status).toBe(200);
       expect(mockGetCachedActiveOrganizationId).not.toHaveBeenCalled();
       expect(mockExecute).toHaveBeenCalledWith(expect.stringContaining('deletion_scheduled_for'), [
-        ORG, expect.any(String), 'user-1',
+        ORG,
+        expect.any(String),
+        'user-1',
       ]);
-      expect(mockRecordAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ organizationId: ORG }));
+      expect(mockRecordAuditEvent).toHaveBeenCalledWith(
+        expect.objectContaining({ organizationId: ORG }),
+      );
     });
 
     it.each([
@@ -324,8 +331,12 @@ describe('DELETE /api/settings/organization', () => {
       expect(response.status).toBe(200);
       expect(mockGetCachedActiveOrganizationId).toHaveBeenCalledWith('user-1');
       expect(mockExecute).toHaveBeenCalledWith(expect.stringContaining('deletion_scheduled_for'), [
-        OTHER_ORG, expect.any(String), 'user-1',
+        OTHER_ORG,
+        expect.any(String),
+        'user-1',
       ]);
     });
   });
 });
+
+type MockedModule0 = typeof import('@/lib/server/request-context-cache');

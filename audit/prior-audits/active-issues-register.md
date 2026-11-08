@@ -4029,7 +4029,6 @@ OPEN, not a newly reproduced missing-disposal defect.
 
 Historical report (not current behavior or rerun):
 
-
 The CLI is spawned with piped stdio. handshake throws after initialize; its catch calls closeServer. closeServer marks closed, rejects requests, removes the map entry and emits runtime-stopped, but neither ends stdin nor kills/detaches the child. The next ensureServer sees no registered server and spawns another. The rejected child retains its open pipe and is excluded from stopAllDeveloperRuntimes, which iterates the map.
 
 Trigger/impact: Configure an installed CLI that answers initialize with an unsupported protocol, runtime version or missing thread/turn capability. Open an approved coding folder, then retry the unavailable folder. Malformed output and oversized incomplete frames use the same disposal path. An ordinary compatibility mismatch can leave an idle app-server alive on every retry. If disposal follows a protocol failure during a running turn, the unregistered runtime can also continue work. No resource-exhaustion magnitude or live leakage was measured.
@@ -4037,7 +4036,6 @@ Trigger/impact: Configure an installed CLI that answers initialize with an unsup
 Source: `apps/desktop/electron/runtime/developerSessionService.ts:678` in `49d0c30f`. [Full evidence](evidence/2026-09-29-ecosystem-review/electron-protocol-review.json). No new tests, native build or mounted Electron run was performed. No mounted Electron run, process listing after a rejected handshake, or new regression test executed.
 
 Resolution/acceptance: Dispose failed handshakes and framing failures through the same owned shutdown path as explicit stop; retain child ownership until exit. Test rejected handshake disposal, buffered old-child notifications and replacement ordering through child exit.
-
 
 Current acceptance limits: mocked child/stream fixtures are unexecuted. No real
 process exit, native lifecycle, SSH or deployment proof exists. Pending launches,
@@ -4061,7 +4059,6 @@ ingress, runtime/deployment acceptance OPEN.
 
 Historical report (not current behavior or rerun):
 
-
 The stdout listener captures the old server. acceptChunk/acceptLine/handleNotification have no early server.closed or registry-generation check. acceptChunk tests closed only after accepting one line, so each later chunk can still deliver its first notification. Notifications carry root/thread/turn ids but no runtime generation. The local session consumer filters the thread but does not check the event turn id before appending output, replacing approval or settling the current turn.
 
 Trigger/impact: Stop a runtime or discard it after a protocol failure while stdout has a buffered notification or emits another data chunk. Start or reopen the same root/session during the cleanup interval. A late old-turn delta can append to a replacement turn, a stale approval can reappear after runtime-stopped cleared it, or a late finished event can settle the newer turn in the same thread. This concerns ordinary buffered callbacks; no forged protocol input or exploit was constructed.
@@ -4069,7 +4066,6 @@ Trigger/impact: Stop a runtime or discard it after a protocol failure while stdo
 Source: `apps/desktop/electron/runtime/developerSessionService.ts:295` in `49d0c30f`. [Full evidence](evidence/2026-09-29-ecosystem-review/electron-protocol-review.json). No new tests, native build or mounted Electron run was performed. No asynchronous child/React regression test executed. Cross-account or permission impact remains unclassified.
 
 Resolution/acceptance: Fence old-child callbacks by current runtime identity and closed state; consumers should match the current turn before applying turn-specific events. Test rejected handshake disposal, buffered old-child notifications and replacement ordering through child exit.
-
 
 Current acceptance limits: mocked child/stream fixtures are unexecuted. No real
 process exit, native lifecycle, SSH or deployment proof exists. Pending launches,
@@ -4093,7 +4089,6 @@ OPEN.
 
 Historical report (not current behavior or rerun):
 
-
 terminate ends stdin and schedules SIGKILL after 1,500 ms, then synchronously calls closeServer, which removes the map entry. stopDeveloperRuntime returns void and exposes no exit promise. ensureServer can immediately spawn a replacement; readyServer waits only for that new child handshake. The prior CLI releases its writer leases at the end of asynchronous host shutdown, after terminating process trees and waiting for managers/tasks.
 
 Trigger/impact: Use Stop background coding runtime, then immediately open/resume/start work in that folder while the prior CLI is still shutting down. Old and new runtimes may overlap for the same approved folder. A fast restart can encounter the old writer lease instead of resuming immediately, and old work can finish during the newly available runtime interval. No overlap duration or visible conflict was measured.
@@ -4101,7 +4096,6 @@ Trigger/impact: Use Stop background coding runtime, then immediately open/resume
 Source: `apps/desktop/electron/runtime/developerSessionService.ts:1195` in `49d0c30f`. [Full evidence](evidence/2026-09-29-ecosystem-review/electron-protocol-review.json). No new tests, native build or mounted Electron run was performed. No real subprocess timing, writer-conflict reproduction or shutdown/restart integration test executed.
 
 Resolution/acceptance: Keep a stopping registry entry with an exit/shutdown promise and sequence replacement admission after it, while retaining a bounded kill fallback. Test rejected handshake disposal, buffered old-child notifications and replacement ordering through child exit.
-
 
 Current acceptance limits: mocked child/stream fixtures are unexecuted. No real
 process exit, native lifecycle, SSH or deployment proof exists. Pending launches,
@@ -8638,7 +8632,6 @@ observed cost and cleanup obligations durably across attempts, and define
 idempotent recovery and truthful receipts. No full cancellation, automatic refund,
 financial repair or new product semantics are approved by this documentation.
 
-
 ## CLI-TURN-HISTORY-AUTHORITY-01
 
 Severity: High. Status: OPEN source-backed accepted-turn/history authority design
@@ -8695,7 +8688,6 @@ coherent across callers. This is **not implementation-ready**. No production
 change, blanket legacy-history refusal, new transfer policy or migration is
 approved by this note. Source reading only; no tests, network or real-data actions.
 
-
 ## WEB-DIRECT-STREAM-TERMINAL-BILLING-COUPLING-01
 
 Severity: Medium. Status: OPEN source-backed outcome-separation design constraint,
@@ -8729,7 +8721,6 @@ empty/missing-stop EOF and cancellation independently. No production change or
 financial-policy decision is approved by this note. Source reading only: no tests,
 DB, provider, billing actions or deployment verification. Managed commit
 `119de96dcd3a5ed7cb27e871b53a4f11d33f0b5b` does not resolve this direct-path issue.
-
 
 ## NATIVE-WORKTREE-ARCHIVE-LIFECYCLE-01
 
@@ -8780,7 +8771,6 @@ decisions. A snapshot receipt alone or a single-process UI lock cannot supply th
 No native edits, tests, filesystem deletion, subprocess or network actions were
 performed for this finding.
 
-
 ## SHARED-UPLOAD-ACTION-AUTHORITY-01
 
 Severity: Medium. Status: OPEN source-backed operation authority design dependency,
@@ -8823,7 +8813,6 @@ explicit Personal/organization selectors, but current admission alone cannot
 reconstruct original intent. No endpoint-only patch, broad implementation, new
 compatibility/refusal semantics or implementation-ready design is approved here.
 Source-only: no tests, network, native, DB or upload actions.
-
 
 ## WEB-VOICE-CLOSED-BEFORE-SETTLEMENT-01
 
@@ -9109,7 +9098,6 @@ assessment and is not bundled here. Adapter pin correction `2c011ad433` does not
 fix this shared-store lifecycle. Source-only review; no tests/checks, credentials,
 network, DB or memory mutation actions.
 
-
 Bounded accepted correction: the new `features/memory/cloud-memory-controller.ts`
 and hook bind in-memory facts and queued operations to canonical admitted
 account/session/workspace ownership, with explicit Personal/organization headers
@@ -9136,7 +9124,6 @@ consumer boundaries with mocks, but all are unexecuted. No integrated browser,
 SDK, DB/RLS, deployment or memory action validation occurred; broader closure is
 not justified.
 
-
 Bounded management-list ordering correction `ec37a9446453e8035c74e38cbf15c589031610d1`
 on 2026-11-05 adds `m.id desc` after pinned and update-time descending order in
 GET `/api/memory`. Batch sync can give several memories identical timestamps;
@@ -9157,7 +9144,6 @@ database behavior. Determinism requires unchanged eligible rows and sort values.
 Expiry can alter eligibility without writes; concurrent changes, cap exhaustion,
 coherent snapshots, query-plan performance and legacy owner/backlog risks remain
 outside this correction.
-
 
 Accepted receipt correction `fce8309a4612f22d62772d23270ae827ee8a31bc` on
 2026-11-05 adds `parseManagedMemoryStrictPageResponse` in canonical
@@ -9215,7 +9201,6 @@ ownership, optimistic rollback, clear semantics and concurrent snapshots remain
 separate. Public Electron uses hosted Web; mobile's Local SQLite cap is a different
 lane. No tests, checks, builds, native or database actions ran.
 
-
 Separate Local-context correction `efdb7f495aa5fa6e94cfae101078348e071c85c1`
 replaces the unowned project-only query cache with ephemeral canonical admitted
 owner/epoch/scope and per-project entries. Prefetch uses captured bearer plus
@@ -9229,7 +9214,6 @@ the Local cache/read exclusion only, not standalone legacy storage, logout purge
 settings preference caches or forget-target semantics. Dedicated and compatibility
 fixture sources remain unexecuted; runtime/deployment acceptance stays OPEN.
 
-
 Preference scope clarification: separate commit `2edbdae2b9` adds owned account
 settings/version APIs and migrates capabilities and MemoryExclusions, with selected
 organization memory policy fetched separately. This narrowly supersedes the
@@ -9239,7 +9223,6 @@ on hold, and compatibility callers, derived indefinite memory-capability caching
 and billing refresh internals remain outside that migration. Existing local/offline
 settings and logout purge are preserved. All fixture sources are unexecuted; no
 universal settings or memory lifecycle closure is established.
-
 
 ## WEB-ARTIFACT-SYNC-BASELINE-OWNERSHIP-01
 
@@ -9283,7 +9266,6 @@ universal settings or memory lifecycle closure is established.
   ready protocol is approved; runtime, large-account and cross-tab behavior remain
   unverified.
 
-
 ## WEB-PROJECT-OBJECT-LIFECYCLE-01
 
 - **Severity/status:** Medium, OPEN; source-derived object availability and recovery
@@ -9322,7 +9304,6 @@ universal settings or memory lifecycle closure is established.
   how callers recover uncertain results. A metadata-only restoration or an ad-hoc
   database lock held across remote storage calls is not an established solution.
   No new retry/deletion policy, tests, checks, database or network actions were performed.
-
 
 ## WEB-MEDIA-SESSION-CLEANUP-01
 
@@ -9370,7 +9351,6 @@ unmounted observation was introduced. Exact-session/request guards remain intact
 this is not evidence of cross-account remote access. Actual-store fixture sources
 were independently reviewed but not executed, and runtime/deployment acceptance
 remains open.
-
 
 ## MOBILE-CLOUD-PRIVACY-CONTROL-OWNERSHIP-01
 
@@ -9532,7 +9512,6 @@ Legacy preference parsing normalizes malformed envelopes/namespaces, and its wri
 helper accepts a successful response with unparseable JSON, ignores stored values
 and announces submitted values. Backend stored receipt validation does not make
 these permissive client reads authoritative.
-
 
 Accepted bounded correction `880ed1b432` adds a narrow privacy adapter using the
 canonical settings path, request authority and CSRF. Strict GET envelopes require
@@ -9940,8 +9919,7 @@ identity transition or authorization bypass demonstrated.
 canonical session lifetime. `clearCsrfToken` has no production caller. The token
 route binds to the authenticated subject when available, otherwise to its
 anonymous HttpOnly cookie; verification compares the current subject. Retaining
-A's cached token after an in-place transition to B therefore fails closed with
-403. Cookie-only account-consent, export and cookie-banner recording callers
+A's cached token after an in-place transition to B therefore fails closed with 403. Cookie-only account-consent, export and cookie-banner recording callers
 remain, while canonical RequestAuthority callers pin bearer identity and omit
 cookies. Valid bearer authentication bypasses CSRF by design.
 
@@ -10382,7 +10360,6 @@ Continue effects to canonical account/view authority, and reconcile unknown
 outcomes by reads rather than mutation replay. Abort is not rollback. Server scheduling idempotency and grant session/consumption policy remain
 separate decisions. No tests, checks, builds or live account operations ran.
 
-
 Account-schedule re-entry addendum, 2026-11-05: Source-corrected in
 `290985bba850c3c5fb15637752ca761f0c164ed4`. DELETE previously rewrote both
 profile deletion timestamps by user ID alone. The lifecycle gate intentionally
@@ -10607,7 +10584,6 @@ Continue/logout and global cleanup remain open; connector-history compatibility
 is still held. No product tests, lint, typechecks, builds, installations, live
 account actions, migration application or deployment ran. Publication is separate.
 
-
 ## WEB-ACCOUNT-CONSENT-RECEIPT-01
 
 Status: Boundedly source-corrected in
@@ -10667,7 +10643,6 @@ and POST, contradictory upgraded refusal, HTTP/network failures and separate
 intent/receipt callbacks. Marketing success mocks now reflect one submitted
 purpose. Local application is mocked; no browser analytics collection was run.
 No tests, lint, typechecks, builds, live consent changes, push or deployment ran.
-
 
 ## MOBILE-LOGOUT-SESSION-LIFETIME-01
 
@@ -11204,7 +11179,6 @@ general cron locking, schedule-version fencing, legal-hold races and complete
 erasure recovery remain outside these corrections. No tests, lint, typechecks,
 builds, installations, live/database actions, push or deployment ran.
 
-
 ## WEB-WORKSPACE-ERASURE-LOCKDOWN-01
 
 Severity: High. Status: Lock-establishment failure and premature lock removal
@@ -11257,7 +11231,6 @@ No tests, lint, typechecks, builds, installations, live/database actions, push o
 deployment ran. Claim only refusal to proceed after lock-establishment failure
 and removal of erasure's own premature flag deletion, not universal isolation.
 
-
 ## WEB-ACCOUNT-EXPORT-ERASURE-CUSTODY-01
 
 Severity: High. Status: Retry-pointer loss source-corrected in
@@ -11294,7 +11267,6 @@ new writes, malformed archive payloads and complete erasure remain outside scope
 No tests, lint, typechecks, builds, installations, live/database actions, push or
 deployment ran.
 
-
 Staging-order addendum, 2026-11-05: Source correction
 `c126a2d8ded87a094305517ac4f3fd937947621a` resolves the workspace query after
 JSON collection but before writing export.json. Previously that query was awaited
@@ -11317,8 +11289,6 @@ fencing need a coordinated design. Objects remain private and normal download
 resolution requires a job; no deployed occurrence or access bypass is established.
 External bucket lifecycle configuration is unknown. No storage, database, fixture
 or other product execution was performed.
-
-
 
 Queue-retention addendum, source-reviewed 2026-11-05: Generic pruneFinishedJobs
 removes succeeded/cancelled data-export rows after seven days and dead rows after
@@ -11348,7 +11318,6 @@ indefinitely would not complete cleanup or establish writer quiescence. Durable
 cleanup ownership and pruning after confirmed disposal need the same coordinated
 staging/fencing design. Independent read-only review traced these paths; no jobs,
 cron, storage, database or fixture was executed.
-
 
 ## WEB-SECURITY-SESSION-COMPLETION-01
 
@@ -11386,7 +11355,6 @@ External boundaries are mocked; no actual sessions, provider calls or runtime
 acceptance were exercised. No tests, lint, typechecks, builds, installations,
 live/database actions, push or deployment ran.
 
-
 ## WEB-CREDENTIAL-MUTATION-RETRY-01
 
 Severity: Medium. Status: Automatic password/API-key mutation retries
@@ -11417,7 +11385,6 @@ Interactive challenge UI, actual provider/server writes, manual double submits,
 server idempotency, response-schema validation, automatic outcome reconciliation
 and session ownership remain outside this correction. No tests, lint, typechecks,
 builds, installations, live/database actions, push or deployment ran.
-
 
 ## WEB-SESSION-REVOCATION-CLASSIFICATION-01
 
@@ -11491,7 +11458,6 @@ other object classes, historical backup configuration and full erasure remain
 outside this correction. No tests, lint, typechecks, builds, installations,
 live/database actions, push or deployment ran.
 
-
 ## WEB-ACCOUNT-KNOWLEDGE-BACKUP-ERASURE-01
 
 Severity: High. Status: Configured knowledge backup cleanup and retry custody
@@ -11531,7 +11497,6 @@ replication, shared-reference races, sequential/unpaginated work and complete
 account erasure remain outside this correction. No tests, lint, typechecks,
 builds, installations, live/database actions, push or deployment ran.
 
-
 ## WEB-ACCOUNT-IDENTITY-ERASURE-CLASSIFICATION-01
 
 Severity: High. Status: Ambiguous identity-deletion errors retain retry custody,
@@ -11565,7 +11530,6 @@ by successful retry, and failure while re-erasing a resurrected profile. They
 mock erasure/storage/identity boundaries; no SDK error, job dispatch, provider
 operation, database transition or fixture was executed. No tests, lint,
 typechecks, builds, installations, live/database actions, push or deployment ran.
-
 
 ## WEB-ACCOUNT-KNOWLEDGE-REFERENCE-ERASURE-01
 
@@ -11608,7 +11572,6 @@ Retries alone do not repair an obsolete base; operator reconciliation may be
 needed. This is not a legacy-data migration, broad URL acceptance, proof of
 stored-byte absence or complete erasure. No tests, lint, typechecks, builds,
 installations, live/database actions, push or deployment ran.
-
 
 ## WEB-EXPORT-SNAPSHOT-REVOCATION-01
 
@@ -11666,7 +11629,6 @@ proven erased-account download bypass. Coordinated writer admission/finalization
 and erasure fencing remain open; the earlier pointer-retention correction does
 not solve that race. No worker, database or storage operation was exercised.
 
-
 ## WEB-EXPORT-ARCHIVE-TIMESTAMP-01
 
 Severity: Medium. Status: Unparseable archive readiness/expiry metadata fails
@@ -11696,7 +11658,6 @@ They cover invalid/blank/nullish/non-string timestamp values, expiry at/before n
 valid future expiry and unchanged non-ready job states. No presigned URL, object
 fetch, live database or fixture was executed. No tests, lint, typechecks, builds,
 installations, live/database actions, push or deployment ran.
-
 
 ## WEB-BILLING-INVOICE-EXPORT-COMPLETENESS-01
 
@@ -11732,6 +11693,7 @@ export retrieves omitted history or that every truncated list is newest-first.
 
 Official Stripe documentation was read on 2026-11-05, including the repository's
 pinned API version 2026-04-22.dahlia:
+
 - https://docs.stripe.com/api/invoices/list?api-version=2026-04-22.dahlia
 - https://docs.stripe.com/api/pagination
 - https://docs.stripe.com/api/invoice-line-item/retrieve?api-version=2026-04-22.dahlia
@@ -11750,7 +11712,6 @@ This reports omissions; it does not retrieve older invoices/lines, recover
 historical or unlinked customers, verify other providers, or solve archive
 snapshot/erasure custody. No tests, lint, typechecks, builds, installations,
 live database/provider actions, push or deployment ran.
-
 
 ## WEB-STORE-BILLING-ERASURE-CUSTODY-01
 
@@ -11851,7 +11812,6 @@ retention or cancellation policy is introduced by this patch.
 No tests, lint, typechecks, builds, installations, application execution, live
 DB/provider actions, push or deployment ran. This is source acceptance only.
 
-
 ## WEB-STORE-CONSENT-PREFLIGHT-01
 
 Severity: Medium. Status: Recorded consent withdrawal is source-corrected at
@@ -11911,7 +11871,6 @@ billing/erasure custody remains separately open under
 No tests, lint, typechecks, builds, installations, application execution, live
 DB/provider actions, push or deployment ran. This is source acceptance only.
 
-
 ## MOBILE-APP-TRANSACTION-OWNERSHIP-01
 
 Severity: Medium. Status: Native registration account lifetime source-corrected
@@ -11969,7 +11928,6 @@ This is a bounded producer-lifetime correction supporting
 identity session authority. No tests, lint, typechecks, builds, installations,
 application execution, native/provider/database actions, push or deployment ran.
 
-
 ## MOBILE-PUSH-REVOCATION-ORDER-01
 
 Severity: High. Status: Open source design finding, 2026-11-05.
@@ -12017,7 +11975,6 @@ uncertain request outcomes. Existing deferred client fixtures mock the API; they
 do not establish backend commit ordering. Tests and all product checks remain
 unrun, and no migration or provider/database action was performed.
 
-
 ## MOBILE-PUSH-ACCOUNT-HANDOFF-01
 
 Severity: Medium. Status: Open source design finding, 2026-11-05.
@@ -12047,7 +12004,6 @@ reset can remove the particular condition; neither is an ordinary account-switch
 solution. No token registration, notification send, device reset, tests, database
 or provider action was performed. See `MOBILE-PUSH-REVOCATION-ORDER-01` for the
 separate stale-write privacy boundary.
-
 
 ## MOBILE-TIME-FOCUS-OWNERSHIP-01
 
@@ -12091,7 +12047,6 @@ retained payload ownership and current-owner read/edit ordering remain open unde
 `MOBILE-TIME-FOCUS-PAYLOAD-OWNERSHIP-01`; already accepted server writes are not
 undone and overlapping same-owner writes are not serialized.
 
-
 ## MOBILE-TIME-FOCUS-PAYLOAD-OWNERSHIP-01
 
 Severity: Medium. Status: Open source design finding, 2026-11-05.
@@ -12121,7 +12076,6 @@ new-owner read pending/failure, partial edits, multiple hook mounts and out-of-
 order reads/writes, with explicit payload ownership and edit revisions. Merely
 adding another current-account check or claiming cancellation is insufficient.
 No implementation for that wider ownership contract is accepted here.
-
 
 Further read-only consumer review on 2026-11-05 includes `TimeFocusReminder`,
 `notificationGate`, `companionNotifications` and `pushPreferenceSync`. Changing
@@ -12153,7 +12107,6 @@ history remains separately device-scoped. Shared ephemeral Cloud state, strict
 readiness, one current write and GET-only recovery must migrate all named consumers
 together. This is a design constraint only, not an accepted production slice or
 runtime validation; no tests, checks, builds or application/native/server actions ran.
-
 
 ## MOBILE-LOCAL-WIPE-CLEANUP-ORDER-01
 
@@ -12205,7 +12158,6 @@ account-handoff and concurrent-session issues remain under their existing IDs.
 No product checks, app execution, live
 wipe, provider/database/native action, push or deployment ran.
 
-
 ## MOBILE-SIRI-ROTATION-DISABLE-01
 
 Severity: High. Status: Ordinary-operation ordering source-corrected on
@@ -12253,7 +12205,6 @@ refused. Server late issuance, unknown commit results and native-generation
 fencing are not repaired. No tests, lint, typechecks, builds, formatters,
 application/native/database/provider actions, push or deployment ran.
 
-
 ## MOBILE-SIRI-ROTATION-RETRY-01
 
 Severity: Medium. Status: Current-owner failed launch-rotation retry
@@ -12292,14 +12243,12 @@ is not repaired. `MOBILE-SIRI-ROTATION-DISABLE-01` and
 `MOBILE-LOGOUT-SESSION-LIFETIME-01` remain open. No tests, lint, typechecks, builds,
 app/native execution, real token request, push or deployment ran.
 
-
 Subsequent `55502a614f` replaces the unowned launch boolean with a successful
 owner snapshot and extends admission to the ordinary-operation FIFO. Fresh
 account/mode/lifecycle owners are not suppressed by old success or failure;
 requests now receive the original epoch. Existing retry fixtures were revised
 to reflect this deliberate fresh-owner behavior. See the preceding ordering
 entry for accepted guarantees and the still-open native/sign-out/server limits.
-
 
 ## MOBILE-CLOUD-SETTINGS-ACCOUNT-CARRYOVER-01
 
@@ -12352,7 +12301,6 @@ General synchronization/edit races, legacy migration semantics, native hydration
 timing and broader session lifetimes remain unverified. No tests, lint,
 typechecks, builds, installs, app/module execution, live native/provider/database
 actions, push or deployment ran.
-
 
 ## SETTINGS-NOTIFICATION-STALE-SIBLINGS-01
 
@@ -12409,7 +12357,6 @@ and identical failed/retried intent. They mock transport, not concurrent
 database behavior. No tests, lint, typechecks, builds, app execution, live
 account/database/provider actions, push or deployment ran.
 
-
 Web lifetime follow-on `b756b08388`, source-reviewed 2026-11-05, retains exact
 one-event channel patches while replacing the component's legacy snapshot/write
 path with a narrow strict adapter. Existing five-key defaults move once to a
@@ -12446,7 +12393,6 @@ inert. This is not runtime/browser acceptance. Cross-view/tab ordering, server C
 rollback/cancellation of dispatched requests and unknown late commits remain open.
 No tests, lint, typechecks, builds, formatters, application, browser, account,
 provider or database actions, push or deployment ran.
-
 
 ## MOBILE-TOOL-APPROVAL-STATE-OWNERSHIP-01
 
@@ -12514,7 +12460,6 @@ fixture covers epoch/signal forwarding and legacy arity. No tests, lint,
 typechecks, builds, app/native execution, live account/database/provider actions,
 push or deployment ran.
 
-
 ## MOBILE-AGENT-PUSH-PREFERENCE-LIFETIME-01
 
 Severity: Medium. Status: Client request ownership and retry source-corrected on
@@ -12565,7 +12510,6 @@ ownership is subsequently source-corrected under
 provides neither last-intent nor exactly-once guarantees. No tests, lint,
 typechecks, builds, formatters, app/native execution, live account/provider/
 database actions, push or deployment ran.
-
 
 ## WEB-SKILL-INSTALL-SETTINGS-ISOLATION-01
 
@@ -12622,7 +12566,6 @@ Other stale writers, past lost settings, cross-client last-intent order and a
 database-wide size invariant are not resolved. No tests, checks, lint, typechecks,
 builds, formatters, application/database/provider execution, push or deployment
 ran.
-
 
 ## MOBILE-SECURITY-PREFERENCES-LIFETIME-01
 
@@ -12686,7 +12629,6 @@ readback is not a server ordering barrier. Multiple screen mounts/clients are no
 globally serialized, and the broader account-security/logout lifecycle remains
 outside this slice. No tests, checks, lint, typechecks, builds, formatters,
 application/native/provider/database execution, push or deployment ran.
-
 
 ## CONNECTOR-SESSION-GRANT-WORKSPACE-SCOPE-01
 
@@ -12785,7 +12727,6 @@ if the policy/review state was observed before that lock. Preserve unrelated
 users, tools, workspaces and newer valid approvals. Exercise both orderings,
 category resets, no pre-existing grant row, rollback and uncertain commits under
 real PostgreSQL before claiming race-safe revocation.
-
 
 Source design follow-up, 2026-11-05: the same stale-review problem also affects
 `approved-always`. `keepBlocked` protects an exact blocked row, not an intervening
@@ -13118,7 +13059,6 @@ not real provider ownership, unique counts, token rollback, database or browser
 acceptance. Deferred cases settle their gates; no product tests, lint, typechecks,
 builds, installs, live services or migration actions were run.
 
-
 ## WEB-DEVELOPER-WEBHOOK-QUEUE-ATOMICITY-01
 
 Severity: Medium. Bounded source correction `897e894683` independently reviewed
@@ -13308,7 +13248,7 @@ read retries, shared defaults, success invalidation or explicit subsequent user
 actions. A transient failure now surfaces immediately instead of being retried.
 The existing `ProjectsPanel` and `WebhooksPanel` use these hooks.
 
-`features/developers/__tests__/developer-mutation-retry.test.tsx` authors 24
+`features/developers/__tests__/DeveloperMutationRetry.test.tsx` authors 24
 unrun cases through the real mutation hooks and a real QueryClient with the old
 retry default enabled. For every operation, transport rejection and a successful
 HTTP response with failed JSON consumption must settle after one transport call;
@@ -13326,7 +13266,6 @@ this correction does not claim account/workspace isolation. Workspace switching
 currently cancels queries, clears caches and reloads, which is a counterguard,
 not proof that all deferred mutation lifetimes are owned. No tests, lint,
 typechecks, builds, app execution, push or deployment ran.
-
 
 ## WEB-DEVELOPER-LOG-REQUEST-OWNERSHIP-01
 
@@ -13381,7 +13320,6 @@ a separate pagination limitation. Project/usage reads receive the subsequent
 bounded correction below; webhook reads and mutation lifetimes remain open. No tests, lint, typechecks, builds, app/service
 execution, push or deployment ran.
 
-
 ## WEB-DEVELOPER-PROJECT-USAGE-READ-OWNERSHIP-01
 
 Severity: Medium. Bounded correction `ad31b0b09c` independently source-reviewed
@@ -13422,7 +13360,7 @@ introduced in `0073` and refined by `0272`; it is not an organization-wide total
 This read correction does not repair project-limit/archive cross-workspace
 coverage documented in `WEB-DEVELOPER-PROJECT-KEY-LIFECYCLE-01`.
 
-`developer-query-ownership.test.tsx` authors both-hook fixtures using real session
+`DeveloperQueryOwnership.test.tsx` authors both-hook fixtures using real session
 snapshots, admission, RequestAuthority and QueryClient, with controlled Clerk,
 network and unrelated mutation transport. Sources cover cache isolation across
 A/B/A and session replacement, deferred tokens/responses/success and error bodies,
@@ -13439,7 +13377,6 @@ secrets, uncertain server outcomes, manual duplicate submissions and broader
 cache reconciliation remain separate gaps.
 The new read surface does not certify the whole developer console as isolated.
 No tests, lint, typechecks, builds, app/service execution, push or deployment ran.
-
 
 ## WEB-DEVELOPER-WEBHOOK-READ-OWNERSHIP-01
 
@@ -13485,7 +13422,7 @@ server authorization are unchanged. Deployed RLS is unverified.
 
 The existing ownership fixture matrix now covers endpoints and deliveries with
 real session/admission/RequestAuthority/QueryClient paths and controlled Clerk/
-network boundaries. New `developer-webhook-read-ownership.test.tsx` sources cover
+network boundaries. New `DeveloperWebhookReadOwnership.test.tsx` sources cover
 disabled/blank IDs, enable/resource callback retirement, cached-error masking,
 shared in-flight disable and captured interval selection. Its transparent query
 wrapper records interval callbacks for direct evaluation: it does not establish
@@ -13502,7 +13439,6 @@ one mutation's returned key into every scoped cache. Webhook/project/key mutatio
 authority, copied editor state, one-time secrets, ambiguous outcomes and manual
 duplicate submissions remain open. No tests, lint, typechecks, builds, app/service
 execution, push or deployment ran.
-
 
 ## WEB-API-KEY-READ-OWNERSHIP-01
 
@@ -14467,7 +14403,6 @@ idempotency, durable unknown-outcome recovery and policy reconciliation after a
 partial response remain open. No tests, lint, typechecks, builds, app/service
 execution, push or deployment ran.
 
-
 ## WEB-EMAIL-CHANGE-COMPLETION-01
 
 Severity: High. False-completion receipts are partially source-corrected on
@@ -15136,7 +15071,6 @@ current-time validation, finite-deadline guarantee, mandatory unknown-age logout
 ownership lease or mutation atomicity is added. Fixtures cover coerced/nonfinite
 fields, later invalid rows, mixed bounds, null behavior and retained explicit
 revocation; they are source-reviewed only and unrun.
-
 
 ## WEB-CHAT-PAUSED-TURN-LOOKS-DONE-01
 
@@ -17087,7 +17021,7 @@ The schema's existing unknown/missing visibility-to-invited fallback remains.
 The page-size check follows parsing; it does not bound transport or parser memory.
 
 Badge writes use null-prototype dictionaries, and the reader checks own keys.
-Valid text IDs such as constructor, toString and __proto__ no longer become
+Valid text IDs such as constructor, toString and **proto** no longer become
 inherited positives or disappear through the prototype setter. This is a
 dictionary boundary correction, not a change to artifact-ID normalization.
 

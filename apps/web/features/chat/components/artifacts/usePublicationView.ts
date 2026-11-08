@@ -9,6 +9,8 @@ export function usePublicationView(artifactId: string | null, scope?: object) {
   const view = useMemo(() => {
     let mounted = false;
     return {
+      artifactId,
+      scope,
       get active() {
         return mounted && isPublicationLeaseCurrent(lease);
       },

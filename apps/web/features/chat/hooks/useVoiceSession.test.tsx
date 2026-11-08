@@ -4,9 +4,10 @@ import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 const identity = vi.hoisted(() => ({ current: true }));
 vi.mock('@/lib/identity/useSessionSnapshot', () => {
   const capture = () => ({
-    userId: 'voice-user', sessionId: 'voice-login',
+    userId: 'voice-user',
+    sessionId: 'voice-login',
     isCurrent: () => identity.current,
-    getToken: async () => identity.current ? 'voice-token' : null,
+    getToken: async () => (identity.current ? 'voice-token' : null),
   });
   return { useSessionSnapshot: () => capture };
 });
@@ -62,13 +63,19 @@ function fakeSession() {
     lastTurnId: null,
     setMuted: live.setMuted,
     close: live.close,
-    settle: (closed: { reason: string; seconds: number }) => fetch('/api/voice/live/sessions/live_1/close', {
-      method: 'POST',
-      body: JSON.stringify({ ...closed, ...(live.backendUsage ? { backend: live.backendUsage } : {}) }),
-    }).then(() => undefined),
-    extend: (block: number) => fetch('/api/voice/live/sessions/live_1/extend', {
-      method: 'POST', body: JSON.stringify({ block }),
-    }),
+    settle: (closed: { reason: string; seconds: number }) =>
+      fetch('/api/voice/live/sessions/live_1/close', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...closed,
+          ...(live.backendUsage ? { backend: live.backendUsage } : {}),
+        }),
+      }).then(() => undefined),
+    extend: (block: number) =>
+      fetch('/api/voice/live/sessions/live_1/extend', {
+        method: 'POST',
+        body: JSON.stringify({ block }),
+      }),
     updateSettings: live.updateSettings,
     cancelBackendWork: live.cancelBackendWork,
     resumePlayback: live.resumePlayback,
@@ -85,7 +92,7 @@ function lastCallbacks(): LiveVoiceSessionCallbacks {
   return options.callbacks;
 }
 
-function mount() {
+function mount(conversationId: string | null = null) {
   const onSend = vi.fn().mockReturnValue(true);
   const onEnsureConversation = vi.fn(async () => 'conv-1');
   const onTranscript = vi.fn();
@@ -93,7 +100,7 @@ function mount() {
     useVoiceSession({
       managed: true,
       turnActive: false,
-      conversationId: null,
+      conversationId,
       onSend,
       onEnsureConversation,
       onTranscript,
@@ -117,7 +124,10 @@ describe('useVoiceSession', () => {
 
   beforeEach(() => {
     identity.current = true;
-    useChatStore.setState({ conversations: [{ id: 'conv-1', title: 'Voice', createdAt: '', updatedAt: '' }], messagesByConversation: {} });
+    useChatStore.setState({
+      conversations: [{ id: 'conv-1', title: 'Voice', createdAt: '', updatedAt: '' }],
+      messagesByConversation: {},
+    });
     useVoiceSessionStore.setState({
       session: INITIAL_VOICE_SESSION_STATE,
       backendBusy: false,
@@ -147,45 +157,71 @@ describe('useVoiceSession', () => {
   });
 
   it('binds a freshly created conversation before its navigation render', async () => {
-    let showCreated!: () => void;
-    const view = renderHook(({ conversationId }: { conversationId: string | null }) => useVoiceSession({
-      managed: true, turnActive: false, conversationId,
-      onSend: () => true,
-      onTranscript: vi.fn(),
-      onEnsureConversation: async (_authority, bindConversation) => {
-        bindConversation('conv-1');
-        showCreated();
-        return 'conv-1';
-      },
-    }), { initialProps: { conversationId: null as string | null } });
-    showCreated = () => view.rerender({ conversationId: 'conv-1' });
-    await act(async () => { view.result.current.enter(); });
+    const view = renderHook(
+      ({ conversationId }: { conversationId: string | null }) =>
+        useVoiceSession({
+          managed: true,
+          turnActive: false,
+          conversationId,
+          onSend: () => true,
+          onTranscript: vi.fn(),
+          onEnsureConversation: async (_authority, bindConversation) => {
+            bindConversation('conv-1');
+            showCreated();
+            return 'conv-1';
+          },
+        }),
+      { initialProps: { conversationId: null as string | null } },
+    );
+    const showCreated = () => view.rerender({ conversationId: 'conv-1' });
+    await act(async () => {
+      view.result.current.enter();
+    });
     await waitFor(() => expect(live.start).toHaveBeenCalledTimes(1));
     expect(live.start.mock.calls[0]?.[0]).toMatchObject({ conversationId: 'conv-1' });
   });
 
   it('does not start managed transport for a Local destination', async () => {
-    const view = renderHook(() => useVoiceSession({
-      managed: false, turnActive: false, conversationId: 'conv-1',
-      onSend: () => true, onTranscript: vi.fn(),
-      onEnsureConversation: async () => 'conv-1',
-    }));
-    await act(async () => { view.result.current.enter(); });
+    const view = renderHook(() =>
+      useVoiceSession({
+        managed: false,
+        turnActive: false,
+        conversationId: 'conv-1',
+        onSend: () => true,
+        onTranscript: vi.fn(),
+        onEnsureConversation: async () => 'conv-1',
+      }),
+    );
+    await act(async () => {
+      view.result.current.enter();
+    });
     expect(live.start).not.toHaveBeenCalled();
     expect(view.result.current.state.status).toBe(VOICE_SESSION_STATUS.error);
   });
 
   it('does not publish an old setup after exit and a replacement attempt', async () => {
     let resolveOld!: (session: ReturnType<typeof fakeSession>) => void;
-    live.start.mockReturnValueOnce(new Promise((resolve) => { resolveOld = resolve; }));
+    live.start.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveOld = resolve;
+      }),
+    );
     const { result } = mount();
-    await act(async () => { result.current.enter(); });
+    await act(async () => {
+      result.current.enter();
+    });
     await waitFor(() => expect(live.start).toHaveBeenCalledTimes(1));
     const oldCallbacks = lastCallbacks();
-    await act(async () => { result.current.exit(); });
-    await act(async () => { result.current.enter(); });
+    await act(async () => {
+      result.current.exit();
+    });
+    await act(async () => {
+      result.current.enter();
+    });
     await waitFor(() => expect(live.start).toHaveBeenCalledTimes(2));
-    await act(async () => { lastCallbacks().onStarted(); });
+    await act(async () => {
+      lastCallbacks().onStarted();
+    });
     await act(async () => {
       resolveOld(fakeSession());
       oldCallbacks.onError('retired failure');
@@ -211,13 +247,25 @@ describe('useVoiceSession', () => {
     await enterAndStart(result);
     const original = lastCallbacks();
     live.close.mockImplementationOnce(async () => {
-      original.onTranscript({ turnId: 'final-stop', role: 'user', text: 'last words', final: true });
+      original.onTranscript({
+        turnId: 'final-stop',
+        role: 'user',
+        text: 'last words',
+        final: true,
+      });
       return { reason: 'close_requested', seconds: 2 };
     });
-    await act(async () => { result.current.exit(); });
-    expect(onTranscript).toHaveBeenCalledWith('conv-1', expect.objectContaining({
-      turnId: 'final-stop', final: true,
-    }), expect.objectContaining({ isCurrent: expect.any(Function) }));
+    await act(async () => {
+      result.current.exit();
+    });
+    expect(onTranscript).toHaveBeenCalledWith(
+      'conv-1',
+      expect.objectContaining({
+        turnId: 'final-stop',
+        final: true,
+      }),
+      expect.objectContaining({ isCurrent: expect.any(Function) }),
+    );
   });
 
   it('returns persisted voice preferences and transient panels to account-safe defaults', () => {
@@ -349,12 +397,16 @@ describe('useVoiceSession', () => {
     });
     await waitFor(() => expect(onTranscript).toHaveBeenCalledTimes(2));
     expect(onEnsureConversation).toHaveBeenCalledTimes(1);
-    expect(onTranscript).toHaveBeenLastCalledWith('conv-1', {
-      turnId: 't1',
-      role: 'user',
-      text: 'hi there',
-      final: true,
-    }, expect.objectContaining({ isCurrent: expect.any(Function) }));
+    expect(onTranscript).toHaveBeenLastCalledWith(
+      'conv-1',
+      {
+        turnId: 't1',
+        role: 'user',
+        text: 'hi there',
+        final: true,
+      },
+      expect.objectContaining({ isCurrent: expect.any(Function) }),
+    );
   });
 
   it('closes the session gracefully on exit and settles its usage', async () => {
@@ -500,7 +552,7 @@ describe('useVoiceSession', () => {
     });
 
     it('carries the call across an in-app navigation and resumes it on the next surface', async () => {
-      const { result, unmount } = mount();
+      const { result, unmount } = mount('conv-1');
       await enterAndStart(result);
 
       await act(async () => {
@@ -510,7 +562,7 @@ describe('useVoiceSession', () => {
       });
       expect(live.close).not.toHaveBeenCalled();
 
-      const next = mount();
+      const next = mount('conv-1');
       await act(async () => {});
 
       expect(live.close).not.toHaveBeenCalled();

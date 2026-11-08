@@ -17,7 +17,10 @@ const {
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: authUserMock }));
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule0>()),
+  getClerkAuthUser: authUserMock,
+}));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: csrfMock }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: rateLimitMock }));
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: userScopedDbMock }));
@@ -117,3 +120,5 @@ describe('PATCH /api/voice/live/sessions/[sessionId]/settings', () => {
     expect(updateVoiceSessionSettingsMock).not.toHaveBeenCalled();
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/api-auth');

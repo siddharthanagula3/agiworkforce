@@ -614,7 +614,10 @@ export function ArtifactPreview({
   const [changesShownFor, setChangesShownFor] = useState<string | null>(null);
   const historyToggleRef = useRef<HTMLButtonElement>(null);
   const draftOwner = useMemo(
-    () => ({ active: false }),
+    () => ({
+      scope: { artifactId: artifact.id, artifactContent: artifact.content, versionCount },
+      active: false,
+    }),
     [artifact.id, artifact.content, versionCount],
   );
   useLayoutEffect(() => {
@@ -802,10 +805,7 @@ export function ArtifactPreview({
       if (/^data:application\/pdf(?:;[^,]*)?,/i.test(value)) return value;
       if (value.startsWith('blob:')) return value;
       // Same-origin http(s) URL pointing at a PDF (never an arbitrary origin).
-      if (
-        typeof window !== 'undefined' &&
-        (/^https?:\/\//i.test(value) || value.startsWith('/'))
-      ) {
+      if (typeof window !== 'undefined' && (/^https?:\/\//i.test(value) || value.startsWith('/'))) {
         try {
           const url = new URL(value, window.location.origin);
           if (
@@ -893,7 +893,7 @@ export function ArtifactPreview({
       ? versionHistory[shownVersionIndex]!.content
       : artifact.content;
   const publishFeedbackScope = useMemo(
-    () => ({}),
+    () => ({ scope: { publicationView, activeContent, shownVersionIndex } }),
     [publicationView, activeContent, shownVersionIndex],
   );
   const publishFeedbackView = usePublicationView(artifact.id, publishFeedbackScope);
@@ -1215,7 +1215,8 @@ export function ArtifactPreview({
       !publicationView.active ||
       !publishFeedbackView.active ||
       publicationView.pending
-    ) return;
+    )
+      return;
     publicationView.pending = true;
     publicationView.revision += 1;
     setPublicationPending({ view: publicationView, kind: 'publish' });
@@ -1266,7 +1267,8 @@ export function ArtifactPreview({
         !publicationView.active ||
         publicationView.pending ||
         next === artifactAudience.current
-      ) return;
+      )
+        return;
       const revision = publicationView.revision;
       const members = artifactAudience.memberCount ?? 0;
       const memberLabel = translateUiPlural('settings', 'counts.members', members, {
@@ -1279,7 +1281,8 @@ export function ArtifactPreview({
           publicationView.pending ||
           publicationView.revision !== revision ||
           audienceSnapshot.current !== artifactAudience
-        ) return;
+        )
+          return;
         publicationView.pending = true;
         publicationView.revision += 1;
         setPublicationPending({ view: publicationView, kind: 'audience' });
@@ -3017,7 +3020,10 @@ export function ArtifactPreview({
             )}
             {artifactAudience?.current === 'invited' && publishedToken && (
               <div className="w-full" data-testid="artifact-invited-viewers">
-                <SiteViewersEditor key={`${artifact.id}:${publishedToken}`} token={publishedToken} />
+                <SiteViewersEditor
+                  key={`${artifact.id}:${publishedToken}`}
+                  token={publishedToken}
+                />
               </div>
             )}
           </div>

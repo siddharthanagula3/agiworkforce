@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useLayoutEffect } from 'react';
 import {
   managedMemoryLocalContextUrl,
   parseManagedMemoryLocalContextResponse,
@@ -11,11 +11,17 @@ import {
   MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
 } from '@agiworkforce/cloud-contracts';
 import { useLocalModelSelection } from '@features/desktop-host';
-import { createRequestAuthority, type RequestAuthority, type SessionAuthority } from '@/lib/identity/request-authority';
+import {
+  createRequestAuthority,
+  type RequestAuthority,
+  type SessionAuthority,
+} from '@/lib/identity/request-authority';
 import { useSessionSnapshot } from '@/lib/identity/useSessionSnapshot';
 import { useAccountWorkspaces } from '@/features/workspaces/hooks/use-workspaces';
 import {
-  observeWorkspaceOwner, subscribeWorkspaceAdmission, workspaceOwnerIsCurrent,
+  observeWorkspaceOwner,
+  subscribeWorkspaceAdmission,
+  workspaceOwnerIsCurrent,
   type WorkspaceOwner,
 } from '@/features/workspaces/lib/workspace-admission';
 
@@ -36,9 +42,12 @@ interface ContextOwner {
 let cached: ContextOwner | null = null;
 
 function isCurrent(candidate: ContextOwner): boolean {
-  return cached === candidate && candidate.owner.phase === 'admitted' &&
+  return (
+    cached === candidate &&
+    candidate.owner.phase === 'admitted' &&
     candidate.owner.scopeKey === candidate.scopeKey &&
-    workspaceOwnerIsCurrent(candidate.owner, candidate.epoch);
+    workspaceOwnerIsCurrent(candidate.owner, candidate.epoch)
+  );
 }
 function retire(candidate: ContextOwner): void {
   for (const entry of candidate.entries.values()) entry.request?.retire();
@@ -57,10 +66,16 @@ async function refresh(candidate: ContextOwner, projectId: string | null): Promi
     candidate.entries.set(projectId, entry);
   }
   if (entry.pending) return entry.pending;
-  if (entry.refreshedAt !== null && Date.now() - entry.refreshedAt < LOCAL_PERSONAL_CONTEXT_STALE_MS) return;
+  if (
+    entry.refreshedAt !== null &&
+    Date.now() - entry.refreshedAt < LOCAL_PERSONAL_CONTEXT_STALE_MS
+  )
+    return;
   const captured = entry;
-  const authority = createRequestAuthority(candidate.owner.session, () =>
-    isCurrent(candidate) && candidate.entries.get(projectId) === captured);
+  const authority = createRequestAuthority(
+    candidate.owner.session,
+    () => isCurrent(candidate) && candidate.entries.get(projectId) === captured,
+  );
   captured.request = authority;
   captured.pending = (async () => {
     try {
@@ -98,24 +113,46 @@ export function useLocalPersonalContextPrefetch(projectId: string | null): void 
   const capture = useSessionSnapshot();
   const owner = observeWorkspaceOwner(capture());
   const data = workspace.data;
-  const scopeKey = data ? JSON.stringify([data.scope, data.activeWorkspaceId, data.activeOrganizationId]) : null;
-  if (cached && !isCurrent(cached)) retire(cached);
-  if (owner && owner.phase === 'admitted' && data && scopeKey !== null && scopeKey === owner.scopeKey &&
-      workspaceOwnerIsCurrent(owner, owner.epoch) && !cached) {
-    cached = {
-      owner, epoch: owner.epoch, scopeKey,
-      organization: data.activeOrganizationId ?? MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
-      entries: new Map(),
-    };
-  }
-  const candidate = cached;
+  const scopeKey = data
+    ? JSON.stringify([data.scope, data.activeWorkspaceId, data.activeOrganizationId])
+    : null;
+  useLayoutEffect(() => {
+    if (cached && !isCurrent(cached)) retire(cached);
+    if (
+      owner &&
+      owner.phase === 'admitted' &&
+      data &&
+      scopeKey !== null &&
+      scopeKey === owner.scopeKey &&
+      workspaceOwnerIsCurrent(owner, owner.epoch) &&
+      !cached
+    ) {
+      cached = {
+        owner,
+        epoch: owner.epoch,
+        scopeKey,
+        organization: data.activeOrganizationId ?? MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
+        entries: new Map(),
+      };
+    }
+  }, [owner, owner?.epoch, data, scopeKey]);
   useEffect(() => {
-    if (!localModelSelected || !candidate) return;
-    const onFocus = () => { void refresh(candidate, projectId); };
+    const candidate = cached;
+    if (
+      !localModelSelected ||
+      !candidate ||
+      candidate.owner !== owner ||
+      candidate.scopeKey !== scopeKey ||
+      !isCurrent(candidate)
+    )
+      return;
+    const onFocus = () => {
+      void refresh(candidate, projectId);
+    };
     onFocus();
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
-  }, [localModelSelected, candidate, projectId]);
+  }, [localModelSelected, owner, owner?.epoch, data, scopeKey, projectId]);
 }
 
 export function readLocalPersonalContext(
@@ -124,8 +161,13 @@ export function readLocalPersonalContext(
 ): ManagedMemoryLocalContextResponse | null {
   const candidate = cached;
   // A turn only reads the canonical owner; a stale turn must never replace it.
-  if (!candidate || !session?.isCurrent() || !isCurrent(candidate) ||
-      candidate.owner.session.userId !== session.userId ||
-      candidate.owner.session.sessionId !== session.sessionId) return null;
+  if (
+    !candidate ||
+    !session?.isCurrent() ||
+    !isCurrent(candidate) ||
+    candidate.owner.session.userId !== session.userId ||
+    candidate.owner.session.sessionId !== session.sessionId
+  )
+    return null;
   return candidate.entries.get(projectId)?.data ?? null;
 }

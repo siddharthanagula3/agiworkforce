@@ -116,9 +116,15 @@ function makeTransactionAdapter() {
             if (!open) throw new Error('Transaction handle escaped');
             return mockNeonExecute(...args);
           },
-          transaction: () => { throw new Error('Nested transaction'); },
-          withUser: () => { throw new Error('Transaction scope escape'); },
-          withOrg: () => { throw new Error('Transaction scope escape'); },
+          transaction: () => {
+            throw new Error('Nested transaction');
+          },
+          withUser: () => {
+            throw new Error('Transaction scope escape');
+          },
+          withOrg: () => {
+            throw new Error('Transaction scope escape');
+          },
         };
         try {
           return await callback(tx);
@@ -142,11 +148,18 @@ function makeTransactionAdapter() {
 }
 
 function normalizedLookupSql(sql: string): string {
-  return sql.toLowerCase().replace(/\s+/g, ' ').replace(/\(\s+/g, '(').replace(/\s+\)/g, ')').trim();
+  return sql
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/\(\s+/g, '(')
+    .replace(/\s+\)/g, ')')
+    .trim();
 }
 
 function expectProjectAdmissionLookup() {
-  const lookups = mockNeonQuery.mock.calls.filter(([sql]) => String(sql).includes('key_prefix = $1'));
+  const lookups = mockNeonQuery.mock.calls.filter(([sql]) =>
+    String(sql).includes('key_prefix = $1'),
+  );
   expect(lookups.length).toBeGreaterThan(0);
   for (const [sql, params] of lookups) {
     expect(normalizedLookupSql(String(sql))).toBe(
@@ -277,9 +290,13 @@ function makeFakeDb() {
           r['key_prefix'] === keyPrefix &&
           (!s.includes('revoked_at is null') || r['revoked_at'] == null) &&
           (!s.includes('(expires_at is null or expires_at > now())') ||
-            r['expires_at'] == null || Date.parse(String(r['expires_at'])) > Date.now()) &&
-          (!hasProjectGate || r['project_id'] == null ||
-            (project?.user_id === r['user_id'] && project.archived_at === null))
+            r['expires_at'] == null ||
+            Date.parse(String(r['expires_at'])) > Date.now()) &&
+          (!hasProjectGate ||
+            r['project_id'] == null ||
+            (project !== undefined &&
+              project.user_id === r['user_id'] &&
+              project.archived_at === null))
         );
       });
     }
@@ -413,64 +430,81 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
   });
 
   // This predicate-sensitive model is not PostgreSQL, RLS, or concurrent archive proof.
-  it.each(['null', 'live', 'archived', 'foreign', 'missing', 'revoked', 'expired', 'lookup-error'] as const)(
-    'uses canonical project admission for a %s key',
-    async (state) => {
-      const fakeDb = makeFakeDb();
-      const { ApiKeyService } = await import('@/lib/services/api-key-service');
-      const { getNeonDb } = await import('@/lib/server/neon-db');
-      fakeDb.projects.set(PROJECT_ID, { user_id: 'project-key-owner', archived_at: null });
-      const { apiKey, rawKey } = await ApiKeyService.createApiKey(
-        getNeonDb(), 'project-key-owner', 'project admission', ['models:read'], null,
-        state === 'null' ? null : PROJECT_ID,
-      );
-      const admissions = mockNeonQuery.mock.calls.filter(([sql]) =>
-        String(sql).includes('update public.developer_projects'),
-      );
-      expect(admissions).toHaveLength(state === 'null' ? 0 : 1);
-      if (state !== 'null') expect(admissions[0]?.[1]).toEqual([PROJECT_ID, 'project-key-owner']);
-      if (state === 'missing') {
-        fakeDb.projects.delete(PROJECT_ID);
-      } else {
-        fakeDb.projects.set(PROJECT_ID, {
-          user_id: state === 'foreign' ? 'another-owner' : 'project-key-owner',
-          archived_at: state === 'archived' ? new Date().toISOString() : null,
+  it.each([
+    'null',
+    'live',
+    'archived',
+    'foreign',
+    'missing',
+    'revoked',
+    'expired',
+    'lookup-error',
+  ] as const)('uses canonical project admission for a %s key', async (state) => {
+    const fakeDb = makeFakeDb();
+    const { ApiKeyService } = await import('@/lib/services/api-key-service');
+    const { getNeonDb } = await import('@/lib/server/neon-db');
+    fakeDb.projects.set(PROJECT_ID, { user_id: 'project-key-owner', archived_at: null });
+    const { apiKey, rawKey } = await ApiKeyService.createApiKey(
+      getNeonDb(),
+      'project-key-owner',
+      'project admission',
+      ['models:read'],
+      null,
+      state === 'null' ? null : PROJECT_ID,
+    );
+    const admissions = mockNeonQuery.mock.calls.filter(([sql]) =>
+      String(sql).includes('update public.developer_projects'),
+    );
+    expect(admissions).toHaveLength(state === 'null' ? 0 : 1);
+    if (state !== 'null') expect(admissions[0]?.[1]).toEqual([PROJECT_ID, 'project-key-owner']);
+    if (state === 'missing') {
+      fakeDb.projects.delete(PROJECT_ID);
+    } else {
+      fakeDb.projects.set(PROJECT_ID, {
+        user_id: state === 'foreign' ? 'another-owner' : 'project-key-owner',
+        archived_at: state === 'archived' ? new Date().toISOString() : null,
+      });
+    }
+    const row = fakeDb.store.get(apiKey.id)!;
+    if (state === 'revoked') row['revoked_at'] = new Date().toISOString();
+    if (state === 'expired') row['expires_at'] = new Date(Date.now() - 60_000).toISOString();
+    fakeDb.lookup.error = state === 'lookup-error';
+    mockAuth.mockResolvedValue(authSession('cookie-must-not-rescue-key'));
+    mockNeonQuery.mockClear();
+    mockNeonExecute.mockClear();
+    const verify = vi.spyOn(argon2, 'verify');
+    try {
+      if (state === 'null' || state === 'live') {
+        await expect(
+          getClerkAuthUser(makeBearerRequest(rawKey), { apiKeyScope: 'models:read' }),
+        ).resolves.toEqual({ userId: 'project-key-owner', apiKeyId: apiKey.id });
+        await expect(
+          getClerkAuthUser(makeBearerRequest(rawKey), { apiKeyScope: 'inference:write' }),
+        ).rejects.toMatchObject({ statusCode: 403 });
+        await expect(getClerkAuthUser(makeBearerRequest(rawKey))).rejects.toMatchObject({
+          statusCode: 403,
         });
+        expect(verify).toHaveBeenCalled();
+        expect(mockNeonExecute).toHaveBeenCalledWith(
+          'UPDATE api_keys SET last_used_at = $1 WHERE id = $2',
+          [expect.any(String), apiKey.id],
+        );
+      } else {
+        await expect(
+          getClerkAuthUser(makeBearerRequest(rawKey), { apiKeyScope: 'models:read' }),
+        ).rejects.toMatchObject({ statusCode: 401 });
+        expect(verify).not.toHaveBeenCalled();
+        expect(
+          mockNeonExecute.mock.calls.some(([sql]) => String(sql).includes('SET last_used_at')),
+        ).toBe(false);
       }
-      const row = fakeDb.store.get(apiKey.id)!;
-      if (state === 'revoked') row['revoked_at'] = new Date().toISOString();
-      if (state === 'expired') row['expires_at'] = new Date(Date.now() - 60_000).toISOString();
-      fakeDb.lookup.error = state === 'lookup-error';
-      mockAuth.mockResolvedValue(authSession('cookie-must-not-rescue-key'));
-      mockNeonQuery.mockClear();
-      mockNeonExecute.mockClear();
-      const verify = vi.spyOn(argon2, 'verify');
-      try {
-        if (state === 'null' || state === 'live') {
-          await expect(getClerkAuthUser(makeBearerRequest(rawKey), { apiKeyScope: 'models:read' }))
-            .resolves.toEqual({ userId: 'project-key-owner', apiKeyId: apiKey.id });
-          await expect(getClerkAuthUser(makeBearerRequest(rawKey), { apiKeyScope: 'inference:write' }))
-            .rejects.toMatchObject({ statusCode: 403 });
-          await expect(getClerkAuthUser(makeBearerRequest(rawKey)))
-            .rejects.toMatchObject({ statusCode: 403 });
-          expect(verify).toHaveBeenCalled();
-          expect(mockNeonExecute).toHaveBeenCalledWith(
-            'UPDATE api_keys SET last_used_at = $1 WHERE id = $2', [expect.any(String), apiKey.id],
-          );
-        } else {
-          await expect(getClerkAuthUser(makeBearerRequest(rawKey), { apiKeyScope: 'models:read' }))
-            .rejects.toMatchObject({ statusCode: 401 });
-          expect(verify).not.toHaveBeenCalled();
-          expect(mockNeonExecute.mock.calls.some(([sql]) => String(sql).includes('SET last_used_at'))).toBe(false);
-        }
-        expectProjectAdmissionLookup();
-        expect(mockAuth).not.toHaveBeenCalled();
-        expect(mockVerifyToken).not.toHaveBeenCalled();
-      } finally {
-        verify.mockRestore();
-      }
-    },
-  );
+      expectProjectAdmissionLookup();
+      expect(mockAuth).not.toHaveBeenCalled();
+      expect(mockVerifyToken).not.toHaveBeenCalled();
+    } finally {
+      verify.mockRestore();
+    }
+  });
 
   it('issue → authenticate round trip: a key from the real POST route authenticates via the real Bearer path', async () => {
     makeFakeDb();
@@ -850,6 +884,7 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
 
     beforeEach(() => {
       vi.stubEnv('CLERK_SECRET_KEY', 'test-clerk-secret-key');
+      mockNeonExecute.mockResolvedValue(0);
     });
 
     afterEach(() => {
@@ -952,15 +987,15 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
             headers: transport === 'bearer' ? { authorization: 'Bearer native-mfa-token' } : {},
           });
 
-        await expect(getClerkAuthUser(request())).resolves.toMatchObject({
+        const admitted = await getClerkAuthUser(request());
+        expect(admitted).toMatchObject({
           userId: 'product-mfa-account',
           sessionIdentity: { subject: 'native-mfa-subject', sessionId: null },
         });
         expect(mockClerkGetUser).toHaveBeenCalledExactlyOnceWith('native-mfa-subject');
-        expect(mockNeonQuery).toHaveBeenCalledWith(
-          expect.stringContaining(') governing'),
-          ['product-mfa-account'],
-        );
+        expect(mockNeonQuery).toHaveBeenCalledWith(expect.stringContaining(') governing'), [
+          'product-mfa-account',
+        ]);
 
         mockClerkGetUser.mockClear();
         mockClerkGetUser.mockImplementation(async (subject: string) => ({
@@ -2052,14 +2087,20 @@ describe('policy authentication captures one admitted organization', () => {
     mockAuth.mockReset().mockResolvedValue(authSession(NATIVE, SESSION));
     mockVerifyToken.mockReset().mockResolvedValue({ sub: NATIVE, sid: SESSION });
     mockClerkGetSession.mockReset().mockResolvedValue({
-      id: SESSION, userId: NATIVE, status: 'active',
-      createdAt: Date.now() - 60_000, lastActiveAt: Date.now(),
+      id: SESSION,
+      userId: NATIVE,
+      status: 'active',
+      createdAt: Date.now() - 60_000,
+      lastActiveAt: Date.now(),
     });
     mockClerkRevokeSession.mockReset().mockResolvedValue(undefined);
     db = makeFakeDb();
     db.identities.set(`clerk:${NATIVE}`, { identityId: 'policy-identity', accountId: ACCOUNT });
     saved = A;
-    roles = new Map([[A, 'owner'], [B, 'member']]);
+    roles = new Map([
+      [A, 'owner'],
+      [B, 'member'],
+    ]);
     order = [];
     const query = mockNeonQuery.getMockImplementation()!;
     mockNeonQuery.mockImplementation(async (sql: string, params: unknown[] = []) => {
@@ -2077,21 +2118,27 @@ describe('policy authentication captures one admitted organization', () => {
       return query(sql, params);
     });
     const resolve = activeWorkspace.resolveActiveOrganizationId;
-    select = vi.spyOn(activeWorkspace, 'resolveActiveOrganizationId').mockImplementation((...args) => {
-      order.push('selection');
-      return resolve(...args);
-    });
+    select = vi
+      .spyOn(activeWorkspace, 'resolveActiveOrganizationId')
+      .mockImplementation((...args) => {
+        order.push('selection');
+        return resolve(...args);
+      });
     const exactOwner = membershipService.resolveOrgMembershipForOrganization;
-    owner = vi.spyOn(membershipService, 'resolveOrgMembershipForOrganization').mockImplementation((...args) => {
-      order.push('owner');
-      return exactOwner(...args);
-    });
+    owner = vi
+      .spyOn(membershipService, 'resolveOrgMembershipForOrganization')
+      .mockImplementation((...args) => {
+        order.push('owner');
+        return exactOwner(...args);
+      });
     lockdown = vi.spyOn(lockdownGate, 'assertTenantNotLockedDown').mockImplementation(async () => {
       order.push('lockdown');
     });
-    security = vi.spyOn(accountSecurityGate, 'assertAccountSecurity').mockImplementation(async () => {
-      order.push('security');
-    });
+    security = vi
+      .spyOn(accountSecurityGate, 'assertAccountSecurity')
+      .mockImplementation(async () => {
+        order.push('security');
+      });
     mfa = vi.spyOn(mfaGate, 'assertMfaPolicy').mockImplementation(async () => {
       order.push('mfa');
     });
@@ -2107,23 +2154,37 @@ describe('policy authentication captures one admitted organization', () => {
     vi.unstubAllEnvs();
   });
 
-  it.each([false, true])('uses mapped account and native session evidence (bearer=%s)', async (bearer) => {
-    const req = request(B, bearer);
-    const result = await getClerkAuthUser(req, options);
-    expect(result).toMatchObject({
-      userId: ACCOUNT,
-      sessionIdentity: { subject: NATIVE, sessionId: SESSION },
-      organizationScope: { userId: ACCOUNT, organizationId: B },
-    });
-    expect(select).toHaveBeenCalledExactlyOnceWith(expect.anything(), ACCOUNT, req);
-    expect(owner).toHaveBeenCalledExactlyOnceWith(expect.anything(), ACCOUNT, B);
-    expect(lockdown).toHaveBeenCalledExactlyOnceWith(B);
-    expect(security).toHaveBeenCalledExactlyOnceWith(ACCOUNT, { kind: 'session', sessionId: SESSION });
-    expect(mfa).toHaveBeenCalledExactlyOnceWith(ACCOUNT, { subject: NATIVE, sessionId: SESSION });
-    expect(ip).toHaveBeenCalledExactlyOnceWith(ACCOUNT, req);
-    expect(noteSessionSighting).toHaveBeenCalledExactlyOnceWith(ACCOUNT, NATIVE, SESSION, req);
-    expect(order).toEqual(['lifecycle', 'selection', 'lockdown', 'security', 'owner', 'mfa', 'ip']);
-  });
+  it.each([false, true])(
+    'uses mapped account and native session evidence (bearer=%s)',
+    async (bearer) => {
+      const req = request(B, bearer);
+      const result = await getClerkAuthUser(req, options);
+      expect(result).toMatchObject({
+        userId: ACCOUNT,
+        sessionIdentity: { subject: NATIVE, sessionId: SESSION },
+        organizationScope: { userId: ACCOUNT, organizationId: B },
+      });
+      expect(select).toHaveBeenCalledExactlyOnceWith(expect.anything(), ACCOUNT, req);
+      expect(owner).toHaveBeenCalledExactlyOnceWith(expect.anything(), ACCOUNT, B);
+      expect(lockdown).toHaveBeenCalledExactlyOnceWith(B);
+      expect(security).toHaveBeenCalledExactlyOnceWith(ACCOUNT, {
+        kind: 'session',
+        sessionId: SESSION,
+      });
+      expect(mfa).toHaveBeenCalledExactlyOnceWith(ACCOUNT, { subject: NATIVE, sessionId: SESSION });
+      expect(ip).toHaveBeenCalledExactlyOnceWith(ACCOUNT, req);
+      expect(noteSessionSighting).toHaveBeenCalledExactlyOnceWith(ACCOUNT, NATIVE, SESSION, req);
+      expect(order).toEqual([
+        'lifecycle',
+        'selection',
+        'lockdown',
+        'security',
+        'owner',
+        'mfa',
+        'ip',
+      ]);
+    },
+  );
 
   it('does not let saved owner A exempt an explicit nonowner B from aggregate MFA', async () => {
     mfa.mockRejectedValue(new mfaGate.MfaRequiredError('Aggregate MFA required'));
@@ -2145,23 +2206,28 @@ describe('policy authentication captures one admitted organization', () => {
   });
 
   it('returns an explicit Personal receipt and still applies aggregate MFA', async () => {
-    await expect(getClerkAuthUser(request(activeWorkspace.PERSONAL_WORKSPACE_KEY), options))
-      .resolves.toMatchObject({ organizationScope: { userId: ACCOUNT, organizationId: null } });
+    await expect(
+      getClerkAuthUser(request(activeWorkspace.PERSONAL_WORKSPACE_KEY), options),
+    ).resolves.toMatchObject({ organizationScope: { userId: ACCOUNT, organizationId: null } });
     expect(lockdown).toHaveBeenCalledExactlyOnceWith(null);
     expect(mfa).toHaveBeenCalledTimes(1);
   });
 
   it('preserves equal product and native ids', async () => {
     db.identities.delete(`clerk:${NATIVE}`);
-    await expect(getClerkAuthUser(request(activeWorkspace.PERSONAL_WORKSPACE_KEY), options))
-      .resolves.toMatchObject({
-        userId: NATIVE, organizationScope: { userId: NATIVE, organizationId: null },
-      });
+    await expect(
+      getClerkAuthUser(request(activeWorkspace.PERSONAL_WORKSPACE_KEY), options),
+    ).resolves.toMatchObject({
+      userId: NATIVE,
+      organizationScope: { userId: NATIVE, organizationId: null },
+    });
     expect(mfa).toHaveBeenCalledWith(NATIVE, { subject: NATIVE, sessionId: SESSION });
   });
 
   it('does not reselect when saved selection changes during account security', async () => {
-    security.mockImplementation(async () => { saved = B; });
+    security.mockImplementation(async () => {
+      saved = B;
+    });
     await expect(getClerkAuthUser(request(), options)).resolves.toMatchObject({
       organizationScope: { userId: ACCOUNT, organizationId: A },
     });
@@ -2198,7 +2264,8 @@ describe('policy authentication captures one admitted organization', () => {
   });
 
   it.each(['not-a-uuid', 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'])(
-    'rejects invalid or nonmember target %s before later gates', async (target) => {
+    'rejects invalid or nonmember target %s before later gates',
+    async (target) => {
       await expect(getClerkAuthUser(request(target), options)).rejects.toBeDefined();
       expect(lockdown).not.toHaveBeenCalled();
       expect(security).not.toHaveBeenCalled();
@@ -2286,8 +2353,11 @@ describe('policy authentication captures one admitted organization', () => {
 
   it('refuses old native sessions before lifecycle and target selection', async () => {
     mockClerkGetSession.mockResolvedValue({
-      id: SESSION, userId: NATIVE, status: 'active',
-      createdAt: 0, lastActiveAt: Date.now(),
+      id: SESSION,
+      userId: NATIVE,
+      status: 'active',
+      createdAt: 0,
+      lastActiveAt: Date.now(),
     });
     await expect(getClerkAuthUser(request(B), options)).rejects.toMatchObject({ statusCode: 401 });
     expect(order).toEqual([]);
@@ -2296,11 +2366,16 @@ describe('policy authentication captures one admitted organization', () => {
 
   it('ignores forged organization receipts in verified provider claims and request bodies', async () => {
     mockVerifyToken.mockResolvedValue({
-      sub: NATIVE, sid: SESSION, organizationScope: { userId: NATIVE, organizationId: A },
+      sub: NATIVE,
+      sid: SESSION,
+      organizationScope: { userId: NATIVE, organizationId: A },
     });
     const req = new NextRequest('http://localhost/api/settings/organization/policy', {
       method: 'POST',
-      headers: { authorization: 'Bearer verified-policy-session', [MANAGED_CLOUD_ORGANIZATION_HEADER]: B },
+      headers: {
+        authorization: 'Bearer verified-policy-session',
+        [MANAGED_CLOUD_ORGANIZATION_HEADER]: B,
+      },
       body: JSON.stringify({ organizationScope: { userId: NATIVE, organizationId: A } }),
     });
     await expect(getClerkAuthUser(req, options)).resolves.toMatchObject({
@@ -2311,27 +2386,37 @@ describe('policy authentication captures one admitted organization', () => {
   it('still refuses valid API keys when the policy endpoint has no apiKeyScope', async () => {
     const { ApiKeyService } = await import('@/lib/services/api-key-service');
     vi.spyOn(ApiKeyService, 'verifyKey').mockResolvedValue({
-      id: 'policy-key', user_id: ACCOUNT, scopes: ['models:read'],
+      id: 'policy-key',
+      user_id: ACCOUNT,
+      scopes: ['models:read'],
     } as NonNullable<Awaited<ReturnType<typeof ApiKeyService.verifyKey>>>);
-    await expect(getClerkAuthUser(makeBearerRequest('sk_live_policy_fixture'), options))
-      .rejects.toMatchObject({ statusCode: 403 });
+    await expect(
+      getClerkAuthUser(makeBearerRequest('sk_live_policy_fixture'), options),
+    ).rejects.toMatchObject({ statusCode: 403 });
     expect(select).not.toHaveBeenCalled();
     expect(security).not.toHaveBeenCalled();
     expect(owner).not.toHaveBeenCalled();
   });
 
   it('preserves developer device principal admission without inventing a session', async () => {
-    const token = jwt.sign({ userId: ACCOUNT, sub: ACCOUNT, surface: 'developer' },
-      TEST_DEVELOPER_JWT_SECRET, {
-        expiresIn: 3600, issuer: 'agiworkforce-api-gateway', audience: 'agiworkforce',
+    const token = jwt.sign(
+      { userId: ACCOUNT, sub: ACCOUNT, surface: 'developer' },
+      TEST_DEVELOPER_JWT_SECRET,
+      {
+        expiresIn: 3600,
+        issuer: 'agiworkforce-api-gateway',
+        audience: 'agiworkforce',
         jwtid: 'policy-device-fixture',
-      });
+      },
+    );
     await expect(getClerkAuthUser(makeBearerRequest(token), options)).resolves.toMatchObject({
-      userId: ACCOUNT, surfaceClass: 'developer',
+      userId: ACCOUNT,
+      surfaceClass: 'developer',
       organizationScope: { userId: ACCOUNT, organizationId: A },
     });
     expect(security).toHaveBeenCalledWith(ACCOUNT, {
-      kind: 'device', issuedAtSeconds: expect.any(Number),
+      kind: 'device',
+      issuedAtSeconds: expect.any(Number),
     });
     expect(mockClerkGetSession).not.toHaveBeenCalled();
     expect(noteSessionSighting).not.toHaveBeenCalled();

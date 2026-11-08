@@ -17,22 +17,40 @@ const boundaries = vi.hoisted(() => ({
 vi.mock('./ArtifactCodeEditor', () => ({
   ArtifactCodeEditor: ({ value, onChange }: ArtifactCodeEditorProps) => {
     boundaries.source = onChange;
-    return <textarea aria-label="Modeled source editor" value={value} onChange={(e) => onChange(e.target.value)} />;
+    return (
+      <textarea
+        aria-label="Modeled source editor"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    );
   },
 }));
 
 vi.mock('./ArtifactDocumentEditor', () => ({
   ArtifactDocumentEditor: ({ value, onChange }: ArtifactDocumentEditorProps) => {
     boundaries.document = onChange;
-    return <textarea aria-label="Modeled document editor" value={value} onChange={(e) => onChange(e.target.value)} />;
+    return (
+      <textarea
+        aria-label="Modeled document editor"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    );
   },
 }));
 
 vi.mock('@agiworkforce/unified-chat', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/unified-chat')>();
+  const actual = await importOriginal<MockedModule0>();
   return {
     ...actual,
-    MarkdownContent: ({ content, onTaskToggle }: { content: string; onTaskToggle?: (index: number) => void }) => {
+    MarkdownContent: ({
+      content,
+      onTaskToggle,
+    }: {
+      content: string;
+      onTaskToggle?: (index: number) => void;
+    }) => {
       boundaries.toggle = onTaskToggle ?? null;
       return <div data-testid="modeled-markdown">{content}</div>;
     },
@@ -47,8 +65,14 @@ const versions = (id = A) => useArtifactsStore.getState().getArtifactVersions(id
 
 function seed(id = A, fields: Partial<ArtifactData> = {}) {
   useArtifactsStore.getState().addArtifact({
-    id, type: 'code', title: id, language: 'text', content: 'original',
-    messageId: `message-${id}`, conversationId: `conversation-${id}`, ...fields,
+    id,
+    type: 'code',
+    title: id,
+    language: 'text',
+    content: 'original',
+    messageId: `message-${id}`,
+    conversationId: `conversation-${id}`,
+    ...fields,
   });
 }
 
@@ -57,7 +81,12 @@ function ReactivePanel({ id = A }: { id?: string }) {
   const artifact = useArtifactsStore((s) => s.artifacts.find((a) => a.id === id));
   const getVersions = useArtifactsStore((s) => s.getArtifactVersions);
   return open && artifact ? (
-    <ArtifactPreview artifact={artifact} variant="panel" versionHistory={getVersions(id)} onClose={() => setOpen(false)} />
+    <ArtifactPreview
+      artifact={artifact}
+      variant="panel"
+      versionHistory={getVersions(id)}
+      onClose={() => setOpen(false)}
+    />
   ) : null;
 }
 
@@ -84,7 +113,10 @@ beforeEach(() => {
   boundaries.source = null;
   boundaries.document = null;
   boundaries.toggle = null;
-  vi.stubGlobal('fetch', vi.fn(async () => Response.json({ items: [], comments: [] })));
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => Response.json({ items: [], comments: [] })),
+  );
 });
 
 afterEach(() => {
@@ -95,25 +127,30 @@ afterEach(() => {
 });
 
 describe('ArtifactPreview recovery ownership', () => {
-  it.each(['unmount', 'close'] as const)('keeps the exact latest text before immediate %s, without a canonical save', async (exit) => {
-    seed();
-    const panel = render(<ReactivePanel />);
-    const editor = await editSource();
-    vi.useFakeTimers();
-    change(editor, 'older draft');
-    expect(localStorage.getItem(key())).toBe('older draft');
-    change(editor, 'newest draft\nincluding trailing whitespace  ');
-    if (exit === 'close') fireEvent.click(screen.getByLabelText('Close artifact viewer'));
-    else panel.unmount();
-    expect(localStorage.getItem(key())).toBe('newest draft\nincluding trailing whitespace  ');
-    advanceAfterUnmount();
-    expect(versions()).toHaveLength(1);
-    expect(stored().content).toBe('original');
-    panel.unmount();
-    vi.useRealTimers();
-    render(<ReactivePanel />);
-    expect(await screen.findByLabelText('Modeled source editor')).toHaveValue('newest draft\nincluding trailing whitespace  ');
-  });
+  it.each(['unmount', 'close'] as const)(
+    'keeps the exact latest text before immediate %s, without a canonical save',
+    async (exit) => {
+      seed();
+      const panel = render(<ReactivePanel />);
+      const editor = await editSource();
+      vi.useFakeTimers();
+      change(editor, 'older draft');
+      expect(localStorage.getItem(key())).toBe('older draft');
+      change(editor, 'newest draft\nincluding trailing whitespace  ');
+      if (exit === 'close') fireEvent.click(screen.getByLabelText('Close artifact viewer'));
+      else panel.unmount();
+      expect(localStorage.getItem(key())).toBe('newest draft\nincluding trailing whitespace  ');
+      advanceAfterUnmount();
+      expect(versions()).toHaveLength(1);
+      expect(stored().content).toBe('original');
+      panel.unmount();
+      vi.useRealTimers();
+      render(<ReactivePanel />);
+      expect(await screen.findByLabelText('Modeled source editor')).toHaveValue(
+        'newest draft\nincluding trailing whitespace  ',
+      );
+    },
+  );
 
   it('keeps A separate from B across an unkeyed panel switch and rejects A callbacks', async () => {
     seed();
@@ -136,7 +173,9 @@ describe('ArtifactPreview recovery ownership', () => {
     const panel = render(<ReactivePanel />);
     change(await editSource(), 'pending edit');
     const stale = boundaries.source!;
-    act(() => useArtifactsStore.getState().upsertArtifact({ ...stored(), content: 'external revision' }));
+    act(() =>
+      useArtifactsStore.getState().upsertArtifact({ ...stored(), content: 'external revision' }),
+    );
     act(() => stale('stale revision callback'));
     expect(localStorage.getItem(key())).toBe('pending edit');
     panel.unmount();
@@ -144,52 +183,71 @@ describe('ArtifactPreview recovery ownership', () => {
     expect(versions().map((v) => v.content)).toEqual(['original', 'external revision']);
   });
 
-  it.each(['save', 'cancel'] as const)('%s ends the session without resurrection from stale callbacks or timers', async (action) => {
-    seed();
-    const panel = render(<ReactivePanel />);
-    change(await editSource(), 'edited');
-    const stale = boundaries.source!;
-    vi.useFakeTimers();
-    fireEvent.click(screen.getByTestId(action === 'save' ? 'artifact-save-source' : 'artifact-cancel-source-edit'));
-    act(() => stale('late editor event'));
-    panel.unmount();
-    advanceAfterUnmount();
-    expect(localStorage.getItem(key())).toBeNull();
-    expect(stored().content).toBe(action === 'save' ? 'edited' : 'original');
-    expect(versions()).toHaveLength(action === 'save' ? 2 : 1);
-  });
+  it.each(['save', 'cancel'] as const)(
+    '%s ends the session without resurrection from stale callbacks or timers',
+    async (action) => {
+      seed();
+      const panel = render(<ReactivePanel />);
+      change(await editSource(), 'edited');
+      const stale = boundaries.source!;
+      vi.useFakeTimers();
+      fireEvent.click(
+        screen.getByTestId(
+          action === 'save' ? 'artifact-save-source' : 'artifact-cancel-source-edit',
+        ),
+      );
+      act(() => stale('late editor event'));
+      panel.unmount();
+      advanceAfterUnmount();
+      expect(localStorage.getItem(key())).toBeNull();
+      expect(stored().content).toBe(action === 'save' ? 'edited' : 'original');
+      expect(versions()).toHaveLength(action === 'save' ? 2 : 1);
+    },
+  );
 
-  it.each([false, true])('Restore confirmation=%s retains the existing history discard warning and recovery semantics', async (confirm) => {
-    seed();
-    useArtifactsStore.getState().upsertArtifact({ ...stored(), content: 'second version' });
-    const panel = render(<ReactivePanel />);
-    change(await editSource(), 'unsaved work');
-    fireEvent.click(screen.getByLabelText('Previous version'));
-    openMore();
-    fireEvent.click(screen.getByTestId('artifact-restore-version'));
-    expect(screen.getByRole('alertdialog')).toHaveTextContent(/unsaved edits are discarded/i);
-    fireEvent.click(screen.getByRole('button', { name: confirm ? 'Restore' : 'Cancel', exact: true }));
-    vi.useFakeTimers();
-    panel.unmount();
-    advanceAfterUnmount();
-    expect(localStorage.getItem(key())).toBe(confirm ? null : 'unsaved work');
-    expect(stored().content).toBe(confirm ? 'original' : 'second version');
-    expect(versions()).toHaveLength(confirm ? 3 : 2);
-  });
+  it.each([false, true])(
+    'Restore confirmation=%s retains the existing history discard warning and recovery semantics',
+    async (confirm) => {
+      seed();
+      useArtifactsStore.getState().upsertArtifact({ ...stored(), content: 'second version' });
+      const panel = render(<ReactivePanel />);
+      change(await editSource(), 'unsaved work');
+      fireEvent.click(screen.getByLabelText('Previous version'));
+      openMore();
+      fireEvent.click(screen.getByTestId('artifact-restore-version'));
+      expect(screen.getByRole('alertdialog')).toHaveTextContent(/unsaved edits are discarded/i);
+      fireEvent.click(screen.getByRole('button', { name: confirm ? 'Restore' : 'Cancel' }));
+      vi.useFakeTimers();
+      panel.unmount();
+      advanceAfterUnmount();
+      expect(localStorage.getItem(key())).toBe(confirm ? null : 'unsaved work');
+      expect(stored().content).toBe(confirm ? 'original' : 'second version');
+      expect(versions()).toHaveLength(confirm ? 3 : 2);
+    },
+  );
 
-  it.each([null, 'recovered text'])('mount, edit entry, and restoration do not rewrite recovery storage (%s)', async (recovered) => {
-    seed();
-    if (recovered !== null) localStorage.setItem(key(), recovered);
-    const writes = vi.spyOn(Storage.prototype, 'setItem');
-    const panel = render(<StrictMode><ReactivePanel /></StrictMode>);
-    if (recovered === null) await editSource();
-    else expect(await screen.findByLabelText('Modeled source editor')).toHaveValue(recovered);
-    vi.useFakeTimers();
-    advanceAfterUnmount();
-    panel.unmount();
-    expect(writes.mock.calls.filter(([name]) => name.startsWith('agi.artifact-draft:'))).toEqual([]);
-    expect(versions()).toHaveLength(1);
-  });
+  it.each([null, 'recovered text'])(
+    'mount, edit entry, and restoration do not rewrite recovery storage (%s)',
+    async (recovered) => {
+      seed();
+      if (recovered !== null) localStorage.setItem(key(), recovered);
+      const writes = vi.spyOn(Storage.prototype, 'setItem');
+      const panel = render(
+        <StrictMode>
+          <ReactivePanel />
+        </StrictMode>,
+      );
+      if (recovered === null) await editSource();
+      else expect(await screen.findByLabelText('Modeled source editor')).toHaveValue(recovered);
+      vi.useFakeTimers();
+      advanceAfterUnmount();
+      panel.unmount();
+      expect(writes.mock.calls.filter(([name]) => name.startsWith('agi.artifact-draft:'))).toEqual(
+        [],
+      );
+      expect(versions()).toHaveLength(1);
+    },
+  );
 
   it('does not overwrite a newer foreign recovery value when the old owner closes', async () => {
     seed();
@@ -201,7 +259,9 @@ describe('ArtifactPreview recovery ownership', () => {
     panel.unmount();
     advanceAfterUnmount();
     expect(localStorage.getItem(key())).toBe('foreign newer recovery');
-    expect(writes.mock.calls.filter(([name]) => name.startsWith('agi.artifact-draft:'))).toEqual([]);
+    expect(writes.mock.calls.filter(([name]) => name.startsWith('agi.artifact-draft:'))).toEqual(
+      [],
+    );
   });
 
   it('rejects old callbacks when canonical text changes with the same version count', async () => {
@@ -227,14 +287,20 @@ describe('ArtifactPreview recovery ownership', () => {
     const editor = await editSource();
     change(editor, 'retained older text');
     const setItem = Storage.prototype.setItem;
-    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (this: Storage, name, value) {
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (
+      this: Storage,
+      name,
+      value,
+    ) {
       if (name === key()) throw new DOMException('Full', 'QuotaExceededError');
       setItem.call(this, name, value);
     });
     change(editor, 'newest text not retained');
     fireEvent.click(screen.getByLabelText('Previous version'));
     fireEvent.click(screen.getByLabelText('Next version'));
-    expect(await screen.findByLabelText('Modeled source editor')).toHaveValue('newest text not retained');
+    expect(await screen.findByLabelText('Modeled source editor')).toHaveValue(
+      'newest text not retained',
+    );
     expect(screen.getByText('Draft not kept')).toBeInTheDocument();
     expect(localStorage.getItem(key())).toBe('retained older text');
     expect(stored().content).toBe('second version');
@@ -247,7 +313,11 @@ describe('ArtifactPreview recovery ownership', () => {
     change(editor, 'retained older text');
     expect(screen.getByText('Draft kept on this device')).toBeInTheDocument();
     const setItem = Storage.prototype.setItem;
-    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (this: Storage, name, value) {
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (
+      this: Storage,
+      name,
+      value,
+    ) {
       if (name === key()) throw new DOMException('Full', 'QuotaExceededError');
       setItem.call(this, name, value);
     });
@@ -279,11 +349,18 @@ describe('ArtifactPreview recovery ownership', () => {
   it('combines rapid checklist callbacks in StrictMode and commits only after the separate four-second pause', () => {
     seed(A, { type: 'document', language: 'markdown', content: '- [ ] first\n- [ ] second' });
     vi.useFakeTimers();
-    const panel = render(<StrictMode><ReactivePanel /></StrictMode>);
+    const panel = render(
+      <StrictMode>
+        <ReactivePanel />
+      </StrictMode>,
+    );
     const toggle = boundaries.toggle!;
     expect(toggle).toBeTypeOf('function');
     const writes = vi.spyOn(Storage.prototype, 'setItem');
-    act(() => { toggle(0); toggle(1); });
+    act(() => {
+      toggle(0);
+      toggle(1);
+    });
     const latest = '- [x] first\n- [x] second';
     expect(localStorage.getItem(key())).toBe(latest);
     expect(writes.mock.calls.filter(([name]) => name === key())).toHaveLength(2);
@@ -304,10 +381,15 @@ describe('ArtifactPreview recovery ownership', () => {
     vi.useFakeTimers();
     render(<ReactivePanel />);
     const toggle = boundaries.toggle!;
-    act(() => { toggle(0); toggle(1); });
+    act(() => {
+      toggle(0);
+      toggle(1);
+    });
     fireEvent.click(screen.getByLabelText('Close artifact viewer'));
     advanceAfterUnmount();
     expect(localStorage.getItem(key())).toBe('- [x] first\n- [x] second');
     expect(versions()).toHaveLength(1);
   });
 });
+
+type MockedModule0 = typeof import('@agiworkforce/unified-chat');

@@ -1,15 +1,31 @@
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import type { ExtensionResponse, SavedShortcut } from '../src/types';
 import { ORIGIN_EXTENSION_PAGE } from '../src/background/policy';
-import { replayScheduledShortcut, ScheduledShortcutReplayCancelledError, ScheduledShortcutReplayDeferredError, type ScheduledShortcutReplayDependencies } from '../src/features/background/scheduled-shortcut-replay';
+import {
+  replayScheduledShortcut,
+  ScheduledShortcutReplayCancelledError,
+  ScheduledShortcutReplayDeferredError,
+  type ScheduledShortcutReplayDependencies,
+} from '../src/features/background/scheduled-shortcut-replay';
 
 const origin = 'https://example.com';
-const task = { id: 'scheduled-1', shortcutId: 'recording-1', createdByOrigin: ORIGIN_EXTENSION_PAGE };
+const task = {
+  id: 'scheduled-1',
+  shortcutId: 'recording-1',
+  createdByOrigin: ORIGIN_EXTENSION_PAGE,
+};
 function recording(): SavedShortcut {
-  return { id: 'recording-1', name: 'Recording', createdAt: 1,
-    createdByOrigin: ORIGIN_EXTENSION_PAGE, startUrl: origin,
-    actions: [{ id: 'click-1', type: 'click', selector: '#go' }] };
+  return {
+    id: 'recording-1',
+    name: 'Recording',
+    createdAt: 1,
+    createdByOrigin: ORIGIN_EXTENSION_PAGE,
+    startUrl: origin,
+    actions: [{ id: 'click-1', type: 'click', selector: '#go' }],
+  };
 }
 function setup() {
   const shortcut = recording();
@@ -21,13 +37,16 @@ function setup() {
     queryActiveTab: async () => ({ id: 7 }),
     getTab: async () => ({ url: `${origin}/page` }),
     loadPolicy: async () => ({ admin: null, userAllowlist: [origin] }),
-    liveGrantedOrigins: () => [], forward,
+    liveGrantedOrigins: () => [],
+    forward,
   };
   return { dependencies, forward, state, shortcut };
 }
 function latch() {
   let resolve!: () => void;
-  const promise = new Promise<void>((done) => { resolve = done; });
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
   return { promise, resolve };
 }
 
@@ -37,21 +56,35 @@ describe('scheduled-only recorded replay', () => {
       const { dependencies, state, forward } = setup();
       const entered = latch();
       const release = latch();
-      if (step === 'loadShortcuts') dependencies.loadShortcuts = async () => {
-        entered.resolve(); await release.promise; return [recording()];
-      };
-      if (step === 'queryActiveTab') dependencies.queryActiveTab = async () => {
-        entered.resolve(); await release.promise; return { id: 7 };
-      };
-      if (step === 'getTab') dependencies.getTab = async () => {
-        entered.resolve(); await release.promise; return { url: origin };
-      };
-      if (step === 'loadPolicy') dependencies.loadPolicy = async () => {
-        entered.resolve(); await release.promise; return { admin: null, userAllowlist: [origin] };
-      };
+      if (step === 'loadShortcuts')
+        dependencies.loadShortcuts = async () => {
+          entered.resolve();
+          await release.promise;
+          return [recording()];
+        };
+      if (step === 'queryActiveTab')
+        dependencies.queryActiveTab = async () => {
+          entered.resolve();
+          await release.promise;
+          return { id: 7 };
+        };
+      if (step === 'getTab')
+        dependencies.getTab = async () => {
+          entered.resolve();
+          await release.promise;
+          return { url: origin };
+        };
+      if (step === 'loadPolicy')
+        dependencies.loadPolicy = async () => {
+          entered.resolve();
+          await release.promise;
+          return { admin: null, userAllowlist: [origin] };
+        };
       const pending = replayScheduledShortcut(task, dependencies);
       await entered.promise;
-      const rejection = expect(pending).rejects.toBeInstanceOf(ScheduledShortcutReplayCancelledError);
+      const rejection = expect(pending).rejects.toBeInstanceOf(
+        ScheduledShortcutReplayCancelledError,
+      );
       state.current = false;
       release.resolve();
       await rejection;
@@ -63,14 +96,20 @@ describe('scheduled-only recorded replay', () => {
     const { dependencies, forward } = setup();
     dependencies.loadPolicy = async () => null;
     dependencies.liveGrantedOrigins = () => [origin];
-    await expect(replayScheduledShortcut(task, dependencies)).rejects.toBeInstanceOf(ScheduledShortcutReplayDeferredError);
+    await expect(replayScheduledShortcut(task, dependencies)).rejects.toBeInstanceOf(
+      ScheduledShortcutReplayDeferredError,
+    );
     expect(forward).not.toHaveBeenCalled();
   });
 
   it('defers failed shortcut reads rather than treating them as missing', async () => {
     const { dependencies, forward } = setup();
-    dependencies.loadShortcuts = async () => { throw new Error('unreadable'); };
-    await expect(replayScheduledShortcut(task, dependencies)).rejects.toBeInstanceOf(ScheduledShortcutReplayDeferredError);
+    dependencies.loadShortcuts = async () => {
+      throw new Error('unreadable');
+    };
+    await expect(replayScheduledShortcut(task, dependencies)).rejects.toBeInstanceOf(
+      ScheduledShortcutReplayDeferredError,
+    );
     expect(forward).not.toHaveBeenCalled();
   });
 
@@ -100,7 +139,8 @@ describe('scheduled-only recorded replay', () => {
     expect(forward).toHaveBeenCalledTimes(1);
     forward.mockClear();
     dependencies.loadPolicy = async () => ({
-      admin: { version: 1, blocklist: [{ pattern: origin }], allowlist: [] }, userAllowlist: [],
+      admin: { version: 1, blocklist: [{ pattern: origin }], allowlist: [] },
+      userAllowlist: [],
     });
     expect(await replayScheduledShortcut(task, dependencies)).toMatchObject({ success: false });
     expect(forward).not.toHaveBeenCalled();
@@ -125,25 +165,45 @@ describe('scheduled-only recorded replay', () => {
     };
     expect(await replayScheduledShortcut(task, dependencies)).toMatchObject({ success: true });
     expect(forward).toHaveBeenCalledTimes(1);
-    expect(forward).toHaveBeenCalledWith(7, expect.objectContaining({
-      type: 'RUN_PAGE_ACTIONS', actions: [{ id: 'click-1', type: 'click', selector: '#go' }],
-    }));
+    expect(forward).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({
+        type: 'RUN_PAGE_ACTIONS',
+        actions: [{ id: 'click-1', type: 'click', selector: '#go' }],
+      }),
+    );
   });
 
   it('checks the original lease again at the actual forwarding boundary', async () => {
     const { dependencies, state, forward } = setup();
-    dependencies.liveGrantedOrigins = () => { state.current = false; return []; };
-    await expect(replayScheduledShortcut(task, dependencies)).rejects.toBeInstanceOf(ScheduledShortcutReplayCancelledError);
+    dependencies.liveGrantedOrigins = () => {
+      state.current = false;
+      return [];
+    };
+    await expect(replayScheduledShortcut(task, dependencies)).rejects.toBeInstanceOf(
+      ScheduledShortcutReplayCancelledError,
+    );
     expect(forward).not.toHaveBeenCalled();
   });
 
   it('keeps interactive replay separate and preserves the synchronous forwarding boundary', () => {
-    const source = readFileSync(new URL('../src/background.ts', import.meta.url), 'utf8');
+    const source = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), '../src/background.ts'),
+      'utf8',
+    );
     expect(source).toContain("case 'REPLAY_SHORTCUT':\n      return handleReplayShortcut");
-    const scheduled = source.slice(source.indexOf('async function executeScheduledTask('), source.indexOf('// A tab-originated message'));
+    const scheduled = source.slice(
+      source.indexOf('async function executeScheduledTask('),
+      source.indexOf('// A tab-originated message'),
+    );
     expect(scheduled).toContain('await replayScheduledShortcut(task, {');
     expect(scheduled).not.toContain('await handleReplayShortcut(');
-    const forwarding = source.slice(source.indexOf('async function forwardToContentScript('), source.indexOf('/**\n * `connectedToDesktop`'));
-    expect(forwarding).toContain('const response = await withTimeout(\n      chrome.tabs.sendMessage(tabId, message),');
+    const forwarding = source.slice(
+      source.indexOf('async function forwardToContentScript('),
+      source.indexOf('/**\n * `connectedToDesktop`'),
+    );
+    expect(forwarding).toContain(
+      'const response = await withTimeout(\n      chrome.tabs.sendMessage(tabId, message),',
+    );
   });
 });

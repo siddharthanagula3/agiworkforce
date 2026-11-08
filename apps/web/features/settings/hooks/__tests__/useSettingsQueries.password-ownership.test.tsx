@@ -18,7 +18,7 @@ import {
 
 vi.mock('@shared/lib/get-auth-token', () => ({ getAuthToken: vi.fn() }));
 vi.mock('@/lib/client/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/client/csrf')>()),
+  ...(await importOriginal<MockedModule0>()),
   getCsrfToken: vi.fn(),
   addCsrfHeaders: vi.fn(),
   clearCsrfToken: vi.fn(),
@@ -50,22 +50,27 @@ function json(body: unknown, status = 200): Response {
 }
 
 function challenge(): Response {
-  return json({
-    error: {
-      code: 'STEP_UP_REQUIRED',
-      message: 'Confirm your identity before changing your password.',
-      details: {
-        action: 'password.change',
-        consequence: 'Your other sessions and device credentials will be revoked.',
-        freshnessSeconds: 120,
+  return json(
+    {
+      error: {
+        code: 'STEP_UP_REQUIRED',
+        message: 'Confirm your identity before changing your password.',
+        details: {
+          action: 'password.change',
+          consequence: 'Your other sessions and device credentials will be revoked.',
+          freshnessSeconds: 120,
+        },
       },
     },
-  }, 403);
+    403,
+  );
 }
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => { resolve = done; });
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
   return { promise, resolve };
 }
 
@@ -108,12 +113,16 @@ beforeEach(() => {
   vi.mocked(getAuthToken).mockReset().mockResolvedValue('unrelated-ambient-token');
   vi.mocked(toast.success).mockClear();
   vi.mocked(toast.error).mockClear();
-  request = createRequestAuthority({
-    userId: 'captured-owner',
-    sessionId: 'captured-session',
-    isCurrent: () => current,
-    getToken,
-  }, () => current, dispatched);
+  request = createRequestAuthority(
+    {
+      userId: 'captured-owner',
+      sessionId: 'captured-session',
+      isCurrent: () => current,
+      getToken,
+    },
+    () => current,
+    dispatched,
+  );
   client = new QueryClient({
     defaultOptions: { mutations: { retry: 3, retryDelay: 0 } },
   });
@@ -149,8 +158,9 @@ describe('owned password mutation transport', () => {
       const { result } = renderHook(useChangePassword, { wrapper });
 
       await act(async () => {
-        await expect(result.current.mutateAsync({ scope: scope(), draft: submitted }))
-          .resolves.toEqual(receipt);
+        await expect(
+          result.current.mutateAsync({ scope: scope(), draft: submitted }),
+        ).resolves.toEqual(receipt);
       });
 
       expect(fetchMock).toHaveBeenCalledOnce();
@@ -176,10 +186,12 @@ describe('owned password mutation transport', () => {
   it('rejects mismatched confirmation before CSRF, authentication or dispatch', async () => {
     const { result } = renderHook(useChangePassword, { wrapper });
     await act(async () => {
-      const error = await result.current.mutateAsync({
-        scope: scope(),
-        draft: { ...draft(), confirmPassword: 'different-password' },
-      }).catch((reason: unknown) => reason);
+      const error = await result.current
+        .mutateAsync({
+          scope: scope(),
+          draft: { ...draft(), confirmPassword: 'different-password' },
+        })
+        .catch((reason: unknown) => reason);
       expect(error).toBeInstanceOf(PasswordMutationRejectedError);
       expect(error).toMatchObject({ message: 'Passwords do not match' });
     });
@@ -193,47 +205,27 @@ describe('owned password mutation transport', () => {
     getToken.mockResolvedValue(null);
     const { result } = renderHook(useChangePassword, { wrapper });
     await act(async () => {
-      await expect(result.current.mutateAsync({ scope: scope(), draft: draft() }))
-        .rejects.toThrow('Not authenticated');
+      await expect(result.current.mutateAsync({ scope: scope(), draft: draft() })).rejects.toThrow(
+        'Not authenticated',
+      );
     });
     expect(getToken).toHaveBeenCalledOnce();
     expect(fetchMock).not.toHaveBeenCalled();
     expect(dispatched).not.toHaveBeenCalled();
   });
 
-  it.each([400, 401, 403, 409, 422, 429])('classifies a current %s refusal without retry', async (status) => {
-    const message = 'Your current password is incorrect.';
-    fetchMock.mockImplementation(async () => json({ error: { message } }, status));
-    const { result } = renderHook(useChangePassword, { wrapper });
-    await act(async () => {
-      const error = await result.current.mutateAsync({ scope: scope(), draft: draft() })
-        .catch((reason: unknown) => reason);
-      expect(error).toBeInstanceOf(PasswordMutationRejectedError);
-      expect(error).toMatchObject({ message });
-    });
-    expect(fetchMock).toHaveBeenCalledOnce();
-    expect(dispatched).toHaveBeenCalledOnce();
-    expect(onStepUpRequired).not.toHaveBeenCalled();
-  });
-
-  it.each(['lost-network', 'server-error', 'unreadable-success', 'unreadable-error', 'invalid-receipt'] as const)(
-    'keeps a dispatched %s outcome ambiguous and does not retry',
-    async (outcome) => {
-      const networkError = new TypeError('Connection lost after dispatch');
-      fetchMock.mockImplementation(async () => {
-        if (outcome === 'lost-network') throw networkError;
-        if (outcome === 'server-error') return json({ error: 'The operation could not be confirmed.' }, 500);
-        if (outcome === 'unreadable-success') return new Response('{', { status: 200 });
-        if (outcome === 'unreadable-error') return new Response('{', { status: 503 });
-        return json({ success: true });
-      });
+  it.each([400, 401, 403, 409, 422, 429])(
+    'classifies a current %s refusal without retry',
+    async (status) => {
+      const message = 'Your current password is incorrect.';
+      fetchMock.mockImplementation(async () => json({ error: { message } }, status));
       const { result } = renderHook(useChangePassword, { wrapper });
       await act(async () => {
-        const error = await result.current.mutateAsync({ scope: scope(), draft: draft() })
+        const error = await result.current
+          .mutateAsync({ scope: scope(), draft: draft() })
           .catch((reason: unknown) => reason);
-        expect(error).toBeInstanceOf(Error);
-        expect(error).not.toBeInstanceOf(PasswordMutationRejectedError);
-        if (outcome === 'lost-network') expect(error).toBe(networkError);
+        expect(error).toBeInstanceOf(PasswordMutationRejectedError);
+        expect(error).toMatchObject({ message });
       });
       expect(fetchMock).toHaveBeenCalledOnce();
       expect(dispatched).toHaveBeenCalledOnce();
@@ -241,12 +233,43 @@ describe('owned password mutation transport', () => {
     },
   );
 
+  it.each([
+    'lost-network',
+    'server-error',
+    'unreadable-success',
+    'unreadable-error',
+    'invalid-receipt',
+  ] as const)('keeps a dispatched %s outcome ambiguous and does not retry', async (outcome) => {
+    const networkError = new TypeError('Connection lost after dispatch');
+    fetchMock.mockImplementation(async () => {
+      if (outcome === 'lost-network') throw networkError;
+      if (outcome === 'server-error')
+        return json({ error: 'The operation could not be confirmed.' }, 500);
+      if (outcome === 'unreadable-success') return new Response('{', { status: 200 });
+      if (outcome === 'unreadable-error') return new Response('{', { status: 503 });
+      return json({ success: true });
+    });
+    const { result } = renderHook(useChangePassword, { wrapper });
+    await act(async () => {
+      const error = await result.current
+        .mutateAsync({ scope: scope(), draft: draft() })
+        .catch((reason: unknown) => reason);
+      expect(error).toBeInstanceOf(Error);
+      expect(error).not.toBeInstanceOf(PasswordMutationRejectedError);
+      if (outcome === 'lost-network') expect(error).toBe(networkError);
+    });
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(dispatched).toHaveBeenCalledOnce();
+    expect(onStepUpRequired).not.toHaveBeenCalled();
+  });
+
   it('preserves the partial-change 503 message without replaying the old password', async () => {
     const message = 'Your password was changed, but signing out your other devices did not finish.';
     fetchMock.mockImplementation(async () => json({ error: { message } }, 503));
     const { result } = renderHook(useChangePassword, { wrapper });
     await act(async () => {
-      const error = await result.current.mutateAsync({ scope: scope(), draft: draft() })
+      const error = await result.current
+        .mutateAsync({ scope: scope(), draft: draft() })
         .catch((reason: unknown) => reason);
       expect(error).toBeInstanceOf(Error);
       expect(error).not.toBeInstanceOf(PasswordMutationRejectedError);
@@ -262,33 +285,37 @@ describe('password request ownership across asynchronous boundaries', () => {
     const { result } = renderHook(useChangePassword, { wrapper });
     request.retire();
     await act(async () => {
-      await expect(result.current.mutateAsync({ scope: scope(), draft: draft() }))
-        .rejects.toMatchObject({ name: 'AbortError' });
+      await expect(
+        result.current.mutateAsync({ scope: scope(), draft: draft() }),
+      ).rejects.toMatchObject({ name: 'AbortError' });
     });
     expect(getCsrfToken).not.toHaveBeenCalled();
     expect(getToken).not.toHaveBeenCalled();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it.each(['csrf', 'token'] as const)('blocks dispatch when ownership changes during %s', async (gate) => {
-    const pause = deferred<string>();
-    if (gate === 'csrf') vi.mocked(getCsrfToken).mockReturnValueOnce(pause.promise);
-    else getToken.mockReturnValueOnce(pause.promise);
-    const { result } = renderHook(useChangePassword, { wrapper });
-    const pending = start(result.current);
-    await waitFor(() => expect(gate === 'csrf' ? getCsrfToken : getToken).toHaveBeenCalledOnce());
-    if (gate === 'csrf') expect(getToken).not.toHaveBeenCalled();
-    current = false;
+  it.each(['csrf', 'token'] as const)(
+    'blocks dispatch when ownership changes during %s',
+    async (gate) => {
+      const pause = deferred<string>();
+      if (gate === 'csrf') vi.mocked(getCsrfToken).mockReturnValueOnce(pause.promise);
+      else getToken.mockReturnValueOnce(pause.promise);
+      const { result } = renderHook(useChangePassword, { wrapper });
+      const pending = start(result.current);
+      await waitFor(() => expect(gate === 'csrf' ? getCsrfToken : getToken).toHaveBeenCalledOnce());
+      if (gate === 'csrf') expect(getToken).not.toHaveBeenCalled();
+      current = false;
 
-    await act(async () => {
-      pause.resolve('retired-value');
-      await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
-    });
+      await act(async () => {
+        pause.resolve('retired-value');
+        await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+      });
 
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(dispatched).not.toHaveBeenCalled();
-    expect(onStepUpRequired).not.toHaveBeenCalled();
-  });
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(dispatched).not.toHaveBeenCalled();
+      expect(onStepUpRequired).not.toHaveBeenCalled();
+    },
+  );
 
   it.each(['response', 'success-body', 'error-body'] as const)(
     'discards a retired %s before accepting a receipt or classifying a refusal',
@@ -297,7 +324,9 @@ describe('password request ownership across asynchronous boundaries', () => {
       const bodyWait = deferred<unknown>();
       const response = json({}, gate === 'error-body' ? 409 : 200);
       const parse = vi.spyOn(response, 'json').mockReturnValue(bodyWait.promise);
-      fetchMock.mockReturnValue(gate === 'response' ? responseWait.promise : Promise.resolve(response));
+      fetchMock.mockReturnValue(
+        gate === 'response' ? responseWait.promise : Promise.resolve(response),
+      );
       const { result } = renderHook(useChangePassword, { wrapper });
       const pending = start(result.current);
       await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
@@ -339,7 +368,9 @@ describe('owned password proof replay', () => {
     submitted.currentPassword = 'changed-during-csrf';
     submitted.newPassword = 'changed-during-csrf';
     submitted.confirmPassword = 'changed-during-csrf';
-    await act(async () => { csrfWait.resolve('csrf-token'); });
+    await act(async () => {
+      csrfWait.resolve('csrf-token');
+    });
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     submitted.currentPassword = null;
     submitted.newPassword = 'changed-during-grant';
@@ -377,10 +408,12 @@ describe('owned password proof replay', () => {
       });
       const { result } = renderHook(useChangePassword, { wrapper });
       await act(async () => {
-        const error = await result.current.mutateAsync({ scope: scope(), draft: draft() })
+        const error = await result.current
+          .mutateAsync({ scope: scope(), draft: draft() })
           .catch((reason: unknown) => reason);
         expect(error).toBeInstanceOf(Error);
-        if (outcome === 'second-challenge') expect(error).toBeInstanceOf(PasswordMutationRejectedError);
+        if (outcome === 'second-challenge')
+          expect(error).toBeInstanceOf(PasswordMutationRejectedError);
         else expect(error).not.toBeInstanceOf(PasswordMutationRejectedError);
       });
       expect(passwordWrites()).toHaveLength(2);
@@ -400,10 +433,14 @@ describe('owned password proof replay', () => {
       const grantResponse = json({});
       const parse = vi.spyOn(grantResponse, 'json').mockReturnValue(bodyWait.promise);
       if (gate === 'token') {
-        getToken.mockResolvedValueOnce('captured-session-token').mockReturnValueOnce(authWait.promise);
+        getToken
+          .mockResolvedValueOnce('captured-session-token')
+          .mockReturnValueOnce(authWait.promise);
       }
       if (gate === 'csrf') {
-        vi.mocked(getCsrfToken).mockResolvedValueOnce('csrf-token').mockReturnValueOnce(authWait.promise);
+        vi.mocked(getCsrfToken)
+          .mockResolvedValueOnce('csrf-token')
+          .mockReturnValueOnce(authWait.promise);
       }
       fetchMock.mockImplementation(async (url) => {
         if (String(url) !== grantPath) return challenge();
@@ -434,15 +471,20 @@ describe('owned password proof replay', () => {
 });
 
 describe('password receipt validation and mutation retention', () => {
-  it.each([0, 4, Number.MAX_SAFE_INTEGER])('accepts safe nonnegative receipt counts of %s', async (count) => {
-    const expected = { ...receipt, otherSessionsEnded: count, deviceCredentialsRevoked: count };
-    fetchMock.mockImplementation(async () => json(expected));
-    const { result } = renderHook(useChangePassword, { wrapper });
-    await act(async () => {
-      await expect(result.current.mutateAsync({ scope: scope(), draft: draft() })).resolves.toEqual(expected);
-    });
-    expect(fetchMock).toHaveBeenCalledOnce();
-  });
+  it.each([0, 4, Number.MAX_SAFE_INTEGER])(
+    'accepts safe nonnegative receipt counts of %s',
+    async (count) => {
+      const expected = { ...receipt, otherSessionsEnded: count, deviceCredentialsRevoked: count };
+      fetchMock.mockImplementation(async () => json(expected));
+      const { result } = renderHook(useChangePassword, { wrapper });
+      await act(async () => {
+        await expect(
+          result.current.mutateAsync({ scope: scope(), draft: draft() }),
+        ).resolves.toEqual(expected);
+      });
+      expect(fetchMock).toHaveBeenCalledOnce();
+    },
+  );
 
   const invalidCounts = [
     { label: 'missing', value: undefined },
@@ -465,28 +507,35 @@ describe('password receipt validation and mutation retention', () => {
       invalidCounts.map(({ label, value }) => ({
         label: `${field}: ${label}`,
         value: { ...receipt, [field]: value },
-      }))),
+      })),
+    ),
     ...[...invalidCounts, { label: 'remaining session', value: 1 }].map(({ label, value }) => ({
       label: `otherSessionsRemaining: ${label}`,
       value: { ...receipt, otherSessionsRemaining: value },
     })),
   ];
 
-  it.each(invalidReceipts)('keeps an invalid $label ambiguous rather than reporting success', async ({ value }) => {
-    const response = json({});
-    vi.spyOn(response, 'json').mockResolvedValue(value);
-    fetchMock.mockResolvedValue(response);
-    const { result } = renderHook(useChangePassword, { wrapper });
-    await act(async () => {
-      const error = await result.current.mutateAsync({ scope: scope(), draft: draft() })
-        .catch((reason: unknown) => reason);
-      expect(error).toBeInstanceOf(Error);
-      expect(error).not.toBeInstanceOf(PasswordMutationRejectedError);
-      expect(error).toMatchObject({ message: 'The password change receipt could not be confirmed.' });
-    });
-    expect(fetchMock).toHaveBeenCalledOnce();
-    expect(result.current.data).toBeUndefined();
-  });
+  it.each(invalidReceipts)(
+    'keeps an invalid $label ambiguous rather than reporting success',
+    async ({ value }) => {
+      const response = json({});
+      vi.spyOn(response, 'json').mockResolvedValue(value);
+      fetchMock.mockResolvedValue(response);
+      const { result } = renderHook(useChangePassword, { wrapper });
+      await act(async () => {
+        const error = await result.current
+          .mutateAsync({ scope: scope(), draft: draft() })
+          .catch((reason: unknown) => reason);
+        expect(error).toBeInstanceOf(Error);
+        expect(error).not.toBeInstanceOf(PasswordMutationRejectedError);
+        expect(error).toMatchObject({
+          message: 'The password change receipt could not be confirmed.',
+        });
+      });
+      expect(fetchMock).toHaveBeenCalledOnce();
+      expect(result.current.data).toBeUndefined();
+    },
+  );
 
   it.each(['success', 'failure'] as const)(
     'releases settled %s variables from the observer and zero-GC cache after reset',
@@ -510,7 +559,9 @@ describe('password receipt validation and mutation retention', () => {
       expect(result.current.variables?.draft).toBe(submitted);
 
       act(() => result.current.reset());
-      await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
 
       expect(result.current.status).toBe('idle');
       expect(result.current.variables).toBeUndefined();
@@ -521,3 +572,5 @@ describe('password receipt validation and mutation retention', () => {
     },
   );
 });
+
+type MockedModule0 = typeof import('@/lib/client/csrf');

@@ -26,28 +26,29 @@ const scope = vi.hoisted(() => ({
   roles: new Map<string, string>(),
 }));
 vi.mock('@/lib/services/organization-permission-service', async () => {
-  const { permissionsForRole } = await import(
-    '@/lib/services/__tests__/organization-permission-service-mock'
-  );
+  const { permissionsForRole } =
+    await import('@/lib/services/__tests__/organization-permission-service-mock');
   const { createError } = await import('@/lib/errors');
   const permissions = (organizationId: string) =>
     permissionsForRole(scope.roles.get(organizationId) ?? permissionRole.value);
+  mocks.permission = vi.fn(
+    async (organizationId: string, _userId: string, permission: OrganizationPermission) => {
+      if (!permissions(organizationId).has(permission)) {
+        throw createError.forbidden('Permission denied');
+      }
+    },
+  );
   return {
     resolveOrganizationPermissions: vi.fn(async (organizationId: string) =>
       permissions(organizationId),
     ),
-    requireMemberPermission: mocks.permission.mockImplementation(
-      async (organizationId: string, _userId: string, permission: OrganizationPermission) => {
-        if (!permissions(organizationId).has(permission)) {
-          throw createError.forbidden('Permission denied');
-        }
-      },
-    ),
+    requireMemberPermission: mocks.permission,
   };
 });
-vi.mock('@/lib/error-handler', () => ({
-  withErrorHandler: (handler: (request: NextRequest) => Promise<Response>) =>
-    async (request: NextRequest) => {
+vi.mock('@/lib/error-handler', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule0>()),
+  withErrorHandler:
+    (handler: (request: NextRequest) => Promise<Response>) => async (request: NextRequest) => {
       try {
         return await handler(request);
       } catch (error) {
@@ -66,7 +67,8 @@ vi.mock('@/lib/server/neon-db', () => ({
 vi.mock('@/lib/services/active-workspace-service', () => ({
   resolveActiveOrganizationId: mocks.savedOrganization,
 }));
-vi.mock('@/lib/services/org-entitlements', () => ({
+vi.mock('@/lib/services/org-entitlements', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule0>()),
   getOrganizationEntitlements: vi.fn(),
   getSharedProjectLimitErrorMessage: vi.fn(),
   isOrgResourceLimitError: vi.fn(),
@@ -84,12 +86,14 @@ vi.mock('@/lib/server/payments/subscription-history', () => ({
 vi.mock('@/lib/server/admin-data-access', () => ({
   logAdminDataAccess: mocks.adminAudit,
 }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule1>()),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.rate }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mocks.csrf }));
-vi.mock('@/lib/security-audit', () => ({
+vi.mock('@/lib/security-audit', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule1>()),
   recordAuditEvent: mocks.recordAuditEvent,
 }));
 vi.mock('@/lib/server/rls-db', () => ({
@@ -236,9 +240,12 @@ function withWorkspace(options: { agreement?: Record<string, unknown> | null } =
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.stubGlobal('fetch', vi.fn(() => {
-    throw new Error('Unexpected network access');
-  }));
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => {
+      throw new Error('Unexpected network access');
+    }),
+  );
   mocks.query.mockReset().mockResolvedValue([]);
   mocks.execute.mockReset().mockResolvedValue(undefined);
   mocks.membership.mockReset();
@@ -497,12 +504,15 @@ function paymentAction(invoiceId = 'in_B') {
 function twoWorkspaces() {
   const agreements = new Map<string, Record<string, unknown>>([
     [ORG, agreementRow({ customer_legal_entity: 'Saved A' })],
-    [ORG_B, agreementRow({
-      id: AGREEMENT_B,
-      organization_id: ORG_B,
-      customer_legal_entity: 'Captured B',
-      order_form_reference: 'B-order',
-    })],
+    [
+      ORG_B,
+      agreementRow({
+        id: AGREEMENT_B,
+        organization_id: ORG_B,
+        customer_legal_entity: 'Captured B',
+        order_form_reference: 'B-order',
+      }),
+    ],
   ]);
   const payments = new Map<string, Record<string, unknown>>();
   scope.organizationId = ORG_B;
@@ -528,25 +538,29 @@ function twoWorkspaces() {
     }
     if (sql.includes('from public.organization_billing_contracts')) {
       return agreements.has(organizationId)
-        ? [{
-            ...contractRow(),
-            customer_legal_entity: organizationId === ORG ? 'Saved A' : 'Captured B',
-          }]
+        ? [
+            {
+              ...contractRow(),
+              customer_legal_entity: organizationId === ORG ? 'Saved A' : 'Captured B',
+            },
+          ]
         : [];
     }
     if (sql.includes('from public.organization_billing_invoices')) {
       if (!agreements.has(organizationId)) return [];
-      return [invoiceRow({
-        stripe_invoice_id: organizationId === ORG ? 'in_A' : 'in_B',
-        invoice_number: organizationId === ORG ? 'A-invoice' : 'B-invoice',
-        reported_offline_cents: payments.has(organizationId) ? '1000' : '0',
-      })];
+      return [
+        invoiceRow({
+          stripe_invoice_id: organizationId === ORG ? 'in_A' : 'in_B',
+          invoice_number: organizationId === ORG ? 'A-invoice' : 'B-invoice',
+          reported_offline_cents: payments.has(organizationId) ? '1000' : '0',
+        }),
+      ];
     }
     if (sql.includes('from public.enterprise_offline_payment_records')) {
       const payment = payments.get(organizationId);
-      return payment
-        && payment['stripe_invoice_id'] === params[1]
-        && payment['remittance_reference'] === params[2]
+      return payment &&
+        payment['stripe_invoice_id'] === params[1] &&
+        payment['remittance_reference'] === params[2]
         ? [{ ...payment }]
         : [];
     }
@@ -580,12 +594,8 @@ function expectCapturedGate(permission: 'billing.read' | 'billing.contracts.mana
     expect.stringContaining("and status = 'active'"),
     [ORG_B, 'user-1'],
   );
-  expect(mocks.requireTeamAdminAccess).toHaveBeenCalledWith(
-    expect.anything(), 'user-1', ORG_B,
-  );
-  expect(mocks.permission).toHaveBeenCalledWith(
-    ORG_B, 'user-1', permission, expect.any(String),
-  );
+  expect(mocks.requireTeamAdminAccess).toHaveBeenCalledWith(expect.anything(), 'user-1', ORG_B);
+  expect(mocks.permission).toHaveBeenCalledWith(ORG_B, 'user-1', permission, expect.any(String));
 }
 
 function expectNoMutation() {
@@ -607,26 +617,19 @@ describe('captured billing-contract workspace isolation', () => {
 
       expect(response.status).toBe(200);
       expect(body.contract.customerLegalEntity).toBe('Captured B');
-      expect(body.history).toEqual([
-        expect.objectContaining({ orderFormReference: 'B-order' }),
-      ]);
+      expect(body.history).toEqual([expect.objectContaining({ orderFormReference: 'B-order' })]);
       expect(body.invoices).toEqual([expect.objectContaining({ invoiceNumber: 'B-invoice' })]);
-      expect(body.invoicePositions).toEqual([
-        expect.objectContaining({ stripeInvoiceId: 'in_B' }),
-      ]);
+      expect(body.invoicePositions).toEqual([expect.objectContaining({ stripeInvoiceId: 'in_B' })]);
       expect(JSON.stringify(body)).not.toContain('Saved A');
       expect(JSON.stringify(body)).not.toContain('in_A');
       expectCapturedGate('billing.read');
       for (const [, params] of mocks.query.mock.calls) expect(params[0]).toBe(ORG_B);
-      expect(mocks.adminAudit).toHaveBeenCalledWith(
-        expect.any(NextRequest),
-        {
-          userId: 'user-1',
-          organizationId: ORG_B,
-          role: 'owner',
-          resourceType: 'enterprise_contract',
-        },
-      );
+      expect(mocks.adminAudit).toHaveBeenCalledWith(expect.any(NextRequest), {
+        userId: 'user-1',
+        organizationId: ORG_B,
+        role: 'owner',
+        resourceType: 'enterprise_contract',
+      });
       expect(JSON.stringify(state.agreements.get(ORG))).toBe(beforeA);
       expectNoMutation();
     });
@@ -648,14 +651,16 @@ describe('captured billing-contract workspace isolation', () => {
         [AGREEMENT_B, ORG_B, null, 'B ended'],
       );
       expect(mocks.recordAuditEvent).toHaveBeenCalledTimes(1);
-      expect(mocks.recordAuditEvent).toHaveBeenCalledWith(expect.objectContaining({
-        organizationId: ORG_B,
-        userId: 'user-1',
-        detail: expect.objectContaining({
-          resourceId: AGREEMENT_B,
-          reason: 'commercial_agreement_terminated',
+      expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          organizationId: ORG_B,
+          userId: 'user-1',
+          detail: expect.objectContaining({
+            resourceId: AGREEMENT_B,
+            reason: 'commercial_agreement_terminated',
+          }),
         }),
-      }));
+      );
       expect(JSON.stringify(state.agreements.get(ORG))).toBe(beforeA);
       expect(state.payments.size).toBe(0);
     });
@@ -678,17 +683,27 @@ describe('captured billing-contract workspace isolation', () => {
       const inserts = mocks.query.mock.calls.filter(([sql]) => sql.includes('insert into'));
       expect(inserts).toHaveLength(1);
       expect(inserts[0]?.[1]).toEqual([
-        ORG_B, 'in_B', 'wire', 1000, 'usd', 'B-reference', '2026-06-01', 'user-1', null,
+        ORG_B,
+        'in_B',
+        'wire',
+        1000,
+        'usd',
+        'B-reference',
+        '2026-06-01',
+        'user-1',
+        null,
       ]);
       expect(mocks.recordAuditEvent).toHaveBeenCalledTimes(1);
-      expect(mocks.recordAuditEvent).toHaveBeenCalledWith(expect.objectContaining({
-        organizationId: ORG_B,
-        userId: 'user-1',
-        detail: expect.objectContaining({
-          resourceId: 'in_B',
-          reason: 'enterprise_offline_payment_reported',
+      expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          organizationId: ORG_B,
+          userId: 'user-1',
+          detail: expect.objectContaining({
+            resourceId: 'in_B',
+            reason: 'enterprise_offline_payment_reported',
+          }),
         }),
-      }));
+      );
       expect(state.payments.has(ORG)).toBe(false);
       expect(JSON.stringify([...state.agreements])).toBe(before);
       for (const [, params] of mocks.query.mock.calls) expect(params[0]).toBe(ORG_B);
@@ -802,9 +817,10 @@ describe('captured billing-contract workspace isolation', () => {
       const blocked = Response.json({ error: guard }, { status: guard === 'csrf' ? 403 : 429 });
       if (guard === 'csrf') mocks.csrf.mockResolvedValue(blocked);
       else mocks.rate.mockResolvedValue(blocked);
-      const response = guard === 'get-rate'
-        ? await GET(capturedRequest())
-        : await POST(capturedRequest(paymentAction()));
+      const response =
+        guard === 'get-rate'
+          ? await GET(capturedRequest())
+          : await POST(capturedRequest(paymentAction()));
 
       expect(response).toBe(blocked);
       expect(mocks.scopedDb).not.toHaveBeenCalled();
@@ -814,3 +830,9 @@ describe('captured billing-contract workspace isolation', () => {
     });
   }
 });
+
+type CompleteMockModule0 = typeof import('@/lib/services/org-entitlements');
+type CompleteMockModule1 = typeof import('@/lib/security-audit');
+
+type RetainedMockModule0 = typeof import('@/lib/error-handler');
+type RetainedMockModule1 = typeof import('@/lib/logger');

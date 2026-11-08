@@ -15,7 +15,10 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('next/server', () => ({ after: mocks.forbidden }));
-vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn() } }));
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule0>()),
+  logger: { error: vi.fn(), warn: vi.fn() },
+}));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: mocks.forbidden }));
 vi.mock('@/lib/server/claimed-user-scope-db', () => ({
   createClaimedUserScopedDb: mocks.claimedScope,
@@ -25,8 +28,12 @@ vi.mock('@/lib/egress-policy', () => ({
   assertResolvedPublicHostname: mocks.resolveHost,
   pinnedPublicFetch: mocks.fetch,
 }));
-vi.mock('@/lib/crypto/cmek', () => ({ platformTenantKeyRing: mocks.keyRing }));
-vi.mock('@/lib/crypto/envelope', () => ({
+vi.mock('@/lib/crypto/cmek', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule0>()),
+  platformTenantKeyRing: mocks.keyRing,
+}));
+vi.mock('@/lib/crypto/envelope', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule1>()),
   openEnvelope: mocks.openEnvelope,
   sealEnvelope: mocks.forbidden,
 }));
@@ -48,7 +55,9 @@ const DISABLED_ERROR = 'The endpoint was turned off before this event was sent.'
 
 function deferred() {
   let resolve!: () => void;
-  const promise = new Promise<void>((done) => { resolve = done; });
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
   return { promise, resolve };
 }
 
@@ -72,7 +81,9 @@ function fixture() {
   const readGate = deferred();
   const reads: Array<{ sql: string; params: unknown[] }> = [];
   const updates: Array<{ sql: string; params: unknown[] }> = [];
-  const forbidden = vi.fn((): never => { throw new Error('Unexpected adapter operation'); });
+  const forbidden = vi.fn((): never => {
+    throw new Error('Unexpected adapter operation');
+  });
   let holdDisabledUpdate = false;
   let holdRead = false;
   const db: DatabaseAdapter = {
@@ -141,8 +152,12 @@ function fixture() {
     readGate,
     disabledUpdateReached,
     disabledUpdateGate,
-    holdDisabledUpdate() { holdDisabledUpdate = true; },
-    holdRead() { holdRead = true; },
+    holdDisabledUpdate() {
+      holdDisabledUpdate = true;
+    },
+    holdRead() {
+      holdRead = true;
+    },
   };
 }
 
@@ -180,8 +195,12 @@ describe('developer webhook terminal delivery persistence', () => {
     finishPost.resolve();
     await expect(sending).resolves.toEqual({ outcome: 'delivered', status: 204 });
     expect(f.state).toMatchObject({
-      status: 'delivered', attempts: 1, responseStatus: 204, error: null,
-      deliveredAt: 'delivered-at', lastAttemptAt: 'completed-attempt',
+      status: 'delivered',
+      attempts: 1,
+      responseStatus: 204,
+      error: null,
+      deliveredAt: 'delivered-at',
+      lastAttemptAt: 'completed-attempt',
     });
     const successfulReceipt = { ...f.state };
     f.disabledUpdateGate.resolve();
@@ -197,12 +216,17 @@ describe('developer webhook terminal delivery persistence', () => {
     const f = fixture();
     f.state.enabled = false;
 
-    await expect(attemptDeveloperWebhookDelivery(f.db, USER_ID, DELIVERY_ID, false))
-      .resolves.toEqual({ outcome: 'skipped', reason: 'endpoint_disabled' });
+    await expect(
+      attemptDeveloperWebhookDelivery(f.db, USER_ID, DELIVERY_ID, false),
+    ).resolves.toEqual({ outcome: 'skipped', reason: 'endpoint_disabled' });
 
     expect(f.state).toMatchObject({
-      status: 'failed', attempts: 0, error: DISABLED_ERROR,
-      deliveredAt: null, responseStatus: null, lastAttemptAt: 'disabled-attempt',
+      status: 'failed',
+      attempts: 0,
+      error: DISABLED_ERROR,
+      deliveredAt: null,
+      responseStatus: null,
+      lastAttemptAt: 'disabled-attempt',
     });
     expect(f.updates[0]?.params).toEqual([DELIVERY_ID, USER_ID, DISABLED_ERROR]);
     expect(mocks.fetch).not.toHaveBeenCalled();
@@ -214,8 +238,9 @@ describe('developer webhook terminal delivery persistence', () => {
     f.state.status = 'delivered';
     f.state.enabled = false;
 
-    await expect(attemptDeveloperWebhookDelivery(f.db, USER_ID, DELIVERY_ID, true))
-      .resolves.toEqual({ outcome: 'skipped', reason: 'already_delivered' });
+    await expect(
+      attemptDeveloperWebhookDelivery(f.db, USER_ID, DELIVERY_ID, true),
+    ).resolves.toEqual({ outcome: 'skipped', reason: 'already_delivered' });
 
     expect(f.updates).toEqual([]);
     expect(mocks.fetch).not.toHaveBeenCalled();
@@ -226,8 +251,9 @@ describe('developer webhook terminal delivery persistence', () => {
     if (kind === 'missing') f.state.exists = false;
     else f.state.userId = 'another-owner';
 
-    await expect(attemptDeveloperWebhookDelivery(f.db, USER_ID, DELIVERY_ID, true))
-      .resolves.toEqual({ outcome: 'skipped', reason: 'endpoint_removed' });
+    await expect(
+      attemptDeveloperWebhookDelivery(f.db, USER_ID, DELIVERY_ID, true),
+    ).resolves.toEqual({ outcome: 'skipped', reason: 'endpoint_removed' });
 
     expect(f.updates).toEqual([]);
     expect(mocks.fetch).not.toHaveBeenCalled();
@@ -240,15 +266,32 @@ function jobContext(db: DatabaseAdapter, signal: AbortSignal): JobHandlerContext
     signal,
     isFinalAttempt: false,
     job: {
-      id: 'webhook-job', queue: 'webhooks', kind: 'webhooks.developer-delivery',
-      userId: USER_ID, organizationId: null, tenantKey: USER_ID,
-      payload: { deliveryId: DELIVERY_ID }, priority: 0, status: 'running',
-      attempts: 1, maxAttempts: 3, runAfter: '2026-11-05T12:00:00.000Z',
-      leaseExpiresAt: null, workerId: 'fixture-worker', idempotencyKey: null,
-      lastError: null, retryReason: null, deadReason: null, deadLetteredAt: null,
-      cancelRequestedAt: null, cancelRequestedBy: null, cancelReason: null,
-      usage: null, originRegion: null,
-      createdAt: '2026-11-05T12:00:00.000Z', updatedAt: '2026-11-05T12:00:00.000Z',
+      id: 'webhook-job',
+      queue: 'webhooks',
+      kind: 'webhooks.developer-delivery',
+      userId: USER_ID,
+      organizationId: null,
+      tenantKey: USER_ID,
+      payload: { deliveryId: DELIVERY_ID },
+      priority: 0,
+      status: 'running',
+      attempts: 1,
+      maxAttempts: 3,
+      runAfter: '2026-11-05T12:00:00.000Z',
+      leaseExpiresAt: null,
+      workerId: 'fixture-worker',
+      idempotencyKey: null,
+      lastError: null,
+      retryReason: null,
+      deadReason: null,
+      deadLetteredAt: null,
+      cancelRequestedAt: null,
+      cancelRequestedBy: null,
+      cancelReason: null,
+      usage: null,
+      originRegion: null,
+      createdAt: '2026-11-05T12:00:00.000Z',
+      updatedAt: '2026-11-05T12:00:00.000Z',
     },
   };
 }
@@ -260,8 +303,9 @@ describe('developer webhook cooperative cancellation', () => {
     const reason = { cancelled: 'before-start' };
     controller.abort(reason);
 
-    await expect(attemptDeveloperWebhookDelivery(f.db, USER_ID, DELIVERY_ID, false, controller.signal))
-      .rejects.toBe(reason);
+    await expect(
+      attemptDeveloperWebhookDelivery(f.db, USER_ID, DELIVERY_ID, false, controller.signal),
+    ).rejects.toBe(reason);
 
     expect(f.reads).toEqual([]);
     expect(f.updates).toEqual([]);
@@ -275,7 +319,13 @@ describe('developer webhook cooperative cancellation', () => {
     f.holdRead();
     const controller = new AbortController();
     const reason = new JobCancelledError('webhook-job');
-    const work = attemptDeveloperWebhookDelivery(f.db, USER_ID, DELIVERY_ID, false, controller.signal);
+    const work = attemptDeveloperWebhookDelivery(
+      f.db,
+      USER_ID,
+      DELIVERY_ID,
+      false,
+      controller.signal,
+    );
     const rejected = expect(work).rejects.toBe(reason);
     await f.readReached.promise;
     controller.abort(reason);
@@ -309,7 +359,10 @@ describe('developer webhook cooperative cancellation', () => {
       finishDns.resolve();
       await rejected;
 
-      expect(mocks.claimedScope).toHaveBeenCalledWith(f.db, { userId: USER_ID, organizationId: null });
+      expect(mocks.claimedScope).toHaveBeenCalledWith(f.db, {
+        userId: USER_ID,
+        organizationId: null,
+      });
       expect(f.reads).toHaveLength(1);
       expect(f.updates).toEqual([]);
       expect(mocks.fetch).not.toHaveBeenCalled();
@@ -322,12 +375,23 @@ describe('developer webhook cooperative cancellation', () => {
     const reason = new JobCancelledError('webhook-job');
     const posting = deferred();
     let transportSignal: AbortSignal | null | undefined;
-    mocks.fetch.mockImplementationOnce((_url: string, init: RequestInit) => new Promise((_resolve, reject) => {
-      transportSignal = init.signal;
-      transportSignal?.addEventListener('abort', () => reject(transportSignal?.reason), { once: true });
-      posting.resolve();
-    }));
-    const work = attemptDeveloperWebhookDelivery(f.db, USER_ID, DELIVERY_ID, false, controller.signal);
+    mocks.fetch.mockImplementationOnce(
+      (_url: string, init: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          transportSignal = init.signal;
+          transportSignal?.addEventListener('abort', () => reject(transportSignal?.reason), {
+            once: true,
+          });
+          posting.resolve();
+        }),
+    );
+    const work = attemptDeveloperWebhookDelivery(
+      f.db,
+      USER_ID,
+      DELIVERY_ID,
+      false,
+      controller.signal,
+    );
     const rejected = expect(work).rejects.toBe(reason);
     await posting.promise;
     controller.abort(reason);
@@ -358,7 +422,13 @@ describe('developer webhook cooperative cancellation', () => {
           },
         },
       });
-      const work = attemptDeveloperWebhookDelivery(f.db, USER_ID, DELIVERY_ID, false, controller.signal);
+      const work = attemptDeveloperWebhookDelivery(
+        f.db,
+        USER_ID,
+        DELIVERY_ID,
+        false,
+        controller.signal,
+      );
       const rejected = expect(work).rejects.toBe(reason);
       await cleaning.promise;
       controller.abort(reason);
@@ -366,8 +436,12 @@ describe('developer webhook cooperative cancellation', () => {
       await rejected;
 
       expect(f.state).toMatchObject({
-        status: 'delivered', attempts: 1, responseStatus: 204, error: null,
-        deliveredAt: 'delivered-at', lastAttemptAt: 'completed-attempt',
+        status: 'delivered',
+        attempts: 1,
+        responseStatus: 204,
+        error: null,
+        deliveredAt: 'delivered-at',
+        lastAttemptAt: 'completed-attempt',
       });
       expect(f.updates).toHaveLength(1);
     },
@@ -376,50 +450,74 @@ describe('developer webhook cooperative cancellation', () => {
   it('retains successful delivery without a caller signal', async () => {
     const f = fixture();
 
-    await expect(attemptDeveloperWebhookDelivery(f.db, USER_ID, DELIVERY_ID, false))
-      .resolves.toEqual({ outcome: 'delivered', status: 204 });
+    await expect(
+      attemptDeveloperWebhookDelivery(f.db, USER_ID, DELIVERY_ID, false),
+    ).resolves.toEqual({ outcome: 'delivered', status: 204 });
 
     expect(f.state.status).toBe('delivered');
     expect(mocks.fetch.mock.calls[0]?.[1]).toMatchObject({ redirect: 'manual' });
     expect(mocks.fetch.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
   });
 
-  it.each([false, true])('retains transport timeout with caller signal=%s', async (withCallerSignal) => {
-    const f = fixture();
-    const callerController = new AbortController();
-    const timeoutController = new AbortController();
-    const timeout = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(timeoutController.signal);
-    const posting = deferred();
-    mocks.fetch.mockImplementationOnce((_url: string, init: RequestInit) => new Promise((_resolve, reject) => {
-      init.signal?.addEventListener('abort', () => reject(init.signal?.reason), { once: true });
-      posting.resolve();
-    }));
-    const work = attemptDeveloperWebhookDelivery(
-      f.db, USER_ID, DELIVERY_ID, true,
-      withCallerSignal ? callerController.signal : undefined,
-    );
-    await posting.promise;
-    timeoutController.abort(new DOMException('Synthetic timeout', 'TimeoutError'));
+  it.each([false, true])(
+    'retains transport timeout with caller signal=%s',
+    async (withCallerSignal) => {
+      const f = fixture();
+      const callerController = new AbortController();
+      const timeoutController = new AbortController();
+      const timeout = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(timeoutController.signal);
+      const posting = deferred();
+      mocks.fetch.mockImplementationOnce(
+        (_url: string, init: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            init.signal?.addEventListener('abort', () => reject(init.signal?.reason), {
+              once: true,
+            });
+            posting.resolve();
+          }),
+      );
+      const work = attemptDeveloperWebhookDelivery(
+        f.db,
+        USER_ID,
+        DELIVERY_ID,
+        true,
+        withCallerSignal ? callerController.signal : undefined,
+      );
+      await posting.promise;
+      timeoutController.abort(new DOMException('Synthetic timeout', 'TimeoutError'));
 
-    const error = `The endpoint did not answer within ${DEVELOPER_WEBHOOK_TIMEOUT_SECONDS} seconds.`;
-    await expect(work).resolves.toEqual({ outcome: 'failed', error });
-    expect(timeout).toHaveBeenCalledWith(DEVELOPER_WEBHOOK_TIMEOUT_SECONDS * 1000);
-    expect(callerController.signal.aborted).toBe(false);
-    expect(f.state).toMatchObject({ status: 'failed', attempts: 1, error });
-  });
+      const error = `The endpoint did not answer within ${DEVELOPER_WEBHOOK_TIMEOUT_SECONDS} seconds.`;
+      await expect(work).resolves.toEqual({ outcome: 'failed', error });
+      expect(timeout).toHaveBeenCalledWith(DEVELOPER_WEBHOOK_TIMEOUT_SECONDS * 1000);
+      expect(callerController.signal.aborted).toBe(false);
+      expect(f.state).toMatchObject({ status: 'failed', attempts: 1, error });
+    },
+  );
 
-  it.each(['network', 'private-address'] as const)('retains %s failure classification', async (kind) => {
-    const f = fixture();
-    if (kind === 'network') mocks.fetch.mockRejectedValueOnce(new Error('Synthetic connection failure'));
-    else mocks.resolveHost.mockRejectedValueOnce(new EgressPolicyError('Synthetic private target'));
-    const error = kind === 'network'
-      ? 'The endpoint could not be reached.'
-      : 'The endpoint now resolves to a private address.';
+  it.each(['network', 'private-address'] as const)(
+    'retains %s failure classification',
+    async (kind) => {
+      const f = fixture();
+      if (kind === 'network')
+        mocks.fetch.mockRejectedValueOnce(new Error('Synthetic connection failure'));
+      else
+        mocks.resolveHost.mockRejectedValueOnce(new EgressPolicyError('Synthetic private target'));
+      const error =
+        kind === 'network'
+          ? 'The endpoint could not be reached.'
+          : 'The endpoint now resolves to a private address.';
 
-    await expect(attemptDeveloperWebhookDelivery(f.db, USER_ID, DELIVERY_ID, false))
-      .resolves.toEqual({ outcome: 'failed', error });
+      await expect(
+        attemptDeveloperWebhookDelivery(f.db, USER_ID, DELIVERY_ID, false),
+      ).resolves.toEqual({ outcome: 'failed', error });
 
-    expect(f.state).toMatchObject({ status: 'pending', attempts: 1, error });
-    if (kind === 'private-address') expect(mocks.fetch).not.toHaveBeenCalled();
-  });
+      expect(f.state).toMatchObject({ status: 'pending', attempts: 1, error });
+      if (kind === 'private-address') expect(mocks.fetch).not.toHaveBeenCalled();
+    },
+  );
 });
+
+type CompleteMockModule0 = typeof import('@/lib/crypto/cmek');
+type CompleteMockModule1 = typeof import('@/lib/crypto/envelope');
+
+type RetainedMockModule0 = typeof import('@/lib/logger');

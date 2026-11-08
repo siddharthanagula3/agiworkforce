@@ -20,7 +20,8 @@ vi.mock('@/lib/observability/error-capture', () => ({ captureServerError: vi.fn(
 
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule1>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/server/rls-db', () => ({
@@ -46,7 +47,8 @@ vi.mock('@/lib/server/request-context-cache', () => ({
   getCachedActiveOrganizationId: vi.fn(async () => undefined),
   setCachedActiveOrganizationId: vi.fn(async () => undefined),
 }));
-vi.mock('@/lib/services/org-entitlements', () => ({
+vi.mock('@/lib/services/org-entitlements', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule0>()),
   getOrganizationEntitlements: vi.fn(),
   getSharedProjectLimitErrorMessage: vi.fn(),
   isOrgResourceLimitError: vi.fn(),
@@ -196,16 +198,23 @@ function send(method: string, body: unknown, headers: Record<string, string> = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.stubGlobal('fetch', vi.fn(() => {
-    throw new Error('Network access is not allowed in admin-key source fixtures');
-  }));
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => {
+      throw new Error('Network access is not allowed in admin-key source fixtures');
+    }),
+  );
   idempotency.clear();
   capturedScope.organizationId = ORG;
   vi.mocked(requireCsrfToken).mockResolvedValue(null);
   vi.mocked(withRateLimit).mockResolvedValue(null);
   vi.mocked(requireTeamAdminAccess).mockResolvedValue({
-    plan: 'enterprise', canManageTeam: true, maxMembers: null,
-    seatsConsumed: null, seatsAvailable: null, seatSource: 'unknown',
+    plan: 'enterprise',
+    canManageTeam: true,
+    maxMembers: null,
+    seatsConsumed: null,
+    seatsAvailable: null,
+    seatSource: 'unknown',
   });
 });
 
@@ -417,9 +426,13 @@ describe('captured workspace scope', () => {
   }
 
   function expectNoStorage() {
-    expect(mockQuery.mock.calls.some(([sql]) =>
-      /public\.(organization_admin_api_keys|organization_service_principals|admin_request_idempotency)/i.test(String(sql)),
-    )).toBe(false);
+    expect(
+      mockQuery.mock.calls.some(([sql]) =>
+        /public\.(organization_admin_api_keys|organization_service_principals|admin_request_idempotency)/i.test(
+          String(sql),
+        ),
+      ),
+    ).toBe(false);
   }
 
   function expectCapturedMembership() {
@@ -429,54 +442,79 @@ describe('captured workspace scope', () => {
     expect(membershipReads).toHaveLength(1);
     expect(membershipReads[0]?.[1]).toEqual([OTHER_ORG, 'user-1']);
     expect(membershipReads[0]?.[0]).toMatch(/status = 'active'/);
-    expect(mockQuery.mock.calls.some(([sql]) => /public\.user_settings/i.test(String(sql)))).toBe(false);
+    expect(mockQuery.mock.calls.some(([sql]) => /public\.user_settings/i.test(String(sql)))).toBe(
+      false,
+    );
     expect(requireTeamAdminAccess).toHaveBeenCalledWith(expect.anything(), 'user-1', OTHER_ORG);
   }
 
-  it.each([true, false])('lists captured B over saved A, with workspace header present=%s', async (withHeader) => {
-    capturedScope.organizationId = OTHER_ORG;
-    bind('owner', principalRow({ organization_id: OTHER_ORG }), OTHER_ORG);
-    const res = await GET(requestFor('GET', withHeader ? { [MANAGED_CLOUD_ORGANIZATION_HEADER]: OTHER_ORG } : {}) as never);
-    const body = await res.json();
-
-    expect(res.status).toBe(200);
-    expect(body.organizationId).toBe(OTHER_ORG);
-    expect(body.keys[0].organizationId).toBe(OTHER_ORG);
-    expect(body.servicePrincipals[0].organizationId).toBe(OTHER_ORG);
-    expectCapturedMembership();
-    expect(requireMemberPermission).toHaveBeenCalledWith(OTHER_ORG, 'user-1', 'identity.read', expect.any(String));
-    for (const [sql, params] of mockQuery.mock.calls) {
-      if (/from public\.(organization_admin_api_keys|organization_service_principals)/i.test(String(sql))) {
-        expect(params).toEqual([OTHER_ORG]);
-      }
-    }
-  });
-
-  it.each(['GET', 'POST', 'DELETE'] as const)('refuses Personal before %s storage, plan, permission, step-up or audit', async (method) => {
-    bind('owner');
-    capturedScope.organizationId = null;
-    const res = await ({ GET, POST, DELETE })[method](requestFor(method) as never);
-
-    expect(res.status).toBe(403);
-    expect(mockQuery).not.toHaveBeenCalled();
-    expect(requireTeamAdminAccess).not.toHaveBeenCalled();
-    expect(requireMemberPermission).not.toHaveBeenCalled();
-    expect(mockRecordAuditEvent).not.toHaveBeenCalled();
-  });
-
-  it.each(['GET', 'POST', 'DELETE'] as const)('refuses absent and mismatched B membership on %s', async (method) => {
-    for (const member of [null, { organization_id: ORG, role: 'owner' }]) {
-      vi.clearAllMocks();
+  it.each([true, false])(
+    'lists captured B over saved A, with workspace header present=%s',
+    async (withHeader) => {
       capturedScope.organizationId = OTHER_ORG;
-      bind('owner', principalRow(), ORG, member);
-      const res = await ({ GET, POST, DELETE })[method](requestFor(method) as never);
+      bind('owner', principalRow({ organization_id: OTHER_ORG }), OTHER_ORG);
+      const res = await GET(
+        requestFor(
+          'GET',
+          withHeader ? { [MANAGED_CLOUD_ORGANIZATION_HEADER]: OTHER_ORG } : {},
+        ) as never,
+      );
+      const body = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(body.organizationId).toBe(OTHER_ORG);
+      expect(body.keys[0].organizationId).toBe(OTHER_ORG);
+      expect(body.servicePrincipals[0].organizationId).toBe(OTHER_ORG);
+      expectCapturedMembership();
+      expect(requireMemberPermission).toHaveBeenCalledWith(
+        OTHER_ORG,
+        'user-1',
+        'identity.read',
+        expect.any(String),
+      );
+      for (const [sql, params] of mockQuery.mock.calls) {
+        if (
+          /from public\.(organization_admin_api_keys|organization_service_principals)/i.test(
+            String(sql),
+          )
+        ) {
+          expect(params).toEqual([OTHER_ORG]);
+        }
+      }
+    },
+  );
+
+  it.each(['GET', 'POST', 'DELETE'] as const)(
+    'refuses Personal before %s storage, plan, permission, step-up or audit',
+    async (method) => {
+      bind('owner');
+      capturedScope.organizationId = null;
+      const res = await { GET, POST, DELETE }[method](requestFor(method) as never);
+
       expect(res.status).toBe(403);
-      expectNoStorage();
+      expect(mockQuery).not.toHaveBeenCalled();
       expect(requireTeamAdminAccess).not.toHaveBeenCalled();
       expect(requireMemberPermission).not.toHaveBeenCalled();
       expect(mockRecordAuditEvent).not.toHaveBeenCalled();
-    }
-  });
+    },
+  );
+
+  it.each(['GET', 'POST', 'DELETE'] as const)(
+    'refuses absent and mismatched B membership on %s',
+    async (method) => {
+      for (const member of [null, { organization_id: ORG, role: 'owner' }]) {
+        vi.clearAllMocks();
+        capturedScope.organizationId = OTHER_ORG;
+        bind('owner', principalRow(), ORG, member);
+        const res = await { GET, POST, DELETE }[method](requestFor(method) as never);
+        expect(res.status).toBe(403);
+        expectNoStorage();
+        expect(requireTeamAdminAccess).not.toHaveBeenCalled();
+        expect(requireMemberPermission).not.toHaveBeenCalled();
+        expect(mockRecordAuditEvent).not.toHaveBeenCalled();
+      }
+    },
+  );
 
   it('binds mint, principal, step-up, idempotency and audit to B and rechecks proof before replay', async () => {
     const headers = { 'Idempotency-Key': 'same-key-both-workspaces' };
@@ -496,103 +534,179 @@ describe('captured workspace scope', () => {
     expect((await second.json()).key).toBe(body.key);
     expect(body.record.organizationId).toBe(OTHER_ORG);
     expect(body.servicePrincipal.organizationId).toBe(OTHER_ORG);
-    expect(requireMemberPermission).toHaveBeenCalledWith(OTHER_ORG, 'user-1', 'identity.manage', expect.any(String));
-    const keyInserts = mockQuery.mock.calls.filter(([sql]) => /insert into public\.organization_admin_api_keys/i.test(String(sql)));
+    expect(requireMemberPermission).toHaveBeenCalledWith(
+      OTHER_ORG,
+      'user-1',
+      'identity.manage',
+      expect.any(String),
+    );
+    const keyInserts = mockQuery.mock.calls.filter(([sql]) =>
+      /insert into public\.organization_admin_api_keys/i.test(String(sql)),
+    );
     expect(keyInserts).toHaveLength(1);
     expect(keyInserts[0]?.[1]?.[0]).toBe(OTHER_ORG);
-    const principalInsert = mockQuery.mock.calls.find(([sql]) => /insert into public\.organization_service_principals/i.test(String(sql)));
+    const principalInsert = mockQuery.mock.calls.find(([sql]) =>
+      /insert into public\.organization_service_principals/i.test(String(sql)),
+    );
     expect(principalInsert?.[1]?.[0]).toBe(OTHER_ORG);
-    const claim = mockQuery.mock.calls.find(([sql]) => /insert into public\.admin_request_idempotency/i.test(String(sql)));
-    expect(claim?.[1]).toEqual([OTHER_ORG, 'admin-api-keys:create', headers['Idempotency-Key'], expect.any(String), 'user-1']);
-    expect(mockRecordAuditEvent).toHaveBeenCalledWith(expect.objectContaining({
-      organizationId: OTHER_ORG, eventType: 'step_up_satisfied',
-      endpoint: '/api/settings/organization/admin-api-keys',
-      detail: expect.objectContaining({ resourceId: 'api_credential.reveal', scope: OTHER_ORG }),
-    }));
-    expect(mockRecordAuditEvent).toHaveBeenCalledWith(expect.objectContaining({
-      organizationId: OTHER_ORG, userId: 'user-1', eventType: 'admin_api_key_created',
-      detail: expect.objectContaining({ resourceId: KEY_ID, subjectRef: `service_principal:${PRINCIPAL_ID}` }),
-    }));
+    const claim = mockQuery.mock.calls.find(([sql]) =>
+      /insert into public\.admin_request_idempotency/i.test(String(sql)),
+    );
+    expect(claim?.[1]).toEqual([
+      OTHER_ORG,
+      'admin-api-keys:create',
+      headers['Idempotency-Key'],
+      expect.any(String),
+      'user-1',
+    ]);
+    expect(mockRecordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organizationId: OTHER_ORG,
+        eventType: 'step_up_satisfied',
+        endpoint: '/api/settings/organization/admin-api-keys',
+        detail: expect.objectContaining({ resourceId: 'api_credential.reveal', scope: OTHER_ORG }),
+      }),
+    );
+    expect(mockRecordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organizationId: OTHER_ORG,
+        userId: 'user-1',
+        eventType: 'admin_api_key_created',
+        detail: expect.objectContaining({
+          resourceId: KEY_ID,
+          subjectRef: `service_principal:${PRINCIPAL_ID}`,
+        }),
+      }),
+    );
 
     vi.clearAllMocks();
     const refused = await POST(requestFor('POST', headers) as never);
     expect(refused.status).toBe(403);
     expectNoStorage();
     expect(mockRecordAuditEvent).toHaveBeenCalledTimes(1);
-    expect(mockRecordAuditEvent).toHaveBeenCalledWith(expect.objectContaining({
-      organizationId: OTHER_ORG, eventType: 'step_up_challenged',
-      detail: expect.objectContaining({ reason: 'subject_mismatch', scope: OTHER_ORG }),
-    }));
+    expect(mockRecordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organizationId: OTHER_ORG,
+        eventType: 'step_up_challenged',
+        detail: expect.objectContaining({ reason: 'subject_mismatch', scope: OTHER_ORG }),
+      }),
+    );
   });
 
   it('refuses an A-only principal under B without minting or creation audit', async () => {
     capturedScope.organizationId = OTHER_ORG;
     bind('owner', principalRow(), OTHER_ORG);
-    const res = await POST(send('POST', { ...createBody, servicePrincipalId: PRINCIPAL_ID }, revealProof(OTHER_ORG)) as never);
+    const res = await POST(
+      send(
+        'POST',
+        { ...createBody, servicePrincipalId: PRINCIPAL_ID },
+        revealProof(OTHER_ORG),
+      ) as never,
+    );
     expect(res.status).toBe(404);
-    const read = mockQuery.mock.calls.find(([sql]) => /from public\.organization_service_principals/i.test(String(sql)));
+    const read = mockQuery.mock.calls.find(([sql]) =>
+      /from public\.organization_service_principals/i.test(String(sql)),
+    );
     expect(read?.[1]).toEqual([OTHER_ORG, PRINCIPAL_ID]);
     expect(mockQuery.mock.calls.some(([sql]) => /insert into/i.test(String(sql)))).toBe(false);
-    expect(mockRecordAuditEvent).not.toHaveBeenCalledWith(expect.objectContaining({ eventType: 'admin_api_key_created' }));
+    expect(mockRecordAuditEvent).not.toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: 'admin_api_key_created' }),
+    );
   });
 
-  it.each([true, false])('revokes only B keys and audits only successful B revocation, key in B=%s', async (inB) => {
-    capturedScope.organizationId = OTHER_ORG;
-    bind('owner', principalRow(), inB ? OTHER_ORG : ORG, { organization_id: OTHER_ORG, role: 'owner' });
-    const res = await DELETE(requestFor('DELETE') as never);
-    expect(res.status).toBe(inB ? 200 : 404);
-    expectCapturedMembership();
-    expect(requireMemberPermission).toHaveBeenCalledWith(OTHER_ORG, 'user-1', 'identity.manage', expect.any(String));
-    const update = mockQuery.mock.calls.find(([sql]) => /update public\.organization_admin_api_keys/i.test(String(sql)));
-    expect(update?.[1]).toEqual([OTHER_ORG, KEY_ID, 'user-1']);
-    if (inB) {
-      expect(mockRecordAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ organizationId: OTHER_ORG, eventType: 'admin_api_key_revoked' }));
-    } else {
+  it.each([true, false])(
+    'revokes only B keys and audits only successful B revocation, key in B=%s',
+    async (inB) => {
+      capturedScope.organizationId = OTHER_ORG;
+      bind('owner', principalRow(), inB ? OTHER_ORG : ORG, {
+        organization_id: OTHER_ORG,
+        role: 'owner',
+      });
+      const res = await DELETE(requestFor('DELETE') as never);
+      expect(res.status).toBe(inB ? 200 : 404);
+      expectCapturedMembership();
+      expect(requireMemberPermission).toHaveBeenCalledWith(
+        OTHER_ORG,
+        'user-1',
+        'identity.manage',
+        expect.any(String),
+      );
+      const update = mockQuery.mock.calls.find(([sql]) =>
+        /update public\.organization_admin_api_keys/i.test(String(sql)),
+      );
+      expect(update?.[1]).toEqual([OTHER_ORG, KEY_ID, 'user-1']);
+      if (inB) {
+        expect(mockRecordAuditEvent).toHaveBeenCalledWith(
+          expect.objectContaining({
+            organizationId: OTHER_ORG,
+            eventType: 'admin_api_key_revoked',
+          }),
+        );
+      } else {
+        expect(mockRecordAuditEvent).not.toHaveBeenCalled();
+      }
+    },
+  );
+
+  it.each(['GET', 'POST', 'DELETE'] as const)(
+    'preserves plan and permission gates on %s',
+    async (method) => {
+      capturedScope.organizationId = OTHER_ORG;
+      bind('owner', principalRow(), OTHER_ORG);
+      vi.mocked(requireTeamAdminAccess).mockRejectedValueOnce(
+        createError.forbidden('Plan unavailable'),
+      );
+      const planDenied = await { GET, POST, DELETE }[method](requestFor(method) as never);
+      expect(planDenied.status).toBe(403);
+      expect(requireMemberPermission).not.toHaveBeenCalled();
+      expectNoStorage();
       expect(mockRecordAuditEvent).not.toHaveBeenCalled();
-    }
-  });
 
-  it.each(['GET', 'POST', 'DELETE'] as const)('preserves plan and permission gates on %s', async (method) => {
-    capturedScope.organizationId = OTHER_ORG;
-    bind('owner', principalRow(), OTHER_ORG);
-    vi.mocked(requireTeamAdminAccess).mockRejectedValueOnce(createError.forbidden('Plan unavailable'));
-    const planDenied = await ({ GET, POST, DELETE })[method](requestFor(method) as never);
-    expect(planDenied.status).toBe(403);
-    expect(requireMemberPermission).not.toHaveBeenCalled();
-    expectNoStorage();
-    expect(mockRecordAuditEvent).not.toHaveBeenCalled();
+      vi.clearAllMocks();
+      bind('viewer', principalRow(), OTHER_ORG);
+      permissionRole.value = null;
+      const permissionDenied = await { GET, POST, DELETE }[method](requestFor(method) as never);
+      expect(permissionDenied.status).toBe(403);
+      expect(requireMemberPermission).toHaveBeenCalled();
+      expectNoStorage();
+      expect(mockRecordAuditEvent).not.toHaveBeenCalled();
+    },
+  );
 
-    vi.clearAllMocks();
-    bind('viewer', principalRow(), OTHER_ORG);
-    permissionRole.value = null;
-    const permissionDenied = await ({ GET, POST, DELETE })[method](requestFor(method) as never);
-    expect(permissionDenied.status).toBe(403);
-    expect(requireMemberPermission).toHaveBeenCalled();
-    expectNoStorage();
-    expect(mockRecordAuditEvent).not.toHaveBeenCalled();
-  });
+  it.each(['GET', 'POST', 'DELETE'] as const)(
+    'preserves rate limiting before %s scope resolution',
+    async (method) => {
+      bind('owner');
+      vi.mocked(withRateLimit).mockResolvedValueOnce(new Response(null, { status: 429 }) as never);
+      const res = await { GET, POST, DELETE }[method](requestFor(method) as never);
+      expect(res.status).toBe(429);
+      expect(getUserScopedDb).not.toHaveBeenCalled();
+      expect(mockQuery).not.toHaveBeenCalled();
+      expect(mockRecordAuditEvent).not.toHaveBeenCalled();
+    },
+  );
 
-  it.each(['GET', 'POST', 'DELETE'] as const)('preserves rate limiting before %s scope resolution', async (method) => {
-    bind('owner');
-    vi.mocked(withRateLimit).mockResolvedValueOnce(new Response(null, { status: 429 }) as never);
-    const res = await ({ GET, POST, DELETE })[method](requestFor(method) as never);
-    expect(res.status).toBe(429);
-    expect(getUserScopedDb).not.toHaveBeenCalled();
-    expect(mockQuery).not.toHaveBeenCalled();
-    expect(mockRecordAuditEvent).not.toHaveBeenCalled();
-  });
+  it.each(['POST', 'DELETE'] as const)(
+    'preserves CSRF and strict body validation before %s writes',
+    async (method) => {
+      bind('owner');
+      vi.mocked(requireCsrfToken).mockResolvedValueOnce(
+        new Response(null, { status: 403 }) as never,
+      );
+      expect((await { POST, DELETE }[method](requestFor(method) as never)).status).toBe(403);
+      expect(getUserScopedDb).not.toHaveBeenCalled();
+      expect(mockQuery).not.toHaveBeenCalled();
+      expect(mockRecordAuditEvent).not.toHaveBeenCalled();
 
-  it.each(['POST', 'DELETE'] as const)('preserves CSRF and strict body validation before %s writes', async (method) => {
-    bind('owner');
-    vi.mocked(requireCsrfToken).mockResolvedValueOnce(new Response(null, { status: 403 }) as never);
-    expect((await ({ POST, DELETE })[method](requestFor(method) as never)).status).toBe(403);
-    expect(getUserScopedDb).not.toHaveBeenCalled();
-    expect(mockQuery).not.toHaveBeenCalled();
-    expect(mockRecordAuditEvent).not.toHaveBeenCalled();
-
-    const invalid = method === 'POST' ? { ...createBody, organizationId: OTHER_ORG } : { keyId: 'invalid' };
-    expect((await ({ POST, DELETE })[method](send(method, invalid) as never)).status).toBe(400);
-    expectNoStorage();
-    expect(mockRecordAuditEvent).not.toHaveBeenCalled();
-  });
+      const invalid =
+        method === 'POST' ? { ...createBody, organizationId: OTHER_ORG } : { keyId: 'invalid' };
+      expect((await { POST, DELETE }[method](send(method, invalid) as never)).status).toBe(400);
+      expectNoStorage();
+      expect(mockRecordAuditEvent).not.toHaveBeenCalled();
+    },
+  );
 });
+
+type CompleteMockModule0 = typeof import('@/lib/services/org-entitlements');
+
+type RetainedMockModule1 = typeof import('@/lib/logger');

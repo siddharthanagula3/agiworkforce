@@ -59,15 +59,35 @@ export function SlackChannelPolicies(props: {
   teamName: string;
   expectedTeamId: string;
 }) {
-  const target = useMemo(() => ({}), [props.view, props.installationId, props.expectedTeamId]);
+  const target = useMemo(
+    () => ({
+      scope: {
+        view: props.view,
+        installationId: props.installationId,
+        expectedTeamId: props.expectedTeamId,
+      },
+    }),
+    [props.view, props.installationId, props.expectedTeamId],
+  );
   const rendered = useRef(target);
   rendered.current = target;
   const targetCurrent = useCallback(() => rendered.current === target, [target]);
-  return <ChannelPoliciesEditor key={`${props.view.id}:${props.installationId}:${props.expectedTeamId}`}
-    {...props} targetCurrent={targetCurrent} />;
+  return (
+    <ChannelPoliciesEditor
+      key={`${props.view.id}:${props.installationId}:${props.expectedTeamId}`}
+      {...props}
+      targetCurrent={targetCurrent}
+    />
+  );
 }
 
-function ChannelPoliciesEditor({ view, installationId, teamName, expectedTeamId, targetCurrent }: {
+function ChannelPoliciesEditor({
+  view,
+  installationId,
+  teamName,
+  expectedTeamId,
+  targetCurrent,
+}: {
   targetCurrent: () => boolean;
   view: SlackSettingsView;
   installationId: string;
@@ -84,23 +104,34 @@ function ChannelPoliciesEditor({ view, installationId, teamName, expectedTeamId,
   const baseline = useRef<SlackChannelPolicyList | null>(null);
   const editorRevision = useRef(0);
   const path = slackChannelPoliciesPath(installationId);
-  const current = useCallback(() => targetCurrent() && mounted.current && view.isCurrent(), [targetCurrent, view]);
-  const transmit = useCallback(async (request: RequestAuthority,
-    init: { method: 'GET' | 'PUT'; body?: unknown }) => {
-    request.assertCurrent();
-    const response = await view.send(request, path, init);
-    request.assertCurrent();
-    return response;
-  }, [path, view]);
-  const parse = useCallback(async (request: RequestAuthority, response: Response) => {
-    const result = await readPolicies(response);
-    request.assertCurrent();
-    if (result.teamId !== expectedTeamId) throw new Error('The channel settings belong to another Slack workspace.');
-    if (new Set(result.channels.map((channel) => channel.channelId)).size !== result.channels.length) {
-      throw new Error('The channel settings contained conflicting channel identifiers.');
-    }
-    return result;
-  }, [expectedTeamId]);
+  const current = useCallback(
+    () => targetCurrent() && mounted.current && view.isCurrent(),
+    [targetCurrent, view],
+  );
+  const transmit = useCallback(
+    async (request: RequestAuthority, init: { method: 'GET' | 'PUT'; body?: unknown }) => {
+      request.assertCurrent();
+      const response = await view.send(request, path, init);
+      request.assertCurrent();
+      return response;
+    },
+    [path, view],
+  );
+  const parse = useCallback(
+    async (request: RequestAuthority, response: Response) => {
+      const result = await readPolicies(response);
+      request.assertCurrent();
+      if (result.teamId !== expectedTeamId)
+        throw new Error('The channel settings belong to another Slack workspace.');
+      if (
+        new Set(result.channels.map((channel) => channel.channelId)).size !== result.channels.length
+      ) {
+        throw new Error('The channel settings contained conflicting channel identifiers.');
+      }
+      return result;
+    },
+    [expectedTeamId],
+  );
 
   useEffect(() => {
     mounted.current = true;
@@ -118,7 +149,8 @@ function ChannelPoliciesEditor({ view, installationId, teamName, expectedTeamId,
           setData(result);
         } catch (reason) {
           view.reconcile();
-          if (request.isCurrent()) setError(toUserMessage(reason, 'Channel settings could not be loaded.'));
+          if (request.isCurrent())
+            setError(toUserMessage(reason, 'Channel settings could not be loaded.'));
         }
       })();
     }
@@ -129,7 +161,10 @@ function ChannelPoliciesEditor({ view, installationId, teamName, expectedTeamId,
     };
   }, [current, view, transmit, parse]);
 
-  const save = async (channelId: string, body: { mode: SlackChannelMode | null; tools?: SlackChannelTool[] | null }) => {
+  const save = async (
+    channelId: string,
+    body: { mode: SlackChannelMode | null; tools?: SlackChannelTool[] | null },
+  ) => {
     const target = baseline.current;
     if (!view.reconcile() || !current() || !target || target !== data) return false;
     const operation = view.begin(() => current() && baseline.current === target);
@@ -137,14 +172,23 @@ function ChannelPoliciesEditor({ view, installationId, teamName, expectedTeamId,
     reading.current?.retire();
     setError(null);
     try {
-      const result = await parse(operation.request,
-        await transmit(operation.request, { method: 'PUT', body: { channelId, ...body } }));
+      const result = await parse(
+        operation.request,
+        await transmit(operation.request, { method: 'PUT', body: { channelId, ...body } }),
+      );
       operation.request.assertCurrent();
       const saved = result.channels.find((channel) => channel.channelId === channelId);
-      if ((body.mode === null ? saved?.mode != null : saved?.mode !== body.mode) ||
-          (body.tools !== undefined && body.mode !== null && (!saved ||
-            SLACK_CHANNEL_TOOLS.some((tool) =>
-              slackChannelToolAllowed(saved.tools, tool) !== slackChannelToolAllowed(body.tools ?? null, tool))))) {
+      if (
+        (body.mode === null ? saved?.mode != null : saved?.mode !== body.mode) ||
+        (body.tools !== undefined &&
+          body.mode !== null &&
+          (!saved ||
+            SLACK_CHANNEL_TOOLS.some(
+              (tool) =>
+                slackChannelToolAllowed(saved.tools, tool) !==
+                slackChannelToolAllowed(body.tools ?? null, tool),
+            )))
+      ) {
         throw new Error('The channel receipt did not match the requested setting.');
       }
       baseline.current = result;
@@ -155,7 +199,9 @@ function ChannelPoliciesEditor({ view, installationId, teamName, expectedTeamId,
       if (operation.dispatched && view.isCurrent()) view.markUncertain();
       if (operation.request.isCurrent()) {
         if (operation.dispatched) {
-          setError('The result could not be confirmed. Check Slack before trying this action again.');
+          setError(
+            'The result could not be confirmed. Check Slack before trying this action again.',
+          );
         } else {
           setError(toUserMessage(reason, 'The channel request could not be sent.'));
         }
@@ -260,40 +306,54 @@ function ChannelPoliciesEditor({ view, installationId, teamName, expectedTeamId,
           No channels yet. Channels where someone mentions the app appear here.
         </p>
       ) : null}
-      {current() ? <form
-        className="flex flex-col gap-1.5 sm:flex-row sm:items-end"
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (!view.reconcile() || !current() || !channelValid || blocked || editorRevision.current !== renderedEditorRevision) return;
-          const revision = editorRevision.current;
-          void setMode(channelInput, 'off').then((saved) => {
-            if (saved && current() && editorRevision.current === revision) setNewChannel('');
-          });
-        }}
-      >
-        <div className="flex flex-1 flex-col gap-1">
-          <Label htmlFor={`${id}-channel`} className="text-xs">
-            Turn it off in another channel
-          </Label>
-          <Input
-            id={`${id}-channel`}
-            value={newChannel}
-            placeholder="Channel ID, such as C0123ABCD"
-            aria-describedby={`${id}-channel-help`}
-            onChange={(event) => {
-              if (!view.reconcile() || !current() || editorRevision.current !== renderedEditorRevision) return;
-              editorRevision.current += 1;
-              setNewChannel(event.target.value);
-            }}
-          />
-          <p id={`${id}-channel-help`} className="text-xs text-muted-foreground">
-            In Slack, open the channel details; the ID is at the bottom of the About tab.
-          </p>
-        </div>
-        <Button type="submit" variant="outline" size="sm" disabled={!channelValid || blocked}>
-          Turn off
-        </Button>
-      </form> : null}
+      {current() ? (
+        <form
+          className="flex flex-col gap-1.5 sm:flex-row sm:items-end"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (
+              !view.reconcile() ||
+              !current() ||
+              !channelValid ||
+              blocked ||
+              editorRevision.current !== renderedEditorRevision
+            )
+              return;
+            const revision = editorRevision.current;
+            void setMode(channelInput, 'off').then((saved) => {
+              if (saved && current() && editorRevision.current === revision) setNewChannel('');
+            });
+          }}
+        >
+          <div className="flex flex-1 flex-col gap-1">
+            <Label htmlFor={`${id}-channel`} className="text-xs">
+              Turn it off in another channel
+            </Label>
+            <Input
+              id={`${id}-channel`}
+              value={newChannel}
+              placeholder="Channel ID, such as C0123ABCD"
+              aria-describedby={`${id}-channel-help`}
+              onChange={(event) => {
+                if (
+                  !view.reconcile() ||
+                  !current() ||
+                  editorRevision.current !== renderedEditorRevision
+                )
+                  return;
+                editorRevision.current += 1;
+                setNewChannel(event.target.value);
+              }}
+            />
+            <p id={`${id}-channel-help`} className="text-xs text-muted-foreground">
+              In Slack, open the channel details; the ID is at the bottom of the About tab.
+            </p>
+          </div>
+          <Button type="submit" variant="outline" size="sm" disabled={!channelValid || blocked}>
+            Turn off
+          </Button>
+        </form>
+      ) : null}
     </section>
   );
 }

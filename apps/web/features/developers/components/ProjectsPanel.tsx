@@ -29,7 +29,9 @@ import { useSessionSnapshot } from '@/lib/identity/useSessionSnapshot';
 import { createRequestAuthority } from '@/lib/identity/request-authority';
 import { useAccountWorkspaces } from '@/features/workspaces/hooks/use-workspaces';
 import {
-  observeWorkspaceOwner, subscribeWorkspaceAdmission, workspaceOwnerIsCurrent,
+  observeWorkspaceOwner,
+  subscribeWorkspaceAdmission,
+  workspaceOwnerIsCurrent,
   type WorkspaceOwner,
 } from '@/features/workspaces/lib/workspace-admission';
 
@@ -59,7 +61,8 @@ type ProjectIntent = {
 };
 type View = { intent: ProjectIntent | null; error: string | null; notice: string | null };
 const EMPTY: View = { intent: null, error: null, notice: null };
-const UNCERTAIN = 'We could not confirm whether the project was updated. Check the project state before repeating this action.';
+const UNCERTAIN =
+  'We could not confirm whether the project was updated. Check the project state before repeating this action.';
 
 type LimitField = { valid: true; limit: number | null } | { valid: false };
 
@@ -167,7 +170,11 @@ function ProjectEditor({
               </p>
             </div>
           </div>
-          {error ? <p role="alert" className="mt-3 text-sm text-danger">{error}</p> : null}
+          {error ? (
+            <p role="alert" className="mt-3 text-sm text-danger">
+              {error}
+            </p>
+          ) : null}
           <DialogFooter className="mt-6">
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel
@@ -183,18 +190,30 @@ function ProjectEditor({
   );
 }
 
-function OwnedProjectsPanel({ owner, epoch, scopeKey, organizationId }: {
-  owner: WorkspaceOwner; epoch: number; scopeKey: string; organizationId: string | null;
+function OwnedProjectsPanel({
+  owner,
+  epoch,
+  scopeKey,
+  organizationId,
+}: {
+  owner: WorkspaceOwner;
+  epoch: number;
+  scopeKey: string;
+  organizationId: string | null;
 }) {
   const projects = useDeveloperProjects();
   const apiKeys = useAPIKeys();
   const usage = useDeveloperUsage();
   const keyStatus = apiKeys.isLoading
     ? 'loading'
-    : apiKeys.isError || !apiKeys.data ? 'unavailable' : 'ready';
+    : apiKeys.isError || !apiKeys.data
+      ? 'unavailable'
+      : 'ready';
   const usageStatus = usage.isLoading
     ? 'loading'
-    : usage.isError || !usage.data ? 'unavailable' : 'ready';
+    : usage.isError || !usage.data
+      ? 'unavailable'
+      : 'ready';
   const usageByProject = new Map(
     (usage.data?.projects ?? []).map((entry) => [entry.projectId, entry] as const),
   );
@@ -202,16 +221,44 @@ function OwnedProjectsPanel({ owner, epoch, scopeKey, organizationId }: {
   const updateProject = useUpdateDeveloperProject();
   const archiveProject = useArchiveDeveloperProject();
   const { confirm, dialog } = useConfirmAction();
-  const lane = useMemo(() => ({ active: false, nextIntentId: 0, generation: {} as object,
-    intent: null as ProjectIntent | null, snapshot: null as object | null }), []);
+  const lane = useMemo(
+    () => ({
+      active: false,
+      nextIntentId: 0,
+      generation: {} as object,
+      intent: null as ProjectIntent | null,
+      snapshot: null as object | null,
+    }),
+    [],
+  );
   const [view, setView] = useState<View>(EMPTY);
-  const ownerCurrent = useCallback(() => owner.phase === 'admitted' && owner.scopeKey === scopeKey &&
-    workspaceOwnerIsCurrent(owner, epoch), [owner, epoch, scopeKey]);
-  const current = (intent: ProjectIntent) => lane.active && lane.generation === intent.generation &&
-    lane.intent === intent && ownerCurrent();
-  const snapshot = useMemo(() => ({}), [projects.data, projects.isLoading, projects.isError,
-    apiKeys.data, keyStatus]);
-  useLayoutEffect(() => { lane.snapshot = snapshot; }, [lane, snapshot]);
+  const ownerCurrent = useCallback(
+    () =>
+      owner.phase === 'admitted' &&
+      owner.scopeKey === scopeKey &&
+      workspaceOwnerIsCurrent(owner, epoch),
+    [owner, epoch, scopeKey],
+  );
+  const current = (intent: ProjectIntent) =>
+    lane.active &&
+    lane.generation === intent.generation &&
+    lane.intent === intent &&
+    ownerCurrent();
+  const snapshot = useMemo(
+    () => ({
+      scope: {
+        projectsData: projects.data,
+        projectsIsLoading: projects.isLoading,
+        projectsIsError: projects.isError,
+        apiKeysData: apiKeys.data,
+        keyStatus,
+      },
+    }),
+    [projects.data, projects.isLoading, projects.isError, apiKeys.data, keyStatus],
+  );
+  useLayoutEffect(() => {
+    lane.snapshot = snapshot;
+  }, [lane, snapshot]);
   useLayoutEffect(() => {
     lane.active = true;
     lane.generation = {};
@@ -222,11 +269,21 @@ function OwnedProjectsPanel({ owner, epoch, scopeKey, organizationId }: {
       lane.intent = null;
     };
     const stop = subscribeWorkspaceAdmission(() => {
-      if (!ownerCurrent()) { retire(); setView(EMPTY); }
+      if (!ownerCurrent()) {
+        retire();
+        setView(EMPTY);
+      }
     });
-    return () => { stop(); retire(); };
+    return () => {
+      stop();
+      retire();
+    };
   }, [lane, ownerCurrent]);
-  const finish = (intent: ProjectIntent, error: string | null = null, notice: string | null = null) => {
+  const finish = (
+    intent: ProjectIntent,
+    error: string | null = null,
+    notice: string | null = null,
+  ) => {
     if (!current(intent)) return;
     intent.phase = 'done';
     intent.scope.request.retire();
@@ -234,17 +291,34 @@ function OwnedProjectsPanel({ owner, epoch, scopeKey, organizationId }: {
     setView({ intent: null, error, notice });
   };
   const openIntent = (editor: ProjectIntent['editor']) => {
-    if (!lane.active || !ownerCurrent() || lane.intent || lane.snapshot !== snapshot ||
-      projects.isLoading || projects.isError || !projects.data) return null;
-    let intent: ProjectIntent;
-    const request = createRequestAuthority(owner.session, () => current(intent), () => {
-      if (intent.phase !== 'writing') throw new Error('The project action is no longer ready.');
-      intent.dispatched = true;
-    });
-    const capturedEditor = editor?.mode === 'edit'
-      ? { mode: 'edit' as const, project: { ...editor.project } } : editor;
-    intent = { id: ++lane.nextIntentId, generation: lane.generation, scope: { request, organizationId }, editor: capturedEditor,
-      phase: editor ? 'editing' : 'confirming', dispatched: false };
+    if (
+      !lane.active ||
+      !ownerCurrent() ||
+      lane.intent ||
+      lane.snapshot !== snapshot ||
+      projects.isLoading ||
+      projects.isError ||
+      !projects.data
+    )
+      return null;
+    const request = createRequestAuthority(
+      owner.session,
+      () => current(intent),
+      () => {
+        if (intent.phase !== 'writing') throw new Error('The project action is no longer ready.');
+        intent.dispatched = true;
+      },
+    );
+    const capturedEditor =
+      editor?.mode === 'edit' ? { mode: 'edit' as const, project: { ...editor.project } } : editor;
+    const intent: ProjectIntent = {
+      id: ++lane.nextIntentId,
+      generation: lane.generation,
+      scope: { request, organizationId },
+      editor: capturedEditor,
+      phase: editor ? 'editing' : 'confirming',
+      dispatched: false,
+    };
     lane.intent = intent;
     setView({ ...EMPTY, intent });
     return intent;
@@ -272,7 +346,11 @@ function OwnedProjectsPanel({ owner, epoch, scopeKey, organizationId }: {
       if (intent.editor.mode === 'create') {
         await createProject.mutateAsync({ scope: intent.scope, draft });
       } else {
-        await updateProject.mutateAsync({ scope: intent.scope, projectId: intent.editor.project.id, patch: draft });
+        await updateProject.mutateAsync({
+          scope: intent.scope,
+          projectId: intent.editor.project.id,
+          patch: draft,
+        });
       }
       if (!intent.scope.request.isCurrent()) return;
       finish(intent);
@@ -283,8 +361,14 @@ function OwnedProjectsPanel({ owner, epoch, scopeKey, organizationId }: {
       } else {
         intent.phase = 'editing';
         intent.dispatched = false;
-        setView({ intent, notice: null, error: toUserMessage(error,
-          'The project could not be saved. Check the details and try again.') });
+        setView({
+          intent,
+          notice: null,
+          error: toUserMessage(
+            error,
+            'The project could not be saved. Check the details and try again.',
+          ),
+        });
       }
     }
   };
@@ -313,7 +397,9 @@ function OwnedProjectsPanel({ owner, epoch, scopeKey, organizationId }: {
             )
           : 'An archived project cannot be restored, and no new key can be created in it.',
       confirmLabel: 'Archive project',
-      onCancel: () => { if (intent.phase === 'confirming') finish(intent); },
+      onCancel: () => {
+        if (intent.phase === 'confirming') finish(intent);
+      },
       onConfirm: async () => {
         if (!current(intent) || intent.phase !== 'confirming') return;
         intent.phase = 'writing';
@@ -356,20 +442,38 @@ function OwnedProjectsPanel({ owner, epoch, scopeKey, organizationId }: {
         </div>
       </CardHeader>
       <CardContent>
-        {!editor && (view.error || view.notice) ? <p role={view.error ? 'alert' : 'status'}
-          className="mb-3 text-sm">{view.error ?? view.notice}</p> : null}
-        {view.notice ? <Button type="button" variant="outline" size="sm" className="mb-3"
-          disabled={projects.isFetching}
-          onClick={() => {
-            if (!lane.active || !ownerCurrent() || lane.intent || lane.snapshot !== snapshot) return;
-            void projects.refetch();
-          }}>Refresh projects</Button> : null}
+        {!editor && (view.error || view.notice) ? (
+          <p role={view.error ? 'alert' : 'status'} className="mb-3 text-sm">
+            {view.error ?? view.notice}
+          </p>
+        ) : null}
+        {view.notice ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="mb-3"
+            disabled={projects.isFetching}
+            onClick={() => {
+              if (!lane.active || !ownerCurrent() || lane.intent || lane.snapshot !== snapshot)
+                return;
+              void projects.refetch();
+            }}
+          >
+            Refresh projects
+          </Button>
+        ) : null}
         {apiKeys.isError ? (
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <p role="alert" className="text-xs text-danger">
               {toUserMessage(apiKeys.error, 'Key counts could not be loaded.')}
             </p>
-            <Button type="button" variant="outline" size="sm" onClick={() => void apiKeys.refetch()}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void apiKeys.refetch()}
+            >
               Retry key counts
             </Button>
           </div>
@@ -423,7 +527,11 @@ function OwnedProjectsPanel({ owner, epoch, scopeKey, organizationId }: {
                   </span>
                   <span className="text-xs text-muted-foreground">
                     {keyCountLabel(keyCounts.get(project.id) ?? 0, keyStatus)},{' '}
-                    {projectUsageLabel(usageByProject.get(project.id), project.monthlyCreditLimit, usageStatus)}
+                    {projectUsageLabel(
+                      usageByProject.get(project.id),
+                      project.monthlyCreditLimit,
+                      usageStatus,
+                    )}
                   </span>
                 </div>
                 <div className="flex shrink-0 gap-2">
@@ -471,7 +579,9 @@ function OwnedProjectsPanel({ owner, epoch, scopeKey, organizationId }: {
           pending={view.intent.phase === 'writing'}
           error={view.error}
           onClose={() => closeEditor(view.intent!)}
-          onSubmit={(draft) => { void save(view.intent!, draft); }}
+          onSubmit={(draft) => {
+            void save(view.intent!, draft);
+          }}
         />
       ) : null}
       {view.intent && !editor ? dialog : null}
@@ -484,17 +594,48 @@ export function ProjectsPanel() {
   const capture = useSessionSnapshot();
   const owner = observeWorkspaceOwner(capture());
   const data = workspace.data;
-  const scopeKey = data ? JSON.stringify([data.scope, data.activeWorkspaceId, data.activeOrganizationId]) : null;
-  if (!owner || owner.phase !== 'admitted' || !data || scopeKey === null ||
-    owner.scopeKey !== scopeKey || !workspaceOwnerIsCurrent(owner, owner.epoch)) {
-    return <Card><CardHeader><CardTitle>Projects</CardTitle></CardHeader><CardContent>
-      <p>{workspace.requiresReload
-        ? 'Reload this page to confirm the current workspace before managing projects.'
-        : 'Your current workspace must finish loading before you can manage projects.'}</p>
-      {workspace.isUnavailable && !workspace.requiresReload && !workspace.isSwitching
-        ? <Button onClick={() => { void workspace.refetch(); }}>Retry loading workspace</Button> : null}
-    </CardContent></Card>;
+  const scopeKey = data
+    ? JSON.stringify([data.scope, data.activeWorkspaceId, data.activeOrganizationId])
+    : null;
+  if (
+    !owner ||
+    owner.phase !== 'admitted' ||
+    !data ||
+    scopeKey === null ||
+    owner.scopeKey !== scopeKey ||
+    !workspaceOwnerIsCurrent(owner, owner.epoch)
+  ) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Projects</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p>
+            {workspace.requiresReload
+              ? 'Reload this page to confirm the current workspace before managing projects.'
+              : 'Your current workspace must finish loading before you can manage projects.'}
+          </p>
+          {workspace.isUnavailable && !workspace.requiresReload && !workspace.isSwitching ? (
+            <Button
+              onClick={() => {
+                void workspace.refetch();
+              }}
+            >
+              Retry loading workspace
+            </Button>
+          ) : null}
+        </CardContent>
+      </Card>
+    );
   }
-  return <OwnedProjectsPanel key={`${owner.incarnation}:${owner.epoch}:${scopeKey}`}
-    owner={owner} epoch={owner.epoch} scopeKey={scopeKey} organizationId={data.activeOrganizationId} />;
+  return (
+    <OwnedProjectsPanel
+      key={`${owner.incarnation}:${owner.epoch}:${scopeKey}`}
+      owner={owner}
+      epoch={owner.epoch}
+      scopeKey={scopeKey}
+      organizationId={data.activeOrganizationId}
+    />
+  );
 }

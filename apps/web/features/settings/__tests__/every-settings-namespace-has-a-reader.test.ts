@@ -63,7 +63,10 @@ const NAMESPACE_CONSUMERS: Readonly<Record<string, NamespaceConsumer>> = {
     token: 'NAMED_PROVIDER_CONSENT_NAMESPACE',
   },
   safety: { file: 'lib/services/managed-content-safety-service.ts' },
-  security: { file: 'lib/server/device-signin-policy.ts' },
+  security: {
+    file: 'lib/server/device-signin-policy.ts',
+    token: 'DEVICE_SIGNIN_SETTINGS_NAMESPACE',
+  },
 };
 
 function namespacesWrittenByTheClient(): string[] {

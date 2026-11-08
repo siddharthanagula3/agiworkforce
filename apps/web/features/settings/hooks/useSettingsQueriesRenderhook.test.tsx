@@ -5,14 +5,16 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 type ScanModule0 = typeof import('@agiworkforce/types');
 
 vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/identity/useSessionSnapshot')>()),
+  ...(await importOriginal<MockedModule0>()),
   useSessionSnapshot: () => () => ({
-    userId: 'creation-fixture', sessionId: 'creation-session',
-    isCurrent: () => true, getToken: async () => 'test-auth-token',
+    userId: 'creation-fixture',
+    sessionId: 'creation-session',
+    isCurrent: () => true,
+    getToken: async () => 'test-auth-token',
   }),
 }));
 vi.mock('@/features/workspaces/lib/workspace-cache-scope', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/features/workspaces/lib/workspace-cache-scope')>()),
+  ...(await importOriginal<MockedModule1>()),
   finalizeWorkspaceSwitch: vi.fn(async () => undefined),
 }));
 
@@ -172,15 +174,36 @@ describe('team administration mutations · renderHook', () => {
     };
     let created = false;
     const selected = {
-      workspaces: [{ id: organization.id, organizationId: organization.id, kind: 'organization',
-        name: organization.name, slug: organization.slug, role: 'owner', isPrimary: true }],
-      activeWorkspaceId: organization.id, activeOrganizationId: organization.id, scope: 'organization',
+      workspaces: [
+        {
+          id: organization.id,
+          organizationId: organization.id,
+          kind: 'organization',
+          name: organization.name,
+          slug: organization.slug,
+          role: 'owner',
+          isPrimary: true,
+        },
+      ],
+      activeWorkspaceId: organization.id,
+      activeOrganizationId: organization.id,
+      scope: 'organization',
     };
     fetchMock.mockImplementation(async (_url: RequestInfo | URL, init?: RequestInit) => {
-      if (init?.method === 'POST') { created = true; return makeResponse({ organization }, 201); }
-      return makeResponse(created ? selected : {
-        workspaces: [], activeWorkspaceId: null, activeOrganizationId: null, scope: 'personal',
-      });
+      if (init?.method === 'POST') {
+        created = true;
+        return makeResponse({ organization }, 201);
+      }
+      return makeResponse(
+        created
+          ? selected
+          : {
+              workspaces: [],
+              activeWorkspaceId: null,
+              activeOrganizationId: null,
+              scope: 'personal',
+            },
+      );
     });
 
     const { useCreateOrganization } = await import('./use-settings-queries');
@@ -416,3 +439,6 @@ describe('useAuditLogActions · renderHook (GET /api/settings/audit-logs/actions
     expect(result.current.error).toBeTruthy();
   });
 });
+
+type MockedModule0 = typeof import('@/lib/identity/useSessionSnapshot');
+type MockedModule1 = typeof import('@/features/workspaces/lib/workspace-cache-scope');

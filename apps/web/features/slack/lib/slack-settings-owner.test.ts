@@ -7,13 +7,15 @@ import { getCsrfToken } from '@/lib/client/csrf';
 import { createSlackSettingsView } from './slack-settings-owner';
 
 vi.mock('@/lib/client/csrf', async (importOriginal) => ({
-  ...await importOriginal<typeof import('@/lib/client/csrf')>(),
+  ...(await importOriginal<MockedModule0>()),
   getCsrfToken: vi.fn(async () => 'csrf'),
 }));
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>((yes) => { resolve = yes; });
+  const promise = new Promise<T>((yes) => {
+    resolve = yes;
+  });
   return { promise, resolve };
 }
 function setup(organizationId: string | null = null) {
@@ -22,7 +24,13 @@ function setup(organizationId: string | null = null) {
   const session = { userId: 'a', sessionId: 'session-a', isCurrent: () => current, getToken };
   const view = createSlackSettingsView(session, () => current, organizationId);
   view.activate();
-  return { view, getToken, retireSession: () => { current = false; } };
+  return {
+    view,
+    getToken,
+    retireSession: () => {
+      current = false;
+    },
+  };
 }
 const fetchMock = vi.fn<typeof fetch>();
 beforeEach(() => {
@@ -33,27 +41,37 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('Slack settings view authority', () => {
-  it.each([null, 'organization-a'])('captures bearer and explicit scope %s', async (organizationId) => {
-    const { view } = setup(organizationId);
-    const operation = view.begin(() => true)!;
-    expect(operation.start()).toBe(true);
-    await view.send(operation.request, '/api/slack/test', { method: 'PUT', body: { mode: 'off' } });
-    const init = fetchMock.mock.calls[0]?.[1];
-    const headers = new Headers(init?.headers);
-    expect(headers.get('authorization')).toBe('Bearer captured-token');
-    expect(headers.get(MANAGED_CLOUD_ORGANIZATION_HEADER)).toBe(
-      organizationId ?? MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE);
-    expect(headers.get('x-csrf-token')).toBe('csrf');
-    expect(init?.credentials).toBe('omit');
-    expect(init?.cache).toBe('no-store');
-    expect(operation.dispatched).toBe(true);
-  });
+  it.each([null, 'organization-a'])(
+    'captures bearer and explicit scope %s',
+    async (organizationId) => {
+      const { view } = setup(organizationId);
+      const operation = view.begin(() => true)!;
+      expect(operation.start()).toBe(true);
+      await view.send(operation.request, '/api/slack/test', {
+        method: 'PUT',
+        body: { mode: 'off' },
+      });
+      const init = fetchMock.mock.calls[0]?.[1];
+      const headers = new Headers(init?.headers);
+      expect(headers.get('authorization')).toBe('Bearer captured-token');
+      expect(headers.get(MANAGED_CLOUD_ORGANIZATION_HEADER)).toBe(
+        organizationId ?? MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
+      );
+      expect(headers.get('x-csrf-token')).toBe('csrf');
+      expect(init?.credentials).toBe('omit');
+      expect(init?.cache).toBe('no-store');
+      expect(operation.dispatched).toBe(true);
+    },
+  );
 
   it('admits one synchronous operation including confirmation waiting and reentrant listeners', () => {
     const { view } = setup();
     let attempted = false;
     view.subscribe(() => {
-      if (!attempted) { attempted = true; expect(view.begin(() => true)).toBeNull(); }
+      if (!attempted) {
+        attempted = true;
+        expect(view.begin(() => true)).toBeNull();
+      }
     });
     const operation = view.begin(() => true)!;
     expect(view.begin(() => true)).toBeNull();
@@ -69,7 +87,9 @@ describe('Slack settings view authority', () => {
   it('releases only a stale unstarted reservation, including reentrant target replacement', () => {
     const { view } = setup();
     let targetCurrent = true;
-    view.subscribe(() => { targetCurrent = false; });
+    view.subscribe(() => {
+      targetCurrent = false;
+    });
     const old = view.begin(() => targetCurrent)!;
     expect(old.start()).toBe(false);
     expect(view.blocked()).toBe(false);
@@ -115,8 +135,9 @@ describe('Slack settings view authority', () => {
     const operation = view.begin(() => true)!;
     retireSession();
     expect(operation.start()).toBe(false);
-    await expect(view.send(operation.request, '/api/slack/test', { method: 'DELETE' }))
-      .rejects.toMatchObject({ name: 'AbortError' });
+    await expect(
+      view.send(operation.request, '/api/slack/test', { method: 'DELETE' }),
+    ).rejects.toMatchObject({ name: 'AbortError' });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -138,8 +159,9 @@ describe('Slack settings view authority', () => {
     const first = setup('first-org').view;
     const second = setup('second-org').view;
     const request = first.read()!;
-    await expect(second.send(request, '/api/slack', { method: 'GET' }))
-      .rejects.toThrow('another settings view');
+    await expect(second.send(request, '/api/slack', { method: 'GET' })).rejects.toThrow(
+      'another settings view',
+    );
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -158,3 +180,5 @@ describe('Slack settings view authority', () => {
     expect(operation.dispatched).toBe(true);
   });
 });
+
+type MockedModule0 = typeof import('@/lib/client/csrf');

@@ -1,6 +1,6 @@
 'use client';
 
-import { useLayoutEffect, useMemo, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import {
   MANAGED_CLOUD_ACCOUNT_DELETION_CANCEL_SCHEDULE_PATH,
@@ -45,11 +45,16 @@ interface Intent {
   release: () => void;
 }
 
-const UNCONFIRMED = 'We could not confirm the cancellation outcome. Check the current status, then open a new confirmation before trying again.';
-const NOT_SENT = 'Cancellation was not sent. Close this dialog, check the current status, and reopen the confirmation.';
+const UNCONFIRMED =
+  'We could not confirm the cancellation outcome. Check the current status, then open a new confirmation before trying again.';
+const NOT_SENT =
+  'Cancellation was not sent. Close this dialog, check the current status, and reopen the confirmation.';
 
 export function useCancelAccountDeletion(active = true) {
-  const lane = useMemo(() => ({ enabled: active, mounted: false, generation: {}, intent: null as Intent | null }), []);
+  const lane = useMemo(
+    () => ({ enabled: false, mounted: false, generation: {}, intent: null as Intent | null }),
+    [],
+  );
   lane.enabled = active;
   const [view, setView] = useState<{
     intent: Intent | null;
@@ -58,15 +63,26 @@ export function useCancelAccountDeletion(active = true) {
     error: Error | null;
     needsStatusCheck: boolean;
   }>({ intent: null, status: 'idle', error: null, needsStatusCheck: false });
-  const current = (intent: Intent) => !intent.retired && lane.enabled && lane.mounted &&
-    lane.generation === intent.generation && lane.intent === intent &&
-    isAccountDeletionSnapshotCurrent(intent.snapshot) && intent.request.session.isCurrent();
-  const retire = (intent: Intent) => {
-    intent.retired = true;
-    intent.request.retire();
-    intent.release();
-    if (lane.intent === intent) lane.intent = null;
-  };
+  const current = useCallback(
+    (intent: Intent) =>
+      !intent.retired &&
+      lane.enabled &&
+      lane.mounted &&
+      lane.generation === intent.generation &&
+      lane.intent === intent &&
+      isAccountDeletionSnapshotCurrent(intent.snapshot) &&
+      intent.request.session.isCurrent(),
+    [lane],
+  );
+  const retire = useCallback(
+    (intent: Intent) => {
+      intent.retired = true;
+      intent.request.retire();
+      intent.release();
+      if (lane.intent === intent) lane.intent = null;
+    },
+    [lane],
+  );
   const ready = (snapshot: Snapshot) => permitsAccountDeletionAction(snapshot, 'cancel');
   useLayoutEffect(() => {
     lane.mounted = true;
@@ -76,13 +92,14 @@ export function useCancelAccountDeletion(active = true) {
       lane.mounted = false;
       if (lane.intent) retire(lane.intent);
     };
-  }, [lane, active]);
+  }, [lane, active, retire]);
+  const intentIsCurrent = !lane.intent || current(lane.intent);
   useLayoutEffect(() => {
-    if (lane.intent && !current(lane.intent)) {
+    if (lane.intent && (!intentIsCurrent || !current(lane.intent))) {
       retire(lane.intent);
       setView({ intent: null, status: 'idle', error: null, needsStatusCheck: false });
     }
-  });
+  }, [lane, intentIsCurrent, current, retire]);
 
   const mutation = useMutation<CancelAccountDeletionResult, Error, Intent>({
     retry: false,
@@ -95,9 +112,15 @@ export function useCancelAccountDeletion(active = true) {
           const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
           intent.request.assertCurrent();
           if (!ready(intent.snapshot)) throw new Error(NOT_SENT);
-          response = await intent.request.fetch(MANAGED_CLOUD_ACCOUNT_DELETION_CANCEL_SCHEDULE_PATH, {
-            method: 'PUT', headers, body: intent.body, redirect: 'error',
-          });
+          response = await intent.request.fetch(
+            MANAGED_CLOUD_ACCOUNT_DELETION_CANCEL_SCHEDULE_PATH,
+            {
+              method: 'PUT',
+              headers,
+              body: intent.body,
+              redirect: 'error',
+            },
+          );
         } catch {
           throw new Error(intent.dispatched ? UNCONFIRMED : NOT_SENT);
         }
@@ -105,14 +128,31 @@ export function useCancelAccountDeletion(active = true) {
         intent.request.assertCurrent();
         if (!response.ok) {
           if (response.status >= 500) throw new Error(UNCONFIRMED);
-          if (response.status === 409 && body !== null && typeof body === 'object' &&
-              'reason' in body && body.reason === 'schedule_changed') {
-            throw new Error('The deletion schedule changed. Check the current status and open a new confirmation.');
+          if (
+            response.status === 409 &&
+            body !== null &&
+            typeof body === 'object' &&
+            'reason' in body &&
+            body.reason === 'schedule_changed'
+          ) {
+            throw new Error(
+              'The deletion schedule changed. Check the current status and open a new confirmation.',
+            );
           }
-          const raw = body !== null && typeof body === 'object' && 'error' in body &&
-            typeof body.error === 'string' && body.error.trim() ? body.error : `HTTP ${response.status}`;
-          throw new Error(toUserMessage(Object.assign(new Error(raw), { status: response.status }),
-            'Could not cancel account deletion.'));
+          const raw =
+            body !== null &&
+            typeof body === 'object' &&
+            'error' in body &&
+            typeof body.error === 'string' &&
+            body.error.trim()
+              ? body.error
+              : `HTTP ${response.status}`;
+          throw new Error(
+            toUserMessage(
+              Object.assign(new Error(raw), { status: response.status }),
+              'Could not cancel account deletion.',
+            ),
+          );
         }
         let receipt: CancelAccountDeletionResult;
         try {
@@ -124,18 +164,33 @@ export function useCancelAccountDeletion(active = true) {
         const unchanged = settleAccountDeletionCancellation(intent.snapshot);
         if (!unchanged) fenceAccountDeletionCancellation(intent.snapshot);
         intent.settled = true;
-        if (current(intent)) setView({ intent, status: 'success', data: receipt, error: null, needsStatusCheck: !unchanged });
+        if (current(intent))
+          setView({
+            intent,
+            status: 'success',
+            data: receipt,
+            error: null,
+            needsStatusCheck: !unchanged,
+          });
         return receipt;
       } catch (error) {
         if (intent.dispatched) fenceAccountDeletionCancellation(intent.snapshot);
         intent.settled = true;
-        if (current(intent)) setView({ intent, status: 'error', error: error instanceof Error ? error : new Error(UNCONFIRMED), needsStatusCheck: intent.dispatched });
+        if (current(intent))
+          setView({
+            intent,
+            status: 'error',
+            error: error instanceof Error ? error : new Error(UNCONFIRMED),
+            needsStatusCheck: intent.dispatched,
+          });
         throw error;
       }
     },
   });
 
-  const begin = (snapshot: Snapshot | null | undefined): AccountDeletionCancellationIntent | null => {
+  const begin = (
+    snapshot: Snapshot | null | undefined,
+  ): AccountDeletionCancellationIntent | null => {
     if (!lane.enabled || !lane.mounted || !snapshot || !ready(snapshot)) return null;
     const body = captureAccountDeletionCancellationBody(snapshot);
     if (body === null) return null;
@@ -143,20 +198,37 @@ export function useCancelAccountDeletion(active = true) {
       if (lane.intent.consumed && !lane.intent.settled) return null;
       retire(lane.intent);
     }
-    let intent: Intent;
-    const request = createAccountDeletionRequest(snapshot, () => current(intent), () => {
-      if (!intent.consumed || intent.dispatched || !ready(intent.snapshot)) throw new Error(NOT_SENT);
-      fenceAccountDeletionCancellation(intent.snapshot);
-      intent.dispatched = true;
-    });
+    const request = createAccountDeletionRequest(
+      snapshot,
+      () => current(intent),
+      () => {
+        if (!intent.consumed || intent.dispatched || !ready(intent.snapshot))
+          throw new Error(NOT_SENT);
+        fenceAccountDeletionCancellation(intent.snapshot);
+        intent.dispatched = true;
+      },
+    );
     if (!request) return null;
-    intent = { generation: lane.generation, snapshot, body, request, consumed: false, dispatched: false, settled: false, checking: false, retired: false, release: () => undefined };
+    const intent: Intent = {
+      generation: lane.generation,
+      snapshot,
+      body,
+      request,
+      consumed: false,
+      dispatched: false,
+      settled: false,
+      checking: false,
+      retired: false,
+      release: () => undefined,
+    };
     lane.intent = intent;
-    const release = request.session.subscribe?.(() => {
-      if (lane.intent !== intent || current(intent)) return;
-      retire(intent);
-      if (lane.mounted) setView({ intent: null, status: 'idle', error: null, needsStatusCheck: false });
-    }) ?? (() => undefined);
+    const release =
+      request.session.subscribe?.(() => {
+        if (lane.intent !== intent || current(intent)) return;
+        retire(intent);
+        if (lane.mounted)
+          setView({ intent: null, status: 'idle', error: null, needsStatusCheck: false });
+      }) ?? (() => undefined);
     intent.release = release;
     if (!current(intent)) {
       retire(intent);
@@ -180,18 +252,31 @@ export function useCancelAccountDeletion(active = true) {
       checkCurrentStatus: async () => {
         if (!current(intent) || !intent.settled || intent.checking) return;
         intent.checking = true;
-        setView((previous) => previous.intent === intent ? { ...previous } : previous);
+        setView((previous) => (previous.intent === intent ? { ...previous } : previous));
         try {
           await refetchAccountDeletionSnapshot(intent.snapshot);
           if (!current(intent)) return;
-          setView((previous) => current(intent) && previous.intent === intent
-            ? { ...previous, needsStatusCheck: false } : previous);
+          setView((previous) =>
+            current(intent) && previous.intent === intent
+              ? { ...previous, needsStatusCheck: false }
+              : previous,
+          );
         } catch {
-          if (current(intent)) setView((previous) => current(intent) && previous.intent === intent
-            ? { ...previous, error: new Error('Could not check the current deletion status. Try checking again without repeating cancellation.') } : previous);
+          if (current(intent))
+            setView((previous) =>
+              current(intent) && previous.intent === intent
+                ? {
+                    ...previous,
+                    error: new Error(
+                      'Could not check the current deletion status. Try checking again without repeating cancellation.',
+                    ),
+                  }
+                : previous,
+            );
         } finally {
           intent.checking = false;
-          if (current(intent)) setView((previous) => previous.intent === intent ? { ...previous } : previous);
+          if (current(intent))
+            setView((previous) => (previous.intent === intent ? { ...previous } : previous));
         }
       },
     };

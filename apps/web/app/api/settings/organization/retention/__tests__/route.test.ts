@@ -26,9 +26,8 @@ const fixture = vi.hoisted(() => ({
 const { mockQuery, mockRecordAuditEvent } = fixture;
 
 vi.mock('@/lib/services/organization-permission-service', async () => {
-  const { permissionsForRole } = await import(
-    '@/lib/services/__tests__/organization-permission-service-mock'
-  );
+  const { permissionsForRole } =
+    await import('@/lib/services/__tests__/organization-permission-service-mock');
   const { createError } = await import('@/lib/errors');
   return {
     resolveOrganizationPermissions: vi.fn(async (organizationId: string) =>
@@ -50,13 +49,14 @@ vi.mock('@/lib/services/organization-permission-service', async () => {
   };
 });
 vi.mock('@/lib/services/org-sharing-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/org-sharing-service')>()),
+  ...(await importOriginal<MockedModule0>()),
   resolveOrgMembership: fixture.savedMembership,
 }));
 vi.mock('@/lib/services/active-workspace-service', () => ({
   resolveActiveOrganizationId: fixture.savedOrganization,
 }));
-vi.mock('@/lib/services/org-entitlements', () => ({
+vi.mock('@/lib/services/org-entitlements', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule0>()),
   getOrganizationEntitlements: fixture.forbiddenIo,
   getSharedProjectLimitErrorMessage: fixture.forbiddenIo,
   isOrgResourceLimitError: fixture.forbiddenIo,
@@ -87,8 +87,12 @@ vi.mock('@/lib/error-handler', async () => {
 });
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn() }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn() }));
-vi.mock('@/lib/cors', () => ({ handleCorsPreflightRequest: vi.fn(() => null) }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/cors', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule1>()),
+  handleCorsPreflightRequest: vi.fn(() => null),
+}));
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule2>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/server/rls-db', () => ({
@@ -101,7 +105,9 @@ vi.mock('@/lib/server/rls-db', () => ({
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => ({ query: fixture.mockQuery })),
 }));
-vi.mock('@/lib/server/admin-data-access', () => ({ logAdminDataAccess: fixture.logAdminDataAccess }));
+vi.mock('@/lib/server/admin-data-access', () => ({
+  logAdminDataAccess: fixture.logAdminDataAccess,
+}));
 vi.mock('@/lib/security-audit', () => ({
   recordAuditEvent: fixture.mockRecordAuditEvent,
   BLOCK_APPEAL_PATH: '/support',
@@ -392,7 +398,11 @@ describe('authoritative retention workspace', () => {
             body.policies.find((policy: { domain: string }) => policy.domain === 'notifications'),
           ).toMatchObject({ retentionDays: 30, enforced: true });
           expect(fixture.policies.get(ORG)).toContainEqual(
-            expect.objectContaining({ domain: 'notifications', retention_days: 30, enforced: true }),
+            expect.objectContaining({
+              domain: 'notifications',
+              retention_days: 30,
+              enforced: true,
+            }),
           );
           expect(fixture.logAdminDataAccess).not.toHaveBeenCalled();
         }
@@ -487,8 +497,18 @@ describe('authoritative retention workspace', () => {
     { policies: [] },
     { policies: [{ domain: 'files', retentionDays: 30, enforced: true, organizationId: ORG_A }] },
     { ...BODY, organizationId: ORG_A },
-  ])('rejects invalid or scope-injecting PUT payload before privileged access: %j', async (body) => {
-    expect((await PUT(put(body) as never)).status).toBe(400);
-    expectNoResources();
-  });
+  ])(
+    'rejects invalid or scope-injecting PUT payload before privileged access: %j',
+    async (body) => {
+      expect((await PUT(put(body) as never)).status).toBe(400);
+      expectNoResources();
+    },
+  );
 });
+
+type MockedModule0 = typeof import('@/lib/services/org-sharing-service');
+
+type CompleteMockModule0 = typeof import('@/lib/services/org-entitlements');
+
+type RetainedMockModule1 = typeof import('@/lib/cors');
+type RetainedMockModule2 = typeof import('@/lib/logger');

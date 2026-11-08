@@ -55,7 +55,12 @@ import { toUserMessage } from '@/lib/user-error-message';
 import { useSessionSnapshot } from '@/lib/identity/useSessionSnapshot';
 import { createRequestAuthority } from '@/lib/identity/request-authority';
 import { useAccountWorkspaces } from '@/features/workspaces/hooks/use-workspaces';
-import { observeWorkspaceOwner, subscribeWorkspaceAdmission, workspaceOwnerIsCurrent, type WorkspaceOwner } from '@/features/workspaces/lib/workspace-admission';
+import {
+  observeWorkspaceOwner,
+  subscribeWorkspaceAdmission,
+  workspaceOwnerIsCurrent,
+  type WorkspaceOwner,
+} from '@/features/workspaces/lib/workspace-admission';
 import { StepUpCancelledError } from '@/features/auth/step-up-fetch';
 
 const DEFAULT_PROJECT_LABEL = 'Default project';
@@ -401,7 +406,11 @@ export const ApiKeysPanel: React.FC<ApiKeysPanelProps> = ({
                         </FormItem>
                       )}
                     />
-                    {formError ? <p role="alert" className="text-sm text-danger">{formError}</p> : null}
+                    {formError ? (
+                      <p role="alert" className="text-sm text-danger">
+                        {formError}
+                      </p>
+                    ) : null}
                     <div className="flex flex-wrap justify-end gap-2">
                       <Button
                         type="button"
@@ -451,9 +460,15 @@ type KeyIntent = {
   copying: boolean;
   release: () => void;
 };
-type KeyView = { intent: KeyIntent | null; secret: string; error: string | null; notice: string | null };
+type KeyView = {
+  intent: KeyIntent | null;
+  secret: string;
+  error: string | null;
+  notice: string | null;
+};
 const EMPTY_VIEW: KeyView = { intent: null, secret: '', error: null, notice: null };
-const UNCERTAIN = 'We could not confirm whether this API key action completed. Refresh API keys before repeating it. A generated secret cannot be recovered.';
+const UNCERTAIN =
+  'We could not confirm whether this API key action completed. Refresh API keys before repeating it. A generated secret cannot be recovered.';
 
 function IntentFormPanel(props: Omit<ApiKeysPanelProps, 'apiKeyForm'>) {
   const apiKeyForm = useForm<CreateApiKeyFormData>({
@@ -464,27 +479,54 @@ function IntentFormPanel(props: Omit<ApiKeysPanelProps, 'apiKeyForm'>) {
   return <ApiKeysPanel {...props} apiKeyForm={apiKeyForm} />;
 }
 
-function OwnedApiKeysManager({ owner, epoch, scopeKey, organizationId }: {
-  owner: WorkspaceOwner; epoch: number; scopeKey: string; organizationId: string | null;
+function OwnedApiKeysManager({
+  owner,
+  epoch,
+  scopeKey,
+  organizationId,
+}: {
+  owner: WorkspaceOwner;
+  epoch: number;
+  scopeKey: string;
+  organizationId: string | null;
 }) {
   const { data: apiKeys = [], isLoading, isError, error, refetch } = useAPIKeys();
   const projectQuery = useDeveloperProjects();
   const usageQuery = useDeveloperUsage();
-  const projects = projectQuery.isSuccess ? projectQuery.data ?? [] : [];
+  const projects = projectQuery.isSuccess ? (projectQuery.data ?? []) : [];
   const usage = usageQuery.isSuccess ? usageQuery.data : undefined;
   const createMutation = useCreateAPIKey();
   const deleteMutation = useDeleteAPIKey();
   const { confirm, dialog } = useConfirmAction();
-  const lane = useMemo(() => ({ active: false, generation: {} as object, nextId: 0,
-    intent: null as KeyIntent | null, lastCreate: null as KeyIntent | null,
-    snapshot: null as object | null, secret: '' }), []);
+  const lane = useMemo(
+    () => ({
+      active: false,
+      generation: {} as object,
+      nextId: 0,
+      intent: null as KeyIntent | null,
+      lastCreate: null as KeyIntent | null,
+      snapshot: null as object | null,
+      secret: '',
+    }),
+    [],
+  );
   const [view, setView] = useState<KeyView>(EMPTY_VIEW);
-  const ownerCurrent = useCallback(() => owner.phase === 'admitted' && owner.scopeKey === scopeKey &&
-    workspaceOwnerIsCurrent(owner, epoch), [owner, epoch, scopeKey]);
-  const current = (intent: KeyIntent) => lane.active && lane.generation === intent.generation &&
-    lane.intent === intent && ownerCurrent();
-  const snapshot = useMemo(() => ({}), [apiKeys, isLoading, isError]);
-  useLayoutEffect(() => { lane.snapshot = snapshot; }, [lane, snapshot]);
+  const ownerCurrent = useCallback(
+    () =>
+      owner.phase === 'admitted' &&
+      owner.scopeKey === scopeKey &&
+      workspaceOwnerIsCurrent(owner, epoch),
+    [owner, epoch, scopeKey],
+  );
+  const current = (intent: KeyIntent) =>
+    lane.active &&
+    lane.generation === intent.generation &&
+    lane.intent === intent &&
+    ownerCurrent();
+  const snapshot = useMemo(() => ({ apiKeys, isLoading, isError }), [apiKeys, isLoading, isError]);
+  useLayoutEffect(() => {
+    lane.snapshot = snapshot;
+  }, [lane, snapshot]);
   const resetCreate = createMutation.reset;
   useLayoutEffect(() => {
     lane.active = true;
@@ -500,9 +542,15 @@ function OwnedApiKeysManager({ owner, epoch, scopeKey, organizationId }: {
       resetCreate();
     };
     const stop = subscribeWorkspaceAdmission(() => {
-      if (!ownerCurrent()) { retire(); setView(EMPTY_VIEW); }
+      if (!ownerCurrent()) {
+        retire();
+        setView(EMPTY_VIEW);
+      }
     });
-    return () => { stop(); retire(); };
+    return () => {
+      stop();
+      retire();
+    };
   }, [lane, ownerCurrent, resetCreate]);
   const finish = (intent: KeyIntent, error: string | null = null, notice: string | null = null) => {
     if (!current(intent)) return;
@@ -514,34 +562,67 @@ function OwnedApiKeysManager({ owner, epoch, scopeKey, organizationId }: {
     if (lane.lastCreate === intent) resetCreate();
     setView({ ...EMPTY_VIEW, error, notice });
   };
-  const close = (intent: KeyIntent) => finish(intent, null,
-    intent.phase === 'writing' && intent.dispatched ? UNCERTAIN : null);
+  const close = (intent: KeyIntent) =>
+    finish(intent, null, intent.phase === 'writing' && intent.dispatched ? UNCERTAIN : null);
   const open = (keyId: string | null) => {
-    if (!lane.active || !ownerCurrent() || lane.intent || lane.snapshot !== snapshot || isLoading || isError) return null;
+    if (
+      !lane.active ||
+      !ownerCurrent() ||
+      lane.intent ||
+      lane.snapshot !== snapshot ||
+      isLoading ||
+      isError
+    )
+      return null;
     let captured: KeyIntent | null = null;
-    const request = createRequestAuthority(owner.session, () => captured === null ?
-      lane.active && ownerCurrent() && lane.intent === null : current(captured), () => {
-      if (!captured || captured.phase !== 'writing') throw new Error('The API key action is no longer ready.');
-      captured.dispatched = true;
-    });
-    const intent: KeyIntent = { id: ++lane.nextId, generation: lane.generation, keyId,
-      phase: keyId ? 'confirming' : 'editing', dispatched: false, copying: false, release: () => undefined,
-      scope: { request, organizationId, onStepUpRequired: () => {
-        if (current(intent) && intent.phase === 'writing') intent.dispatched = false;
-      } } };
+    const request = createRequestAuthority(
+      owner.session,
+      () =>
+        captured === null
+          ? lane.active && ownerCurrent() && lane.intent === null
+          : current(captured),
+      () => {
+        if (!captured || captured.phase !== 'writing')
+          throw new Error('The API key action is no longer ready.');
+        captured.dispatched = true;
+      },
+    );
+    const intent: KeyIntent = {
+      id: ++lane.nextId,
+      generation: lane.generation,
+      keyId,
+      phase: keyId ? 'confirming' : 'editing',
+      dispatched: false,
+      copying: false,
+      release: () => undefined,
+      scope: {
+        request,
+        organizationId,
+        onStepUpRequired: () => {
+          if (current(intent) && intent.phase === 'writing') intent.dispatched = false;
+        },
+      },
+    };
     captured = intent;
     lane.intent = intent;
     setView({ ...EMPTY_VIEW, intent });
-    intent.release = owner.session.subscribe?.(() => {
-      if (lane.intent !== intent || ownerCurrent()) return;
+    intent.release =
+      owner.session.subscribe?.(() => {
+        if (lane.intent !== intent || ownerCurrent()) return;
+        intent.release();
+        intent.scope.request.retire();
+        lane.intent = null;
+        lane.secret = '';
+        if (lane.lastCreate === intent) {
+          lane.lastCreate = null;
+          resetCreate();
+        }
+        setView(EMPTY_VIEW);
+      }) ?? (() => undefined);
+    if (lane.intent !== intent) {
       intent.release();
-      intent.scope.request.retire();
-      lane.intent = null;
-      lane.secret = '';
-      if (lane.lastCreate === intent) { lane.lastCreate = null; resetCreate(); }
-      setView(EMPTY_VIEW);
-    }) ?? (() => undefined);
-    if (lane.intent !== intent) { intent.release(); return null; }
+      return null;
+    }
     return intent;
   };
   const generate = async (intent: KeyIntent, data: CreateApiKeyFormData) => {
@@ -564,8 +645,17 @@ function OwnedApiKeysManager({ owner, epoch, scopeKey, organizationId }: {
       } else {
         intent.phase = 'editing';
         intent.dispatched = false;
-        setView({ ...EMPTY_VIEW, intent, error: error instanceof StepUpCancelledError ? null :
-          toUserMessage(error, 'The API key could not be created. Check the details and try again.') });
+        setView({
+          ...EMPTY_VIEW,
+          intent,
+          error:
+            error instanceof StepUpCancelledError
+              ? null
+              : toUserMessage(
+                  error,
+                  'The API key could not be created. Check the details and try again.',
+                ),
+        });
       }
     } finally {
       if (lane.lastCreate === intent) resetCreate();
@@ -576,9 +666,12 @@ function OwnedApiKeysManager({ owner, epoch, scopeKey, organizationId }: {
     if (!intent) return;
     confirm({
       title: 'Delete API Key',
-      description: 'Requests made with this key are refused from now on, so any application using it stops working. A deleted key cannot be restored.',
+      description:
+        'Requests made with this key are refused from now on, so any application using it stops working. A deleted key cannot be restored.',
       confirmLabel: 'Delete Key',
-      onCancel: () => { if (intent.phase === 'confirming') finish(intent); },
+      onCancel: () => {
+        if (intent.phase === 'confirming') finish(intent);
+      },
       onConfirm: async () => {
         if (!current(intent) || intent.phase !== 'confirming') return;
         intent.phase = 'writing';
@@ -590,7 +683,8 @@ function OwnedApiKeysManager({ owner, epoch, scopeKey, organizationId }: {
           finish(intent);
         } catch (error) {
           if (!current(intent)) return;
-          if (intent.dispatched && !(error instanceof APIKeyMutationRejectedError)) finish(intent, null, UNCERTAIN);
+          if (intent.dispatched && !(error instanceof APIKeyMutationRejectedError))
+            finish(intent, null, UNCERTAIN);
           else finish(intent, toUserMessage(error, 'The API key could not be deleted. Try again.'));
         }
       },
@@ -605,7 +699,9 @@ function OwnedApiKeysManager({ owner, epoch, scopeKey, organizationId }: {
       if (canCopy()) toast.success('API key copied to clipboard');
     } catch {
       if (canCopy()) toast.error('Could not copy the API key');
-    } finally { intent.copying = false; }
+    } finally {
+      intent.copying = false;
+    }
   };
   const intent = view.intent;
   const readCurrent = () => lane.active && ownerCurrent() && lane.snapshot === snapshot;
@@ -613,33 +709,61 @@ function OwnedApiKeysManager({ owner, epoch, scopeKey, organizationId }: {
   return (
     <>
       {projectQuery.isLoading ? (
-        <p role="status" className="text-sm text-muted-foreground">Loading project choices</p>
+        <p role="status" className="text-sm text-muted-foreground">
+          Loading project choices
+        </p>
       ) : projectQuery.isError ? (
         <div className="flex flex-wrap items-center gap-2">
           <p role="alert" className="text-sm text-danger">
             {toUserMessage(projectQuery.error, 'Project choices could not be loaded.')}
           </p>
-          <Button type="button" variant="outline" size="sm" onClick={() => { if (readCurrent()) void projectQuery.refetch(); }}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              if (readCurrent()) void projectQuery.refetch();
+            }}
+          >
             Retry project choices
           </Button>
         </div>
       ) : null}
       {usageQuery.isLoading ? (
-        <p role="status" className="text-sm text-muted-foreground">Loading key usage</p>
+        <p role="status" className="text-sm text-muted-foreground">
+          Loading key usage
+        </p>
       ) : usageQuery.isError ? (
         <div className="flex flex-wrap items-center gap-2">
           <p role="alert" className="text-sm text-danger">
             {toUserMessage(usageQuery.error, 'Key usage could not be loaded.')}
           </p>
-          <Button type="button" variant="outline" size="sm" onClick={() => { if (readCurrent()) void usageQuery.refetch(); }}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              if (readCurrent()) void usageQuery.refetch();
+            }}
+          >
             Retry key usage
           </Button>
         </div>
       ) : null}
-      {(!intent || intent.keyId !== null) && (view.error || view.notice) ? <p role={view.error ? 'alert' : 'status'}>{view.error ?? view.notice}</p> : null}
-      {view.notice ? <Button onClick={() => { if (readCurrent() && !lane.intent) void refetch(); }}>Refresh API keys</Button> : null}
+      {(!intent || intent.keyId !== null) && (view.error || view.notice) ? (
+        <p role={view.error ? 'alert' : 'status'}>{view.error ?? view.notice}</p>
+      ) : null}
+      {view.notice ? (
+        <Button
+          onClick={() => {
+            if (readCurrent() && !lane.intent) void refetch();
+          }}
+        >
+          Refresh API keys
+        </Button>
+      ) : null}
       <IntentFormPanel
-        key={intent?.id ?? 'idle'}
+        key={`api-key-intent:${intent?.id ?? 'idle'}`}
         apiKeys={apiKeys}
         projects={projects.filter((project) => project.archivedAt === null)}
         usageByKey={
@@ -652,18 +776,35 @@ function OwnedApiKeysManager({ owner, epoch, scopeKey, organizationId }: {
         isCreatePending={intent?.phase === 'writing'}
         isLoading={isLoading}
         loadError={isError ? toUserMessage(error, 'Unable to load API keys. Try again.') : null}
-        onRetry={() => { if (readCurrent()) void refetch(); }}
-        onSetShowAPIKeyDialog={(isOpen) => { if (isOpen) open(null); else if (intent) close(intent); }}
-        onSetKeyToDelete={(id) => { if (id) requestDelete(id); }}
-        onGenerateAPIKey={(draft) => { if (intent) void generate(intent, draft); }}
-        onCopyAPIKey={(secret) => { if (intent) void copy(intent, secret); }}
-        onDismissGeneratedKey={() => { if (intent) close(intent); }}
+        onRetry={() => {
+          if (readCurrent()) void refetch();
+        }}
+        onSetShowAPIKeyDialog={(isOpen) => {
+          if (isOpen) open(null);
+          else if (intent) close(intent);
+        }}
+        onSetKeyToDelete={(id) => {
+          if (id) requestDelete(id);
+        }}
+        onGenerateAPIKey={(draft) => {
+          if (intent) void generate(intent, draft);
+        }}
+        onCopyAPIKey={(secret) => {
+          if (intent) void copy(intent, secret);
+        }}
+        onDismissGeneratedKey={() => {
+          if (intent) close(intent);
+        }}
       />
       {intent?.keyId && intent.phase === 'confirming' ? dialog : null}
-      {intent?.keyId && intent.phase === 'writing' ? <div>
-        <p role="status">Deleting API key…</p>
-        <Button type="button" variant="outline" onClick={() => close(intent)}>Cancel waiting</Button>
-      </div> : null}
+      {intent?.keyId && intent.phase === 'writing' ? (
+        <div>
+          <p role="status">Deleting API key…</p>
+          <Button type="button" variant="outline" onClick={() => close(intent)}>
+            Cancel waiting
+          </Button>
+        </div>
+      ) : null}
       {createMutation.stepUpDialog}
     </>
   );
@@ -674,17 +815,48 @@ export function ApiKeysManager() {
   const capture = useSessionSnapshot();
   const owner = observeWorkspaceOwner(capture());
   const data = workspace.data;
-  const scopeKey = data ? JSON.stringify([data.scope, data.activeWorkspaceId, data.activeOrganizationId]) : null;
-  if (!owner || owner.phase !== 'admitted' || !data || scopeKey === null ||
-    owner.scopeKey !== scopeKey || !workspaceOwnerIsCurrent(owner, owner.epoch)) {
-    return <Card><CardHeader><CardTitle>API Keys</CardTitle></CardHeader><CardContent>
-      <p>{workspace.requiresReload
-        ? 'Reload this page to confirm the current workspace before managing API keys.'
-        : 'Your current workspace must finish loading before you can manage API keys.'}</p>
-      {workspace.isUnavailable && !workspace.requiresReload && !workspace.isSwitching
-        ? <Button onClick={() => { void workspace.refetch(); }}>Retry loading workspace</Button> : null}
-    </CardContent></Card>;
+  const scopeKey = data
+    ? JSON.stringify([data.scope, data.activeWorkspaceId, data.activeOrganizationId])
+    : null;
+  if (
+    !owner ||
+    owner.phase !== 'admitted' ||
+    !data ||
+    scopeKey === null ||
+    owner.scopeKey !== scopeKey ||
+    !workspaceOwnerIsCurrent(owner, owner.epoch)
+  ) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>API Keys</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p>
+            {workspace.requiresReload
+              ? 'Reload this page to confirm the current workspace before managing API keys.'
+              : 'Your current workspace must finish loading before you can manage API keys.'}
+          </p>
+          {workspace.isUnavailable && !workspace.requiresReload && !workspace.isSwitching ? (
+            <Button
+              onClick={() => {
+                void workspace.refetch();
+              }}
+            >
+              Retry loading workspace
+            </Button>
+          ) : null}
+        </CardContent>
+      </Card>
+    );
   }
-  return <OwnedApiKeysManager key={`${owner.incarnation}:${owner.epoch}:${scopeKey}`}
-    owner={owner} epoch={owner.epoch} scopeKey={scopeKey} organizationId={data.activeOrganizationId} />;
+  return (
+    <OwnedApiKeysManager
+      key={`${owner.incarnation}:${owner.epoch}:${scopeKey}`}
+      owner={owner}
+      epoch={owner.epoch}
+      scopeKey={scopeKey}
+      organizationId={data.activeOrganizationId}
+    />
+  );
 }

@@ -246,18 +246,21 @@ describe('current CLI help articles distinguish implementation from release avai
   it('scopes local inference separately from conditional catalog refresh and tool network use', () => {
     const cache = repoText('apps', 'cli', 'src', 'tier_cache.rs');
     const ensureStart = cache.indexOf('pub async fn ensure_plan_models_cached()');
-    const refreshStart = cache.indexOf('async fn refresh_plan_models_cache()', ensureStart);
-    const refreshEnd = cache.indexOf('pub fn adopt_server_plan(', refreshStart);
+    const refreshStart = cache.indexOf('async fn refresh_plan_models_cache(', ensureStart);
+    const refreshEnd = cache.indexOf('pub(crate) fn adopt_server_plan(', refreshStart);
     expect(ensureStart).toBeGreaterThan(-1);
     expect(refreshStart).toBeGreaterThan(ensureStart);
     expect(refreshEnd).toBeGreaterThan(refreshStart);
     const ensure = cache.slice(ensureStart, refreshStart);
+    expect(ensure).toContain('ManagedRequestContext::capture()');
     expect(ensure).toMatch(
-      /if read_plan_models_cache\(\)\.is_some\(\) \|\| load_jwt\(\)\.is_none\(\) \{\s*return;\s*\}\s*refresh_plan_models_cache\(\)\.await;/u,
+      /if context\.jwt\.is_none\(\)\s*\|\| context\s*\.with_current\(\|\| plan_models_for\(&context\)\)\s*\.flatten\(\)\s*\.is_some\(\)\s*\{\s*return;\s*\}\s*refresh_plan_models_cache\(&context\)\.await;/u,
     );
     const refresh = cache.slice(refreshStart, refreshEnd);
-    expect(refresh).toContain('crate::models::gateway_models::discover_gateway_models().await');
-    expect(refresh).toContain('write_plan_models_cache(&ids);');
+    expect(refresh).toContain(
+      'crate::models::gateway_models::discover_gateway_models_for(context).await',
+    );
+    expect(refresh).toContain('context.with_current(|| write_plan_models_cache(context, &ids));');
     expect(refresh).toMatch(/Err\(error\) => tracing::debug!/u);
     const commands = repoText('apps', 'cli', 'src', 'lib.rs');
     expect(commands).toMatch(
@@ -274,9 +277,15 @@ describe('current CLI help articles distinguish implementation from release avai
     expect(fetch).toContain('.get(endpoint)');
     expect(fetch).toMatch(/let response = request\s*\.send\(\)\s*\.await/u);
     const discovery = gateway.slice(discoverStart, discoverEnd);
-    expect(discovery).toContain('let endpoint = models_endpoint(&raw_base)?;');
-    expect(discovery).toContain('let jwt = crate::tier_cache::load_jwt();');
-    expect(discovery).toContain('fetch_from_endpoint(&client, &endpoint, jwt.as_deref()).await');
+    expect(discovery).toContain(
+      'let context = crate::tier_cache::ManagedRequestContext::capture()?;',
+    );
+    expect(discovery).toContain('discover_gateway_models_for(&context).await');
+    expect(discovery).toContain('let endpoint = models_endpoint(&context.base)?;');
+    expect(discovery).toContain(
+      'fetch_from_endpoint(&client, &endpoint, context.jwt.as_deref()).await',
+    );
+    expect(discovery).toMatch(/context\s*\.with_current\(\|\| catalog\)/u);
     const mcp = repoText('apps', 'cli', 'src', 'mcp', 'mod.rs');
     expect(mcp).toMatch(
       /fn mcp_transport_allowed\([\s\S]{0,250}privacy_mode != crate::agent::PrivacyMode::Local\s*\|\| matches!\(config\.as_transport\(\), McpTransport::Stdio \{ \.\. \}\)/u,
@@ -535,8 +544,8 @@ describe('artifacts help article follows the implemented publishing controls', (
       /artifactAudience\?\.current === 'invited' && publishedToken && \(\s*<div[^>]*>\s*<SiteViewersEditor key=\{`\$\{artifact\.id\}:\$\{publishedToken\}`\} token=\{publishedToken\} \/>/u,
     );
     expect(preview).toContain('Only the people you add by email can open it after signing in.');
-    expect(fileText('features/sites/components/SiteViewersEditor.tsx')).toContain(
-      "setError('Enter a full email address')",
+    expect(fileText('features/sites/components/SiteViewersEditor.tsx')).toMatch(
+      /if \(!EMAIL\.test\(address\)\) \{\s*publish\(lane, \{ \.\.\.result, error: 'Enter a full email address' \}\);\s*return;/u,
     );
     expect(article).toContain(
       '**Only people you invite** limits it to the people you add by email, who sign in to open it.',
@@ -561,7 +570,9 @@ describe('artifacts help article follows the implemented publishing controls', (
   it('unpublishes from the Published artifacts list and tells the owner the link no longer works', () => {
     expect(settings).toContain('await unpublishArtifact(artifact.token, request);');
     expect(settings).toContain('The link no longer works.');
-    expect(settings).toContain("{view.actionToken === artifact.token && view.confirmation ? 'Unpublishing…' : 'Unpublish'}");
+    expect(settings).toContain(
+      "{view.actionToken === artifact.token && view.confirmation ? 'Unpublishing…' : 'Unpublish'}",
+    );
     expect(article).toContain('**Published artifacts** list with **Unpublish** on each one');
   });
 });

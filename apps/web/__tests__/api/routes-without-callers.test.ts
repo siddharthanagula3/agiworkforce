@@ -1,6 +1,8 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { staticTemplatePrefixes } from '../../../../scripts/lib/sql-constant-expansion.mjs';
 
 const WEB_ROOT = join(__dirname, '..', '..');
 const REPO_ROOT = join(WEB_ROOT, '..', '..');
@@ -148,13 +150,7 @@ const CALLERLESS: ReadonlyArray<{ url: string; why: string }> = [
   },
 
   // Built this wave by another executor; their surfaces are still landing.
-  { url: '/api/plugins/installations', why: 'plugins directory work in flight' },
-  { url: '/api/plugins/installations/[id]', why: 'plugins directory work in flight' },
   { url: '/api/plugins/uploads', why: 'plugins directory work in flight' },
-  {
-    url: '/api/plugins/updates',
-    why: 'plugins directory work in flight; version offers and permission re-consent are not surfaced yet',
-  },
 ];
 
 function walk(dir: string, match: (name: string) => boolean, out: string[] = []): string[] {
@@ -197,7 +193,16 @@ function callerCorpus(): string[] {
     .map((file) => {
       try {
         const text = readFileSync(file, 'utf8');
-        return (CODE_FILE.test(file) ? withoutComments(text) : text).replace(ROUTE_FILE_PATH, '');
+        const prefixes =
+          /\.[cm]?[jt]sx?$/.test(file) && text.includes('${') && text.includes('/api/')
+            ? staticTemplatePrefixes(file)
+            : [];
+        return [
+          CODE_FILE.test(file) ? withoutComments(text) : text,
+          ...prefixes.map((prefix) => JSON.stringify(prefix)),
+        ]
+          .join('\n')
+          .replace(ROUTE_FILE_PATH, '');
       } catch {
         return '';
       }
@@ -235,6 +240,36 @@ function callerlessUrls(): string[] {
     .sort();
 }
 
+describe('computed caller paths', () => {
+  function prefixes(source: string): string[] {
+    const dir = mkdtempSync(join(tmpdir(), 'agi-caller-prefix-'));
+    try {
+      const file = join(dir, 'caller.ts');
+      writeFileSync(file, source);
+      return staticTemplatePrefixes(file);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  it('resolves a local literal base before a dynamic query', () => {
+    expect(prefixes("const base = '/api/example'; fetch(`${base}/lookup?${query}`)")).toEqual([
+      '/api/example/lookup?',
+    ]);
+  });
+
+  it.each([
+    "let base = '/api/example'; fetch(`${base}/export`)",
+    "const base = '/api/example'; function run(base: string) { fetch(`${base}/export`) }",
+    "import { base } from './elsewhere'; fetch(`${base}/export`)",
+    'const base = getBase(); fetch(`${base}/export`)',
+    "const base = '/api/example'; tag`${base}/export`",
+    "// const base = '/api/example'; fetch(`${base}/export`)",
+  ])('does not resolve an unproven base: %s', (source) => {
+    expect(prefixes(source)).toEqual([]);
+  });
+});
+
 describe('every api route either has a caller or a written reason', () => {
   const measured = callerlessUrls();
   const declared = new Set(CALLERLESS.map((entry) => entry.url));
@@ -244,7 +279,7 @@ describe('every api route either has a caller or a written reason', () => {
 
     expect(
       undeclared,
-      'give this route a caller, or add it to CALLERLESS with the reason it has none',
+      `give these routes callers or reasons: ${JSON.stringify(undeclared)}`,
     ).toEqual([]);
   });
 
@@ -252,7 +287,7 @@ describe('every api route either has a caller or a written reason', () => {
     const found = new Set(measured);
     const stale = CALLERLESS.map((entry) => entry.url).filter((url) => !found.has(url));
 
-    expect(stale, 'these have callers now, drop them from CALLERLESS').toEqual([]);
+    expect(stale, `drop obsolete callerless reasons: ${JSON.stringify(stale)}`).toEqual([]);
   });
 
   it('gives every declared route a reason worth reading', () => {

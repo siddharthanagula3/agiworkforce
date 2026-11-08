@@ -92,7 +92,38 @@ export function PublishedArtifactView({
   const heading = title || t('artifactPublish.untitled', 'Published artifact');
   const returnPath = token ? `/shared-artifact/${token}` : '/chat';
 
-  const source = useMemo(() => ({}), [token, content, kind, language, title, heading, publishedAt, audience, isLoaded, isSignedIn, userId, capturedSessionId]);
+  const source = useMemo(
+    () => ({
+      scope: {
+        token,
+        content,
+        kind,
+        language,
+        title,
+        heading,
+        publishedAt,
+        audience,
+        isLoaded,
+        isSignedIn,
+        userId,
+        capturedSessionId,
+      },
+    }),
+    [
+      token,
+      content,
+      kind,
+      language,
+      title,
+      heading,
+      publishedAt,
+      audience,
+      isLoaded,
+      isSignedIn,
+      userId,
+      capturedSessionId,
+    ],
+  );
   const visibleSource = useRef(source);
   visibleSource.current = source;
   useLayoutEffect(() => {
@@ -116,18 +147,28 @@ export function PublishedArtifactView({
     const session = captureSession();
     if (!session) return;
     const mounted = lifetime.current;
-    let current: { source: object; authority: RequestAuthority };
-    const isVisible = () => lifetime.current === mounted && visibleSource.current === source && invocation.current === current && session.isCurrent();
+    const isVisible = () =>
+      lifetime.current === mounted &&
+      visibleSource.current === source &&
+      invocation.current === current &&
+      session.isCurrent();
     const authority = createRequestAuthority(session, undefined, () => {
       if (!isVisible()) throw new DOMException('Copy source changed', 'AbortError');
     });
-    current = { source, authority };
+    const current: { source: object; authority: RequestAuthority } = { source, authority };
     invocation.current = current;
-    const ownsView = () => lifetime.current === mounted && visibleSource.current === source && invocation.current === current && authority.isCurrent();
+    const ownsView = () =>
+      lifetime.current === mounted &&
+      visibleSource.current === source &&
+      invocation.current === current &&
+      authority.isCurrent();
     setCopying(true);
     setCopyError(null);
     try {
-      const result = await copySharedArtifactToChat({ title: heading, kind, language, content }, authority);
+      const result = await copySharedArtifactToChat(
+        { title: heading, kind, language, content },
+        authority,
+      );
       if (!ownsView()) return;
       if (result.kind === 'sign-in') {
         router.push(webEntryHref(returnPath));
@@ -135,12 +176,26 @@ export function PublishedArtifactView({
         useArtifactsStore.getState().upsertArtifact(result.artifact);
         if (ownsView()) router.push(`/chat/${encodeURIComponent(result.conversationId)}`);
       } else {
-        setCopyError(result.conversationId
-          ? t('artifactPublish.copySaveUnconfirmed', 'A chat was created, but saving this copy could not be confirmed. Check your chats before trying again.')
-          : t('artifactPublish.copyUnconfirmed', 'This copy could not be confirmed. Check your chats before trying again.'));
+        setCopyError(
+          result.conversationId
+            ? t(
+                'artifactPublish.copySaveUnconfirmed',
+                'A chat was created, but saving this copy could not be confirmed. Check your chats before trying again.',
+              )
+            : t(
+                'artifactPublish.copyUnconfirmed',
+                'This copy could not be confirmed. Check your chats before trying again.',
+              ),
+        );
       }
     } catch {
-      if (ownsView()) setCopyError(t('artifactPublish.copyUnconfirmed', 'This copy could not be confirmed. Check your chats before trying again.'));
+      if (ownsView())
+        setCopyError(
+          t(
+            'artifactPublish.copyUnconfirmed',
+            'This copy could not be confirmed. Check your chats before trying again.',
+          ),
+        );
     } finally {
       if (ownsView()) {
         invocation.current = null;

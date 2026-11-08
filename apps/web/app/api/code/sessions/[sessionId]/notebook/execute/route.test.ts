@@ -191,3 +191,14 @@ describe('POST /notebook/execute', () => {
     expect(response.status).toBe(expectedStatus);
   });
 });
+
+vi.mock('@/lib/server/neon-db', async () => {
+  const { createDatabaseAdapterFake } = await import('@/test/database-adapter-fake');
+  const privilegedDb = createDatabaseAdapterFake();
+  return {
+    getNeonDb: () => privilegedDb,
+    getStripeWebhookDb: () => {
+      throw new Error('Unexpected Stripe webhook database access');
+    },
+  };
+});

@@ -20,6 +20,7 @@ import { fetchSharedLinks, revokeSharedLink, type SharedLink } from '@/src/featu
 import { translatePlural } from '@/src/i18n/plural';
 
 interface LinkSession {
+  revision: number;
   account: CloudAccountEpoch;
   controller: AbortController;
   active: boolean;
@@ -74,10 +75,14 @@ export default function SharedLinksScreen() {
 
   const isCurrent = useCallback((owner: LinkSession): boolean => {
     const auth = useAuthStore.getState();
-    return sessionRef.current === owner && owner.active &&
+    return (
+      sessionRef.current === owner &&
+      owner.active &&
       useChatAppModeStore.getState().appMode === 'cloud' &&
-      auth.isClerkSignedIn && auth.clerkUserId === owner.account.ownerId &&
-      isCloudAccountEpochCurrent(owner.account);
+      auth.isClerkSignedIn &&
+      auth.clerkUserId === owner.account.ownerId &&
+      isCloudAccountEpochCurrent(owner.account)
+    );
   }, []);
 
   const retire = useCallback(() => {
@@ -93,40 +98,45 @@ export default function SharedLinksScreen() {
     }
   }, []);
 
-  const load = useCallback(async (owner: LinkSession, refresh = false) => {
-    if (!isCurrent(owner) || owner.mutation) return;
-    owner.read?.controller.abort();
-    const request = { controller: new AbortController() };
-    owner.read = request;
-    setRefreshing(refresh);
-    const ownsRead = () => isCurrent(owner) && owner.read === request;
-    try {
-      const links = await fetchSharedLinks({
-        accountEpoch: owner.account,
-        signal: request.controller.signal,
-      });
-      if (!ownsRead()) return;
-      const next = { owner, links };
-      linksRef.current = next;
-      setState({ kind: 'ready', ...next });
-    } catch (error) {
-      if (!ownsRead()) return;
-      linksRef.current = null;
-      setState(isEgressBlocked(error) ? { kind: 'blocked' } : { kind: 'error' });
-    } finally {
-      if (ownsRead()) {
-        owner.read = null;
-        setRefreshing(false);
+  const load = useCallback(
+    async (owner: LinkSession, refresh = false) => {
+      if (!isCurrent(owner) || owner.mutation) return;
+      owner.read?.controller.abort();
+      const request = { controller: new AbortController() };
+      owner.read = request;
+      setRefreshing(refresh);
+      const ownsRead = () => isCurrent(owner) && owner.read === request;
+      try {
+        const links = await fetchSharedLinks({
+          accountEpoch: owner.account,
+          signal: request.controller.signal,
+        });
+        if (!ownsRead()) return;
+        const next = { owner, links };
+        linksRef.current = next;
+        setState({ kind: 'ready', ...next });
+      } catch (error) {
+        if (!ownsRead()) return;
+        linksRef.current = null;
+        setState(isEgressBlocked(error) ? { kind: 'blocked' } : { kind: 'error' });
+      } finally {
+        if (ownsRead()) {
+          owner.read = null;
+          setRefreshing(false);
+        }
       }
-    }
-  }, [isCurrent]);
+    },
+    [isCurrent],
+  );
 
   useEffect(() => {
     const invalidate = () => {
       retire();
       setRefreshing(false);
       setRevoking(null);
-      setState({ kind: useChatAppModeStore.getState().appMode === 'cloud' ? 'loading' : 'blocked' });
+      setState({
+        kind: useChatAppModeStore.getState().appMode === 'cloud' ? 'loading' : 'blocked',
+      });
       setScopeRevision((revision) => revision + 1);
     };
     const stopEpoch = subscribeCloudAccountEpochChange(invalidate);
@@ -134,7 +144,10 @@ export default function SharedLinksScreen() {
       if (next.appMode !== previous.appMode) invalidate();
     });
     const stopAuth = useAuthStore.subscribe((next, previous) => {
-      if (next.clerkUserId !== previous.clerkUserId || next.isClerkSignedIn !== previous.isClerkSignedIn) {
+      if (
+        next.clerkUserId !== previous.clerkUserId ||
+        next.isClerkSignedIn !== previous.isClerkSignedIn
+      ) {
         invalidate();
       }
     });
@@ -161,6 +174,7 @@ export default function SharedLinksScreen() {
         return;
       }
       const owner: LinkSession = {
+        revision: scopeRevision,
         account,
         controller: new AbortController(),
         active: true,
@@ -181,12 +195,22 @@ export default function SharedLinksScreen() {
     if (owner) void load(owner, true);
   }, [load]);
 
-  const isCurrentRow = useCallback((owner: LinkSession, link: SharedLink): boolean => {
-    const current = linksRef.current;
-    return isCurrent(owner) && current?.owner === owner &&
-      current.links.some((row) => row.token === link.token && row.shareUrl === link.shareUrl &&
-        row.expired === link.expired);
-  }, [isCurrent]);
+  const isCurrentRow = useCallback(
+    (owner: LinkSession, link: SharedLink): boolean => {
+      const current = linksRef.current;
+      return (
+        isCurrent(owner) &&
+        current?.owner === owner &&
+        current.links.some(
+          (row) =>
+            row.token === link.token &&
+            row.shareUrl === link.shareUrl &&
+            row.expired === link.expired,
+        )
+      );
+    },
+    [isCurrent],
+  );
 
   const handleRevoke = useCallback(
     (owner: LinkSession, link: SharedLink) => {
@@ -197,9 +221,13 @@ export default function SharedLinksScreen() {
         'Revoke this link?',
         `"${link.title}" will stop opening for anyone who has the URL.`,
         [
-          { text: 'Cancel', style: 'cancel', onPress: () => {
-            if (confirmationRef.current === intent) confirmationRef.current = null;
-          } },
+          {
+            text: 'Cancel',
+            style: 'cancel',
+            onPress: () => {
+              if (confirmationRef.current === intent) confirmationRef.current = null;
+            },
+          },
           {
             text: 'Revoke',
             style: 'destructive',
@@ -222,7 +250,10 @@ export default function SharedLinksScreen() {
                   if (!ownsMutation()) return;
                   const current = linksRef.current;
                   if (current?.owner === owner) {
-                    const next = { owner, links: current.links.filter((row) => row.token !== link.token) };
+                    const next = {
+                      owner,
+                      links: current.links.filter((row) => row.token !== link.token),
+                    };
                     linksRef.current = next;
                     setState({ kind: 'ready', ...next });
                   }
@@ -246,17 +277,23 @@ export default function SharedLinksScreen() {
     [isCurrent, isCurrentRow],
   );
 
-  const handleShare = useCallback(async (owner: LinkSession, link: SharedLink) => {
-    if (!isCurrentRow(owner, link) || link.expired || owner.mutation) return;
-    try {
-      await Share.share({ message: link.shareUrl });
-    } catch {
-      if (isCurrentRow(owner, link)) Alert.alert('Could not share', 'Please try again.');
-    }
-  }, [isCurrentRow]);
+  const handleShare = useCallback(
+    async (owner: LinkSession, link: SharedLink) => {
+      if (!isCurrentRow(owner, link) || link.expired || owner.mutation) return;
+      try {
+        await Share.share({ message: link.shareUrl });
+      } catch {
+        if (isCurrentRow(owner, link)) Alert.alert('Could not share', 'Please try again.');
+      }
+    },
+    [isCurrentRow],
+  );
 
-  const visibleState: LoadState = !isCloudMode ? { kind: 'blocked' }
-    : state.kind === 'ready' && !isCurrent(state.owner) ? { kind: 'loading' } : state;
+  const visibleState: LoadState = !isCloudMode
+    ? { kind: 'blocked' }
+    : state.kind === 'ready' && !isCurrent(state.owner)
+      ? { kind: 'loading' }
+      : state;
 
   return (
     <SettingsScreenShell

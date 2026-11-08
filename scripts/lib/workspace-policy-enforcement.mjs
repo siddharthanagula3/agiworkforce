@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { createRequire } from 'node:module';
 
 export const CONTRACT_FILE = 'packages/contracts/types/src/enterprise/workspace-controls.ts';
 export const BASELINE_FILE = 'scripts/config/workspace-policy-enforcement-baseline.json';
@@ -134,6 +135,94 @@ export function identifiersIn(source) {
   return new Set([...source.matchAll(/\b([a-zA-Z_][a-zA-Z0-9_]*)\b/g)].map((m) => m[1]));
 }
 
+function checkedSource(file) {
+  const ts = createRequire(import.meta.url)('typescript');
+  const program = ts.createProgram([file], {
+    noResolve: true,
+    noLib: true,
+    allowJs: true,
+    target: ts.ScriptTarget.Latest,
+  });
+  const source = program.getSourceFile(file);
+  return source && !source.parseDiagnostics.length
+    ? { ts, source, checker: program.getTypeChecker() }
+    : null;
+}
+
+function contractDecisionReaders(file) {
+  const parsed = checkedSource(file);
+  const readers = new Map();
+  if (!parsed) return readers;
+  const { ts, source, checker } = parsed;
+  // Policy mergers read controls too; only the permission predicate lends enforcement evidence.
+  const predicate = source.statements.find(
+    (node) =>
+      ts.isFunctionDeclaration(node) &&
+      node.name?.text === 'isWorkspaceCountryAllowed' &&
+      node.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword),
+  );
+  if (!predicate?.body) return readers;
+  const fields = new Set();
+  const visited = new Set();
+  const follow = (declaration) => {
+    if (!declaration.body || visited.has(declaration)) return;
+    visited.add(declaration);
+    const visit = (node) => {
+      if (node !== declaration.body && ts.isFunctionLike(node)) return;
+      if (ts.isPropertyAccessExpression(node)) fields.add(node.name.text);
+      if (ts.isElementAccessExpression(node) && ts.isStringLiteral(node.argumentExpression))
+        fields.add(node.argumentExpression.text);
+      if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
+        const declarations = checker.getSymbolAtLocation(node.expression)?.declarations;
+        if (
+          declarations?.length === 1 &&
+          ts.isFunctionDeclaration(declarations[0]) &&
+          declarations[0].getSourceFile() === source
+        )
+          follow(declarations[0]);
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(declaration.body);
+  };
+  follow(predicate);
+  readers.set(predicate.name.text, fields);
+  return readers;
+}
+
+function calledDecisionFields(file, readers) {
+  const fields = new Set();
+  if (!readers.size) return fields;
+  const parsed = checkedSource(file);
+  if (!parsed) return fields;
+  const { ts, source, checker } = parsed;
+  const visit = (node) => {
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
+      const declarations = checker.getSymbolAtLocation(node.expression)?.declarations;
+      const declaration = declarations?.length === 1 ? declarations[0] : null;
+      if (
+        declaration &&
+        ts.isImportSpecifier(declaration) &&
+        !declaration.isTypeOnly &&
+        !declaration.parent.parent.isTypeOnly
+      ) {
+        const imported = declaration.parent.parent.parent;
+        const name = declaration.propertyName?.text ?? declaration.name.text;
+        if (
+          ts.isImportDeclaration(imported) &&
+          ts.isStringLiteral(imported.moduleSpecifier) &&
+          imported.moduleSpecifier.text === '@agiworkforce/types'
+        ) {
+          for (const field of readers.get(name) ?? []) fields.add(field);
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return fields;
+}
+
 export function walk(scanRoot, dir) {
   const abs = path.join(scanRoot, dir);
   if (!fs.existsSync(abs)) return [];
@@ -166,6 +255,7 @@ export function findUnenforcedKeys(scanRoot) {
   const enforcedFeatures = new Set();
   const enforcedIdentifiers = new Set();
   const invokedActs = new Set();
+  const decisionReaders = contractDecisionReaders(contractPath);
   const actsByControl = codeActsByControl(fs.readFileSync(contractPath, 'utf8'));
   for (const root of SCAN_ROOTS) {
     for (const full of walk(scanRoot, root)) {
@@ -173,6 +263,10 @@ export function findUnenforcedKeys(scanRoot) {
       const source = fs.readFileSync(path.join(scanRoot, full), 'utf8');
       for (const feature of featuresEnforcedIn(source)) enforcedFeatures.add(feature);
       for (const identifier of identifiersIn(source)) enforcedIdentifiers.add(identifier);
+      if ([...decisionReaders.keys()].some((name) => source.includes(name))) {
+        for (const field of calledDecisionFields(path.join(scanRoot, full), decisionReaders))
+          enforcedIdentifiers.add(field);
+      }
       for (const act of invokedCodeActs(source)) invokedActs.add(act);
     }
   }
@@ -197,13 +291,80 @@ export const EFFECTIVE_ROUTE_FILE =
 
 // A control with no server surface to refuse on is only honoured if the server
 // tells the client about it, so the exemption is paid for by the published answer.
-export function servedFamilies(effectiveRouteSource) {
+export function servedFamilies(effectiveRouteSource, contractSource = '') {
   const families = new Set();
-  if (/controls:\s*effective\.controls/.test(effectiveRouteSource)) {
-    families.add('feature');
-    families.add('control');
-  }
-  if (/code:\s*effective\.code/.test(effectiveRouteSource)) families.add('code');
+  const ts = createRequire(import.meta.url)('typescript');
+  const source = ts.createSourceFile(
+    'effective-policy.ts',
+    effectiveRouteSource,
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  if (source.parseDiagnostics.length) return families;
+  const toggles = new Set(listStringLiterals(contractSource, 'WORKSPACE_CODE_TOGGLE_KEYS'));
+  const unwrap = (node) => {
+    while (ts.isParenthesizedExpression(node)) node = node.expression;
+    return node;
+  };
+  const reference = (value, ...parts) => {
+    let node = unwrap(value);
+    for (const part of parts.reverse()) {
+      if (!ts.isPropertyAccessExpression(node) || node.questionDotToken || node.name.text !== part)
+        return false;
+      node = unwrap(node.expression);
+    }
+    return ts.isIdentifier(node) && node.text === 'effective';
+  };
+  const retained = (value, family) => {
+    const node = unwrap(value);
+    if (reference(node, family)) return true;
+    if (!ts.isObjectLiteralExpression(node)) return false;
+    const [spread, ...properties] = node.properties;
+    if (!spread || !ts.isSpreadAssignment(spread) || !reference(spread.expression, family))
+      return false;
+    const names = new Set();
+    return properties.every((property) => {
+      if (
+        !ts.isPropertyAssignment(property) ||
+        !ts.isIdentifier(property.name) ||
+        names.has(property.name.text)
+      )
+        return false;
+      const name = property.name.text;
+      names.add(name);
+      const value = unwrap(property.initializer);
+      if (reference(value, family, name)) return true;
+      if (
+        family !== 'code' ||
+        !toggles.has(name) ||
+        !ts.isBinaryExpression(value) ||
+        value.operatorToken.kind !== ts.SyntaxKind.AmpersandAmpersandToken ||
+        !reference(value.left, family, name)
+      )
+        return false;
+      const restriction = unwrap(value.right);
+      return (
+        restriction.kind === ts.SyntaxKind.TrueKeyword ||
+        restriction.kind === ts.SyntaxKind.FalseKeyword ||
+        (ts.isPrefixUnaryExpression(restriction) &&
+          restriction.operator === ts.SyntaxKind.ExclamationToken)
+      );
+    });
+  };
+  const visit = (node) => {
+    if (
+      ts.isPropertyAssignment(node) &&
+      (ts.isIdentifier(node.name) || ts.isStringLiteral(node.name))
+    ) {
+      if (node.name.text === 'controls' && retained(node.initializer, 'controls')) {
+        families.add('feature');
+        families.add('control');
+      }
+      if (node.name.text === 'code' && retained(node.initializer, 'code')) families.add('code');
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
   return families;
 }
 

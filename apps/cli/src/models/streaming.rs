@@ -140,7 +140,9 @@ fn local_provider_client() -> Result<&'static Client> {
                 .build()
         })
         .as_ref()
-        .map_err(|error| anyhow::anyhow!("failed to build isolated Local inference client: {error}"))
+        .map_err(|error| {
+            anyhow::anyhow!("failed to build isolated Local inference client: {error}")
+        })
 }
 
 fn client_for_provider(provider: &Provider) -> Result<&'static Client> {

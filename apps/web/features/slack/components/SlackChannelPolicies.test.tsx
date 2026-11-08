@@ -3,16 +3,21 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/client/csrf', async (importOriginal) => ({
-  ...await importOriginal<typeof import('@/lib/client/csrf')>(),
+  ...(await importOriginal<MockedModule0>()),
   getCsrfToken: vi.fn(async () => 'csrf'),
 }));
 
 import { SlackChannelPolicies } from './SlackChannelPolicies';
 import { createSlackSettingsView } from '../lib/slack-settings-owner';
 
-function renderPolicies(send: (path: string, init: { method: string; body?: unknown }) => Promise<Response>) {
-  const view = createSlackSettingsView({ userId: 'a', sessionId: 'session-a',
-    isCurrent: () => true, getToken: async () => 'token-a' }, () => true, null);
+function renderPolicies(
+  send: (path: string, init: { method: string; body?: unknown }) => Promise<Response>,
+) {
+  const view = createSlackSettingsView(
+    { userId: 'a', sessionId: 'session-a', isCurrent: () => true, getToken: async () => 'token-a' },
+    () => true,
+    null,
+  );
   view.activate();
   view.send = async (request, path, init) => {
     request.assertCurrent();
@@ -20,7 +25,14 @@ function renderPolicies(send: (path: string, init: { method: string; body?: unkn
     request.assertCurrent();
     return response;
   };
-  return render(<SlackChannelPolicies view={view} installationId={INSTALLATION} expectedTeamId="T123" teamName="Acme" />);
+  return render(
+    <SlackChannelPolicies
+      view={view}
+      installationId={INSTALLATION}
+      expectedTeamId="T123"
+      teamName="Acme"
+    />,
+  );
 }
 
 const INSTALLATION = '0190a000-0000-7000-8000-0000000000b1';
@@ -165,3 +177,5 @@ describe('SlackChannelPolicies', () => {
     );
   });
 });
+
+type MockedModule0 = typeof import('@/lib/client/csrf');

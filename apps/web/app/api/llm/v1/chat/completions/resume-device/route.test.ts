@@ -290,20 +290,31 @@ describe('POST /api/llm/v1/chat/completions/resume-device', () => {
     { ...contextPolicySnapshotFixture(), version: 2 },
     contextPolicySnapshotFixture('other-user'),
     contextPolicySnapshotFixture('user-1', 'other-org'),
-    { ...contextPolicySnapshotFixture(), policy: { ...contextPolicySnapshotFixture().policy, allowMemory: false } },
-  ])('releases the claim before processing an invalid or changed policy snapshot: %j', async (snapshot) => {
-    const original = claimed();
-    mocks.claim.mockResolvedValue({
-      ...original,
-      checkpoint: { ...original.checkpoint, request: { ...original.checkpoint.request, x_context_policy_snapshot: snapshot } },
-    });
-    const response = await POST(resume(resumeBody()));
-    expect(response.status).toBe(409);
-    expect(await response.json()).toMatchObject({ error: { code: 'context_policy_restart_required' } });
-    expect(mocks.release).toHaveBeenCalledOnce();
-    expect(mocks.processRequest).not.toHaveBeenCalled();
-    expect(mocks.runTurn).not.toHaveBeenCalled();
-  });
+    {
+      ...contextPolicySnapshotFixture(),
+      policy: { ...contextPolicySnapshotFixture().policy, allowMemory: false },
+    },
+  ])(
+    'releases the claim before processing an invalid or changed policy snapshot: %j',
+    async (snapshot) => {
+      const original = claimed();
+      mocks.claim.mockResolvedValue({
+        ...original,
+        checkpoint: {
+          ...original.checkpoint,
+          request: { ...original.checkpoint.request, x_context_policy_snapshot: snapshot },
+        },
+      });
+      const response = await POST(resume(resumeBody()));
+      expect(response.status).toBe(409);
+      expect(await response.json()).toMatchObject({
+        error: { code: 'context_policy_restart_required' },
+      });
+      expect(mocks.release).toHaveBeenCalledOnce();
+      expect(mocks.processRequest).not.toHaveBeenCalled();
+      expect(mocks.runTurn).not.toHaveBeenCalled();
+    },
+  );
 
   it('continues the paused run from trusted state with what the device returned', async () => {
     const response = await POST(resume(resumeBody()));
@@ -623,7 +634,11 @@ describe('POST /api/llm/v1/chat/completions/resume-device', () => {
       const response = await POST(resume(resumeBody()));
       await response.text();
 
-      expect(mocks.processRequest.mock.calls[0]![2]).toEqual({ workspaceControls: controls });
+      expect(mocks.processRequest.mock.calls[0]![2]).toEqual({
+        workspaceControls: controls,
+        turnToolProhibition: undefined,
+        contextPolicySnapshot: contextPolicySnapshotFixture(),
+      });
     });
 
     it('releases the device step when the workspace controls refuse the resume', async () => {

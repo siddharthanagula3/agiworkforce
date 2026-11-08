@@ -1,7 +1,22 @@
 import {
-  client, deferred, fetchMock, fixture, getCsrfToken, identity, json, leaveReceipt,
-  LEAVE_PATH, ORG, OTHER_ORG, reads, transferReceipt, transport, workspace, wrapper, writes,
-} from '../hooks/__tests__/organization-membership-fixture';
+  client,
+  deferred,
+  fetchMock,
+  fixture,
+  getCsrfToken,
+  identity,
+  json,
+  leaveReceipt,
+  LEAVE_PATH,
+  ORG,
+  OTHER_ORG,
+  reads,
+  transferReceipt,
+  transport,
+  workspace,
+  wrapper,
+  writes,
+} from '../hooks/__tests__/OrganizationMembershipFixture';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TeamMember } from '../hooks/use-settings-queries';
@@ -11,31 +26,73 @@ const team = vi.hoisted(() => ({
   members: [] as TeamMember[],
 }));
 vi.mock('../hooks/use-settings-queries', async (original) => ({
-  ...await original<typeof import('../hooks/use-settings-queries')>(),
-  useOrganizationOverview: () => ({ data: {
-    organization: { id: ORG, name: 'Unowned overview label', slug: 'research', plan: 'team',
-      memberCount: 2, maxMembers: null, currentUserRole: team.role },
-    access: { plan: 'team', canManageTeam: true, maxMembers: null, seatsConsumed: null,
-      seatsAvailable: null, seatSource: 'unknown' },
-    activeOrganizationId: ORG, workspaces: [],
-  }, isLoading: false, isError: false, refetch: vi.fn() }),
-  useTeamMembers: () => ({ data: team.members, isLoading: false, isError: false, refetch: vi.fn() }),
+  ...(await original<MockedModule0>()),
+  useOrganizationOverview: () => ({
+    data: {
+      organization: {
+        id: ORG,
+        name: 'Unowned overview label',
+        slug: 'research',
+        plan: 'team',
+        memberCount: 2,
+        maxMembers: null,
+        currentUserRole: team.role,
+      },
+      access: {
+        plan: 'team',
+        canManageTeam: true,
+        maxMembers: null,
+        seatsConsumed: null,
+        seatsAvailable: null,
+        seatSource: 'unknown',
+      },
+      activeOrganizationId: ORG,
+      workspaces: [],
+    },
+    isLoading: false,
+    isError: false,
+    refetch: vi.fn(),
+  }),
+  useTeamMembers: () => ({
+    data: team.members,
+    isLoading: false,
+    isError: false,
+    refetch: vi.fn(),
+  }),
   useTeamSeatTypes: () => ({ data: null, isLoading: false, isError: false, refetch: vi.fn() }),
-  useTeamInvitations: () => ({ data: { invitations: [], seats: null }, isLoading: false, isError: false, refetch: vi.fn() }),
+  useTeamInvitations: () => ({
+    data: { invitations: [], seats: null },
+    isLoading: false,
+    isError: false,
+    refetch: vi.fn(),
+  }),
 }));
 vi.mock('./team/SSOPanel', () => ({ SSOPanel: () => null }));
 vi.mock('@/features/workspaces/lib/workspace-switch-interruptions', async (original) => ({
-  ...await original<typeof import('@/features/workspaces/lib/workspace-switch-interruptions')>(),
+  ...(await original<MockedModule1>()),
   useWorkspaceSwitchInterruptions: () => [],
 }));
 
 import { TeamSection } from './TeamSection';
 
 function member(userId: string, role: TeamMember['role'] = 'member'): TeamMember {
-  return { id: `${ORG}:${userId}`, userId, organizationId: ORG, email: `${userId}@example.com`,
-    name: userId === 'successor' ? 'Successor' : 'Other member', avatarUrl: null, role,
-    status: 'active', provisionedAt: null, joinedAt: null, lastActiveAt: null,
-    permissions: [], isCurrentUser: false, seatType: 'standard', premiumPaidThrough: null };
+  return {
+    id: `${ORG}:${userId}`,
+    userId,
+    organizationId: ORG,
+    email: `${userId}@example.com`,
+    name: userId === 'successor' ? 'Successor' : 'Other member',
+    avatarUrl: null,
+    role,
+    status: 'active',
+    provisionedAt: null,
+    joinedAt: null,
+    lastActiveAt: null,
+    permissions: [],
+    isCurrentUser: false,
+    seatType: 'standard',
+    premiumPaidThrough: null,
+  };
 }
 function retainClick(node: HTMLElement) {
   const key = Object.keys(node).find((candidate) => candidate.startsWith('__reactProps$'));
@@ -46,8 +103,12 @@ function retainClick(node: HTMLElement) {
   return () => retained(new MouseEvent('click', { bubbles: true, cancelable: true }));
 }
 const chooseTransfer = () => {
-  fireEvent.change(screen.getByTestId('transfer-ownership-member'), { target: { value: 'successor' } });
-  fireEvent.change(screen.getByTestId('transfer-ownership-outgoing-role'), { target: { value: 'viewer' } });
+  fireEvent.change(screen.getByTestId('transfer-ownership-member'), {
+    target: { value: 'successor' },
+  });
+  fireEvent.change(screen.getByTestId('transfer-ownership-outgoing-role'), {
+    target: { value: 'viewer' },
+  });
 };
 async function mount() {
   const mounted = render(<TeamSection />, { wrapper });
@@ -72,13 +133,23 @@ describe('Team membership real transport and confirmation', () => {
     expect(dialog).toHaveTextContent('Successor becomes the owner of Research');
     expect(dialog).toHaveTextContent('You become Viewer');
     expect(dialog).not.toHaveTextContent('Unowned overview label');
-    fireEvent.change(screen.getByTestId('transfer-ownership-member'), { target: { value: 'replacement' } });
-    fireEvent.change(screen.getByTestId('transfer-ownership-outgoing-role'), { target: { value: 'admin' } });
+    fireEvent.change(screen.getByTestId('transfer-ownership-member'), {
+      target: { value: 'replacement' },
+    });
+    fireEvent.change(screen.getByTestId('transfer-ownership-outgoing-role'), {
+      target: { value: 'admin' },
+    });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Transfer ownership' }));
     await screen.findByText('Ownership transferred');
     expect(writes()).toHaveLength(1);
-    expect(JSON.parse(String(writes()[0]![1]?.body))).toEqual({ organizationId: ORG, toUserId: 'successor', outgoingOwnerRole: 'viewer' });
-    expect(screen.getByText('Ownership was transferred. Your role is now Viewer.')).toBeInTheDocument();
+    expect(JSON.parse(String(writes()[0]![1]?.body))).toEqual({
+      organizationId: ORG,
+      toUserId: 'successor',
+      outgoingOwnerRole: 'viewer',
+    });
+    expect(
+      screen.getByText('Ownership was transferred. Your role is now Viewer.'),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled();
     expect(fixture.navigate).not.toHaveBeenCalled();
     expect(reads()).toHaveLength(1);
@@ -90,7 +161,9 @@ describe('Team membership real transport and confirmation', () => {
     team.members.push({ ...member('foreign-member'), organizationId: OTHER_ORG });
     await mount();
     const select = screen.getByTestId('transfer-ownership-member');
-    const options = within(select).getAllByRole('option').map((node) => (node as HTMLOptionElement).value);
+    const options = within(select)
+      .getAllByRole('option')
+      .map((node) => (node as HTMLOptionElement).value);
     expect(options).toContain('successor');
     expect(fixture.accountId).not.toBe(fixture.auth.userId);
     expect(options).not.toContain(fixture.accountId);
@@ -98,9 +171,16 @@ describe('Team membership real transport and confirmation', () => {
   });
 
   it('does not elevate an admitted member from the unowned overview owner role', async () => {
-    fetchMock.mockImplementation(async () => json({ ...workspace(), workspaces: workspace().workspaces.map((item) => ({ ...item, role: 'member' })) }));
+    fetchMock.mockImplementation(async () =>
+      json({
+        ...workspace(),
+        workspaces: workspace().workspaces.map((item) => ({ ...item, role: 'member' })),
+      }),
+    );
     render(<TeamSection />, { wrapper });
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Leave workspace' })).toBeEnabled());
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Leave workspace' })).toBeEnabled(),
+    );
     expect(screen.queryByTestId('transfer-ownership-submit')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Leave workspace' }));
     expect(screen.getByRole('alertdialog')).toHaveTextContent('lose access to Research');
@@ -112,28 +192,44 @@ describe('Team membership real transport and confirmation', () => {
     const receipt = { ...leaveReceipt('successor'), warnings: ['Some cleanup is incomplete.'] };
     transport(async () => json(receipt));
     await mount();
-    fireEvent.change(screen.getByLabelText('New workspace owner'), { target: { value: 'successor' } });
+    fireEvent.change(screen.getByLabelText('New workspace owner'), {
+      target: { value: 'successor' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Transfer ownership and leave' }));
     const dialog = screen.getByRole('alertdialog');
     expect(dialog).toHaveTextContent('Successor becomes owner of Research');
     expect(dialog).toHaveTextContent('Cleanup will attempt');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Transfer and leave' }));
     await screen.findByText('You left the workspace');
-    expect(screen.getByText(/The server reports 0 device tokens, 0 API keys and 0 sessions revoked, and 0 shared connectors disconnected/)).toBeInTheDocument();
-    expect(screen.getByRole('alert')).toHaveTextContent('Some credential or connector cleanup could not be confirmed');
+    expect(
+      screen.getByText(
+        /The server reports 0 device tokens, 0 API keys and 0 sessions revoked, and 0 shared connectors disconnected/,
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Some credential or connector cleanup could not be confirmed',
+    );
     expect(screen.queryByText('No cleanup problems were reported.')).toBeNull();
     expect(fixture.finalize).not.toHaveBeenCalled();
     expect(reads()).toHaveLength(1);
     fetchMock.mockImplementation(async () => json(workspace(OTHER_ORG)));
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
     await waitFor(() => expect(fixture.navigate).toHaveBeenCalledOnce());
-    expect(fixture.finalize).toHaveBeenCalledWith(client, OTHER_ORG, expect.anything(), undefined, fixture.accountId);
+    expect(fixture.finalize).toHaveBeenCalledWith(
+      client,
+      OTHER_ORG,
+      expect.anything(),
+      undefined,
+      fixture.accountId,
+    );
     expect(writes()).toHaveLength(1);
     expect(writes()[0]![0]).toBe(LEAVE_PATH);
   });
 
   it('shows unknown outcome without a success panel or another send', async () => {
-    transport(async () => { throw new TypeError('Lost response'); });
+    transport(async () => {
+      throw new TypeError('Lost response');
+    });
     await mount();
     const dialog = openTransfer();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Transfer ownership' }));
@@ -151,13 +247,18 @@ describe('Team membership real transport and confirmation', () => {
     chooseTransfer();
     const oldOpener = retainClick(screen.getByTestId('transfer-ownership-submit'));
     fireEvent.click(screen.getByTestId('transfer-ownership-submit'));
-    const oldConfirmation = retainClick(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Transfer ownership' }));
+    const oldConfirmation = retainClick(
+      within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Transfer ownership' }),
+    );
     mounted.rerender(<TeamSection active={false} />);
     expect(screen.queryByRole('alertdialog')).toBeNull();
     mounted.rerender(<TeamSection active />);
     await waitFor(() => expect(screen.getByLabelText('New workspace owner')).toBeEnabled());
     const replacement = openTransfer();
-    act(() => { oldOpener(); oldConfirmation(); });
+    act(() => {
+      oldOpener();
+      oldConfirmation();
+    });
     expect(screen.getByRole('alertdialog')).toBe(replacement);
     expect(replacement).toHaveTextContent('Successor becomes the owner of Research');
     expect(writes()).toHaveLength(0);
@@ -193,13 +294,21 @@ describe('Team membership real transport and confirmation', () => {
     fixture.accountId = 'temporary-product-account';
     act(() => client.setQueriesData({ queryKey: ['workspaces'] }, workspace()));
     await waitFor(() => expect(screen.getByTestId('transfer-ownership-member')).toHaveValue(''));
-    expect(within(screen.getByTestId('transfer-ownership-member')).getAllByRole('option')
-      .map((node) => (node as HTMLOptionElement).value)).toContain(originalAccount);
+    expect(
+      within(screen.getByTestId('transfer-ownership-member'))
+        .getAllByRole('option')
+        .map((node) => (node as HTMLOptionElement).value),
+    ).toContain(originalAccount);
     expect(screen.getByTestId('transfer-ownership-outgoing-role')).toHaveValue('admin');
     fixture.accountId = originalAccount;
     act(() => client.setQueriesData({ queryKey: ['workspaces'] }, workspace()));
-    await waitFor(() => expect(within(screen.getByTestId('transfer-ownership-member')).getAllByRole('option')
-      .map((node) => (node as HTMLOptionElement).value)).not.toContain(originalAccount));
+    await waitFor(() =>
+      expect(
+        within(screen.getByTestId('transfer-ownership-member'))
+          .getAllByRole('option')
+          .map((node) => (node as HTMLOptionElement).value),
+      ).not.toContain(originalAccount),
+    );
     act(() => oldOpener());
     expect(screen.queryByRole('alertdialog')).toBeNull();
     expect(screen.getByTestId('transfer-ownership-member')).toHaveValue('');
@@ -230,3 +339,6 @@ describe('Team membership real transport and confirmation', () => {
     expect(writes()).toHaveLength(1);
   });
 });
+
+type MockedModule0 = typeof import('../hooks/use-settings-queries');
+type MockedModule1 = typeof import('@/features/workspaces/lib/workspace-switch-interruptions');

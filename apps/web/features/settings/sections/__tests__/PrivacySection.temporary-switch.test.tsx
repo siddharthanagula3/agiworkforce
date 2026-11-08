@@ -1,5 +1,5 @@
 vi.mock('@/features/settings/hooks/use-preference-owner', async (original) => ({
-  ...await original<typeof import('@/features/settings/hooks/use-preference-owner')>(),
+  ...(await original<MockedModule0>()),
   usePreferenceOwner: () => null,
 }));
 
@@ -12,7 +12,9 @@ import { useSettingsStore } from '@shared/stores/web-settings-store';
 type ScanModule0 = typeof import('@agiworkforce/ui');
 type ScanModule1 = typeof import('@/lib/sentry-shared');
 
-vi.mock('../../components/BulkConversationControls', () => ({ BulkConversationControls: () => null }));
+vi.mock('../../components/BulkConversationControls', () => ({
+  BulkConversationControls: () => null,
+}));
 
 vi.mock('../../components/UsOnlyRoutingPanel', async (importOriginal) => ({
   ...(await importOriginal<UsOnlyRoutingPanelModule>()),
@@ -104,3 +106,5 @@ describe('the start-as-temporary switch', () => {
     expect(toggle).toHaveAttribute('data-state', 'checked');
   });
 });
+
+type MockedModule0 = typeof import('@/features/settings/hooks/use-preference-owner');

@@ -25,11 +25,11 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 vi.mock('@/lib/services/active-workspace-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/active-workspace-service')>()),
+  ...(await importOriginal<MockedModule0>()),
   resolveActiveOrganizationId: mockSavedOrganizationId,
 }));
 vi.mock('@/lib/services/organization-permission-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/organization-permission-service')>()),
+  ...(await importOriginal<MockedModule1>()),
   resolveOrganizationPermissions: mockPermissions,
 }));
 vi.mock('@/lib/server/rls-db', () => ({
@@ -112,12 +112,14 @@ describe('PUT with real write access and mocked request-scope receipt', () => {
     }) as never;
   }
 
-  function respondToWrite(options: {
-    membership?: Record<string, unknown>[];
-    membershipError?: boolean;
-    writeGrant?: boolean;
-    owner?: boolean;
-  } = {}) {
+  function respondToWrite(
+    options: {
+      membership?: Record<string, unknown>[];
+      membershipError?: boolean;
+      writeGrant?: boolean;
+      owner?: boolean;
+    } = {},
+  ) {
     mockRlsQuery.mockImplementation(async (sql: string) => {
       if (sql.startsWith('update user_projects')) {
         return sql.includes('user_id <>') || options.owner
@@ -134,12 +136,14 @@ describe('PUT with real write access and mocked request-scope receipt', () => {
           : [{ project_id: PROJECT }];
       }
       if (sql.includes('from user_projects p')) {
-        return [projectRow({
-          instructions: 'Rewritten',
-          user_id: options.owner ? 'member-1' : 'owner-1',
-          is_org_shared: !options.owner,
-          shared_access: options.owner ? null : 'write',
-        })];
+        return [
+          projectRow({
+            instructions: 'Rewritten',
+            user_id: options.owner ? 'member-1' : 'owner-1',
+            is_org_shared: !options.owner,
+            shared_access: options.owner ? null : 'write',
+          }),
+        ];
       }
       if (sql.includes('from user_projects')) return [];
       throw new Error(`Unexpected query: ${sql}`);
@@ -161,52 +165,69 @@ describe('PUT with real write access and mocked request-scope receipt', () => {
     }
   }
 
-  it.each([true, false])('writes B with an explicit grant and content.share (explicit header: %s)', async (explicit) => {
-    respondToWrite();
-    const response = await PUT(receiptRequest(explicit), context);
-    expect(response.status).toBe(200);
-    const body = await response.json();
-    expect(body.project.instructions).toBe('Rewritten');
-    expect(body.project.sharedAccess).toBe('write');
-    expect(mockResolveProjectWriteAccess).toHaveBeenCalledWith(expect.anything(), {
-      projectId: PROJECT, userId: 'member-1', organizationId: ORG,
-    });
-    expect(mockPermissions).toHaveBeenCalledWith(ORG, 'member-1');
-    expectOnlyTargetQueries();
-    const grants = mockRlsQuery.mock.calls.find(([sql]) => sql.includes("a.access = 'write'"))!;
-    expect(grants[0]).toMatch(/join public\.organization_project_access a/);
-    expect(grants[0]).toMatch(/a\.user_id = \$2/);
-    const writes = mockRlsQuery.mock.calls.filter(([sql]) => sql.startsWith('update user_projects'));
-    expect(writes).toHaveLength(2);
-    expect(writes[0]![0]).toMatch(/user_id = \$3/);
-    expect(writes[1]![0]).toMatch(/user_id <> \$3/);
-    for (const [sql, params] of writes) {
-      expect(sql).toMatch(/organization_id is not distinct from \$4::uuid/);
-      expect(params).toEqual(['Rewritten', PROJECT, 'member-1', ORG]);
-    }
-    const [readSql, readParams] = mockRlsQuery.mock.calls.at(-1)!;
-    expect(readSql).toMatch(/p\.id = any\(\$3::uuid\[\]\)/);
-    expect(readSql).toMatch(/p\.organization_id is not distinct from \$4::uuid/);
-    expect(readParams).toEqual([PROJECT, 'member-1', [PROJECT], ORG, 'write']);
-  });
+  it.each([true, false])(
+    'writes B with an explicit grant and content.share (explicit header: %s)',
+    async (explicit) => {
+      respondToWrite();
+      const response = await PUT(receiptRequest(explicit), context);
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(body.project.instructions).toBe('Rewritten');
+      expect(body.project.sharedAccess).toBe('write');
+      expect(mockResolveProjectWriteAccess).toHaveBeenCalledWith(expect.anything(), {
+        projectId: PROJECT,
+        userId: 'member-1',
+        organizationId: ORG,
+      });
+      expect(mockPermissions).toHaveBeenCalledWith(ORG, 'member-1');
+      expectOnlyTargetQueries();
+      const grants = mockRlsQuery.mock.calls.find(([sql]) => sql.includes("a.access = 'write'"))!;
+      expect(grants[0]).toMatch(/join public\.organization_project_access a/);
+      expect(grants[0]).toMatch(/a\.user_id = \$2/);
+      const writes = mockRlsQuery.mock.calls.filter(([sql]) =>
+        sql.startsWith('update user_projects'),
+      );
+      expect(writes).toHaveLength(2);
+      expect(writes[0]![0]).toMatch(/user_id = \$3/);
+      expect(writes[1]![0]).toMatch(/user_id <> \$3/);
+      for (const [sql, params] of writes) {
+        expect(sql).toMatch(/organization_id is not distinct from \$4::uuid/);
+        expect(params).toEqual(['Rewritten', PROJECT, 'member-1', ORG]);
+      }
+      const [readSql, readParams] = mockRlsQuery.mock.calls.at(-1)!;
+      expect(readSql).toMatch(/p\.id = any\(\$3::uuid\[\]\)/);
+      expect(readSql).toMatch(/p\.organization_id is not distinct from \$4::uuid/);
+      expect(readParams).toEqual([PROJECT, 'member-1', [PROJECT], ORG, 'write']);
+    },
+  );
 
   it.each(['reader', 'viewer', 'missing', 'mismatched', 'membership error'] as const)(
-    'does not attempt an editor write for %s', async (kind) => {
+    'does not attempt an editor write for %s',
+    async (kind) => {
       respondToWrite({
         writeGrant: kind !== 'reader',
         membershipError: kind === 'membership error',
-        membership: kind === 'missing' ? [] : [{
-          organization_id: kind === 'mismatched' ? SAVED_ORG : ORG,
-          role: kind === 'viewer' ? 'viewer' : 'member',
-        }],
+        membership:
+          kind === 'missing'
+            ? []
+            : [
+                {
+                  organization_id: kind === 'mismatched' ? SAVED_ORG : ORG,
+                  role: kind === 'viewer' ? 'viewer' : 'member',
+                },
+              ],
       });
       if (kind === 'viewer') mockPermissions.mockResolvedValue(new Set());
       const response = await PUT(receiptRequest(false), context);
       expect(response.status).toBe(kind === 'membership error' ? 500 : 404);
-      expect(mockRlsQuery.mock.calls.filter(([sql]) => sql.startsWith('update user_projects'))).toHaveLength(1);
+      expect(
+        mockRlsQuery.mock.calls.filter(([sql]) => sql.startsWith('update user_projects')),
+      ).toHaveLength(1);
       expect(mockRlsQuery.mock.calls.some(([sql]) => sql.includes('user_id <>'))).toBe(false);
       if (kind === 'missing' || kind === 'mismatched' || kind === 'membership error') {
-        expect(mockRlsQuery.mock.calls.some(([sql]) => sql.includes('organization_shared_projects'))).toBe(false);
+        expect(
+          mockRlsQuery.mock.calls.some(([sql]) => sql.includes('organization_shared_projects')),
+        ).toBe(false);
       }
       expectOnlyTargetQueries();
     },
@@ -292,3 +313,6 @@ describe('PUT /api/projects/[id] · editor on a shared project', () => {
     expect(mockResolveProjectWriteAccess).not.toHaveBeenCalled();
   });
 });
+
+type MockedModule0 = typeof import('@/lib/services/active-workspace-service');
+type MockedModule1 = typeof import('@/lib/services/organization-permission-service');

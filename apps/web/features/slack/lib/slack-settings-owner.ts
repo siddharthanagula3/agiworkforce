@@ -40,8 +40,11 @@ export interface SlackSettingsView {
   retire: () => void;
   read: (current?: () => boolean) => RequestAuthority | null;
   begin: (current: () => boolean) => SlackSettingsMutation | null;
-  send: (request: RequestAuthority, path: string,
-    init: { method: string; body?: unknown }) => Promise<Response>;
+  send: (
+    request: RequestAuthority,
+    path: string,
+    init: { method: string; body?: unknown },
+  ) => Promise<Response>;
 }
 
 let nextView = 0;
@@ -78,7 +81,10 @@ export function createSlackSettingsView(
     if (!session || !isCurrent()) return null;
     const request = createRequestAuthority(session, () => isCurrent() && targetCurrent());
     const retire = request.retire;
-    request.retire = () => { retire(); requests.delete(request); };
+    request.retire = () => {
+      retire();
+      requests.delete(request);
+    };
     requests.add(request);
     return request;
   };
@@ -86,24 +92,44 @@ export function createSlackSettingsView(
     id: ++nextView,
     isCurrent,
     reconcile,
-    subscribe: (listener) => { listeners.add(listener); return () => { listeners.delete(listener); }; },
+    subscribe: (listener) => {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
     revision: () => revision,
     blocked: () => !isCurrent() || mutation !== null || uncertain,
     uncertain: () => uncertain,
-    markUncertain: () => { if (isCurrent()) { uncertain = true; publish(); } },
-    activate: () => { active = true; publish(); },
+    markUncertain: () => {
+      if (isCurrent()) {
+        uncertain = true;
+        publish();
+      }
+    },
+    activate: () => {
+      active = true;
+      publish();
+    },
     retire,
     read,
     begin: (targetCurrent) => {
       if (!reconcile() || !session || mutation || uncertain || !targetCurrent()) return null;
       let started = false;
       const operation: SlackSettingsMutation = {
-        request: createRequestAuthority(session,
+        request: createRequestAuthority(
+          session,
           () => isCurrent() && mutation === operation && targetCurrent(),
-          () => { operation.dispatched = true; }),
+          () => {
+            operation.dispatched = true;
+          },
+        ),
         dispatched: false,
         start: () => {
-          if (started) { reconcile(); return false; }
+          if (started) {
+            reconcile();
+            return false;
+          }
           if (!reconcile() || !operation.request.isCurrent()) {
             operation.finish();
             return false;
@@ -111,11 +137,16 @@ export function createSlackSettingsView(
           started = true;
           return true;
         },
-        cancel: () => { if (!started) operation.finish(); },
+        cancel: () => {
+          if (!started) operation.finish();
+        },
         finish: () => {
           operation.request.retire();
           requests.delete(operation.request);
-          if (mutation === operation) { mutation = null; publish(); }
+          if (mutation === operation) {
+            mutation = null;
+            publish();
+          }
         },
       };
       mutation = operation;
@@ -126,7 +157,8 @@ export function createSlackSettingsView(
     send: async (request, path, init) => {
       try {
         request.assertCurrent();
-        if (!requests.has(request)) throw new Error('The Slack request belongs to another settings view.');
+        if (!requests.has(request))
+          throw new Error('The Slack request belongs to another settings view.');
         const csrf = init.method === 'GET' ? null : await getCsrfToken();
         request.assertCurrent();
         return await request.fetch(path, {
@@ -153,27 +185,46 @@ export function useSlackSettingsView(active: boolean): SlackSettingsView {
   const capture = useSessionSnapshot();
   const owner = observeWorkspaceOwner(capture());
   const epoch = owner?.epoch;
+  const phase = owner?.phase;
   const scope = workspace.data;
   const scopeKey = scope
-    ? JSON.stringify([scope.scope, scope.activeWorkspaceId, scope.activeOrganizationId]) : null;
+    ? JSON.stringify([scope.scope, scope.activeWorkspaceId, scope.activeOrganizationId])
+    : null;
   const [, redraw] = useState(0);
   const rendered = useRef<SlackSettingsView | null>(null);
   const view = useMemo(() => {
-    const next = createSlackSettingsView(owner?.session ?? null, () =>
-      active && rendered.current === next && !!owner && epoch !== undefined &&
-      scopeKey !== null && owner.phase === 'admitted' && owner.scopeKey === scopeKey &&
-      workspaceOwnerIsCurrent(owner, epoch), scope?.activeOrganizationId ?? null);
+    const next = createSlackSettingsView(
+      owner?.session ?? null,
+      () =>
+        active &&
+        rendered.current === next &&
+        !!owner &&
+        epoch !== undefined &&
+        scopeKey !== null &&
+        phase === 'admitted' &&
+        owner.phase === phase &&
+        owner.scopeKey === scopeKey &&
+        workspaceOwnerIsCurrent(owner, epoch),
+      scope?.activeOrganizationId ?? null,
+    );
     return next;
-  }, [active, owner, owner?.phase, epoch, scopeKey, scope?.activeOrganizationId]);
+  }, [active, owner, phase, epoch, scopeKey, scope?.activeOrganizationId]);
   rendered.current = view;
   useLayoutEffect(() => {
     view.activate();
     const retireStale = () => {
-      if (!view.isCurrent()) { view.retire(); redraw((value) => value + 1); }
+      if (!view.isCurrent()) {
+        view.retire();
+        redraw((value) => value + 1);
+      }
     };
     const stopWorkspace = subscribeWorkspaceAdmission(retireStale);
     const stopSession = owner?.session.subscribe?.(retireStale);
-    return () => { view.retire(); stopWorkspace(); stopSession?.(); };
+    return () => {
+      view.retire();
+      stopWorkspace();
+      stopSession?.();
+    };
   }, [view, owner]);
   return view;
 }

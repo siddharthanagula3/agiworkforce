@@ -1,6 +1,7 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Alert, RefreshControl, Share } from 'react-native';
+import { retainedPress } from '../test-utils/retainedPress';
 
 const mockGet = jest.fn();
 const mockDelete = jest.fn();
@@ -9,7 +10,9 @@ let mockBlur: (() => void) | undefined;
 
 jest.mock('@/src/features/auth/store', () => {
   const { create } = jest.requireActual<typeof import('zustand')>('zustand');
-  return { useAuthStore: create(() => ({ clerkUserId: 'fixture-account', isClerkSignedIn: true })) };
+  return {
+    useAuthStore: create(() => ({ clerkUserId: 'fixture-account', isClerkSignedIn: true })),
+  };
 });
 
 jest.mock('@/services/api', () => ({
@@ -64,7 +67,10 @@ import {
 function deferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (error: Error) => void;
-  const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; });
+  const promise = new Promise<T>((yes, no) => {
+    resolve = yes;
+    reject = no;
+  });
   return { promise, resolve, reject };
 }
 
@@ -132,14 +138,16 @@ describe('Shared links screen', () => {
   });
 
   it('does not publish a delayed Cloud list after switching to Local mode', async () => {
-    const read = deferred<{ shares: typeof share[] }>();
+    const read = deferred<{ shares: (typeof share)[] }>();
     mockGet.mockReturnValueOnce(read.promise);
     render(<SharedLinksScreen />);
     await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(1));
     const signal = mockGet.mock.calls[0][1].signal as AbortSignal;
 
     act(() => useChatAppModeStore.setState({ appMode: 'local' }));
-    await act(async () => { read.resolve({ shares: [share] }); });
+    await act(async () => {
+      read.resolve({ shares: [share] });
+    });
 
     expect(signal.aborted).toBe(true);
     expect(screen.getByText('Chat is set to Local Mode')).toBeTruthy();
@@ -148,28 +156,36 @@ describe('Shared links screen', () => {
   });
 
   it('ignores a blurred load failure after a refocused list succeeds', async () => {
-    const old = deferred<{ shares: typeof share[] }>();
+    const old = deferred<{ shares: (typeof share)[] }>();
     mockGet.mockReturnValueOnce(old.promise).mockResolvedValueOnce({ shares: [share] });
     render(<SharedLinksScreen />);
     await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(1));
     act(() => mockBlur?.());
-    await act(async () => { mockFocusCallbacks.at(-1)?.(); });
+    await act(async () => {
+      mockFocusCallbacks.at(-1)?.();
+    });
     expect(await screen.findByText(share.title)).toBeTruthy();
-    await act(async () => { old.reject(new Error('late read failure')); });
+    await act(async () => {
+      old.reject(new Error('late read failure'));
+    });
     expect(screen.getByText(share.title)).toBeTruthy();
     expect(screen.queryByText('Could not load shared links')).toBeNull();
   });
 
   it('only the latest refresh owns rows and the refresh spinner', async () => {
-    const old = deferred<{ shares: typeof share[] }>();
-    const latest = deferred<{ shares: typeof share[] }>();
-    mockGet.mockResolvedValueOnce({ shares: [share] })
-      .mockReturnValueOnce(old.promise).mockReturnValueOnce(latest.promise);
+    const old = deferred<{ shares: (typeof share)[] }>();
+    const latest = deferred<{ shares: (typeof share)[] }>();
+    mockGet
+      .mockResolvedValueOnce({ shares: [share] })
+      .mockReturnValueOnce(old.promise)
+      .mockReturnValueOnce(latest.promise);
     const view = render(<SharedLinksScreen />);
     await screen.findByText(share.title);
     act(() => view.UNSAFE_getByType(RefreshControl).props.onRefresh());
     act(() => view.UNSAFE_getByType(RefreshControl).props.onRefresh());
-    await act(async () => { old.resolve({ shares: [] }); });
+    await act(async () => {
+      old.resolve({ shares: [] });
+    });
     expect(view.UNSAFE_getByType(RefreshControl).props.refreshing).toBe(true);
     await act(async () => {
       latest.resolve({ shares: [{ ...share, title: 'Newest list' }] });
@@ -213,14 +229,14 @@ describe('Shared links screen', () => {
         } else {
           buttons?.find((button) => button.text === 'Cancel')?.onPress?.();
         }
-        confirm?.();
       });
+      act(() => confirm?.());
       expect(mockDelete).not.toHaveBeenCalled();
     },
   );
 
   it('keeps the confirmed token across a same-owner refresh', async () => {
-    const refresh = deferred<{ shares: typeof share[] }>();
+    const refresh = deferred<{ shares: (typeof share)[] }>();
     mockGet.mockResolvedValueOnce({ shares: [share] }).mockReturnValueOnce(refresh.promise);
     mockDelete.mockResolvedValueOnce(undefined);
     const alerts = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
@@ -228,18 +244,25 @@ describe('Shared links screen', () => {
     fireEvent.press(await screen.findByLabelText(`Revoke link to ${share.title}`));
     const confirm = alerts.mock.calls[0][2]?.find((button) => button.text === 'Revoke')?.onPress;
     act(() => view.UNSAFE_getByType(RefreshControl).props.onRefresh());
-    await act(async () => { refresh.resolve({ shares: [] }); });
-    await act(async () => { confirm?.(); });
-    expect(mockDelete).toHaveBeenCalledWith('/api/share/tok-1', expect.objectContaining({
-      accountEpoch: mockGet.mock.calls[0][1].accountEpoch,
-    }));
+    await act(async () => {
+      refresh.resolve({ shares: [] });
+    });
+    await act(async () => {
+      confirm?.();
+    });
+    expect(mockDelete).toHaveBeenCalledWith(
+      '/api/share/tok-1',
+      expect.objectContaining({
+        accountEpoch: mockGet.mock.calls[0][1].accountEpoch,
+      }),
+    );
     expect(screen.getByText('No shared links yet')).toBeTruthy();
   });
 
   it.each(['resolve', 'reject'] as const)(
     'keeps replacement account rows after an old list %s',
     async (outcome) => {
-      const old = deferred<{ shares: typeof share[] }>();
+      const old = deferred<{ shares: (typeof share)[] }>();
       mockGet.mockReturnValueOnce(old.promise).mockResolvedValue({
         shares: [{ ...share, title: 'Replacement account list' }],
       });
@@ -264,9 +287,11 @@ describe('Shared links screen', () => {
     'refuses a saved native-share callback after %s retirement',
     async (boundary) => {
       mockGet.mockResolvedValue({ shares: [share] });
-      const nativeShare = jest.spyOn(Share, 'share').mockResolvedValue({ action: Share.sharedAction });
+      const nativeShare = jest
+        .spyOn(Share, 'share')
+        .mockResolvedValue({ action: Share.sharedAction });
       const view = render(<SharedLinksScreen />);
-      const press = (await screen.findByLabelText(`Share link to ${share.title}`)).props.onPress;
+      const press = retainedPress(await screen.findByLabelText(`Share link to ${share.title}`));
       act(() => {
         if (boundary === 'local') {
           useChatAppModeStore.setState({ appMode: 'local' });
@@ -280,14 +305,18 @@ describe('Shared links screen', () => {
           view.unmount();
         }
       });
-      await act(async () => { await press(); });
+      await act(async () => {
+        await press();
+      });
       expect(nativeShare).not.toHaveBeenCalled();
     },
   );
 
   it('shares a current non-expired row through the native sheet', async () => {
     mockGet.mockResolvedValue({ shares: [share] });
-    const nativeShare = jest.spyOn(Share, 'share').mockResolvedValue({ action: Share.sharedAction });
+    const nativeShare = jest
+      .spyOn(Share, 'share')
+      .mockResolvedValue({ action: Share.sharedAction });
     render(<SharedLinksScreen />);
     fireEvent.press(await screen.findByLabelText(`Share link to ${share.title}`));
     expect(nativeShare).toHaveBeenCalledWith({ message: share.shareUrl });
@@ -301,13 +330,21 @@ describe('Shared links screen', () => {
     render(<SharedLinksScreen />);
     fireEvent.press(await screen.findByLabelText(`Revoke link to ${share.title}`));
     const confirm = alerts.mock.calls[0][2]?.find((button) => button.text === 'Revoke')?.onPress;
-    act(() => { confirm?.(); confirm?.(); });
+    act(() => {
+      confirm?.();
+      confirm?.();
+    });
     expect(mockDelete).toHaveBeenCalledTimes(1);
-    expect(mockDelete).toHaveBeenCalledWith('/api/share/tok-1', expect.objectContaining({
-      accountEpoch: mockGet.mock.calls[0][1].accountEpoch,
-      signal: expect.anything(),
-    }));
-    await act(async () => { deletion.resolve(); });
+    expect(mockDelete).toHaveBeenCalledWith(
+      '/api/share/tok-1',
+      expect.objectContaining({
+        accountEpoch: mockGet.mock.calls[0][1].accountEpoch,
+        signal: expect.anything(),
+      }),
+    );
+    await act(async () => {
+      deletion.resolve();
+    });
     expect(screen.queryByText(share.title)).toBeNull();
     expect(screen.getByText('No shared links yet')).toBeTruthy();
     expect(mockGet).toHaveBeenCalledTimes(1);
@@ -345,9 +382,13 @@ describe('Shared links screen', () => {
     render(<SharedLinksScreen />);
     fireEvent.press(await screen.findByLabelText(`Revoke link to ${share.title}`));
     const confirm = alerts.mock.calls[0][2]?.find((button) => button.text === 'Revoke')?.onPress;
-    await act(async () => { confirm?.(); });
-    expect(alerts).toHaveBeenLastCalledWith('Could not revoke',
-      'Could not confirm whether the link was revoked. Refresh the list before trying again.');
+    await act(async () => {
+      confirm?.();
+    });
+    expect(alerts).toHaveBeenLastCalledWith(
+      'Could not revoke',
+      'Could not confirm whether the link was revoked. Refresh the list before trying again.',
+    );
     expect(screen.queryByLabelText(`Revoke link to ${share.title}`)).toBeNull();
   });
 });

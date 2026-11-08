@@ -12,16 +12,25 @@ import { recordAuditEvent } from '@/lib/security-audit';
 import { pseudonymizeIdentifier } from '@/lib/server/pseudonymize';
 import { CONTACT_EMAIL } from '@/lib/legal-constants';
 import { z } from 'zod';
-import { AccountDeletionScheduleCancellationRequestSchema } from '@agiworkforce/cloud-contracts';
+import type { AccountDeletionScheduleCancellationRequestSchema } from '@agiworkforce/cloud-contracts';
 
-type CancellationMode = { kind: 'legacy' } | { kind: 'required-pair' };
+type CancellationMode =
+  | { kind: 'legacy' }
+  | {
+      kind: 'required-pair';
+      requestSchema: typeof AccountDeletionScheduleCancellationRequestSchema;
+    };
 
 const LockedRowsSchema = z.array(z.object({ id: z.string() })).max(1);
-const ScheduleStateSchema = z.array(z.object({
-  has_schedule: z.boolean(),
-  pair_matches: z.boolean(),
-  eligible: z.boolean(),
-})).length(1);
+const ScheduleStateSchema = z
+  .array(
+    z.object({
+      has_schedule: z.boolean(),
+      pair_matches: z.boolean(),
+      eligible: z.boolean(),
+    }),
+  )
+  .length(1);
 
 const SECURITY_HEADERS = {
   'Content-Security-Policy': "default-src 'none'",
@@ -53,9 +62,7 @@ export async function handleAccountDeletionCancellation(
 
   let expectedSchedule: { scheduledFor: string; requestedAt: string | null } | undefined;
   if (mode.kind === 'required-pair') {
-    const parsed = AccountDeletionScheduleCancellationRequestSchema.safeParse(
-      await request.json().catch(() => undefined),
-    );
+    const parsed = mode.requestSchema.safeParse(await request.json().catch(() => undefined));
     if (!parsed.success) {
       return NextResponse.json(
         { error: 'A valid expected deletion schedule is required.' },
@@ -69,9 +76,9 @@ export async function handleAccountDeletionCancellation(
 
   try {
     const outcome = await db.transaction(async (tx) => {
-      const locked = LockedRowsSchema.parse(await tx.query(
-        'select id from profiles where id = $1 for update', [userId],
-      ));
+      const locked = LockedRowsSchema.parse(
+        await tx.query('select id from profiles where id = $1 for update', [userId]),
+      );
       if (locked.length === 0) return 'none';
       if (locked[0]?.id !== userId) throw new Error('Unexpected locked profile');
       const params = expectedSchedule
@@ -81,25 +88,31 @@ export async function handleAccountDeletionCancellation(
         ? 'deletion_scheduled_for = $2::timestamptz and deletion_requested_at is not distinct from $3::timestamptz'
         : 'true';
       const readState = async () => {
-        const rows = ScheduleStateSchema.parse(await tx.query(
-          `select deletion_scheduled_for is not null as has_schedule,
+        const rows = ScheduleStateSchema.parse(
+          await tx.query(
+            `select deletion_scheduled_for is not null as has_schedule,
                   coalesce((${pairPredicate}), false) as pair_matches,
                   coalesce(deletion_scheduled_for > clock_timestamp(), false) as eligible
-             from profiles where id = $1`, params,
-        ));
+             from profiles where id = $1`,
+            params,
+          ),
+        );
         return rows[0]!;
       };
       const state = await readState();
       if (!state.has_schedule) return 'none';
       if (!state.pair_matches) return 'changed';
-      const cancelled = LockedRowsSchema.parse(await tx.query(
-        `update profiles
+      const cancelled = LockedRowsSchema.parse(
+        await tx.query(
+          `update profiles
             set deletion_requested_at = null, deletion_scheduled_for = null
           where id = $1
             and (${pairPredicate})
             and deletion_scheduled_for > clock_timestamp()
-          returning id`, params,
-      ));
+          returning id`,
+          params,
+        ),
+      );
       if (cancelled.length === 1) {
         if (cancelled[0]?.id !== userId) throw new Error('Unexpected cancelled profile');
         return 'cancelled';
@@ -137,7 +150,11 @@ export async function handleAccountDeletionCancellation(
 
     if (outcome === 'changed') {
       return NextResponse.json(
-        { error: 'The deletion schedule changed. Refresh before deciding whether to cancel.', cancelled: false, reason: 'schedule_changed' },
+        {
+          error: 'The deletion schedule changed. Refresh before deciding whether to cancel.',
+          cancelled: false,
+          reason: 'schedule_changed',
+        },
         { status: 409, headers: { ...getCorsHeaders(request), ...SECURITY_HEADERS } },
       );
     }

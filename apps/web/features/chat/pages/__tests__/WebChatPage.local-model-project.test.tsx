@@ -45,7 +45,8 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('@clerk/nextjs', async () => {
-  const { createClerkSessionFixture } = await import('@/lib/identity/__tests__/clerk-session-fixture');
+  const { createClerkSessionFixture } =
+    await import('@/lib/identity/__tests__/clerk-session-fixture');
   const session = createClerkSessionFixture(
     () => ({
       getToken: async () => 'fixture-token',
@@ -296,14 +297,24 @@ const PRIVATE_PROMPT = 'my biopsy result says the margins are clear';
 function stubFetch() {
   const fetchMock = vi.fn(
     async (url: RequestInfo | URL) =>
-      new Response(JSON.stringify(String(url).includes(MANAGED_CLOUD_WORKSPACES_PATH)
-        ? { workspaces: [], activeWorkspaceId: null, activeOrganizationId: null, scope: 'personal' }
-        : String(url).includes('/api/memory/local-context')
-          ? { instructions: null, memory: null, memoryCitations: [] }
-          : {}), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      }),
+      new Response(
+        JSON.stringify(
+          String(url).includes(MANAGED_CLOUD_WORKSPACES_PATH)
+            ? {
+                workspaces: [],
+                activeWorkspaceId: null,
+                activeOrganizationId: null,
+                scope: 'personal',
+              }
+            : String(url).includes('/api/memory/local-context')
+              ? { instructions: null, memory: null, memoryCitations: [] }
+              : {},
+        ),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
   );
   vi.stubGlobal('fetch', fetchMock);
   return fetchMock;
@@ -337,7 +348,11 @@ describe('a chat on a model on this device, started inside a project', () => {
 
   it('is refused before any conversation, title or draft reaches the server', async () => {
     const fetchMock = stubFetch();
-    render(<QueryClientProvider client={queryClient}><WebChatPage /></QueryClientProvider>);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <WebChatPage />
+      </QueryClientProvider>,
+    );
     await waitFor(() => expect(mocks.composerOnSend).not.toBeNull());
 
     act(() => {
@@ -354,7 +369,11 @@ describe('a chat on a model on this device, started inside a project', () => {
 
   it('starts a temporary chat filed under no project when no project is in scope', async () => {
     stubFetch();
-    render(<QueryClientProvider client={queryClient}><WebChatPage /></QueryClientProvider>);
+    render(
+      <QueryClientProvider client={queryClient}>
+        <WebChatPage />
+      </QueryClientProvider>,
+    );
     await waitFor(() => expect(mocks.composerOnSend).not.toBeNull());
 
     act(() => {
@@ -364,6 +383,10 @@ describe('a chat on a model on this device, started inside a project', () => {
     await waitFor(() => expect(mocks.createConversation).toHaveBeenCalledTimes(1));
     const [, , projectId, options] = mocks.createConversation.mock.calls[0]!;
     expect(projectId ?? null).toBeNull();
-    expect(options).toEqual({ isTemporary: true });
+    expect(options).toEqual({
+      isTemporary: true,
+      authority: undefined,
+      shouldActivate: expect.any(Function),
+    });
   });
 });

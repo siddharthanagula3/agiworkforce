@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -17,7 +17,10 @@ import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { SettingsGroup, SettingsInfo, SettingsRow } from '@/src/features/settings/Common';
-import { isCloudAccountEpochCurrent, type CloudAccountEpoch } from '@/src/features/auth/services/cloudAccountSession';
+import {
+  isCloudAccountEpochCurrent,
+  type CloudAccountEpoch,
+} from '@/src/features/auth/services/cloudAccountSession';
 import type { UseStepUp } from '@/src/features/auth/hooks/useStepUp';
 import { isStepUpCancelled, StepUpCancelledError } from '@/src/features/auth/services/stepUp';
 import { toUserMessage } from '@/services/userMessage';
@@ -93,13 +96,26 @@ export function TwoFactorSection({
 }) {
   const colors = useThemeColors();
   const [storedStage, setStage] = useState<Stage>({ name: 'idle' });
-  const stage: Stage = storedStage.name === 'idle' || isCloudAccountEpochCurrent(storedStage.account)
-    ? storedStage : { name: 'idle' };
+  const storedStageCurrent =
+    storedStage.name === 'idle' || isCloudAccountEpochCurrent(storedStage.account);
+  const stage = useMemo<Stage>(
+    () => (storedStageCurrent ? storedStage : { name: 'idle' }),
+    [storedStage, storedStageCurrent],
+  );
   const operation = useRef(0);
-  useEffect(() => () => { operation.current += 1; }, []);
+  useEffect(
+    () => () => {
+      operation.current += 1;
+    },
+    [],
+  );
   const stageVersion = operation.current;
   const closeStage = () => {
-    if (stageVersion !== operation.current || (stage.name !== 'idle' && !isCloudAccountEpochCurrent(stage.account))) return;
+    if (
+      stageVersion !== operation.current ||
+      (stage.name !== 'idle' && !isCloudAccountEpochCurrent(stage.account))
+    )
+      return;
     operation.current += 1;
     setStage({ name: 'idle' });
     setCode('');
@@ -136,7 +152,12 @@ export function TwoFactorSection({
   }, [account, fail, withStepUp]);
 
   const verify = useCallback(async () => {
-    if (stageVersion !== operation.current || stage.name !== 'enrolling' || !isCloudAccountEpochCurrent(stage.account)) return;
+    if (
+      stageVersion !== operation.current ||
+      stage.name !== 'enrolling' ||
+      !isCloudAccountEpochCurrent(stage.account)
+    )
+      return;
     const owner = stage.account;
     const request = ++operation.current;
     const current = () => operation.current === request && isCloudAccountEpochCurrent(owner);
@@ -311,9 +332,17 @@ export function TwoFactorSection({
                   <ActionButton
                     label="Open authenticator app"
                     onPress={() => {
-                      if (stageVersion !== operation.current || !isCloudAccountEpochCurrent(stage.account)) return;
+                      if (
+                        stageVersion !== operation.current ||
+                        !isCloudAccountEpochCurrent(stage.account)
+                      )
+                        return;
                       Linking.openURL(stage.otpauthUrl).catch(() => {
-                        if (stageVersion !== operation.current || !isCloudAccountEpochCurrent(stage.account)) return;
+                        if (
+                          stageVersion !== operation.current ||
+                          !isCloudAccountEpochCurrent(stage.account)
+                        )
+                          return;
                         Alert.alert(
                           'No authenticator app found',
                           'Copy the setup key and add it to your authenticator app by hand.',
@@ -324,14 +353,22 @@ export function TwoFactorSection({
                   <ActionButton
                     label="Copy setup key"
                     onPress={() => {
-                      if (stageVersion === operation.current && isCloudAccountEpochCurrent(stage.account)) void Clipboard.setStringAsync(stage.secret);
+                      if (
+                        stageVersion === operation.current &&
+                        isCloudAccountEpochCurrent(stage.account)
+                      )
+                        void Clipboard.setStringAsync(stage.secret);
                     }}
                   />
                 </View>
                 <TextInput
                   value={code}
                   onChangeText={(next) => {
-                    if (stageVersion !== operation.current || !isCloudAccountEpochCurrent(stage.account)) return;
+                    if (
+                      stageVersion !== operation.current ||
+                      !isCloudAccountEpochCurrent(stage.account)
+                    )
+                      return;
                     setCode(next.replace(/\D/g, '').slice(0, 6));
                   }}
                   placeholder="6-digit code"
@@ -396,13 +433,21 @@ export function TwoFactorSection({
                   <ActionButton
                     label="Copy codes"
                     onPress={() => {
-                      if (stageVersion === operation.current && isCloudAccountEpochCurrent(stage.account)) void Clipboard.setStringAsync(codesText);
+                      if (
+                        stageVersion === operation.current &&
+                        isCloudAccountEpochCurrent(stage.account)
+                      )
+                        void Clipboard.setStringAsync(codesText);
                     }}
                   />
                   <ActionButton
                     label="Save or share"
                     onPress={() => {
-                      if (stageVersion !== operation.current || !isCloudAccountEpochCurrent(stage.account)) return;
+                      if (
+                        stageVersion !== operation.current ||
+                        !isCloudAccountEpochCurrent(stage.account)
+                      )
+                        return;
                       Share.share({
                         title: 'AGI backup codes',
                         message: codesText,
@@ -410,11 +455,7 @@ export function TwoFactorSection({
                     }}
                   />
                 </View>
-                <ActionButton
-                  label="I saved these codes"
-                  primary
-                  onPress={closeStage}
-                />
+                <ActionButton label="I saved these codes" primary onPress={closeStage} />
               </>
             ) : null}
           </ScrollView>

@@ -28,31 +28,33 @@ const {
   mockCsrf: vi.fn(),
 }));
 
-vi.mock('@/lib/error-handler', () => ({
-  withErrorHandler: (handler: (request: Request) => Promise<Response>) =>
-    async (request: Request) => {
+vi.mock('@/lib/error-handler', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule0>()),
+  withErrorHandler:
+    (handler: (request: Request) => Promise<Response>) => async (request: Request) => {
       try {
         return await handler(request);
       } catch (error) {
         const failure = error as { statusCode?: number; message: string };
-        return Response.json(
-          { error: failure.message },
-          { status: failure.statusCode ?? 500 },
-        );
+        return Response.json({ error: failure.message }, { status: failure.statusCode ?? 500 });
       }
     },
 }));
-vi.mock('@/lib/cors', () => ({ handleCorsPreflightRequest: vi.fn(() => null) }));
+vi.mock('@/lib/cors', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule1>()),
+  handleCorsPreflightRequest: vi.fn(() => null),
+}));
 vi.mock('@/lib/services/active-workspace-service', () => ({
   resolveActiveOrganizationId: mockResolveSavedOrganization,
 }));
-vi.mock('@/lib/services/org-entitlements', () => ({
+vi.mock('@/lib/services/org-entitlements', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule0>()),
   getOrganizationEntitlements: vi.fn(),
   getSharedProjectLimitErrorMessage: vi.fn(),
   isOrgResourceLimitError: vi.fn(),
 }));
 vi.mock('@/lib/services/org-sharing-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/org-sharing-service')>()),
+  ...(await importOriginal<MockedModule0>()),
   resolveOrgMembership: mockResolveSavedMembership,
 }));
 vi.mock('@/lib/services/organization-permission-service', () => ({
@@ -61,7 +63,8 @@ vi.mock('@/lib/services/organization-permission-service', () => ({
 }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mockRateLimit }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mockCsrf }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule3>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mockGetUserScopedDb }));
@@ -364,77 +367,97 @@ function expectNoPolicyEffects() {
 }
 
 describe('captured model-policy workspace boundary', () => {
-  it.each([ORG, undefined])('reads captured B with selector %s despite saved A', async (selector) => {
-    bind({ existing: policyRow({ blocked_models: [SAMPLE.id.toLowerCase()] }) });
-    const savedBefore = structuredClone(policies.get(SAVED_ORG));
-    const response = await GET(req('GET', undefined, selector) as never);
-    const body = (await response.json()) as ModelPolicyResponse;
+  it.each([ORG, undefined])(
+    'reads captured B with selector %s despite saved A',
+    async (selector) => {
+      bind({ existing: policyRow({ blocked_models: [SAMPLE.id.toLowerCase()] }) });
+      const savedBefore = structuredClone(policies.get(SAVED_ORG));
+      const response = await GET(req('GET', undefined, selector) as never);
+      const body = (await response.json()) as ModelPolicyResponse;
 
-    expect(response.status).toBe(200);
-    expect(body.organizationId).toBe(ORG);
-    expect(body.policy.blockedModels).toEqual([SAMPLE.id.toLowerCase()]);
-    expect(body.policy.blockedProviders).toEqual([]);
-    expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining('organization_members'), [ORG, USER]);
-    expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining('organization_model_policies'), [ORG]);
-    expect(mockRequireTeamAdminAccess).toHaveBeenCalledWith(scopedDb, USER, ORG);
-    expect(mockResolvePermissions).toHaveBeenCalledWith(ORG, USER);
-    expect(mockPrivilegedQuery).not.toHaveBeenCalled();
-    expect(mockRecordAuditEvent).not.toHaveBeenCalled();
-    expect(policies.get(SAVED_ORG)).toEqual(savedBefore);
-    expectNoSavedFallback();
-  });
+      expect(response.status).toBe(200);
+      expect(body.organizationId).toBe(ORG);
+      expect(body.policy.blockedModels).toEqual([SAMPLE.id.toLowerCase()]);
+      expect(body.policy.blockedProviders).toEqual([]);
+      expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining('organization_members'), [
+        ORG,
+        USER,
+      ]);
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('organization_model_policies'),
+        [ORG],
+      );
+      expect(mockRequireTeamAdminAccess).toHaveBeenCalledWith(scopedDb, USER, ORG);
+      expect(mockResolvePermissions).toHaveBeenCalledWith(ORG, USER);
+      expect(mockPrivilegedQuery).not.toHaveBeenCalled();
+      expect(mockRecordAuditEvent).not.toHaveBeenCalled();
+      expect(policies.get(SAVED_ORG)).toEqual(savedBefore);
+      expectNoSavedFallback();
+    },
+  );
 
-  it.each([ORG, undefined])('writes and audits only captured B with selector %s', async (selector) => {
-    bind({ existing: policyRow() });
-    const savedBefore = structuredClone(policies.get(SAVED_ORG));
-    const request = req('PUT', { ...EMPTY, blockedModels: [SAMPLE.id] }, selector);
-    const response = await PUT(request as never);
-    const body = (await response.json()) as ModelPolicyResponse;
+  it.each([ORG, undefined])(
+    'writes and audits only captured B with selector %s',
+    async (selector) => {
+      bind({ existing: policyRow() });
+      const savedBefore = structuredClone(policies.get(SAVED_ORG));
+      const request = req('PUT', { ...EMPTY, blockedModels: [SAMPLE.id] }, selector);
+      const response = await PUT(request as never);
+      const body = (await response.json()) as ModelPolicyResponse;
 
-    expect(response.status).toBe(200);
-    expect(body).toEqual({
-      organizationId: ORG,
-      configured: true,
-      canManagePolicy: true,
-      currentUserRole: 'admin',
-      policy: {
-        ...EMPTY,
-        blockedModels: [SAMPLE.id.toLowerCase()],
-        updatedAt: '2026-08-23T00:00:00.000Z',
-      },
-      catalog: expect.objectContaining({
-        models: expect.arrayContaining([expect.objectContaining({ id: SAMPLE.id })]),
-        providers: expect.arrayContaining([String(SAMPLE.provider)]),
-      }),
-    });
-    expect(mockPrivilegedQuery).toHaveBeenCalledTimes(1);
-    expect(mockPrivilegedQuery).toHaveBeenCalledWith(
-      expect.stringContaining('insert into public.organization_model_policies'),
-      [ORG, [], [], [], [SAMPLE.id.toLowerCase()], USER],
-    );
-    expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining('organization_model_policies'), [ORG]);
-    expect(mockRequirePermission).toHaveBeenCalledWith(ORG, USER, 'policy.manage', expect.any(String));
-    expect(mockRecordAuditEvent).toHaveBeenCalledTimes(1);
-    expect(mockRecordAuditEvent).toHaveBeenCalledWith({
-      userId: USER,
-      eventType: 'admin_policy_changed',
-      organizationId: ORG,
-      request,
-      outcome: 'success',
-      severity: 'warning',
-      detail: {
-        resourceType: 'organization_model_policy',
-        resourceId: ORG,
-        role: 'admin',
-        status: 'updated',
-        changedKeys: ['blockedModels'],
-      },
-    });
-    expect(policies.get(ORG)).toEqual(policyRow({ blocked_models: [SAMPLE.id.toLowerCase()] }));
-    expect(policies.get(SAVED_ORG)).toEqual(savedBefore);
-    expect(mockQuery.mock.calls.every(([, params]) => params[0] === ORG)).toBe(true);
-    expectNoSavedFallback();
-  });
+      expect(response.status).toBe(200);
+      expect(body).toEqual({
+        organizationId: ORG,
+        configured: true,
+        canManagePolicy: true,
+        currentUserRole: 'admin',
+        policy: {
+          ...EMPTY,
+          blockedModels: [SAMPLE.id.toLowerCase()],
+          updatedAt: '2026-08-23T00:00:00.000Z',
+        },
+        catalog: expect.objectContaining({
+          models: expect.arrayContaining([expect.objectContaining({ id: SAMPLE.id })]),
+          providers: expect.arrayContaining([String(SAMPLE.provider)]),
+        }),
+      });
+      expect(mockPrivilegedQuery).toHaveBeenCalledTimes(1);
+      expect(mockPrivilegedQuery).toHaveBeenCalledWith(
+        expect.stringContaining('insert into public.organization_model_policies'),
+        [ORG, [], [], [], [SAMPLE.id.toLowerCase()], USER],
+      );
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('organization_model_policies'),
+        [ORG],
+      );
+      expect(mockRequirePermission).toHaveBeenCalledWith(
+        ORG,
+        USER,
+        'policy.manage',
+        expect.any(String),
+      );
+      expect(mockRecordAuditEvent).toHaveBeenCalledTimes(1);
+      expect(mockRecordAuditEvent).toHaveBeenCalledWith({
+        userId: USER,
+        eventType: 'admin_policy_changed',
+        organizationId: ORG,
+        request,
+        outcome: 'success',
+        severity: 'warning',
+        detail: {
+          resourceType: 'organization_model_policy',
+          resourceId: ORG,
+          role: 'admin',
+          status: 'updated',
+          changedKeys: ['blockedModels'],
+        },
+      });
+      expect(policies.get(ORG)).toEqual(policyRow({ blocked_models: [SAMPLE.id.toLowerCase()] }));
+      expect(policies.get(SAVED_ORG)).toEqual(savedBefore);
+      expect(mockQuery.mock.calls.every(([, params]) => params[0] === ORG)).toBe(true);
+      expectNoSavedFallback();
+    },
+  );
 
   describe.each(['GET', 'PUT'] as const)('%s refusal boundaries', (method) => {
     const invoke = (selector?: string) => {
@@ -459,7 +482,10 @@ describe('captured model-policy workspace boundary', () => {
       else memberships.set(ORG, { organization_id: SAVED_ORG, role: 'owner' });
       expect((await invoke(ORG)).status).toBe(403);
       expect(mockQuery).toHaveBeenCalledTimes(1);
-      expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining("status = 'active'"), [ORG, USER]);
+      expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining("status = 'active'"), [
+        ORG,
+        USER,
+      ]);
       expect(mockRequireTeamAdminAccess).not.toHaveBeenCalled();
       expect(mockResolvePermissions).not.toHaveBeenCalled();
       expectNoPolicyEffects();
@@ -485,7 +511,12 @@ describe('captured model-policy workspace boundary', () => {
   it('refuses B permission denial despite A owner rights', async () => {
     roles.set(ORG, 'viewer');
     expect((await PUT(req('PUT', EMPTY, ORG) as never)).status).toBe(403);
-    expect(mockRequirePermission).toHaveBeenCalledWith(ORG, USER, 'policy.manage', expect.any(String));
+    expect(mockRequirePermission).toHaveBeenCalledWith(
+      ORG,
+      USER,
+      'policy.manage',
+      expect.any(String),
+    );
     expectNoPolicyEffects();
   });
 
@@ -516,3 +547,11 @@ describe('captured model-policy workspace boundary', () => {
     expectNoPolicyEffects();
   });
 });
+
+type MockedModule0 = typeof import('@/lib/services/org-sharing-service');
+
+type CompleteMockModule0 = typeof import('@/lib/services/org-entitlements');
+
+type RetainedMockModule0 = typeof import('@/lib/error-handler');
+type RetainedMockModule1 = typeof import('@/lib/cors');
+type RetainedMockModule3 = typeof import('@/lib/logger');

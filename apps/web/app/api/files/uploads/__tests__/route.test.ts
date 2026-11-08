@@ -31,7 +31,8 @@ vi.mock('@/lib/server/attachment-allowance', async (importOriginal) => ({
 
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn().mockResolvedValue(null) }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule1>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mockGetUserScopedDb }));
@@ -50,7 +51,8 @@ vi.mock('@/lib/server/project-knowledge-files', () => ({
   findProjectKnowledgeFileByChecksum: vi.fn().mockResolvedValue(null),
   registerProjectKnowledgeFile: mockRegisterProjectKnowledgeFile,
 }));
-vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
+vi.mock('@/lib/server/project-knowledge-object-storage', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule0>()),
   deleteProjectKnowledgeObject: vi.fn().mockResolvedValue(undefined),
   sealProjectKnowledgeObject: vi.fn(),
 }));
@@ -447,3 +449,7 @@ describe('resumable upload for every upload kind', () => {
     expect(await store.current?.listPendingMultipartUploads(PRIVATE_BUCKET)).toEqual([]);
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/server/project-knowledge-object-storage');
+
+type RetainedMockModule1 = typeof import('@/lib/logger');

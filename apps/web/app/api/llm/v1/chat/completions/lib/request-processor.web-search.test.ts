@@ -42,6 +42,7 @@ vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: vi.fn(async (request: NextRequest) => {
     const { createDatabaseAdapterFake } = await import('@/test/database-adapter-fake');
     return {
+      organizationId: null,
       db: createDatabaseAdapterFake(),
       userId: request.headers.get('idempotency-key')?.startsWith('free-')
         ? 'user-free'

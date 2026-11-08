@@ -11,7 +11,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule0>()),
   getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1', email: 'user@example.com' })),
 }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
@@ -36,7 +37,8 @@ vi.mock('@/lib/feature-flags/billing-upgrade-gate', () => ({
 vi.mock('@/lib/server/email-pseudonym', () => ({
   pseudonymizeEmail: vi.fn(() => 'email-hash'),
 }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule1>()),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
@@ -188,3 +190,7 @@ describe('GET /api/waitlist', () => {
     await expect((await GET(get())).json()).resolves.toMatchObject({ noticeEmail: null });
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/api-auth');
+
+type RetainedMockModule1 = typeof import('@/lib/logger');

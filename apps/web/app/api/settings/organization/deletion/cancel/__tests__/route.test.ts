@@ -7,7 +7,10 @@ import {
 vi.mock('server-only', () => ({}));
 
 const {
-  mockQuery, mockGetClerkAuthUser, mockGetNeonDb, mockRecordAuditEvent,
+  mockQuery,
+  mockGetClerkAuthUser,
+  mockGetNeonDb,
+  mockRecordAuditEvent,
   mockGetCachedActiveOrganizationId,
 } = vi.hoisted(() => ({
   mockQuery: vi.fn(),
@@ -18,7 +21,7 @@ const {
 }));
 
 vi.mock('@/lib/server/request-context-cache', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/request-context-cache')>()),
+  ...(await importOriginal<MockedModule0>()),
   getCachedActiveOrganizationId: mockGetCachedActiveOrganizationId,
   setCachedActiveOrganizationId: vi.fn(async () => undefined),
 }));
@@ -173,8 +176,13 @@ describe('POST /api/settings/organization/deletion/cancel', () => {
 
       expect(response.status).toBe(200);
       expect(mockGetCachedActiveOrganizationId).not.toHaveBeenCalled();
-      expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining('deletion_scheduled_for > now()'), [ORG]);
-      expect(mockRecordAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ organizationId: ORG }));
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('deletion_scheduled_for > now()'),
+        [ORG],
+      );
+      expect(mockRecordAuditEvent).toHaveBeenCalledWith(
+        expect.objectContaining({ organizationId: ORG }),
+      );
     });
 
     it.each([
@@ -186,7 +194,9 @@ describe('POST /api/settings/organization/deletion/cancel', () => {
 
       expect(response.status).toBe(status);
       expect(mockGetCachedActiveOrganizationId).not.toHaveBeenCalled();
-      expect(mockQuery.mock.calls.some(([sql]) => String(sql).trim().startsWith('update'))).toBe(false);
+      expect(mockQuery.mock.calls.some(([sql]) => String(sql).trim().startsWith('update'))).toBe(
+        false,
+      );
       expect(mockRecordAuditEvent).not.toHaveBeenCalled();
     });
 
@@ -195,7 +205,12 @@ describe('POST /api/settings/organization/deletion/cancel', () => {
 
       expect(response.status).toBe(200);
       expect(mockGetCachedActiveOrganizationId).toHaveBeenCalledWith('user-1');
-      expect(mockQuery).toHaveBeenCalledWith(expect.stringContaining('deletion_scheduled_for > now()'), [OTHER_ORG]);
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('deletion_scheduled_for > now()'),
+        [OTHER_ORG],
+      );
     });
   });
 });
+
+type MockedModule0 = typeof import('@/lib/server/request-context-cache');

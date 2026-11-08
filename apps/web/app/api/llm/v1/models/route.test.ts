@@ -5,7 +5,8 @@ vi.mock('server-only', () => ({}));
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn(() => Promise.resolve(null)),
 }));
-vi.mock('@/lib/cors', () => ({
+vi.mock('@/lib/cors', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule0>()),
   getCorsHeaders: vi.fn(() => ({})),
 }));
 
@@ -19,7 +20,8 @@ vi.mock('@/lib/server/rls-db', () => ({
     return { db: authMocks.db, userId, organizationId: null };
   },
 }));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule0>()),
   isAccountUnavailableError: vi.fn(() => false),
   getClerkAuthUser: authMocks.getClerkAuthUser,
 }));
@@ -249,3 +251,7 @@ describe('GET /api/llm/v1/models authentication downgrade boundary', () => {
     });
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/api-auth');
+
+type RetainedMockModule0 = typeof import('@/lib/cors');

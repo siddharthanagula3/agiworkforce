@@ -302,3 +302,102 @@ test('the repository is clean apart from the recorded baseline', () => {
   assert.deepEqual(renderers(), []);
   assert.deepEqual(uncheckedLoads(), []);
 });
+
+const PROJECT_FILE_READ =
+  'select f.id from project_knowledge_files f join user_projects p on p.id = f.project_id where ${SCOPE}';
+
+for (const fixture of [
+  { name: 'direct imported constant', predicate: 'p.id = $1 and p.user_id = $2', expected: 0 },
+  {
+    name: 'renamed import',
+    predicate: 'p.id = $1 and p.user_id = $2',
+    binding: 'ACCESS as SCOPE',
+    exported: 'ACCESS',
+    expected: 0,
+  },
+  { name: 'removed owner predicate', predicate: 'p.id = $1', expected: 1 },
+  {
+    name: 'parameter shadowing the import',
+    predicate: 'p.id = $1 and p.user_id = $2',
+    parameters: ', SCOPE',
+    expected: 1,
+  },
+  {
+    name: 'local constant shadowing the import',
+    predicate: 'p.id = $1 and p.user_id = $2',
+    local: "const SCOPE = 'p.id = $1';",
+    expected: 1,
+  },
+  {
+    name: 'mutable imported value',
+    predicate: 'p.id = $1 and p.user_id = $2',
+    declaration: 'let',
+    expected: 1,
+  },
+  {
+    name: 'non-exported constant',
+    predicate: 'p.id = $1 and p.user_id = $2',
+    exportedDeclaration: '',
+    expected: 1,
+  },
+  { name: 'quoted owner text', predicate: "p.id = $1 and 'p.user_id = $2' <> ''", expected: 1 },
+  { name: 'commented owner text', predicate: 'p.id = $1 /* and p.user_id = $2 */', expected: 1 },
+  { name: 'multiple SQL statements', predicate: 'p.id = $1; select p.user_id = $2', expected: 1 },
+  {
+    name: 'predicate interpolated in SELECT',
+    predicate: 'p.user_id = $2',
+    sql: 'select ${SCOPE} as permitted from project_knowledge_files f join user_projects p on p.id = f.project_id where p.id = $1',
+    expected: 1,
+  },
+  {
+    name: 'quoted WHERE before a SELECT interpolation',
+    predicate: 'p.user_id = $2',
+    sql: "select 'where', ${SCOPE} as permitted from project_knowledge_files f join user_projects p on p.id = f.project_id where p.id = $1",
+    expected: 1,
+  },
+  {
+    name: 'function-produced predicate',
+    predicate: 'p.id = $1 and p.user_id = $2',
+    initializer: 'buildPredicate()',
+    expected: 1,
+  },
+  {
+    name: 'missing imported module',
+    predicate: 'p.id = $1 and p.user_id = $2',
+    module: '@/lib/missing-scope',
+    expected: 1,
+  },
+  {
+    name: 'type-only import',
+    predicate: 'p.id = $1 and p.user_id = $2',
+    typeOnly: 'type ',
+    expected: 1,
+  },
+  {
+    name: 'tagged template',
+    predicate: 'p.id = $1 and p.user_id = $2',
+    tag: 'sqlTag',
+    expected: 1,
+  },
+]) {
+  test(`project SQL expansion: ${fixture.name}`, () => {
+    const consumer = 'apps/web/lib/services/read-project.ts';
+    const root = makeRepo({
+      'apps/web/lib/scope.ts': `${fixture.exportedDeclaration ?? 'export '}${fixture.declaration ?? 'const'} ${fixture.exported ?? 'SCOPE'} = ${fixture.initializer ?? JSON.stringify(fixture.predicate)};`,
+      [consumer]: `
+import ${fixture.typeOnly ?? ''}{ ${fixture.binding ?? 'SCOPE'} } from '${fixture.module ?? '@/lib/scope'}';
+export async function read(db, projectId, userId${fixture.parameters ?? ''}) {
+  ${fixture.local ?? ''}
+  return db.query(${fixture.tag ?? ''}\`${fixture.sql ?? PROJECT_FILE_READ}\`, [projectId, userId]);
+}
+`,
+    });
+    try {
+      const findings = findUnscopedProjectReads(root, [consumer]);
+      assert.equal(findings.length, fixture.expected, JSON.stringify(findings));
+      if (fixture.expected) assert.equal(findings[0].file, consumer);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+}

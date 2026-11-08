@@ -6,7 +6,7 @@ const egress = vi.hoisted(() => ({ fetch: vi.fn(), privateHosts: new Set<string>
 // The real resolver would ask DNS about a test hostname. The hosts named here
 // stand for the ones whose addresses come back inside the deployment network.
 vi.mock('@/lib/egress-policy', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/egress-policy')>('@/lib/egress-policy');
+  const actual = await vi.importActual<MockedModule0>('@/lib/egress-policy');
   return {
     ...actual,
     pinnedPublicFetch: (...args: unknown[]) => egress.fetch(...args),
@@ -37,7 +37,7 @@ const stat = vi.fn();
 const createReadStream = vi.fn();
 
 vi.mock('./object-storage', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('./object-storage')>()),
+  ...(await importOriginal<MockedModule1>()),
   putObject: (...args: unknown[]) => putObject(...args),
   putPrivateObject: (...args: unknown[]) => putPrivateObject(...args),
   getObject: (...args: unknown[]) => getObject(...args),
@@ -563,7 +563,8 @@ describe('bounded stored media reads', () => {
   afterEach(() => vi.unstubAllEnvs());
 
   it.each([privatePath, attachmentPath, `${attachmentPath}.scanned`])(
-    'uses the private bounded reader for %s', async (pathname) => {
+    'uses the private bounded reader for %s',
+    async (pathname) => {
       const stored = { data: Buffer.from('ok'), contentType: 'text/plain' };
       getBoundedPrivateObject.mockResolvedValue(stored);
       await expect(readStoredMedia(pathname, 2)).resolves.toEqual(stored);
@@ -607,19 +608,28 @@ describe('bounded stored media reads', () => {
     ['exact cap', 2, [Buffer.from('ok')], false],
     ['zero-byte file', 0, [], false],
     ['growth after stat', 2, [Buffer.from('ok'), Buffer.from('!')], true],
-  ] as const)('counts local bytes and destroys the stream: %s', async (_label, limit, chunks, fails) => {
-    stat.mockResolvedValue({ size: limit });
-    const destroy = vi.fn();
-    createReadStream.mockReturnValue({
-      destroy,
-      async *[Symbol.asyncIterator]() { yield* chunks; },
-    });
-    const result = readStoredMedia(localPath, limit);
-    if (fails) await expect(result).rejects.toBeInstanceOf(StoredObjectTooLargeError);
-    else await expect(result).resolves.toEqual({ data: Buffer.concat(chunks), contentType: undefined });
-    expect(destroy).toHaveBeenCalledOnce();
-    expect(readFile).not.toHaveBeenCalled();
-  });
+  ] as const)(
+    'counts local bytes and destroys the stream: %s',
+    async (_label, limit, chunks, fails) => {
+      stat.mockResolvedValue({ size: limit });
+      const destroy = vi.fn();
+      createReadStream.mockReturnValue({
+        destroy,
+        async *[Symbol.asyncIterator]() {
+          yield* chunks;
+        },
+      });
+      const result = readStoredMedia(localPath, limit);
+      if (fails) await expect(result).rejects.toBeInstanceOf(StoredObjectTooLargeError);
+      else
+        await expect(result).resolves.toEqual({
+          data: Buffer.concat(chunks),
+          contentType: undefined,
+        });
+      expect(destroy).toHaveBeenCalledOnce();
+      expect(readFile).not.toHaveBeenCalled();
+    },
+  );
 
   it('destroys a failed local stream and preserves the read error', async () => {
     stat.mockResolvedValue({ size: 1 });
@@ -627,7 +637,10 @@ describe('bounded stored media reads', () => {
     const destroy = vi.fn();
     createReadStream.mockReturnValue({
       destroy,
-      async *[Symbol.asyncIterator]() { yield Buffer.from('a'); throw failure; },
+      async *[Symbol.asyncIterator]() {
+        yield Buffer.from('a');
+        throw failure;
+      },
     });
     await expect(readStoredMedia(localPath, 2)).rejects.toBe(failure);
     expect(destroy).toHaveBeenCalledOnce();
@@ -639,3 +652,6 @@ describe('bounded stored media reads', () => {
     expect(createReadStream).not.toHaveBeenCalled();
   });
 });
+
+type MockedModule0 = typeof import('@/lib/egress-policy');
+type MockedModule1 = typeof import('./object-storage');

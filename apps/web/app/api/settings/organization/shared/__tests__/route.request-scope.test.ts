@@ -31,7 +31,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mocks.auth }));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({ query: mocks.ownerQuery }) }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule0>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.rate }));
@@ -41,13 +42,14 @@ vi.mock('@/lib/security-audit', () => ({
   BLOCK_APPEAL_PATH: '/support',
   logRateLimitExceeded: vi.fn(),
 }));
-vi.mock('@/lib/services/organization-permission-service', () => ({
+vi.mock('@/lib/services/organization-permission-service', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule0>()),
   resolveOrganizationPermissions: mocks.permissions,
 }));
 vi.mock('@/lib/connectors/connector-capability', () => ({ assertConnectorsReleased: vi.fn() }));
 vi.mock('@/lib/user-connector-tools', () => ({ evictOrgSharedConnectorCaches: mocks.evict }));
 vi.mock('@/lib/services/org-sharing-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/org-sharing-service')>()),
+  ...(await importOriginal<MockedModule0>()),
   listSharedProjects: mocks.listProjects,
   shareProject: mocks.shareProject,
   unshareProject: mocks.unshareProject,
@@ -221,7 +223,9 @@ describe('sharing routes consume mocked authenticated scope through the real mem
         expect(mocks.auth).toHaveBeenCalledWith(req);
         expect(mocks.query).toHaveBeenCalledTimes(1);
         expect(mocks.query).toHaveBeenCalledWith(
-          expect.stringMatching(/where organization_id = \$1 and user_id = \$2\s+and status = 'active'/),
+          expect.stringMatching(
+            /where organization_id = \$1 and user_id = \$2\s+and status = 'active'/,
+          ),
           [B, USER],
         );
         if (entry.mutation) {
@@ -245,7 +249,8 @@ describe('sharing routes consume mocked authenticated scope through the real mem
           expect(mocks.permissions).toHaveBeenCalledTimes(1);
           expect(mocks.permissions).toHaveBeenCalledWith(B, USER);
         }
-        if (entry.name === 'connector DELETE') expect(mocks.evict).toHaveBeenCalledWith(B, RESOURCE);
+        if (entry.name === 'connector DELETE')
+          expect(mocks.evict).toHaveBeenCalledWith(B, RESOURCE);
       },
     );
 
@@ -303,14 +308,13 @@ describe('sharing routes consume mocked authenticated scope through the real mem
       mocks.query.mockResolvedValue([{ organization_id: B, role: 'member' }]);
       expect((await entry.invoke(request(entry))).status).toBe(200);
       expect(mocks.permissions).toHaveBeenCalledWith(B, USER);
-      expect(mocks.audit).toHaveBeenCalledWith(
-        expect.objectContaining({ organizationId: B }),
-      );
+      expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({ organizationId: B }));
     });
 
     it(`${entry.name} refuses permission in B even if saved A would allow it`, async () => {
-      mocks.permissions.mockImplementation(async (organizationId: string) =>
-        new Set(organizationId === A ? ['sharing.manage'] : ['content.read']),
+      mocks.permissions.mockImplementation(
+        async (organizationId: string) =>
+          new Set(organizationId === A ? ['sharing.manage'] : ['content.read']),
       );
       const response = await entry.invoke(request(entry));
       expect(response.status).toBe(403);
@@ -337,3 +341,9 @@ describe('sharing routes consume mocked authenticated scope through the real mem
     assertNoEffects();
   });
 });
+
+type MockedModule0 = typeof import('@/lib/services/org-sharing-service');
+
+type CompleteMockModule0 = typeof import('@/lib/services/organization-permission-service');
+
+type RetainedMockModule0 = typeof import('@/lib/logger');

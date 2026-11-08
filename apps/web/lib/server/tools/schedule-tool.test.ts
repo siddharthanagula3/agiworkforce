@@ -1,19 +1,27 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { createDatabaseAdapterFake } from '@/test/database-adapter-fake';
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/services/entitlement-resolution', () => ({
   resolveEntitledPlanTier: vi.fn(),
 }));
 vi.mock('@/lib/services/schedule-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/schedule-service')>()),
+  ...(await importOriginal<MockedModule0>()),
   assertScheduleQuota: vi.fn(),
   createSchedule: vi.fn(),
 }));
 
 import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
-import { assertScheduleQuota, createSchedule, ScheduleLimitError } from '@/lib/services/schedule-service';
-import { executeScheduleTool } from './schedule-tool';
+import {
+  assertScheduleQuota,
+  createSchedule,
+  ScheduleLimitError,
+} from '@/lib/services/schedule-service';
+
+// The real service imports this tool through its worker before the partial mock settles.
+vi.resetModules();
+const { executeScheduleTool } = await import('./schedule-tool');
 
 const args = {
   name: 'Daily briefing',
@@ -25,10 +33,14 @@ const args = {
 function harness() {
   const controller = new AbortController();
   const execute = vi.fn(async () => 0);
-  const tx = { execute } as unknown as DatabaseAdapter;
-  const transaction = vi.fn(async <T>(callback: (db: DatabaseAdapter) => Promise<T>) => callback(tx));
+  const tx = createDatabaseAdapterFake({ execute });
+  const db = createDatabaseAdapterFake({
+    transaction: async <T>(callback: (db: DatabaseAdapter) => Promise<T>): Promise<T> =>
+      callback(tx),
+  });
+  const transaction = vi.spyOn(db, 'transaction');
   const context = {
-    db: { transaction } as unknown as DatabaseAdapter,
+    db,
     userId: 'user-1',
     temporaryChat: false,
     signal: controller.signal,
@@ -85,7 +97,11 @@ describe('native schedule cancellation admission', () => {
   it('keeps the successful transaction receipt after cancellation', async () => {
     const { controller, transaction, context } = harness();
     transaction.mockImplementationOnce(async (callback) => {
-      const result = await callback({ execute: vi.fn(async () => 0) } as unknown as DatabaseAdapter);
+      const result = await callback(
+        createDatabaseAdapterFake({
+          execute: vi.fn(async () => 0),
+        }),
+      );
       controller.abort();
       return result;
     });
@@ -97,3 +113,5 @@ describe('native schedule cancellation admission', () => {
     });
   });
 });
+
+type MockedModule0 = typeof import('@/lib/services/schedule-service');

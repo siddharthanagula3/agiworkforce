@@ -6,6 +6,7 @@ vi.mock('server-only', () => ({}));
 const mocks = vi.hoisted(() => ({
   getClerkAuthUser: vi.fn(),
   getSubscription: vi.fn(),
+  databaseQuery: vi.fn(),
 }));
 
 vi.mock('@/lib/rate-limit', () => ({
@@ -28,6 +29,7 @@ vi.mock('@/lib/services/subscription-service', () => ({
 }));
 
 import { runAuthGate } from '../lib/auth-gate';
+import { CURRENT_TERMS_VERSION, forgetTermsStanding } from '@/lib/server/terms';
 
 function request(surface?: string, token = 'clerk-session-token'): NextRequest {
   const headers: Record<string, string> = {
@@ -79,6 +81,23 @@ function subscription(planTier: string) {
 describe('runAuthGate managed cloud surface entitlements', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    forgetTermsStanding();
+    mocks.databaseQuery.mockImplementation(async (sql: string, params: unknown[] = []) => {
+      if (
+        sql.includes('terms_version') &&
+        sql.includes('from public.profiles') &&
+        params[0] === 'user-1'
+      ) {
+        return [
+          {
+            terms_version: CURRENT_TERMS_VERSION,
+            terms_accepted_at: new Date().toISOString(),
+            terms_accepted_surface: 'web-login',
+          },
+        ];
+      }
+      return [];
+    });
     mocks.getClerkAuthUser.mockResolvedValue({ userId: 'user-1' });
     mocks.getSubscription.mockResolvedValue(subscription('free'));
   });
@@ -193,4 +212,15 @@ describe('runAuthGate managed cloud surface entitlements', () => {
       }
     },
   );
+});
+
+vi.mock('@/lib/server/neon-db', async () => {
+  const { createDatabaseAdapterFake } = await import('@/test/database-adapter-fake');
+  const privilegedDb = createDatabaseAdapterFake({ query: mocks.databaseQuery });
+  return {
+    getNeonDb: () => privilegedDb,
+    getStripeWebhookDb: () => {
+      throw new Error('Unexpected Stripe webhook database access');
+    },
+  };
 });

@@ -63,11 +63,15 @@ describe('clipboard draft read ownership', () => {
     const { result } = renderHook(() => useClipboardDraftLifetime(props));
     let old!: Read;
     let current!: Read;
-    act(() => { old = result.current.begin(); });
+    act(() => {
+      old = result.current.begin();
+    });
     act(() => result.current.retire());
     expect(props.onRetire).toHaveBeenCalledOnce();
     expect(old.isCurrent()).toBe(false);
-    act(() => { current = result.current.begin(); });
+    act(() => {
+      current = result.current.begin();
+    });
     act(() => old.finish());
     expect(result.current.readingClipboard).toBe(true);
     expect(current.isCurrent()).toBe(true);
@@ -79,7 +83,9 @@ describe('clipboard draft read ownership', () => {
     const props = options();
     const { result } = renderHook(() => useClipboardDraftLifetime(props));
     let read!: Read;
-    act(() => { read = result.current.begin(); });
+    act(() => {
+      read = result.current.begin();
+    });
     act(() => useChatStore.setState({ activeConversationId: 'conversation-b' }));
     expect(read.isCurrent()).toBe(false);
     expect(result.current.readingClipboard).toBe(false);
@@ -92,7 +98,9 @@ describe('clipboard draft read ownership', () => {
     const props = { ...options(), pickerOwned: true };
     const { result } = renderHook(() => useClipboardDraftLifetime(props));
     let read!: Read;
-    act(() => { read = result.current.begin(); });
+    act(() => {
+      read = result.current.begin();
+    });
     act(() => useProjectStore.setState({ activeProjectId: 'project-b' }));
     expect(read.isCurrent()).toBe(false);
     expect(result.current.readingClipboard).toBe(false);
@@ -102,7 +110,9 @@ describe('clipboard draft read ownership', () => {
     const props = { ...options(), projectId: 'project-a', pickerOwned: true };
     const { result } = renderHook(() => useClipboardDraftLifetime(props));
     let read!: Read;
-    act(() => { read = result.current.begin(); });
+    act(() => {
+      read = result.current.begin();
+    });
     act(() => useProjectStore.setState({ activeProjectId: 'project-b' }));
     act(() => useChatStore.setState({ activeConversationId: 'unrelated-chat' }));
     expect(read.isCurrent()).toBe(true);
@@ -121,7 +131,9 @@ describe('clipboard draft read ownership', () => {
     const props = options();
     const { result } = renderHook(() => useClipboardDraftLifetime(props));
     let read!: Read;
-    act(() => { read = result.current.begin(); });
+    act(() => {
+      read = result.current.begin();
+    });
     act(() => useLocalModelSelection.setState({ selected: null }));
     expect(read.isCurrent()).toBe(false);
     expect(result.current.readingClipboard).toBe(false);
@@ -141,12 +153,18 @@ describe('clipboard draft read ownership', () => {
     const props = options();
     const { result } = renderHook(() => useClipboardDraftLifetime(props));
     let read!: Read;
-    act(() => { read = result.current.begin(); });
-    act(() => useLocalModelSelection.setState({ selected: {
-      ...local,
-      id: localModelId('ollama', 'other-clipboard-fixture'),
-      name: 'other-clipboard-fixture',
-    } }));
+    act(() => {
+      read = result.current.begin();
+    });
+    act(() =>
+      useLocalModelSelection.setState({
+        selected: {
+          ...local,
+          id: localModelId('ollama', 'other-clipboard-fixture'),
+          name: 'other-clipboard-fixture',
+        },
+      }),
+    );
     expect(read.isCurrent()).toBe(true);
     expect(props.onRetire).not.toHaveBeenCalled();
     act(() => read.finish());
@@ -156,7 +174,9 @@ describe('clipboard draft read ownership', () => {
     const props = options();
     const { result, rerender } = renderHook(useClipboardDraftLifetime, { initialProps: props });
     let read!: Read;
-    act(() => { read = result.current.begin(); });
+    act(() => {
+      read = result.current.begin();
+    });
     rerender({ ...props, conversationId: 'conversation-b' });
     expect(read.isCurrent()).toBe(false);
     expect(result.current.readingClipboard).toBe(false);
@@ -175,8 +195,12 @@ describe('clipboard draft read ownership', () => {
     const props = { ...options(), conversationId: conversation.id };
     const { result } = renderHook(() => useClipboardDraftLifetime(props));
     let read!: Read;
-    act(() => { read = result.current.begin(); });
-    act(() => useChatStore.setState({ conversations: [{ ...conversation, projectId: 'project-b' }] }));
+    act(() => {
+      read = result.current.begin();
+    });
+    act(() =>
+      useChatStore.setState({ conversations: [{ ...conversation, projectId: 'project-b' }] }),
+    );
     expect(read.isCurrent()).toBe(false);
     expect(result.current.readingClipboard).toBe(false);
     expect(props.onRetire).toHaveBeenCalledOnce();
@@ -187,7 +211,9 @@ describe('clipboard draft read ownership', () => {
     const props = options();
     const { result } = renderHook(() => useClipboardDraftLifetime(props));
     props.onRetire.mockImplementation(() => observations.push(result.current.readingClipboard));
-    act(() => { result.current.begin(); });
+    act(() => {
+      result.current.begin();
+    });
     act(() => result.current.retire());
     expect(observations).toEqual([true]);
     expect(result.current.readingClipboard).toBe(false);
@@ -197,7 +223,9 @@ describe('clipboard draft read ownership', () => {
     const props = options();
     const { result } = renderHook(() => useClipboardDraftLifetime(props));
     let read!: Read;
-    act(() => { read = result.current.begin(); });
+    act(() => {
+      read = result.current.begin();
+    });
     act(() => {
       identity.sdk.loaded = false;
       expect(read.isCurrent()).toBe(false);
@@ -212,7 +240,9 @@ describe('clipboard draft read ownership', () => {
     const props = options();
     const { result, unmount } = renderHook(() => useClipboardDraftLifetime(props));
     let read!: Read;
-    act(() => { read = result.current.begin(); });
+    act(() => {
+      read = result.current.begin();
+    });
     unmount();
     expect(props.onRetire).toHaveBeenCalledOnce();
     expect(read.isCurrent()).toBe(false);

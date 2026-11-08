@@ -865,7 +865,7 @@ export const MessageBubble = memo(function MessageBubble({
   const speechRef = useRef<voiceOutput.VoiceOutputHandle | null>(null);
   const speechScopeRef = useRef<object | null>(null);
   const speechScope = useMemo(
-    () => ({}),
+    () => ({ scope: { messageId: message.id, messageContent: message.content, speechOwner } }),
     [message.id, message.content, speechOwner],
   );
 

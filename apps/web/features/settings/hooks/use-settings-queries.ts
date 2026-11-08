@@ -46,8 +46,14 @@ import type { CreateApiKeyFormData } from '../schemas/settings-validation';
 import { toUserMessage } from '@/lib/user-error-message';
 import { isStepUpCancelled } from '@/features/auth/step-up-fetch';
 import { useStepUp } from './useStepUp';
-import { useSelectWorkspace, useWorkspaceSelectionMutation } from '@/features/workspaces/hooks/use-workspaces';
-import { useWorkspaceQuery, type WorkspaceQueryScope } from '@/features/workspaces/hooks/use-workspace-query';
+import {
+  useSelectWorkspace,
+  useWorkspaceSelectionMutation,
+} from '@/features/workspaces/hooks/use-workspaces';
+import {
+  useWorkspaceQuery,
+  type WorkspaceQueryScope,
+} from '@/features/workspaces/hooks/use-workspace-query';
 import type { RequestAuthority } from '@/lib/identity/request-authority';
 import {
   MANAGED_CLOUD_ACCOUNT_DELETION_PATH,
@@ -99,12 +105,16 @@ async function sendOwnedAPIKeyRequest(
   });
 }
 
-async function readOwnedAPIKeyReceipt(scope: APIKeyMutationScope, response: Response): Promise<unknown> {
+async function readOwnedAPIKeyReceipt(
+  scope: APIKeyMutationScope,
+  response: Response,
+): Promise<unknown> {
   scope.request.assertCurrent();
   if (!response.ok) {
     const message = await readApiError(response);
     scope.request.assertCurrent();
-    if (response.status >= 400 && response.status < 500) throw new APIKeyMutationRejectedError(message);
+    if (response.status >= 400 && response.status < 500)
+      throw new APIKeyMutationRejectedError(message);
     throw new Error(message);
   }
   const body: unknown = await response.json();
@@ -114,7 +124,8 @@ async function readOwnedAPIKeyReceipt(scope: APIKeyMutationScope, response: Resp
 
 function apiKeyReceiptRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown> : null;
+    ? (value as Record<string, unknown>)
+    : null;
 }
 
 /**
@@ -180,7 +191,9 @@ async function readAPIKeys({ request, headers }: WorkspaceQueryScope): Promise<A
     if (!request.isCurrent()) throw error;
     const message = timeoutSignal.aborted
       ? 'API keys took too long to load. Please try again.'
-      : error instanceof Error ? error.message : 'Unable to load API keys.';
+      : error instanceof Error
+        ? error.message
+        : 'Unable to load API keys.';
     logger.error('[SettingsQuery] API keys error:', message);
     throw new Error(message);
   }
@@ -277,8 +290,11 @@ export type ChangePasswordMutation = UseMutationResult<
 export function useChangePassword(): ChangePasswordMutation {
   const { withStepUp, dialog } = useStepUp();
 
-  const mutation = useMutation<ChangePasswordReceipt, Error,
-    { scope: PasswordMutationScope; draft: ChangePasswordParams }>({
+  const mutation = useMutation<
+    ChangePasswordReceipt,
+    Error,
+    { scope: PasswordMutationScope; draft: ChangePasswordParams }
+  >({
     retry: false,
     gcTime: 0,
     mutationFn: async ({ scope, draft }) => {
@@ -287,32 +303,42 @@ export function useChangePassword(): ChangePasswordMutation {
       if (newPassword !== confirmPassword) {
         throw new PasswordMutationRejectedError('Passwords do not match');
       }
-      const body = JSON.stringify({ newPassword, ...(currentPassword === null ? {} : { currentPassword }) });
-      const response = await withStepUp(async (headers) => {
-        scope.request.assertCurrent();
-        const csrfToken = await getCsrfToken();
-        scope.request.assertCurrent();
-        return scope.request.fetch('/api/settings/password', {
-          method: 'POST',
-          headers: { ...headers, 'Content-Type': 'application/json', 'x-csrf-token': csrfToken },
-          body,
-        });
-      }, null, { authority: scope.request, onStepUpRequired: scope.onStepUpRequired });
+      const body = JSON.stringify({
+        newPassword,
+        ...(currentPassword === null ? {} : { currentPassword }),
+      });
+      const response = await withStepUp(
+        async (headers) => {
+          scope.request.assertCurrent();
+          const csrfToken = await getCsrfToken();
+          scope.request.assertCurrent();
+          return scope.request.fetch('/api/settings/password', {
+            method: 'POST',
+            headers: { ...headers, 'Content-Type': 'application/json', 'x-csrf-token': csrfToken },
+            body,
+          });
+        },
+        null,
+        { authority: scope.request, onStepUpRequired: scope.onStepUpRequired },
+      );
       scope.request.assertCurrent();
       if (!response.ok) {
         const message = await readApiError(response);
         scope.request.assertCurrent();
-        if (response.status >= 400 && response.status < 500) throw new PasswordMutationRejectedError(message);
+        if (response.status >= 400 && response.status < 500)
+          throw new PasswordMutationRejectedError(message);
         throw new Error(message);
       }
       const receipt: unknown = await response.json();
       scope.request.assertCurrent();
-      const parsed = z.object({
-        success: z.literal(true),
-        otherSessionsEnded: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
-        otherSessionsRemaining: z.literal(0),
-        deviceCredentialsRevoked: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
-      }).safeParse(receipt);
+      const parsed = z
+        .object({
+          success: z.literal(true),
+          otherSessionsEnded: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+          otherSessionsRemaining: z.literal(0),
+          deviceCredentialsRevoked: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+        })
+        .safeParse(receipt);
       if (!parsed.success) throw new Error('The password change receipt could not be confirmed.');
       return parsed.data;
     },
@@ -334,8 +360,11 @@ export function useCreateAPIKey(): CreateAPIKeyMutation {
   const queryClient: QueryClient = useQueryClient();
   const { withStepUp, dialog } = useStepUp();
 
-  const mutation = useMutation<CreateAPIKeyResult, Error,
-    { scope: APIKeyMutationScope; draft: CreateApiKeyFormData }>({
+  const mutation = useMutation<
+    CreateAPIKeyResult,
+    Error,
+    { scope: APIKeyMutationScope; draft: CreateApiKeyFormData }
+  >({
     retry: false,
     gcTime: 0,
     mutationFn: async ({ scope, draft }): Promise<CreateAPIKeyResult> => {
@@ -349,7 +378,12 @@ export function useCreateAPIKey(): CreateAPIKeyMutation {
           ? null
           : new Date(Date.now() + Number(expiresInDays) * 24 * 60 * 60 * 1000).toISOString();
       // Freeze both form values and expiry before auth waits or a proof replay.
-      const body = JSON.stringify({ name, scopes: [...scopes], expiresAt, projectId: projectId ?? null });
+      const body = JSON.stringify({
+        name,
+        scopes: [...scopes],
+        expiresAt,
+        projectId: projectId ?? null,
+      });
       const response = await withStepUp(
         (headers) => sendOwnedAPIKeyRequest(scope, '/api/settings/api-keys', 'POST', body, headers),
         null,
@@ -357,12 +391,16 @@ export function useCreateAPIKey(): CreateAPIKeyMutation {
       );
       const created = apiKeyReceiptRecord(await readOwnedAPIKeyReceipt(scope, response));
       scope.request.assertCurrent();
-      const key = apiKeyReceiptRecord(created?.api_key);
-      if (typeof key?.id !== 'string' || !key.id ||
-        typeof created?.full_key !== 'string' || !created.full_key) {
+      const key = apiKeyReceiptRecord(created?.['api_key']);
+      if (
+        typeof key?.['id'] !== 'string' ||
+        !key['id'] ||
+        typeof created?.['full_key'] !== 'string' ||
+        !created['full_key']
+      ) {
         throw new Error('The API key creation receipt could not be confirmed.');
       }
-      return { apiKey: key as unknown as APIKey, fullKey: created.full_key };
+      return { apiKey: key as unknown as APIKey, fullKey: created['full_key'] };
     },
     onSuccess: (_receipt, { scope }): void => {
       // Do not delay the once-only key receipt behind a background list reload.
@@ -382,18 +420,24 @@ export function useCreateAPIKey(): CreateAPIKeyMutation {
  *
  * @returns UseMutationResult for deleting API key
  */
-export function useDeleteAPIKey(): UseMutationResult<string, Error,
-  { scope: APIKeyMutationScope; keyId: string }> {
+export function useDeleteAPIKey(): UseMutationResult<
+  string,
+  Error,
+  { scope: APIKeyMutationScope; keyId: string }
+> {
   const queryClient: QueryClient = useQueryClient();
 
   return useMutation<string, Error, { scope: APIKeyMutationScope; keyId: string }>({
     retry: false,
     mutationFn: async ({ scope, keyId }): Promise<string> => {
-      const response = await sendOwnedAPIKeyRequest(scope,
-        `/api/settings/api-keys/${encodeURIComponent(keyId)}`, 'DELETE');
+      const response = await sendOwnedAPIKeyRequest(
+        scope,
+        `/api/settings/api-keys/${encodeURIComponent(keyId)}`,
+        'DELETE',
+      );
       const receipt = apiKeyReceiptRecord(await readOwnedAPIKeyReceipt(scope, response));
       scope.request.assertCurrent();
-      if (typeof receipt?.message !== 'string' || !receipt.message) {
+      if (typeof receipt?.['message'] !== 'string' || !receipt['message']) {
         throw new Error('The API key revocation receipt could not be confirmed.');
       }
       return keyId;
@@ -520,7 +564,10 @@ export type { AccountDeletionStatus } from '@agiworkforce/cloud-contracts';
  */
 export { useAccountDeletionStatus } from './use-account-deletion-status';
 
-export { useCancelAccountDeletion, type CancelAccountDeletionResult } from './use-cancel-account-deletion';
+export {
+  useCancelAccountDeletion,
+  type CancelAccountDeletionResult,
+} from './use-cancel-account-deletion';
 
 // ============================================================================
 // ORGANIZATION SETTINGS HOOKS
@@ -672,7 +719,9 @@ export interface CreateOrganizationInput {
 
 export function useCreateOrganization() {
   return useWorkspaceSelectionMutation<CreateOrganizationInput>((input) => ({
-    url: '/api/settings/organization', method: 'POST', body: input,
+    url: '/api/settings/organization',
+    method: 'POST',
+    body: input,
     errorMessage: 'We could not create your workspace. Try again.',
   }));
 }
@@ -1828,11 +1877,7 @@ export function useUpdateWorkspacePolicy(): UseMutationResult<
   WorkspaceAdminPolicyPatch
 > {
   const queryClient: QueryClient = useQueryClient();
-  return useMutation<
-    WorkspacePolicyOverview,
-    Error,
-    WorkspaceAdminPolicyPatch
-  >({
+  return useMutation<WorkspacePolicyOverview, Error, WorkspaceAdminPolicyPatch>({
     mutationFn: async (patch) => {
       const token = await getAuthToken();
       if (!token) throw new Error('User not authenticated');

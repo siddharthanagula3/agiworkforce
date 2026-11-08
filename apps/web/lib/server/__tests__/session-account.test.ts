@@ -25,14 +25,14 @@ vi.mock('@/lib/server/neon-db', () => ({
   getStripeWebhookDb: vi.fn(),
 }));
 vi.mock('@/lib/services/active-workspace-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/active-workspace-service')>()),
+  ...(await importOriginal<MockedModule0>()),
   resolveActiveOrganizationId: mocks.resolveOrganization,
 }));
 vi.mock('@/lib/server/claimed-user-scope-db', () => ({
   createClaimedUserScopedDb: mocks.claimScope,
 }));
 vi.mock('@/lib/observability/trace-context', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/observability/trace-context')>()),
+  ...(await importOriginal<MockedModule1>()),
   setTenantScope: mocks.setTenantScope,
 }));
 
@@ -54,7 +54,9 @@ const AUTH: AuthResult = {
 function request(bearer = true) {
   return new NextRequest('http://localhost/api/settings/email?accountId=forged-account', {
     headers: {
-      ...(bearer ? { authorization: 'Bearer verified-native-token' } : { cookie: '__session=cookie' }),
+      ...(bearer
+        ? { authorization: 'Bearer verified-native-token' }
+        : { cookie: '__session=cookie' }),
       'x-user-id': 'forged-subject',
       'x-session-id': 'forged-session',
     },
@@ -84,9 +86,18 @@ describe('canonical native session account admission', () => {
 
   it.each([
     ['absent native identity', { userId: ACCOUNT }],
-    ['absent native session', { userId: ACCOUNT, sessionIdentity: { subject: SUBJECT, sessionId: null } }],
-    ['empty native session', { userId: ACCOUNT, sessionIdentity: { subject: SUBJECT, sessionId: '' } }],
-    ['empty native subject', { userId: ACCOUNT, sessionIdentity: { subject: '', sessionId: SESSION } }],
+    [
+      'absent native session',
+      { userId: ACCOUNT, sessionIdentity: { subject: SUBJECT, sessionId: null } },
+    ],
+    [
+      'empty native session',
+      { userId: ACCOUNT, sessionIdentity: { subject: SUBJECT, sessionId: '' } },
+    ],
+    [
+      'empty native subject',
+      { userId: ACCOUNT, sessionIdentity: { subject: '', sessionId: SESSION } },
+    ],
     ['API key', { userId: ACCOUNT, apiKeyId: 'key-1' }],
   ] satisfies Array<[string, AuthResult]>)(
     'rejects %s before creating a database scope',
@@ -140,26 +151,36 @@ describe('canonical native session account admission', () => {
 });
 
 describe('mapped account database scope', () => {
-  it.each([true, false])('claims product account and organization with bearer=%s', async (bearer) => {
-    const incoming = request(bearer);
+  it.each([true, false])(
+    'claims product account and organization with bearer=%s',
+    async (bearer) => {
+      const incoming = request(bearer);
 
-    await expect(getSessionAccountDb(incoming)).resolves.toEqual({
-      db: CLAIMED_DB,
-      userId: ACCOUNT,
-      organizationId: ORGANIZATION,
-      sessionIdentity: { subject: SUBJECT, sessionId: SESSION },
-    });
+      await expect(getSessionAccountDb(incoming)).resolves.toEqual({
+        db: CLAIMED_DB,
+        userId: ACCOUNT,
+        organizationId: ORGANIZATION,
+        sessionIdentity: { subject: SUBJECT, sessionId: SESSION },
+      });
 
-    expect(mocks.authenticate).toHaveBeenCalledExactlyOnceWith(incoming, {});
-    expect(mocks.getNeonDb).toHaveBeenCalledTimes(1);
-    expect(mocks.resolveOrganization).toHaveBeenCalledExactlyOnceWith(SERVICE_DB, ACCOUNT, incoming);
-    expect(mocks.claimScope).toHaveBeenCalledExactlyOnceWith(SERVICE_DB, {
-      userId: ACCOUNT,
-      organizationId: ORGANIZATION,
-    });
-    expect(mocks.setTenantScope).toHaveBeenCalledWith({ userId: ACCOUNT, organizationId: ORGANIZATION });
-    expect(SERVICE_DB.withUser).not.toHaveBeenCalled();
-  });
+      expect(mocks.authenticate).toHaveBeenCalledExactlyOnceWith(incoming, {});
+      expect(mocks.getNeonDb).toHaveBeenCalledTimes(1);
+      expect(mocks.resolveOrganization).toHaveBeenCalledExactlyOnceWith(
+        SERVICE_DB,
+        ACCOUNT,
+        incoming,
+      );
+      expect(mocks.claimScope).toHaveBeenCalledExactlyOnceWith(SERVICE_DB, {
+        userId: ACCOUNT,
+        organizationId: ORGANIZATION,
+      });
+      expect(mocks.setTenantScope).toHaveBeenCalledWith({
+        userId: ACCOUNT,
+        organizationId: ORGANIZATION,
+      });
+      expect(SERVICE_DB.withUser).not.toHaveBeenCalled();
+    },
+  );
 
   it('omits extra organization resolution for enrollment after canonical authentication', async () => {
     const incoming = request();
@@ -178,7 +199,10 @@ describe('mapped account database scope', () => {
       userId: ACCOUNT,
       organizationId: null,
     });
-    expect(mocks.setTenantScope).toHaveBeenCalledWith({ userId: ACCOUNT, organizationId: undefined });
+    expect(mocks.setTenantScope).toHaveBeenCalledWith({
+      userId: ACCOUNT,
+      organizationId: undefined,
+    });
   });
 
   it('does not silently choose another organization if resolution fails', async () => {
@@ -190,3 +214,6 @@ describe('mapped account database scope', () => {
     expect(mocks.claimScope).not.toHaveBeenCalled();
   });
 });
+
+type MockedModule0 = typeof import('@/lib/services/active-workspace-service');
+type MockedModule1 = typeof import('@/lib/observability/trace-context');

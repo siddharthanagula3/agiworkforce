@@ -14,19 +14,22 @@ const mocks = vi.hoisted(() => ({
   reconcile: vi.fn(),
 }));
 
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule0>()),
   getClerkAuthUser: (...args: unknown[]) => mocks.auth(...args),
 }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: (...args: unknown[]) => mocks.csrf(...args) }));
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: (...args: unknown[]) => mocks.rateLimit(...args),
 }));
-vi.mock('@/lib/cors', () => ({
+vi.mock('@/lib/cors', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule1>()),
   handleCorsPreflightRequest: () => null,
   getCorsHeaders: () => ({}),
   getSecurityHeaders: () => ({}),
 }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule2>()),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/server/rls-db', () => ({
@@ -208,3 +211,8 @@ describe('POST /api/media/video/cancel', () => {
     expect(mocks.reconcile).not.toHaveBeenCalled();
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/api-auth');
+
+type RetainedMockModule1 = typeof import('@/lib/cors');
+type RetainedMockModule2 = typeof import('@/lib/logger');

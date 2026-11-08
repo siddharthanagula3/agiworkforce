@@ -32,9 +32,13 @@ vi.mock('@clerk/nextjs', () => ({
 }));
 
 vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/identity/useSessionSnapshot')>()),
-  useSessionSnapshot: () => () => ({ userId: 'native-user-1', sessionId: 'session-1',
-    isCurrent: () => true, getToken: async () => 'captured-token' }),
+  ...(await importOriginal<MockedModule0>()),
+  useSessionSnapshot: () => () => ({
+    userId: 'native-user-1',
+    sessionId: 'session-1',
+    isCurrent: () => true,
+    getToken: async () => 'captured-token',
+  }),
 }));
 
 vi.mock('@shared/stores/authentication-store', () => ({
@@ -88,11 +92,17 @@ function proPlan(overrides: Partial<MockSubscription> = {}): MockSubscription {
 function stubSessions(sessions: unknown[] = []): void {
   vi.spyOn(globalThis, 'fetch').mockImplementation(
     async (input) =>
-      new Response(JSON.stringify(String(input) === '/api/user/delete-account'
-        ? NO_PENDING_ACCOUNT_DELETION : { sessions, totalCount: sessions.length }), {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
-      }),
+      new Response(
+        JSON.stringify(
+          String(input) === '/api/user/delete-account'
+            ? NO_PENDING_ACCOUNT_DELETION
+            : { sessions, totalCount: sessions.length },
+        ),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        },
+      ),
   );
 }
 
@@ -196,5 +206,11 @@ describe('AccountSection active sessions type scale', () => {
 
 function renderAccountSection() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(<QueryClientProvider client={client}><AccountSection /></QueryClientProvider>);
+  return render(
+    <QueryClientProvider client={client}>
+      <AccountSection />
+    </QueryClientProvider>,
+  );
 }
+
+type MockedModule0 = typeof import('@/lib/identity/useSessionSnapshot');

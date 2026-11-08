@@ -27,13 +27,14 @@ vi.mock('@/lib/server/key-value', () => ({
   ),
 }));
 vi.mock('@/lib/server/identity', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/identity')>()),
+  ...(await importOriginal<MockedModule0>()),
   getIdentityUser: mocks.getUser,
 }));
 
 import { createUpstashKeyValueStore, type UpstashRedisLike } from '@agiworkforce/key-value';
 
-const { assertMfaPolicy, isMfaRequiredError, resolveMfaEnrolled } = await import('../mfa-policy-gate');
+const { assertMfaPolicy, isMfaRequiredError, resolveMfaEnrolled } =
+  await import('../mfa-policy-gate');
 
 const ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
 
@@ -151,19 +152,22 @@ describe('resolveMfaEnrolled admitted session evidence', () => {
     { accountId: 'native-subject', cached: 'enrolled', enrolled: false },
     { accountId: 'product-account', cached: 'unenrolled', enrolled: true },
     { accountId: 'native-subject', cached: 'unenrolled', enrolled: true },
-  ])('uses native enrollment for $accountId despite $cached cache', async ({
-    accountId, cached, enrolled,
-  }) => {
-    const get = vi.fn(async () => cached);
-    mocks.redisClient = { get, set: mocks.redisSet };
-    mocks.getUser.mockResolvedValue({ id: 'native-subject', twoFactorEnabled: enrolled });
+  ])(
+    'uses native enrollment for $accountId despite $cached cache',
+    async ({ accountId, cached, enrolled }) => {
+      const get = vi.fn(async () => cached);
+      mocks.redisClient = { get, set: mocks.redisSet };
+      mocks.getUser.mockResolvedValue({ id: 'native-subject', twoFactorEnabled: enrolled });
 
-    await expect(resolveMfaEnrolled(accountId, { subject: 'native-subject' })).resolves.toBe(enrolled);
-    expect(mocks.getUser).toHaveBeenCalledExactlyOnceWith('native-subject');
-    expect(get).not.toHaveBeenCalled();
-    expect(mocks.redisSet).not.toHaveBeenCalled();
-    expect(mocks.resolveMfaPolicy).not.toHaveBeenCalled();
-  });
+      await expect(resolveMfaEnrolled(accountId, { subject: 'native-subject' })).resolves.toBe(
+        enrolled,
+      );
+      expect(mocks.getUser).toHaveBeenCalledExactlyOnceWith('native-subject');
+      expect(get).not.toHaveBeenCalled();
+      expect(mocks.redisSet).not.toHaveBeenCalled();
+      expect(mocks.resolveMfaPolicy).not.toHaveBeenCalled();
+    },
+  );
 
   it.each([
     null,
@@ -299,12 +303,15 @@ describe('session-native mfa enrollment', () => {
     expect(mocks.getUser).toHaveBeenCalledExactlyOnceWith('native-subject');
   });
 
-  it.each(['', '   '])('refuses a blank native subject %j without a provider lookup', async (subject) => {
-    await expect(assertMfaPolicy('product-account', { subject })).rejects.toSatisfy(
-      isMfaRequiredError,
-    );
-    expect(mocks.getUser).not.toHaveBeenCalled();
-  });
+  it.each(['', '   '])(
+    'refuses a blank native subject %j without a provider lookup',
+    async (subject) => {
+      await expect(assertMfaPolicy('product-account', { subject })).rejects.toSatisfy(
+        isMfaRequiredError,
+      );
+      expect(mocks.getUser).not.toHaveBeenCalled();
+    },
+  );
 
   it('does not read native enrollment when the workspace does not require mfa', async () => {
     mocks.resolveMfaPolicy.mockResolvedValue({
@@ -317,3 +324,5 @@ describe('session-native mfa enrollment', () => {
     expect(mocks.getUser).not.toHaveBeenCalled();
   });
 });
+
+type MockedModule0 = typeof import('@/lib/server/identity');

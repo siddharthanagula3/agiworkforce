@@ -8,7 +8,8 @@ let sequence = 0;
 function replaceAccount() {
   const id = `exclusions-${++sequence}`;
   const next: SessionAuthority = {
-    userId: id, sessionId: id,
+    userId: id,
+    sessionId: id,
     isCurrent: () => session === next,
     getToken: async () => 'fixture-token',
   };
@@ -16,7 +17,7 @@ function replaceAccount() {
 }
 
 vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/identity/useSessionSnapshot')>()),
+  ...(await importOriginal<MockedModule0>()),
   useSessionSnapshot: () => () => session,
 }));
 
@@ -27,10 +28,11 @@ const fetchStoredPreferenceNamespace = vi.fn(async () => ({
 const savePreferenceNamespace = vi.fn(async () => undefined);
 
 vi.mock('@/app/settings/_lib/preferences-client', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/app/settings/_lib/preferences-client')>()),
+  ...(await importOriginal<MockedModule1>()),
   fetchOwnedPreferenceNamespace: (_owner: unknown, ...args: unknown[]) =>
     fetchStoredPreferenceNamespace(...(args as [])),
-  saveOwnedPreferenceNamespace: (_owner: unknown, ...args: unknown[]) => savePreferenceNamespace(...(args as [])),
+  saveOwnedPreferenceNamespace: (_owner: unknown, ...args: unknown[]) =>
+    savePreferenceNamespace(...(args as [])),
 }));
 
 import { MemoryExclusions } from '../MemoryExclusions';
@@ -84,32 +86,53 @@ describe('memory source suppression control', () => {
 
   it('does not render a retired account read after replacement', async () => {
     let finish!: (value: { excludedTerms: string[]; suppressedSources: string[] }) => void;
-    fetchStoredPreferenceNamespace.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+    fetchStoredPreferenceNamespace.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
     const view = render(<MemoryExclusions />);
-    fetchStoredPreferenceNamespace.mockResolvedValueOnce({ excludedTerms: ['current-account'], suppressedSources: [] });
+    fetchStoredPreferenceNamespace.mockResolvedValueOnce({
+      excludedTerms: ['current-account'],
+      suppressedSources: [],
+    });
     replaceAccount();
     view.rerender(<MemoryExclusions />);
     expect(await screen.findByText('current-account')).toBeVisible();
-    await act(async () => { finish({ excludedTerms: ['old-account'], suppressedSources: ['auto'] }); });
+    await act(async () => {
+      finish({ excludedTerms: ['old-account'], suppressedSources: ['auto'] });
+    });
     expect(screen.queryByText('old-account')).toBeNull();
     expect(screen.getByRole('checkbox', { name: /automatically captured/i })).not.toBeChecked();
   });
 
   it('ignores a retired account save failure and finally cleanup', async () => {
     let fail!: (reason: unknown) => void;
-    savePreferenceNamespace.mockReturnValueOnce(new Promise((_resolve, reject) => { fail = reject; }));
+    savePreferenceNamespace.mockReturnValueOnce(
+      new Promise((_resolve, reject) => {
+        fail = reject;
+      }),
+    );
     const user = userEvent.setup();
     const view = render(<MemoryExclusions />);
     const toggle = screen.getByRole('checkbox', { name: /automatically captured/i });
     await waitFor(() => expect(toggle).toBeEnabled());
     await user.click(toggle);
     await waitFor(() => expect(savePreferenceNamespace).toHaveBeenCalledTimes(1));
-    fetchStoredPreferenceNamespace.mockResolvedValueOnce({ excludedTerms: ['current-account'], suppressedSources: [] });
+    fetchStoredPreferenceNamespace.mockResolvedValueOnce({
+      excludedTerms: ['current-account'],
+      suppressedSources: [],
+    });
     replaceAccount();
     view.rerender(<MemoryExclusions />);
     expect(await screen.findByText('current-account')).toBeVisible();
-    await act(async () => { fail(new Error('old-account failure')); });
+    await act(async () => {
+      fail(new Error('old-account failure'));
+    });
     expect(screen.queryByRole('alert')).toBeNull();
     expect(screen.getByRole('checkbox', { name: /automatically captured/i })).toBeEnabled();
   });
 });
+
+type MockedModule0 = typeof import('@/lib/identity/useSessionSnapshot');
+type MockedModule1 = typeof import('@/app/settings/_lib/preferences-client');

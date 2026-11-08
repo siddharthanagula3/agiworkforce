@@ -32,7 +32,8 @@ vi.mock('@/lib/logger', () => ({
   shouldUsePrettyLogTransport: vi.fn(),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule0>()),
   getClerkAuthUser: vi.fn(),
   getClerkAuthorizedParties: vi.fn(),
   getOptionalAuthUser: vi.fn(),
@@ -136,3 +137,5 @@ describe('/api/finance/overview', () => {
     expect(mocks.readFinanceOverview).toHaveBeenCalledWith('user-1', '30d');
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/api-auth');

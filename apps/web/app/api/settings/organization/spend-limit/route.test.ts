@@ -24,7 +24,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/error-handler', () => ({
+vi.mock('@/lib/error-handler', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule0>()),
   withErrorHandler: (handler: (request: NextRequest) => Promise<Response>) => handler,
 }));
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mocks.scoped }));
@@ -32,7 +33,8 @@ vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => mocks.privilegedDb }))
 vi.mock('@/lib/services/active-workspace-service', () => ({
   resolveActiveOrganizationId: mocks.savedSelection,
 }));
-vi.mock('@/lib/services/org-entitlements', () => ({
+vi.mock('@/lib/services/org-entitlements', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule0>()),
   getOrganizationEntitlements: vi.fn(),
   getSharedProjectLimitErrorMessage: vi.fn(),
   isOrgResourceLimitError: vi.fn(),
@@ -46,8 +48,14 @@ vi.mock('@/lib/services/organization-permission-service', () => ({
 }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mocks.csrf }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.rateLimit }));
-vi.mock('@/lib/cors', () => ({ handleCorsPreflightRequest: vi.fn() }));
-vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: mocks.audit }));
+vi.mock('@/lib/cors', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule2>()),
+  handleCorsPreflightRequest: vi.fn(),
+}));
+vi.mock('@/lib/security-audit', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule1>()),
+  recordAuditEvent: mocks.audit,
+}));
 vi.mock('@/lib/services/spend-limit-service', () => ({
   readSpendState: mocks.read,
   upsertSpendLimit: mocks.upsert,
@@ -123,78 +131,101 @@ beforeEach(() => {
 
 // These are forwarding tests: getUserScopedDb is the auth/scope boundary, not a header parser.
 describe('spend-limit forwards the first resolved workspace', () => {
-  it.each(['GET', 'PUT', 'DELETE'] as const)('%s binds membership, gates and storage to B, not saved A', async (method) => {
-    const req = request(method);
-    const response = await handlers[method](req);
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({
-      organizationId: RESOLVED_B,
-      canManageLimit: true,
-      currentUserRole: 'admin',
-      state,
-    });
-    expect(mocks.scoped).toHaveBeenCalledExactlyOnceWith(req);
-    expect(mocks.query).toHaveBeenCalledTimes(1);
-    expect(mocks.savedSelection).not.toHaveBeenCalled();
-    expect(mocks.teamAccess).toHaveBeenCalledExactlyOnceWith(db, USER, RESOLVED_B);
-    expect(mocks.read).toHaveBeenCalledExactlyOnceWith(db, RESOLVED_B);
-    if (method === 'GET') {
-      expect(mocks.permissions).toHaveBeenCalledExactlyOnceWith(RESOLVED_B, USER);
-      expect(mocks.permission).not.toHaveBeenCalled();
-      expect(mocks.upsert).not.toHaveBeenCalled();
-      expect(mocks.remove).not.toHaveBeenCalled();
-      expect(mocks.audit).not.toHaveBeenCalled();
-    } else {
-      expect(mocks.permission).toHaveBeenCalledExactlyOnceWith(
-        RESOLVED_B, USER, 'policy.manage', expect.any(String),
-      );
-      expect(mocks.audit).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
-        userId: USER,
+  it.each(['GET', 'PUT', 'DELETE'] as const)(
+    '%s binds membership, gates and storage to B, not saved A',
+    async (method) => {
+      const req = request(method);
+      const response = await handlers[method](req);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({
         organizationId: RESOLVED_B,
-        request: req,
-        eventType: 'admin_policy_changed',
-        detail: expect.objectContaining({ resourceId: RESOLVED_B }),
-      }));
-      if (method === 'PUT') {
-        expect(mocks.upsert).toHaveBeenCalledExactlyOnceWith(mocks.privilegedDb, RESOLVED_B, {
-          monthlyCapCents: Math.ceil(centsFromCredits(input.monthlyCapCredits)),
-          enforcement: 'block',
-          alertThresholdPct: 80,
-        }, USER);
-        expect(mocks.remove).not.toHaveBeenCalled();
-      } else {
-        expect(mocks.remove).toHaveBeenCalledExactlyOnceWith(mocks.privilegedDb, RESOLVED_B);
+        canManageLimit: true,
+        currentUserRole: 'admin',
+        state,
+      });
+      expect(mocks.scoped).toHaveBeenCalledExactlyOnceWith(req);
+      expect(mocks.query).toHaveBeenCalledTimes(1);
+      expect(mocks.savedSelection).not.toHaveBeenCalled();
+      expect(mocks.teamAccess).toHaveBeenCalledExactlyOnceWith(db, USER, RESOLVED_B);
+      expect(mocks.read).toHaveBeenCalledExactlyOnceWith(db, RESOLVED_B);
+      if (method === 'GET') {
+        expect(mocks.permissions).toHaveBeenCalledExactlyOnceWith(RESOLVED_B, USER);
+        expect(mocks.permission).not.toHaveBeenCalled();
         expect(mocks.upsert).not.toHaveBeenCalled();
+        expect(mocks.remove).not.toHaveBeenCalled();
+        expect(mocks.audit).not.toHaveBeenCalled();
+      } else {
+        expect(mocks.permission).toHaveBeenCalledExactlyOnceWith(
+          RESOLVED_B,
+          USER,
+          'policy.manage',
+          expect.any(String),
+        );
+        expect(mocks.audit).toHaveBeenCalledExactlyOnceWith(
+          expect.objectContaining({
+            userId: USER,
+            organizationId: RESOLVED_B,
+            request: req,
+            eventType: 'admin_policy_changed',
+            detail: expect.objectContaining({ resourceId: RESOLVED_B }),
+          }),
+        );
+        if (method === 'PUT') {
+          expect(mocks.upsert).toHaveBeenCalledExactlyOnceWith(
+            mocks.privilegedDb,
+            RESOLVED_B,
+            {
+              monthlyCapCents: Math.ceil(centsFromCredits(input.monthlyCapCredits)),
+              enforcement: 'block',
+              alertThresholdPct: 80,
+            },
+            USER,
+          );
+          expect(mocks.remove).not.toHaveBeenCalled();
+        } else {
+          expect(mocks.remove).toHaveBeenCalledExactlyOnceWith(mocks.privilegedDb, RESOLVED_B);
+          expect(mocks.upsert).not.toHaveBeenCalled();
+        }
       }
-    }
-  });
+    },
+  );
 
-  it.each(['GET', 'PUT', 'DELETE'] as const)('%s refuses resolved Personal despite saved A', async (method) => {
-    mocks.scoped.mockResolvedValue({ db, userId: USER, organizationId: null });
-    await expect(handlers[method](request(method, MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE)))
-      .rejects.toMatchObject({ statusCode: 403 });
-    expect(mocks.query).not.toHaveBeenCalled();
-    expect(mocks.savedSelection).not.toHaveBeenCalled();
-    expect(mocks.teamAccess).not.toHaveBeenCalled();
-    expect(mocks.permission).not.toHaveBeenCalled();
-    expect(mocks.permissions).not.toHaveBeenCalled();
-    expectNoStorageOrAudit();
-  });
+  it.each(['GET', 'PUT', 'DELETE'] as const)(
+    '%s refuses resolved Personal despite saved A',
+    async (method) => {
+      mocks.scoped.mockResolvedValue({ db, userId: USER, organizationId: null });
+      await expect(
+        handlers[method](request(method, MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE)),
+      ).rejects.toMatchObject({ statusCode: 403 });
+      expect(mocks.query).not.toHaveBeenCalled();
+      expect(mocks.savedSelection).not.toHaveBeenCalled();
+      expect(mocks.teamAccess).not.toHaveBeenCalled();
+      expect(mocks.permission).not.toHaveBeenCalled();
+      expect(mocks.permissions).not.toHaveBeenCalled();
+      expectNoStorageOrAudit();
+    },
+  );
 
-  it.each(['GET', 'PUT', 'DELETE'] as const)('%s retains the headerless first resolution when saved selection differs', async (method) => {
-    await handlers[method](request(method, null));
-    expect(mocks.scoped).toHaveBeenCalledTimes(1);
-    expect(mocks.savedSelection).not.toHaveBeenCalled();
-    expect(mocks.read).toHaveBeenCalledExactlyOnceWith(db, RESOLVED_B);
-  });
+  it.each(['GET', 'PUT', 'DELETE'] as const)(
+    '%s retains the headerless first resolution when saved selection differs',
+    async (method) => {
+      await handlers[method](request(method, null));
+      expect(mocks.scoped).toHaveBeenCalledTimes(1);
+      expect(mocks.savedSelection).not.toHaveBeenCalled();
+      expect(mocks.read).toHaveBeenCalledExactlyOnceWith(db, RESOLVED_B);
+    },
+  );
 
-  it.each(['GET', 'PUT', 'DELETE'] as const)('%s refuses missing active B membership before gates or storage', async (method) => {
-    mocks.query.mockResolvedValue([]);
-    await expect(handlers[method](request(method))).rejects.toMatchObject({ statusCode: 403 });
-    expect(mocks.teamAccess).not.toHaveBeenCalled();
-    expect(mocks.permission).not.toHaveBeenCalled();
-    expectNoStorageOrAudit();
-  });
+  it.each(['GET', 'PUT', 'DELETE'] as const)(
+    '%s refuses missing active B membership before gates or storage',
+    async (method) => {
+      mocks.query.mockResolvedValue([]);
+      await expect(handlers[method](request(method))).rejects.toMatchObject({ statusCode: 403 });
+      expect(mocks.teamAccess).not.toHaveBeenCalled();
+      expect(mocks.permission).not.toHaveBeenCalled();
+      expectNoStorageOrAudit();
+    },
+  );
 
   it.each(['GET', 'PUT', 'DELETE'] as const)('%s honors B entitlement denial', async (method) => {
     mocks.teamAccess.mockRejectedValue(createError.forbidden('B plan is ineligible'));
@@ -216,20 +247,26 @@ describe('spend-limit forwards the first resolved workspace', () => {
   it('GET reports B read-only permission without mutating its limit', async () => {
     mocks.permissions.mockResolvedValue(new Set());
     const response = await GET(request('GET'));
-    expect(await response.json()).toMatchObject({ organizationId: RESOLVED_B, canManageLimit: false });
+    expect(await response.json()).toMatchObject({
+      organizationId: RESOLVED_B,
+      canManageLimit: false,
+    });
     expect(mocks.permissions).toHaveBeenCalledExactlyOnceWith(RESOLVED_B, USER);
     expect(mocks.upsert).not.toHaveBeenCalled();
     expect(mocks.remove).not.toHaveBeenCalled();
     expect(mocks.audit).not.toHaveBeenCalled();
   });
 
-  it.each(['PUT', 'DELETE'] as const)('%s returns CSRF refusal before resolving scope', async (method) => {
-    const refusal = NextResponse.json({ error: 'CSRF' }, { status: 403 });
-    mocks.csrf.mockResolvedValue(refusal);
-    expect(await handlers[method](request(method))).toBe(refusal);
-    expect(mocks.scoped).not.toHaveBeenCalled();
-    expectNoStorageOrAudit();
-  });
+  it.each(['PUT', 'DELETE'] as const)(
+    '%s returns CSRF refusal before resolving scope',
+    async (method) => {
+      const refusal = NextResponse.json({ error: 'CSRF' }, { status: 403 });
+      mocks.csrf.mockResolvedValue(refusal);
+      expect(await handlers[method](request(method))).toBe(refusal);
+      expect(mocks.scoped).not.toHaveBeenCalled();
+      expectNoStorageOrAudit();
+    },
+  );
 
   it.each(['GET', 'PUT', 'DELETE'] as const)('%s preserves rate-limit refusal', async (method) => {
     const refusal = NextResponse.json({ error: 'rate limit' }, { status: 429 });
@@ -259,14 +296,17 @@ describe('spend-limit forwards the first resolved workspace', () => {
     expectNoStorageOrAudit();
   });
 
-  it.each(['GET', 'PUT', 'DELETE'] as const)('%s honors authentication boundary refusal', async (method) => {
-    const failure = createError.forbidden('Authentication boundary refused');
-    mocks.scoped.mockRejectedValue(failure);
-    await expect(handlers[method](request(method))).rejects.toBe(failure);
-    expect(mocks.query).not.toHaveBeenCalled();
-    expect(mocks.savedSelection).not.toHaveBeenCalled();
-    expectNoStorageOrAudit();
-  });
+  it.each(['GET', 'PUT', 'DELETE'] as const)(
+    '%s honors authentication boundary refusal',
+    async (method) => {
+      const failure = createError.forbidden('Authentication boundary refused');
+      mocks.scoped.mockRejectedValue(failure);
+      await expect(handlers[method](request(method))).rejects.toBe(failure);
+      expect(mocks.query).not.toHaveBeenCalled();
+      expect(mocks.savedSelection).not.toHaveBeenCalled();
+      expectNoStorageOrAudit();
+    },
+  );
 
   it('DELETE does not audit a missing cap as a removal', async () => {
     mocks.remove.mockResolvedValue(false);
@@ -275,3 +315,9 @@ describe('spend-limit forwards the first resolved workspace', () => {
     expect(mocks.audit).not.toHaveBeenCalled();
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/services/org-entitlements');
+type CompleteMockModule1 = typeof import('@/lib/security-audit');
+
+type RetainedMockModule0 = typeof import('@/lib/error-handler');
+type RetainedMockModule2 = typeof import('@/lib/cors');

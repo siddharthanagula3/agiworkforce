@@ -1,3 +1,4 @@
+import { localModelId } from '@agiworkforce/local-runtime-contract';
 import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest';
 import type React from 'react';
 import { render, screen, fireEvent, act, waitFor, within } from '@testing-library/react';
@@ -118,7 +119,9 @@ vi.mock('./MessageBubble', () => ({
     };
   }) => (
     <div
-      ref={() => { if (onReadAloud) ttsMock.callbacks.set(message.id, onReadAloud); }}
+      ref={() => {
+        if (onReadAloud) ttsMock.callbacks.set(message.id, onReadAloud);
+      }}
       data-testid={`bubble-${message.id}`}
       data-role={message.role}
       data-latest-turn={isLatestTurn ? 'true' : undefined}
@@ -959,11 +962,15 @@ describe('ChatMessageList actions', () => {
     render(<ChatMessageList messages={messages} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'read-msg-1' }));
-    expect(ttsMock.speak).toHaveBeenCalledWith('First response', { canSpeak: expect.any(Function) });
+    expect(ttsMock.speak).toHaveBeenCalledWith('First response', {
+      canSpeak: expect.any(Function),
+    });
     expect(screen.getByRole('button', { name: 'stop-msg-1' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'read-msg-2' }));
-    expect(ttsMock.speak).toHaveBeenLastCalledWith('Second response', { canSpeak: expect.any(Function) });
+    expect(ttsMock.speak).toHaveBeenLastCalledWith('Second response', {
+      canSpeak: expect.any(Function),
+    });
     expect(screen.getByRole('button', { name: 'stop-msg-2' })).toBeInTheDocument();
   });
 
@@ -1858,7 +1865,6 @@ describe('ChatMessageList safety refusal notice', () => {
   });
 });
 
-
 describe('ChatMessageList current read-aloud provenance', () => {
   it('reads current text instead of content supplied by a retained row handler', () => {
     const first = makeMessage({ id: 'current', role: 'assistant', content: 'Old' });
@@ -1873,7 +1879,13 @@ describe('ChatMessageList current read-aloud provenance', () => {
     const first = makeMessage({ id: 'current', role: 'assistant', content: 'Old' });
     const view = render(<ChatMessageList messages={[first]} />);
     const retained = ttsMock.callbacks.get('current')!;
-    view.rerender(<ChatMessageList messages={[{ ...first, model: 'local:ollama/llama3', isStreaming: true }]} />);
+    view.rerender(
+      <ChatMessageList
+        messages={[
+          { ...first, model: localModelId('ollama', 'privacy-test-model'), isStreaming: true },
+        ]}
+      />,
+    );
     act(() => retained('current', 'Old'));
     expect(ttsMock.speak).not.toHaveBeenCalled();
     view.rerender(<ChatMessageList messages={[]} />);
@@ -1882,7 +1894,11 @@ describe('ChatMessageList current read-aloud provenance', () => {
   });
 
   it('gives the hook a live predicate that revokes when its row becomes restricted', () => {
-    const first = makeMessage({ id: 'current', role: 'assistant', content: 'Allowed legacy reply' });
+    const first = makeMessage({
+      id: 'current',
+      role: 'assistant',
+      content: 'Allowed legacy reply',
+    });
     const view = render(<ChatMessageList messages={[first]} />);
     fireEvent.click(screen.getByRole('button', { name: 'read-current' }));
     const predicate = ttsMock.speak.mock.calls[0]![1]!.canSpeak!;

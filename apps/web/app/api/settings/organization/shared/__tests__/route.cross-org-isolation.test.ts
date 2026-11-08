@@ -11,7 +11,8 @@ const { mockQuery, mockNeonQuery, mockGetUserScopedDb } = vi.hoisted(() => ({
 }));
 
 const callerRole = vi.hoisted(() => ({ value: 'admin' as string }));
-vi.mock('@/lib/services/organization-permission-service', () => ({
+vi.mock('@/lib/services/organization-permission-service', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule0>()),
   resolveOrganizationPermissions: vi.fn(async () =>
     callerRole.value === 'member'
       ? new Set(['content.read', 'content.share'])
@@ -20,7 +21,8 @@ vi.mock('@/lib/services/organization-permission-service', () => ({
 }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule1>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mockGetUserScopedDb }));
@@ -202,3 +204,7 @@ describe('organization shared surface · cross-org isolation', () => {
     expect(insert).toBeUndefined();
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/services/organization-permission-service');
+
+type RetainedMockModule1 = typeof import('@/lib/logger');

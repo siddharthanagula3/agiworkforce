@@ -420,10 +420,11 @@ async function postWebhook(
 ): Promise<{ status: number | null; error: string | null }> {
   signal?.throwIfAborted();
   let response: Response;
+  let timeout: AbortSignal | undefined;
   try {
     await assertResolvedPublicHostname(url);
     signal?.throwIfAborted();
-    const timeout = AbortSignal.timeout(DELIVERY_TIMEOUT_MS);
+    timeout = AbortSignal.timeout(DELIVERY_TIMEOUT_MS);
     response = await pinnedPublicFetch(url, {
       method: 'POST',
       headers,
@@ -436,7 +437,7 @@ async function postWebhook(
     if (error instanceof EgressPolicyError) {
       return { status: null, error: 'The endpoint now resolves to a private address.' };
     }
-    const timedOut = error instanceof Error && error.name === 'TimeoutError';
+    const timedOut = timeout?.aborted === true;
     return {
       status: null,
       error: timedOut

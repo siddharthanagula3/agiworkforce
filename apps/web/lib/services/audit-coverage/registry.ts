@@ -329,6 +329,11 @@ export const REQUIRED_ROUTE_AUDIT_EVENTS: readonly RequiredRouteAuditEvents[] = 
   { route: 'webhooks/slack-interactions/route.ts', eventTypes: ['tool_approval_decided'] },
   { route: 'settings/spend-limit/route.ts', eventTypes: ['spend_limit_changed'] },
   { route: 'artifacts/publish/[token]/viewers/route.ts', eventTypes: ['share_link_updated'] },
+  { route: 'artifacts/publish/route.ts', eventTypes: ['share_link_updated'] },
+  {
+    route: 'artifacts/publish/[token]/versions/[version]/route.ts',
+    eventTypes: ['share_link_updated'],
+  },
 ] as const;
 
 export type AuditedSurface = 'chrome' | 'vscode' | 'cli' | 'desktop' | 'mobile';

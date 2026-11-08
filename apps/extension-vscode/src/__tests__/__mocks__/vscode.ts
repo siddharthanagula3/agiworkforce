@@ -141,6 +141,15 @@ class Range {
   }
 }
 
+class Diagnostic {
+  source?: string;
+  constructor(
+    public range: Range,
+    public message: string,
+    public severity: number = DiagnosticSeverity.Error,
+  ) {}
+}
+
 class CodeLens {
   constructor(
     public readonly range: Range,
@@ -786,6 +795,7 @@ export class RelativePattern {
 export const version = '1.95.0';
 
 export {
+  Diagnostic,
   CancellationTokenSource,
   Disposable,
   EventEmitter,

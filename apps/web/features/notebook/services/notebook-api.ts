@@ -161,9 +161,8 @@ export function createNotebookApi(dependencies: NotebookApiDependencies = {}): N
   const fetchImpl = dependencies.fetchImpl ?? fetch;
   const getCsrfToken = dependencies.getCsrfToken ?? getBrowserCsrfToken;
   const assertCurrent = dependencies.assertCurrent ?? (() => undefined);
-  const mutationHeaders = async () => dependencies.bearerAuthenticated
-    ? {}
-    : { 'x-csrf-token': await getCsrfToken() };
+  const mutationHeaders = async (): Promise<Record<string, string>> =>
+    dependencies.bearerAuthenticated ? {} : { 'x-csrf-token': await getCsrfToken() };
 
   async function request<T>(path: string, init: RequestInit, schema: z.ZodType<T>): Promise<T> {
     let response: Response;
@@ -176,10 +175,7 @@ export function createNotebookApi(dependencies: NotebookApiDependencies = {}): N
     } catch (error) {
       assertCurrent();
       if (error instanceof DOMException && error.name === 'AbortError') throw error;
-      throw new NotebookApiError(
-        'Could not confirm the managed Code response.',
-        0,
-      );
+      throw new NotebookApiError('Could not confirm the managed Code response.', 0);
     }
     const body = await responseBody(response);
     assertCurrent();
@@ -197,7 +193,7 @@ export function createNotebookApi(dependencies: NotebookApiDependencies = {}): N
         `/api/code/sessions/${encodeURIComponent(sessionId)}/notebook/execute`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...await mutationHeaders() },
+          headers: { 'Content-Type': 'application/json', ...(await mutationHeaders()) },
           body: JSON.stringify(input),
           signal,
         },
@@ -209,7 +205,7 @@ export function createNotebookApi(dependencies: NotebookApiDependencies = {}): N
         `/api/code/sessions/${encodeURIComponent(sessionId)}/notebook/run-all`,
         {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...await mutationHeaders() },
+          headers: { 'Content-Type': 'application/json', ...(await mutationHeaders()) },
           body: JSON.stringify(input),
           signal,
         },

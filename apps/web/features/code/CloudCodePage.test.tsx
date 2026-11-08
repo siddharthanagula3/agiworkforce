@@ -50,7 +50,7 @@ const codeIdentity = vi.hoisted(() => ({
   },
 }));
 vi.mock('@clerk/nextjs', async (importOriginal) => ({
-  ...await importOriginal<typeof import('@clerk/nextjs')>(),
+  ...(await importOriginal()),
   useAuth: () => codeIdentity.auth,
   useClerk: () => codeIdentity.sdk,
 }));
@@ -216,11 +216,18 @@ vi.mock('@/features/desktop-host', async (importOriginal) => ({
 }));
 
 beforeEach(() => {
-  codeIdentity.auth = { isLoaded: true, isSignedIn: true, userId: 'account-a', sessionId: 'auth-session-a' };
+  codeIdentity.auth = {
+    isLoaded: true,
+    isSignedIn: true,
+    userId: 'account-a',
+    sessionId: 'auth-session-a',
+  };
   codeIdentity.sdk.loaded = true;
   codeIdentity.sdk.user = { id: 'account-a' };
   codeIdentity.sdk.session = {
-    id: 'auth-session-a', user: { id: 'account-a' }, getToken: async () => 'token-a',
+    id: 'auth-session-a',
+    user: { id: 'account-a' },
+    getToken: async () => 'token-a',
   };
   navigationState.search = '';
   useSettingsStore.setState({ codeFirstRunCompleted: true, codeRailPins: {} });
@@ -412,7 +419,10 @@ function createApi(overrides: Partial<CloudCodeApi> = {}): CloudCodeApi {
 function codeDeferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (reason: unknown) => void;
-  const promise = new Promise<T>((done, fail) => { resolve = done; reject = fail; });
+  const promise = new Promise<T>((done, fail) => {
+    resolve = done;
+    reject = fail;
+  });
   return { promise, resolve, reject };
 }
 
@@ -420,7 +430,9 @@ function changeCodeIdentity(userId: string, sessionId: string) {
   codeIdentity.auth = { ...codeIdentity.auth, userId, sessionId };
   codeIdentity.sdk.user = { id: userId };
   codeIdentity.sdk.session = {
-    id: sessionId, user: { id: userId }, getToken: async () => 'token-b',
+    id: sessionId,
+    user: { id: userId },
+    getToken: async () => 'token-b',
   };
 }
 
@@ -449,39 +461,57 @@ describe('CloudCodePage', () => {
     greetingResolved = true;
   });
 
-  it.each(['account', 'session'] as const)('drops a late list after an authenticated %s switch', async (switchKind) => {
-    const old = codeDeferred<Awaited<ReturnType<CloudCodeApi['list']>>>();
-    const api = createApi({ list: vi.fn(() => (
-      codeIdentity.auth.sessionId === 'auth-session-a'
-        ? old.promise
-        : Promise.resolve({ availability, sessions: [], runtimes: [] })
-    )) });
-    const { rerender } = render(<CloudCodePage api={api} />);
-    await waitFor(() => expect(api.list).toHaveBeenCalled());
-    changeCodeIdentity(switchKind === 'account' ? 'account-b' : 'account-a', 'auth-session-b');
-    rerender(<CloudCodePage api={api} />);
-    await screen.findByText('No cloud sessions yet.');
-    await act(async () => {
-      old.resolve({ availability, sessions: [{ ...session, title: 'Old account private session' }], runtimes: [] });
-    });
-    expect(screen.queryByText('Old account private session')).not.toBeInTheDocument();
-    expect(screen.getByText('No cloud sessions yet.')).toBeInTheDocument();
-  });
+  it.each(['account', 'session'] as const)(
+    'drops a late list after an authenticated %s switch',
+    async (switchKind) => {
+      const old = codeDeferred<Awaited<ReturnType<CloudCodeApi['list']>>>();
+      const api = createApi({
+        list: vi.fn(() =>
+          codeIdentity.auth.sessionId === 'auth-session-a'
+            ? old.promise
+            : Promise.resolve({ availability, sessions: [], runtimes: [] }),
+        ),
+      });
+      const { rerender } = render(<CloudCodePage api={api} />);
+      await waitFor(() => expect(api.list).toHaveBeenCalled());
+      changeCodeIdentity(switchKind === 'account' ? 'account-b' : 'account-a', 'auth-session-b');
+      rerender(<CloudCodePage api={api} />);
+      await screen.findByText('No cloud sessions yet.');
+      await act(async () => {
+        old.resolve({
+          availability,
+          sessions: [{ ...session, title: 'Old account private session' }],
+          runtimes: [],
+        });
+      });
+      expect(screen.queryByText('Old account private session')).not.toBeInTheDocument();
+      expect(screen.getByText('No cloud sessions yet.')).toBeInTheDocument();
+    },
+  );
 
   it('does not publish an old turn approval or task into another selected session', async () => {
     const user = userEvent.setup();
     const old = codeDeferred<CloudCodeAgentTurn>();
     const nextSession: CloudCodeSession = {
-      ...session, id: '33333333-3333-4333-8333-333333333333', title: 'Second session',
+      ...session,
+      id: '33333333-3333-4333-8333-333333333333',
+      title: 'Second session',
     };
     const api = createApi({
       list: vi.fn(async () => ({ availability, sessions: [session, nextSession], runtimes: [] })),
-      get: vi.fn(async (id) => ({ session: id === session.id ? session : nextSession, terminalEntries: [], turns: [] })),
+      get: vi.fn(async (id) => ({
+        session: id === session.id ? session : nextSession,
+        terminalEntries: [],
+        turns: [],
+      })),
       startAgentTurn: vi.fn(() => old.promise),
     });
     const { rerender } = render(<CloudCodePage api={api} sessionId={session.id} />);
     await screen.findByRole('heading', { name: session.title });
-    await user.type(await screen.findByRole('textbox', { name: 'Describe a task or ask a question' }), 'Old session task');
+    await user.type(
+      await screen.findByRole('textbox', { name: 'Describe a task or ask a question' }),
+      'Old session task',
+    );
     await user.click(screen.getByRole('button', { name: 'Start the task' }));
     await waitFor(() => expect(api.startAgentTurn).toHaveBeenCalled());
     rerender(<CloudCodePage api={api} sessionId={nextSession.id} />);
@@ -489,136 +519,215 @@ describe('CloudCodePage', () => {
     await act(async () => {
       old.resolve({
         turnId: '22222222-2222-4222-8222-222222222222',
-        stopReason: 'awaiting_approval', stepsUsed: 1, finalMessage: 'Old session result', steps: [],
+        stopReason: 'awaiting_approval',
+        stepsUsed: 1,
+        finalMessage: 'Old session result',
+        steps: [],
         pendingApproval: {
-          stepIndex: 0, toolUseId: 'old-tool', command: 'old-private-command', reason: 'Old session approval reason',
+          stepIndex: 0,
+          toolUseId: 'old-tool',
+          command: 'old-private-command',
+          reason: 'Old session approval reason',
         },
       });
     });
     expect(screen.queryByText('Old session approval reason')).not.toBeInTheDocument();
     expect(screen.queryByText('Old session result')).not.toBeInTheDocument();
     expect(screen.queryByText('Old session task')).not.toBeInTheDocument();
-    expect(screen.getByRole('textbox', { name: 'Describe a task or ask a question' })).not.toHaveValue('Old session task');
+    expect(
+      screen.getByRole('textbox', { name: 'Describe a task or ask a question' }),
+    ).not.toHaveValue('Old session task');
   });
 
-  it.each(['resolve', 'reject'] as const)('keeps the replacement turn busy after an A-to-B-to-A old %s', async (outcome) => {
-    const user = userEvent.setup();
-    const old = codeDeferred<CloudCodeAgentTurn>();
-    const replacement = codeDeferred<CloudCodeAgentTurn>();
-    const nextSession: CloudCodeSession = {
-      ...session, id: '33333333-3333-4333-8333-333333333333', title: 'Second session',
-    };
-    const api = createApi({
-      list: vi.fn(async () => ({ availability, sessions: [session, nextSession], runtimes: [] })),
-      get: vi.fn(async (id) => ({ session: id === session.id ? session : nextSession, terminalEntries: [], turns: [] })),
-      startAgentTurn: vi.fn().mockReturnValueOnce(old.promise).mockReturnValueOnce(replacement.promise),
-    });
-    const { rerender } = render(<CloudCodePage api={api} sessionId={session.id} />);
-    await screen.findByRole('heading', { name: session.title });
-    await user.type(await screen.findByRole('textbox', { name: CODE_COPY.composerPlaceholder }), 'Original task');
-    await user.click(screen.getByRole('button', { name: CODE_COPY.send }));
-    await waitFor(() => expect(api.startAgentTurn).toHaveBeenCalledTimes(1));
-    rerender(<CloudCodePage api={api} sessionId={nextSession.id} />);
-    await screen.findByRole('heading', { name: nextSession.title });
-    rerender(<CloudCodePage api={api} sessionId={session.id} />);
-    await screen.findByRole('heading', { name: session.title });
-    const field = await screen.findByRole('textbox', { name: CODE_COPY.composerPlaceholder });
-    await user.clear(field);
-    await user.type(field, 'Replacement task');
-    await user.click(screen.getByRole('button', { name: CODE_COPY.send }));
-    await waitFor(() => expect(api.startAgentTurn).toHaveBeenCalledTimes(2));
-    await user.type(field, 'Unsent next task');
-    await act(async () => {
-      if (outcome === 'reject') old.reject(new Error('The original turn failed.'));
-      else old.resolve({
-        turnId: '22222222-2222-4222-8222-222222222222',
-        stopReason: 'awaiting_approval', stepsUsed: 1, finalMessage: 'Original result', steps: [],
-        pendingApproval: { stepIndex: 0, toolUseId: 'old-tool', command: 'old-command', reason: 'Original approval' },
+  it.each(['resolve', 'reject'] as const)(
+    'keeps the replacement turn busy after an A-to-B-to-A old %s',
+    async (outcome) => {
+      const user = userEvent.setup();
+      const old = codeDeferred<CloudCodeAgentTurn>();
+      const replacement = codeDeferred<CloudCodeAgentTurn>();
+      const nextSession: CloudCodeSession = {
+        ...session,
+        id: '33333333-3333-4333-8333-333333333333',
+        title: 'Second session',
+      };
+      const api = createApi({
+        list: vi.fn(async () => ({ availability, sessions: [session, nextSession], runtimes: [] })),
+        get: vi.fn(async (id) => ({
+          session: id === session.id ? session : nextSession,
+          terminalEntries: [],
+          turns: [],
+        })),
+        startAgentTurn: vi
+          .fn()
+          .mockReturnValueOnce(old.promise)
+          .mockReturnValueOnce(replacement.promise),
       });
-    });
-    expect(screen.getByRole('button', { name: CODE_COPY.stopTurn })).toBeEnabled();
-    expect(field).toHaveValue('Unsent next task');
-    expect(screen.queryByText('Original approval')).not.toBeInTheDocument();
-    expect(screen.queryByText('Original result')).not.toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: CODE_COPY.stopTurn }));
-    await waitFor(() => expect(api.cancelAgentTurn).toHaveBeenCalledWith(session.id));
-    await act(async () => replacement.resolve({
-      turnId: '44444444-4444-4444-8444-444444444444', stopReason: 'done',
-      stepsUsed: 1, finalMessage: 'Replacement result', steps: [],
-    }));
-    expect(await screen.findByText('Replacement result')).toBeInTheDocument();
-  });
+      const { rerender } = render(<CloudCodePage api={api} sessionId={session.id} />);
+      await screen.findByRole('heading', { name: session.title });
+      await user.type(
+        await screen.findByRole('textbox', { name: CODE_COPY.composerPlaceholder }),
+        'Original task',
+      );
+      await user.click(screen.getByRole('button', { name: CODE_COPY.send }));
+      await waitFor(() => expect(api.startAgentTurn).toHaveBeenCalledTimes(1));
+      rerender(<CloudCodePage api={api} sessionId={nextSession.id} />);
+      await screen.findByRole('heading', { name: nextSession.title });
+      rerender(<CloudCodePage api={api} sessionId={session.id} />);
+      await screen.findByRole('heading', { name: session.title });
+      const field = await screen.findByRole('textbox', { name: CODE_COPY.composerPlaceholder });
+      await user.clear(field);
+      await user.type(field, 'Replacement task');
+      await user.click(screen.getByRole('button', { name: CODE_COPY.send }));
+      await waitFor(() => expect(api.startAgentTurn).toHaveBeenCalledTimes(2));
+      await user.type(field, 'Unsent next task');
+      await act(async () => {
+        if (outcome === 'reject') old.reject(new Error('The original turn failed.'));
+        else
+          old.resolve({
+            turnId: '22222222-2222-4222-8222-222222222222',
+            stopReason: 'awaiting_approval',
+            stepsUsed: 1,
+            finalMessage: 'Original result',
+            steps: [],
+            pendingApproval: {
+              stepIndex: 0,
+              toolUseId: 'old-tool',
+              command: 'old-command',
+              reason: 'Original approval',
+            },
+          });
+      });
+      expect(screen.getByRole('button', { name: CODE_COPY.stopTurn })).toBeEnabled();
+      expect(field).toHaveValue('Unsent next task');
+      expect(screen.queryByText('Original approval')).not.toBeInTheDocument();
+      expect(screen.queryByText('Original result')).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: CODE_COPY.stopTurn }));
+      await waitFor(() => expect(api.cancelAgentTurn).toHaveBeenCalledWith(session.id));
+      await act(async () =>
+        replacement.resolve({
+          turnId: '44444444-4444-4444-8444-444444444444',
+          stopReason: 'done',
+          stepsUsed: 1,
+          finalMessage: 'Replacement result',
+          steps: [],
+        }),
+      );
+      expect(await screen.findByText('Replacement result')).toBeInTheDocument();
+    },
+  );
 
-  it.each(['creating', 'provisioning'] as const)('preserves an edited draft while %s and does not auto-start the old task', async (phase) => {
-    const user = userEvent.setup();
-    const creation = codeDeferred<Awaited<ReturnType<CloudCodeApi['create']>>>();
-    const readiness = codeDeferred<Awaited<ReturnType<CloudCodeApi['get']>>>();
-    const api = createApi({ create: vi.fn(() => creation.promise), get: vi.fn(() => readiness.promise) });
-    render(<CloudCodePage api={api} />);
-    const field = await screen.findByRole('textbox', { name: CODE_COPY.composerPlaceholder });
-    await user.type(field, 'Original task');
-    await user.click(screen.getByRole('button', { name: CODE_COPY.send }));
-    await waitFor(() => expect(api.create).toHaveBeenCalledTimes(1));
-    if (phase === 'provisioning') {
-      await act(async () => creation.resolve({ session: { ...session, state: 'provisioning' }, terminalEntries: [] }));
-      await waitFor(() => expect(api.get).toHaveBeenCalledWith(session.id));
-    }
-    await user.clear(field);
-    await user.type(field, 'Edited task');
-    await act(async () => {
-      if (phase === 'creating') creation.resolve({ session: { ...session, state: 'provisioning' }, terminalEntries: [] });
-      else readiness.resolve({ session, terminalEntries: [], turns: [] });
-    });
-    expect(api.startAgentTurn).not.toHaveBeenCalled();
-    expect(screen.getByRole('textbox', { name: CODE_COPY.composerPlaceholder })).toHaveValue('Edited task');
-    expect(screen.getByRole('button', { name: CODE_COPY.send })).toBeEnabled();
-    if (phase === 'creating') {
-      expect(api.get).not.toHaveBeenCalled();
-      expect(push).not.toHaveBeenCalled();
-    }
-  });
+  it.each(['creating', 'provisioning'] as const)(
+    'preserves an edited draft while %s and does not auto-start the old task',
+    async (phase) => {
+      const user = userEvent.setup();
+      const creation = codeDeferred<Awaited<ReturnType<CloudCodeApi['create']>>>();
+      const readiness = codeDeferred<Awaited<ReturnType<CloudCodeApi['get']>>>();
+      const api = createApi({
+        create: vi.fn(() => creation.promise),
+        get: vi.fn(() => readiness.promise),
+      });
+      render(<CloudCodePage api={api} />);
+      const field = await screen.findByRole('textbox', { name: CODE_COPY.composerPlaceholder });
+      await user.type(field, 'Original task');
+      await user.click(screen.getByRole('button', { name: CODE_COPY.send }));
+      await waitFor(() => expect(api.create).toHaveBeenCalledTimes(1));
+      if (phase === 'provisioning') {
+        await act(async () =>
+          creation.resolve({ session: { ...session, state: 'provisioning' }, terminalEntries: [] }),
+        );
+        await waitFor(() => expect(api.get).toHaveBeenCalledWith(session.id));
+      }
+      await user.clear(field);
+      await user.type(field, 'Edited task');
+      await act(async () => {
+        if (phase === 'creating')
+          creation.resolve({ session: { ...session, state: 'provisioning' }, terminalEntries: [] });
+        else readiness.resolve({ session, terminalEntries: [], turns: [] });
+      });
+      expect(api.startAgentTurn).not.toHaveBeenCalled();
+      expect(screen.getByRole('textbox', { name: CODE_COPY.composerPlaceholder })).toHaveValue(
+        'Edited task',
+      );
+      expect(screen.getByRole('button', { name: CODE_COPY.send })).toBeEnabled();
+      if (phase === 'creating') {
+        expect(api.get).not.toHaveBeenCalled();
+        expect(push).not.toHaveBeenCalled();
+      }
+    },
+  );
 
   it.each([
-    ['delete', 'selection'], ['close', 'selection'], ['delete', 'account'], ['close', 'account'],
-  ] as const)('does not dispatch an old %s confirmation after %s changes', async (action, change) => {
-    const user = userEvent.setup();
-    const original = { ...session, archivedAt: '2026-07-30T12:10:00.000Z' };
-    const nextSession: CloudCodeSession = {
-      ...session, id: '33333333-3333-4333-8333-333333333333', title: 'Second session',
-    };
-    const api = createApi({
-      list: vi.fn(async () => ({ availability, sessions: [original, nextSession], runtimes: [] })),
-      get: vi.fn(async (id) => ({ session: id === session.id ? original : nextSession, terminalEntries: [], turns: [] })),
-    });
-    const { rerender } = render(<CloudCodePage api={api} sessionId={session.id} />);
-    await screen.findByRole('heading', { name: session.title });
-    await user.click(screen.getByRole('button', { name: CODE_COPY.sessionMenu }));
-    await user.click(await screen.findByRole('menuitem', { name: action === 'delete' ? CODE_COPY.deleteSession : CODE_COPY.closeSession }));
-    await screen.findByRole('alertdialog');
-    if (change === 'selection') {
-      rerender(<CloudCodePage api={api} sessionId={nextSession.id} />);
-      await waitFor(() => expect(api.get).toHaveBeenCalledWith(nextSession.id, expect.anything()));
-    } else {
-      codeIdentity.sdk.user = { id: 'account-b' };
-      codeIdentity.sdk.session = { id: 'auth-session-b', user: { id: 'account-b' }, getToken: async () => 'token-b' };
-    }
-    const dialog = screen.getByRole('alertdialog');
-    await user.click(within(dialog).getByRole('button', {
-      name: action === 'delete' ? CODE_COPY.deleteSessionConfirm : CODE_COPY.closeSessionConfirm,
-    }));
-    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
-    expect(api.deleteSession).not.toHaveBeenCalled();
-    expect(api.close).not.toHaveBeenCalled();
-  });
+    ['delete', 'selection'],
+    ['close', 'selection'],
+    ['delete', 'account'],
+    ['close', 'account'],
+  ] as const)(
+    'does not dispatch an old %s confirmation after %s changes',
+    async (action, change) => {
+      const user = userEvent.setup();
+      const original = { ...session, archivedAt: '2026-07-30T12:10:00.000Z' };
+      const nextSession: CloudCodeSession = {
+        ...session,
+        id: '33333333-3333-4333-8333-333333333333',
+        title: 'Second session',
+      };
+      const api = createApi({
+        list: vi.fn(async () => ({
+          availability,
+          sessions: [original, nextSession],
+          runtimes: [],
+        })),
+        get: vi.fn(async (id) => ({
+          session: id === session.id ? original : nextSession,
+          terminalEntries: [],
+          turns: [],
+        })),
+      });
+      const { rerender } = render(<CloudCodePage api={api} sessionId={session.id} />);
+      await screen.findByRole('heading', { name: session.title });
+      await user.click(screen.getByRole('button', { name: CODE_COPY.sessionMenu }));
+      await user.click(
+        await screen.findByRole('menuitem', {
+          name: action === 'delete' ? CODE_COPY.deleteSession : CODE_COPY.closeSession,
+        }),
+      );
+      await screen.findByRole('alertdialog');
+      if (change === 'selection') {
+        rerender(<CloudCodePage api={api} sessionId={nextSession.id} />);
+        await waitFor(() =>
+          expect(api.get).toHaveBeenCalledWith(nextSession.id, expect.anything()),
+        );
+      } else {
+        codeIdentity.sdk.user = { id: 'account-b' };
+        codeIdentity.sdk.session = {
+          id: 'auth-session-b',
+          user: { id: 'account-b' },
+          getToken: async () => 'token-b',
+        };
+      }
+      const dialog = screen.getByRole('alertdialog');
+      await user.click(
+        within(dialog).getByRole('button', {
+          name:
+            action === 'delete' ? CODE_COPY.deleteSessionConfirm : CODE_COPY.closeSessionConfirm,
+        }),
+      );
+      await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+      expect(api.deleteSession).not.toHaveBeenCalled();
+      expect(api.close).not.toHaveBeenCalled();
+    },
+  );
 
   it('does not persist first-run completion from an old account response', async () => {
     useSettingsStore.setState({ codeFirstRunCompleted: false });
     const old = codeDeferred<Awaited<ReturnType<CloudCodeApi['list']>>>();
-    const api = createApi({ list: vi.fn(() => (
-      codeIdentity.auth.sessionId === 'auth-session-a'
-        ? old.promise
-        : Promise.resolve({ availability, sessions: [], runtimes: [] })
-    )) });
+    const api = createApi({
+      list: vi.fn(() =>
+        codeIdentity.auth.sessionId === 'auth-session-a'
+          ? old.promise
+          : Promise.resolve({ availability, sessions: [], runtimes: [] }),
+      ),
+    });
     const { rerender } = render(<CloudCodePage api={api} />);
     await waitFor(() => expect(api.listRepositories).toHaveBeenCalled());
     changeCodeIdentity('account-b', 'auth-session-b');

@@ -2396,11 +2396,13 @@ pub mod connectors {
             return policy;
         }
         let context = CloudClient::policy_context().ok()?;
-        context.with_current(|| {
-            let slot = cache().lock().ok()?;
-            let read = slot.as_ref()?;
-            read.reusable_for(context.owner.as_deref()).flatten()
-        }).flatten()
+        context
+            .with_current(|| {
+                let slot = cache().lock().ok()?;
+                let read = slot.as_ref()?;
+                read.reusable_for(context.owner.as_deref()).flatten()
+            })
+            .flatten()
     }
 
     #[cfg(test)]
@@ -2410,7 +2412,10 @@ pub mod connectors {
     }
 
     #[cfg(test)]
-    pub fn with_test_connector_policy<T>(policy: Option<ConnectorAccessPolicy>, run: impl FnOnce() -> T) -> T {
+    pub fn with_test_connector_policy<T>(
+        policy: Option<ConnectorAccessPolicy>,
+        run: impl FnOnce() -> T,
+    ) -> T {
         struct Restore(Option<Option<ConnectorAccessPolicy>>);
         impl Drop for Restore {
             fn drop(&mut self) {
@@ -2438,12 +2443,17 @@ pub mod connectors {
         } else {
             None
         };
-        context.with_current(|| {
-            if let (Some(owner), Ok(mut slot)) = (context.owner.as_ref(), cache().lock()) {
-                *slot = Some(ConnectorPolicyRead { owner: owner.clone(), policy: policy.clone() });
-            }
-            policy
-        }).ok_or_else(account_changed)
+        context
+            .with_current(|| {
+                if let (Some(owner), Ok(mut slot)) = (context.owner.as_ref(), cache().lock()) {
+                    *slot = Some(ConnectorPolicyRead {
+                        owner: owner.clone(),
+                        policy: policy.clone(),
+                    });
+                }
+                policy
+            })
+            .ok_or_else(account_changed)
     }
 
     fn account_changed() -> CloudError {
@@ -2514,12 +2524,18 @@ pub mod connectors {
                 assert!(result.is_err());
                 assert!(cached_policy().is_none());
             });
-            assert_eq!(TEST_CONNECTOR_POLICY.with(|slot| slot.borrow().clone()), before);
+            assert_eq!(
+                TEST_CONNECTOR_POLICY.with(|slot| slot.borrow().clone()),
+                before
+            );
         }
 
         #[test]
         fn advisory_policy_and_unrestricted_answers_require_the_original_owner() {
-            let read = ConnectorPolicyRead { owner: "deployment_session_a".to_string(), policy: None };
+            let read = ConnectorPolicyRead {
+                owner: "deployment_session_a".to_string(),
+                policy: None,
+            };
             assert_eq!(read.reusable_for(Some("deployment_session_a")), Some(None));
             assert_eq!(read.reusable_for(Some("deployment_session_b")), None);
             assert_eq!(read.reusable_for(None), None);
@@ -2527,14 +2543,23 @@ pub mod connectors {
 
         #[test]
         fn local_policy_never_reuses_an_unidentified_authority() {
-            assert!(!cached_read_reusable(None, LocalToolPolicy::Unrestricted, std::time::Duration::ZERO, None));
             assert!(!cached_read_reusable(
-                Some("deployment_session_a"), LocalToolPolicy::Unrestricted,
-                std::time::Duration::ZERO, Some("deployment_session_b"),
+                None,
+                LocalToolPolicy::Unrestricted,
+                std::time::Duration::ZERO,
+                None
+            ));
+            assert!(!cached_read_reusable(
+                Some("deployment_session_a"),
+                LocalToolPolicy::Unrestricted,
+                std::time::Duration::ZERO,
+                Some("deployment_session_b"),
             ));
             assert!(cached_read_reusable(
-                Some("anonymous_deployment"), LocalToolPolicy::Unrestricted,
-                std::time::Duration::ZERO, Some("anonymous_deployment"),
+                Some("anonymous_deployment"),
+                LocalToolPolicy::Unrestricted,
+                std::time::Duration::ZERO,
+                Some("anonymous_deployment"),
             ));
         }
     }
@@ -2604,8 +2629,10 @@ pub mod connectors {
             Err(error) => return local_tool_policy_from(Err(error), true),
         };
         let cached = context.with_current(|| {
-            local_tool_cache().lock().ok()
-                .and_then(|slot| slot.as_ref().and_then(|read| read.reusable_for(&context.owner)))
+            local_tool_cache().lock().ok().and_then(|slot| {
+                slot.as_ref()
+                    .and_then(|read| read.reusable_for(&context.owner))
+            })
         });
         let Some(cached) = cached else {
             return local_tool_policy_from(Err(account_changed()), true);
@@ -2631,16 +2658,18 @@ pub mod connectors {
             Err(error) => (Err(error), context.jwt.is_some()),
         };
         let policy = local_tool_policy_from(read, workspace_member);
-        context.with_current(|| {
-            if let Ok(mut slot) = local_tool_cache().lock() {
-                *slot = Some(LocalToolRead {
-                    owner: context.owner.clone(),
-                    policy: policy.clone(),
-                    read_at: std::time::Instant::now(),
-                });
-            }
-            policy
-        }).unwrap_or_else(|| local_tool_policy_from(Err(account_changed()), true))
+        context
+            .with_current(|| {
+                if let Ok(mut slot) = local_tool_cache().lock() {
+                    *slot = Some(LocalToolRead {
+                        owner: context.owner.clone(),
+                        policy: policy.clone(),
+                        read_at: std::time::Instant::now(),
+                    });
+                }
+                policy
+            })
+            .unwrap_or_else(|| local_tool_policy_from(Err(account_changed()), true))
     }
 
     pub fn prefetch_workspace_policy(privacy: PrivacyMode) {
@@ -4075,9 +4104,9 @@ mod chrome_state_tests {
 #[cfg(test)]
 mod connector_contract_tests {
     use super::connectors::{
-        evaluate_connector_access, evaluate_mcp_host_access,
-        evaluate_plugin_access, mcp_host_matches, with_test_connector_policy, AccessCode,
-        ConnectorAccessPolicy, CONNECTOR_POLICY_PATH,
+        evaluate_connector_access, evaluate_mcp_host_access, evaluate_plugin_access,
+        mcp_host_matches, with_test_connector_policy, AccessCode, ConnectorAccessPolicy,
+        CONNECTOR_POLICY_PATH,
     };
     use super::render_install_app;
 

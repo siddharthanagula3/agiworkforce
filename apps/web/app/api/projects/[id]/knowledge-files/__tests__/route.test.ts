@@ -1,3 +1,4 @@
+import { createDatabaseAdapterFake } from '@/test/database-adapter-fake';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { MAX_PLAN_ATTACHMENT_BYTES } from '@agiworkforce/types';
@@ -110,7 +111,7 @@ describe('completed project upload lookup query', () => {
     const query = vi.fn().mockResolvedValue([]);
     const organizationId = '11111111-1111-4111-8111-111111111111';
     const scope = {
-      db: { query } as Parameters<typeof findProjectKnowledgeFileByChecksum>[0]['db'],
+      db: createDatabaseAdapterFake({ query }),
       projectId: 'proj-1',
       userId: 'user-abc',
       organizationId,

@@ -322,6 +322,11 @@ const clipboardFixture = vi.hoisted(() => ({
 vi.mock('@clerk/nextjs', () => ({
   useAuth: () => clipboardFixture.auth,
   useClerk: () => clipboardFixture.sdk,
+  useUser: () => ({
+    isLoaded: clipboardFixture.auth.isLoaded,
+    isSignedIn: clipboardFixture.auth.isSignedIn,
+    user: clipboardFixture.sdk.user,
+  }),
 }));
 
 type DesktopHostModule = typeof import('@/features/desktop-host');
@@ -333,7 +338,10 @@ vi.mock('@/features/desktop-host', async (importOriginal) => ({
 type PlusMenuModule = typeof import('./ComposerPlusMenu');
 vi.mock('./ComposerPlusMenu', async (importOriginal) => ({
   ...(await importOriginal<PlusMenuModule>()),
-  ComposerPlusMenu: ({ onAttachClipboard, isReadingClipboard }: {
+  ComposerPlusMenu: ({
+    onAttachClipboard,
+    isReadingClipboard,
+  }: {
     onAttachClipboard: () => void;
     isReadingClipboard: boolean;
   }) => (
@@ -388,7 +396,9 @@ describe('deferred clipboard ownership in the real composer', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Attach clipboard' }));
     clipboardFixture.sdk.loaded = false;
     await act(async () => pending.resolve({ textTruncated: false }));
-    expect(screen.queryByText('Your clipboard is empty, so there was nothing to attach.')).toBeNull();
+    expect(
+      screen.queryByText('Your clipboard is empty, so there was nothing to attach.'),
+    ).toBeNull();
     expect(screen.getByRole('button', { name: 'Attach clipboard' })).toBeEnabled();
   });
 

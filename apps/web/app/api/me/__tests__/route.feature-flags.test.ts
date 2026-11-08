@@ -20,7 +20,8 @@ vi.mock('@/lib/feature-flags/flag-store', () => ({
   getSubjectOverrides: (...args: unknown[]) => flagMocks.getSubjectOverrides(...args),
 }));
 
-vi.mock('@/lib/services/org-sharing-service', () => ({
+vi.mock('@/lib/services/org-sharing-service', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule0>()),
   resolveOrgMembership: (...args: unknown[]) => flagMocks.resolveOrgMembership(...args),
 }));
 
@@ -37,7 +38,8 @@ vi.mock('@/lib/web-search/web-search-tool', () => ({
   webSearchBackendConfigured: vi.fn(() => true),
 }));
 
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule1>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
@@ -334,3 +336,7 @@ describe('GET /api/me, capabilities held closed', () => {
     expect(body.disabled_features).toEqual([]);
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/services/org-sharing-service');
+
+type RetainedMockModule1 = typeof import('@/lib/logger');

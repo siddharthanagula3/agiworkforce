@@ -348,9 +348,9 @@ vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => {
   return {
     ...(await importOriginal<ReadonlyIdentityModule>()),
     useReadonlyIdentityLifetime: () => capture,
+    useSessionSnapshot: () => () => null,
   };
 });
-
 
 describe('composer cleanup draft ownership', () => {
   it('does not replace an accepted empty-clear owner when navigation parks an empty composer', async () => {
@@ -358,7 +358,9 @@ describe('composer cleanup draft ownership', () => {
     const view = render(<ChatComposerNew onSend={vi.fn()} conversationId="conv-1" />);
     const owner = useChatStore.getState().draftOwnersByConversation['conv-1'];
     view.unmount();
-    await act(async () => { await Promise.resolve(); });
+    await act(async () => {
+      await Promise.resolve();
+    });
     expect(useChatStore.getState().draftOwnersByConversation['conv-1']).toBe(owner);
   });
 
@@ -367,11 +369,12 @@ describe('composer cleanup draft ownership', () => {
     typeInTextarea(DRAFT);
     view.unmount();
     useChatStore.getState().setDraftContent('new identity text', 'conv-1');
-    await act(async () => { await Promise.resolve(); });
+    await act(async () => {
+      await Promise.resolve();
+    });
     expect(useChatStore.getState().getDraftContent('conv-1')).toBe('new identity text');
   });
 });
-
 
 it('does not attempt cleanup parking after only the identity changes', async () => {
   const original = useChatStore.getState().setDraftContent;
@@ -384,10 +387,19 @@ it('does not attempt cleanup parking after only the identity changes', async () 
     setDraftContent.mockClear();
     view.unmount();
     draftIdentityMock.generation += 1;
-    await act(async () => { await Promise.resolve(); });
+    await act(async () => {
+      await Promise.resolve();
+    });
     expect(useChatStore.getState().draftOwnersByConversation['conv-1']).toBe(owner);
     expect(setDraftContent).not.toHaveBeenCalled();
   } finally {
     useChatStore.setState({ setDraftContent: original });
   }
 });
+
+type WorkspacePolicyModule = typeof import('@shared/hooks/use-workspace-policy');
+vi.mock('@shared/hooks/use-workspace-policy', async (importOriginal) => ({
+  ...(await importOriginal<WorkspacePolicyModule>()),
+  useWorkspacePolicy: () => ({ policy: null, source: 'none', stale: false, checkedAt: null }),
+  useDisabledWorkspaceFeatures: () => [],
+}));

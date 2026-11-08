@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   fetchPreferenceNamespace: vi.fn(async () => ({})),
-  savePreferenceNamespace: vi.fn(async () => {}),
+  savePreferenceNamespace: vi.fn(async (..._args: unknown[]) => {}),
   webPush: {
     checked: false,
     disabled: false,
@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
 type OriginalNotificationsModule = typeof import('@/features/notifications');
 
 vi.mock('@/app/settings/_lib/preferences-client', async (original) => ({
-  ...await original<typeof import('@/app/settings/_lib/preferences-client')>(),
+  ...(await original<MockedModule0>()),
   fetchPreferenceNamespace: mocks.fetchPreferenceNamespace,
   savePreferenceNamespace: mocks.savePreferenceNamespace,
 }));
@@ -99,13 +99,19 @@ const notificationOwner = vi.hoisted(() => ({
   session: { userId: 'a', sessionId: 'a', isCurrent: () => true, getToken: async () => 'token-a' },
 }));
 vi.mock('../hooks/use-preference-owner', async (original) => ({
-  ...await original<typeof import('../hooks/use-preference-owner')>(),
+  ...(await original<MockedModule1>()),
   usePreferenceOwner: () => notificationOwner,
 }));
 vi.mock('../services/notification-preferences-client', () => ({
-  readNotificationPreferences: async () => ({ stored: await (mocks.fetchPreferenceNamespace)(), version: 'v1' }),
+  readNotificationPreferences: async () => ({
+    stored: await mocks.fetchPreferenceNamespace(),
+    version: 'v1',
+  }),
   saveNotificationPreferences: async (_authority: unknown, patch: object) => {
-    await (mocks.savePreferenceNamespace)('notifications', patch, { merge: true });
+    await mocks.savePreferenceNamespace('notifications', patch, { merge: true });
     return { stored: patch, version: 'v2' };
   },
 }));
+
+type MockedModule0 = typeof import('@/app/settings/_lib/preferences-client');
+type MockedModule1 = typeof import('../hooks/use-preference-owner');

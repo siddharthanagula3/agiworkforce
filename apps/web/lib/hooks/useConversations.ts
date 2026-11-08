@@ -144,14 +144,22 @@ export function __resetConversationListLoadForTests(): void {
 function getConversationListLoad(session: SessionAuthority): ConversationListLoad {
   const existing = conversationListLoad;
   if (
-    existing && existing.session.userId === session.userId &&
+    existing &&
+    existing.session.userId === session.userId &&
     existing.session.sessionId === session.sessionId &&
-    existing.session.isCurrent() && session.isCurrent()
-  ) return existing;
+    existing.session.isCurrent() &&
+    session.isCurrent()
+  )
+    return existing;
 
   existing?.inFlight?.authority.retire();
   const next: ConversationListLoad = {
-    session, loadedAtMs: 0, hasMore: false, nextOffset: 0, retryAttempt: 0, inFlight: null,
+    session,
+    loadedAtMs: 0,
+    hasMore: false,
+    nextOffset: 0,
+    retryAttempt: 0,
+    inFlight: null,
   };
   conversationListLoad = next;
   return next;
@@ -196,10 +204,12 @@ function startConversationListFetch(cache: ConversationListLoad): ConversationLi
             cache.retryAttempt < CONVERSATIONS_LIST_RETRY_MAX_ATTEMPTS
           ) {
             const attempt = cache.retryAttempt++;
-            const delay = parseRetryAfterMs(response.headers.get('retry-after')) ?? Math.min(
-              CONVERSATIONS_LIST_RETRY_BASE_DELAY_MS * 2 ** attempt,
-              CONVERSATIONS_LIST_RETRY_MAX_DELAY_MS,
-            );
+            const delay =
+              parseRetryAfterMs(response.headers.get('retry-after')) ??
+              Math.min(
+                CONVERSATIONS_LIST_RETRY_BASE_DELAY_MS * 2 ** attempt,
+                CONVERSATIONS_LIST_RETRY_MAX_DELAY_MS,
+              );
             setBusy(false);
             await waitForListRetry(authority, delay);
             authority.assertCurrent();
@@ -233,7 +243,9 @@ function startConversationListFetch(cache: ConversationListLoad): ConversationLi
     subscribeBusy: (listener) => {
       busyListeners.add(listener);
       listener(busy);
-      return () => { busyListeners.delete(listener); };
+      return () => {
+        busyListeners.delete(listener);
+      };
     },
   };
   cache.inFlight = request;
@@ -253,29 +265,39 @@ function useConversationReadScope() {
   const mountedRef = useRef(true);
   const requestsRef = useRef(new Set<RequestAuthority>());
   useEffect(() => {
+    const requests = requestsRef.current;
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
       lifetimeRef.current = {};
-      for (const request of requestsRef.current) request.retire();
-      requestsRef.current.clear();
+      for (const request of requests) request.retire();
+      requests.clear();
       if (conversationListLoad && !conversationListLoad.session.isCurrent()) {
         conversationListLoad.inFlight?.authority.retire();
       }
     };
   }, [session]);
   const canRead = useCallback(() => mountedRef.current && session?.isCurrent() === true, [session]);
-  const createReadAuthority = useCallback((isOwner: () => boolean = () => true) => {
-    if (!session || !canRead()) return null;
-    const lifetime = lifetimeRef.current;
-    const authority = createRequestAuthority(
-      session,
-      () => lifetimeRef.current === lifetime && isOwner(),
-    );
-    requestsRef.current.add(authority);
-    authority.signal.addEventListener('abort', () => { requestsRef.current.delete(authority); }, { once: true });
-    return authority;
-  }, [canRead, session]);
+  const createReadAuthority = useCallback(
+    (isOwner: () => boolean = () => true) => {
+      if (!session || !canRead()) return null;
+      const lifetime = lifetimeRef.current;
+      const authority = createRequestAuthority(
+        session,
+        () => lifetimeRef.current === lifetime && isOwner(),
+      );
+      requestsRef.current.add(authority);
+      authority.signal.addEventListener(
+        'abort',
+        () => {
+          requestsRef.current.delete(authority);
+        },
+        { once: true },
+      );
+      return authority;
+    },
+    [canRead, session],
+  );
   const releaseReadAuthority = useCallback((authority: RequestAuthority) => {
     requestsRef.current.delete(authority);
     authority.retire();
@@ -361,7 +383,12 @@ interface UseConversationsReturn {
     title?: string,
     model?: string,
     projectId?: string | null,
-    options?: { isTemporary?: boolean; selectedRouteId?: string | null; authority?: RequestAuthority; shouldActivate?: () => boolean },
+    options?: {
+      isTemporary?: boolean;
+      selectedRouteId?: string | null;
+      authority?: RequestAuthority;
+      shouldActivate?: () => boolean;
+    },
   ) => Promise<Conversation | null>;
   loadConversation: (id: string) => Promise<boolean>;
   /**
@@ -389,7 +416,8 @@ interface UseConversationsReturn {
 
 export function useConversations(): UseConversationsReturn {
   const { getAuthHeaders, isLoaded, isSignedIn } = useConversationAuthHeaders();
-  const { session, canRead, createReadAuthority, releaseReadAuthority } = useConversationReadScope();
+  const { session, canRead, createReadAuthority, releaseReadAuthority } =
+    useConversationReadScope();
   const conversations = useChatStore((state) => state.conversations);
   const activeConversationId = useChatStore((state) => state.activeConversationId);
   const error = useChatStore((state) => state.error);
@@ -440,34 +468,40 @@ export function useConversations(): UseConversationsReturn {
     };
   }, [session]);
 
-  const applyListFetch = useCallback(async (request: ConversationListRequest) => {
-    listApplyOwnerRef.current?.retire();
-    const authority: RequestAuthority | null = createReadAuthority(() => listApplyOwnerRef.current === authority);
-    if (!authority) return;
-    listApplyOwnerRef.current = authority;
-    setIsFetchingConversations(true);
-    setListError(null);
-    const unsubscribe = request.subscribeBusy((busy) => {
-      if (authority.isCurrent() && request.authority.isCurrent()) setIsFetchingConversations(busy);
-    });
-    if (authority.signal.aborted) unsubscribe();
-    else authority.signal.addEventListener('abort', unsubscribe, { once: true });
-    try {
-      const outcome = await request.promise;
-      if (!outcome || !authority.isCurrent() || !request.authority.isCurrent()) return;
-      setListError(outcome.error);
-      setHasMoreConversations(outcome.hasMore);
-      nextOffsetRef.current = outcome.nextOffset;
-    } finally {
-      unsubscribe();
-      authority.signal.removeEventListener('abort', unsubscribe);
-      if (listApplyOwnerRef.current === authority) {
-        listApplyOwnerRef.current = null;
-        setIsFetchingConversations(false);
+  const applyListFetch = useCallback(
+    async (request: ConversationListRequest) => {
+      listApplyOwnerRef.current?.retire();
+      const authority: RequestAuthority | null = createReadAuthority(
+        () => listApplyOwnerRef.current === authority,
+      );
+      if (!authority) return;
+      listApplyOwnerRef.current = authority;
+      setIsFetchingConversations(true);
+      setListError(null);
+      const unsubscribe = request.subscribeBusy((busy) => {
+        if (authority.isCurrent() && request.authority.isCurrent())
+          setIsFetchingConversations(busy);
+      });
+      if (authority.signal.aborted) unsubscribe();
+      else authority.signal.addEventListener('abort', unsubscribe, { once: true });
+      try {
+        const outcome = await request.promise;
+        if (!outcome || !authority.isCurrent() || !request.authority.isCurrent()) return;
+        setListError(outcome.error);
+        setHasMoreConversations(outcome.hasMore);
+        nextOffsetRef.current = outcome.nextOffset;
+      } finally {
+        unsubscribe();
+        authority.signal.removeEventListener('abort', unsubscribe);
+        if (listApplyOwnerRef.current === authority) {
+          listApplyOwnerRef.current = null;
+          setIsFetchingConversations(false);
+        }
+        releaseReadAuthority(authority);
       }
-      releaseReadAuthority(authority);
-    }
-  }, [createReadAuthority, releaseReadAuthority]);
+    },
+    [createReadAuthority, releaseReadAuthority],
+  );
 
   const fetchConversations = useCallback(async () => {
     if (!session || !canRead()) return;
@@ -495,7 +529,9 @@ export function useConversations(): UseConversationsReturn {
     if (!session?.isCurrent() || loadMoreOwnerRef.current || !hasMoreConversations) {
       return;
     }
-    const authority: RequestAuthority | null = createReadAuthority(() => loadMoreOwnerRef.current === authority);
+    const authority: RequestAuthority | null = createReadAuthority(
+      () => loadMoreOwnerRef.current === authority,
+    );
     if (!authority) return;
     loadMoreOwnerRef.current = authority;
 
@@ -558,7 +594,12 @@ export function useConversations(): UseConversationsReturn {
       title?: string,
       model?: string,
       projectId?: string | null,
-      options?: { isTemporary?: boolean; selectedRouteId?: string | null; authority?: RequestAuthority; shouldActivate?: () => boolean },
+      options?: {
+        isTemporary?: boolean;
+        selectedRouteId?: string | null;
+        authority?: RequestAuthority;
+        shouldActivate?: () => boolean;
+      },
     ): Promise<Conversation | null> => {
       const authority = options?.authority;
       authority?.assertCurrent();
@@ -570,7 +611,10 @@ export function useConversations(): UseConversationsReturn {
       try {
         const headers = await addCsrfHeaders(
           authority
-            ? { 'Content-Type': 'application/json', Authorization: `Bearer ${await authority.getToken()}` }
+            ? {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${await authority.getToken()}`,
+              }
             : await getAuthHeaders(),
         );
         authority?.assertCurrent();
@@ -657,11 +701,13 @@ export function useConversations(): UseConversationsReturn {
         foregroundLoadOwnerRef.current = {};
       }
       const foregroundOwner = foregroundLoadOwnerRef.current;
-      const authority: RequestAuthority | null = createReadAuthority(() =>
-        foregroundLoadOwnerRef.current === foregroundOwner &&
-        (quiet
-          ? refreshOwnerRef.current === authority && useChatStore.getState().activeConversationId === id
-          : openingOwnerRef.current === authority),
+      const authority: RequestAuthority | null = createReadAuthority(
+        () =>
+          foregroundLoadOwnerRef.current === foregroundOwner &&
+          (quiet
+            ? refreshOwnerRef.current === authority &&
+              useChatStore.getState().activeConversationId === id
+            : openingOwnerRef.current === authority),
       );
       if (!authority) return true;
       if (quiet) refreshOwnerRef.current = authority;
@@ -723,7 +769,11 @@ export function useConversations(): UseConversationsReturn {
         }
         const loadedConversation = toWebConversation(loadedConversationWire);
         upsertConversation(loadedConversation);
-        observeConversationDraftRevision(id, loadedConversationWire.draft_updated_at, authority.session);
+        observeConversationDraftRevision(
+          id,
+          loadedConversationWire.draft_updated_at,
+          authority.session,
+        );
 
         // A draft this device has not seen belongs in the composer: it was
         // typed on another machine, or before a reload here. A draft already
@@ -1001,8 +1051,8 @@ export function useProjectConversations(
       const projectScope = projectScopeRef.current;
       if (projectScope.projectId !== projectId) return;
       pageOwnerRef.current?.retire();
-      const authority: RequestAuthority | null = createReadAuthority(() =>
-        pageOwnerRef.current === authority && projectScopeRef.current === projectScope,
+      const authority: RequestAuthority | null = createReadAuthority(
+        () => pageOwnerRef.current === authority && projectScopeRef.current === projectScope,
       );
       if (!authority) return;
       pageOwnerRef.current = authority;

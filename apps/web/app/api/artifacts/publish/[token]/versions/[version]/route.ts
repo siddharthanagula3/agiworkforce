@@ -8,6 +8,7 @@ import { createError } from '@/lib/errors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { preparePublishedArtifactPublication } from '@/lib/services/published-artifact-publication-policy';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { recordAuditEvent } from '@/lib/security-audit';
 import {
   PUBLISHED_TOKEN_REGEX,
   PublishedArtifactOwnershipError,
@@ -44,7 +45,10 @@ async function handleReadVersion(request: NextRequest, context: RouteContext): P
 
 export const GET = withErrorHandler(handleReadVersion);
 
-async function handleRestoreVersion(request: NextRequest, context: RouteContext): Promise<Response> {
+async function handleRestoreVersion(
+  request: NextRequest,
+  context: RouteContext,
+): Promise<Response> {
   const { token, version } = await context.params;
   const number = Number(version);
   if (!PUBLISHED_TOKEN_REGEX.test(token) || !Number.isSafeInteger(number) || number < 1) {
@@ -101,6 +105,18 @@ async function handleRestoreVersion(request: NextRequest, context: RouteContext)
   if (!restored) {
     throw createError.conflict('This publication is no longer available to restore.');
   }
+
+  await recordAuditEvent({
+    userId,
+    organizationId,
+    eventType: 'share_link_updated',
+    request,
+    detail: {
+      resourceType: 'published_artifact',
+      resourceId: restored.id,
+      status: 'version_restored',
+    },
+  });
 
   return NextResponse.json({
     token: restored.token,

@@ -23,7 +23,10 @@ import { SharedCodeSessionPage } from './SharedCodeSessionPage';
 function deferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (reason: unknown) => void;
-  const promise = new Promise<T>((done, fail) => { resolve = done; reject = fail; });
+  const promise = new Promise<T>((done, fail) => {
+    resolve = done;
+    reject = fail;
+  });
   return { promise, resolve, reject };
 }
 
@@ -33,15 +36,25 @@ function shared(title: string): CloudCodeSharedSession {
     terminalEntries: [],
     turns: [],
     visibility: 'public',
+    ownerName: null,
+    workingBranch: null,
+    baseBranch: null,
+    pullRequestUrl: null,
+    pullRequestNumber: null,
+    createdAt: '2026-07-30T12:00:00Z',
     repositoryUrl: null,
     updatedAt: '2026-07-30T12:00:00Z',
-  } as CloudCodeSharedSession;
+  };
 }
 
 beforeEach(() => {
   identity.auth = { isLoaded: true, isSignedIn: true, userId: 'account-a', sessionId: 'session-a' };
   identity.sdk.user = { id: 'account-a' };
-  identity.sdk.session = { id: 'session-a', user: { id: 'account-a' }, getToken: async () => 'token-a' };
+  identity.sdk.session = {
+    id: 'session-a',
+    user: { id: 'account-a' },
+    getToken: async () => 'token-a',
+  };
 });
 
 describe('shared Code session ownership', () => {
@@ -63,28 +76,36 @@ describe('shared Code session ownership', () => {
     },
   );
 
-  it.each(['resolve', 'reject'] as const)('ignores old token %s after navigation', async (outcome) => {
-    const old = deferred<CloudCodeSharedSession>();
-    const next = deferred<CloudCodeSharedSession>();
-    const api = {
-      openShared: vi.fn().mockReturnValueOnce(old.promise).mockReturnValueOnce(next.promise),
-    } as unknown as CloudCodeApi;
-    const { rerender } = render(<SharedCodeSessionPage token="old" api={api} />);
-    rerender(<SharedCodeSessionPage token="next" api={api} />);
-    await act(async () => { next.resolve(shared('Current shared session')); });
-    await act(async () => {
-      if (outcome === 'resolve') old.resolve(shared('Old private title'));
-      else old.reject(new Error('Old private failure'));
-    });
-    expect(screen.getByRole('heading', { name: 'Current shared session' })).toBeTruthy();
-    expect(screen.queryByText('Old private title')).toBeNull();
-    expect(screen.queryByText('Old private failure')).toBeNull();
-  });
+  it.each(['resolve', 'reject'] as const)(
+    'ignores old token %s after navigation',
+    async (outcome) => {
+      const old = deferred<CloudCodeSharedSession>();
+      const next = deferred<CloudCodeSharedSession>();
+      const api = {
+        openShared: vi.fn().mockReturnValueOnce(old.promise).mockReturnValueOnce(next.promise),
+      } as unknown as CloudCodeApi;
+      const { rerender } = render(<SharedCodeSessionPage token="old" api={api} />);
+      rerender(<SharedCodeSessionPage token="next" api={api} />);
+      await act(async () => {
+        next.resolve(shared('Current shared session'));
+      });
+      await act(async () => {
+        if (outcome === 'resolve') old.resolve(shared('Old private title'));
+        else old.reject(new Error('Old private failure'));
+      });
+      expect(screen.getByRole('heading', { name: 'Current shared session' })).toBeTruthy();
+      expect(screen.queryByText('Old private title')).toBeNull();
+      expect(screen.queryByText('Old private failure')).toBeNull();
+    },
+  );
 
   it('clears a loaded share synchronously when the authenticated session changes', async () => {
     const next = deferred<CloudCodeSharedSession>();
     const api = {
-      openShared: vi.fn().mockResolvedValueOnce(shared('Account A share')).mockReturnValueOnce(next.promise),
+      openShared: vi
+        .fn()
+        .mockResolvedValueOnce(shared('Account A share'))
+        .mockReturnValueOnce(next.promise),
     } as unknown as CloudCodeApi;
     const { rerender } = render(<SharedCodeSessionPage token="same" api={api} />);
     await act(async () => {});
@@ -93,7 +114,9 @@ describe('shared Code session ownership', () => {
     identity.sdk.session = { ...identity.sdk.session, id: 'session-b' };
     rerender(<SharedCodeSessionPage token="same" api={api} />);
     expect(screen.queryByRole('heading', { name: 'Account A share' })).toBeNull();
-    await act(async () => { next.resolve(shared('New session share')); });
+    await act(async () => {
+      next.resolve(shared('New session share'));
+    });
     expect(screen.getByRole('heading', { name: 'New session share' })).toBeTruthy();
   });
 });

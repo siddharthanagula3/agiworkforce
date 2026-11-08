@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: vi.fn(async () => ({
+    organizationId: null,
     db: { query: mocks.scopedQuery },
     userId: 'user-pro',
   })),

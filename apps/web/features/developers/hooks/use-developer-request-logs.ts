@@ -74,45 +74,82 @@ export function useDeveloperRequestLogs(fetchLogs: RequestLogFetcher = fetchRequ
     ? JSON.stringify([data.scope, data.activeWorkspaceId, data.activeOrganizationId])
     : null;
   const organizationId = data?.activeOrganizationId ?? null;
-  const lane = useMemo<LogLane>(() => ({ active: false, token: {}, operation: null, page: null }),
-    [owner, epoch, scopeKey, fetchLogs]);
+  const lane = useMemo<LogLane>(
+    () => ({
+      scope: { owner, epoch, scopeKey, fetchLogs },
+      active: false,
+      token: {},
+      operation: null,
+      page: null,
+    }),
+    [owner, epoch, scopeKey, fetchLogs],
+  );
   const [state, setState] = useState<LogView | null>(null);
-  const ownerCurrent = useCallback(() => !!owner && epoch !== undefined && scopeKey !== null &&
-    owner.phase === 'admitted' && owner.scopeKey === scopeKey && workspaceOwnerIsCurrent(owner, epoch),
-    [owner, epoch, scopeKey]);
+  const ownerCurrent = useCallback(
+    () =>
+      !!owner &&
+      epoch !== undefined &&
+      scopeKey !== null &&
+      owner.phase === 'admitted' &&
+      owner.scopeKey === scopeKey &&
+      workspaceOwnerIsCurrent(owner, epoch),
+    [owner, epoch, scopeKey],
+  );
   const current = useCallback(() => lane.active && ownerCurrent(), [lane, ownerCurrent]);
-  const publish = useCallback((patch: Partial<LogView>) => {
-    if (!current()) return;
-    const token = {};
-    lane.token = token;
-    setState((previous) => ({ lane, page: null, loadingMore: false, error: null,
-      ...(previous?.lane === lane ? previous : {}), ...patch, token }));
-  }, [current, lane]);
+  const publish = useCallback(
+    (patch: Partial<LogView>) => {
+      if (!current()) return;
+      const token = {};
+      lane.token = token;
+      setState((previous) => ({
+        lane,
+        page: null,
+        loadingMore: false,
+        error: null,
+        ...(previous?.lane === lane ? previous : {}),
+        ...patch,
+        token,
+      }));
+    },
+    [current, lane],
+  );
 
-  const read = useCallback(async (append: boolean) => {
-    if (!current() || lane.operation) return;
-    const previous = lane.page;
-    if (append && !previous?.nextBefore) return;
-    const request = createRequestAuthority(owner!.session, () => current() && lane.operation === request);
-    lane.operation = request;
-    publish({ loadingMore: append, error: null });
-    try {
-      const next = await fetchLogs(append ? previous!.nextBefore : null, { request, organizationId });
-      request.assertCurrent();
-      const page = append ? { ...next, logs: [...previous!.logs, ...next.logs] } : next;
-      lane.page = page;
-      lane.operation = null;
-      publish({ page, loadingMore: false });
-    } catch (error) {
-      if (request.isCurrent()) {
+  const read = useCallback(
+    async (append: boolean) => {
+      if (!current() || lane.operation) return;
+      const previous = lane.page;
+      if (append && !previous?.nextBefore) return;
+      const request = createRequestAuthority(
+        owner!.session,
+        () => current() && lane.operation === request,
+      );
+      lane.operation = request;
+      publish({ loadingMore: append, error: null });
+      try {
+        const next = await fetchLogs(append ? previous!.nextBefore : null, {
+          request,
+          organizationId,
+        });
+        request.assertCurrent();
+        const page = append ? { ...next, logs: [...previous!.logs, ...next.logs] } : next;
+        lane.page = page;
         lane.operation = null;
-        publish({ loadingMore: false, error: toUserMessage(error, 'Request logs could not be loaded.') });
+        publish({ page, loadingMore: false });
+      } catch (error) {
+        if (request.isCurrent()) {
+          lane.operation = null;
+          publish({
+            loadingMore: false,
+            error: toUserMessage(error, 'Request logs could not be loaded.'),
+          });
+        }
+      } finally {
+        if (lane.operation === request) lane.operation = null;
+        request.retire();
       }
-    } finally {
-      if (lane.operation === request) lane.operation = null;
-      request.retire();
-    }
-  }, [current, lane, owner, organizationId, fetchLogs, publish]);
+    },
+    [current, lane, owner, organizationId, fetchLogs, publish],
+  );
 
   useLayoutEffect(() => {
     lane.active = true;
@@ -123,28 +160,38 @@ export function useDeveloperRequestLogs(fetchLogs: RequestLogFetcher = fetchRequ
       lane.page = null;
     };
     const stop = subscribeWorkspaceAdmission(() => {
-      if (!ownerCurrent()) { retire(); setState(null); }
+      if (!ownerCurrent()) {
+        retire();
+        setState(null);
+      }
     });
     if (ownerCurrent()) void read(false);
-    return () => { stop(); retire(); };
+    return () => {
+      stop();
+      retire();
+    };
   }, [lane, ownerCurrent, read]);
 
   const view = state?.lane === lane && state.token === lane.token && current() ? state : null;
   return {
     viewKey: lane,
     logs: view?.page?.logs ?? null,
-    nextBefore: view?.error ? null : view?.page?.nextBefore ?? null,
+    nextBefore: view?.error ? null : (view?.page?.nextBefore ?? null),
     error: view?.error ?? null,
     loadingMore: view?.loadingMore ?? false,
     isUnavailable: !ownerCurrent() && !workspace.isLoading,
     requiresReload: workspace.requiresReload,
     retry: () => {
       if (!lane.active) return;
-      if (!ownerCurrent()) { void workspace.refetch(); return; }
+      if (!ownerCurrent()) {
+        void workspace.refetch();
+        return;
+      }
       if (view?.token === lane.token && view.page === lane.page) void read(false);
     },
     loadMore: () => {
-      if (view?.token === lane.token && view.page && view.page === lane.page && !view.error) void read(true);
+      if (view?.token === lane.token && view.page && view.page === lane.page && !view.error)
+        void read(true);
     },
   };
 }

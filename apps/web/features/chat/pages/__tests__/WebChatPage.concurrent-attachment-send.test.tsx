@@ -1,4 +1,4 @@
-import { createWebChatWorkspaceFixture } from './web-chat-workspace-fixture';
+import { createWebChatWorkspaceFixture } from './WebChatWorkspaceFixture';
 import { act, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 type ScanModule0 = typeof import('react-i18next');
@@ -404,14 +404,18 @@ describe('WebChatPage concurrent send during attachment upload', () => {
     render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await waitFor(() => expect(mocks.composerOnSend).not.toBeNull());
     act(() => {
-      mocks.composerOnSend!(FIRST_MESSAGE, [new File(['notes'], 'notes.txt', { type: 'text/plain' })]);
+      mocks.composerOnSend!(FIRST_MESSAGE, [
+        new File(['notes'], 'notes.txt', { type: 'text/plain' }),
+      ]);
     });
     await waitFor(() => expect(mocks.uploadChatAttachments).toHaveBeenCalledTimes(1));
     const authority = mocks.uploadChatAttachments.mock.calls[0]![2] as { isCurrent: () => boolean };
     try {
       mocks.sdk.user = { id: 'other-user' };
       mocks.sdk.session = { id: 'other-session', user: { id: 'other-user' } };
-      await act(async () => { mocks.uploadResolvers[0]!([]); });
+      await act(async () => {
+        mocks.uploadResolvers[0]!([]);
+      });
       expect(authority.isCurrent()).toBe(false);
       expect(mocks.sendMessage).not.toHaveBeenCalled();
       expect(mocks.createConversation).not.toHaveBeenCalled();
@@ -571,7 +575,9 @@ describe('WebChatPage typed image request by plan', () => {
     render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await waitFor(() => expect(mocks.composerOnSend).not.toBeNull());
     let outcome: Awaited<ReturnType<ComposerOnSend>>;
-    await act(async () => { outcome = await mocks.composerOnSend!(PROMPT); });
+    await act(async () => {
+      outcome = await mocks.composerOnSend!(PROMPT);
+    });
     expect(outcome!).toBe(false);
     expect(mocks.createConversation).not.toHaveBeenCalled();
     expect(mocks.sendMessage).not.toHaveBeenCalled();
@@ -580,35 +586,62 @@ describe('WebChatPage typed image request by plan', () => {
   it('refuses an old prompt after the live SDK switches before React renders', async () => {
     useBillingStore.setState({ subscription: subscription('free') });
     let finishCatalogue!: (response: Response) => void;
-    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) =>
-      String(input) === '/api/models/free-quota'
-        ? new Promise<Response>((resolve) => { finishCatalogue = resolve; })
-        : Promise.resolve(Response.json({})),
-    ));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) =>
+        String(input) === '/api/models/free-quota'
+          ? new Promise<Response>((resolve) => {
+              finishCatalogue = resolve;
+            })
+          : Promise.resolve(Response.json({})),
+      ),
+    );
     render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
     await waitFor(() => expect(mocks.composerOnSend).not.toBeNull());
     let pending!: ReturnType<ComposerOnSend>;
-    act(() => { pending = mocks.composerOnSend!(PROMPT); });
+    act(() => {
+      pending = mocks.composerOnSend!(PROMPT);
+    });
     expect(finishCatalogue).toBeDefined();
     mocks.sdk.user = { id: 'other-account' };
     mocks.sdk.session = { id: 'other-session', user: { id: 'other-account' } };
     let outcome: Awaited<ReturnType<ComposerOnSend>>;
     await act(async () => {
-      finishCatalogue(Response.json({
-        issuer: 'Fixture provider', observedOn: '2026-11-04',
-        evidenceUrl: 'https://provider.example/offer', reportedEligible: 1, reportedUnavailable: 0,
-        models: [{ key: 'fixture-image-offering', providerModelId: 'fixture-image',
-          displayName: 'Fixture image', category: 'image', unit: 'images', limit: 100,
-          consumedApproximate: 0, expiresOn: null, status: 'ready' }],
-        limitedOffer: [{ category: 'image', dailyCap: 10, remainingToday: 10,
-          resetsAt: '2026-11-05T00:00:00.000Z' }],
-        mediaAvailability: { image: 'offered', video: 'not_offered' },
-      }));
+      finishCatalogue(
+        Response.json({
+          issuer: 'Fixture provider',
+          observedOn: '2026-11-04',
+          evidenceUrl: 'https://provider.example/offer',
+          reportedEligible: 1,
+          reportedUnavailable: 0,
+          models: [
+            {
+              key: 'fixture-image-offering',
+              providerModelId: 'fixture-image',
+              displayName: 'Fixture image',
+              category: 'image',
+              unit: 'images',
+              limit: 100,
+              consumedApproximate: 0,
+              expiresOn: null,
+              status: 'ready',
+            },
+          ],
+          limitedOffer: [
+            {
+              category: 'image',
+              dailyCap: 10,
+              remainingToday: 10,
+              resetsAt: '2026-11-05T00:00:00.000Z',
+            },
+          ],
+          mediaAvailability: { image: 'offered', video: 'not_offered' },
+        }),
+      );
       outcome = await pending;
     });
     expect(outcome!).toBe(false);
     expect(mocks.createConversation).not.toHaveBeenCalled();
     expect(mocks.sendMessage).not.toHaveBeenCalled();
   });
-
 });

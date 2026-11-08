@@ -20,7 +20,10 @@ const mockHasAcceptedCurrentTerms = vi.hoisted(() => vi.fn(async (_userId: strin
 vi.mock('@/lib/server/device-signin-policy', () => ({
   readDeviceCodeSignInPolicy: vi.fn(async () => 'enabled'),
 }));
-vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: vi.fn(async () => undefined) }));
+vi.mock('@/lib/security-audit', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule0>()),
+  recordAuditEvent: vi.fn(async () => undefined),
+}));
 vi.mock('@/lib/services/account-activity-notifications', () => ({
   notifyDeviceSignInApproved: vi.fn(async () => undefined),
 }));
@@ -33,7 +36,8 @@ vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn(() => null),
 }));
 
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule1>()),
   logger: {
     info: vi.fn(),
     error: vi.fn(),
@@ -42,7 +46,8 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-vi.mock('@/lib/cors', () => ({
+vi.mock('@/lib/cors', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule2>()),
   handleCorsPreflightRequest: vi.fn(() => null),
 }));
 
@@ -177,3 +182,8 @@ describe('Device code approve compatibility API', () => {
     expect(mockQuery).not.toHaveBeenCalled();
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/security-audit');
+
+type RetainedMockModule1 = typeof import('@/lib/logger');
+type RetainedMockModule2 = typeof import('@/lib/cors');

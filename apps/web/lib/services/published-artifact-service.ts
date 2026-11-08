@@ -503,8 +503,10 @@ export async function restorePublishedArtifactRecord(
 ): Promise<(PublishedArtifact & { version: number }) | null> {
   if (!input.publishedArtifactId || !PUBLISHED_TOKEN_REGEX.test(input.token)) return null;
   return db.transaction(async (tx) => {
-    const { userId, artifactId, title, language, content } =
-      await preparePublishArtifactRecord(tx, input);
+    const { userId, artifactId, title, language, content } = await preparePublishArtifactRecord(
+      tx,
+      input,
+    );
 
     let rows: PublishedArtifactRow[];
     try {
@@ -677,15 +679,26 @@ function validCursorTimestamp(value: string): boolean {
   const day = Number(parts[3]);
   const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
   const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-  return year >= 1 && month >= 1 && month <= 12 && day >= 1 &&
-    day <= days[month - 1]! && Number(parts[4]) <= 23 &&
-    Number(parts[5]) <= 59 && Number(parts[6]) <= 59;
+  return (
+    year >= 1 &&
+    month >= 1 &&
+    month <= 12 &&
+    day >= 1 &&
+    day <= days[month - 1]! &&
+    Number(parts[4]) <= 23 &&
+    Number(parts[5]) <= 59 &&
+    Number(parts[6]) <= 59
+  );
 }
 
 function readPublishedArtifactCursor(value: string, userId: string): PublishedArtifactCursor {
   const invalid = () => new PublishedArtifactValidationError('Invalid published artifact cursor');
-  if (!value || value.length > MANAGED_CLOUD_PUBLISHED_ARTIFACT_CURSOR_MAX_CHARS ||
-      !/^[A-Za-z0-9_-]+$/.test(value)) throw invalid();
+  if (
+    !value ||
+    value.length > MANAGED_CLOUD_PUBLISHED_ARTIFACT_CURSOR_MAX_CHARS ||
+    !/^[A-Za-z0-9_-]+$/.test(value)
+  )
+    throw invalid();
   const bytes = Buffer.from(value, 'base64url');
   if (bytes.toString('base64url') !== value) throw invalid();
   let decoded: unknown;
@@ -698,13 +711,18 @@ function readPublishedArtifactCursor(value: string, userId: string): PublishedAr
   }
   if (typeof decoded !== 'object' || decoded === null || Array.isArray(decoded)) throw invalid();
   const cursor = decoded as Record<string, unknown>;
-  if (Object.keys(cursor).length !== 4 || cursor.v !== 1 || cursor.owner !== userId ||
-      typeof cursor.createdAt !== 'string' || !validCursorTimestamp(cursor.createdAt) ||
-      typeof cursor.id !== 'string' ||
-      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(cursor.id)) {
+  if (
+    Object.keys(cursor).length !== 4 ||
+    cursor['v'] !== 1 ||
+    cursor['owner'] !== userId ||
+    typeof cursor['createdAt'] !== 'string' ||
+    !validCursorTimestamp(cursor['createdAt']) ||
+    typeof cursor['id'] !== 'string' ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(cursor['id'])
+  ) {
     throw invalid();
   }
-  return { v: 1, owner: userId, createdAt: cursor.createdAt, id: cursor.id };
+  return { v: 1, owner: userId, createdAt: cursor['createdAt'], id: cursor['id'] };
 }
 
 export async function listPublishedArtifactsPage(
@@ -717,7 +735,8 @@ export async function listPublishedArtifactsPage(
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_LIST_LIMIT) {
     throw new PublishedArtifactValidationError('Invalid published artifact page size');
   }
-  const cursor = input.cursor === undefined ? null : readPublishedArtifactCursor(input.cursor, userId);
+  const cursor =
+    input.cursor === undefined ? null : readPublishedArtifactCursor(input.cursor, userId);
   const rows = await db.query<PublishedArtifactPageRow>(
     `select id, token, artifact_id, conversation_id, title, kind, language,
             length(content) as content_chars, version, visibility, created_at, updated_at,
@@ -730,11 +749,17 @@ export async function listPublishedArtifactsPage(
   );
   const page = rows.slice(0, limit);
   const boundary = page.at(-1);
-  const nextCursor = rows.length > limit && boundary
-    ? Buffer.from(JSON.stringify({
-        v: 1, owner: userId, createdAt: boundary.cursor_created_at, id: boundary.id,
-      } satisfies PublishedArtifactCursor)).toString('base64url')
-    : null;
+  const nextCursor =
+    rows.length > limit && boundary
+      ? Buffer.from(
+          JSON.stringify({
+            v: 1,
+            owner: userId,
+            createdAt: boundary.cursor_created_at,
+            id: boundary.id,
+          } satisfies PublishedArtifactCursor),
+        ).toString('base64url')
+      : null;
   if (nextCursor) readPublishedArtifactCursor(nextCursor, userId);
   return { artifacts: page.map(rowToSummary), nextCursor };
 }

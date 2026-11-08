@@ -1,35 +1,55 @@
 import { StrictMode } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { observePreferenceOwner, type PreferenceOwner } from '@/app/settings/_lib/preferences-client';
+import {
+  observePreferenceOwner,
+  type PreferenceOwner,
+} from '@/app/settings/_lib/preferences-client';
 import { DeviceSignInToggle } from '../DeviceSignInToggle';
 
 const identity = vi.hoisted(() => ({ owner: null as PreferenceOwner | null }));
 vi.mock('../../hooks/use-preference-owner', async (original) => ({
-  ...await original<typeof import('../../hooks/use-preference-owner')>(),
+  ...(await original<MockedModule0>()),
   usePreferenceOwner: () => identity.owner,
 }));
 vi.mock('@/lib/client/csrf', async (original) => ({
-  ...await original<typeof import('@/lib/client/csrf')>(),
+  ...(await original<MockedModule1>()),
   addCsrfHeaders: vi.fn(async (headers: HeadersInit = {}) => new Headers(headers)),
 }));
 const fetchMock = vi.fn<typeof fetch>();
 const SWITCH_NAME = 'Approve sign-in from a device code';
 const toggle = () => screen.getByRole('switch', { name: SWITCH_NAME });
-const response = (enabled: boolean, receipt = false) => Response.json({
-  settings: receipt ? { security: { deviceCodeSignInEnabled: enabled } } : { deviceCodeSignInEnabled: enabled }, version: 'v1',
-});
+const response = (enabled: boolean, receipt = false) =>
+  Response.json({
+    settings: receipt
+      ? { security: { deviceCodeSignInEnabled: enabled } }
+      : { deviceCodeSignInEnabled: enabled },
+    version: 'v1',
+  });
 function deferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (reason?: unknown) => void;
-  const promise = new Promise<T>((done, fail) => { resolve = done; reject = fail; });
+  const promise = new Promise<T>((done, fail) => {
+    resolve = done;
+    reject = fail;
+  });
   return { promise, resolve, reject };
 }
 let live: boolean;
 const listeners = new Set<() => void>();
 function setOwner(id: string) {
-  identity.owner = observePreferenceOwner({ userId: id, sessionId: id,
-    isCurrent: () => live, subscribe: (listener) => { listeners.add(listener); return () => { listeners.delete(listener); }; }, getToken: async () => `token-${id}` });
+  identity.owner = observePreferenceOwner({
+    userId: id,
+    sessionId: id,
+    isCurrent: () => live,
+    subscribe: (listener) => {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+    getToken: async () => `token-${id}`,
+  });
 }
 beforeEach(() => {
   listeners.clear();
@@ -40,7 +60,12 @@ beforeEach(() => {
   fetchMock.mockReset().mockResolvedValue(response(false));
   vi.stubGlobal('fetch', fetchMock);
 });
-afterEach(() => { cleanup(); live = false; observePreferenceOwner(null); vi.unstubAllGlobals(); });
+afterEach(() => {
+  cleanup();
+  live = false;
+  observePreferenceOwner(null);
+  vi.unstubAllGlobals();
+});
 
 describe('device sign-in switch ownership', () => {
   it('keeps the shared off-state edge and confirms a patch before changing display', async () => {
@@ -49,13 +74,16 @@ describe('device sign-in switch ownership', () => {
     render(<DeviceSignInToggle />);
     await waitFor(() => expect(toggle()).toBeEnabled());
     expect(toggle()).toHaveAttribute('data-state', 'unchecked');
-    expect(toggle().className).toContain('data-[state=unchecked]:border-[color:var(--switch-off-edge)]');
+    expect(toggle().className).toContain(
+      'data-[state=unchecked]:border-[color:var(--switch-off-edge)]',
+    );
     fireEvent.click(toggle());
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     expect(toggle()).toHaveAttribute('data-state', 'unchecked');
     expect(toggle()).toBeDisabled();
     expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toEqual({
-      namespace: 'security', patch: { deviceCodeSignInEnabled: true },
+      namespace: 'security',
+      patch: { deviceCodeSignInEnabled: true },
     });
     await act(async () => write.resolve(response(true, true)));
     await waitFor(() => expect(toggle()).toBeEnabled());
@@ -66,7 +94,10 @@ describe('device sign-in switch ownership', () => {
     fetchMock.mockResolvedValueOnce(response(false)).mockReturnValueOnce(write.promise);
     render(<DeviceSignInToggle />);
     await waitFor(() => expect(toggle()).toBeEnabled());
-    act(() => { fireEvent.click(toggle()); fireEvent.click(toggle()); });
+    act(() => {
+      fireEvent.click(toggle());
+      fireEvent.click(toggle());
+    });
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     await act(async () => write.resolve(response(true, true)));
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -81,16 +112,22 @@ describe('device sign-in switch ownership', () => {
     expect(toggle()).toHaveAttribute('data-state', 'checked');
   });
   it('blocks unknown writes across refresh until deliberate acknowledgement', async () => {
-    fetchMock.mockResolvedValueOnce(response(false)).mockRejectedValueOnce(new Error('lost receipt'))
+    fetchMock
+      .mockResolvedValueOnce(response(false))
+      .mockRejectedValueOnce(new Error('lost receipt'))
       .mockResolvedValueOnce(response(true));
     render(<DeviceSignInToggle />);
     await waitFor(() => expect(toggle()).toBeEnabled());
     fireEvent.click(toggle());
     await screen.findByText(/We could not confirm whether your change was saved/);
     expect(toggle()).toBeDisabled();
-    expect(screen.queryByRole('button', { name: 'I understand; allow another change' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'I understand; allow another change' }),
+    ).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Refresh setting' }));
-    const acknowledge = await screen.findByRole('button', { name: 'I understand; allow another change' });
+    const acknowledge = await screen.findByRole('button', {
+      name: 'I understand; allow another change',
+    });
     expect(toggle()).toHaveAttribute('data-state', 'checked');
     expect(toggle()).toBeDisabled();
     fireEvent.click(acknowledge);
@@ -112,17 +149,28 @@ describe('device sign-in switch ownership', () => {
     const body = deferred<unknown>();
     const parsing = deferred<void>();
     const pending = new Response();
-    vi.spyOn(pending, 'json').mockImplementation(() => { parsing.resolve(); return body.promise; });
+    vi.spyOn(pending, 'json').mockImplementation(() => {
+      parsing.resolve();
+      return body.promise;
+    });
     fetchMock.mockResolvedValue(pending);
-    const view = render(<StrictMode><DeviceSignInToggle /></StrictMode>);
+    const view = render(
+      <StrictMode>
+        <DeviceSignInToggle />
+      </StrictMode>,
+    );
     await parsing.promise;
     view.unmount();
-    await act(async () => body.resolve({ settings: { deviceCodeSignInEnabled: true }, version: 'v1' }));
+    await act(async () =>
+      body.resolve({ settings: { deviceCodeSignInEnabled: true }, version: 'v1' }),
+    );
     expect(screen.queryByRole('switch', { name: SWITCH_NAME })).not.toBeInTheDocument();
   });
   it('retains uncertainty when closed after dispatch and ignores old receipt', async () => {
     const write = deferred<Response>();
-    fetchMock.mockResolvedValueOnce(response(false)).mockReturnValueOnce(write.promise)
+    fetchMock
+      .mockResolvedValueOnce(response(false))
+      .mockReturnValueOnce(write.promise)
       .mockResolvedValueOnce(response(false));
     const view = render(<DeviceSignInToggle />);
     await waitFor(() => expect(toggle()).toBeEnabled());
@@ -140,7 +188,10 @@ describe('device sign-in switch ownership', () => {
     render(<DeviceSignInToggle />);
     await waitFor(() => expect(toggle()).toBeEnabled());
     expect(toggle()).toHaveAttribute('data-state', 'checked');
-    act(() => { live = false; for (const listener of [...listeners]) listener(); });
+    act(() => {
+      live = false;
+      for (const listener of [...listeners]) listener();
+    });
     expect(toggle()).toBeDisabled();
     expect(toggle()).toHaveAttribute('data-state', 'unchecked');
     expect(screen.getByText('Your device sign-in setting is unknown.')).toBeInTheDocument();
@@ -179,3 +230,6 @@ describe('device sign-in switch ownership', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
+
+type MockedModule0 = typeof import('../../hooks/use-preference-owner');
+type MockedModule1 = typeof import('@/lib/client/csrf');

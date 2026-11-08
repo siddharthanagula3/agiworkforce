@@ -12,23 +12,23 @@ const h = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  ...(await importOriginal<MockedModule0>()),
   getUserScopedDb: h.getUserScopedDb,
 }));
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<MockedModule1>()),
   withRateLimit: vi.fn(async () => null),
 }));
 vi.mock('@/lib/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/csrf')>()),
+  ...(await importOriginal<MockedModule2>()),
   requireCsrfToken: vi.fn(async () => null),
 }));
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<MockedModule3>()),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/server/request-context-cache', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/request-context-cache')>()),
+  ...(await importOriginal<MockedModule4>()),
   invalidateActiveOrganizationCache: h.invalidateActiveOrganizationCache,
 }));
 
@@ -72,7 +72,9 @@ function script(steps: Step[]) {
 
 function put(body: unknown) {
   return new NextRequest('http://localhost:3000/api/settings/preferences', {
-    method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
   });
 }
 
@@ -84,22 +86,31 @@ function writtenDelta() {
 beforeEach(() => {
   vi.resetAllMocks();
   h.events.length = 0;
-  h.query.mockImplementation(async () => { throw new Error('Unexpected outer query'); });
-  h.txQuery.mockImplementation(async () => { throw new Error('Unscripted transaction query'); });
-  h.transaction.mockImplementation(async (callback: (tx: { query: typeof h.txQuery }) => Promise<unknown>) => {
-    h.events.push('begin');
-    try {
-      const result = await callback({ query: h.txQuery });
-      h.events.push('commit');
-      return result;
-    } catch (error) {
-      h.events.push('rollback');
-      throw error;
-    }
+  h.query.mockImplementation(async () => {
+    throw new Error('Unexpected outer query');
   });
-  h.invalidateActiveOrganizationCache.mockImplementation(async () => { h.events.push('invalidate'); });
+  h.txQuery.mockImplementation(async () => {
+    throw new Error('Unscripted transaction query');
+  });
+  h.transaction.mockImplementation(
+    async (callback: (tx: { query: typeof h.txQuery }) => Promise<unknown>) => {
+      h.events.push('begin');
+      try {
+        const result = await callback({ query: h.txQuery });
+        h.events.push('commit');
+        return result;
+      } catch (error) {
+        h.events.push('rollback');
+        throw error;
+      }
+    },
+  );
+  h.invalidateActiveOrganizationCache.mockImplementation(async () => {
+    h.events.push('invalidate');
+  });
   h.getUserScopedDb.mockResolvedValue({
-    db: { query: h.query, transaction: h.transaction }, userId: 'user-1',
+    db: { query: h.query, transaction: h.transaction },
+    userId: 'user-1',
   });
 });
 
@@ -111,33 +122,48 @@ describe('preferences transaction SQL and modeled interleavings, not a PostgreSQ
       expect(params).toEqual(['user-1']);
       return [row({ general: { theme: 'dark' } })];
     });
-    const response = await GET(new NextRequest('http://localhost:3000/api/settings/preferences?namespace=general'));
+    const response = await GET(
+      new NextRequest('http://localhost:3000/api/settings/preferences?namespace=general'),
+    );
     expect(await response.json()).toEqual({ settings: { theme: 'dark' }, version: STORED_VERSION });
     expect(h.transaction).not.toHaveBeenCalled();
   });
 
-  it.each([undefined, null, STORED_VERSION])('locks before merging an existing namespace (%s)', async (expectedVersion) => {
-    const stored = { capabilities: { memory: false, searchPastChats: true }, general: { theme: 'dark' } };
-    const done = script([
-      { operation: 'lock', rows: [row({ ...stored, capabilities: { memory: true, searchPastChats: true } })] },
-      { operation: 'update', rows: [{ settings: stored, version: NEXT_VERSION }] },
-    ]);
-    const response = await PUT(put({ namespace: 'capabilities', patch: { memory: false }, expectedVersion }));
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({ settings: stored, version: NEXT_VERSION });
-    expect(writtenDelta()).toEqual({ capabilities: { memory: false, searchPastChats: true } });
-    expect(h.events).toEqual(['begin', 'lock', 'update', 'commit']);
-    expect(h.query).not.toHaveBeenCalled();
-    expect(h.transaction).toHaveBeenCalledTimes(1);
-    done();
-  });
+  it.each([undefined, null, STORED_VERSION])(
+    'locks before merging an existing namespace (%s)',
+    async (expectedVersion) => {
+      const stored = {
+        capabilities: { memory: false, searchPastChats: true },
+        general: { theme: 'dark' },
+      };
+      const done = script([
+        {
+          operation: 'lock',
+          rows: [row({ ...stored, capabilities: { memory: true, searchPastChats: true } })],
+        },
+        { operation: 'update', rows: [{ settings: stored, version: NEXT_VERSION }] },
+      ]);
+      const response = await PUT(
+        put({ namespace: 'capabilities', patch: { memory: false }, expectedVersion }),
+      );
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ settings: stored, version: NEXT_VERSION });
+      expect(writtenDelta()).toEqual({ capabilities: { memory: false, searchPastChats: true } });
+      expect(h.events).toEqual(['begin', 'lock', 'update', 'commit']);
+      expect(h.query).not.toHaveBeenCalled();
+      expect(h.transaction).toHaveBeenCalledTimes(1);
+      done();
+    },
+  );
 
   it('models a prior sibling write visible when this transaction acquires the row', async () => {
     const done = script([
       { operation: 'lock', rows: [row({ general: { firstWriter: true, secondWriter: false } })] },
       { operation: 'update', rows: [row({ general: { firstWriter: true, secondWriter: true } })] },
     ]);
-    expect((await PUT(put({ namespace: 'general', patch: { secondWriter: true } }))).status).toBe(200);
+    expect((await PUT(put({ namespace: 'general', patch: { secondWriter: true } }))).status).toBe(
+      200,
+    );
     expect(writtenDelta()).toEqual({ general: { firstWriter: true, secondWriter: true } });
     done();
   });
@@ -145,7 +171,9 @@ describe('preferences transaction SQL and modeled interleavings, not a PostgreSQ
   it('returns an absent-row insert receipt even with an explicit old version', async () => {
     const receipt = { settings: { general: { theme: 'dark' } }, version: NEXT_VERSION };
     const done = script([{ operation: 'lock' }, { operation: 'insert', rows: [receipt] }]);
-    const response = await PUT(put({ namespace: 'general', patch: { theme: 'dark' }, expectedVersion: 'old' }));
+    const response = await PUT(
+      put({ namespace: 'general', patch: { theme: 'dark' }, expectedVersion: 'old' }),
+    );
     expect(await response.json()).toEqual(receipt);
     expect(h.events).toEqual(['begin', 'lock', 'insert', 'commit']);
     done();
@@ -153,19 +181,24 @@ describe('preferences transaction SQL and modeled interleavings, not a PostgreSQ
 
   it('models losing a first insert, then merges the winner under a fresh lock', async () => {
     const done = script([
-      { operation: 'lock' }, { operation: 'insert' },
+      { operation: 'lock' },
+      { operation: 'insert' },
       { operation: 'lock', rows: [row({ general: { winner: true } })] },
       { operation: 'update', rows: [row({ general: { winner: true, loser: true } })] },
     ]);
     expect((await PUT(put({ namespace: 'general', patch: { loser: true } }))).status).toBe(200);
-    expect(JSON.parse(String(h.txQuery.mock.calls[3]?.[1]?.[1]))).toEqual({ general: { winner: true, loser: true } });
+    expect(JSON.parse(String(h.txQuery.mock.calls[3]?.[1]?.[1]))).toEqual({
+      general: { winner: true, loser: true },
+    });
     expect(h.events).toEqual(['begin', 'lock', 'insert', 'lock', 'update', 'commit']);
     done();
   });
 
   it('fails without a receipt when the insert winner disappears before the second lock', async () => {
     const done = script([{ operation: 'lock' }, { operation: 'insert' }, { operation: 'lock' }]);
-    const response = await PUT(put({ namespace: 'workspace', patch: { activeOrganizationId: null } }));
+    const response = await PUT(
+      put({ namespace: 'workspace', patch: { activeOrganizationId: null } }),
+    );
     expect(response.status).toBe(500);
     expect(await response.json()).not.toHaveProperty('settings');
     expect(h.events).toEqual(['begin', 'lock', 'insert', 'lock', 'rollback']);
@@ -173,18 +206,31 @@ describe('preferences transaction SQL and modeled interleavings, not a PostgreSQ
     done();
   });
 
-  it.each([false, true])('returns the locked namespace on explicit conflict, after insert race=%s', async (insertRace) => {
-    const done = script([
-      ...(insertRace ? [{ operation: 'lock' as const }, { operation: 'insert' as const }] : []),
-      { operation: 'lock', rows: [row({ workspace: { activeOrganizationId: 'org-new' } })] },
-    ]);
-    const response = await PUT(put({ namespace: 'workspace', patch: { activeOrganizationId: null }, expectedVersion: 'old' }));
-    expect(response.status).toBe(412);
-    expect(await response.json()).toMatchObject({ error: { code: 'SETTINGS_VERSION_CONFLICT' }, settings: { activeOrganizationId: 'org-new' }, version: STORED_VERSION });
-    expect(h.query).not.toHaveBeenCalled();
-    expect(h.invalidateActiveOrganizationCache).not.toHaveBeenCalled();
-    done();
-  });
+  it.each([false, true])(
+    'returns the locked namespace on explicit conflict, after insert race=%s',
+    async (insertRace) => {
+      const done = script([
+        ...(insertRace ? [{ operation: 'lock' as const }, { operation: 'insert' as const }] : []),
+        { operation: 'lock', rows: [row({ workspace: { activeOrganizationId: 'org-new' } })] },
+      ]);
+      const response = await PUT(
+        put({
+          namespace: 'workspace',
+          patch: { activeOrganizationId: null },
+          expectedVersion: 'old',
+        }),
+      );
+      expect(response.status).toBe(412);
+      expect(await response.json()).toMatchObject({
+        error: { code: 'SETTINGS_VERSION_CONFLICT' },
+        settings: { activeOrganizationId: 'org-new' },
+        version: STORED_VERSION,
+      });
+      expect(h.query).not.toHaveBeenCalled();
+      expect(h.invalidateActiveOrganizationCache).not.toHaveBeenCalled();
+      done();
+    },
+  );
 
   it.each([
     [{ namespace: 'general', value: { replaced: true } }, { general: { replaced: true } }],
@@ -221,27 +267,36 @@ describe('the exact JavaScript UTF-16 size contract', () => {
     done();
   });
 
-  it.each([false, true])('rejects combined sibling growth after locked reread, insert race=%s', async (insertRace) => {
-    const done = script([
-      ...(insertRace ? [{ operation: 'lock' as const }, { operation: 'insert' as const }] : []),
-      { operation: 'lock', rows: [row({ general: { winner: 'x'.repeat(60_000) } })] },
-    ]);
-    const response = await PUT(put({ namespace: 'general', patch: { loser: 'y'.repeat(60_000) } }));
-    expect(response.status).toBe(400);
-    expect(JSON.stringify(await response.json())).toContain('Settings payload is too large');
-    expect(h.events.at(-1)).toBe('rollback');
-    done();
-  });
+  it.each([false, true])(
+    'rejects combined sibling growth after locked reread, insert race=%s',
+    async (insertRace) => {
+      const done = script([
+        ...(insertRace ? [{ operation: 'lock' as const }, { operation: 'insert' as const }] : []),
+        { operation: 'lock', rows: [row({ general: { winner: 'x'.repeat(60_000) } })] },
+      ]);
+      const response = await PUT(
+        put({ namespace: 'general', patch: { loser: 'y'.repeat(60_000) } }),
+      );
+      expect(response.status).toBe(400);
+      expect(JSON.stringify(await response.json())).toContain('Settings payload is too large');
+      expect(h.events.at(-1)).toBe('rollback');
+      done();
+    },
+  );
 
   it('rejects an oversized absent-row write before inserting', async () => {
     const done = script([{ operation: 'lock' }]);
-    expect((await PUT(put({ namespace: 'general', value: { text: 'x'.repeat(100_000) } }))).status).toBe(400);
+    expect(
+      (await PUT(put({ namespace: 'general', value: { text: 'x'.repeat(100_000) } }))).status,
+    ).toBe(400);
     done();
   });
 
   it('preserves validation precedence over explicit version conflict', async () => {
     const done = script([{ operation: 'lock', rows: [row()] }]);
-    const response = await PUT(put({ namespace: 'general', value: { text: 'x'.repeat(100_000) }, expectedVersion: 'old' }));
+    const response = await PUT(
+      put({ namespace: 'general', value: { text: 'x'.repeat(100_000) }, expectedVersion: 'old' }),
+    );
     expect(response.status).toBe(400);
     expect(h.events.at(-1)).toBe('rollback');
     done();
@@ -250,17 +305,25 @@ describe('the exact JavaScript UTF-16 size contract', () => {
 
 describe('committed receipts and workspace cache ordering', () => {
   it.each([
-    undefined, {}, { settings: null, version: NEXT_VERSION },
-    { settings: [], version: NEXT_VERSION }, { settings: false, version: NEXT_VERSION },
-    { settings: 'invalid', version: NEXT_VERSION }, { settings: {} },
-    { settings: {}, version: null }, { settings: {}, version: '' },
-    { settings: {}, version: ' ' }, { settings: {}, version: 1 },
+    undefined,
+    {},
+    { settings: null, version: NEXT_VERSION },
+    { settings: [], version: NEXT_VERSION },
+    { settings: false, version: NEXT_VERSION },
+    { settings: 'invalid', version: NEXT_VERSION },
+    { settings: {} },
+    { settings: {}, version: null },
+    { settings: {}, version: '' },
+    { settings: {}, version: ' ' },
+    { settings: {}, version: 1 },
   ])('does not synthesize a stored receipt from %j', async (receipt) => {
     const done = script([
       { operation: 'lock', rows: [row({ workspace: {} })] },
       { operation: 'update', rows: receipt === undefined ? [] : [receipt] },
     ]);
-    const response = await PUT(put({ namespace: 'workspace', patch: { activeOrganizationId: null } }));
+    const response = await PUT(
+      put({ namespace: 'workspace', patch: { activeOrganizationId: null } }),
+    );
     expect(response.status).toBe(500);
     expect(await response.json()).not.toHaveProperty('settings');
     expect(h.events).toEqual(['begin', 'lock', 'update', 'commit', 'invalidate']);
@@ -272,7 +335,9 @@ describe('committed receipts and workspace cache ordering', () => {
       { operation: 'lock', rows: [row({ workspace: {} })] },
       { operation: 'update', rows: [{ settings: {}, version: NEXT_VERSION }] },
     ]);
-    const response = await PUT(put({ namespace: 'workspace', patch: { activeOrganizationId: null } }));
+    const response = await PUT(
+      put({ namespace: 'workspace', patch: { activeOrganizationId: null } }),
+    );
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ settings: {}, version: NEXT_VERSION });
     expect(h.events).toEqual(['begin', 'lock', 'update', 'commit', 'invalidate']);
@@ -284,7 +349,9 @@ describe('committed receipts and workspace cache ordering', () => {
       { operation: 'lock', rows: [row({ workspace: {} })] },
       { operation: 'update', error: new Error('Database unavailable') },
     ]);
-    const response = await PUT(put({ namespace: 'workspace', patch: { activeOrganizationId: null } }));
+    const response = await PUT(
+      put({ namespace: 'workspace', patch: { activeOrganizationId: null } }),
+    );
     expect(response.status).toBe(500);
     expect(h.events).toEqual(['begin', 'lock', 'update', 'rollback']);
     expect(h.invalidateActiveOrganizationCache).not.toHaveBeenCalled();
@@ -298,13 +365,17 @@ describe('transaction completion failures', () => {
       { operation: 'lock', rows: [row({ workspace: {} })] },
       { operation: 'update', rows: [row({ workspace: { activeOrganizationId: null } })] },
     ]);
-    h.transaction.mockImplementation(async (callback: (tx: { query: typeof h.txQuery }) => Promise<unknown>) => {
-      h.events.push('begin');
-      await callback({ query: h.txQuery });
-      h.events.push('commit-error');
-      throw new Error('Connection lost during commit');
-    });
-    const response = await PUT(put({ namespace: 'workspace', patch: { activeOrganizationId: null } }));
+    h.transaction.mockImplementation(
+      async (callback: (tx: { query: typeof h.txQuery }) => Promise<unknown>) => {
+        h.events.push('begin');
+        await callback({ query: h.txQuery });
+        h.events.push('commit-error');
+        throw new Error('Connection lost during commit');
+      },
+    );
+    const response = await PUT(
+      put({ namespace: 'workspace', patch: { activeOrganizationId: null } }),
+    );
     expect(response.status).toBe(500);
     expect(await response.json()).not.toHaveProperty('settings');
     expect(h.events).toEqual(['begin', 'lock', 'update', 'commit-error']);
@@ -313,3 +384,9 @@ describe('transaction completion failures', () => {
     done();
   });
 });
+
+type MockedModule0 = typeof import('@/lib/server/rls-db');
+type MockedModule1 = typeof import('@/lib/rate-limit');
+type MockedModule2 = typeof import('@/lib/csrf');
+type MockedModule3 = typeof import('@/lib/logger');
+type MockedModule4 = typeof import('@/lib/server/request-context-cache');

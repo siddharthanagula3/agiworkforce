@@ -42,11 +42,11 @@ vi.mock('@/lib/services/org-sharing-service', async (importOriginal) => ({
   resolveSharedProjectScope: mockResolveSharedProjectScope,
 }));
 vi.mock('@/lib/services/active-workspace-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/active-workspace-service')>()),
+  ...(await importOriginal<MockedModule0>()),
   resolveActiveOrganizationId: mockSavedOrganizationId,
 }));
 vi.mock('@/lib/services/organization-permission-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/organization-permission-service')>()),
+  ...(await importOriginal<MockedModule1>()),
   resolveOrganizationPermissions: mockPermissions,
 }));
 
@@ -124,44 +124,51 @@ describe('project reads with real shared scope and mocked request-scope receipt'
     ['list headerless', false, false],
     ['detail explicit', true, true],
     ['detail headerless', true, false],
-  ] as const)('reads B with a mocked %s receipt despite saved A', async (_label, detail, explicit) => {
-    respondWithMembership([{ organization_id: ORG, role: 'member' }]);
-    const response = detail
-      ? await GET_PROJECT(request(detail, explicit), {
-          params: Promise.resolve({ id: SHARED_PROJECT }),
-        })
-      : await LIST_PROJECTS(request(detail, explicit));
+  ] as const)(
+    'reads B with a mocked %s receipt despite saved A',
+    async (_label, detail, explicit) => {
+      respondWithMembership([{ organization_id: ORG, role: 'member' }]);
+      const response = detail
+        ? await GET_PROJECT(request(detail, explicit), {
+            params: Promise.resolve({ id: SHARED_PROJECT }),
+          })
+        : await LIST_PROJECTS(request(detail, explicit));
 
-    expect(response.status).toBe(200);
-    const body = await response.json();
-    expect(detail ? body.project.id : body.projects[0].id).toBe(SHARED_PROJECT);
-    expect(mockResolveSharedProjectScope).toHaveBeenCalledWith(expect.anything(), 'member-1', ORG);
-    expect(mockSavedOrganizationId).not.toHaveBeenCalled();
-    expect(mockNeonQuery).not.toHaveBeenCalled();
-    expect(mockPermissions).not.toHaveBeenCalled();
-    const membership = mockRlsQuery.mock.calls.find(([sql]) =>
-      sql.includes('from public.organization_members'),
-    )!;
-    expect(membership[0]).toMatch(
-      /organization_id = \$1 and user_id = \$2[\s\S]*status = 'active'/,
-    );
-    expect(membership[1]).toEqual([ORG, 'member-1']);
-    for (const [sql, params] of mockRlsQuery.mock.calls) {
-      expect(params).not.toContain(SAVED_ORG);
-      if (sql.includes('from public.organization_shared_projects')) {
-        expect(sql).toMatch(/s\.organization_id = \$1/);
-        expect(params).toEqual([ORG, 'member-1']);
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(detail ? body.project.id : body.projects[0].id).toBe(SHARED_PROJECT);
+      expect(mockResolveSharedProjectScope).toHaveBeenCalledWith(
+        expect.anything(),
+        'member-1',
+        ORG,
+      );
+      expect(mockSavedOrganizationId).not.toHaveBeenCalled();
+      expect(mockNeonQuery).not.toHaveBeenCalled();
+      expect(mockPermissions).not.toHaveBeenCalled();
+      const membership = mockRlsQuery.mock.calls.find(([sql]) =>
+        sql.includes('from public.organization_members'),
+      )!;
+      expect(membership[0]).toMatch(
+        /organization_id = \$1 and user_id = \$2[\s\S]*status = 'active'/,
+      );
+      expect(membership[1]).toEqual([ORG, 'member-1']);
+      for (const [sql, params] of mockRlsQuery.mock.calls) {
+        expect(params).not.toContain(SAVED_ORG);
+        if (sql.includes('from public.organization_shared_projects')) {
+          expect(sql).toMatch(/s\.organization_id = \$1/);
+          expect(params).toEqual([ORG, 'member-1']);
+        }
       }
-    }
-    const [sql, params] = mockRlsQuery.mock.calls.at(-1)!;
-    expect(sql).toMatch(
-      detail
-        ? /p\.organization_id is not distinct from \$4::uuid/
-        : /p\.organization_id is not distinct from \$5::uuid/,
-    );
-    expect(params[detail ? 2 : 3]).toEqual([SHARED_PROJECT]);
-    expect(params[detail ? 3 : 4]).toBe(ORG);
-  });
+      const [sql, params] = mockRlsQuery.mock.calls.at(-1)!;
+      expect(sql).toMatch(
+        detail
+          ? /p\.organization_id is not distinct from \$4::uuid/
+          : /p\.organization_id is not distinct from \$5::uuid/,
+      );
+      expect(params[detail ? 2 : 3]).toEqual([SHARED_PROJECT]);
+      expect(params[detail ? 3 : 4]).toBe(ORG);
+    },
+  );
 
   it.each([
     ['missing', []],
@@ -173,7 +180,9 @@ describe('project reads with real shared scope and mocked request-scope receipt'
     });
     expect(response.status).toBe(404);
     expect(mockRlsQuery).toHaveBeenCalledTimes(2);
-    expect(mockRlsQuery.mock.calls.some(([sql]) => sql.includes('organization_shared_projects'))).toBe(false);
+    expect(
+      mockRlsQuery.mock.calls.some(([sql]) => sql.includes('organization_shared_projects')),
+    ).toBe(false);
     expect(mockSavedOrganizationId).not.toHaveBeenCalled();
   });
 
@@ -422,3 +431,6 @@ describe('the payload says which projects the caller may write', () => {
     expect(mockResolveSharedProjectScope).not.toHaveBeenCalled();
   });
 });
+
+type MockedModule0 = typeof import('@/lib/services/active-workspace-service');
+type MockedModule1 = typeof import('@/lib/services/organization-permission-service');

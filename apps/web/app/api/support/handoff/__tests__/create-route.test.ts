@@ -17,7 +17,8 @@ const routeMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@clerk/nextjs/server', () => ({ auth: routeMocks.auth }));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule0>()),
   getSuspendedAccountUser: vi.fn(async () => null),
   getOptionalAuthUser: routeMocks.optionalUser,
   getClerkAuthUser: vi.fn(),
@@ -36,7 +37,8 @@ vi.mock('@/lib/csrf', () => ({
   getOrCreateAnonSession: routeMocks.getOrCreateAnonSession,
 }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: routeMocks.withRateLimit }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule1>()),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/support/handoff/store', () => ({
@@ -253,3 +255,7 @@ describe('POST /api/support/handoff', () => {
     expect(response.headers.get('set-cookie')).toContain('__Host-anon-session-id=anon-new');
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/api-auth');
+
+type RetainedMockModule1 = typeof import('@/lib/logger');

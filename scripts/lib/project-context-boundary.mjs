@@ -5,6 +5,8 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readTableColumns } from '../check-resource-metadata.mjs';
+import { stripComments } from './module-graph.mjs';
+import { localSqlConstantExpansion, sqlPredicateCode } from './sql-constant-expansion.mjs';
 
 export const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url));
 
@@ -88,10 +90,6 @@ export function projectScopedTables(repoRoot = REPO_ROOT) {
     if (columns.has('project_id')) tables.add(table);
   }
   return tables;
-}
-
-function stripComments(source) {
-  return source.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:'"`\\])\/\/[^\n]*/g, '$1 ');
 }
 
 export function extractStatements(source) {
@@ -251,15 +249,27 @@ export function findUnscopedProjectReads(repoRoot = REPO_ROOT, files = productio
     }
     const statements = extractStatements(source);
     let authorisedAt = Number.POSITIVE_INFINITY;
+    let expandConstants;
     for (const statement of statements) {
-      const tables = tablesRead(statement.sql, scoped);
+      if (tablesRead(statement.sql, scoped).length === 0) continue;
+      let sql = statement.sql;
+      if (sql.includes('${')) {
+        expandConstants ??= localSqlConstantExpansion(path.join(repoRoot, relative), {
+          repoRoot,
+          importConstants: true,
+        });
+        const expanded = sqlPredicateCode(expandConstants(sql, statement.index));
+        const where = expanded?.search(/\bwhere\b/) ?? -1;
+        if (where >= 0 && OWNER_PREDICATE.test(expanded.slice(where))) sql = expanded;
+      }
+      const tables = tablesRead(sql, scoped);
       if (tables.length === 0) continue;
-      if (authorisesProject(statement.sql, tables)) {
+      if (authorisesProject(sql, tables)) {
         authorisedAt = Math.min(authorisedAt, statement.index);
         continue;
       }
-      if (!narrowsByProject(statement.sql, tables)) continue;
-      if (OWNER_PREDICATE.test(statement.sql)) continue;
+      if (!narrowsByProject(sql, tables)) continue;
+      if (OWNER_PREDICATE.test(sql)) continue;
       if (statement.index > authorisedAt) continue;
       findings.push({
         file: relative,

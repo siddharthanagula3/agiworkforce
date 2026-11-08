@@ -55,7 +55,11 @@ describe('browser Office archive bounds', () => {
     const zip = new JSZip();
     zip.file('bomb.xml', 'A'.repeat(1_000_000));
     const archive = await openOfficeArchive(
-      await zip.generateAsync({ type: 'arraybuffer', compression: 'DEFLATE' }),
+      await zip.generateAsync({
+        type: 'arraybuffer',
+        compression: 'DEFLATE',
+        comment: 'Office package',
+      }),
     );
     await expect(officeMemberText(archive, 'bomb.xml')).rejects.toMatchObject({ limit: 'ratio' });
   });
@@ -75,14 +79,17 @@ describe('browser Office archive bounds', () => {
 
   it('rebuilds admitted DOCX parts using STORE and preserves their bytes', async () => {
     const zip = new JSZip();
-    zip.comment = 'Office package';
     zip.file('word/document.xml', '<document>日本語</document>', { createFolders: false });
     const stored = await storedOfficeArchive(
-      await zip.generateAsync({ type: 'arraybuffer', compression: 'DEFLATE' }),
+      await zip.generateAsync({
+        type: 'arraybuffer',
+        compression: 'DEFLATE',
+        comment: 'Office package',
+      }),
     );
     expect(new DataView(stored).getUint16(8, true)).toBe(0);
     const accepted = await JSZip.loadAsync(stored);
-    expect(accepted.comment).toBe('Office package');
+    expect(accepted).toHaveProperty('comment', 'Office package');
     expect(await accepted.file('word/document.xml')!.async('string')).toBe(
       '<document>日本語</document>',
     );
@@ -93,7 +100,13 @@ describe('browser Office archive bounds', () => {
     zip.file('word/document.xml', '<document>Text</document>');
     zip.file('unreferenced.bin', 'A'.repeat(1_000_000));
     await expect(
-      storedOfficeArchive(await zip.generateAsync({ type: 'arraybuffer', compression: 'DEFLATE' })),
+      storedOfficeArchive(
+        await zip.generateAsync({
+          type: 'arraybuffer',
+          compression: 'DEFLATE',
+          comment: 'Office package',
+        }),
+      ),
     ).rejects.toBeInstanceOf(DecompressionLimitError);
   });
 });

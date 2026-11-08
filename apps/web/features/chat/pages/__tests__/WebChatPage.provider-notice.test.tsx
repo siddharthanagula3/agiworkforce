@@ -1,4 +1,4 @@
-import { createWebChatWorkspaceFixture } from './web-chat-workspace-fixture';
+import { createWebChatWorkspaceFixture } from './WebChatWorkspaceFixture';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -50,7 +50,8 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('@clerk/nextjs', async () => {
-  const { createClerkSessionFixture } = await import('@/lib/identity/__tests__/clerk-session-fixture');
+  const { createClerkSessionFixture } =
+    await import('@/lib/identity/__tests__/clerk-session-fixture');
   const session = createClerkSessionFixture(
     () => ({
       getToken: async () => 'fixture-token',
@@ -410,7 +411,15 @@ describe('the notice before a free model run by a named provider answers', () =>
     expect(mocks.savePreference).toHaveBeenCalledWith(
       'provider_consent',
       { qwen: expect.objectContaining({ accepted: true, disclosureVersion: notice.version }) },
-      { merge: true },
+      {
+        merge: true,
+        authority: expect.objectContaining({
+          session: expect.objectContaining({
+            userId: 'fixture-user',
+            sessionId: 'fixture-session',
+          }),
+        }),
+      },
     );
     expect(mocks.savePreference.mock.invocationCallOrder[0]!).toBeLessThan(
       mocks.sendMessage.mock.invocationCallOrder[0]!,

@@ -84,9 +84,9 @@ const SECRET_IN_RESUME_MESSAGE =
 // Same tool loop as route.ts, same limit; a literal because Next reads it statically.
 export const maxDuration = 300;
 
-function jsonError(message: string, status: number): NextResponse {
+function jsonError(message: string, status: number, code = 'tool_input_invalid'): NextResponse {
   return NextResponse.json(
-    { error: { message, type: 'invalid_request_error', code: 'tool_input_invalid' } },
+    { error: { message, type: 'invalid_request_error', code } },
     { status, headers: getSecurityHeaders() },
   );
 }

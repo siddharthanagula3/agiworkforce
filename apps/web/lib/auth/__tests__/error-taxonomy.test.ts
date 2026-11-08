@@ -20,6 +20,19 @@ function vendor(first: Record<string, unknown>, envelope: Record<string, unknown
 }
 
 describe('auth error taxonomy', () => {
+  it.each([20, null, {}, [], 'constructor', '__proto__'])(
+    'handles non-provider error code %j without throwing',
+    (code) => {
+      expect(classifyAuthError({ code })).toEqual({ kind: 'unexpected' });
+    },
+  );
+
+  it('handles the numeric code on a native cancellation error', () => {
+    expect(classifyAuthError(new DOMException('Owner changed', 'AbortError'))).toEqual({
+      kind: 'unexpected',
+    });
+  });
+
   it('separates an expired code from an incorrect one', () => {
     expect(classifyAuthError(vendor({ code: 'verification_expired' })).kind).toBe('code_expired');
     expect(classifyAuthError(vendor({ code: 'form_code_incorrect' })).kind).toBe('code_incorrect');

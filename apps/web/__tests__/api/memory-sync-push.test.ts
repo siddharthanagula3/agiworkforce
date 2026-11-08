@@ -308,7 +308,7 @@ describe('POST /api/memory/sync, body admission', () => {
         controller.enqueue(new TextEncoder().encode('{"memories":'));
       },
     });
-    const init: RequestInit & { duplex: 'half' } = {
+    const init: ConstructorParameters<typeof NextRequest>[1] & { duplex: 'half' } = {
       method: 'POST',
       headers,
       body,
@@ -337,7 +337,7 @@ describe('POST /api/memory/sync, body admission', () => {
       },
       cancel,
     });
-    const init: RequestInit & { duplex: 'half' } = {
+    const init: ConstructorParameters<typeof NextRequest>[1] & { duplex: 'half' } = {
       method: 'POST',
       headers,
       body,

@@ -86,7 +86,13 @@ export function SiteDetailScreen() {
   return <SiteDetailBody key={view.key} view={view} access={access} />;
 }
 
-function SiteDetailBody({ view, access }: { view: SiteDetailLifetime; access: CloudFeatureAccess }) {
+function SiteDetailBody({
+  view,
+  access,
+}: {
+  view: SiteDetailLifetime;
+  access: CloudFeatureAccess;
+}) {
   const router = useRouter();
   const colors = useThemeColors();
   const { token, authority, refresh } = view;
@@ -113,7 +119,9 @@ function SiteDetailBody({ view, access }: { view: SiteDetailLifetime; access: Cl
         setState(null);
         setError(cloudActionError(loadError, 'Could not load this site.'));
       });
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [view]);
 
   const run = useCallback(
@@ -127,8 +135,11 @@ function SiteDetailBody({ view, access }: { view: SiteDetailLifetime; access: Cl
         return view.isCurrent();
       } catch (actionError) {
         if (view.isCurrent()) {
-          setError(actionError instanceof SiteMutationUncertainError
-            ? actionError.message : cloudActionError(actionError, failure));
+          setError(
+            actionError instanceof SiteMutationUncertainError
+              ? actionError.userMessage
+              : cloudActionError(actionError, failure),
+          );
         }
         return false;
       } finally {
@@ -151,7 +162,9 @@ function SiteDetailBody({ view, access }: { view: SiteDetailLifetime; access: Cl
         consequence:
           'The link stops working for everyone, and all shared and personal data visitors saved in this site is permanently erased. The original artifact stays in its chat. The deleted data cannot be recovered.',
         actionLabel: withData ? 'Delete' : 'Unpublish',
-      }).finally(() => { confirmation.current = false; });
+      }).finally(() => {
+        confirmation.current = false;
+      });
       if (!confirmed || !view.isCurrent()) return;
       const done = await run(
         withData ? 'delete' : 'unpublish',
@@ -165,7 +178,8 @@ function SiteDetailBody({ view, access }: { view: SiteDetailLifetime; access: Cl
             : unpublishSite(state.site.token, authority),
         withData ? 'Could not delete this site.' : 'Could not unpublish this site.',
       );
-      if (done && view.isCurrent()) router.replace(SITES_ROUTE as Parameters<typeof router.replace>[0]);
+      if (done && view.isCurrent())
+        router.replace(SITES_ROUTE as Parameters<typeof router.replace>[0]);
     },
     [authority, router, run, state, view],
   );
@@ -178,10 +192,16 @@ function SiteDetailBody({ view, access }: { view: SiteDetailLifetime; access: Cl
       consequence:
         'Everything visitors saved to this page for everyone is erased. Each visitor’s personal data stays theirs. This cannot be undone.',
       actionLabel: 'Clear',
-    }).finally(() => { confirmation.current = false; });
+    }).finally(() => {
+      confirmation.current = false;
+    });
     if (!confirmed || !view.isCurrent()) return;
     if (
-      await run('clear', () => clearSiteSharedData(state.site.token, authority), 'Could not clear the data.')
+      await run(
+        'clear',
+        () => clearSiteSharedData(state.site.token, authority),
+        'Could not clear the data.',
+      )
     ) {
       refresh();
     }
@@ -246,19 +266,25 @@ function SiteDetailBody({ view, access }: { view: SiteDetailLifetime; access: Cl
               title={copyControlLabel(copyStatus, 'Copy link')}
               size="sm"
               variant="outline"
-              onPress={() => { if (view.isCurrent()) void copy(site.shareUrl); }}
+              onPress={() => {
+                if (view.isCurrent()) void copy(site.shareUrl);
+              }}
             />
             <Button
               title="Share"
               size="sm"
               variant="outline"
-              onPress={() => { if (view.isCurrent()) void Share.share({ message: site.shareUrl }); }}
+              onPress={() => {
+                if (view.isCurrent()) void Share.share({ message: site.shareUrl });
+              }}
             />
             <Button
               title="Open"
               size="sm"
               variant="outline"
-              onPress={() => { if (view.isCurrent()) void openUntrustedUrlInAppBrowser(site.shareUrl); }}
+              onPress={() => {
+                if (view.isCurrent()) void openUntrustedUrlInAppBrowser(site.shareUrl);
+              }}
             />
             {site.conversationId ? (
               <Button
@@ -266,7 +292,8 @@ function SiteDetailBody({ view, access }: { view: SiteDetailLifetime; access: Cl
                 size="sm"
                 variant="outline"
                 onPress={() =>
-                  view.isCurrent() && router.push({
+                  view.isCurrent() &&
+                  router.push({
                     pathname: '/(app)/chat/[id]' as const,
                     params: { id: site.conversationId! },
                   })
@@ -306,7 +333,9 @@ function SiteDetailBody({ view, access }: { view: SiteDetailLifetime; access: Cl
             label="Site name"
             value={title}
             maxLength={MANAGED_CLOUD_PUBLISHED_ARTIFACT_TITLE_MAX_CHARS}
-            onChangeText={(value) => { if (view.isCurrent()) setTitle(value); }}
+            onChangeText={(value) => {
+              if (view.isCurrent()) setTitle(value);
+            }}
           />
           <Button
             title="Rename"

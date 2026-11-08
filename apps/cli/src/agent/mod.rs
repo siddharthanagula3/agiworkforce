@@ -2915,11 +2915,18 @@ mod tests {
 
     #[test]
     fn rejected_managed_load_preserves_the_active_conversation() {
-        for invalid_route in ["missing-model", "missing-authority", "incompatible-authority"] {
+        for invalid_route in [
+            "missing-model",
+            "missing-authority",
+            "incompatible-authority",
+        ] {
             let temp = tempfile::tempdir().expect("session fixture");
-            let mut session = AgentSession::new("fixture-local-model:latest", &test_context(), None);
+            let mut session =
+                AgentSession::new("fixture-local-model:latest", &test_context(), None);
             session.set_session_persistence(false);
-            session.messages.push(Message::text("user", "active conversation"));
+            session
+                .messages
+                .push(Message::text("user", "active conversation"));
             session.recent_tool_calls = vec![17];
             session.loop_strike_count = 2;
             session.memory_extracted_through = session.messages.len();
@@ -2940,20 +2947,32 @@ mod tests {
             match invalid_route {
                 "missing-model" => incoming.model = None,
                 "missing-authority" => incoming.routing_authority = None,
-                _ => incoming.routing_authority.as_mut().expect("authority").privacy_mode = PrivacyMode::Byok,
+                _ => {
+                    incoming
+                        .routing_authority
+                        .as_mut()
+                        .expect("authority")
+                        .privacy_mode = PrivacyMode::Byok
+                }
             }
 
             assert!(session
                 .load_managed_conversation(incoming, temp.path().join("target.json"))
                 .is_err());
-            assert_eq!(serde_json::to_value(&session.messages).expect("messages"), original_messages);
+            assert_eq!(
+                serde_json::to_value(&session.messages).expect("messages"),
+                original_messages
+            );
             assert_eq!(session.runtime_session_id, original_id);
             assert_eq!(session.model, original_model);
             assert_eq!(session.provider, original_provider);
             assert_eq!(session.privacy_mode, PrivacyMode::Local);
             assert!(session.managed_session.is_none());
             assert!(session.managed_session_path.is_none());
-            assert!(std::sync::Arc::ptr_eq(&session.session_activity, &original_activity));
+            assert!(std::sync::Arc::ptr_eq(
+                &session.session_activity,
+                &original_activity
+            ));
             assert_eq!(session.recent_tool_calls, vec![17]);
             assert_eq!(session.loop_strike_count, 2);
             assert_eq!(session.memory_extracted_through, original_extracted);
@@ -2966,11 +2985,14 @@ mod tests {
         let temp = tempfile::tempdir().expect("session fixture");
         let mut session = AgentSession::new("fixture-local-model:latest", &test_context(), None);
         session.set_session_persistence(false);
-        session.messages.push(Message::text("user", "previous conversation"));
+        session
+            .messages
+            .push(Message::text("user", "previous conversation"));
         session.recent_tool_calls = vec![17];
         session.loop_strike_count = 2;
         session.memory_extracted_through = session.messages.len();
-        let mut incoming = ManagedSession::with_messages("empty-target", chrono::Utc::now(), Vec::new());
+        let mut incoming =
+            ManagedSession::with_messages("empty-target", chrono::Utc::now(), Vec::new());
         incoming.model = Some(session.model.clone());
         incoming.routing_authority = Some(session.current_routing_authority());
 
@@ -3020,7 +3042,8 @@ mod tests {
         for approval in [None, Some(false), Some(true)] {
             for target_has_plan in [false, true] {
                 let temp = tempfile::tempdir().expect("session fixture");
-                let mut session = AgentSession::new("fixture-local-model:latest", &test_context(), None);
+                let mut session =
+                    AgentSession::new("fixture-local-model:latest", &test_context(), None);
                 session.set_session_persistence(false);
                 session.permission_mode = crate::cli_options::PermissionMode::Plan;
                 session.plan_mode = true;
@@ -3039,17 +3062,24 @@ mod tests {
                         notes: None,
                     }],
                 });
-                let expected_plan = serde_json::to_value(&incoming.current_plan).expect("target plan");
+                let expected_plan =
+                    serde_json::to_value(&incoming.current_plan).expect("target plan");
 
                 session
                     .adopt_managed_session(incoming, temp.path().join("target.json"))
                     .expect("adopt target");
 
                 assert_eq!(session.plan_approved, approval.unwrap_or(false));
-                assert_eq!(serde_json::to_value(&session.current_plan).expect("plan"), expected_plan);
+                assert_eq!(
+                    serde_json::to_value(&session.current_plan).expect("plan"),
+                    expected_plan
+                );
                 assert!(session.current_plan_path.is_none());
                 assert!(session.plan_rejection_feedback.is_none());
-                assert_eq!(session.permission_mode, crate::cli_options::PermissionMode::Plan);
+                assert_eq!(
+                    session.permission_mode,
+                    crate::cli_options::PermissionMode::Plan
+                );
                 assert!(session.plan_mode);
             }
         }
@@ -3058,7 +3088,8 @@ mod tests {
     #[test]
     fn initializing_persistence_preserves_the_current_plan_and_transients() {
         let temp = tempfile::tempdir().expect("session fixture");
-        let store = crate::runtime::session_control::ManagedSessionStore::new(temp.path().to_path_buf());
+        let store =
+            crate::runtime::session_control::ManagedSessionStore::new(temp.path().to_path_buf());
         let mut session = AgentSession::new("fixture-local-model:latest", &test_context(), None);
         session.set_session_persistence(true);
         session.plan_approved = true;
@@ -3074,16 +3105,28 @@ mod tests {
         session.plan_rejection_feedback = Some("current feedback".to_string());
         let expected_plan = serde_json::to_value(&session.current_plan).expect("plan");
 
-        session.initialize_managed_session(&store).expect("initialize fixture");
+        session
+            .initialize_managed_session(&store)
+            .expect("initialize fixture");
 
         assert!(session.plan_approved);
-        assert_eq!(serde_json::to_value(&session.current_plan).expect("plan"), expected_plan);
+        assert_eq!(
+            serde_json::to_value(&session.current_plan).expect("plan"),
+            expected_plan
+        );
         assert_eq!(session.current_plan_path, Some(plan_path));
-        assert_eq!(session.plan_rejection_feedback.as_deref(), Some("current feedback"));
-        let saved = ManagedSession::load_from_path(session.managed_session_path.as_ref().expect("path"))
-            .expect("read fixture");
+        assert_eq!(
+            session.plan_rejection_feedback.as_deref(),
+            Some("current feedback")
+        );
+        let saved =
+            ManagedSession::load_from_path(session.managed_session_path.as_ref().expect("path"))
+                .expect("read fixture");
         assert_eq!(saved.plan_approved, Some(true));
-        assert_eq!(serde_json::to_value(&saved.current_plan).expect("saved plan"), expected_plan);
+        assert_eq!(
+            serde_json::to_value(&saved.current_plan).expect("saved plan"),
+            expected_plan
+        );
     }
 
     fn durable_local_handoff_session(

@@ -28,7 +28,9 @@ vi.mock('@/lib/logger', () => ({
 }));
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: vi.fn(async () => ({
-    db: { query: mocks.query }, userId: 'user-1', organizationId: ORG,
+    db: { query: mocks.query },
+    userId: 'user-1',
+    organizationId: ORG,
   })),
 }));
 vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: mocks.audit }));
@@ -42,7 +44,7 @@ vi.mock('@/lib/services/organization-policy-override-service', () => ({
   readApplicablePolicyOverrides: mocks.overrides,
 }));
 vi.mock('@/lib/services/organization-policy-service', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/services/organization-policy-service')>();
+  const actual = await importOriginal<MockedModule0>();
   return {
     ...actual,
     readOrganizationPolicy: (...args: Parameters<typeof actual.readOrganizationPolicy>) =>
@@ -129,12 +131,20 @@ beforeEach(() => {
   mocks.useRealPolicy = false;
   mocks.overrides.mockResolvedValue([]);
   vi.mocked(getUserScopedDb).mockResolvedValue({
-    db: { query: mocks.query }, userId: 'user-1', organizationId: ORG,
+    db: { query: mocks.query },
+    userId: 'user-1',
+    organizationId: ORG,
   } as never);
-  vi.mocked(resolveOrganizationPermissions).mockImplementation(async () => mocks.permissions as never);
+  vi.mocked(resolveOrganizationPermissions).mockImplementation(
+    async () => mocks.permissions as never,
+  );
   vi.mocked(requireTeamAdminAccess).mockResolvedValue({
-    plan: 'team', canManageTeam: true, maxMembers: null,
-    seatsConsumed: null, seatsAvailable: null, seatSource: 'unknown',
+    plan: 'team',
+    canManageTeam: true,
+    maxMembers: null,
+    seatsConsumed: null,
+    seatsAvailable: null,
+    seatSource: 'unknown',
   });
   mocks.query.mockImplementation(async (sql: string) => {
     if (/from public\.organization_members/i.test(sql)) {
@@ -247,52 +257,63 @@ const SAVED_ORG = ORG;
 
 type ScopedRow = Record<string, unknown>;
 
-function bindCapturedScope(options: {
-  organizationId?: string | null;
-  membership?: 'active' | 'absent' | 'mismatched';
-  role?: 'owner' | 'admin' | 'member';
-  entitled?: boolean;
-  canManage?: boolean;
-} = {}) {
+function bindCapturedScope(
+  options: {
+    organizationId?: string | null;
+    membership?: 'active' | 'absent' | 'mismatched';
+    role?: 'owner' | 'admin' | 'member';
+    entitled?: boolean;
+    canManage?: boolean;
+  } = {},
+) {
   const rows = new Map<string, ScopedRow>([
-    [SAVED_ORG, {
-      organization_id: SAVED_ORG,
-      default_privacy_mode: 'local',
-      allowed_privacy_modes: ['local'],
-      allow_managed_compute: false,
-      require_local_to_byok_preview: true,
-      chat_sync_surfaces: ['web'],
-      allow_cli_cloud_sync: false,
-      allow_vscode_cloud_sync: false,
-      allow_chrome_cloud_sync: false,
-      audit_export_enabled: true,
-      retention_days: 11,
-      retention_enforced: false,
-      external_sharing_enabled: false,
-      allow_memory: false,
-      metadata: { marker: 'A', codeControls: { allowGithubConnection: false } },
-      updated_at: '2026-11-01T00:00:00.000Z',
-    }],
-    [CAPTURED_ORG, {
-      organization_id: CAPTURED_ORG,
-      default_privacy_mode: 'managed',
-      allowed_privacy_modes: ['local', 'byok', 'managed'],
-      allow_managed_compute: true,
-      require_local_to_byok_preview: true,
-      chat_sync_surfaces: ['web', 'desktop'],
-      allow_cli_cloud_sync: true,
-      allow_vscode_cloud_sync: true,
-      allow_chrome_cloud_sync: true,
-      audit_export_enabled: true,
-      retention_days: 222,
-      retention_enforced: false,
-      external_sharing_enabled: true,
-      allow_memory: true,
-      metadata: { marker: 'B', codeControls: { allowGithubConnection: true } },
-      updated_at: '2026-11-02T00:00:00.000Z',
-    }],
+    [
+      SAVED_ORG,
+      {
+        organization_id: SAVED_ORG,
+        default_privacy_mode: 'local',
+        allowed_privacy_modes: ['local'],
+        allow_managed_compute: false,
+        require_local_to_byok_preview: true,
+        chat_sync_surfaces: ['web'],
+        allow_cli_cloud_sync: false,
+        allow_vscode_cloud_sync: false,
+        allow_chrome_cloud_sync: false,
+        audit_export_enabled: true,
+        retention_days: 11,
+        retention_enforced: false,
+        external_sharing_enabled: false,
+        allow_memory: false,
+        metadata: { marker: 'A', codeControls: { allowGithubConnection: false } },
+        updated_at: '2026-11-01T00:00:00.000Z',
+      },
+    ],
+    [
+      CAPTURED_ORG,
+      {
+        organization_id: CAPTURED_ORG,
+        default_privacy_mode: 'managed',
+        allowed_privacy_modes: ['local', 'byok', 'managed'],
+        allow_managed_compute: true,
+        require_local_to_byok_preview: true,
+        chat_sync_surfaces: ['web', 'desktop'],
+        allow_cli_cloud_sync: true,
+        allow_vscode_cloud_sync: true,
+        allow_chrome_cloud_sync: true,
+        audit_export_enabled: true,
+        retention_days: 222,
+        retention_enforced: false,
+        external_sharing_enabled: true,
+        allow_memory: true,
+        metadata: { marker: 'B', codeControls: { allowGithubConnection: true } },
+        updated_at: '2026-11-02T00:00:00.000Z',
+      },
+    ],
   ]);
-  const revisions = new Map([[SAVED_ORG, 3], [CAPTURED_ORG, 9]]);
+  const revisions = new Map([
+    [SAVED_ORG, 3],
+    [CAPTURED_ORG, 9],
+  ]);
   const originalA = JSON.stringify(rows.get(SAVED_ORG));
   const query = mocks.query;
   query.mockImplementation(async (sql: string, params: unknown[] = []) => {
@@ -303,23 +324,36 @@ function bindCapturedScope(options: {
       if (params[1] !== CAPTURED_USER) return [];
       if (params[0] === SAVED_ORG) return [{ organization_id: SAVED_ORG, role: 'owner' }];
       if (params[0] !== CAPTURED_ORG || options.membership === 'absent') return [];
-      return [{
-        organization_id: options.membership === 'mismatched' ? SAVED_ORG : CAPTURED_ORG,
-        role: options.role ?? 'admin',
-      }];
+      return [
+        {
+          organization_id: options.membership === 'mismatched' ? SAVED_ORG : CAPTURED_ORG,
+          role: options.role ?? 'admin',
+        },
+      ];
     }
     const organizationId = String(params[0]);
     if (/insert into public\.organization_admin_policies/i.test(sql)) {
       const columns = [
-        'organization_id', 'default_privacy_mode', 'allowed_privacy_modes',
-        'allow_managed_compute', 'require_local_to_byok_preview', 'chat_sync_surfaces',
-        'allow_cli_cloud_sync', 'allow_vscode_cloud_sync', 'allow_chrome_cloud_sync',
-        'audit_export_enabled', 'retention_days', 'retention_enforced',
-        'external_sharing_enabled', 'allow_memory',
+        'organization_id',
+        'default_privacy_mode',
+        'allowed_privacy_modes',
+        'allow_managed_compute',
+        'require_local_to_byok_preview',
+        'chat_sync_surfaces',
+        'allow_cli_cloud_sync',
+        'allow_vscode_cloud_sync',
+        'allow_chrome_cloud_sync',
+        'audit_export_enabled',
+        'retention_days',
+        'retention_enforced',
+        'external_sharing_enabled',
+        'allow_memory',
       ];
-      const row = { ...rows.get(organizationId), ...Object.fromEntries(
-        columns.map((column, index) => [column, params[index]]),
-      ), metadata: JSON.parse(params[14] as string) };
+      const row = {
+        ...rows.get(organizationId),
+        ...Object.fromEntries(columns.map((column, index) => [column, params[index]])),
+        metadata: JSON.parse(params[14] as string),
+      };
       rows.set(organizationId, row);
       // Simulate the database revision trigger, not a production trigger test.
       revisions.set(organizationId, (revisions.get(organizationId) ?? 0) + 1);
@@ -366,16 +400,23 @@ function bindCapturedScope(options: {
   mocks.useRealPolicy = true;
   mocks.overrides.mockImplementation(async (...args: unknown[]) => {
     expect(args).toEqual([db, CAPTURED_ORG, CAPTURED_USER]);
-    return [{
-      id: 'B-user-override', organizationId: CAPTURED_ORG, subjectType: 'user',
-      subjectId: CAPTURED_USER, layer: { code: { allowGithubConnection: false } },
-      updatedAt: '2026-11-02T00:00:00.000Z',
-    }];
+    return [
+      {
+        id: 'B-user-override',
+        organizationId: CAPTURED_ORG,
+        subjectType: 'user',
+        subjectId: CAPTURED_USER,
+        layer: { code: { allowGithubConnection: false } },
+        updatedAt: '2026-11-02T00:00:00.000Z',
+      },
+    ];
   });
   setCachedIpAllowList(SAVED_ORG, ['192.0.2.1']);
   setCachedIpAllowList(CAPTURED_ORG, ['198.51.100.1']);
   return {
-    db, rows, revisions,
+    db,
+    rows,
+    revisions,
     assertAUnchanged() {
       expect(JSON.stringify(rows.get(SAVED_ORG))).toBe(originalA);
       expect(revisions.get(SAVED_ORG)).toBe(3);
@@ -452,7 +493,9 @@ describe('captured policy scope (auth mocked; UNRUN)', () => {
     it(`writes only captured B (${explicit ? 'explicit selector' : 'headerless'})`, async () => {
       const state = bindCapturedScope();
       const req = scopedRequest(
-        'PATCH', explicit, { allowDesktopCloudSync: false },
+        'PATCH',
+        explicit,
+        { allowDesktopCloudSync: false },
         { 'If-Match': 'not-a-revision-tag' },
       );
       const response = await PATCH(req);
@@ -464,11 +507,13 @@ describe('captured policy scope (auth mocked; UNRUN)', () => {
       expect(requireTeamAdminAccess).toHaveBeenCalledWith(state.db, CAPTURED_USER, CAPTURED_ORG);
       expect(resolveOrganizationPermissions).toHaveBeenCalledWith(CAPTURED_ORG, CAPTURED_USER);
       expect(state.rows.get(CAPTURED_ORG)).toMatchObject({
-        organization_id: CAPTURED_ORG, allow_managed_compute: true,
+        organization_id: CAPTURED_ORG,
+        allow_managed_compute: true,
         metadata: { marker: 'B' },
       });
       expect(state.rows.get(CAPTURED_ORG)).toMatchObject({
-        retention_days: 222, metadata: { codeControls: { allowDesktopCloudSync: false } },
+        retention_days: 222,
+        metadata: { codeControls: { allowDesktopCloudSync: false } },
       });
       expect(body.controls.allowDesktopCloudSync).toBe(false);
       expect(body.effective.appliedOverrideIds).toEqual(['B-user-override']);
@@ -478,11 +523,17 @@ describe('captured policy scope (auth mocked; UNRUN)', () => {
       expect(response.headers.get('x-workspace-revision')).toBeNull();
       expect(getCachedIpAllowList(CAPTURED_ORG)).toBeUndefined();
       expect(mocks.audit).toHaveBeenCalledTimes(1);
-      expect(mocks.audit).toHaveBeenCalledWith(expect.objectContaining({
-        userId: CAPTURED_USER, organizationId: CAPTURED_ORG,
-        eventType: 'admin_policy_changed',
-        detail: expect.objectContaining({ resourceId: CAPTURED_ORG, changedKeys: ['allowDesktopCloudSync'] }),
-      }));
+      expect(mocks.audit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: CAPTURED_USER,
+          organizationId: CAPTURED_ORG,
+          eventType: 'admin_policy_changed',
+          detail: expect.objectContaining({
+            resourceId: CAPTURED_ORG,
+            changedKeys: ['allowDesktopCloudSync'],
+          }),
+        }),
+      );
       state.assertAUnchanged();
     });
   }
@@ -491,7 +542,9 @@ describe('captured policy scope (auth mocked; UNRUN)', () => {
     for (const membership of ['absent', 'mismatched'] as const) {
       it(`refuses ${method} with ${membership} exact B membership`, async () => {
         const state = bindCapturedScope({ membership });
-        expect((await (method === 'GET' ? GET : PATCH)(scopedRequest(method, true))).status).toBe(403);
+        expect((await (method === 'GET' ? GET : PATCH)(scopedRequest(method, true))).status).toBe(
+          403,
+        );
         expect(requireTeamAdminAccess).not.toHaveBeenCalled();
         expect(resolveOrganizationPermissions).not.toHaveBeenCalled();
         state.assertNoWrite();
@@ -511,7 +564,9 @@ describe('captured policy scope (auth mocked; UNRUN)', () => {
 
     it(`refuses ${method} for ineligible B even when A is eligible`, async () => {
       const state = bindCapturedScope({ entitled: false });
-      expect((await (method === 'GET' ? GET : PATCH)(scopedRequest(method, true))).status).toBe(403);
+      expect((await (method === 'GET' ? GET : PATCH)(scopedRequest(method, true))).status).toBe(
+        403,
+      );
       expect(requireTeamAdminAccess).toHaveBeenCalledWith(state.db, CAPTURED_USER, CAPTURED_ORG);
       expect(resolveOrganizationPermissions).not.toHaveBeenCalled();
       state.assertNoWrite();
@@ -521,7 +576,9 @@ describe('captured policy scope (auth mocked; UNRUN)', () => {
     it(`preserves the ${method} rate-limit short circuit before auth`, async () => {
       const state = bindCapturedScope();
       vi.mocked(withRateLimit).mockResolvedValueOnce(new NextResponse(null, { status: 429 }));
-      expect((await (method === 'GET' ? GET : PATCH)(scopedRequest(method, true))).status).toBe(429);
+      expect((await (method === 'GET' ? GET : PATCH)(scopedRequest(method, true))).status).toBe(
+        429,
+      );
       expect(getUserScopedDb).not.toHaveBeenCalled();
       expect(mocks.query).not.toHaveBeenCalled();
       state.assertNoWrite();
@@ -550,10 +607,14 @@ describe('captured policy scope (auth mocked; UNRUN)', () => {
     const state = bindCapturedScope();
     const req = scopedRequest('PATCH', true);
     const invalid = new NextRequest(req.url, {
-      method: 'PATCH', headers: req.headers, body: JSON.stringify({ allowEverything: true }),
+      method: 'PATCH',
+      headers: req.headers,
+      body: JSON.stringify({ allowEverything: true }),
     });
     expect((await PATCH(invalid)).status).toBe(400);
     state.assertNoWrite();
     state.assertAUnchanged();
   });
 });
+
+type MockedModule0 = typeof import('@/lib/services/organization-policy-service');

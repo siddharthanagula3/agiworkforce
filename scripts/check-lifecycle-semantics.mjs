@@ -10,6 +10,8 @@ import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { readForeignKeys, readTableColumns } from './check-resource-metadata.mjs';
+import { stripComments } from './lib/module-graph.mjs';
+import { localSqlConstantExpansion, sqlPredicateCode } from './lib/sql-constant-expansion.mjs';
 
 export const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 
@@ -50,10 +52,6 @@ function isNonProductionPath(relativePath) {
       relativePath,
     )
   );
-}
-
-function stripComments(source) {
-  return source.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:'"`\\])\/\/[^\n]*/g, '$1 ');
 }
 
 export function loadContract(repoRoot = REPO_ROOT) {
@@ -507,8 +505,12 @@ function splitStatements(sql) {
  * resolved. A fragment consumed by another literal in the same file is judged
  * in the statement that uses it, never on its own.
  */
-export function sqlStatements(source) {
+export function sqlStatements(source, { repoRoot = null, file = null } = {}) {
   const code = stripComments(source);
+  const expand =
+    file && source.includes('${')
+      ? localSqlConstantExpansion(file, { repoRoot, importConstants: true })
+      : () => null;
   const literals = scanLiterals(code);
   const { bindings, exported } = literalBindings(code, literals);
   const context = { bindings, fragments: fragmentSources(code, literals) };
@@ -521,7 +523,13 @@ export function sqlStatements(source) {
   const statements = [];
   for (const literal of literals) {
     if (spliced.has(literal)) continue;
-    const rendered = renderLiteral(literal, context, new Set()).replace(/(^|\s)--[^\n]*/g, '$1 ');
+    const imported = sqlPredicateCode(
+      expand(code.slice(literal.start + 1, literal.end - 1), literal.start),
+    );
+    const rendered = (imported ?? renderLiteral(literal, context, new Set())).replace(
+      /(^|\s)--[^\n]*/g,
+      '$1 ',
+    );
     for (const statement of splitStatements(rendered)) {
       const trimmed = statement.trim();
       if (trimmed.length > 0 && SQL_VERB.test(trimmed)) statements.push(trimmed);
@@ -597,7 +605,10 @@ export function findUnfilteredReads({ repoRoot = REPO_ROOT, files, contract, mar
     if (candidates.length === 0) continue;
 
     const seen = new Set();
-    for (const statement of sqlStatements(raw)) {
+    for (const statement of sqlStatements(raw, {
+      repoRoot,
+      file: path.join(repoRoot, relativePath),
+    })) {
       const lower = statement.toLowerCase();
       for (const [table, markers] of candidates) {
         if (!lower.includes(table)) continue;

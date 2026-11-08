@@ -1,3 +1,5 @@
+'use client';
+
 export interface SessionAuthority {
   readonly userId: string;
   readonly sessionId: string;
@@ -48,23 +50,25 @@ export function createRequestAuthority(
       const destination = input instanceof Request ? input.url : String(input);
       const origin = typeof window === 'undefined' ? null : window.location.origin;
       const target = new URL(destination, origin ?? 'https://request-authority.invalid');
-      if (!target.pathname.startsWith('/api/') ||
-          target.origin !== (origin ?? 'https://request-authority.invalid')) {
+      if (
+        !target.pathname.startsWith('/api/') ||
+        target.origin !== (origin ?? 'https://request-authority.invalid')
+      ) {
         throw new Error('Request authority requires a same-origin API destination');
       }
       const token = await session.getToken();
       assertCurrent();
       if (!token) throw new Error('Not authenticated');
-      const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined));
+      const headers = new Headers(
+        init?.headers ?? (input instanceof Request ? input.headers : undefined),
+      );
       headers.set('Authorization', `Bearer ${token}`);
       const inputSignal = init?.signal ?? (input instanceof Request ? input.signal : undefined);
       const requestInit: RequestInit = {
         ...init,
         headers,
         credentials: 'omit',
-        signal: inputSignal
-          ? AbortSignal.any([controller.signal, inputSignal])
-          : controller.signal,
+        signal: inputSignal ? AbortSignal.any([controller.signal, inputSignal]) : controller.signal,
       };
       assertCurrent();
       onDispatch?.();

@@ -11,29 +11,31 @@ export function useLocalDataExport() {
   const mounted = useRef(false);
   const operation = useRef<{ assertAuthority?: () => void } | null>(null);
 
-  useFocusEffect(useCallback(() => {
-    mounted.current = true;
-    setExporting(false);
-    setProgress(null);
-    const unsubscribe = subscribeCloudAccountEpochChange(() => {
-      const current = operation.current;
-      if (!current) return;
-      try {
-        current.assertAuthority?.();
-      } catch {
-        operation.current = null;
-        if (mounted.current) {
-          setExporting(false);
-          setProgress(null);
+  useFocusEffect(
+    useCallback(() => {
+      mounted.current = true;
+      setExporting(false);
+      setProgress(null);
+      const unsubscribe = subscribeCloudAccountEpochChange(() => {
+        const current = operation.current;
+        if (!current) return;
+        try {
+          current.assertAuthority?.();
+        } catch {
+          operation.current = null;
+          if (mounted.current) {
+            setExporting(false);
+            setProgress(null);
+          }
         }
-      }
-    });
-    return () => {
-      mounted.current = false;
-      operation.current = null;
-      unsubscribe();
-    };
-  }, []));
+      });
+      return () => {
+        mounted.current = false;
+        operation.current = null;
+        unsubscribe();
+      };
+    }, []),
+  );
 
   const handleExport = useCallback(async () => {
     if (!mounted.current || operation.current) return;
@@ -49,15 +51,22 @@ export function useLocalDataExport() {
     try {
       const snapshot = buildLocalDataExportSnapshot();
       current.assertAuthority = snapshot.assertAuthority;
-      await exportAllUserData((next) => {
-        assertActive();
-        setProgress(next);
-      }, snapshot, assertActive);
+      await exportAllUserData(
+        (next) => {
+          assertActive();
+          setProgress(next);
+        },
+        snapshot,
+        assertActive,
+      );
     } catch (error) {
       if (isCurrent()) {
-        Alert.alert('Export failed', error instanceof LocalExportAuthorityError
-          ? error.message
-          : 'Could not prepare your local data export. Try again.');
+        Alert.alert(
+          'Export failed',
+          error instanceof LocalExportAuthorityError
+            ? error.userMessage
+            : 'Could not prepare your local data export. Try again.',
+        );
       }
     } finally {
       if (isCurrent()) {

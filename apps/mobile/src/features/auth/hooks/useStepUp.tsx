@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type ReactElement } from 'react';
 import { useSession } from '@clerk/expo';
 import { StepUpModal } from '../components/StepUpModal';
 import { subscribeCloudAccountEpochChange } from '../services/cloudAccountSession';
@@ -36,29 +36,38 @@ interface Attempt {
 }
 
 export function useStepUp(): UseStepUp {
+  const dialogOwnerId = useId();
   const { session } = useSession();
   const [challenge, setChallenge] = useState<StepUpChallenge | null>(null);
   const active = useRef<Attempt | null>(null);
   const sequence = useRef(0);
   const mounted = useRef(true);
 
-  const current = useCallback((attempt: Attempt) =>
-    mounted.current && active.current === attempt && !attempt.controller.signal.aborted &&
-    attempt.identity.isCurrent(), []);
+  const current = useCallback(
+    (attempt: Attempt) =>
+      mounted.current &&
+      active.current === attempt &&
+      !attempt.controller.signal.aborted &&
+      attempt.identity.isCurrent(),
+    [],
+  );
 
   const settle = useCallback((attempt: Attempt, token: string | null) => {
     if (active.current !== attempt) return;
     const resolve = attempt.settle;
     attempt.settle = null;
-    if (mounted.current) setChallenge((value) => value?.attemptId === attempt.id ? null : value);
+    if (mounted.current) setChallenge((value) => (value?.attemptId === attempt.id ? null : value));
     resolve?.(token);
   }, []);
 
-  const retire = useCallback((attempt: Attempt) => {
-    attempt.controller.abort();
-    settle(attempt, null);
-    if (active.current === attempt) active.current = null;
-  }, [settle]);
+  const retire = useCallback(
+    (attempt: Attempt) => {
+      attempt.controller.abort();
+      settle(attempt, null);
+      if (active.current === attempt) active.current = null;
+    },
+    [settle],
+  );
 
   useEffect(() => {
     mounted.current = true;
@@ -88,8 +97,12 @@ export function useStepUp(): UseStepUp {
       const identity = captureStepUpIdentity();
       if (active.current) retire(active.current);
       const attempt: Attempt = {
-        id: ++sequence.current, action, resourceId, identity,
-        controller: new AbortController(), settle: null,
+        id: ++sequence.current,
+        action,
+        resourceId,
+        identity,
+        controller: new AbortController(),
+        settle: null,
       };
       active.current = attempt;
       const assertCurrent = () => {
@@ -103,7 +116,9 @@ export function useStepUp(): UseStepUp {
           if (!isStepUpRequired(error)) throw error;
         }
         assertCurrent();
-        const pending = new Promise<string | null>((resolve) => { attempt.settle = resolve; });
+        const pending = new Promise<string | null>((resolve) => {
+          attempt.settle = resolve;
+        });
         const options = { accountEpoch: identity.account, signal: attempt.controller.signal };
         const acquisition: { failure: { error: unknown } | null } = { failure: null };
         void (async () => {
@@ -113,17 +128,28 @@ export function useStepUp(): UseStepUp {
             if (!sessionToken) throw new Error('You are signed out. Sign in again to continue.');
             const silent = await requestStepUpGrant(action, resourceId, sessionToken, options);
             assertCurrent();
-            if (silent.kind === 'granted') { settle(attempt, silent.token); return; }
+            if (silent.kind === 'granted') {
+              settle(attempt, silent.token);
+              return;
+            }
             if (silent.kind === 'failed') throw new Error(silent.message);
             const consequence = await readStepUpConsequence(action, options);
             assertCurrent();
             setChallenge({
-              attemptId: attempt.id, action, resourceId, identity, consequence,
-              level: silent.level, signal: attempt.controller.signal,
+              attemptId: attempt.id,
+              action,
+              resourceId,
+              identity,
+              consequence,
+              level: silent.level,
+              signal: attempt.controller.signal,
               isCurrent: () => current(attempt),
             });
           } catch (error) {
-            if (!current(attempt)) { retire(attempt); return; }
+            if (!current(attempt)) {
+              retire(attempt);
+              return;
+            }
             acquisition.failure = { error };
             settle(attempt, null);
           }
@@ -140,20 +166,21 @@ export function useStepUp(): UseStepUp {
     [current, retire, settle],
   );
 
-  const modal = challenge && challenge.isCurrent() ? (
-    <StepUpModal
-      key={challenge.attemptId}
-      challenge={challenge}
-      onCancel={() => {
-        const attempt = active.current;
-        if (attempt?.id === challenge.attemptId) retire(attempt);
-      }}
-      onSatisfied={(token) => {
-        const attempt = active.current;
-        if (attempt?.id === challenge.attemptId && current(attempt)) settle(attempt, token);
-      }}
-    />
-  ) : null;
+  const modal =
+    challenge && challenge.isCurrent() ? (
+      <StepUpModal
+        key={`${dialogOwnerId}:${challenge.attemptId}`}
+        challenge={challenge}
+        onCancel={() => {
+          const attempt = active.current;
+          if (attempt?.id === challenge.attemptId) retire(attempt);
+        }}
+        onSatisfied={(token) => {
+          const attempt = active.current;
+          if (attempt?.id === challenge.attemptId && current(attempt)) settle(attempt, token);
+        }}
+      />
+    ) : null;
 
   return { withStepUp, modal };
 }

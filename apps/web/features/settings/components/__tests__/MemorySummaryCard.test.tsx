@@ -1,12 +1,18 @@
-import { MANAGED_CLOUD_ORGANIZATION_HEADER, MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE } from '@agiworkforce/cloud-contracts';
+import {
+  MANAGED_CLOUD_ORGANIZATION_HEADER,
+  MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
+} from '@agiworkforce/cloud-contracts';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createCloudMemoryFixture, getCloudMemoryFixtureSession } from '@/features/memory/__tests__/cloud-memory-fixture';
+import {
+  createCloudMemoryFixture,
+  getCloudMemoryFixtureSession,
+} from '@/features/memory/__tests__/CloudMemoryFixture';
 
 vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/identity/useSessionSnapshot')>()),
+  ...(await importOriginal<MockedModule0>()),
   useSessionSnapshot: () => getCloudMemoryFixtureSession,
   useReadonlyIdentityLifetime: () => () => {
     const session = getCloudMemoryFixtureSession();
@@ -15,8 +21,13 @@ vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
 }));
 
 let cloud: ReturnType<typeof createCloudMemoryFixture>;
-beforeEach(() => { cloud = createCloudMemoryFixture(); });
-afterEach(() => { cloud.retire(); vi.unstubAllGlobals(); });
+beforeEach(() => {
+  cloud = createCloudMemoryFixture();
+});
+afterEach(() => {
+  cloud.retire();
+  vi.unstubAllGlobals();
+});
 
 import { MemorySummaryCard } from '../MemorySummaryCard';
 
@@ -68,7 +79,9 @@ describe('Unexecuted cloud MemorySummaryCard', () => {
     const [, init] = fetchMock.mock.calls[1]!;
     expect(init.method).toBe('POST');
     expect(new Headers(init.headers).get('Authorization')).toMatch(/^Bearer fixture-token-/);
-    expect(new Headers(init.headers).get(MANAGED_CLOUD_ORGANIZATION_HEADER)).toBe(MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE);
+    expect(new Headers(init.headers).get(MANAGED_CLOUD_ORGANIZATION_HEADER)).toBe(
+      MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
+    );
     expect(init.credentials).toBe('omit');
   });
 
@@ -106,3 +119,5 @@ describe('Unexecuted cloud MemorySummaryCard', () => {
     expect(screen.getByRole('button', { name: 'Summarise my memories' })).toBeEnabled();
   });
 });
+
+type MockedModule0 = typeof import('@/lib/identity/useSessionSnapshot');

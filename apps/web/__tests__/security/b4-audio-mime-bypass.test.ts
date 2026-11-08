@@ -15,19 +15,22 @@ const TRANSCRIPTION_MODEL = (() => {
 
 vi.mock('server-only', () => ({}));
 
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule0>()),
   getClerkAuthUser: vi.fn(),
 }));
 
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn(),
 }));
-vi.mock('@/lib/cors', () => ({
+vi.mock('@/lib/cors', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule0>()),
   handleCorsPreflightRequest: vi.fn(),
   getCorsHeaders: vi.fn(),
   getSecurityHeaders: vi.fn(),
 }));
-vi.mock('@/lib/error-handler', () => ({
+vi.mock('@/lib/error-handler', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule1>()),
   withErrorHandler: <T extends (...a: unknown[]) => unknown>(handler: T) => handler,
 }));
 vi.mock('@/lib/server/neon-db', async (importOriginal) => {
@@ -37,7 +40,8 @@ vi.mock('@/lib/server/neon-db', async (importOriginal) => {
     getNeonDb: () => createDatabaseAdapterFake(),
   };
 });
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<RetainedMockModule2>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
@@ -129,3 +133,9 @@ describe('B4: audio MIME + magic-bytes validation', () => {
     expect(providerCalls()).toEqual([]);
   });
 });
+
+type CompleteMockModule0 = typeof import('@/lib/api-auth');
+
+type RetainedMockModule0 = typeof import('@/lib/cors');
+type RetainedMockModule1 = typeof import('@/lib/error-handler');
+type RetainedMockModule2 = typeof import('@/lib/logger');

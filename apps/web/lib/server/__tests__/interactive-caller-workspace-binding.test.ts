@@ -29,7 +29,8 @@ vi.mock('@/lib/services/organization-permission-service', () => ({
   requireMemberPermission: mocks.requireMemberPermission,
   resolveOrganizationPermissions: mocks.resolveOrganizationPermissions,
 }));
-vi.mock('@/lib/services/org-entitlements', () => ({
+vi.mock('@/lib/services/org-entitlements', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule0>()),
   getOrganizationEntitlements: vi.fn(),
   getSharedProjectLimitErrorMessage: vi.fn(),
   isOrgResourceLimitError: vi.fn(),
@@ -43,7 +44,7 @@ vi.mock('@/lib/ip-allow-list-gate', () => ({
 }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn() }));
 vi.mock('@/lib/server/admin-api-keys', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/admin-api-keys')>()),
+  ...(await importOriginal<MockedModule0>()),
   verifyAdminApiKey: mocks.verifyAdminApiKey,
 }));
 
@@ -95,38 +96,57 @@ beforeEach(() => {
 
 // Scoped auth is a seam: these fixtures do not execute selector parsing, SQL/RLS, or HTTP serialization.
 describe.each([
-  { name: 'workspace', resolve: (req: NextRequest) => resolveWorkspaceApiCaller(req, auditRoute, 'GET') },
+  {
+    name: 'workspace',
+    resolve: (req: NextRequest) => resolveWorkspaceApiCaller(req, auditRoute, 'GET'),
+  },
   {
     name: 'compliance',
-    resolve: (req: NextRequest) => compliance.resolveComplianceCaller(req, 'audit.read', auditDenied),
+    resolve: (req: NextRequest) =>
+      compliance.resolveComplianceCaller(req, 'audit.read', auditDenied),
   },
 ])('$name interactive caller workspace binding', ({ resolve }) => {
-  it.each([ORG_B, undefined])('retains captured B scope with selector %s despite saved A', async (selector) => {
-    const req = request(selector);
-    const caller = await resolve(req);
-    expect(mocks.getUserScopedDb).toHaveBeenCalledExactlyOnceWith(req);
-    expect(mocks.resolveActiveOrganizationId).not.toHaveBeenCalled();
-    expect(mocks.query).toHaveBeenCalledExactlyOnceWith(
-      expect.stringMatching(/where organization_id = \$1 and user_id = \$2\s+and status = 'active'/u),
-      [ORG_B, USER],
-    );
-    expect(mocks.requireTeamAdminAccess).toHaveBeenCalledExactlyOnceWith(db, USER, ORG_B);
-    expect(mocks.requireMemberPermission).toHaveBeenCalledExactlyOnceWith(
-      ORG_B, USER, 'audit.read', auditDenied,
-    );
-    expect(caller).toEqual({
-      kind: 'member', db, actorUserId: USER, organizationId: ORG_B, role: 'admin',
-      keyId: null, servicePrincipalId: null, permissions,
-    });
-    expect(caller.db).toBe(db);
-    expect(caller.permissions).toBe(permissions);
-    expect(mocks.getNeonDb).not.toHaveBeenCalled();
-  });
+  it.each([ORG_B, undefined])(
+    'retains captured B scope with selector %s despite saved A',
+    async (selector) => {
+      const req = request(selector);
+      const caller = await resolve(req);
+      expect(mocks.getUserScopedDb).toHaveBeenCalledExactlyOnceWith(req);
+      expect(mocks.resolveActiveOrganizationId).not.toHaveBeenCalled();
+      expect(mocks.query).toHaveBeenCalledExactlyOnceWith(
+        expect.stringMatching(
+          /where organization_id = \$1 and user_id = \$2\s+and status = 'active'/u,
+        ),
+        [ORG_B, USER],
+      );
+      expect(mocks.requireTeamAdminAccess).toHaveBeenCalledExactlyOnceWith(db, USER, ORG_B);
+      expect(mocks.requireMemberPermission).toHaveBeenCalledExactlyOnceWith(
+        ORG_B,
+        USER,
+        'audit.read',
+        auditDenied,
+      );
+      expect(caller).toEqual({
+        kind: 'member',
+        db,
+        actorUserId: USER,
+        organizationId: ORG_B,
+        role: 'admin',
+        keyId: null,
+        servicePrincipalId: null,
+        permissions,
+      });
+      expect(caller.db).toBe(db);
+      expect(caller.permissions).toBe(permissions);
+      expect(mocks.getNeonDb).not.toHaveBeenCalled();
+    },
+  );
 
   it('refuses captured Personal scope before membership queries or authorization gates', async () => {
     mocks.getUserScopedDb.mockResolvedValue({ db, userId: USER, organizationId: null });
-    await expect(resolve(request(MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE)))
-      .rejects.toMatchObject({ statusCode: 403 });
+    await expect(
+      resolve(request(MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE)),
+    ).rejects.toMatchObject({ statusCode: 403 });
     expect(mocks.query).not.toHaveBeenCalled();
     expect(mocks.resolveActiveOrganizationId).not.toHaveBeenCalled();
     expect(mocks.requireTeamAdminAccess).not.toHaveBeenCalled();
@@ -177,7 +197,10 @@ describe.each([
     mocks.requireMemberPermission.mockRejectedValue(error);
     await expect(resolve(request(ORG_B))).rejects.toBe(error);
     expect(mocks.requireMemberPermission).toHaveBeenCalledExactlyOnceWith(
-      ORG_B, USER, 'audit.read', auditDenied,
+      ORG_B,
+      USER,
+      'audit.read',
+      auditDenied,
     );
     expect(mocks.resolveActiveOrganizationId).not.toHaveBeenCalled();
   });
@@ -187,29 +210,38 @@ describe('workspace caller route and key boundaries', () => {
   it.each(WORKSPACE_ROUTE_ACCESS)('uses declared permission for $method $route', async (access) => {
     await resolveWorkspaceApiCaller(request(ORG_B), access.route, access.method);
     expect(mocks.requireMemberPermission).toHaveBeenCalledExactlyOnceWith(
-      ORG_B, USER, access.permission, access.deniedMessage,
+      ORG_B,
+      USER,
+      access.permission,
+      access.deniedMessage,
     );
   });
 
   it('refuses an undeclared route before either authentication branch', async () => {
-    await expect(resolveWorkspaceApiCaller(request(ORG_B, KEY), '/api/undeclared', 'GET'))
-      .rejects.toThrow('has no workspace route access declaration');
+    await expect(
+      resolveWorkspaceApiCaller(request(ORG_B, KEY), '/api/undeclared', 'GET'),
+    ).rejects.toThrow('has no workspace route access declaration');
     expect(mocks.getUserScopedDb).not.toHaveBeenCalled();
     expect(mocks.verifyAdminApiKey).not.toHaveBeenCalled();
     expect(mocks.query).not.toHaveBeenCalled();
   });
 
   it('refuses keys on members-only routes before verifying or using a cookie', async () => {
-    await expect(resolveWorkspaceApiCaller(
-      request(ORG_B, KEY), '/api/settings/organization/service-principals', 'PATCH',
-    )).rejects.toMatchObject({ statusCode: 403 });
+    await expect(
+      resolveWorkspaceApiCaller(
+        request(ORG_B, KEY),
+        '/api/settings/organization/service-principals',
+        'PATCH',
+      ),
+    ).rejects.toMatchObject({ statusCode: 403 });
     expect(mocks.verifyAdminApiKey).not.toHaveBeenCalled();
     expect(mocks.getUserScopedDb).not.toHaveBeenCalled();
     expect(mocks.getNeonDb).not.toHaveBeenCalled();
   });
 
   it.each(WORKSPACE_ROUTE_ACCESS.filter((access) => access.servicePrincipals === 'allowed'))(
-    'delegates the exact request and permission for $method $route', async (access) => {
+    'delegates the exact request and permission for $method $route',
+    async (access) => {
       const delegated = {} as compliance.ComplianceCaller;
       const spy = vi.spyOn(compliance, 'resolveComplianceCaller').mockResolvedValue(delegated);
       const req = request(ORG_B, KEY);
@@ -223,18 +255,26 @@ describe('workspace caller route and key boundaries', () => {
 
 describe('compliance key scope is independent of interactive selection', () => {
   it.each([ORG_B, MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE])(
-    'keeps verified key organization A with selector %s', async (selector) => {
+    'keeps verified key organization A with selector %s',
+    async (selector) => {
       const req = request(selector, KEY);
       const caller = await compliance.resolveComplianceCaller(req, 'audit.read', auditDenied);
       expect(caller).toEqual({
-        kind: 'service_principal', db: keyDb, actorUserId: 'service_principal:principal-1',
-        organizationId: ORG_A, role: 'service_principal', keyId: 'key-1',
-        servicePrincipalId: 'principal-1', permissions,
+        kind: 'service_principal',
+        db: keyDb,
+        actorUserId: 'service_principal:principal-1',
+        organizationId: ORG_A,
+        role: 'service_principal',
+        keyId: 'key-1',
+        servicePrincipalId: 'principal-1',
+        permissions,
       });
       expect(mocks.verifyAdminApiKey).toHaveBeenCalledExactlyOnceWith(keyDb, KEY);
       expect(mocks.getTeamAdminAccess).toHaveBeenCalledExactlyOnceWith(keyDb, '', ORG_A);
       expect(mocks.assertOrganizationIpAllowList).toHaveBeenCalledExactlyOnceWith(
-        ORG_A, 'service_principal:principal-1', req,
+        ORG_A,
+        'service_principal:principal-1',
+        req,
       );
       expect(mocks.getUserScopedDb).not.toHaveBeenCalled();
       expect(mocks.resolveActiveOrganizationId).not.toHaveBeenCalled();
@@ -243,13 +283,21 @@ describe('compliance key scope is independent of interactive selection', () => {
     },
   );
 
-  it.each(['invalid-bearer', KEY])('never falls back to cookies for denied bearer %s', async (token) => {
-    mocks.verifyAdminApiKey.mockResolvedValue(null);
-    await expect(compliance.resolveComplianceCaller(request(ORG_B, token), 'audit.read', auditDenied))
-      .rejects.toMatchObject({ statusCode: 401 });
-    expect(mocks.getUserScopedDb).not.toHaveBeenCalled();
-    expect(mocks.query).not.toHaveBeenCalled();
-    expect(mocks.getTeamAdminAccess).not.toHaveBeenCalled();
-    expect(mocks.requireMemberPermission).not.toHaveBeenCalled();
-  });
+  it.each(['invalid-bearer', KEY])(
+    'never falls back to cookies for denied bearer %s',
+    async (token) => {
+      mocks.verifyAdminApiKey.mockResolvedValue(null);
+      await expect(
+        compliance.resolveComplianceCaller(request(ORG_B, token), 'audit.read', auditDenied),
+      ).rejects.toMatchObject({ statusCode: 401 });
+      expect(mocks.getUserScopedDb).not.toHaveBeenCalled();
+      expect(mocks.query).not.toHaveBeenCalled();
+      expect(mocks.getTeamAdminAccess).not.toHaveBeenCalled();
+      expect(mocks.requireMemberPermission).not.toHaveBeenCalled();
+    },
+  );
 });
+
+type MockedModule0 = typeof import('@/lib/server/admin-api-keys');
+
+type CompleteMockModule0 = typeof import('@/lib/services/org-entitlements');

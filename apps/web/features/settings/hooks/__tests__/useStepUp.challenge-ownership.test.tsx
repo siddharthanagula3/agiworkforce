@@ -20,7 +20,7 @@ const { requestGrant, reverification } = vi.hoisted(() => ({
 }));
 
 vi.mock('@/features/auth/step-up-fetch', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/features/auth/step-up-fetch')>()),
+  ...(await importOriginal<MockedModule0>()),
   requestStepUpGrant: requestGrant,
 }));
 vi.mock('@/lib/identity/client', () => ({
@@ -36,20 +36,24 @@ import {
 import { useStepUp } from '../useStepUp';
 
 function refusal(): Response {
-  return new Response(JSON.stringify({
-    error: {
-      code: 'STEP_UP_REQUIRED',
-      details: {
-        action: 'organization.transfer_ownership',
-        consequence: 'Ownership moves to another member.',
-        freshnessSeconds: 300,
+  return new Response(
+    JSON.stringify({
+      error: {
+        code: 'STEP_UP_REQUIRED',
+        details: {
+          action: 'organization.transfer_ownership',
+          consequence: 'Ownership moves to another member.',
+          freshnessSeconds: 300,
+        },
       },
-    },
-  }), { status: 403 });
+    }),
+    { status: 403 },
+  );
 }
 
 function sender() {
-  return vi.fn<(headers: Record<string, string>) => Promise<Response>>()
+  return vi
+    .fn<(headers: Record<string, string>) => Promise<Response>>()
     .mockImplementationOnce(async () => refusal())
     .mockImplementation(async () => new Response('{}', { status: 200 }));
 }
@@ -62,7 +66,10 @@ function dialog(element: ReactElement | null): ReactElement<StepUpDialogProps> {
 function deferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (reason: unknown) => void;
-  const promise = new Promise<T>((done, fail) => { resolve = done; reject = fail; });
+  const promise = new Promise<T>((done, fail) => {
+    resolve = done;
+    reject = fail;
+  });
   return { promise, resolve, reject };
 }
 
@@ -196,36 +203,42 @@ describe('useStepUp hook lifetime', () => {
     expect(send).toHaveBeenCalledTimes(1);
   });
 
-  it.each(['initial', 'proof'] as const)('preserves the already-invoked %s sender response after retirement', async (stage) => {
-    requestGrant.mockResolvedValue({ kind: 'granted', token: 'grant' });
-    const sent = deferred<Response>();
-    const send = vi.fn<(headers: Record<string, string>) => Promise<Response>>();
-    if (stage === 'proof') send.mockResolvedValueOnce(refusal());
-    send.mockImplementation(() => sent.promise);
-    const { result, unmount } = renderHook(useStepUp);
-    const operation = result.current.withStepUp(send);
-    await waitFor(() => expect(send).toHaveBeenCalledTimes(stage === 'proof' ? 2 : 1));
-    unmount();
-    const response = new Response('{}', { status: 200 });
-    sent.resolve(response);
-    expect(await operation).toBe(response);
-  });
+  it.each(['initial', 'proof'] as const)(
+    'preserves the already-invoked %s sender response after retirement',
+    async (stage) => {
+      requestGrant.mockResolvedValue({ kind: 'granted', token: 'grant' });
+      const sent = deferred<Response>();
+      const send = vi.fn<(headers: Record<string, string>) => Promise<Response>>();
+      if (stage === 'proof') send.mockResolvedValueOnce(refusal());
+      send.mockImplementation(() => sent.promise);
+      const { result, unmount } = renderHook(useStepUp);
+      const operation = result.current.withStepUp(send);
+      await waitFor(() => expect(send).toHaveBeenCalledTimes(stage === 'proof' ? 2 : 1));
+      unmount();
+      const response = new Response('{}', { status: 200 });
+      sent.resolve(response);
+      expect(await operation).toBe(response);
+    },
+  );
 
-  it.each(['initial', 'proof'] as const)('preserves the exact already-invoked %s sender error after retirement', async (stage) => {
-    requestGrant.mockResolvedValue({ kind: 'granted', token: 'grant' });
-    const sent = deferred<Response>();
-    const send = vi.fn<(headers: Record<string, string>) => Promise<Response>>();
-    if (stage === 'proof') send.mockResolvedValueOnce(refusal());
-    send.mockImplementation(() => sent.promise);
-    const { result, unmount } = renderHook(useStepUp);
-    const operation = result.current.withStepUp(send).catch((error: unknown) => error);
-    await waitFor(() => expect(send).toHaveBeenCalledTimes(stage === 'proof' ? 2 : 1));
-    unmount();
-    const uncertain = new Error('Connection lost after dispatch');
-    sent.reject(uncertain);
-    expect(await operation).toBe(uncertain);
-    expect(isStepUpCancelled(uncertain)).toBe(false);
-  });
+  it.each(['initial', 'proof'] as const)(
+    'preserves the exact already-invoked %s sender error after retirement',
+    async (stage) => {
+      requestGrant.mockResolvedValue({ kind: 'granted', token: 'grant' });
+      const sent = deferred<Response>();
+      const send = vi.fn<(headers: Record<string, string>) => Promise<Response>>();
+      if (stage === 'proof') send.mockResolvedValueOnce(refusal());
+      send.mockImplementation(() => sent.promise);
+      const { result, unmount } = renderHook(useStepUp);
+      const operation = result.current.withStepUp(send).catch((error: unknown) => error);
+      await waitFor(() => expect(send).toHaveBeenCalledTimes(stage === 'proof' ? 2 : 1));
+      unmount();
+      const uncertain = new Error('Connection lost after dispatch');
+      sent.reject(uncertain);
+      expect(await operation).toBe(uncertain);
+      expect(isStepUpCancelled(uncertain)).toBe(false);
+    },
+  );
 
   it('keeps pre-cleanup invocations retired through real StrictMode effect re-setup', async () => {
     const oldResponse = deferred<Response>();
@@ -238,12 +251,17 @@ describe('useStepUp hook lifetime', () => {
       const { withStepUp, dialog: challenge } = useStepUp();
       useEffect(() => {
         callbacks.push(withStepUp);
-        operations.push(withStepUp(operations.length === 0 ? oldSend : newSend)
-          .catch((error: unknown) => error));
+        operations.push(
+          withStepUp(operations.length === 0 ? oldSend : newSend).catch((error: unknown) => error),
+        );
       }, [withStepUp]);
       return challenge;
     }
-    render(<StrictMode><Consumer /></StrictMode>);
+    render(
+      <StrictMode>
+        <Consumer />
+      </StrictMode>,
+    );
     await waitFor(() => expect(newSend).toHaveBeenCalledTimes(2));
     expect(operations).toHaveLength(2);
     expect(callbacks[0]).toBe(callbacks[1]);
@@ -301,7 +319,9 @@ describe('useStepUp exact pending challenge ownership', () => {
     expect(result.current.dialog).toBe(replacement);
     expect(secondSend).toHaveBeenCalledTimes(1);
 
-    act(() => { void replacement.props.onSatisfied('replacement-grant'); });
+    act(() => {
+      void replacement.props.onSatisfied('replacement-grant');
+    });
     expect((await second).status).toBe(200);
     expect(result.current.dialog).toBeNull();
     expect(secondSend).toHaveBeenCalledTimes(2);
@@ -350,7 +370,9 @@ describe('useStepUp exact pending challenge ownership', () => {
       void old.props.onSatisfied('still-too-late');
     });
     expect(result.current.dialog).toBe(next);
-    act(() => { next.props.onCancel(); });
+    act(() => {
+      next.props.onCancel();
+    });
     expect(isStepUpCancelled(await second)).toBe(true);
     expect(secondSend).toHaveBeenCalledTimes(1);
   });
@@ -380,11 +402,15 @@ describe('useStepUp exact pending challenge ownership', () => {
     await waitFor(() => expect(result.current.dialog).not.toBeNull());
     const current = dialog(result.current.dialog);
     const response = new Response('{}', { status: 200 });
-    await act(async () => { dispatched.resolve(response); });
+    await act(async () => {
+      dispatched.resolve(response);
+    });
     expect(await first).toBe(response);
     expect(result.current.dialog).toBe(current);
     expect(firstSend).toHaveBeenCalledTimes(1);
-    act(() => { current.props.onCancel(); });
+    act(() => {
+      current.props.onCancel();
+    });
     expect(isStepUpCancelled(await second)).toBe(true);
   });
 
@@ -414,27 +440,39 @@ describe('useStepUp exact pending challenge ownership', () => {
     expect(isStepUpCancelled(await first)).toBe(true);
     await user.type(await screen.findByLabelText('Code from your authenticator app'), '222222');
 
-    await act(async () => { verification.resolve({ kind: 'complete' }); });
+    await act(async () => {
+      verification.resolve({ kind: 'complete' });
+    });
     await waitFor(() => expect(requestGrant).toHaveBeenCalledTimes(3));
     expect(requestGrant).toHaveBeenLastCalledWith(
-      'organization.transfer_ownership', 'org-1', 'fresh-session-token',
+      'organization.transfer_ownership',
+      'org-1',
+      'fresh-session-token',
     );
     expect(result.current.dialog).toBe(replacement);
     expect(screen.getByLabelText('Code from your authenticator app')).toHaveValue('222222');
     expect(firstSend).toHaveBeenCalledTimes(1);
     expect(secondSend).toHaveBeenCalledTimes(1);
-    act(() => { replacement.props.onCancel(); });
+    act(() => {
+      replacement.props.onCancel();
+    });
     expect(isStepUpCancelled(await second)).toBe(true);
   });
 });
 
-
 describe('owned challenge retirement', () => {
   it('settles a pending challenge on abort without replay', async () => {
-    const authority = createRequestAuthority({ userId: 'a', sessionId: 'a', isCurrent: () => true, getToken: async () => 'fake-token' });
+    const authority = createRequestAuthority({
+      userId: 'a',
+      sessionId: 'a',
+      isCurrent: () => true,
+      getToken: async () => 'fake-token',
+    });
     const { result } = renderHook(useStepUp);
     const send = sender();
-    const operation = result.current.withStepUp(send, null, { authority }).catch((error: unknown) => error);
+    const operation = result.current
+      .withStepUp(send, null, { authority })
+      .catch((error: unknown) => error);
     await waitFor(() => expect(result.current.dialog).not.toBeNull());
     act(() => authority.retire());
     expect(result.current.dialog).toBeNull();
@@ -445,10 +483,17 @@ describe('owned challenge retirement', () => {
   it('never presents a delayed silent grant after intent retirement', async () => {
     const grant = deferred<StepUpGrantOutcome>();
     requestGrant.mockReturnValueOnce(grant.promise);
-    const authority = createRequestAuthority({ userId: 'a', sessionId: 'a', isCurrent: () => true, getToken: async () => 'fake-token' });
+    const authority = createRequestAuthority({
+      userId: 'a',
+      sessionId: 'a',
+      isCurrent: () => true,
+      getToken: async () => 'fake-token',
+    });
     const { result } = renderHook(useStepUp);
     const send = sender();
-    const operation = result.current.withStepUp(send, null, { authority }).catch((error: unknown) => error);
+    const operation = result.current
+      .withStepUp(send, null, { authority })
+      .catch((error: unknown) => error);
     await waitFor(() => expect(requestGrant).toHaveBeenCalledTimes(1));
     act(() => authority.retire());
     grant.resolve({ kind: 'granted', token: 'fake-proof' });
@@ -458,12 +503,18 @@ describe('owned challenge retirement', () => {
   });
 });
 
-
 it('keeps explicit owned challenge cancellation quiet while the editor remains current', async () => {
-  const authority = createRequestAuthority({ userId: 'a', sessionId: 'a', isCurrent: () => true, getToken: async () => 'fake-token' });
+  const authority = createRequestAuthority({
+    userId: 'a',
+    sessionId: 'a',
+    isCurrent: () => true,
+    getToken: async () => 'fake-token',
+  });
   const { result } = renderHook(useStepUp);
   const send = sender();
-  const operation = result.current.withStepUp(send, null, { authority }).catch((error: unknown) => error);
+  const operation = result.current
+    .withStepUp(send, null, { authority })
+    .catch((error: unknown) => error);
   await waitFor(() => expect(result.current.dialog).not.toBeNull());
   act(() => dialog(result.current.dialog).props.onCancel());
   expect(isStepUpCancelled(await operation)).toBe(true);
@@ -471,3 +522,5 @@ it('keeps explicit owned challenge cancellation quiet while the editor remains c
   expect(result.current.dialog).toBeNull();
   expect(send).toHaveBeenCalledTimes(1);
 });
+
+type MockedModule0 = typeof import('@/features/auth/step-up-fetch');

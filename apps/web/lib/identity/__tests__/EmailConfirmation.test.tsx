@@ -6,26 +6,40 @@ import { useSessionSnapshot } from '../useSessionSnapshot';
 const mocks = vi.hoisted(() => ({
   user: null as Record<string, unknown> | null,
   sessionId: 'session-current',
-  nativeSession: null as { id: string; user: Record<string, unknown>; getToken: () => Promise<string> } | null,
+  nativeSession: null as {
+    id: string;
+    user: Record<string, unknown>;
+    getToken: () => Promise<string>;
+  } | null,
 }));
 
 vi.mock('@clerk/nextjs', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@clerk/nextjs')>()),
-  useAuth: () => ({ isLoaded: true, isSignedIn: true, userId: 'user-1', sessionId: mocks.sessionId, getToken: vi.fn() }),
+  ...(await importOriginal()),
+  useAuth: () => ({
+    isLoaded: true,
+    isSignedIn: true,
+    userId: 'user-1',
+    sessionId: mocks.sessionId,
+    getToken: vi.fn(),
+  }),
   useClerk: () => clerk,
   useUser: () => ({ isLoaded: true, isSignedIn: true, user: mocks.user }),
   useSession: () => ({ session: mocks.nativeSession }),
   useSignUp: () => ({ fetchStatus: 'idle', signUp: {} }),
 }));
 vi.mock('@agiworkforce/local-runtime-contract', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/local-runtime-contract')>()),
+  ...(await importOriginal<MockedModule0>()),
   getHostBridge: () => null,
 }));
 
 const clerk = {
   loaded: true,
-  get user() { return mocks.user; },
-  get session() { return mocks.nativeSession; },
+  get user() {
+    return mocks.user;
+  },
+  get session() {
+    return mocks.nativeSession;
+  },
   signOut: vi.fn(),
   addListener: (_listener: () => void) => () => undefined,
 };
@@ -78,7 +92,11 @@ function accountWithAddress(status: string) {
     createExternalAccount,
     reload: vi.fn(async () => undefined),
   };
-  mocks.nativeSession = { id: mocks.sessionId, user: mocks.user, getToken: vi.fn(async () => 'fixture-token') };
+  mocks.nativeSession = {
+    id: mocks.sessionId,
+    user: mocks.user,
+    getToken: vi.fn(async () => 'fixture-token'),
+  };
   return { address, sessions, createExternalAccount };
 }
 
@@ -129,7 +147,12 @@ describe('linking another way to sign in', () => {
     const { result } = renderHook(() => useConnectedAccounts());
 
     await expect(
-      result.current.capture({ kind: 'connect', provider: 'google', returnUrl: 'https://agiworkforce.com/settings' }, connectScope()).execute(),
+      result.current
+        .capture(
+          { kind: 'connect', provider: 'google', returnUrl: 'https://agiworkforce.com/settings' },
+          connectScope(),
+        )
+        .execute(),
     ).rejects.toThrow(UNCONFIRMED_EMAIL_CONNECT_MESSAGE);
     expect(createExternalAccount).not.toHaveBeenCalled();
   });
@@ -141,7 +164,14 @@ describe('linking another way to sign in', () => {
     const { result } = renderHook(() => useConnectedAccounts());
 
     const scope = connectScope();
-    await act(() => result.current.capture({ kind: 'connect', provider: 'google', returnUrl: 'https://agiworkforce.com/settings' }, scope).execute());
+    await act(() =>
+      result.current
+        .capture(
+          { kind: 'connect', provider: 'google', returnUrl: 'https://agiworkforce.com/settings' },
+          scope,
+        )
+        .execute(),
+    );
 
     expect(createExternalAccount).toHaveBeenCalledWith({
       strategy: 'oauth_google',
@@ -151,3 +181,5 @@ describe('linking another way to sign in', () => {
     vi.unstubAllGlobals();
   });
 });
+
+type MockedModule0 = typeof import('@agiworkforce/local-runtime-contract');

@@ -67,21 +67,24 @@ describe('create-only partial retention in currently known client state', () => 
     expectRefusal('preserved', '<main>Later partial');
   });
 
-  it.each(['edit', 'rename', 'restore', 'empty'] as const)('preserves saved %s and all side/UI/history state', (kind) => {
-    const store = useArtifactsStore.getState();
-    store.upsertArtifact(partial);
-    if (kind === 'edit' || kind === 'restore') {
-      store.upsertArtifact({ ...partial, content: 'My edited work' });
-    }
-    if (kind === 'restore') store.restoreArtifactVersion(ID, 0);
-    if (kind === 'rename') store.renameArtifact(ID, 'My title');
-    if (kind === 'empty') store.upsertArtifact({ ...partial, content: '' });
-    store.openArtifactForEditing(ID);
-    store.setCloudSyncStatus('error', 'Existing sync error');
-    expectRefusal('preserved', 'New partial bytes');
-    expectRefusal('unchanged', useArtifactsStore.getState().artifacts[0]!.content);
-    expectRefusal('preserved', `${useArtifactsStore.getState().artifacts[0]!.content} `);
-  });
+  it.each(['edit', 'rename', 'restore', 'empty'] as const)(
+    'preserves saved %s and all side/UI/history state',
+    (kind) => {
+      const store = useArtifactsStore.getState();
+      store.upsertArtifact(partial);
+      if (kind === 'edit' || kind === 'restore') {
+        store.upsertArtifact({ ...partial, content: 'My edited work' });
+      }
+      if (kind === 'restore') store.restoreArtifactVersion(ID, 0);
+      if (kind === 'rename') store.renameArtifact(ID, 'My title');
+      if (kind === 'empty') store.upsertArtifact({ ...partial, content: '' });
+      store.openArtifactForEditing(ID);
+      store.setCloudSyncStatus('error', 'Existing sync error');
+      expectRefusal('preserved', 'New partial bytes');
+      expectRefusal('unchanged', useArtifactsStore.getState().artifacts[0]!.content);
+      expectRefusal('preserved', `${useArtifactsStore.getState().artifacts[0]!.content} `);
+    },
+  );
 
   it('uses cloud-visible content, not a raw local match, and never creates over cloud-only work', () => {
     const store = useArtifactsStore.getState();
@@ -97,7 +100,7 @@ describe('create-only partial retention in currently known client state', () => 
     const store = useArtifactsStore.getState();
     store.upsertArtifact({
       ...partial,
-      type: 'pdf',
+      type: 'document',
       language: 'pdf',
       title: 'My file',
       generatedFile: {
@@ -130,14 +133,19 @@ describe('create-only partial retention in currently known client state', () => 
     expectRefusal('preserved', '<main>Cloud</main>');
   });
 
-  it.each([false, true])('blocks a cloud tombstone even with hidden local=%s and matching bytes', (local) => {
-    const store = useArtifactsStore.getState();
-    if (local) store.upsertArtifact(partial);
-    store.applyCloudArtifactDeltas([cloud({ content: partial.content, deleted_at: '2026-07-18T00:00:00.000Z' })]);
-    expectRefusal('blocked');
-    store.clearCloudArtifacts();
-    expect(useArtifactsStore.getState().artifacts).toHaveLength(local ? 1 : 0);
-  });
+  it.each([false, true])(
+    'blocks a cloud tombstone even with hidden local=%s and matching bytes',
+    (local) => {
+      const store = useArtifactsStore.getState();
+      if (local) store.upsertArtifact(partial);
+      store.applyCloudArtifactDeltas([
+        cloud({ content: partial.content, deleted_at: '2026-07-18T00:00:00.000Z' }),
+      ]);
+      expectRefusal('blocked');
+      store.clearCloudArtifacts();
+      expect(useArtifactsStore.getState().artifacts).toHaveLength(local ? 1 : 0);
+    },
+  );
 
   it('keeps a removed in-flight artifact blocked without consuming its pending result', () => {
     const store = useArtifactsStore.getState();
@@ -212,7 +220,9 @@ describe('create-only partial retention in currently known client state', () => 
     for (let index = 0; index < 200; index++) {
       store.upsertArtifact({ ...partial, id: `other-${index}` });
     }
-    expect(_sharedArtifactStore.getState().artifacts.some((artifact) => artifact.id === ID)).toBe(false);
+    expect(_sharedArtifactStore.getState().artifacts.some((artifact) => artifact.id === ID)).toBe(
+      false,
+    );
     expect(store.getArtifactVersions(ID)).toEqual([]);
     expectRefusal('blocked');
   });

@@ -16,7 +16,7 @@ vi.mock('../hooks/use-settings-queries', () => ({
 }));
 
 vi.mock('../hooks/use-mfa-readers', async (importOriginal) => ({
-  ...await importOriginal<typeof import('../hooks/use-mfa-readers')>(),
+  ...(await importOriginal<MockedModule0>()),
   useMfaStatus: () => mockTwoFactorStatus(),
 }));
 
@@ -118,17 +118,27 @@ describe('WorkspacePolicySection security controls', () => {
 
   it('does not describe unreadable enrollment availability as confirmed disabled setup', () => {
     mockOverview.mockReturnValue(overview());
-    mockTwoFactorStatus.mockReturnValue({ data: undefined, error: new Error('Unavailable'), isLoading: false });
+    mockTwoFactorStatus.mockReturnValue({
+      data: undefined,
+      error: new Error('Unavailable'),
+      isLoading: false,
+    });
     renderSection();
     expect(screen.getByLabelText('Require multi-factor authentication')).toBeDisabled();
     expect(screen.getByText(/availability could not be confirmed/i)).toBeInTheDocument();
-    expect(screen.queryByText(/members cannot set up an authenticator app yet/i)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/members cannot set up an authenticator app yet/i),
+    ).not.toBeInTheDocument();
   });
 
   it('allows an existing requirement to be turned off when enrollment status is unreadable', async () => {
     const user = userEvent.setup();
     mockOverview.mockReturnValue(overview({ policy: policy({ requireMfa: true }) }));
-    mockTwoFactorStatus.mockReturnValue({ data: undefined, error: new Error('Unavailable'), isLoading: false });
+    mockTwoFactorStatus.mockReturnValue({
+      data: undefined,
+      error: new Error('Unavailable'),
+      isLoading: false,
+    });
     renderSection();
     const toggle = screen.getByLabelText('Require multi-factor authentication');
     expect(toggle).toBeEnabled();
@@ -257,3 +267,5 @@ describe('WorkspacePolicySection security controls', () => {
     expect(screen.getByLabelText('Add an IP address or CIDR block')).toBeDisabled();
   });
 });
+
+type MockedModule0 = typeof import('../hooks/use-mfa-readers');

@@ -2,11 +2,27 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiKeysManager } from './ApiKeys';
-import { admitWorkspace, observeWorkspaceOwner } from '@/features/workspaces/lib/workspace-admission';
+import {
+  admitWorkspace,
+  observeWorkspaceOwner,
+} from '@/features/workspaces/lib/workspace-admission';
 
-const { createMutate, deleteMutate, mockApiKeysQuery, mockProjectsQuery, mockUsageQuery, resetCreate, session } = vi.hoisted(() => ({
+const {
+  createMutate,
+  deleteMutate,
+  mockApiKeysQuery,
+  mockProjectsQuery,
+  mockUsageQuery,
+  resetCreate,
+  session,
+} = vi.hoisted(() => ({
   resetCreate: vi.fn(),
-  session: { userId: 'read-state-user', sessionId: 'read-state-session', isCurrent: () => true, getToken: async () => 'token' },
+  session: {
+    userId: 'read-state-user',
+    sessionId: 'read-state-session',
+    isCurrent: () => true,
+    getToken: async () => 'token',
+  },
   createMutate: vi.fn(),
   deleteMutate: vi.fn(),
   mockApiKeysQuery: vi.fn(),
@@ -17,16 +33,24 @@ const { createMutate, deleteMutate, mockApiKeysQuery, mockProjectsQuery, mockUsa
 vi.mock('@features/settings/hooks/use-settings-queries', () => ({
   APIKeyMutationRejectedError: class extends Error {},
   useAPIKeys: () => mockApiKeysQuery(),
-  useCreateAPIKey: () => ({ mutateAsync: createMutate, reset: resetCreate, isPending: false, stepUpDialog: null }),
+  useCreateAPIKey: () => ({
+    mutateAsync: createMutate,
+    reset: resetCreate,
+    isPending: false,
+    stepUpDialog: null,
+  }),
   useDeleteAPIKey: () => ({ mutateAsync: deleteMutate, isPending: false }),
 }));
 
 vi.mock('@/lib/identity/useSessionSnapshot', async (original) => ({
-  ...await original<typeof import('@/lib/identity/useSessionSnapshot')>(), useSessionSnapshot: () => () => session,
+  ...(await original<MockedModule0>()),
+  useSessionSnapshot: () => () => session,
 }));
 vi.mock('@/features/workspaces/hooks/use-workspaces', async (original) => ({
-  ...await original<typeof import('@/features/workspaces/hooks/use-workspaces')>(),
-  useAccountWorkspaces: () => ({ data: { scope: 'personal', activeWorkspaceId: 'personal', activeOrganizationId: null } }),
+  ...(await original<MockedModule1>()),
+  useAccountWorkspaces: () => ({
+    data: { scope: 'personal', activeWorkspaceId: 'personal', activeOrganizationId: null },
+  }),
 }));
 
 vi.mock('@/features/developers/hooks/use-developer-projects', () => ({
@@ -46,11 +70,20 @@ describe('ApiKeysManager', () => {
     admitWorkspace(owner, owner.epoch, JSON.stringify(['personal', 'personal', null]));
     createMutate.mockResolvedValue({ apiKey: { id: 'created' }, fullKey: 'once-only-secret' });
     mockProjectsQuery.mockReturnValue({
-      data: [], isLoading: false, isError: false, isSuccess: true, error: null, refetch: vi.fn(),
+      data: [],
+      isLoading: false,
+      isError: false,
+      isSuccess: true,
+      error: null,
+      refetch: vi.fn(),
     });
     mockUsageQuery.mockReturnValue({
       data: { from: '', to: '', keys: [], projects: [] },
-      isLoading: false, isError: false, isSuccess: true, error: null, refetch: vi.fn(),
+      isLoading: false,
+      isError: false,
+      isSuccess: true,
+      error: null,
+      refetch: vi.fn(),
     });
     mockApiKeysQuery.mockReturnValue({
       data: [
@@ -91,10 +124,15 @@ describe('ApiKeysManager', () => {
     await user.click(generateButton);
 
     await waitFor(() =>
-      expect(createMutate).toHaveBeenCalledWith(
-        { draft: { name: 'VS Code', scopes: ['inference:write'], expiresInDays: 'never', projectId: null },
-          scope: expect.objectContaining({ organizationId: null, request: expect.any(Object) }) },
-      ),
+      expect(createMutate).toHaveBeenCalledWith({
+        draft: {
+          name: 'VS Code',
+          scopes: ['inference:write'],
+          expiresInDays: 'never',
+          projectId: null,
+        },
+        scope: expect.objectContaining({ organizationId: null, request: expect.any(Object) }),
+      }),
     );
   });
 
@@ -164,8 +202,18 @@ describe('ApiKeysManager', () => {
     consoleError.mockRestore();
   });
   it('labels supplementary loading instead of reporting zero usage', () => {
-    mockProjectsQuery.mockReturnValue({ data: undefined, isLoading: true, isError: false, isSuccess: false });
-    mockUsageQuery.mockReturnValue({ data: undefined, isLoading: true, isError: false, isSuccess: false });
+    mockProjectsQuery.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      isError: false,
+      isSuccess: false,
+    });
+    mockUsageQuery.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      isError: false,
+      isSuccess: false,
+    });
 
     render(<ApiKeysManager />);
 
@@ -185,17 +233,27 @@ describe('ApiKeysManager', () => {
     const retryUsage = vi.fn();
     mockProjectsQuery.mockReturnValue({
       data: [{ id: 'project-1', name: 'Cached project', archivedAt: null }],
-      isLoading: false, isError: true, isSuccess: false,
-      error: new Error('Project choices could not be loaded.'), refetch: retryProjects,
+      isLoading: false,
+      isError: true,
+      isSuccess: false,
+      error: new Error('Project choices could not be loaded.'),
+      refetch: retryProjects,
     });
     mockUsageQuery.mockReturnValue({
-      data: { keys: [{ apiKeyId: 'key-1', requests: 7, credits: 12, unsettledRequests: 0 }], projects: [] },
-      isLoading: false, isError: true, isSuccess: false,
-      error: new Error('Key usage could not be loaded.'), refetch: retryUsage,
+      data: {
+        keys: [{ apiKeyId: 'key-1', requests: 7, credits: 12, unsettledRequests: 0 }],
+        projects: [],
+      },
+      isLoading: false,
+      isError: true,
+      isSuccess: false,
+      error: new Error('Key usage could not be loaded.'),
+      refetch: retryUsage,
     });
     const apiKeys = mockApiKeysQuery();
     mockApiKeysQuery.mockReturnValue({
-      ...apiKeys, data: [{ ...apiKeys.data[0], project_id: 'project-1' }],
+      ...apiKeys,
+      data: [{ ...apiKeys.data[0], project_id: 'project-1' }],
     });
 
     render(<ApiKeysManager />);
@@ -209,5 +267,7 @@ describe('ApiKeysManager', () => {
     expect(retryProjects).toHaveBeenCalledOnce();
     expect(retryUsage).toHaveBeenCalledOnce();
   });
-
 });
+
+type MockedModule0 = typeof import('@/lib/identity/useSessionSnapshot');
+type MockedModule1 = typeof import('@/features/workspaces/hooks/use-workspaces');

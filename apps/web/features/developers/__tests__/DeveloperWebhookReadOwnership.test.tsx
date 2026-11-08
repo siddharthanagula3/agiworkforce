@@ -1,11 +1,15 @@
 import React from 'react';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import {
-  QueryClient, QueryClientProvider, type Query, type UseQueryOptions,
+  QueryClient,
+  QueryClientProvider,
+  type Query,
+  type UseQueryOptions,
 } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  MANAGED_CLOUD_WORKSPACES_PATH, type ManagedCloudAccountWorkspaces,
+  MANAGED_CLOUD_WORKSPACES_PATH,
+  type ManagedCloudAccountWorkspaces,
 } from '@agiworkforce/cloud-contracts';
 import { useAccountWorkspaces } from '@/features/workspaces/hooks/use-workspaces';
 import { observeWorkspaceOwner } from '@/features/workspaces/lib/workspace-admission';
@@ -14,52 +18,95 @@ import type { DeveloperWebhookDelivery } from '../types';
 
 const fixture = vi.hoisted(() => ({
   auth: { isLoaded: true, isSignedIn: true, userId: 'a', sessionId: 'session-a' },
-  sdk: { loaded: true, user: { id: 'a' }, session: {
-    id: 'session-a', user: { id: 'a' }, getToken: async (): Promise<string | null> => 'token-a',
-  } },
+  sdk: {
+    loaded: true,
+    user: { id: 'a' },
+    session: {
+      id: 'session-a',
+      user: { id: 'a' },
+      getToken: async (): Promise<string | null> => 'token-a',
+    },
+  },
   polls: [] as Array<{ gate: (query: Query) => number | false | undefined; query: Query }>,
 }));
 vi.mock('@clerk/nextjs', () => ({ useAuth: () => fixture.auth, useClerk: () => fixture.sdk }));
 vi.mock('@features/auth/step-up-fetch', () => ({ sendAuthorizedJson: vi.fn() }));
 vi.mock('@tanstack/react-query', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@tanstack/react-query')>();
+  const actual = await importOriginal<MockedModule0>();
   return {
     ...actual,
     useQuery: (options: UseQueryOptions, client?: QueryClient) => {
       const gate = options.refetchInterval;
-      if (options.queryKey[0] !== 'developers' || options.queryKey[3] !== 'deliveries' ||
-          typeof gate !== 'function') return actual.useQuery(options, client);
-      return actual.useQuery({ ...options, refetchInterval: (query) => {
-        fixture.polls.push({ gate, query });
-        return gate(query);
-      } }, client);
+      if (
+        options.queryKey[0] !== 'developers' ||
+        options.queryKey[3] !== 'deliveries' ||
+        typeof gate !== 'function'
+      )
+        return actual.useQuery(options, client);
+      return actual.useQuery(
+        {
+          ...options,
+          refetchInterval: (query) => {
+            fixture.polls.push({ gate, query });
+            return gate(query);
+          },
+        },
+        client,
+      );
     },
   };
 });
 
 const personal: ManagedCloudAccountWorkspaces = {
-  scope: 'personal', activeWorkspaceId: 'personal', activeOrganizationId: null, workspaces: [],
+  scope: 'personal',
+  activeWorkspaceId: 'personal',
+  activeOrganizationId: null,
+  workspaces: [],
 };
 const deliveryPrefix = ['developers', 'webhooks'] as const;
-const deliveryPath = (endpointId: string) => `/api/developers/webhooks/${encodeURIComponent(endpointId)}/deliveries`;
+const deliveryPath = (endpointId: string) =>
+  `/api/developers/webhooks/${encodeURIComponent(endpointId)}/deliveries`;
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
-function deliveries(id: string, status: DeveloperWebhookDelivery['status'] = 'delivered', attempts = 1): DeveloperWebhookDelivery[] {
-  return [{ id, eventId: id, eventType: 'test', status, attempts, responseStatus: null,
-    error: null, redeliveryOf: null, lastAttemptAt: null, deliveredAt: null,
-    createdAt: '2026-10-20T00:00:00.000Z' }];
+function deliveries(
+  id: string,
+  status: DeveloperWebhookDelivery['status'] = 'delivered',
+  attempts = 1,
+): DeveloperWebhookDelivery[] {
+  return [
+    {
+      id,
+      eventId: id,
+      eventType: 'test',
+      status,
+      attempts,
+      responseStatus: null,
+      error: null,
+      redeliveryOf: null,
+      lastAttemptAt: null,
+      deliveredAt: null,
+      createdAt: '2026-10-20T00:00:00.000Z',
+    },
+  ];
 }
 function deferred<T>() {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>((yes) => { resolve = yes; });
+  const promise = new Promise<T>((yes) => {
+    resolve = yes;
+  });
   return { promise, resolve };
 }
 function changeIdentity(userId: string) {
   fixture.auth = { isLoaded: true, isSignedIn: true, userId, sessionId: `session-${userId}` };
   fixture.sdk.user = { id: userId };
-  fixture.sdk.session = { id: `session-${userId}`, user: { id: userId }, getToken: async () => `token-${userId}` };
+  fixture.sdk.session = {
+    id: `session-${userId}`,
+    user: { id: userId },
+    getToken: async () => `token-${userId}`,
+  };
 }
 const fetchMock = vi.fn<typeof fetch>();
-const reads = () => fetchMock.mock.calls.filter(([path]) => String(path).startsWith('/api/developers/webhooks/'));
+const reads = () =>
+  fetchMock.mock.calls.filter(([path]) => String(path).startsWith('/api/developers/webhooks/'));
 let client: QueryClient;
 const wrapper = ({ children }: { children: React.ReactNode }) => (
   <QueryClientProvider client={client}>{children}</QueryClientProvider>
@@ -69,16 +116,28 @@ function useHarness({ endpointId, enabled }: { endpointId: string; enabled: bool
 }
 const initialProps = { endpointId: 'endpoint-a', enabled: true };
 function expectMasked(query: ReturnType<typeof useWebhookDeliveries>) {
-  expect(query).toMatchObject({ data: undefined, error: null, isError: false,
-    isLoading: false, isFetching: false, isSuccess: false });
+  expect(query).toMatchObject({
+    data: undefined,
+    error: null,
+    isError: false,
+    isLoading: false,
+    isFetching: false,
+    isSuccess: false,
+  });
 }
 beforeEach(() => {
   observeWorkspaceOwner(null);
   changeIdentity('a');
   fixture.polls = [];
-  client = new QueryClient({ defaultOptions: { queries: {
-    retry: false, staleTime: Infinity, gcTime: Infinity,
-  } } });
+  client = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+        staleTime: Infinity,
+        gcTime: Infinity,
+      },
+    },
+  });
   fetchMock.mockReset();
   fetchMock.mockImplementation(async (path) => {
     if (String(path) === MANAGED_CLOUD_WORKSPACES_PATH) return json(personal);
@@ -118,12 +177,18 @@ describe('webhook delivery read gates', () => {
     rerender({ ...initialProps, enabled: false });
     expectMasked(result.current);
     const disabled = result.current.refetch;
-    await act(async () => { await original(); await disabled(); });
+    await act(async () => {
+      await original();
+      await disabled();
+    });
     expect(reads()).toHaveLength(1);
     rerender(initialProps);
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     const count = reads().length;
-    await act(async () => { await original(); await disabled(); });
+    await act(async () => {
+      await original();
+      await disabled();
+    });
     expect(reads()).toHaveLength(count);
     await act(async () => result.current.refetch());
     expect(reads()).toHaveLength(count + 1);
@@ -142,7 +207,10 @@ describe('webhook delivery read gates', () => {
     rerender(initialProps);
     await waitFor(() => expect(result.current.data).toEqual(deliveries('a')));
     const count = reads().length;
-    await act(async () => { await fromA(); await fromB(); });
+    await act(async () => {
+      await fromA();
+      await fromB();
+    });
     expect(reads()).toHaveLength(count);
     await act(async () => result.current.refetch());
     expect(reads()).toHaveLength(count + 1);
@@ -175,7 +243,10 @@ describe('webhook delivery read gates', () => {
     first.rerender({ ...initialProps, enabled: false });
     expectMasked(first.result.current);
     expect(signal?.aborted).toBe(false);
-    await act(async () => { await stale(); await first.result.current.refetch(); });
+    await act(async () => {
+      await stale();
+      await first.result.current.refetch();
+    });
     expect(reads()).toHaveLength(1);
     await act(async () => response.resolve(json({ deliveries: deliveries('shared') })));
     await waitFor(() => expect(second.result.current.data).toEqual(deliveries('shared')));
@@ -196,7 +267,9 @@ describe('webhook delivery read gates', () => {
     expect(beforeData.gate(beforeData.query)).toBe(false);
     await act(async () => response.resolve(json({ deliveries: deliveries('a') })));
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    const captured = [...fixture.polls].reverse().find(({ query }) => query.state.data !== undefined)!;
+    const captured = [...fixture.polls]
+      .reverse()
+      .find(({ query }) => query.state.data !== undefined)!;
     expect(captured).toBeDefined();
     for (const [data, expected] of [
       [[], false],
@@ -217,3 +290,5 @@ describe('webhook delivery read gates', () => {
     expect(client.getQueryCache().findAll({ queryKey: deliveryPrefix }).length).toBeGreaterThan(1);
   });
 });
+
+type MockedModule0 = typeof import('@tanstack/react-query');

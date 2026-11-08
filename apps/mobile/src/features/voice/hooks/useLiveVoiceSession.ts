@@ -1,7 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import { useSession } from '@clerk/expo';
-import { captureLiveVoiceAuthority, type LiveVoiceAuthority } from '@/src/features/voice/services/liveVoiceAuthority';
+import {
+  captureLiveVoiceAuthority,
+  type LiveVoiceAuthority,
+} from '@/src/features/voice/services/liveVoiceAuthority';
 import { subscribeCloudAccountEpochChange } from '@/src/features/auth/services/cloudAccountSession';
 import type {
   LiveVoicePendingApproval,
@@ -134,13 +137,22 @@ export function useLiveVoiceSession({
       return undefined;
     }
     const existing = callBindingRef.current;
-    if (executionMode !== 'cloud' || !identitySession || !conversationId ||
-        (existing && (existing.identity !== identitySession || existing.conversationId !== conversationId))) {
+    if (
+      executionMode !== 'cloud' ||
+      !identitySession ||
+      !conversationId ||
+      (existing &&
+        (existing.identity !== identitySession || existing.conversationId !== conversationId))
+    ) {
       setStatus('idle');
       endedRef.current(LIVE_VOICE_MESSAGE.sessionEnded);
       return undefined;
     }
-    callBindingRef.current ??= { identity: identitySession, conversationId, binding: bindingRef.current };
+    callBindingRef.current ??= {
+      identity: identitySession,
+      conversationId,
+      binding: bindingRef.current,
+    };
     let cancelled = false;
     let terminal = false;
     let finalizing = false;
@@ -151,13 +163,23 @@ export function useLiveVoiceSession({
     let ownedSession: LiveVoiceSession | null = null;
     const originalManaged = () => {
       if (!target) return false;
-      const original = getConversationMessageStore(target).getState().conversations.find((entry) => entry.id === target);
+      const original = getConversationMessageStore(target)
+        .getState()
+        .conversations.find((entry) => entry.id === target);
       return Boolean(original && executionModeForConversation(original) === 'cloud');
     };
-    const destinationCurrent = () => destinationRef.current.executionMode === 'cloud' &&
+    const destinationCurrent = () =>
+      destinationRef.current.executionMode === 'cloud' &&
       destinationRef.current.conversationId === target;
-    const authority = captureLiveVoiceAuthority(() => !cancelled && !terminal &&
-      attemptRef.current === attemptOwner && destinationCurrent() && originalManaged() && !getRemoteChatDisabledReason());
+    const authority = captureLiveVoiceAuthority(
+      () =>
+        !cancelled &&
+        !terminal &&
+        attemptRef.current === attemptOwner &&
+        destinationCurrent() &&
+        originalManaged() &&
+        !getRemoteChatDisabledReason(),
+    );
     if (!authority) {
       setStatus('error');
       setError(LIVE_VOICE_MESSAGE.connectionFailed);
@@ -166,7 +188,8 @@ export function useLiveVoiceSession({
     authorityRef.current = authority;
     const current = () => authority.isCurrent();
     const recordTurn = (turn: LiveTranscriptTurn) => {
-      const foreground = !cancelled && !terminal && attemptRef.current === attemptOwner && current();
+      const foreground =
+        !cancelled && !terminal && attemptRef.current === attemptOwner && current();
       if (!foreground && !(finalizing && turn.final)) return;
       if (!target || !authority.isIdentityCurrent() || !originalManaged()) return;
       if (foreground) {
@@ -178,9 +201,13 @@ export function useLiveVoiceSession({
           return next;
         });
       }
-      if (turn.final) appendVoiceTurn(target, {
-        id: turn.turnId, role: turn.role, content: turn.text, model: binding.model,
-      });
+      if (turn.final)
+        appendVoiceTurn(target, {
+          id: turn.turnId,
+          role: turn.role,
+          content: turn.text,
+          model: binding.model,
+        });
     };
     setStatus('connecting');
     setError(null);
@@ -198,10 +225,15 @@ export function useLiveVoiceSession({
     };
     const closeOwned = (session: LiveVoiceSession) => {
       finalizing = true;
-      void session.close().then((closed) => {
-        finalizing = false;
-        finish(session, closed);
-      }, () => { finalizing = false; });
+      void session.close().then(
+        (closed) => {
+          finalizing = false;
+          finish(session, closed);
+        },
+        () => {
+          finalizing = false;
+        },
+      );
     };
 
     let budgetTimer: ReturnType<typeof setTimeout> | null = null;
@@ -260,7 +292,7 @@ export function useLiveVoiceSession({
         );
       }
       applyAudioRoute(activeAudioRoute());
-      const ensured = target ?? await binding.ensureConversation();
+      const ensured = target ?? (await binding.ensureConversation());
       authority.assertCurrent();
       if (!ensured) throw new Error('Voice conversation is unavailable');
       target = ensured;
@@ -346,7 +378,10 @@ export function useLiveVoiceSession({
             if (stableTimer) clearTimeout(stableTimer);
             if (sessionRef.current === ownedSession) sessionRef.current = null;
             if (ownedSession) {
-              finish(ownedSession, { reason: 'connection_lost', seconds: ownedSession.lastUsageSeconds });
+              finish(ownedSession, {
+                reason: 'connection_lost',
+                seconds: ownedSession.lastUsageSeconds,
+              });
             }
             setBackendBusy(false);
             setApprovals([]);
@@ -361,7 +396,9 @@ export function useLiveVoiceSession({
             setReconnecting(true);
             setStatus('connecting');
             reconnectTimerRef.current = setTimeout(
-              () => { if (current()) setAttempt((value) => value + 1); },
+              () => {
+                if (current()) setAttempt((value) => value + 1);
+              },
               RECONNECT_BASE_MS * 2 ** (reconnectsRef.current - 1),
             );
           },
@@ -433,13 +470,29 @@ export function useLiveVoiceSession({
       setApprovals([]);
       setToolActivity([]);
     };
-  }, [active, attempt, executionMode, conversationId, identitySession, offersWorkTask, appendVoiceTurn]);
+  }, [
+    active,
+    attempt,
+    executionMode,
+    conversationId,
+    identitySession,
+    offersWorkTask,
+    appendVoiceTurn,
+  ]);
 
-  useEffect(() => {
-    if ((status === 'connecting' || status === 'live') && authorityRef.current && !authorityRef.current.isCurrent()) {
+  const reconcileAuthority = useEffectEvent(() => {
+    if (
+      (status === 'connecting' || status === 'live') &&
+      authorityRef.current &&
+      !authorityRef.current.isCurrent()
+    ) {
       setStatus('idle');
       endedRef.current(LIVE_VOICE_MESSAGE.sessionEnded);
     }
+  });
+
+  useEffect(() => {
+    reconcileAuthority();
   });
 
   const toggleMute = useCallback(() => {

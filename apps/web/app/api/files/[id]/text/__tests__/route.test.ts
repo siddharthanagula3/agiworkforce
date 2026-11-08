@@ -5,7 +5,7 @@ import { renderFileTextPreview } from '@/lib/server/file-text-preview';
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/server/file-text-preview', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/server/file-text-preview')>();
+  const actual = await importOriginal<MockedModule0>();
   return { ...actual, renderFileTextPreview: vi.fn(actual.renderFileTextPreview) };
 });
 
@@ -114,15 +114,16 @@ function asset(overrides: Record<string, unknown> = {}) {
 
 describe('/api/files/[id]/text', () => {
   it('passes the admitted organization to the reader', async () => {
-    mocks.getUserScopedDb.mockResolvedValue({ db, userId: 'user-1', organizationId: 'workspace-A' });
+    mocks.getUserScopedDb.mockResolvedValue({
+      db,
+      userId: 'user-1',
+      organizationId: 'workspace-A',
+    });
     mocks.getActiveWorkspaceMediaAssetById.mockResolvedValue(null);
     await GET(request(), context());
-    expect(mocks.getActiveWorkspaceMediaAssetById).toHaveBeenCalledWith(
-      'user-1',
-      FILE_ID,
-      db,
-      { organizationId: 'workspace-A' },
-    );
+    expect(mocks.getActiveWorkspaceMediaAssetById).toHaveBeenCalledWith('user-1', FILE_ID, db, {
+      organizationId: 'workspace-A',
+    });
     expect(mocks.readStoredMedia).not.toHaveBeenCalled();
   });
 
@@ -211,7 +212,10 @@ describe('/api/files/[id]/text', () => {
     expect(await response.json()).toMatchObject({
       error: { code: 'VALIDATION_ERROR', message: 'This file is too large to preview' },
     });
-    expect(mocks.readStoredMedia).toHaveBeenCalledWith('users/user-1/notes.txt', MAX_TEXT_SOURCE_BYTES);
+    expect(mocks.readStoredMedia).toHaveBeenCalledWith(
+      'users/user-1/notes.txt',
+      MAX_TEXT_SOURCE_BYTES,
+    );
     expect(renderFileTextPreview).not.toHaveBeenCalled();
   });
 
@@ -228,7 +232,10 @@ describe('/api/files/[id]/text', () => {
         message: 'This file could not be read within the preview size limit',
       },
     });
-    expect(mocks.readStoredMedia).toHaveBeenCalledWith('users/user-1/notes.txt', MAX_TEXT_SOURCE_BYTES);
+    expect(mocks.readStoredMedia).toHaveBeenCalledWith(
+      'users/user-1/notes.txt',
+      MAX_TEXT_SOURCE_BYTES,
+    );
     expect(renderFileTextPreview).not.toHaveBeenCalled();
   });
 
@@ -259,7 +266,10 @@ describe('/api/files/[id]/text', () => {
     expect(mocks.getActiveWorkspaceMediaAssetById).toHaveBeenCalledWith('user-1', FILE_ID, db, {
       organizationId: null,
     });
-    expect(mocks.readStoredMedia).toHaveBeenCalledWith('users/user-1/notes.txt', MAX_TEXT_SOURCE_BYTES);
+    expect(mocks.readStoredMedia).toHaveBeenCalledWith(
+      'users/user-1/notes.txt',
+      MAX_TEXT_SOURCE_BYTES,
+    );
     expect(renderFileTextPreview).toHaveBeenCalledWith(
       'text',
       'notes.txt',
@@ -281,3 +291,5 @@ describe('/api/files/[id]/text', () => {
     expect(await response.json()).toMatchObject({ kind: 'table', text: 'a,b\n1,2\n' });
   });
 });
+
+type MockedModule0 = typeof import('@/lib/server/file-text-preview');

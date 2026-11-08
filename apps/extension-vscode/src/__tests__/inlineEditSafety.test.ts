@@ -10,7 +10,7 @@ import { ExtensionContext } from './__mocks__/vscode';
 const realpath = vi.hoisted(() => vi.fn<(path: string) => string>());
 
 vi.mock('node:fs', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('node:fs')>()),
+  ...(await importOriginal<MockedModule0>()),
   realpathSync: realpath,
 }));
 
@@ -345,3 +345,5 @@ describe('inline edit ownership across asynchronous work', () => {
     expect(vscode.workspace.openTextDocument).not.toHaveBeenCalled();
   });
 });
+
+type MockedModule0 = typeof import('node:fs');

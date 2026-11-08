@@ -10,12 +10,15 @@ import type { LiveTranscriptTurn } from '@features/chat/lib/live-voice-session';
 
 const controller = vi.hoisted(() => ({
   current: {} as Record<string, unknown>,
-  options: null as { onTranscript: (id: string, turn: LiveTranscriptTurn) => void } | null,
+  options: null as {
+    onTranscript: (id: string, turn: LiveTranscriptTurn) => void;
+    onCaption: (turn: LiveTranscriptTurn) => void;
+  } | null,
 }));
 
 vi.mock('@features/chat/hooks/use-voice-session', () => ({
   liveVoiceOutputRef: { current: null },
-  useVoiceSession: (options: { onTranscript: (id: string, turn: LiveTranscriptTurn) => void }) => {
+  useVoiceSession: (options: NonNullable<typeof controller.options>) => {
     controller.options = options;
     return controller.current;
   },
@@ -84,7 +87,7 @@ const onTranscript = vi.fn();
 function renderSurface() {
   return render(
     <VoiceModeSurface
-          managed={true}
+      managed={true}
       variant={VOICE_SURFACE_VARIANT.chat}
       turnActive={false}
       conversationId="conversation-1"
@@ -102,6 +105,7 @@ function renderSurface() {
 function emit(turn: LiveTranscriptTurn): void {
   act(() => {
     controller.options?.onTranscript('conversation-1', turn);
+    controller.options?.onCaption(turn);
   });
 }
 

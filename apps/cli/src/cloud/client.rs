@@ -217,7 +217,9 @@ impl CloudClient {
         let context = tier_cache::ManagedRequestContext::capture()
             .map_err(|error| CloudError::Transport(error.to_string()))?;
         if context.owner.is_none() {
-            return Err(CloudError::Transport("Managed account identity is unreadable".to_string()));
+            return Err(CloudError::Transport(
+                "Managed account identity is unreadable".to_string(),
+            ));
         }
         Ok(context)
     }
@@ -228,7 +230,9 @@ impl CloudClient {
         let jwt = context.jwt.as_ref().ok_or(CloudError::SignedOut)?;
         let owner = crate::auth::jwt_subject(jwt)
             .filter(|_| context.owner.is_some())
-            .ok_or_else(|| CloudError::Transport("Managed account identity is unreadable".to_string()))?;
+            .ok_or_else(|| {
+                CloudError::Transport("Managed account identity is unreadable".to_string())
+            })?;
         let http = reqwest::Client::builder()
             .timeout(CLOUD_TIMEOUT)
             .build()
@@ -286,7 +290,10 @@ impl CloudClient {
         Ok(Reply { status, body })
     }
 
-    async fn send<T: DeserializeOwned>(&self, builder: reqwest::RequestBuilder) -> Result<T, CloudError> {
+    async fn send<T: DeserializeOwned>(
+        &self,
+        builder: reqwest::RequestBuilder,
+    ) -> Result<T, CloudError> {
         let reply = self.exchange(builder).await?;
         if !reply.is_success() {
             return Err(CloudError::Api {
@@ -323,7 +330,9 @@ impl CloudClient {
                     Err(CloudError::SessionExpired) => {
                         forget_refused_session(&renewed.jwt).map_err(|error| CloudError::Api {
                             status: 401,
-                            message: format!("The rejected credential could not be removed: {error:#}"),
+                            message: format!(
+                                "The rejected credential could not be removed: {error:#}"
+                            ),
                         })?;
                         Err(CloudError::SessionExpired)
                     }

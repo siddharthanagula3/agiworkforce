@@ -339,7 +339,10 @@ export function ArtifactsPanel({
   const [settledPublication, setSettledPublication] = useState(0);
   const publicationLease = usePublishedSitesStore((state) => state.lease);
   const publicationOperations = useMemo(
-    () => new Map<string, { revision: number; pending: boolean }>(),
+    () => ({
+      lease: publicationLease,
+      entries: new Map<string, { revision: number; pending: boolean }>(),
+    }),
     [publicationLease],
   );
   const recordPublishedSite = usePublishedSitesStore((s) => s.record);
@@ -407,82 +410,108 @@ export function ArtifactsPanel({
   );
 
   const publicationScope = useMemo(
-    () => ({}),
+    () => ({
+      scope: {
+        activeConversationId,
+        selectedArtifactId: selectedArtifact?.id,
+        selectedArtifactKey,
+        panelOpen,
+        showStreamingView,
+        publicationLease,
+      },
+    }),
     [
-      activeConversationId, selectedArtifact?.id, selectedArtifactKey, panelOpen,
-      showStreamingView, publicationLease,
+      activeConversationId,
+      selectedArtifact?.id,
+      selectedArtifactKey,
+      panelOpen,
+      showStreamingView,
+      publicationLease,
     ],
   );
   const publicationView = usePublicationView(selectedArtifact?.id ?? null, publicationScope);
   const publishDetails = publication?.view === publicationView ? publication.details : null;
-  const operationFor = useCallback((id: string) => {
-    let operation = publicationOperations.get(id);
-    if (!operation) {
-      operation = { revision: 0, pending: false };
-      publicationOperations.set(id, operation);
-    }
-    return operation;
-  }, [publicationOperations]);
+  const operationFor = useCallback(
+    (id: string) => {
+      let operation = publicationOperations.entries.get(id);
+      if (!operation) {
+        operation = { revision: 0, pending: false };
+        publicationOperations.entries.set(id, operation);
+      }
+      return operation;
+    },
+    [publicationOperations],
+  );
   useLayoutEffect(() => {
     const artifactId = selectedArtifact?.id;
     return () => {
-      if (artifactId && !publicationOperations.get(artifactId)?.pending) {
-        publicationOperations.delete(artifactId);
+      if (artifactId && !publicationOperations.entries.get(artifactId)?.pending) {
+        publicationOperations.entries.delete(artifactId);
       }
     };
   }, [publicationView, selectedArtifact?.id, publicationOperations]);
-  const makePublishHandler = (artifact: Artifact) => async (selection: ArtifactPublishSelection) => {
-    if (
-      !isPublicationLeaseCurrent(publicationLease) || !panelOpen ||
-      showStreamingView || !publicationView.active
-    ) {
-      throw new Error('This publication action is no longer available.');
-    }
-    const operation = operationFor(artifact.id);
-    if (operation.pending) throw new Error('A publication change is already in progress.');
-    operation.pending = true;
-    operation.revision += 1;
-    try {
-      const publishable = await publishableArtifact(artifact, selection.content);
-      if (!isPublicationLeaseCurrent(publicationLease) || !publicationView.active) {
-        throw new Error('This publication view has closed.');
-      }
-      const result = await publishArtifactService({
-        artifact: publishable,
-        privacyMode: 'managed',
-        originPrivacyMode: resolveArtifactOriginPrivacyMode(
-          artifact,
-          conversationMessages,
-          activeConversation,
-        ),
-        surface: 'web',
-        cloudPublisher: createWebCloudPublisher({
-          conversationId: activeConversationId ?? null,
-          onPublished: (details) => {
-            if (!recordPublishedSite(artifact.id, details, publicationLease)) return;
-            if (publicationView.active) setPublication({ view: publicationView, details });
-          },
-        }),
-      });
-      if (!isPublicationLeaseCurrent(publicationLease)) {
+  const makePublishHandler =
+    (artifact: Artifact) => async (selection: ArtifactPublishSelection) => {
+      if (
+        !isPublicationLeaseCurrent(publicationLease) ||
+        !panelOpen ||
+        showStreamingView ||
+        !publicationView.active
+      ) {
         throw new Error('This publication action is no longer available.');
       }
-      return result;
-    } finally {
-      operation.pending = false;
-      if (!publicationView.active && publicationOperations.get(artifact.id) === operation) {
-        publicationOperations.delete(artifact.id);
+      const operation = operationFor(artifact.id);
+      if (operation.pending) throw new Error('A publication change is already in progress.');
+      operation.pending = true;
+      operation.revision += 1;
+      try {
+        const publishable = await publishableArtifact(artifact, selection.content);
+        if (!isPublicationLeaseCurrent(publicationLease) || !publicationView.active) {
+          throw new Error('This publication view has closed.');
+        }
+        const result = await publishArtifactService({
+          artifact: publishable,
+          privacyMode: 'managed',
+          originPrivacyMode: resolveArtifactOriginPrivacyMode(
+            artifact,
+            conversationMessages,
+            activeConversation,
+          ),
+          surface: 'web',
+          cloudPublisher: createWebCloudPublisher({
+            conversationId: activeConversationId ?? null,
+            onPublished: (details) => {
+              if (!recordPublishedSite(artifact.id, details, publicationLease)) return;
+              if (publicationView.active) setPublication({ view: publicationView, details });
+            },
+          }),
+        });
+        if (!isPublicationLeaseCurrent(publicationLease)) {
+          throw new Error('This publication action is no longer available.');
+        }
+        return result;
+      } finally {
+        operation.pending = false;
+        if (
+          !publicationView.active &&
+          publicationOperations.entries.get(artifact.id) === operation
+        ) {
+          publicationOperations.entries.delete(artifact.id);
+        }
+        if (isPublicationLeaseCurrent(publicationLease) && panelLifetime.active) {
+          setSettledPublication((value) => value + 1);
+        }
       }
-      if (isPublicationLeaseCurrent(publicationLease) && panelLifetime.active) {
-        setSettledPublication((value) => value + 1);
-      }
-    }
-  };
+    };
   useEffect(() => {
     if (
-      !isPublicationLeaseCurrent(publicationLease) || !panelOpen || showStreamingView ||
-      !selectedArtifactKey || publication?.view === publicationView
-    ) return;
+      !isPublicationLeaseCurrent(publicationLease) ||
+      !panelOpen ||
+      showStreamingView ||
+      !selectedArtifactKey ||
+      publication?.view === publicationView
+    )
+      return;
     const operation = operationFor(selectedArtifactKey);
     if (operation.pending) return;
     const revision = operation.revision;
@@ -490,9 +519,13 @@ export function ArtifactsPanel({
     void fetchArtifactPublication(selectedArtifactKey)
       .then((details) => {
         if (
-          !isPublicationLeaseCurrent(publicationLease) || cancelled || !publicationView.active ||
-          operation.revision !== revision || !details
-        ) return;
+          !isPublicationLeaseCurrent(publicationLease) ||
+          cancelled ||
+          !publicationView.active ||
+          operation.revision !== revision ||
+          !details
+        )
+          return;
         if (!recordPublishedSite(selectedArtifactKey, details, publicationLease)) return;
         if (cancelled || !publicationView.active || operation.revision !== revision) return;
         setPublication({ view: publicationView, details });
@@ -502,23 +535,35 @@ export function ArtifactsPanel({
       cancelled = true;
     };
   }, [
-    selectedArtifactKey, panelOpen, showStreamingView, publicationView, publication,
-    settledPublication, operationFor, recordPublishedSite, publicationLease,
+    selectedArtifactKey,
+    panelOpen,
+    showStreamingView,
+    publicationView,
+    publication,
+    settledPublication,
+    operationFor,
+    recordPublishedSite,
+    publicationLease,
   ]);
   const publicationRevision = selectedArtifactKey
-    ? (publicationOperations.get(selectedArtifactKey)?.revision ?? 0)
+    ? (publicationOperations.entries.get(selectedArtifactKey)?.revision ?? 0)
     : 0;
   const changeAudience = useCallback(
     async (next: PublishedArtifactAudience) => {
       if (
-        !isPublicationLeaseCurrent(publicationLease) || !panelOpen || showStreamingView ||
-        !publicationView.active || !publishDetails || !selectedArtifactKey
+        !isPublicationLeaseCurrent(publicationLease) ||
+        !panelOpen ||
+        showStreamingView ||
+        !publicationView.active ||
+        !publishDetails ||
+        !selectedArtifactKey
       ) {
         throw new Error('This publication action is no longer available.');
       }
       const operation = operationFor(selectedArtifactKey);
       if (
-        publicationRef.current !== publication || operation.pending ||
+        publicationRef.current !== publication ||
+        operation.pending ||
         operation.revision !== publicationRevision
       ) {
         throw new Error('This publication action is no longer available.');
@@ -536,9 +581,10 @@ export function ArtifactsPanel({
       } finally {
         operation.pending = false;
         if (
-          !publicationView.active && publicationOperations.get(selectedArtifactKey) === operation
+          !publicationView.active &&
+          publicationOperations.entries.get(selectedArtifactKey) === operation
         ) {
-          publicationOperations.delete(selectedArtifactKey);
+          publicationOperations.entries.delete(selectedArtifactKey);
         }
         if (isPublicationLeaseCurrent(publicationLease) && panelLifetime.active) {
           setSettledPublication((value) => value + 1);
@@ -546,9 +592,18 @@ export function ArtifactsPanel({
       }
     },
     [
-      panelOpen, showStreamingView, publicationView, publicationRevision, publication, publishDetails,
-      selectedArtifactKey, operationFor, recordPublishedSite, panelLifetime,
-      publicationLease, publicationOperations,
+      panelOpen,
+      showStreamingView,
+      publicationView,
+      publicationRevision,
+      publication,
+      publishDetails,
+      selectedArtifactKey,
+      operationFor,
+      recordPublishedSite,
+      panelLifetime,
+      publicationLease,
+      publicationOperations,
     ],
   );
   const artifactAudience = useMemo(

@@ -11,13 +11,14 @@ const reservedDirectories = new Set<string>();
 export async function withDsarTemporaryFile(
   fileName: 'agi_data_export.json' | 'agi_cloud_data_export.json',
   assertActive: () => void,
-  useFile: (uri: string) => Promise<void>,
+  consumeFile: (uri: string) => Promise<void>,
 ): Promise<void> {
   assertActive();
   if (!cacheDirectory) throw new Error('Temporary export storage is unavailable.');
   const root = `${cacheDirectory}dsar_exports/`;
   const directory = `${root}${Crypto.randomUUID()}/`;
-  if (reservedDirectories.has(directory)) throw new Error('Could not allocate an export directory.');
+  if (reservedDirectories.has(directory))
+    throw new Error('Could not allocate an export directory.');
   reservedDirectories.add(directory);
   let allocated = false;
   try {
@@ -33,7 +34,7 @@ export async function withDsarTemporaryFile(
     await makeDirectoryAsync(directory, { intermediates: false });
     allocated = true;
     assertActive();
-    await useFile(`${directory}${fileName}`);
+    await consumeFile(`${directory}${fileName}`);
   } finally {
     // A rejected allocation does not establish ownership of the candidate directory.
     if (allocated) await deleteAsync(directory, { idempotent: true }).catch(() => {});

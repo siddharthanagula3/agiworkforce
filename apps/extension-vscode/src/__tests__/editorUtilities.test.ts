@@ -12,7 +12,7 @@ import {
 const realpath = vi.hoisted(() => vi.fn<(path: string) => string>());
 
 vi.mock('node:fs', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('node:fs')>()),
+  ...(await importOriginal<MockedModule0>()),
   realpathSync: realpath,
 }));
 
@@ -287,3 +287,5 @@ describe('what never leaves the machine', () => {
     },
   );
 });
+
+type MockedModule0 = typeof import('node:fs');

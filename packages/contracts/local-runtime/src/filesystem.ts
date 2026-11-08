@@ -97,7 +97,10 @@ const SSH_KEY = /^id_(rsa|dsa|ecdsa|ed25519|xmss)(_sk)?([-_.].*)?$/u;
  * test counts them. The environment patterns come first because a checked-in
  * template is exempt from them alone.
  */
-const ENVIRONMENT_FILE_PATTERNS: readonly RegExp[] = [/(^|\/)\.env(\..+)?$/i, /(^|\/)\.envrc$/i];
+const ENVIRONMENT_FILE_PATTERNS: readonly RegExp[] = [
+  /(^|\/)\.env(\.[\s\S]+)?$/i,
+  /(^|\/)\.envrc$/i,
+];
 
 const CREDENTIAL_FILE_PATTERNS: readonly RegExp[] = [
   /(^|\/)secrets?\.(json|ya?ml|toml|env|txt)$/i,
@@ -124,9 +127,9 @@ const CREDENTIAL_FILE_PATTERNS: readonly RegExp[] = [
   // Terraform state holds every resource attribute in plain text, including the
   // secrets a provider generated, and a .tfvars file is where the inputs to it
   // are kept. Both are ordinary-looking project files.
-  /(^|\/).*\.tfstate(\.backup)?$/i,
+  /(^|\/)[^/]*\.tfstate(\.backup)?$/i,
   /(^|\/)terraform\.tfstate\.d\//i,
-  /(^|\/).*\.auto\.tfvars(\.json)?$/i,
+  /(^|\/)[^/]*\.auto\.tfvars(\.json)?$/i,
   /(^|\/)terraform\.tfvars(\.json)?$/i,
   /(^|\/)\.terraform\/terraform\.tfstate$/i,
   /(^|\/)\.terraformrc$/i,

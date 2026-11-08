@@ -13,10 +13,16 @@ import { useSessionSnapshot } from '@/lib/identity/useSessionSnapshot';
 import { toUserMessage } from '@/lib/user-error-message';
 import { finalizeWorkspaceSwitch } from '@/features/workspaces/lib/workspace-cache-scope';
 import {
-  admitWorkspace, beginWorkspaceSwitch, finishWorkspaceSwitch, observeWorkspaceOwner,
-  subscribeWorkspaceAdmission, workspaceAdmissionRevision, workspaceOwnerIsCurrent,
+  admitWorkspace,
+  beginWorkspaceSwitch,
+  finishWorkspaceSwitch,
+  observeWorkspaceOwner,
+  subscribeWorkspaceAdmission,
+  workspaceAdmissionRevision,
+  workspaceOwnerIsCurrent,
   workspaceQueryKey,
-  failWorkspaceRead, retryWorkspaceRead,
+  failWorkspaceRead,
+  retryWorkspaceRead,
   type WorkspaceOwner,
 } from '../lib/workspace-admission';
 
@@ -41,7 +47,10 @@ async function readApiError(res: Response, fallback: string): Promise<Error> {
   return error;
 }
 
-async function readWorkspaces(authority: RequestAuthority, signal?: AbortSignal): Promise<AccountWorkspaces> {
+async function readWorkspaces(
+  authority: RequestAuthority,
+  signal?: AbortSignal,
+): Promise<AccountWorkspaces> {
   const res = await authority.fetch(MANAGED_CLOUD_WORKSPACES_PATH, { signal, cache: 'no-store' });
   if (!res.ok) throw await readApiError(res, 'We could not load your workspaces. Try again.');
   const data = ManagedCloudAccountWorkspacesSchema.parse(await res.json());
@@ -64,7 +73,9 @@ export function useAccountWorkspaces() {
     enabled: canRead,
     queryFn: async ({ signal }) => {
       if (!owner || epoch === undefined || !canRead) throw new Error('Workspaces are unavailable.');
-      const authority = createRequestAuthority(owner.session, () => workspaceOwnerIsCurrent(owner, epoch));
+      const authority = createRequestAuthority(owner.session, () =>
+        workspaceOwnerIsCurrent(owner, epoch),
+      );
       try {
         const data = await readWorkspaces(authority, signal);
         admitWorkspace(owner, epoch, workspaceScopeKey(data));
@@ -80,13 +91,17 @@ export function useAccountWorkspaces() {
     retry: false,
     meta: { silent: true },
   });
-  const admitted = !!owner && epoch !== undefined && owner.phase === 'admitted' &&
+  const admitted =
+    !!owner &&
+    epoch !== undefined &&
+    owner.phase === 'admitted' &&
     workspaceOwnerIsCurrent(owner, epoch);
   return {
     ...query,
     refetch: () => {
       if (owner?.phase === 'unavailable') retryWorkspaceRead(owner);
       else if (canRead) return query.refetch();
+      return undefined;
     },
     data: admitted ? query.data : undefined,
     isLoading: canRead && query.isLoading,
@@ -100,14 +115,20 @@ export function useSelectWorkspace(kind: 'workspace' | 'organization' = 'workspa
   return useWorkspaceSelectionMutation<string | null>((workspaceId) => ({
     url: kind === 'workspace' ? MANAGED_CLOUD_WORKSPACES_PATH : '/api/settings/organization/active',
     method: 'PUT',
-    body: kind === 'workspace'
-      ? { workspaceId: workspaceId ?? PERSONAL_WORKSPACE_SELECTOR }
-      : { organizationId: workspaceId },
+    body:
+      kind === 'workspace'
+        ? { workspaceId: workspaceId ?? PERSONAL_WORKSPACE_SELECTOR }
+        : { organizationId: workspaceId },
   }));
 }
 
 export function useWorkspaceSelectionMutation<Input>(
-  request: (input: Input) => { url: string; method: 'POST' | 'PUT'; body: unknown; errorMessage?: string },
+  request: (input: Input) => {
+    url: string;
+    method: 'POST' | 'PUT';
+    body: unknown;
+    errorMessage?: string;
+  },
 ) {
   const accountWorkspaces = useAccountWorkspaces();
   const queryClient = useQueryClient();
@@ -118,29 +139,39 @@ export function useWorkspaceSelectionMutation<Input>(
     retry: false,
     // Errors render in the owner-bound controls, not the global mutation toast.
     onError: () => undefined,
-    mutationFn: async ({ input, owner, expectedEpoch, request: capturedRequest }: {
-      input: Input; owner: WorkspaceOwner | null; expectedEpoch: number | undefined; request: typeof request;
+    mutationFn: async ({
+      input,
+      owner,
+      expectedEpoch,
+      request: capturedRequest,
+    }: {
+      input: Input;
+      owner: WorkspaceOwner | null;
+      expectedEpoch: number | undefined;
+      request: typeof request;
     }) => {
       if (!owner) throw new Error('Sign in to select a workspace.');
       if (expectedEpoch === undefined) throw new Error('Workspaces are unavailable.');
       attempt.current = { owner, epoch: expectedEpoch };
       const epoch = beginWorkspaceSwitch(owner, expectedEpoch);
       attempt.current = { owner, epoch };
-      const authority = createRequestAuthority(owner.session, () => workspaceOwnerIsCurrent(owner, epoch));
+      const authority = createRequestAuthority(owner.session, () =>
+        workspaceOwnerIsCurrent(owner, epoch),
+      );
       let rejected = false;
       try {
         const operation = capturedRequest(input);
-        const response = await authority.fetch(
-          operation.url,
-          {
-            method: operation.method,
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(operation.body),
-          },
-        );
+        const response = await authority.fetch(operation.url, {
+          method: operation.method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(operation.body),
+        });
         rejected = response.status >= 400 && response.status < 500;
-        if (!response.ok) throw await readApiError(response,
-          operation.errorMessage ?? 'We could not switch workspaces. Try again.');
+        if (!response.ok)
+          throw await readApiError(
+            response,
+            operation.errorMessage ?? 'We could not switch workspaces. Try again.',
+          );
         const data = await readWorkspaces(authority);
         authority.assertCurrent();
         await finalizeWorkspaceSwitch(queryClient, data.activeOrganizationId, authority);
@@ -168,15 +199,17 @@ export function useWorkspaceSelectionMutation<Input>(
     },
   });
   const current = attempt.current;
-  const ownsResult = !!current && current.owner === owner &&
-    workspaceOwnerIsCurrent(current.owner, current.epoch);
+  const ownsResult =
+    !!current && current.owner === owner && workspaceOwnerIsCurrent(current.owner, current.epoch);
   return {
     ...mutation,
     ownerKey: owner ? `${owner.incarnation}:${capturedEpoch}` : null,
     accountWorkspaces: accountWorkspaces.data,
     canMutate: !!owner && owner.phase === 'admitted',
-    mutate: (input: Input) => mutation.mutate({ input, owner, expectedEpoch: capturedEpoch, request }),
-    mutateAsync: (input: Input) => mutation.mutateAsync({ input, owner, expectedEpoch: capturedEpoch, request }),
+    mutate: (input: Input) =>
+      mutation.mutate({ input, owner, expectedEpoch: capturedEpoch, request }),
+    mutateAsync: (input: Input) =>
+      mutation.mutateAsync({ input, owner, expectedEpoch: capturedEpoch, request }),
     variables: ownsResult ? mutation.variables?.input : undefined,
     data: ownsResult ? mutation.data : undefined,
     error: ownsResult ? mutation.error : null,

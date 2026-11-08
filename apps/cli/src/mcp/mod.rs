@@ -1295,10 +1295,10 @@ fn respawn_check(
         if let Some(refusal) = policy_refusal(&name, &config) {
             return Err(refusal);
         }
-        if origin != McpServerOrigin::User
-            && let Some(project) = project.as_deref()
-        {
-            consent::respawn_allowed(project, origin, &name, &config)?;
+        if origin != McpServerOrigin::User {
+            if let Some(project) = project.as_deref() {
+                consent::respawn_allowed(project, origin, &name, &config)?;
+            }
         }
         Ok(())
     }))
@@ -2629,13 +2629,25 @@ mod tests {
 
     #[test]
     fn every_stdio_origin_checks_policy_before_project_consent() {
-        for origin in [McpServerOrigin::User, McpServerOrigin::Project, McpServerOrigin::Plugin] {
+        for origin in [
+            McpServerOrigin::User,
+            McpServerOrigin::Project,
+            McpServerOrigin::Plugin,
+        ] {
             let config = McpServerConfig::stdio("node", vec![], HashMap::new()).with_origin(origin);
-            let check = respawn_check("server", &config, Some(std::path::Path::new("unread-project")))
-                .expect("stdio policy check");
+            let check = respawn_check(
+                "server",
+                &config,
+                Some(std::path::Path::new("unread-project")),
+            )
+            .expect("stdio policy check");
             crate::cloud::workspace_policy::with_test_policy(
                 serde_json::json!({"schemaVersion": 3, "governed": true, "code": {"allowMcpServers": false, "mcpRestrictionActive": false, "allowedMcpServers": []}}),
-                || assert!(check().unwrap_err().contains("administrator has turned MCP servers off")),
+                || {
+                    assert!(check()
+                        .unwrap_err()
+                        .contains("administrator has turned MCP servers off"))
+                },
             );
         }
     }
@@ -2654,7 +2666,11 @@ mod tests {
                 );
                 crate::cloud::workspace_policy::with_test_policy(
                     serde_json::json!({"schemaVersion": 2, "code": {"allowMcpServers": true, "allowedMcpServers": []}}),
-                    || assert!(check().unwrap_err().contains("workspace policy could not be read")),
+                    || {
+                        assert!(check()
+                            .unwrap_err()
+                            .contains("workspace policy could not be read"))
+                    },
                 );
                 assert_eq!(check(), Ok(()));
             },

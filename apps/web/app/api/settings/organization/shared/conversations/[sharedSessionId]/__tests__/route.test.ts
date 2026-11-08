@@ -123,7 +123,10 @@ describe('DELETE shared conversation', () => {
     DB.query.mockReset();
     mocks.requireCsrfToken.mockResolvedValue(null);
     mocks.getUserScopedDb.mockResolvedValue({ db: DB, userId: 'member-1', organizationId: ORG });
-    mocks.resolveOrgMembershipForOrganization.mockResolvedValue({ organizationId: ORG, role: 'member' });
+    mocks.resolveOrgMembershipForOrganization.mockResolvedValue({
+      organizationId: ORG,
+      role: 'member',
+    });
   });
 
   it('returns 401 when the caller is not signed in', async () => {
@@ -180,7 +183,7 @@ describe('DELETE shared conversation', () => {
   it('canonicalizes a mixed-case UUID before deleting and auditing its exact receipt', async () => {
     const mixedCaseId = 'aBcDeF12-ABcd-4eF0-8aBc-Def123456789';
     const canonicalId = 'abcdef12-abcd-4ef0-8abc-def123456789';
-    const actual = await vi.importActual<typeof import('@/lib/services/org-shared-session-service')>(
+    const actual = await vi.importActual<MockedModule0>(
       '@/lib/services/org-shared-session-service',
     );
     mocks.unshare.mockImplementation(actual.unshareSessionFromOrganization);
@@ -221,7 +224,7 @@ describe('DELETE shared conversation', () => {
     },
     { label: 'exact', rows: [{ shared_session_id: SESSION }], status: 200 },
   ])('reports the real delete helper outcome for $label receipts', async ({ rows, status }) => {
-    const actual = await vi.importActual<typeof import('@/lib/services/org-shared-session-service')>(
+    const actual = await vi.importActual<MockedModule0>(
       '@/lib/services/org-shared-session-service',
     );
     mocks.unshare.mockImplementation(actual.unshareSessionFromOrganization);
@@ -255,3 +258,5 @@ describe('DELETE shared conversation', () => {
     }
   });
 });
+
+type MockedModule0 = typeof import('@/lib/services/org-shared-session-service');

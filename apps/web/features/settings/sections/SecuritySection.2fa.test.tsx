@@ -11,45 +11,80 @@ const fixture = vi.hoisted(() => ({
 }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: vi.fn(), push: vi.fn() }) }));
 vi.mock('@/lib/identity/client', async (original) => ({
-  ...await original<typeof import('@/lib/identity/client')>(),
+  ...(await original<MockedModule0>()),
   useCurrentUser: () => ({ isLoaded: true, isSignedIn: false, user: null }),
   useSignOut: () => vi.fn(),
 }));
 vi.mock('@shared/stores/authentication-store', () => ({ useAuthStore: () => vi.fn() }));
 vi.mock('@agiworkforce/ui', async (original) => ({
-  ...await original<typeof import('@agiworkforce/ui')>(),
+  ...(await original<MockedModule1>()),
   useConfirmAction: () => ({ confirm: vi.fn(), dialog: null }),
 }));
 vi.mock('@features/settings/hooks/useStepUp', () => ({
   useStepUp: () => ({ withStepUp: vi.fn(), dialog: null }),
 }));
-vi.mock('@features/settings/hooks/use-settings-queries', () => ({
+vi.mock('@features/settings/hooks/use-settings-queries', async (importOriginal) => ({
+  ...(await importOriginal<CompleteMockModule0>()),
   useUserSettings: () => ({ data: fixture.settings, isLoading: false, isError: false }),
   useUpdateSettings: () => ({ mutate: fixture.mutate, isPending: false }),
 }));
 vi.mock('@features/settings/hooks/use-mfa-readers', async (original) => ({
-  ...await original<typeof import('@features/settings/hooks/use-mfa-readers')>(),
-  useMfaStatus: (active: boolean) => { fixture.readStatus(active); return { data: active ? fixture.status : undefined }; },
+  ...(await original<MockedModule2>()),
+  useMfaStatus: (active: boolean) => {
+    fixture.readStatus(active);
+    return { data: active ? fixture.status : undefined };
+  },
 }));
 vi.mock('@features/settings/components/Settings/TwoFactorEnrollment', () => ({
-  TwoFactorEnrollmentPanel: ({ active }: { active: boolean }) => <div data-testid="enrollment-active">{String(active)}</div>,
+  TwoFactorEnrollmentPanel: ({ active }: { active: boolean }) => (
+    <div data-testid="enrollment-active">{String(active)}</div>
+  ),
 }));
-vi.mock('@features/settings/components/Settings/PasswordEditor', () => ({ PasswordEditor: () => null }));
-vi.mock('@features/settings/components/Settings/SignInMethodsPanel', () => ({ SignInMethodsPanel: () => null }));
-vi.mock('@features/settings/components/Settings/PasskeysPanel', () => ({ PasskeysPanel: () => null }));
-vi.mock('@/features/account-security/components/AdvancedAccountSecurityPanel', () => ({ AdvancedAccountSecurityPanel: () => null }));
+vi.mock('@features/settings/components/Settings/PasswordEditor', () => ({
+  PasswordEditor: () => null,
+}));
+vi.mock('@features/settings/components/Settings/SignInMethodsPanel', () => ({
+  SignInMethodsPanel: () => null,
+}));
+vi.mock('@features/settings/components/Settings/PasskeysPanel', () => ({
+  PasskeysPanel: () => null,
+}));
+vi.mock('@/features/account-security/components/AdvancedAccountSecurityPanel', () => ({
+  AdvancedAccountSecurityPanel: () => null,
+}));
 vi.mock('@features/settings/components/AuditLogPanel', () => ({ AuditLogPanel: () => null }));
-vi.mock('@features/settings/components/DeviceSignInToggle', () => ({ DeviceSignInToggle: ({ active }: { active: boolean }) => <div data-testid="device-sign-in-active">{String(active)}</div> }));
+vi.mock('@features/settings/components/DeviceSignInToggle', () => ({
+  DeviceSignInToggle: ({ active }: { active: boolean }) => (
+    <div data-testid="device-sign-in-active">{String(active)}</div>
+  ),
+}));
 vi.mock('@/features/support/components/HelpArticleLink', () => ({ HelpArticleLink: () => null }));
-vi.mock('@features/settings/components/SettingsSectionLink', () => ({ SettingsSectionLink: () => null }));
-vi.mock('./AccountSection', () => ({ readApiError: (_body: unknown, fallback: string) => fallback }));
+vi.mock('@features/settings/components/SettingsSectionLink', () => ({
+  SettingsSectionLink: () => null,
+}));
+vi.mock('./AccountSection', () => ({
+  readApiError: (_body: unknown, fallback: string) => fallback,
+}));
 vi.mock('@features/settings/components/Settings/TwoFactor', async (original) => ({
-  ...await original<typeof import('@features/settings/components/Settings/TwoFactor')>(),
-  TwoFactorPanel: ({ securityForm, onSaveSecurity }: ComponentProps<typeof import('@features/settings/components/Settings/TwoFactor').TwoFactorPanel>) => (
+  ...(await original<MockedModule3>()),
+  TwoFactorPanel: ({
+    securityForm,
+    onSaveSecurity,
+  }: ComponentProps<
+    typeof import('@features/settings/components/Settings/TwoFactor').TwoFactorPanel
+  >) => (
     <>
       <div data-testid="timeout-form">{JSON.stringify(securityForm.watch())}</div>
       <button onClick={securityForm.handleSubmit(onSaveSecurity)}>Save timeout</button>
-      <button onClick={() => onSaveSecurity({ ...securityForm.getValues(), two_factor_enabled: true } as Parameters<typeof onSaveSecurity>[0])}>Submit stale caller data</button>
+      <button
+        onClick={() =>
+          onSaveSecurity({ ...securityForm.getValues(), two_factor_enabled: true } as Parameters<
+            typeof onSaveSecurity
+          >[0])
+        }
+      >
+        Submit stale caller data
+      </button>
     </>
   ),
 }));
@@ -87,30 +122,52 @@ describe('SecuritySection mocked child composition (not enrollment integration)'
 
   it('distinguishes unconfirmed availability from confirmed unavailable and available', () => {
     const view = render(<SecuritySection />);
-    expect(screen.getByLabelText('Account security availability')).toHaveTextContent('availability has not been confirmed');
+    expect(screen.getByLabelText('Account security availability')).toHaveTextContent(
+      'availability has not been confirmed',
+    );
     fixture.status = { enabled: false, backupCodesReady: false, enrollmentAvailable: false };
     view.rerender(<SecuritySection />);
-    expect(screen.getByLabelText('Account security availability')).toHaveTextContent('temporarily unavailable');
+    expect(screen.getByLabelText('Account security availability')).toHaveTextContent(
+      'temporarily unavailable',
+    );
     fixture.status = { ...fixture.status, enrollmentAvailable: true };
     view.rerender(<SecuritySection />);
-    expect(screen.getByLabelText('Account security availability')).toHaveTextContent('supported second factor');
+    expect(screen.getByLabelText('Account security availability')).toHaveTextContent(
+      'supported second factor',
+    );
     view.rerender(<SecuritySection twoFactorActive={false} />);
-    expect(screen.getByLabelText('Account security availability')).toHaveTextContent('availability has not been confirmed');
+    expect(screen.getByLabelText('Account security availability')).toHaveTextContent(
+      'availability has not been confirmed',
+    );
   });
 
-  it.each([true, false])('keeps stale preference %s and authoritative status out of timeout form and submissions', async (stale) => {
-    fixture.settings = { two_factor_enabled: stale, session_timeout: 240 };
-    fixture.status = { enabled: !stale, backupCodesReady: !stale, enrollmentAvailable: true };
-    const view = render(<SecuritySection />);
-    await waitFor(() => expect(screen.getByTestId('timeout-form')).toHaveTextContent('{"session_timeout":240}'));
-    expect(screen.getByTestId('timeout-form')).not.toHaveTextContent('two_factor_enabled');
-    fireEvent.click(screen.getByRole('button', { name: 'Save timeout' }));
-    await waitFor(() => expect(fixture.mutate).toHaveBeenCalledWith({ session_timeout: 240 }));
-    fixture.status = { enabled: stale, backupCodesReady: stale, enrollmentAvailable: true };
-    view.rerender(<SecuritySection />);
-    expect(screen.getByTestId('timeout-form')).not.toHaveTextContent('two_factor_enabled');
-    fireEvent.click(screen.getByRole('button', { name: 'Submit stale caller data' }));
-    expect(fixture.mutate).toHaveBeenLastCalledWith({ session_timeout: 240 });
-    expect(fixture.mutate.mock.calls.every(([payload]) => !('two_factor_enabled' in payload))).toBe(true);
-  });
+  it.each([true, false])(
+    'keeps stale preference %s and authoritative status out of timeout form and submissions',
+    async (stale) => {
+      fixture.settings = { two_factor_enabled: stale, session_timeout: 240 };
+      fixture.status = { enabled: !stale, backupCodesReady: !stale, enrollmentAvailable: true };
+      const view = render(<SecuritySection />);
+      await waitFor(() =>
+        expect(screen.getByTestId('timeout-form')).toHaveTextContent('{"session_timeout":240}'),
+      );
+      expect(screen.getByTestId('timeout-form')).not.toHaveTextContent('two_factor_enabled');
+      fireEvent.click(screen.getByRole('button', { name: 'Save timeout' }));
+      await waitFor(() => expect(fixture.mutate).toHaveBeenCalledWith({ session_timeout: 240 }));
+      fixture.status = { enabled: stale, backupCodesReady: stale, enrollmentAvailable: true };
+      view.rerender(<SecuritySection />);
+      expect(screen.getByTestId('timeout-form')).not.toHaveTextContent('two_factor_enabled');
+      fireEvent.click(screen.getByRole('button', { name: 'Submit stale caller data' }));
+      expect(fixture.mutate).toHaveBeenLastCalledWith({ session_timeout: 240 });
+      expect(
+        fixture.mutate.mock.calls.every(([payload]) => !('two_factor_enabled' in payload)),
+      ).toBe(true);
+    },
+  );
 });
+
+type MockedModule0 = typeof import('@/lib/identity/client');
+type MockedModule1 = typeof import('@agiworkforce/ui');
+type MockedModule2 = typeof import('@features/settings/hooks/use-mfa-readers');
+type MockedModule3 = typeof import('@features/settings/components/Settings/TwoFactor');
+
+type CompleteMockModule0 = typeof import('@features/settings/hooks/use-settings-queries');

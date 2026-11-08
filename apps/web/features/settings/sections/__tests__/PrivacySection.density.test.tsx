@@ -10,21 +10,28 @@ type ScanModule1 = typeof import('@/lib/sentry-shared');
 
 const fixture = vi.hoisted(() => ({
   auth: { isLoaded: true, isSignedIn: true, userId: 'a', sessionId: 'session-a' },
-  sdk: { loaded: true, user: { id: 'a' },
-    session: { id: 'session-a', user: { id: 'a' }, getToken: async () => 'token-a' } },
+  sdk: {
+    loaded: true,
+    user: { id: 'a' },
+    session: { id: 'session-a', user: { id: 'a' }, getToken: async () => 'token-a' },
+  },
   stored: { shareTelemetry: false, keepOutOfProviderTraining: false },
 }));
 vi.mock('@clerk/nextjs', () => ({ useAuth: () => fixture.auth, useClerk: () => fixture.sdk }));
 vi.mock('../../services/privacy-preferences-client', async (original) => ({
-  ...await original<typeof import('../../services/privacy-preferences-client')>(),
+  ...(await original<MockedModule0>()),
   readPrivacyPreferences: vi.fn(async () => ({ stored: { ...fixture.stored }, version: 'v1' })),
-  savePrivacyPreference: vi.fn(async (_authority: unknown, key: keyof typeof fixture.stored, value: boolean) => {
-    fixture.stored[key] = value;
-    return { stored: { ...fixture.stored }, version: 'v2' };
-  }),
+  savePrivacyPreference: vi.fn(
+    async (_authority: unknown, key: keyof typeof fixture.stored, value: boolean) => {
+      fixture.stored[key] = value;
+      return { stored: { ...fixture.stored }, version: 'v2' };
+    },
+  ),
 }));
 
-vi.mock('../../components/BulkConversationControls', () => ({ BulkConversationControls: () => null }));
+vi.mock('../../components/BulkConversationControls', () => ({
+  BulkConversationControls: () => null,
+}));
 
 vi.mock('../../components/UsOnlyRoutingPanel', () => ({
   UsOnlyRoutingPanel: () => null,
@@ -81,7 +88,7 @@ vi.mock('@/lib/sentry-shared', async (importOriginal) => ({
 }));
 
 vi.mock('@/app/settings/_lib/preferences-client', async (original) => ({
-  ...await original<typeof import('@/app/settings/_lib/preferences-client')>(),
+  ...(await original<MockedModule1>()),
   fetchPreferenceNamespace: vi.fn(async () => ({})),
   savePreferenceNamespace: vi.fn(async () => ({})),
 }));
@@ -153,7 +160,9 @@ describe('PrivacySection row density', () => {
 
     await userEvent.click(screen.getByRole('switch', { name: /Share crash and error reports/i }));
 
-    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Your privacy setting was saved.'));
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent('Your privacy setting was saved.'),
+    );
     expect(savePrivacyPreference).toHaveBeenCalledWith(expect.anything(), 'shareTelemetry', true);
   });
 
@@ -172,3 +181,6 @@ describe('PrivacySection row density', () => {
     expect(screen.queryByText(/message content is never included/i)).toBeNull();
   });
 });
+
+type MockedModule0 = typeof import('../../services/privacy-preferences-client');
+type MockedModule1 = typeof import('@/app/settings/_lib/preferences-client');
