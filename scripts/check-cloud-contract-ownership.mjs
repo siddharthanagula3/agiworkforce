@@ -38,6 +38,7 @@ const cloudModules = [
   'chat-attachment-truncation',
   'chat-code-runs',
   'managed-cloud-chat-attachments-client',
+  'managed-upload',
   'project-knowledge',
   'managed-cloud-project-knowledge-client',
   'resumable-uploads',
@@ -62,6 +63,7 @@ const cloudModules = [
   'connector-directory',
   'capability-handshake',
   'schedules',
+  'schedule-models',
   'live-voice-tools',
   'triggers',
   'conversation-shares',
@@ -101,6 +103,7 @@ const cloudModules = [
   'google-docs-export',
   'artifact-cloud-save',
   'security-scan',
+  'page-context',
 ];
 
 const cloudMovedFiles = [
