@@ -55,9 +55,6 @@ function actions() {
     closeAllWindows: vi.fn(),
     minimizeAllWindows: vi.fn(),
     zoomAllWindows: vi.fn(),
-    startDictation: vi.fn(),
-    showEmojiPanel: vi.fn(),
-    autoFill: vi.fn(),
     fillWindow: vi.fn(),
     centerWindow: vi.fn(),
     moveWindow: vi.fn(),
@@ -545,23 +542,6 @@ describe('the application menu', () => {
     expect(close?.accelerator).toBe(contractAccelerator('host-close-window'));
   });
 
-  it('fills a field from Edit > AutoFill on the public window', () => {
-    const { menu, actions: spies } = template();
-    const autoFill = submenu(menu, 'Edit').find((entry) => entry.label === 'AutoFill');
-    const sources = (autoFill?.submenu ?? []) as MenuItemConstructorOptions[];
-    const contact = sources.find((entry) => entry.label === 'Contact…');
-    const passwords = sources.find((entry) => entry.label === 'Passwords…');
-    const card = sources.find((entry) => entry.label === 'Credit Card…');
-
-    (contact?.click as () => void)();
-    (passwords?.click as () => void)();
-    (card?.click as () => void)();
-
-    expect(spies.autoFill).toHaveBeenNthCalledWith(1, 'contact');
-    expect(spies.autoFill).toHaveBeenNthCalledWith(2, 'passwords');
-    expect(spies.autoFill).toHaveBeenNthCalledWith(3, 'credit-card');
-  });
-
   it('pastes and matches style from the public window Edit menu', () => {
     const { menu } = template();
     const edit = submenu(menu, 'Edit');
@@ -674,22 +654,6 @@ describe('the application menu', () => {
     const edit = submenu(menu, 'Edit');
 
     expect(edit.some((entry) => entry.role === 'paste')).toBe(true);
-  });
-
-  it('starts dictation from the public window Edit menu', () => {
-    const { menu, actions: spies } = template();
-
-    (item(menu, 'Edit', 'Start Dictation…').click as () => void)();
-
-    expect(spies.startDictation).toHaveBeenCalledTimes(1);
-  });
-
-  it('opens emoji and symbols from the public window Edit menu', () => {
-    const { menu, actions: spies } = template();
-
-    (item(menu, 'Edit', 'Emoji & Symbols').click as () => void)();
-
-    expect(spies.showEmojiPanel).toHaveBeenCalledTimes(1);
   });
 
   it('closes every window from File > Close All on the public window', () => {

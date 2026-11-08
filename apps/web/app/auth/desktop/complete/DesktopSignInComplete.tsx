@@ -83,9 +83,9 @@ export function DesktopSignInComplete({
   if (errorMessage === null) {
     return (
       <AuthStepFrame heading={SIGNING_IN}>
-        <p role="status" className="flex items-center justify-center">
+        <div role="status" className="flex items-center justify-center">
           <Spinner size="sm" aria-label={SIGNING_IN} />
-        </p>
+        </div>
       </AuthStepFrame>
     );
   }

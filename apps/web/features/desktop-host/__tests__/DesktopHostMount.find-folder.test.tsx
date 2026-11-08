@@ -135,7 +135,7 @@ describe('the public window mount', () => {
       deliver?.('find');
     });
 
-    expect(await screen.findByRole('textbox', { name: 'Find' })).toBeTruthy();
+    expect(await screen.findByRole('textbox', { name: 'Find in page' })).toBeTruthy();
   });
 
   it('shows the folder File > Open Folder grants on the page the public window loads', async () => {

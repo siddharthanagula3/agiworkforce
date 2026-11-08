@@ -112,7 +112,7 @@ export function useDictation(options: UseDictationOptions): DictationController 
       owner.retire();
     }
     dispatch({ type: DICTATION_EVENT.cancel });
-    setAnnouncement(ANNOUNCEMENT.cancelled);
+    setAnnouncement(owner ? ANNOUNCEMENT.cancelled : '');
   }, []);
 
   const start = useCallback(() => {

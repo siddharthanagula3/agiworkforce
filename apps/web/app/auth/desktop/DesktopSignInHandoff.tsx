@@ -94,10 +94,13 @@ export function DesktopSignInHandoff({ challenge }: { challenge: string | null }
   return (
     <AuthStepFrame heading={HEADING} detail={<p>{DETAIL}</p>}>
       {state.kind === 'preparing' ? (
-        <p role="status" className="flex items-center justify-center gap-2 text-sm text-text-muted">
+        <div
+          role="status"
+          className="flex items-center justify-center gap-2 text-sm text-text-muted"
+        >
           <Spinner size="sm" />
           <span>{PREPARING}</span>
-        </p>
+        </div>
       ) : (
         <>
           <button

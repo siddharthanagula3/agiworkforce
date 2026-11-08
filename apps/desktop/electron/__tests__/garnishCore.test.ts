@@ -15,7 +15,6 @@ import {
   cascadedFrames,
   windowSetAfterJoin,
   windowSetWithout,
-  autoFillSelector,
   followNavigationState,
   frameIsOnScreen,
   isShortcutOff,
@@ -411,12 +410,6 @@ describe('fillsWorkArea', () => {
     expect(cascadedFrames([front], workArea)[0]).toEqual(
       centeredFrame({ x: 0, y: 0, width: front.width, height: front.height }, workArea),
     );
-  });
-
-  it('names the system action Edit > AutoFill sends for each saved source', () => {
-    expect(autoFillSelector('contact')).toBe('showAutoFillContactsForView:');
-    expect(autoFillSelector('passwords')).toBe('showAutoFillPasswordsForView:');
-    expect(autoFillSelector('credit-card')).toBe('showAutoFillCreditCardsForView:');
   });
 
   it('drops the front window from the set Window > Remove Window from Set edits', () => {

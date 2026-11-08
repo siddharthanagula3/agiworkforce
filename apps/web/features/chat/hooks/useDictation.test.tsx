@@ -100,6 +100,22 @@ function mount() {
 }
 
 describe('useDictation', () => {
+  it('keeps the idle announcement empty through strict mode setup replay', () => {
+    const { result } = renderHook(
+      () =>
+        useDictation({
+          scope: 'empty-composer',
+          isAvailable: () => true,
+          onInsert: vi.fn(),
+          onSend: vi.fn(),
+        }),
+      { reactStrictMode: true },
+    );
+    expect(result.current.status).toBe(DICTATION_STATUS.idle);
+    expect(result.current.announcement).toBe('');
+    expect(useVoiceInputStore.getState().mode).toBe('idle');
+  });
+
   beforeEach(() => {
     useSettingsStore.setState({ dictationEnabled: true });
     useBillingStore.setState({ disabledFeatures: [] });

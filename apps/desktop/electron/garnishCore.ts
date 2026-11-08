@@ -450,20 +450,6 @@ export function cascadedFrames(
   }));
 }
 
-export type AutoFillSource = 'contact' | 'passwords' | 'credit-card';
-
-/** The system action Edit > AutoFill sends for one saved source. */
-export function autoFillSelector(source: AutoFillSource): string {
-  switch (source) {
-    case 'contact':
-      return 'showAutoFillContactsForView:';
-    case 'passwords':
-      return 'showAutoFillPasswordsForView:';
-    case 'credit-card':
-      return 'showAutoFillCreditCardsForView:';
-  }
-}
-
 /** Window ids placed together by Fill, Center, a tile, or an arrange. */
 export function windowSetAfterJoin(
   existing: readonly number[],

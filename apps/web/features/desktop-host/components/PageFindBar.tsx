@@ -1,13 +1,14 @@
 'use client';
 
 import { useEffect, useId, useRef, useState } from 'react';
+import { ChevronDown, ChevronUp, X } from '@agiworkforce/icons';
 import { onAppCommand } from '@shared/lib/app-commands';
 import { applyPageFindSelection, pageFindOccurrences } from '../lib/page-find';
 
 const FIELD_CLASS =
-  'min-h-[32px] w-44 rounded-md border border-border/60 bg-background px-3 py-1 text-sm text-foreground outline-none focus-visible:border-[var(--chat-accent-primary)]';
+  'h-9 min-w-0 flex-1 rounded-md border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-focus-ring';
 const BUTTON_CLASS =
-  'min-h-[32px] rounded-md px-2 text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring';
+  'flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring disabled:opacity-40 pointer-coarse:h-11 pointer-coarse:w-11';
 
 /**
  * The find session Edit > Find asks the page to run.
@@ -77,57 +78,73 @@ export function PageFindBar() {
   return (
     <div
       role="search"
-      aria-label="Find"
+      aria-label="Find in page"
       data-page-find-bar=""
-      className="fixed right-3 top-12 z-[var(--z-popover)] flex items-center gap-2 rounded-md border border-border/60 bg-background px-2 py-1 text-foreground"
+      className="fixed right-3 top-[calc(var(--agi-window-title-strip,0px)+3rem)] z-[var(--z-popover)] w-96 max-w-[calc(100vw-1.5rem)] rounded-lg border border-border bg-popover p-3 text-popover-foreground shadow-lg"
     >
-      <label htmlFor={inputId} className="sr-only">
-        Find
-      </label>
-      <input
-        ref={inputRef}
-        id={inputId}
-        type="text"
-        value={query}
-        autoComplete="off"
-        spellCheck={false}
-        className={FIELD_CLASS}
-        onChange={(event) => {
-          setQuery(event.target.value);
-          setIndex(0);
-        }}
-        onKeyDown={(event) => {
-          if (event.key === 'Escape') {
-            event.preventDefault();
-            setOpen(false);
-            return;
-          }
-          if (event.key === 'Enter') {
-            event.preventDefault();
-            setIndex((current) => current + (event.shiftKey ? -1 : 1));
-          }
-        }}
-      />
-      <span aria-live="polite" className="min-w-16 text-xs text-muted-foreground">
-        {status}
-      </span>
-      <button
-        type="button"
-        className={BUTTON_CLASS}
-        onClick={() => setIndex((current) => current - 1)}
-      >
-        Previous
-      </button>
-      <button
-        type="button"
-        className={BUTTON_CLASS}
-        onClick={() => setIndex((current) => current + 1)}
-      >
-        Next
-      </button>
-      <button type="button" className={BUTTON_CLASS} onClick={() => setOpen(false)}>
-        Close
-      </button>
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <label htmlFor={inputId} className="text-sm font-medium">
+          Find in page
+        </label>
+        <button
+          type="button"
+          aria-label="Close"
+          className={BUTTON_CLASS}
+          onClick={() => setOpen(false)}
+        >
+          <X className="h-4 w-4" aria-hidden="true" />
+        </button>
+      </div>
+      <div className="flex items-center gap-1">
+        <input
+          ref={inputRef}
+          id={inputId}
+          type="text"
+          placeholder="Search this page"
+          value={query}
+          autoComplete="off"
+          spellCheck={false}
+          className={FIELD_CLASS}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setIndex(0);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              event.preventDefault();
+              setOpen(false);
+              return;
+            }
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              setIndex((current) => current + (event.shiftKey ? -1 : 1));
+            }
+          }}
+        />
+        <button
+          type="button"
+          aria-label="Previous"
+          title="Previous match"
+          className={BUTTON_CLASS}
+          disabled={count === 0}
+          onClick={() => setIndex((current) => current - 1)}
+        >
+          <ChevronUp className="h-4 w-4" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          aria-label="Next"
+          title="Next match"
+          className={BUTTON_CLASS}
+          disabled={count === 0}
+          onClick={() => setIndex((current) => current + 1)}
+        >
+          <ChevronDown className="h-4 w-4" aria-hidden="true" />
+        </button>
+      </div>
+      <div aria-live="polite" className="mt-2 text-xs text-muted-foreground">
+        {status || 'Type to find text on this page'}
+      </div>
     </div>
   );
 }

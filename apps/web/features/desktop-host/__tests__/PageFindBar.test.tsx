@@ -19,7 +19,7 @@ describe('the page find bar', () => {
     await act(async () => {
       emitAppCommand('find');
     });
-    const field = await screen.findByRole('textbox', { name: 'Find' });
+    const field = await screen.findByRole('textbox', { name: 'Find in page' });
     fireEvent.change(field, { target: { value: 'alpha' } });
 
     expect(await screen.findByText('1 of 2')).toBeTruthy();
@@ -38,7 +38,7 @@ describe('the page find bar', () => {
     expect(await screen.findByText('No matches')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
-    expect(screen.queryByRole('textbox', { name: 'Find' })).toBeNull();
+    expect(screen.queryByRole('textbox', { name: 'Find in page' })).toBeNull();
   });
 
   it('steps back to the previous match when Find Previous is chosen', async () => {
@@ -47,7 +47,7 @@ describe('the page find bar', () => {
     await act(async () => {
       emitAppCommand('find');
     });
-    fireEvent.change(await screen.findByRole('textbox', { name: 'Find' }), {
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Find in page' }), {
       target: { value: 'alpha' },
     });
     expect(await screen.findByText('1 of 2')).toBeTruthy();
@@ -69,7 +69,7 @@ describe('the page find bar', () => {
     await act(async () => {
       emitAppCommand('find-next');
     });
-    const field = await screen.findByRole('textbox', { name: 'Find' });
+    const field = await screen.findByRole('textbox', { name: 'Find in page' });
     fireEvent.change(field, { target: { value: 'beta' } });
 
     expect(await screen.findByText('1 of 1')).toBeTruthy();

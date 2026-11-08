@@ -10,7 +10,6 @@ import {
   clipboard,
   desktopCapturer,
   ipcMain,
-  Menu,
   nativeTheme,
   net,
   powerMonitor,
@@ -190,11 +189,9 @@ import {
   frameSavedBeforeTile,
   frameToRestore,
   arrangedFrames,
-  autoFillSelector,
   cascadedFrames,
   windowSetAfterJoin,
   windowSetWithout,
-  type AutoFillSource,
   type RectLike,
   type WindowTile,
   type WindowArrangement,
@@ -1367,18 +1364,6 @@ async function newChatFromShortcut(): Promise<void> {
   await focusComposerWhenReady(win, NEW_CHAT_COMPOSER_WAIT_MS);
 }
 
-function autoFill(source: AutoFillSource): void {
-  Menu.sendActionToFirstResponder(autoFillSelector(source));
-}
-
-function startDictation(): void {
-  Menu.sendActionToFirstResponder('startDictation:');
-}
-
-function showEmojiAndSymbols(): void {
-  app.showEmojiPanel();
-}
-
 function closeAllShellWindows(): void {
   for (const entry of liveWindows()) {
     if (!entry.win.isDestroyed()) entry.win.close();
@@ -2399,9 +2384,6 @@ function installMenu(): void {
       closeAllWindows: closeAllShellWindows,
       minimizeAllWindows: minimizeAllShellWindows,
       zoomAllWindows: zoomAllShellWindows,
-      autoFill,
-      startDictation,
-      showEmojiPanel: showEmojiAndSymbols,
       fillWindow: fillFrontWindow,
       centerWindow: centerFrontWindow,
       moveWindow: moveFrontWindow,

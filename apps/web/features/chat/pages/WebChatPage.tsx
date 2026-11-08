@@ -263,7 +263,6 @@ import {
   type ComposerWorkMode,
 } from '../components/Composer/ChatComposerNew';
 import { GreetingBanner } from '../components/GreetingBanner/GreetingBanner';
-import { ComposerSuggestions } from '../components/Composer/ComposerSuggestions';
 import { HomeActiveTasks } from '../components/HomeActiveTasks';
 import { AgiWorkIntroDialog } from '../components/AgiWorkIntroDialog';
 import { NewChatConnectorSuggestions } from '../components/NewChat/NewChatConnectorSuggestions';
@@ -7293,7 +7292,6 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                       onReviewApprovals={handleReviewApprovals}
                     />
                     {studyModeIndicator}
-                    {!voiceModeActive && <ComposerSuggestions onPick={setComposerPrefill} />}
                     {voiceModeActive ? (
                       <VoiceModeSurface
                         variant={VOICE_SURFACE_VARIANT.empty}

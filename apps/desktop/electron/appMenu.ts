@@ -7,7 +7,7 @@ import {
 } from '@agiworkforce/local-runtime-contract';
 import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { isLaunchAtLoginEnabled, setLaunchAtLogin } from './launchAtLogin';
-import type { AutoFillSource, WindowArrangement, WindowTile } from './garnishCore';
+import type { WindowArrangement, WindowTile } from './garnishCore';
 
 /**
  * The native application menu.
@@ -59,9 +59,6 @@ export interface AppMenuActions {
   closeAllWindows: () => void;
   minimizeAllWindows: () => void;
   zoomAllWindows: () => void;
-  startDictation: () => void;
-  showEmojiPanel: () => void;
-  autoFill: (source: AutoFillSource) => void;
   fillWindow: () => void;
   centerWindow: () => void;
   moveWindow: (tile: WindowTile) => void;
@@ -269,19 +266,6 @@ function editMenu(actions: AppMenuActions): MenuItemConstructorOptions {
   ];
   if (isMac) {
     items.splice(6, 0, { role: 'pasteAndMatchStyle' }, { role: 'delete' });
-    items.push(
-      { type: 'separator' },
-      {
-        label: 'AutoFill',
-        submenu: [
-          { label: 'Contact…', click: () => actions.autoFill('contact') },
-          { label: 'Passwords…', click: () => actions.autoFill('passwords') },
-          { label: 'Credit Card…', click: () => actions.autoFill('credit-card') },
-        ],
-      },
-      { label: 'Start Dictation…', click: () => actions.startDictation() },
-      { label: 'Emoji & Symbols', click: () => actions.showEmojiPanel() },
-    );
   }
   return { label: 'Edit', submenu: items };
 }

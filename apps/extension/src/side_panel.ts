@@ -5657,9 +5657,6 @@ function renderEmptyGreeting(): void {
 
 function updateEmptyStateActions(): void {
   const ready = managedCloudChatState === 'ready' && _ctx.managedCloudOwner !== null;
-  const pageBlocked = document.getElementById('sp-blocked')?.classList.contains('visible') === true;
-  const suggestions = document.getElementById('sp-empty-suggestions');
-  if (suggestions) suggestions.hidden = !ready || pageBlocked;
   const projects = document.getElementById('sp-empty-projects');
   if (projects) projects.hidden = !ready || recentProjects.length === 0;
 }
@@ -12405,27 +12402,6 @@ function buildUI(): void {
   }
   emptyState.appendChild(emptyIcon);
   emptyState.appendChild(el('h2', { id: 'sp-empty-greeting', hidden: '' }));
-  const suggestionGroup = el('div', {
-    id: 'sp-empty-suggestions',
-    class: 'sp-empty-actions',
-    role: 'group',
-    'aria-label': t('spSuggestionsLabel'),
-    hidden: '',
-  });
-  const suggestions: Array<[string, string]> = [
-    ['/summarize', t('spSuggestionSummarize')],
-    ['/explain', t('spSuggestionExplain')],
-    ['/extract', t('spSuggestionExtract')],
-    ['/translate', t('spSuggestionTranslate')],
-  ];
-  for (const [command, label] of suggestions) {
-    const suggestion = el('button', { class: 'sp-empty-action', type: 'button' });
-    suggestion.appendChild(renderIcon(FileText, 15));
-    suggestion.appendChild(el('span', { class: 'sp-empty-action-label' }, label));
-    suggestion.addEventListener('click', () => sendMessage(command, label));
-    suggestionGroup.appendChild(suggestion);
-  }
-  emptyState.appendChild(suggestionGroup);
   const recentProjectsGroup = el('div', {
     id: 'sp-empty-projects',
     class: 'sp-empty-actions',
