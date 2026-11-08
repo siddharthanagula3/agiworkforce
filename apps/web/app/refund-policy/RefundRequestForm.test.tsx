@@ -69,6 +69,7 @@ function session(overrides: Partial<IdentitySessionState> = {}): IdentitySession
     isLoaded: true,
     isSignedIn: true,
     userId: FIRST_USER,
+    sessionId: null,
     getToken: vi.fn().mockResolvedValue(null),
     ...overrides,
   };

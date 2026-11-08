@@ -33,7 +33,7 @@ const fixture = vi.hoisted(() => ({
   confirmations: [] as Array<{ onConfirm: () => unknown; onCancel?: () => void }>,
 }));
 vi.mock('@clerk/nextjs', async (original) => ({
-  ...(await original<typeof import('@clerk/nextjs')>()),
+  ...(await original()),
   useAuth: () => fixture.auth,
   useClerk: () => fixture.sdk,
   useUser: () => ({ user: fixture.sdk.user }),

@@ -17,7 +17,7 @@ const identity = vi.hoisted(() => ({
   listeners: new Set<() => void>(),
 }));
 vi.mock('@clerk/nextjs', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@clerk/nextjs')>()),
+  ...(await importOriginal()),
   useAuth: () => identity.auth,
   useClerk: () => identity.sdk,
 }));

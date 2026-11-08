@@ -15,7 +15,7 @@ const fixture = vi.hoisted(() => ({
 }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: vi.fn() }) }));
 vi.mock('@clerk/nextjs', async (original) => ({
-  ...(await original<typeof import('@clerk/nextjs')>()),
+  ...(await original()),
   useClerk: () => ({ signOut: vi.fn() }),
 }));
 vi.mock('../components/EmailAddressChange', () => ({

@@ -1,6 +1,6 @@
 'use client';
 
-import { useAuth, useClerk } from '@clerk/nextjs';
+import { useProviderAuth as useAuth, useProviderClerk as useClerk } from './client';
 import { useCallback, useRef } from 'react';
 import type { SessionAuthority } from './request-authority';
 import { bindNativeSession } from './native-session-authority';

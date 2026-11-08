@@ -43,7 +43,7 @@ const native = vi.hoisted(() => {
   };
 });
 vi.mock('@clerk/nextjs', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@clerk/nextjs')>()),
+  ...(await importOriginal()),
   useAuth: () => native.auth,
   useClerk: () => native.sdk,
 }));

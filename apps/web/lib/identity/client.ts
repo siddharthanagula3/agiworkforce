@@ -27,6 +27,7 @@ export interface IdentitySessionState {
   isLoaded: boolean;
   isSignedIn: boolean;
   userId: string | null;
+  sessionId: string | null;
   getToken: () => Promise<string | null>;
 }
 
@@ -62,14 +63,29 @@ function optional(value: string | null | undefined): string | null {
 }
 
 export function useSession(): IdentitySessionState {
-  const { isLoaded, isSignedIn, userId, getToken } = useAuth();
+  const { isLoaded, isSignedIn, userId, sessionId, getToken } = useAuth();
   const readToken = useCallback(async () => (await getToken()) ?? null, [getToken]);
   return {
     isLoaded,
     isSignedIn: isSignedIn === true,
     userId: userId ?? null,
+    sessionId: sessionId ?? null,
     getToken: readToken,
   };
+}
+
+export function useProviderAuth() {
+  return useAuth();
+}
+
+export function useProviderClerk() {
+  return useClerk();
+}
+
+type NativeClerkSession = NonNullable<ReturnType<typeof useClerk>['session']>;
+
+export function nativeClerkSession(authority: RequestAuthority): NativeClerkSession {
+  return nativeSessionFor<NativeClerkSession>(authority.session);
 }
 
 export function useCompletedSignUpForCurrentSession(): {
@@ -190,7 +206,7 @@ export function usePasskeys(): IdentityPasskeysState {
     (kind, submitted, passkeyId) => {
       const { authority, onDispatch } = submitted;
       authority.assertCurrent();
-      const session = nativeSessionFor(authority.session);
+      const session = nativeClerkSession(authority);
       const capturedUser = session.user;
       if (
         !isLoaded ||
@@ -408,7 +424,7 @@ export function useConnectedAccounts(): IdentityConnectedAccountsState {
   const capture = useCallback<IdentityConnectedAccountsState['capture']>(
     (selection, { authority, onDispatch }) => {
       authority.assertCurrent();
-      const native = nativeSessionFor(authority.session);
+      const native = nativeClerkSession(authority);
       const capturedUser = native.user;
       if (
         !isLoaded ||
@@ -570,7 +586,7 @@ export function useSessionReverification(authority?: RequestAuthority): Identity
 
   const activeSession = useCallback(() => {
     authority?.assertCurrent();
-    const current = authority ? nativeSessionFor(authority.session) : sessionRef.current;
+    const current = authority ? nativeClerkSession(authority) : sessionRef.current;
     if (!current) throw new Error('You are signed out. Sign in again to continue.');
     return current;
   }, [authority]);
@@ -681,13 +697,13 @@ export interface IdentityEmailAddressVerification {
 
 export function useEmailAddressVerification(): IdentityEmailAddressVerification {
   return useMemo<IdentityEmailAddressVerification>(() => {
-    type NativeUser = NonNullable<ReturnType<typeof nativeSessionFor>['user']>;
+    type NativeUser = NonNullable<NativeClerkSession['user']>;
     const owned = async <T>(
       authority: RequestAuthority,
       work: (user: NativeUser, assertCurrent: () => void) => Promise<T>,
     ): Promise<T> => {
       authority.assertCurrent();
-      const session = nativeSessionFor(authority.session);
+      const session = nativeClerkSession(authority);
       const user = session.user;
       if (!user || user.id !== authority.session.userId) {
         authority.retire();

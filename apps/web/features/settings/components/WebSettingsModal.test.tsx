@@ -26,7 +26,7 @@ vi.mock('@/lib/client/csrf', async (importOriginal) => ({
 
 const getTokenMock = vi.fn(async () => 'session-token');
 vi.mock('@clerk/nextjs', async (original) => ({
-  ...(await original<typeof import('@clerk/nextjs')>()),
+  ...(await original()),
   useAuth: () => ({ getToken: getTokenMock }),
 }));
 

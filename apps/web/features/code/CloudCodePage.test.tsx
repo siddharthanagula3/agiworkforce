@@ -51,7 +51,7 @@ const codeIdentity = vi.hoisted(() => ({
   },
 }));
 vi.mock('@clerk/nextjs', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@clerk/nextjs')>()),
+  ...(await importOriginal()),
   useAuth: () => codeIdentity.auth,
   useClerk: () => codeIdentity.sdk,
 }));

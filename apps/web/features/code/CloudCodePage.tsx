@@ -4,7 +4,7 @@ import { SshConnectionControl } from './components/SshConnectionControl';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useAuth } from '@clerk/nextjs';
+import { useSession } from '@/lib/identity/client';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Code2,
@@ -190,7 +190,7 @@ export interface CloudCodePageProps {
 }
 
 export function CloudCodePage(props: CloudCodePageProps) {
-  const { isLoaded, isSignedIn, userId, sessionId } = useAuth();
+  const { isLoaded, isSignedIn, userId, sessionId } = useSession();
   return <OwnedCloudCodePage key={`${isLoaded}:${isSignedIn}:${userId}:${sessionId}`} {...props} />;
 }
 

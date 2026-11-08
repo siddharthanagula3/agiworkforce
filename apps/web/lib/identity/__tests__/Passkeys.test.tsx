@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { deferred, passkeyFixture } from './passkey-fixture';
 const mocks = vi.hoisted(() => ({ fixture: null as unknown, loaded: true, noUser: false }));
 vi.mock('@clerk/nextjs', async () => ({
-  ...(await vi.importActual<typeof import('@clerk/nextjs')>('@clerk/nextjs')),
+  ...(await vi.importActual('@clerk/nextjs')),
   useUser: () => ({
     isLoaded: mocks.loaded,
     user: mocks.noUser ? null : (mocks.fixture as ReturnType<typeof passkeyFixture>).user,

@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
   stepUp: null as unknown,
 }));
 vi.mock('@clerk/nextjs', async (original) => ({
-  ...(await original<typeof import('@clerk/nextjs')>()),
+  ...(await original()),
   useAuth: () => {
     const { clerk } = mocks.fixture as ReturnType<typeof makeFixture>;
     return { isLoaded: true, isSignedIn: true, userId: clerk.user.id, sessionId: clerk.session.id };

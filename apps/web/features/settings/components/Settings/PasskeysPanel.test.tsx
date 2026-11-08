@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   confirmCallbacks: [] as Array<() => unknown>,
 }));
 vi.mock('@clerk/nextjs', async () => ({
-  ...(await vi.importActual<typeof import('@clerk/nextjs')>('@clerk/nextjs')),
+  ...(await vi.importActual('@clerk/nextjs')),
   useAuth: () => {
     const { clerk } = mocks.fixture as ReturnType<typeof passkeyFixture>;
     return { isLoaded: true, isSignedIn: true, userId: clerk.user.id, sessionId: clerk.session.id };

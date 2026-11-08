@@ -33,7 +33,7 @@ const fixture = vi.hoisted(() => ({
   validate: null as Promise<void> | null,
 }));
 vi.mock('@clerk/nextjs', async (original) => ({
-  ...(await original<typeof import('@clerk/nextjs')>()),
+  ...(await original()),
   useAuth: () => fixture.auth,
   useClerk: () => fixture.sdk,
   useSession: () => ({ isLoaded: true, session: fixture.sdk.session }),

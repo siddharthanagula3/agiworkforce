@@ -1,17 +1,15 @@
-import type { useClerk } from '@clerk/nextjs';
 import type { SessionAuthority } from './request-authority';
 
-type NativeSession = NonNullable<ReturnType<typeof useClerk>['session']>;
-const nativeSessions = new WeakMap<SessionAuthority, NativeSession>();
+const nativeSessions = new WeakMap<SessionAuthority, object>();
 
-export function bindNativeSession(authority: SessionAuthority, session: NativeSession): void {
+export function bindNativeSession(authority: SessionAuthority, session: object): void {
   nativeSessions.set(authority, session);
 }
 
-export function nativeSessionFor(authority: SessionAuthority): NativeSession {
+export function nativeSessionFor<T extends object>(authority: SessionAuthority): T {
   const session = nativeSessions.get(authority);
   if (!authority.isCurrent() || !session) {
     throw new DOMException('Session owner changed', 'AbortError');
   }
-  return session;
+  return session as T;
 }

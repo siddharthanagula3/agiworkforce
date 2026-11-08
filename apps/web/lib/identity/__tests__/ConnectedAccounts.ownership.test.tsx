@@ -61,7 +61,7 @@ function accountFixture() {
 
 const mocks = vi.hoisted(() => ({ fixture: null as unknown, loaded: true }));
 vi.mock('@clerk/nextjs', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@clerk/nextjs')>()),
+  ...(await importOriginal()),
   useUser: () => ({
     isLoaded: mocks.loaded,
     user: (mocks.fixture as ReturnType<typeof accountFixture>).user,
