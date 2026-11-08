@@ -1,3 +1,9 @@
+import {
+  WEB_PAGE_URL_MAX_LENGTH as MAX_URL_LENGTH,
+  type ManagedCloudPageReadResponse,
+  type UrlFetchErrorCode,
+} from '@agiworkforce/cloud-contracts';
+export type { UrlFetchErrorCode } from '@agiworkforce/cloud-contracts';
 import { fenceUntrustedContent } from '@agiworkforce/utils/fence';
 import {
   researchDomainAllowed,
@@ -37,7 +43,6 @@ export const URL_FETCH_MAX_EXTRACT_CHARS = 262_144;
 export const URL_FETCH_MAX_REDIRECTS = 5;
 export const URL_FETCH_MAX_DOCUMENT_BYTES = 10_485_760;
 const PDF_MIME_TYPE = 'application/pdf';
-const MAX_URL_LENGTH = 2_048;
 
 const ALLOWED_CONTENT_TYPES = new Set([
   'text/html',
@@ -48,30 +53,7 @@ const ALLOWED_CONTENT_TYPES = new Set([
   'application/json',
 ]);
 
-export type UrlFetchErrorCode =
-  | 'invalid_tool_input'
-  | 'url_not_allowed'
-  | 'url_not_accessible'
-  | 'cancelled'
-  | 'timeout'
-  | 'response_too_large'
-  | 'unsupported_content_type'
-  | 'unreadable_document'
-  | 'too_many_redirects';
-
-export type UrlFetchOutcome =
-  | {
-      ok: true;
-      url: string;
-      title: string;
-      content: string;
-      truncated: boolean;
-      /** The page's own description, so a fetched source card reads like a searched one. */
-      snippet?: string;
-      /** When the page says it was published. */
-      date?: string;
-    }
-  | { ok: false; errorCode: UrlFetchErrorCode; error: string };
+export type UrlFetchOutcome = ManagedCloudPageReadResponse;
 
 export function urlFetchToolDef(): {
   type: 'function';
@@ -471,6 +453,7 @@ export interface UrlFetchOverrides {
   maxRedirects?: number;
   signal?: AbortSignal;
   domainPolicy?: ResearchDomainPolicy | null;
+  allowedContentTypes?: readonly string[];
 }
 
 const CANCELLED_MESSAGE = 'The request was cancelled.';
@@ -580,6 +563,10 @@ export async function executeUrlFetch(
 
     const contentTypeHeader = response.headers.get('content-type') ?? '';
     const mime = contentTypeHeader.split(';')[0]?.trim().toLowerCase() ?? '';
+    if (overrides.allowedContentTypes && !overrides.allowedContentTypes.includes(mime)) {
+      await response.body?.cancel().catch(() => undefined);
+      return err('unsupported_content_type', 'This reader accepts web pages and plain text.');
+    }
     const documentReader = ALLOWED_CONTENT_TYPES.has(mime) ? null : await documentReaderFor(mime);
     if (!ALLOWED_CONTENT_TYPES.has(mime) && !documentReader) {
       await response.body?.cancel().catch(() => undefined);

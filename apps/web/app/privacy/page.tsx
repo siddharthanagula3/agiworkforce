@@ -40,7 +40,7 @@ const METERING_EVIDENCE_RETENTION_YEARS = Math.round(METERING_EVIDENCE_RETENTION
 export const metadata = buildMetadata({
   title: 'Privacy policy',
   description:
-    'What AGI collects, what it does not, and how that differs across Local, BYOK and Managed Cloud. Includes the retention schedule the product actually enforces.',
+    'What AGI collects, what it does not, and how that differs across Local, BYOK and Cloud. Includes the retention schedule the product actually enforces.',
   path: '/privacy',
 });
 
@@ -92,7 +92,7 @@ const DEFINITIONS_LEDGER: readonly LedgerRow[] = [
     value: 'Bring your own key: routing a request through your own account with a model provider.',
   },
   {
-    label: 'Managed Cloud',
+    label: 'Cloud',
     value: `The hosted, metered service ${LEGAL_ENTITY} operates, currently in public alpha.`,
   },
   {
@@ -115,14 +115,14 @@ const MODE_LEDGER: readonly LedgerRow[] = [
     value: (
       <>
         <strong>Where your prompts go:</strong> from the CLI to Ollama or LM Studio on loopback.
-        Nothing is transmitted to us and nothing is silently routed to BYOK or Managed Cloud. The{' '}
+        Nothing is transmitted to us and nothing is silently routed to BYOK or Cloud. The{' '}
         <Link href="/download" className="agi-ds-link">
           download page
         </Link>{' '}
         shows which CLI releases are published.
         <br />
         <strong>What we hold:</strong> nothing about the local model request. The current Desktop
-        and web apps use Managed Cloud; they do not expose Local inference.
+        and web apps use Cloud; they do not expose Local inference.
       </>
     ),
   },
@@ -134,7 +134,7 @@ const MODE_LEDGER: readonly LedgerRow[] = [
         targeted, on your own API key. We are not in that request path.{' '}
         <strong>
           BYOK is part of the CLI. The VS Code extension is coming soon. Desktop and web are
-          cloud-only and have no user-key path, so work on those surfaces is Managed Cloud.
+          cloud-only and have no user-key path, so work on those surfaces is Cloud.
         </strong>
         <br />
         <strong>What we hold:</strong> not the provider key or prompt traffic. The CLI stores the
@@ -144,12 +144,12 @@ const MODE_LEDGER: readonly LedgerRow[] = [
     ),
   },
   {
-    label: 'Managed Cloud',
+    label: 'Cloud',
     value: (
       <>
         <strong>Where your prompts go:</strong> through our gateway to the provider serving the
         model you selected. On the Free plan&rsquo;s default model, AGI chooses the provider, as
-        section 01 sets out. Managed Cloud is in public alpha.
+        section 01 sets out. Cloud is in public alpha.
         <br />
         <strong>What we hold:</strong> conversations, files, projects, memories, schedules and
         settings, so they sync across your devices. This is the only mode where we act as your
@@ -190,7 +190,7 @@ const COLLECT_LEDGER: readonly LedgerRow[] = [
     ),
   },
   {
-    label: 'Conversations (Managed Cloud)',
+    label: 'Conversations (Cloud)',
     value: (
       <>
         <strong>Examples:</strong> threads, messages, tool calls, and references to attached files.
@@ -306,9 +306,9 @@ const COLLECT_LEDGER: readonly LedgerRow[] = [
     value: (
       <>
         <strong>Examples:</strong> CLI sessions sent to Ollama or LM Studio on loopback. Not
-        silently routed to BYOK or Managed Cloud.
+        silently routed to BYOK or Cloud.
         <br />
-        <strong>Why, and how it is protected:</strong> AGI Cloud is not in the model request path.
+        <strong>Why, and how it is protected:</strong> Cloud is not in the model request path.
       </>
     ),
   },
@@ -320,7 +320,7 @@ const COLLECT_LEDGER: readonly LedgerRow[] = [
         credential store, or in owner-only files on Linux or when the keyring is turned off.
         <br />
         <strong>Why, and how it is protected:</strong> the CLI reads the key locally and sends
-        requests directly to the selected provider; AGI Cloud does not receive it.
+        requests directly to the selected provider; Cloud does not receive it.
       </>
     ),
   },
@@ -485,7 +485,7 @@ const NOT_COLLECTED: readonly { title: string; body: React.ReactNode }[] = [
   },
   {
     title: 'Local-mode anything',
-    body: 'Local mode uses on-device or local model routes and does not silently send chats, files, or developer sessions to BYOK providers or Managed Cloud.',
+    body: 'Local mode uses on-device or local model routes and does not silently send chats, files, or developer sessions to BYOK providers or Cloud.',
   },
   {
     title: 'Advertising and cross-context profiles',
@@ -506,7 +506,7 @@ const BASIS_LEDGER: readonly LedgerRow[] = [
     ),
   },
   {
-    label: 'Running the assistant (Managed Cloud)',
+    label: 'Running the assistant (Cloud)',
     value: (
       <>
         <strong>Data used:</strong> conversations, files, projects, memories, schedules.
@@ -697,7 +697,7 @@ const RETENTION_LEDGER: readonly LedgerRow[] = [
     ),
   },
   {
-    label: 'Conversations (Managed Cloud)',
+    label: 'Conversations (Cloud)',
     value: (
       <>
         <strong>Retention:</strong> kept until you delete them or delete your account, unless your
@@ -719,7 +719,7 @@ const RETENTION_LEDGER: readonly LedgerRow[] = [
     ),
   },
   {
-    label: 'Temporary chats (Managed Cloud)',
+    label: 'Temporary chats (Cloud)',
     value: (
       <>
         <strong>Retention:</strong> about 30 days.
@@ -731,7 +731,7 @@ const RETENTION_LEDGER: readonly LedgerRow[] = [
     ),
   },
   {
-    label: 'Background jobs (Managed Cloud)',
+    label: 'Background jobs (Cloud)',
     value: (
       <>
         <strong>Retention:</strong> up to 30 days.
@@ -1004,13 +1004,13 @@ export default function PrivacyPage() {
               What we collect, what we do not, and how that changes depending on which mode you run.{' '}
               <strong>
                 AGI does not use customer conversation content to train AGI-owned models. We do not
-                sell your data. Website users can use AGI managed cloud. The Free plan runs on a
-                model AGI chooses, within a small usage allowance, and paid plans with more capacity
-                are opening in stages, so an upgrade needs an access code or a place on the upgrade
+                sell your data. Website users can use Cloud. The Free plan runs on a model AGI
+                chooses, within a small usage allowance, and paid plans with more capacity are
+                opening in stages, so an upgrade needs an access code or a place on the upgrade
                 waitlist. The CLI supports Local and BYOK; VS Code BYOK is coming soon. Managed
                 cloud is open by default, not invite-only.
               </strong>{' '}
-              Last updated: {POLICY_LAST_UPDATED.privacy}. Managed Cloud is in public alpha.{' '}
+              Last updated: {POLICY_LAST_UPDATED.privacy}. Cloud is in public alpha.{' '}
               <PolicyVersionsLink policy="privacy" />
             </>
           }
@@ -1048,9 +1048,9 @@ export default function PrivacyPage() {
                     </h2>
                     <Prose>
                       Most privacy policies have one answer. This product has three, because Local,
-                      BYOK and Managed Cloud are separate trust boundaries and your data goes to
-                      genuinely different places in each. Read this table first; the rest of the
-                      page is detail.
+                      BYOK and Cloud are separate trust boundaries and your data goes to genuinely
+                      different places in each. Read this table first; the rest of the page is
+                      detail.
                     </Prose>
                   </div>
                   <Ledger caption="Mode and where your data goes" rows={MODE_LEDGER} />
@@ -1074,13 +1074,13 @@ export default function PrivacyPage() {
                     paragraph exists to prevent.
                   </Prose>
                   <Prose size="sm">
-                    <strong>Hosted AI providers we may route requests to (Managed Cloud):</strong>{' '}
+                    <strong>Hosted AI providers we may route requests to (Cloud):</strong>{' '}
                     Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity and Moonshot directly; Qwen
                     and Zhipu through OpenRouter, which therefore also handles those requests,
                     unless AGI holds its own key for that provider, in which case the request goes
-                    to it directly. MiniMax models receive nothing from Managed Cloud and are
-                    reachable only with your own key. Which one depends on the model you select,
-                    with one exception.{' '}
+                    to it directly. MiniMax models receive nothing from Cloud and are reachable only
+                    with your own key. Which one depends on the model you select, with one
+                    exception.{' '}
                     <strong>
                       On the Free plan, a chat on the default model goes to a provider AGI chooses,
                       not one you pick
@@ -1130,7 +1130,7 @@ export default function PrivacyPage() {
                         their provider, not to us.
                       </Prose>
                       <Prose size="sm">
-                        <strong>On what basis.</strong> In Managed Cloud we hold it as the account
+                        <strong>On what basis.</strong> In Cloud we hold it as the account
                         holder&rsquo;s processor and act on their instruction under the{' '}
                         <Link href="/dpa" className="agi-ds-link">
                           DPA
@@ -1246,9 +1246,9 @@ export default function PrivacyPage() {
                     Who at AGI can see your content
                   </h2>
                   <Prose>
-                    In Managed Cloud we store your conversations and files. Access to your content
-                    by people at AGI is limited to those who need it to operate or support the
-                    service, and to the cases in the table below. The text filter described in the{' '}
+                    In Cloud we store your conversations and files. Access to your content by people
+                    at AGI is limited to those who need it to operate or support the service, and to
+                    the cases in the table below. The text filter described in the{' '}
                     <Link href={CANONICAL_POLICY_ROUTES.acceptableUse} className="agi-ds-link">
                       acceptable use policy
                     </Link>{' '}

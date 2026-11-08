@@ -575,6 +575,7 @@ const ProviderUsageObservationSchema = z
     model: z.string().min(1).optional(),
     costDollars: z.number().finite().nonnegative().optional(),
     costSource: z.enum(['provider_reported', 'estimated']).optional(),
+    tokenSource: z.enum(['provider_reported', 'estimated']).optional(),
     routeId: z.string().min(1).nullable().optional(),
     upstreamProvider: z.string().min(1).optional(),
     providerReportedCostUsd: z.number().finite().nonnegative().optional(),

@@ -7,6 +7,10 @@ vi.mock('@/lib/logger', () => ({
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { deprovisionMember } from '../deprovision-service';
+import {
+  orgSharedCatalogCache,
+  orgSharedCacheKey,
+} from '@/lib/connectors/org-shared-catalog-cache';
 
 const USER = 'user-leaver';
 const OTHER_USER = 'user-stays';
@@ -224,9 +228,30 @@ function dbStub({
   };
 }
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  orgSharedCatalogCache.clear();
+});
 
 describe('deprovisionMember', () => {
+  it('evicts the removed share from the same cache used for discovery, preserving other workspaces', async () => {
+    const removedKey = orgSharedCacheKey(ORG, LEAVER_SHARE.connectorRowId);
+    const retainedKey = orgSharedCacheKey(OTHER_ORG, LEAVER_OTHER_ORG_SHARE.connectorRowId);
+    orgSharedCatalogCache.set(removedKey, { catalog: null, expiresAt: Date.now() + 60_000 });
+    orgSharedCatalogCache.set(retainedKey, { catalog: null, expiresAt: Date.now() + 60_000 });
+    const db = dbStub({ connectors: CONNECTORS, shares: ALL_SHARES });
+
+    const result = await deprovisionMember(db.db, identityStub().identity, {
+      userId: USER,
+      organizationId: ORG,
+    });
+
+    expect(result.errors).toEqual([]);
+    expect(result.sharedConnectorsUnshared).toBe(1);
+    expect(orgSharedCatalogCache.has(removedKey)).toBe(false);
+    expect(orgSharedCatalogCache.has(retainedKey)).toBe(true);
+  });
+
   it('revokes the live session, device token, and API key this workspace issued', async () => {
     const identity = identityStub();
     const db = dbStub();

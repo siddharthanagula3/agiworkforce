@@ -4,6 +4,7 @@ import {
   getDefaultAutoRoutingProfile,
   getModelMetadataById,
   getModelRegistryFacts,
+  getRoutingSlotModel,
   listCanonicalModels,
   REGISTRY_HARNESS_IDS,
 } from '@agiworkforce/types';
@@ -51,7 +52,7 @@ import {
   isNeverRotateCategory,
   FIRST_PROVIDER_STEP,
 } from './managed-failover';
-import { EmptyProviderResponseError } from '@agiworkforce/provider-runtime';
+import { classifyError, EmptyProviderResponseError } from '@agiworkforce/provider-runtime';
 import { CHAT_SYSTEM_PROMPT_ID } from '@/lib/prompts/chat-system-prompt';
 import {
   buildCapabilityPreamble,
@@ -146,6 +147,117 @@ beforeEach(() => {
   mockResolveProviderFromModel.mockImplementation((model: string) =>
     model === 'candidate-a' ? 'openai' : 'google',
   );
+});
+
+describe('Auto availability refusal for an admitted catalog model', () => {
+  const primary = getRoutingSlotModel('workhorse_general');
+  const fallback = listCanonicalModels().find(
+    (model) => model.id !== primary && model.provider === 'openai' && model.capabilities.tools,
+  );
+  if (!fallback) throw new Error('Canonical tool-capable fallback fixture is missing');
+  const fallbackModel = fallback.id;
+  const missingModel = () => {
+    const error = Object.assign(new Error('model not found: admitted catalog route'), {
+      status: 404,
+      code: 'model_not_found',
+    });
+    expect(classifyError(error).category).toBe('invalid_model');
+    return error;
+  };
+  function admitted(requestedModel = 'auto', model = primary) {
+    mockResolveProviderFromModel.mockReturnValue(fallback!.provider);
+    return makeProcessed({
+      requestedModel,
+      provider: 'openrouter',
+      fallbackModels: [fallbackModel],
+      chatRequest: {
+        model,
+        messages: [{ role: 'user', content: 'Read this page.' }],
+      } as ProcessedRequest['chatRequest'],
+      llmRequest: {
+        model,
+        messages: [{ role: 'user', content: 'Read this page.' }],
+      } as ProcessedRequest['llmRequest'],
+    });
+  }
+
+  it.each(['auto', 'auto-economy'])(
+    'continues %s on its admitted fallback when the selected catalog model is unavailable',
+    (selection) => {
+      const plan = makePlan(admitted(selection));
+      expect(plan.next(missingModel(), { step: FIRST_PROVIDER_STEP })).toMatchObject({
+        model: fallbackModel,
+        processed: { requestedModel: selection, fallbackReason: 'managed_failover' },
+      });
+      expect(plan.next(missingModel(), { step: FIRST_PROVIDER_STEP })).toBeNull();
+    },
+  );
+
+  it('preserves the completed client-browser transcript on fallback', () => {
+    const processed = admitted();
+    const toolMessages = [
+      {
+        role: 'assistant',
+        content: '',
+        tool_calls: [
+          {
+            id: 'read-1',
+            type: 'function',
+            function: { name: 'browser_read_page', arguments: '{}' },
+          },
+        ],
+      },
+      { role: 'tool', tool_call_id: 'read-1', content: 'Unique public page value R7F4.' },
+    ];
+    processed.llmRequest.messages.push(...(toolMessages as typeof processed.llmRequest.messages));
+    processed.llmRequest.tools = [
+      {
+        type: 'function',
+        function: {
+          name: 'browser_read_page',
+          description: 'Read the current page',
+          parameters: { type: 'object', properties: {} },
+        },
+      },
+    ];
+    const attempt = makePlan(processed).next(missingModel(), { step: FIRST_PROVIDER_STEP });
+    expect(attempt?.model).toBe(fallbackModel);
+    expect(attempt?.processed.llmRequest.messages.slice(-2)).toEqual(toolMessages);
+  });
+
+  it('does not substitute for a named model or an unknown catalog model', () => {
+    expect(
+      makePlan(admitted(primary)).next(missingModel(), { step: FIRST_PROVIDER_STEP }),
+    ).toBeNull();
+    expect(
+      makePlan(admitted('auto', 'not-in-catalog')).next(missingModel(), {
+        step: FIRST_PROVIDER_STEP,
+      }),
+    ).toBeNull();
+  });
+
+  it('does not rotate after the first provider step or without a known step', () => {
+    expect(makePlan(admitted()).next(missingModel(), { step: FIRST_PROVIDER_STEP + 1 })).toBeNull();
+    expect(makePlan(admitted()).next(missingModel())).toBeNull();
+  });
+
+  it('rechecks candidate admission and respects cancellation', () => {
+    const processed = admitted();
+    mockCanAccessModel.mockReturnValue(false);
+    expect(makePlan(processed).next(missingModel(), { step: FIRST_PROVIDER_STEP })).toBeNull();
+    mockCanAccessModel.mockReturnValue(true);
+    expect(
+      makePlan(processed, true).next(missingModel(), { step: FIRST_PROVIDER_STEP }),
+    ).toBeNull();
+  });
+
+  it('does not treat a safety refusal as model availability', () => {
+    expect(
+      makePlan(admitted()).next(httpError(400, 'content was blocked by safety'), {
+        step: FIRST_PROVIDER_STEP,
+      }),
+    ).toBeNull();
+  });
 });
 
 describe('configured transient same-route retry', () => {

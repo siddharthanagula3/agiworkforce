@@ -495,9 +495,9 @@ export default async function StatusPage() {
                   body: `BYOK requests from the CLI travel directly to the provider you chose. ${BYOK_SURFACES.availability} Desktop does not accept provider keys. If a model misbehaves, the provider’s own status page is the source of truth.`,
                 },
                 {
-                  meta: 'AGI Cloud',
+                  meta: 'Cloud',
                   title: 'Public alpha, open by default.',
-                  body: 'Managed compute is in public alpha: signed-in users can use it now, with metered usage and visible provider labels. This is the only mode the signal above describes.',
+                  body: 'Cloud compute is in public alpha: signed-in users can use it now, with metered usage and visible provider labels. This is the only mode the signal above describes.',
                 },
               ]}
             />

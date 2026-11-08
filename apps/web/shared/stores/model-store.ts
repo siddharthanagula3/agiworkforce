@@ -141,7 +141,7 @@ function buildAvailableModels(): AIModel[] {
   const autoModeEntries = getAutoRoutingProfiles().map((profile) => ({
     id: profile.id,
     name: profile.label,
-    provider: PROVIDER_LABELS['managed_cloud'] ?? 'Managed Cloud',
+    provider: PROVIDER_LABELS['managed_cloud'] ?? 'Cloud',
     providerKey: 'managed_cloud',
     description: profile.description,
   }));

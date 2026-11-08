@@ -10,7 +10,7 @@ import {
   ReferralOverviewSchema,
   type ReferralOverviewResponse,
 } from '@agiworkforce/cloud-contracts';
-import { formatCredits } from '@agiworkforce/types';
+import { BILLING_PLAN_PRICING, formatCredits } from '@agiworkforce/types';
 import { safeClipboard } from '@shared/utils/browser-utils';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { CANONICAL_POLICY_ROUTES } from '@/lib/legal-constants';
@@ -145,7 +145,7 @@ export function ReferralsSection() {
   const shareLink = async (link: string, program: ReferralProgram) => {
     setNotice(null);
     const title = `Join me on ${SITE_NAME}`;
-    const text = `Try ${SITE_NAME} with ${program.friendTrialDays} days of Pro free.`;
+    const text = `Try ${SITE_NAME} with ${program.friendTrialDays} days of ${BILLING_PLAN_PRICING.pro.label} free.`;
     if (!canShare) {
       window.location.href = `mailto:?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(`${text}\n\n${link}`)}`;
       return;
@@ -166,7 +166,7 @@ export function ReferralsSection() {
         <h1 className="text-h1 text-foreground">Referrals</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
           {program
-            ? `Invite friends to ${SITE_NAME}. They get ${program.friendTrialDays} days of Pro free, and when their first payment goes through you each get ${wholeCredits(program.rewardCredits)}.`
+            ? `Invite friends to ${SITE_NAME}. They get ${program.friendTrialDays} days of ${BILLING_PLAN_PRICING.pro.label} free, and when their first payment goes through you each get ${wholeCredits(program.rewardCredits)}.`
             : `Invite friends to ${SITE_NAME} and earn bonus credits when they subscribe.`}
         </p>
       </header>
@@ -309,9 +309,9 @@ export function ReferralsSection() {
             </h2>
             <ul className="list-disc space-y-1 ps-5 text-sm text-muted-foreground">
               <li>
-                A friend who signs up with your link and starts Pro gets {program.friendTrialDays}{' '}
-                days free. Pro then renews at its normal price unless they cancel before the trial
-                ends.
+                A friend who signs up with your link and starts {BILLING_PLAN_PRICING.pro.label}{' '}
+                gets {program.friendTrialDays} days free. {BILLING_PLAN_PRICING.pro.label} then
+                renews at its normal price unless they cancel before the trial ends.
               </li>
               <li>
                 When their first payment goes through they get {wholeCredits(program.rewardCredits)}

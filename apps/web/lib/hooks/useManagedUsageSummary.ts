@@ -164,7 +164,7 @@ export function spendableCreditsNow(usage: ManagedUsageSummaryResponse | null): 
   const credits = usage?.credits;
   if (!credits) return null;
   const planRemaining = Math.min(
-    credits.five_hour.remaining,
+    credits.five_hour?.remaining ?? Infinity,
     credits.weekly.remaining,
     credits.monthly.remaining,
   );
@@ -179,12 +179,16 @@ export function readManagedUsageBuckets(
   const inCredits = (window: ManagedUsageCreditWindow | null | undefined) =>
     window ? { allowanceCredits: window.allowance, usedCredits: window.used } : {};
   return [
-    {
-      bucket: 'session',
-      percentRemaining: 100 - normalizeUsagePercentage(usage.session_usage_percentage),
-      resetAt: usage.session_reset_at ?? null,
-      ...inCredits(credits?.five_hour),
-    },
+    ...(credits?.five_hour === null
+      ? []
+      : [
+          {
+            bucket: 'session' as const,
+            percentRemaining: 100 - normalizeUsagePercentage(usage.session_usage_percentage),
+            resetAt: usage.session_reset_at ?? null,
+            ...inCredits(credits?.five_hour),
+          },
+        ]),
     {
       bucket: 'weekly',
       percentRemaining: 100 - normalizeUsagePercentage(usage.weekly_usage_percentage),

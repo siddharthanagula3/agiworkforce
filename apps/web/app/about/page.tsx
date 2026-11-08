@@ -62,11 +62,11 @@ export const metadata = buildMetadata({
 const PRINCIPLES = [
   {
     title: 'The route is always visible.',
-    body: 'Local, BYOK, and managed cloud are separate trust boundaries. A Local thread stays Local. Moving work anywhere else takes a label and your consent, never a silent hand-off.',
+    body: 'Local, BYOK, and cloud are separate trust boundaries. A Local thread stays Local. Moving work anywhere else takes a label and your consent, never a silent hand-off.',
   },
   {
     title: 'Your keys, your bill, no markup.',
-    body: `Bring your own provider keys in the CLI. ${BYOK_SURFACES.availability} Traffic goes straight to your provider, the CLI saves keys in the operating system credential store, or in owner-only files on Linux or when the keyring is turned off, and Desktop remains managed-cloud only.`,
+    body: `Bring your own provider keys in the CLI. ${BYOK_SURFACES.availability} Traffic goes straight to your provider, the CLI saves keys in the operating system credential store, or in owner-only files on Linux or when the keyring is turned off, and Desktop remains cloud only.`,
   },
   {
     title: `One contract layer, ${SURFACE_COUNT} surfaces at different stages.`,
@@ -97,9 +97,8 @@ export default function AboutPage() {
               <Prose>
                 An AI application suite across {SURFACE_COUNT} surfaces, with one difference that
                 decides the rest: it is built so that you choose whether a request runs on Local
-                models, on your own provider keys, or on AGI managed cloud. That choice is
-                architectural, not a setting bolted on late. These are the rules the product is
-                built around.
+                models, on your own provider keys, or on Cloud. That choice is architectural, not a
+                setting bolted on late. These are the rules the product is built around.
               </Prose>
             </div>
             <NoteList items={PRINCIPLES} />
@@ -195,10 +194,10 @@ export default function AboutPage() {
               Judge the bet on its merits.
             </h2>
             <Prose>
-              {`Try AGI Chat in the browser. The CLI runs local models and your own keys on your own hardware. ${CLI_AVAILABILITY_NOTE} Either way, you see where every request runs before it leaves your device.`}
+              {`Try chat in the browser. The CLI runs local models and your own keys on your own hardware. ${CLI_AVAILABILITY_NOTE} Either way, you see where every request runs before it leaves your device.`}
             </Prose>
             <ButtonRow>
-              <Button href={WEB_ENTRY_HREF}>Try AGI Chat</Button>
+              <Button href={WEB_ENTRY_HREF}>Try chat</Button>
               <Button href={CLI_CTA.href} variant="secondary">
                 {CLI_CTA.label}
               </Button>

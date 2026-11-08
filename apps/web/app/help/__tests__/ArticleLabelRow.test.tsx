@@ -8,6 +8,15 @@ import {
 import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
+vi.mock('@shared/components/seo/JsonLd', () => ({
+  JsonLd: ({ data }: { data: Record<string, unknown>[] }) =>
+    data.map((block, index) => (
+      <script key={index} type="application/ld+json">
+        {JSON.stringify(block)}
+      </script>
+    )),
+}));
+
 vi.mock('@/features/docs/components/DocsShell', () => ({
   DocsShell: ({ children }: { children: ReactNode }) => children,
 }));

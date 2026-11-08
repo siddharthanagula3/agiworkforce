@@ -4,6 +4,11 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { MICROUSD_PER_CREDIT } from '@agiworkforce/types';
 import { BLOCK_APPEAL_PATH } from '@/lib/security-audit';
 
+vi.mock('@/lib/services/usage-limit-promotion-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/usage-limit-promotion-service')>()),
+  resolvePromotionalCaps: vi.fn(async ({ caps }: { caps: unknown }) => caps),
+}));
+
 const recordSettledProviderCost = vi.hoisted(() => vi.fn());
 const loggerError = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/logger', () => ({
@@ -170,6 +175,37 @@ describe('managed usage request service', () => {
     );
   });
 
+  it('reserves Ultra without a session ceiling while retaining its weekly ceiling', async () => {
+    const db = fakeDb([
+      {
+        reservation_decision: 'acquired',
+        request_status: 'reserved',
+        lease_token: 'ultra-lease',
+        estimated_cost_microusd: 70_000,
+      },
+    ]);
+    await reserveManagedUsageRequest({
+      db,
+      userId: 'user_1',
+      idempotencyKey: 'agi.chat.web.send.ultra_request',
+      requestHash: 'f'.repeat(64),
+      provider: 'anthropic',
+      model: 'fixture-model',
+      estimatedCostCents: 7,
+      leaseToken: 'ultra-lease',
+      planTier: 'max_15x',
+      isFlagship: false,
+    });
+    const call = vi
+      .mocked(db.query)
+      .mock.calls.find(([sql]) =>
+        sql.includes('reserve_managed_usage_request_with_limits_microusd'),
+      );
+    expect(call).toBeDefined();
+    expect(call?.[1]?.[8]).toBeNull();
+    expect(call?.[1]?.[9]).toBe(5_000 * MICROUSD_PER_CREDIT);
+  });
+
   it.each([
     ['in_progress', 409, 'idempotency_in_progress'],
     ['completed', 409, 'idempotency_replay'],
@@ -307,7 +343,7 @@ describe('managed usage request service', () => {
         model: 'fixture-model',
         estimatedCostCents: 7,
         leaseToken: 'lease-window',
-        planTier: 'max_15x',
+        planTier: 'max',
         isFlagship: false,
       }).catch((caught) => caught);
 
@@ -327,7 +363,10 @@ describe('managed usage request service', () => {
       },
     );
     const db = fakeDb([]);
-    (db.query as ReturnType<typeof vi.fn>).mockRejectedValue(failure);
+    vi.mocked(db.query).mockImplementation(async (sql) => {
+      if (sql.includes('reserve_managed_usage_request_with_limits_microusd')) throw failure;
+      return [];
+    });
 
     await expect(
       reserveManagedUsageRequest({

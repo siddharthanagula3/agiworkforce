@@ -198,6 +198,30 @@ describe('LibraryView', () => {
     }
   });
 
+  it('sets List view from the library page the public window loads', async () => {
+    render(<LibraryView />);
+    await screen.findByTestId('library-grid');
+    const list = screen.getByRole('button', { name: 'List view' });
+    expect(list).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(list);
+    expect(screen.getByTestId('library-list')).toBeInTheDocument();
+    expect(screen.queryByTestId('library-grid')).not.toBeInTheDocument();
+    expect(list).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('sets Grid view from the library page the public window loads', async () => {
+    render(<LibraryView />);
+    await screen.findByTestId('library-grid');
+    fireEvent.click(screen.getByRole('button', { name: 'List view' }));
+    expect(screen.getByTestId('library-list')).toBeInTheDocument();
+    const grid = screen.getByRole('button', { name: 'Grid view' });
+    expect(grid).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(grid);
+    expect(screen.getByTestId('library-grid')).toBeInTheDocument();
+    expect(screen.queryByTestId('library-list')).not.toBeInTheDocument();
+    expect(grid).toHaveAttribute('aria-pressed', 'true');
+  });
+
   it('lists the account projects as folders and opens the project page', async () => {
     routeFetch([makeItem()], [PROJECT]);
     render(<LibraryView />);
@@ -422,7 +446,7 @@ describe('library hand-off actions', () => {
     stubAsset([item]);
     render(<LibraryView />);
     fireEvent.click(await screen.findByRole('button', { name: 'Actions for report.pdf' }));
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Add to AGI Work' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Add to Work' }));
 
     await waitFor(() => expect(push).toHaveBeenCalledWith('/chat'));
     expect(takeStagedLibraryAttachments()?.[0]?.name).toBe('report.pdf');

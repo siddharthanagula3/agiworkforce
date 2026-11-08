@@ -269,6 +269,11 @@ export const rateLimitConfigs = {
     window: '1 h', // 5 export requests per hour - data portability
     failClosed: true, // Security-sensitive: block if Redis fails
   },
+  'page-read': {
+    limit: 30,
+    window: '1 m',
+    failClosed: true,
+  },
   'chat-conversation': {
     limit: 60,
     window: '1 m', // 60 conversation operations per minute

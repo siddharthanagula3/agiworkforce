@@ -66,7 +66,7 @@ export function TasksPage() {
         );
         router.push('/chat');
         toast.success(
-          'Loaded this session’s goal, constraints and deliverable into a new AGI Work chat. Edit them if you like, then send to run it again.',
+          'Loaded this session’s goal, constraints and deliverable into a new Work chat. Edit them if you like, then send to run it again.',
         );
       },
       saveAsRoutine: (goal) => {

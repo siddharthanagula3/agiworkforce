@@ -1,7 +1,11 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { isEnterprisePlanTier, isEntitledSubscriptionStatusForTier } from '@agiworkforce/types';
+import {
+  BILLING_PLAN_PRICING,
+  isEnterprisePlanTier,
+  isEntitledSubscriptionStatusForTier,
+} from '@agiworkforce/types';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getClerkAuthUser, isAccountUnavailableError } from '@/lib/api-auth';
 import type { SubscriptionInfo } from '@/lib/services/subscription-service';
@@ -95,13 +99,13 @@ function enforceManagedCloudSurface(
         }
       : capability === 'developer_surfaces'
         ? {
-            message: 'Managed Cloud CLI, browser extension, and IDE access require Pro or higher.',
+            message: `Managed Cloud CLI, browser extension, and IDE access require ${BILLING_PLAN_PRICING.pro.label} or higher.`,
             code: 'developer_surface_plan_required',
             requiredTier: 'pro',
           }
         : capability === 'managed_api'
           ? {
-              message: 'Managed API access requires Pro or higher.',
+              message: `Managed API access requires ${BILLING_PLAN_PRICING.pro.label} or higher.`,
               code: 'managed_api_plan_required',
               requiredTier: 'pro',
             }

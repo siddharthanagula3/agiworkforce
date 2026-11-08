@@ -345,6 +345,7 @@ export function buildManagedAgentStream(
       {
         inputTokens: input.processed.estimatedPromptTokens,
         outputTokens: estimateTokens(unbilledText, serving.chatRequest.model),
+        tokenSource: 'estimated',
       },
       { provider: serving.provider, model: serving.chatRequest.model },
     );
@@ -414,7 +415,8 @@ export function buildManagedAgentStream(
           if (next.done) {
             const outcome = reportedFailure
               ? 'failed'
-              : lastStopReason === 'cancelled'
+              : lastStopReason === 'cancelled' ||
+                  (lastStopReason === undefined && lastCanonicalTaskState === 'cancelled')
                 ? 'cancelled'
                 : lastCanonicalTaskState === 'failed' && lastStopReason === 'error'
                   ? 'failed'

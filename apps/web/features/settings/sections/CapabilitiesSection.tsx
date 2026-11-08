@@ -101,7 +101,7 @@ export function CapabilitiesSection() {
       <LockdownModePanel />
 
       <p className="text-xs text-muted-foreground">
-        {`Running models on your own provider keys belongs to the ${BYOK_SURFACES.label}. ${BYOK_SURFACES.availability} Hosted Web and Desktop are Managed Cloud only and never store a provider key of yours.`}
+        {`Running models on your own provider keys belongs to the ${BYOK_SURFACES.label}. ${BYOK_SURFACES.availability} Hosted Web and Desktop are Cloud only and never store a provider key of yours.`}
       </p>
     </div>
   );

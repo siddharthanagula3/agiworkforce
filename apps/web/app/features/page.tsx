@@ -129,18 +129,21 @@ const MEDIA = [
     title: 'Image generation',
     body: `Describe a picture in chat, choose its shape and style, then revise the result. Included on ${IMAGE_PLANS} plans.`,
     href: '/features/images',
+    linkLabel: 'Learn more about image generation',
   },
   {
     meta: 'Video',
     title: 'Video generation',
     body: `Describe a short video, follow its progress while it renders, then play or download it. Included on ${VIDEO_PLANS} plans.`,
     href: '/features/video',
+    linkLabel: 'Learn more about video generation',
   },
   {
     meta: 'Voice',
     title: 'Voice',
     body: 'Hold a spoken conversation that is added to the chat, or dictate a message into the composer.',
     href: '/features/voice',
+    linkLabel: 'Learn more about voice',
   },
 ] as const;
 
@@ -150,24 +153,28 @@ const EXTEND = [
     title: 'Tools and connectors',
     body: `MCP servers and OAuth apps, added one explicit permission at a time, with a default of asking first.${CONNECTORS_NOTE}`,
     href: '/features/tools',
+    linkLabel: 'Learn more about tools and connectors',
   },
   {
     meta: 'Plugins',
     title: 'Plugins',
     body: 'Commands, agents, skills, hooks, and MCP wiring bundled into one install, gated behind a SHA-256 you pin yourself.',
     href: '/features/plugins',
+    linkLabel: 'Learn more about plugins',
   },
   {
     meta: 'Skills',
     title: 'Skills',
     body: 'A directory of reusable instruction sets to start a workspace from.',
     href: '/skills',
+    linkLabel: 'Learn more about skills',
   },
   {
     meta: 'Integrations',
     title: 'Integrations',
     body: `MCP plugins, the native messaging bridge, and BYOK provider keys in the CLI. ${BYOK_SURFACES.availability}`,
     href: '/integrations',
+    linkLabel: 'Learn more about integrations',
   },
 ] as const;
 
@@ -184,7 +191,7 @@ export default function FeaturesPage() {
                 Conversation is the front door. This is what sits behind it.
               </h1>
               <ButtonRow>
-                <Button href={WEB_ENTRY_HREF}>Try AGI Chat</Button>
+                <Button href={WEB_ENTRY_HREF}>Try chat</Button>
                 <Button href={CLI_CTA.href} variant="secondary">
                   {CLI_CTA.label}
                 </Button>
@@ -204,8 +211,8 @@ export default function FeaturesPage() {
                 Chat, and the things a chat opens into.
               </h2>
               <Prose>
-                These features open from the same composer on a managed-cloud account. Local and
-                BYOK are CLI routes.
+                These features open from the same composer on a cloud account. Local and BYOK are
+                CLI routes.
               </Prose>
             </div>
             <ScrollFeatures features={FEATURES} label="Six things a chat opens into" />
@@ -227,7 +234,7 @@ export default function FeaturesPage() {
                   <h3 className="agi-ds-h3">{item.title}</h3>
                   <Prose size="sm">{item.body}</Prose>
                   <Link href={item.href} className="agi-ds-link">
-                    Read more
+                    {item.linkLabel}
                   </Link>
                 </div>
               ))}
@@ -250,7 +257,7 @@ export default function FeaturesPage() {
                   <h3 className="agi-ds-h3">{item.title}</h3>
                   <Prose size="sm">{item.body}</Prose>
                   <Link href={item.href} className="agi-ds-link">
-                    Read more
+                    {item.linkLabel}
                   </Link>
                 </div>
               ))}
@@ -271,13 +278,13 @@ export default function FeaturesPage() {
               cards={[
                 {
                   title: 'Start on your own',
-                  body: 'AGI Chat is free to try in the browser. Local and BYOK need no account at all.',
+                  body: 'Chat is free to try in the browser. Local and BYOK need no account at all.',
                   points: [
                     'Every admitted model behind one selector',
                     'Projects, memory, artifacts and web search from the first day',
                     'Every reply names the model that answered it',
                   ],
-                  cta: { href: WEB_ENTRY_HREF, label: 'Try AGI Chat' },
+                  cta: { href: WEB_ENTRY_HREF, label: 'Try chat' },
                 },
                 {
                   title: 'Bring your team',

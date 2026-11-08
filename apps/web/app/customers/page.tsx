@@ -162,7 +162,7 @@ const SCENARIOS: Scenario[] = [
       },
       {
         label: 'Plan tier',
-        value: `Run this on managed cloud instead and the gates change: AGI Work needs ${BILLING_PLAN_PRICING.pro.label} or above, and scheduled tasks are capped per plan at ${BASIC_SCHEDULES} on ${BILLING_PLAN_PRICING.basic.label} and ${PRO_SCHEDULES} on ${BILLING_PLAN_PRICING.pro.label}.`,
+        value: `Run this on cloud instead and the gates change: Work needs ${BILLING_PLAN_PRICING.pro.label} or above, and scheduled tasks are capped per plan at ${BASIC_SCHEDULES} on ${BILLING_PLAN_PRICING.basic.label} and ${PRO_SCHEDULES} on ${BILLING_PLAN_PRICING.pro.label}.`,
       },
     ],
     caveat:
@@ -188,7 +188,7 @@ export default function CustomersPage() {
           em="puts a name on this page."
           lede={`Nobody has given us that permission yet, so there are no logos here, no testimonials, and no anonymised "a leading bank". What stands in their place is three situations built entirely out of what the CLI does in the repository, with the part AGI declines to do written next to the part it does. ${CLI_AVAILABILITY_NOTE}`}
           ctas={[
-            { href: WEB_ENTRY_HREF, label: 'Try AGI Chat' },
+            { href: WEB_ENTRY_HREF, label: 'Try chat' },
             { href: '/pricing', label: 'See what a plan includes', variant: 'secondary' },
           ]}
           visual={
@@ -257,7 +257,7 @@ export default function CustomersPage() {
                 We will ask you before your name ever appears here.
               </h2>
               <Prose>
-                {`AGI Chat is ${SURFACE_STATUS.web.toLowerCase()}. ${CLI_AVAILABILITY_NOTE} The download page shows what is published. If AGI earns a place in how you work and you are willing to say so in writing, this page will finally carry something other than worked examples.`}
+                {`Chat is ${SURFACE_STATUS.web.toLowerCase()}. ${CLI_AVAILABILITY_NOTE} The download page shows what is published. If AGI earns a place in how you work and you are willing to say so in writing, this page will finally carry something other than worked examples.`}
               </Prose>
               <Prose size="sm">Nothing on this page is a customer reference.</Prose>
             </div>

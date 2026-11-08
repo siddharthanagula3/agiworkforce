@@ -27,7 +27,7 @@ import {
 import { joinSurfaceNames } from '@/lib/surface-status';
 
 const LIVE_PATH_STEPS = [
-  { lead: 'Open AGI Chat.', body: 'It runs in this browser, with nothing to install.' },
+  { lead: 'Open chat Chat.', body: 'It runs in this browser, with nothing to install.' },
   { lead: 'Sign in.', body: 'Use the account you have, or create one in the same flow.' },
   { lead: 'Send a message.', body: 'Managed cloud is open by default with a small free cap.' },
 ] as const;
@@ -64,7 +64,7 @@ const NOTIFY_LIST_ROWS = NOTIFY_LIST_SURFACES.map((surface) => ({
 
 export const metadata = buildMetadata({
   title: 'Get started: from zero to a working chat',
-  description: `Open AGI Chat in the browser, with nothing to install. ${surfaceAvailabilitySummary()} Local and BYOK run on the CLI.`,
+  description: `Open chat Chat in the browser, with nothing to install. ${surfaceAvailabilitySummary()} Local and BYOK run on the CLI.`,
   path: '/get-started',
 });
 
@@ -82,9 +82,9 @@ export default function GetStartedPage() {
           eyebrow="Get started"
           title="Get started."
           em="started."
-          lede="Open AGI Chat, sign in, and send your first message. It runs in your browser, with nothing to install."
+          lede="Open chat Chat, sign in, and send your first message. It runs in your browser, with nothing to install."
           ctas={[
-            { href: WEB_ENTRY_HREF, label: 'Try AGI Chat' },
+            { href: WEB_ENTRY_HREF, label: 'Try chat' },
             { href: '/download', label: 'Check availability', variant: 'secondary' },
           ]}
           visual={
@@ -108,14 +108,14 @@ export default function GetStartedPage() {
               Choose your surface.
             </h2>
             <Prose>
-              {`AGI Chat is ${SURFACE_STATUS.web.toLowerCase()}. Local and BYOK run on the CLI, which is ${SURFACE_STATUS.cli.toLowerCase()}; VS Code BYOK is ${SURFACE_STATUS.vscode.toLowerCase()}, and Desktop is managed-cloud only.`}
+              {`Chat is ${SURFACE_STATUS.web.toLowerCase()}. Local and BYOK run on the CLI, which is ${SURFACE_STATUS.cli.toLowerCase()}; VS Code BYOK is ${SURFACE_STATUS.vscode.toLowerCase()}, and Desktop is cloud only.`}
             </Prose>
             <Stack gap="loose" className="agi-ds-full">
               <SurfaceStatus
                 state="live"
                 name="Web"
                 detail="Hosted chat, projects, and artifacts in the browser, with nothing to install."
-                action={{ label: 'Try AGI Chat', href: WEB_ENTRY_HREF }}
+                action={{ label: 'Try chat', href: WEB_ENTRY_HREF }}
               />
               <SurfaceStatus
                 state="pending"
@@ -189,7 +189,7 @@ export default function GetStartedPage() {
                       hold. Paste the key at the prompt and it is saved to the OS credential store
                       except on Linux or when AGIWORKFORCE_NO_KEYRING disables the keyring. In those
                       cases, it is saved to files in the CLI configuration directory. A bare{' '}
-                      <code>agi login</code> signs into AGI managed cloud instead.
+                      <code>agi login</code> signs into Cloud instead.
                     </>
                   ),
                 },
@@ -215,7 +215,7 @@ export default function GetStartedPage() {
               VS Code extension.
             </Prose>
             <ButtonRow>
-              <Button href="/pricing">See what managed cloud costs</Button>
+              <Button href="/pricing">See what cloud costs</Button>
               <Button href="/docs" variant="secondary">
                 Read the docs
               </Button>

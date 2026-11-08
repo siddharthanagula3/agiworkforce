@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { PRODUCT_BRAND } from '@agiworkforce/types';
 import { AgiMark } from '@shared/components/agi/AgiMark';
 import './system.css';
 import { Button } from './Button';
@@ -16,8 +17,6 @@ import {
   WEB_ENTRY_HREF,
 } from './nav';
 
-const MARK_SIZE = 18;
-
 export function MarketingHeader({
   minimal = false,
   signedIn = false,
@@ -26,9 +25,8 @@ export function MarketingHeader({
   signedIn?: boolean;
 } = {}) {
   const wordmark = (
-    <Link href="/" className="agi-ds-wordmark">
-      <AgiMark size={MARK_SIZE} />
-      <span>AGI</span>
+    <Link href="/" className="agi-ds-wordmark" aria-label={PRODUCT_BRAND}>
+      <AgiMark className="agi-ds-brand-symbol" />
     </Link>
   );
 
@@ -66,13 +64,13 @@ export function MarketingHeader({
               Contact sales
             </Link>
             {signedIn ? (
-              <Button href={CHAT_ROOT_HREF}>Open AGI</Button>
+              <Button href={CHAT_ROOT_HREF}>Open chat</Button>
             ) : (
               <>
                 <Link href={SIGN_IN_HREF} className="agi-ds-navlink">
                   Sign in
                 </Link>
-                <Button href={WEB_ENTRY_HREF}>Try AGI Chat</Button>
+                <Button href={WEB_ENTRY_HREF}>Try chat</Button>
               </>
             )}
             <MarketingMobileNav signedIn={signedIn} />

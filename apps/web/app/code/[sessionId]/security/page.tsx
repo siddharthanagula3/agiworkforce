@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { SecurityScanPage } from '@/features/security-scan';
 
 export const metadata: Metadata = {
-  title: { absolute: 'Security scan · AGI Code' },
+  title: { absolute: 'Security scan · Code' },
   description:
     'Scan a repository for exploitable vulnerabilities and review a proposed fix for each.',
   robots: { index: false, follow: false },

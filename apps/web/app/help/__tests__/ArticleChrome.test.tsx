@@ -6,6 +6,15 @@ vi.mock('@/features/docs/components/DocsShell', () => ({
   DocsShell: ({ children }: { children: ReactNode }) => children,
 }));
 
+vi.mock('@shared/components/seo/JsonLd', () => ({
+  JsonLd: ({ data }: { data: Record<string, unknown>[] }) =>
+    data.map((block, index) => (
+      <script key={index} type="application/ld+json">
+        {JSON.stringify(block)}
+      </script>
+    )),
+}));
+
 import { docsNavGroups } from '@/features/docs/lib/docs-nav';
 import { getHelpArticle, helpArticlePath } from '@/lib/support/help-articles';
 
@@ -21,6 +30,24 @@ async function renderArticle(slug: string) {
 }
 
 describe('help article page chrome', () => {
+  it('describes the visible article and breadcrumb with the same canonical identity', async () => {
+    const { container } = await renderArticle(ARTICLE_ID);
+    const blocks = Array.from(container.querySelectorAll('script[type="application/ld+json"]')).map(
+      (script) => JSON.parse(script.textContent ?? '{}') as Record<string, unknown>,
+    );
+    const article = getHelpArticle(ARTICLE_ID);
+    expect(article).not.toBeNull();
+    expect(blocks.find((block) => block['@type'] === 'Article')).toMatchObject({
+      headline: container.querySelector('h1')?.textContent,
+      description: container.querySelector('.dx-desc')?.textContent,
+      dateModified: article?.updated,
+    });
+    const breadcrumb = blocks.find((block) => block['@type'] === 'BreadcrumbList');
+    const items = breadcrumb?.['itemListElement'] as { item: string; name: string }[];
+    expect(items.at(-1)?.name).toBe(article?.title);
+    expect(items.at(-1)?.item).toMatch(new RegExp(`${helpArticlePath(ARTICLE_ID)}$`));
+  });
+
   it('ends the breadcrumb with the unlinked article title', async () => {
     const { container } = await renderArticle(ARTICLE_ID);
     const crumbs = Array.from(container.querySelectorAll('nav[aria-label="Breadcrumb"] li'));

@@ -83,7 +83,7 @@ export interface LocalSessionsState {
 }
 
 /**
- * The coding sessions the AGI CLI has recorded for every folder this Mac has
+ * The coding sessions the CLI has recorded for every folder this Mac has
  * opened to AGI. Absent in a browser, where there is no host to ask.
  */
 export function useLocalSessions(): LocalSessionsState {

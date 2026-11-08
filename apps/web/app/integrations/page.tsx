@@ -45,7 +45,7 @@ const PATTERNS = [
   {
     meta: 'Bridge',
     title: 'Native messaging bridge',
-    body: `The Chrome side panel can pair with Desktop on localhost:8787 for selections, captures, and queued messages. Panel chat remains Managed Cloud. ${BRIDGE_SURFACE_STATES}`,
+    body: `The Chrome side panel can pair with Desktop on localhost:8787 for selections, captures, and queued messages. Panel chat remains Cloud. ${BRIDGE_SURFACE_STATES}`,
   },
   {
     meta: 'Keys',
@@ -147,7 +147,7 @@ export default function IntegrationsPage() {
                 },
                 {
                   label: 'Local runtimes',
-                  value: `${CLI_LOCAL_RUNTIMES.label} in the CLI. Free, offline-capable after setup, no account required. Desktop is managed-cloud only. ${CLI_AVAILABILITY_NOTE}`,
+                  value: `${CLI_LOCAL_RUNTIMES.label} in the CLI. Free, offline-capable after setup, no account required. Desktop is cloud only. ${CLI_AVAILABILITY_NOTE}`,
                 },
                 {
                   label: 'MCP transports',

@@ -24,6 +24,7 @@ vi.mock('@/lib/server/rls-db', () => ({
   }),
 }));
 vi.mock('@/lib/server/object-storage', () => ({
+  putPrivateObject: vi.fn(async ({ key }: { key: string }) => ({ key })),
   copyPrivateObjectIfUnchanged: vi.fn(),
   objectKeyFromStorageUri: (value: string) => value,
   isObjectStorageConfigured: () => true,

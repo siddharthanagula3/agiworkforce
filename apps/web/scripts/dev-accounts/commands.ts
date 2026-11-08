@@ -64,7 +64,12 @@ export async function seed(
         print(`${account.name}: already seeded (${userId}); reset it to start over`);
         continue;
       }
-      await provisionDevAccount(account, userId, ownerResolver(userIds));
+      await provisionDevAccount(
+        account,
+        userId,
+        ownerResolver(userIds),
+        environment.clerkSecretKey,
+      );
       print(`${account.name}: seeded (${userId})`);
     }
   });
@@ -84,7 +89,12 @@ export async function reset(
         print(`${account.name}: not seeded yet; run seed first`);
         continue;
       }
-      await provisionDevAccount(account, userId, ownerResolver(userIds));
+      await provisionDevAccount(
+        account,
+        userId,
+        ownerResolver(userIds),
+        environment.clerkSecretKey,
+      );
       print(`${account.name}: reset to its seed (${userId})`);
     }
   });

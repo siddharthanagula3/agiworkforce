@@ -71,7 +71,7 @@ describe('managed usage summary, metered auxiliary spend', () => {
 
     expect(summary.session_usage_percentage).toBe(0);
     expect(summary.weekly_usage_percentage).toBe(0);
-    expect(summary.credits?.five_hour.used).toBe(0);
+    expect(summary.credits?.five_hour?.used).toBe(0);
   });
 
   it('counts a conversation-title or memory-extraction deduction in the rolling windows', async () => {
@@ -81,7 +81,7 @@ describe('managed usage summary, metered auxiliary spend', () => {
 
     expect(summary.session_usage_percentage).toBeGreaterThan(0);
     expect(summary.weekly_usage_percentage).toBeGreaterThan(0);
-    expect(summary.credits?.five_hour.used).toBeGreaterThan(0);
+    expect(summary.credits?.five_hour?.used).toBeGreaterThan(0);
     expect(summary.credits?.weekly.used).toBeGreaterThan(0);
   });
 

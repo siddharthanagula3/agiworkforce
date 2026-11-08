@@ -16,7 +16,7 @@ export default function SharedScheduleNotFound() {
           href="/"
           className="inline-flex min-h-11 items-center rounded-lg bg-primary px-6 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
-          Open AGI
+          Open chat
         </Link>
       </div>
     </main>

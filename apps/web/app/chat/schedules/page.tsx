@@ -5,7 +5,7 @@ import { SchedulesPageWithProjects } from '@/features/schedules';
 
 export const metadata: Metadata = {
   title: 'Scheduled',
-  description: 'Create and manage recurring Managed Cloud tasks.',
+  description: 'Create and manage recurring Cloud tasks.',
   robots: { index: false, follow: false },
 };
 

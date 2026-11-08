@@ -17,8 +17,7 @@ import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
 
 export const metadata = buildMetadata({
   title: 'FAQ: providers, BYOK, local mode, and security',
-  description:
-    'Frequently asked questions about providers, BYOK, Local mode, AGI managed cloud, and security.',
+  description: 'Frequently asked questions about providers, BYOK, Local mode, Cloud, and security.',
   path: '/faq',
 });
 
@@ -44,15 +43,15 @@ const QA: { title: string; body: string }[] = [
   },
   {
     title: 'Can I run AGI fully offline?',
-    body: `Yes in the CLI after Ollama or LM Studio and a model are installed. ${CLI_AVAILABILITY_NOTE} Those Local conversations are not sent to AGI, and Local mode is free; downloading a model may require internet first. Desktop uses managed cloud, and Mobile has no published release.`,
+    body: `Yes in the CLI after Ollama or LM Studio and a model are installed. ${CLI_AVAILABILITY_NOTE} Those Local conversations are not sent to AGI, and Local mode is free; downloading a model may require internet first. Desktop uses cloud, and Mobile has no published release.`,
   },
   {
     title: 'Can I switch models mid-conversation?',
-    body: 'Within the active trust boundary, yes: pick another supported model and the provider label updates before the next request leaves your machine. Moving between Local, BYOK, and managed Cloud is not an ordinary model switch. It requires an explicit fork or continuation with context selection, secret scanning, a payload preview, consent, and a visible destination label. Local content is never silently sent elsewhere.',
+    body: 'Within the active trust boundary, yes: pick another supported model and the provider label updates before the next request leaves your machine. Moving between Local, BYOK, and Cloud is not an ordinary model switch. It requires an explicit fork or continuation with context selection, secret scanning, a payload preview, consent, and a visible destination label. Local content is never silently sent elsewhere.',
   },
   {
-    title: 'What does AGI Cloud cost?',
-    body: `The ${FREE_PLAN} plan on AGI managed cloud is open by default: sign in and start, no waitlist. Paid upgrades start from the pricing page; if they are not open to your account yet, you can join the upgrade waitlist there or enter an access code. Usage is metered and current plan details live on the pricing page. Local and BYOK remain free. Pricing is also the source of truth for which self-serve checkouts are configured for your region and billing cadence; ${TEAM_PLAN} is priced per seat when its checkout is available. ${ENTERPRISE_PLAN} is contract-scoped and sales-assisted, with a contact list for access and additional governance requirements.`,
+    title: 'What does Cloud cost?',
+    body: `The ${FREE_PLAN} plan on Cloud is open by default: sign in and start, no waitlist. Paid upgrades start from the pricing page; if they are not open to your account yet, you can join the upgrade waitlist there or enter an access code. Usage is metered and current plan details live on the pricing page. Local and BYOK remain free. Pricing is also the source of truth for which self-serve checkouts are configured for your region and billing cadence; ${TEAM_PLAN} is priced per seat when its checkout is available. ${ENTERPRISE_PLAN} is contract-scoped and sales-assisted, with a contact list for access and additional governance requirements.`,
   },
   {
     title: 'How do I upgrade, downgrade, cancel, or get an invoice?',
@@ -60,11 +59,11 @@ const QA: { title: string; body: string }[] = [
   },
   {
     title: 'Do you train on my data?',
-    body: `AGI does not use customer conversation content to train AGI-owned models, and we do not sell your data. Be precise about the part people misread: in managed cloud we send your prompt and attachments to the provider serving the model you selected. On the ${FREE_PLAN} plan, a chat on the default model goes to a provider AGI chooses, not one you pick: Alibaba Cloud Model Studio, on AGI’s own key at its international endpoint in Singapore, or OpenAI. Which one answers depends on what is available for that turn, and the reply shows the model that answered. Alibaba’s published privacy notice says it never uses your data for model training, which we rely on and cannot verify. Qwen and Zhipu route through OpenRouter unless AGI holds its own key for that provider, and OpenRouter is also the failover for every other chat model in the catalogue, so content for a model from any provider can pass through it. Those third parties handle that content under their applicable terms and data-use policies, our statement about AGI-owned models is not a promise on their behalf. MiniMax models receive nothing from managed cloud and are reachable only with your own key. In BYOK mode your own provider account and terms govern, and in Local mode none of them are contacted. Recipients are listed at /subprocessors.`,
+    body: `AGI does not use customer conversation content to train AGI-owned models, and we do not sell your data. Be precise about the part people misread: in cloud we send your prompt and attachments to the provider serving the model you selected. On the ${FREE_PLAN} plan, a chat on the default model goes to a provider AGI chooses, not one you pick: Alibaba Cloud Model Studio, on AGI’s own key at its international endpoint in Singapore, or OpenAI. Which one answers depends on what is available for that turn, and the reply shows the model that answered. Alibaba’s published privacy notice says it never uses your data for model training, which we rely on and cannot verify. Qwen and Zhipu route through OpenRouter unless AGI holds its own key for that provider, and OpenRouter is also the failover for every other chat model in the catalogue, so content for a model from any provider can pass through it. Those third parties handle that content under their applicable terms and data-use policies, our statement about AGI-owned models is not a promise on their behalf. MiniMax models receive nothing from cloud and are reachable only with your own key. In BYOK mode your own provider account and terms govern, and in Local mode none of them are contacted. Recipients are listed at /subprocessors.`,
   },
   {
     title: 'Who can read my conversations?',
-    body: 'In Local mode, nobody but you. They never reach us. In managed cloud we store them, so people at AGI can access them, but only those who need it to operate or support the service, and every request is scoped to the account that owns it by two layers of access control. The privacy policy states what those layers are and, more usefully, where each one stops.',
+    body: 'In Local mode, nobody but you. They never reach us. In cloud we store them, so people at AGI can access them, but only those who need it to operate or support the service, and every request is scoped to the account that owns it by two layers of access control. The privacy policy states what those layers are and, more usefully, where each one stops.',
   },
   {
     title: 'Do you sell my data, or use it for ads?',
@@ -122,9 +121,9 @@ export default function FaqPage() {
                 {QA.length} questions, {QA.length} straight answers.
               </h2>
               <Prose>
-                Providers, trust modes, managed cloud, billing, and what happens to your data. The
-                short version of everything the rest of the site covers at length. For the data
-                questions in more depth there is a page of its own at{' '}
+                Providers, trust modes, cloud, billing, and what happens to your data. The short
+                version of everything the rest of the site covers at length. For the data questions
+                in more depth there is a page of its own at{' '}
                 <Link href="/data-use" className="agi-ds-link">
                   how we use your data
                 </Link>

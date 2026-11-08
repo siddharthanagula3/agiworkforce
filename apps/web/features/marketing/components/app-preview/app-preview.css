@@ -316,7 +316,7 @@ html[data-theme='light'] [data-design='agi'] figure.agi-dev.agi-app[data-device]
   flex-direction: column;
   gap: calc(var(--u) * 18);
   inline-size: 100%;
-  max-inline-size: calc(var(--u) * 768);
+  max-inline-size: calc(var(--u) * var(--app-content-w));
   min-block-size: 0;
   font-size: calc(var(--u) * 16);
   line-height: 1.625;
@@ -442,11 +442,12 @@ html[data-theme='light'] [data-design='agi'] figure.agi-dev.agi-app[data-device]
   flex-direction: column;
   gap: calc(var(--u) * 14);
   inline-size: 100%;
-  max-inline-size: calc(var(--u) * 768);
+  max-inline-size: calc(var(--u) * var(--app-content-w));
   padding: calc(var(--u) * 16) calc(var(--u) * 16) calc(var(--u) * 12);
   border: 1px solid var(--chat-border-strong);
   border-radius: calc(var(--u) * 24);
   background: var(--chat-input-bg);
+  font-size: var(--agi-app-text-body);
 }
 
 [data-design='agi'] .agi-app-placeholder {
@@ -457,9 +458,28 @@ html[data-theme='light'] [data-design='agi'] figure.agi-dev.agi-app[data-device]
 
 [data-design='agi'] .agi-app-composer-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: space-between;
   gap: calc(var(--u) * 12);
   color: var(--chat-text-secondary);
+}
+
+[data-design='agi'] .agi-app-composer-modes,
+[data-design='agi'] .agi-app-composer-controls {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 12);
+  min-inline-size: 0;
+}
+
+[data-design='agi'] .agi-app-composer-modes {
+  flex-wrap: wrap;
+}
+
+[data-design='agi'] .agi-app-composer-controls {
+  flex: none;
+  margin-inline-start: auto;
 }
 
 [data-design='agi'] .agi-app-seg,

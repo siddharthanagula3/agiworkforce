@@ -60,8 +60,8 @@ body:has([data-design='agi'][data-public-reference]) {
 }
 
 [data-design='agi'][data-public-reference] .agi-ds-eyebrow {
-  font-family: var(--public-font-code);
-  font-size: var(--public-text-code);
+  font-family: var(--public-label-font);
+  font-size: var(--public-label-size);
   line-height: var(--public-leading-control);
 }
 

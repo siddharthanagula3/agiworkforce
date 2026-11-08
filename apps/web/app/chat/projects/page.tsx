@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ProjectGallery, ProjectCard } from '@agiworkforce/unified-chat';
 import type { Project, ProjectGalleryCreateInput } from '@agiworkforce/unified-chat';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -9,6 +9,7 @@ import { ProjectSettingsDialog } from '@features/projects/components/ProjectSett
 import { ProjectShareDialog } from '@features/projects/components/ProjectShareDialog';
 import { useManagedCloudProjects, useProjectStore } from '@features/projects';
 import { webManagedCloudProjects } from '@/features/projects/services/managed-cloud-projects';
+import { subscribeNewProject } from '@shared/lib/new-project-command';
 import { WebAppShell } from '@shared/components/layout/WebAppShell';
 import { toast } from 'sonner';
 import { toUserMessage } from '@/lib/user-error-message';
@@ -73,6 +74,7 @@ export default function ProjectsPage() {
   const [editProject, setEditProject] = useState<Project | null>(null);
   const searchParams = useSearchParams();
   const [createOpen, setCreateOpen] = useState(searchParams.get('new') === '1');
+  useEffect(() => subscribeNewProject(() => setCreateOpen(true)), []);
   const [sortMode, setSortMode] = useState<SortMode>('updated');
 
   const sortedProjects = useMemo(() => sortProjects(projects, sortMode), [projects, sortMode]);
@@ -216,7 +218,7 @@ export default function ProjectsPage() {
                 }}
               >
                 Group related conversations under a shared project. Each project can carry its own
-                files, instructions, and chat history. Projects sync securely across your AGI Chat,
+                files, instructions, and chat history. Projects sync securely across your Chat,
                 Mobile, and Desktop cloud sessions.
               </p>
             </div>

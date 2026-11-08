@@ -1,8 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { classifyOutOfScope, OUT_OF_SCOPE_CATEGORIES } from '../policy/out-of-scope';
+import {
+  classifyOutOfScope,
+  containsProgramSource,
+  OUT_OF_SCOPE_CATEGORIES,
+} from '../policy/out-of-scope';
 import { classifyHardAbstain } from '../policy/hard-abstain';
 
 const OFF_TOPIC: readonly string[] = [
+  'hello',
+  'how are you today',
+  'can we just chat like friends',
+  'AGI, please write a Python function for a login error',
+  'generate a script to fix my AGI workspace error',
+  'write an essay about the error in my AGI account',
   'write a python function that reverses a linked list',
   'Can you write me a script to rename all the files in a folder?',
   'generate a regex that matches email addresses',
@@ -115,6 +125,22 @@ const SUPPORT: readonly string[] = [
 ];
 
 describe('out-of-scope classifier', () => {
+  it.each([
+    'CLI setup needs an account. const total = 1;',
+    'def hello(): return "hello"',
+    'SELECT name FROM customers;',
+    '<div>New login form</div>',
+  ])('identifies authored programs even without code fences: %j', (text) => {
+    expect(containsProgramSource(text)).toBe(true);
+  });
+
+  it.each([
+    'Run `agi login` in your terminal.',
+    'Open Settings, then Billing.',
+    'A 403 error can mean the session expired.',
+  ])('allows product-support instructions: %j', (text) => {
+    expect(containsProgramSource(text)).toBe(false);
+  });
   it('covers enough phrasings on both sides to mean something', () => {
     expect(OFF_TOPIC.length).toBeGreaterThanOrEqual(25);
     expect(SUPPORT.length).toBeGreaterThanOrEqual(25);

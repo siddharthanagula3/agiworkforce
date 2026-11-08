@@ -114,7 +114,7 @@ export default function AgentPermissionsPage() {
               <Section id="default-authority" labelledBy="agi-perm-default-title" rule>
                 <Stack gap="loose">
                   <div>
-                    <Eyebrow>Managed Cloud · default authority</Eyebrow>
+                    <Eyebrow>Cloud · default authority</Eyebrow>
                     <h2 className="agi-ds-h2" id="agi-perm-default-title">
                       On the website, eligible tools run automatically by default.
                     </h2>
@@ -157,7 +157,7 @@ export default function AgentPermissionsPage() {
               <Section id="always-ask" labelledBy="agi-perm-ask-title" rule ground="2">
                 <Stack gap="loose">
                   <div>
-                    <Eyebrow>Managed Cloud · approval required</Eyebrow>
+                    <Eyebrow>Cloud · approval required</Eyebrow>
                     <h2 className="agi-ds-h2" id="agi-perm-ask-title">
                       These always ask.
                     </h2>
@@ -299,9 +299,9 @@ export default function AgentPermissionsPage() {
                               Screenshots are not redacted and cannot be. You cannot scrub secrets
                               out of a PNG.
                             </strong>{' '}
-                            They reach the Managed Cloud gateway. If a page has a secret visibly
-                            rendered on it, a screenshot of that page carries it. This is a
-                            residual, accepted risk, bounded by the allowlist and the approval gate.
+                            They reach the Cloud gateway. If a page has a secret visibly rendered on
+                            it, a screenshot of that page carries it. This is a residual, accepted
+                            risk, bounded by the allowlist and the approval gate.
                           </>
                         ),
                       },
@@ -318,7 +318,7 @@ export default function AgentPermissionsPage() {
                       {
                         label: 'Where inference happens',
                         value:
-                          'Computer use requires Managed Cloud sign-in and calls the Managed Cloud gateway directly from the extension.',
+                          'Computer use requires Cloud sign-in and calls the Cloud gateway directly from the extension.',
                       },
                     ]}
                   />
@@ -362,7 +362,7 @@ export default function AgentPermissionsPage() {
 
                   <h3 className="agi-ds-h3">A connector is defined by the credential behind it.</h3>
                   <Ledger
-                    caption="Connector credentials on Managed Cloud"
+                    caption="Connector credentials on Cloud"
                     rows={[
                       {
                         label: 'GitHub App installation',

@@ -7,7 +7,12 @@ import path from 'node:path';
 import type { NextConfig } from 'next';
 import { PHASE_PRODUCTION_BUILD, PHASE_PRODUCTION_SERVER } from 'next/constants';
 
-import { BOT_PROTECTION_ENV_VAR, BOT_PROTECTION_MODES } from '../bot-protection';
+import {
+  BOT_PROTECTION_ENV_VAR,
+  BOT_PROTECTION_MODES,
+  BOT_PROTECTION_PUBLIC_ENV_VAR,
+} from '../bot-protection';
+import { HOSTING_ENV_VARS } from '@/lib/server/hosting';
 
 const BOTID_CHALLENGE_SOURCE =
   '/149e9513-01fa-4fb0-aad4-566afd725d1b/2d206a39-8ed7-437e-a3be-862e0f06eea3/a-4-a/c.js';
@@ -94,6 +99,37 @@ afterEach(() => {
 });
 
 describe('botid rewrites in next.config', () => {
+  it.each([
+    ['local default', false, undefined, BOT_PROTECTION_MODES.off],
+    ['platform default', true, undefined, BOT_PROTECTION_MODES.platform],
+    ['explicit platform', false, BOT_PROTECTION_MODES.platform, BOT_PROTECTION_MODES.platform],
+    ['explicit off', true, BOT_PROTECTION_MODES.off, BOT_PROTECTION_MODES.off],
+  ] as const)(
+    'projects the resolved development bot mode into the browser for %s',
+    async (_label, platform, configured, expected) => {
+      vi.stubEnv('NODE_ENV', 'development');
+      for (const name of HOSTING_ENV_VARS.platformMarker) vi.stubEnv(name, undefined);
+      vi.stubEnv(BOT_PROTECTION_ENV_VAR, configured);
+      vi.stubEnv(BOT_PROTECTION_PUBLIC_ENV_VAR, undefined);
+      if (platform) vi.stubEnv('VERCEL', '1');
+      const config = await loadNextConfig();
+      expect(config.env?.[BOT_PROTECTION_PUBLIC_ENV_VAR]).toBe(expected);
+    },
+    60_000,
+  );
+  it.each([false, true])(
+    'preserves the production client default when platform markers are %s',
+    async (platform) => {
+      vi.stubEnv('NODE_ENV', 'production');
+      for (const name of HOSTING_ENV_VARS.platformMarker) vi.stubEnv(name, undefined);
+      vi.stubEnv(BOT_PROTECTION_ENV_VAR, undefined);
+      vi.stubEnv(BOT_PROTECTION_PUBLIC_ENV_VAR, undefined);
+      if (platform) vi.stubEnv('VERCEL', '1');
+      const config = await loadNextConfig();
+      expect(config.env?.[BOT_PROTECTION_PUBLIC_ENV_VAR]).toBeUndefined();
+    },
+    60_000,
+  );
   it('serves the classification script and proxy same-origin', async () => {
     vi.stubEnv(BOT_PROTECTION_ENV_VAR, BOT_PROTECTION_MODES.platform);
     const rewrites = await loadRewrites();

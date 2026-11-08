@@ -7,9 +7,9 @@ import { ProductFrame } from '@/features/marketing/components/ProductFrame';
 import { NOTIFY_CTA, SURFACE_STATUS } from '../../lib/marketing-constants';
 
 export const metadata = buildMetadata({
-  title: 'AGI Code for VS Code: the @agi chat participant',
+  title: 'Code for VS Code: the @agi chat participant',
   description:
-    'Chat with @agi inside VS Code with workspace-scoped context, six slash commands, and diff review. Plus an explicit local bridge to AGI Desktop. Developer preview.',
+    'Chat with @agi inside VS Code with workspace-scoped context, six slash commands, and diff review. Plus an explicit local bridge to Desktop. Developer preview.',
   path: '/vscode-extension',
 });
 
@@ -31,16 +31,16 @@ export default function VscodeExtensionPage() {
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
           <div className="agi-fl-hero-split">
             <div className="agi-fl-hero-copy">
-              <p className="agi-fl-eyebrow">AGI Code for VS Code · {SURFACE_STATUS.vscode}</p>
+              <p className="agi-fl-eyebrow">Code for VS Code · {SURFACE_STATUS.vscode}</p>
               <h1 id="agi-vscode-hero-title" className="sr-only">
-                AGI Code for VS Code
+                Code for VS Code
               </h1>
               <div className="agi-fl-cta-row">
                 <Link href={NOTIFY_CTA.href} className="agi-fl-cta agi-fl-cta--primary">
                   {NOTIFY_CTA.label}
                 </Link>
                 <Link href="/agi-code" className="agi-fl-cta agi-fl-cta--secondary">
-                  Explore AGI Code
+                  Explore Code
                 </Link>
                 <Link href="/cli" className="agi-fl-cta agi-fl-cta--ghost">
                   See the CLI
@@ -56,7 +56,7 @@ export default function VscodeExtensionPage() {
         <TrustTriptych
           eyebrow="In the preview"
           title="A focused start, on the suite's rules."
-          lede="AGI Code for VS Code ships the way every AGI surface does: visible context, reviewable changes, no silent routing. No VSIX has been published yet; here is what the preview build carries."
+          lede="Code for VS Code ships the way every AGI surface does: visible context, reviewable changes, no silent routing. No VSIX has been published yet; here is what the preview build carries."
           cards={[
             {
               mode: '@agi chat',
@@ -80,19 +80,19 @@ export default function VscodeExtensionPage() {
                 '/fix and /refactor explain every change they propose',
                 'You decide what gets applied',
               ],
-              cta: { href: '/agi-code', label: 'Explore AGI Code' },
+              cta: { href: '/agi-code', label: 'Explore Code' },
             },
             {
               mode: 'Desktop bridge',
               glyph: '●',
               title: 'Heavier work, handed off explicitly.',
-              body: 'Pair the editor with AGI Desktop when you choose to.',
+              body: 'Pair the editor with Desktop when you choose to.',
               points: [
                 'Local WebSocket bridge on port 8787',
                 'Authenticated handshake with allowlisted message types',
                 "Degrades gracefully when Desktop isn't running",
               ],
-              cta: { href: '/desktop', label: 'See AGI Desktop' },
+              cta: { href: '/desktop', label: 'See Desktop' },
             },
           ]}
         />
@@ -121,11 +121,11 @@ export default function VscodeExtensionPage() {
         </section>
 
         <DevBand
-          eyebrow="AGI Code"
+          eyebrow="Code"
           title="One developer story, two surfaces."
-          body="AGI Code for VS Code pairs with the AGI CLI. Assistance in the editor when you want context and diffs. An agent in the terminal when you want resumable sessions and sandboxed execution. Developer sessions stay separate from consumer chat sync. Every cloud or local handoff is explicit."
+          body="Code for VS Code pairs with the CLI. Assistance in the editor when you want context and diffs. An agent in the terminal when you want resumable sessions and sandboxed execution. Developer sessions stay separate from consumer chat sync. Every cloud or local handoff is explicit."
           ctas={[
-            { href: '/agi-code', label: 'Explore AGI Code' },
+            { href: '/agi-code', label: 'Explore Code' },
             { href: '/cli', label: 'See the CLI' },
           ]}
         />
@@ -133,7 +133,7 @@ export default function VscodeExtensionPage() {
         <FinalCta
           eyebrow={SURFACE_STATUS.vscode}
           title="Bring @agi into your editor."
-          body={`AGI Code for VS Code is in developer preview and will ship as a VSIX. ${NOTIFY_CTA.label} takes you to the form on the download page, where you leave an email to hear when it is published. Pair it with AGI Desktop and the AGI CLI when they are released.`}
+          body={`Code for VS Code is in developer preview and will ship as a VSIX. ${NOTIFY_CTA.label} takes you to the form on the download page, where you leave an email to hear when it is published. Pair it with Desktop and the CLI when they are released.`}
           ctas={[
             NOTIFY_CTA,
             { href: '/cli', label: 'See the CLI' },

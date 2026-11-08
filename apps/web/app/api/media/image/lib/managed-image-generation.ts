@@ -7,7 +7,11 @@ import {
   supportsManagedMediaImageEdit,
 } from '@agiworkforce/cloud-contracts';
 import { providerKeepsInputsOutOfTraining } from '@agiworkforce/model-registry';
-import { billingPlanCapabilityWireTiers, canUseBillingPlanCapability } from '@agiworkforce/types';
+import {
+  billingPlanCapabilityUpgradeMessage,
+  billingPlanCapabilityWireTiers,
+  canUseBillingPlanCapability,
+} from '@agiworkforce/types';
 import { parseManagedMediaIdempotencyKey, type ManagedMediaSurface } from '@agiworkforce/utils';
 import { aiGeneratedHeaders, type AiGeneratedProvenance } from '@/lib/compliance/ai-act';
 import { logger } from '@/lib/logger';
@@ -193,8 +197,7 @@ export async function generateManagedImage(
     return NextResponse.json(
       {
         error: {
-          message:
-            'Image generation is available on Pro, Max, Team, and Enterprise plans. Upgrade your plan to unlock AI-powered image creation.',
+          message: billingPlanCapabilityUpgradeMessage('image_generation'),
           type: 'invalid_request_error',
           code: 'plan_upgrade_required',
           current_plan: userTier,

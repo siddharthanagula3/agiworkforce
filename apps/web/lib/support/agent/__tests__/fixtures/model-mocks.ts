@@ -1,14 +1,17 @@
 import { vi, type Mock } from 'vitest';
+import { getModelFamilySlot, getModelMetadataById } from '@agiworkforce/types';
+
+const FAMILY = getModelFamilySlot('openai/gpt-fast');
 
 export const SELECTED_ROUTE = {
   status: 'selected' as const,
-  requestedSelection: 'auto',
+  requestedSelection: FAMILY.activeModelId,
   requestedProfile: null,
   effectiveProfile: 'balanced',
   taskType: 'simple_chat',
-  modelKey: 'test.model',
-  provider: 'anthropic',
-  providerModelId: 'test-provider-model-id',
+  modelKey: FAMILY.activeModelId,
+  provider: FAMILY.provider,
+  providerModelId: getModelMetadataById(FAMILY.activeModelId)?.apiModelId ?? FAMILY.activeModelId,
   routeId: 'test-route',
   harnessId: 'test/chat',
   fallbacks: [],
@@ -59,7 +62,7 @@ export function armModelMocks(): void {
     },
   }));
   modelMocks.drainToLlmResponse.mockImplementation(async () => ({
-    model: 'test.model',
+    model: FAMILY.activeModelId,
     content: nextModelText,
     promptTokens: 10,
     completionTokens: 10,

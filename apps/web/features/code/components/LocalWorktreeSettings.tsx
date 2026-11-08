@@ -21,7 +21,7 @@ type KeepState =
   | { status: 'unavailable'; reason: string };
 
 /**
- * "Keep the newest N worktrees", read from and written through the AGI CLI so
+ * "Keep the newest N worktrees", read from and written through the CLI so
  * the count the page shows is the one cleanup applies. While no CLI is running,
  * or when the count cannot be read, the row stays, disabled, saying why.
  */

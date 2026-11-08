@@ -9,7 +9,7 @@ import { getRequestIdentity } from '@/lib/server/identity';
 
 export const metadata: Metadata = {
   title: 'Admin Readiness',
-  description: 'Enterprise control-plane readiness for AGI teams and managed compute.',
+  description: 'Enterprise control-plane readiness for AGI teams and cloud compute.',
 };
 
 export default async function AdminPage() {

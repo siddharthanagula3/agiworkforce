@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { withCloudAgentRunCancellation } from '@/lib/services/cloud-agent-run-cancellation';
+
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { start, type WorkflowReadableStream } from 'workflow/api';
 import { withTimeout } from '@agiworkforce/utils';
@@ -307,12 +309,14 @@ function buildInlineCloudAgentTurn(input: RunCloudAgentTurnInput): ReadableStrea
     disabledConnectorIds: processed.chatRequest.disabled_connector_ids,
   });
   const usage = createObservedProviderUsage();
+  const cancellation = new AbortController();
+  const signal = AbortSignal.any([input.signal, cancellation.signal]);
   let pauseCheckpointSaved = false;
   // The tool loop can rotate to a managed-failover candidate mid-run; keep the
   // serving view so attribution and settlement follow what actually answered.
   let serving: ProcessedRequest = processed;
   const failover = createFailoverPlan(processed, {
-    signal: input.signal,
+    signal,
     isProviderDispatchable: (candidate) => Boolean(ADAPTER_PROVIDERS[candidate]),
     modelPolicy: processed.modelPolicy ?? null,
   });
@@ -328,7 +332,7 @@ function buildInlineCloudAgentTurn(input: RunCloudAgentTurnInput): ReadableStrea
       ? { connectorExecutor: makeUserConnectorExecutor(input.userId, processed.organizationId) }
       : {}),
     usage,
-    signal: input.signal,
+    signal,
     // The durable transport replays a resume through these same options. The
     // inline one is not a lesser resume, it is the same resume, minus the
     // detachment.
@@ -462,7 +466,12 @@ function buildInlineCloudAgentTurn(input: RunCloudAgentTurnInput): ReadableStrea
   });
 
   return buildManagedAgentStream({
-    generator,
+    generator: withCloudAgentRunCancellation(generator, {
+      db: input.db,
+      userId: input.userId,
+      runId: input.runId,
+      controller: cancellation,
+    }),
     processed,
     usage,
     userId: input.userId,

@@ -7,7 +7,39 @@
  * reachable from a native menu item or any other caller. Naming the events in
  * one place is what makes them a contract instead of matching strings.
  */
-export const APP_COMMANDS = ['open-search', 'open-shortcuts', 'open-upgrade'] as const;
+export const APP_COMMANDS = [
+  'open-search',
+  'open-shortcuts',
+  'open-upgrade',
+  'find',
+  'find-next',
+  'find-previous',
+  'find-in-files',
+  'toggle-files',
+  'focus-follow-up',
+  'new-project',
+  'previous-chat',
+  'next-chat',
+  'previous-tab',
+  'next-tab',
+  'new-tab',
+  'reopen-closed-tab',
+  'focus-first-tab',
+  'close-active-tab',
+  'close-other-tabs',
+  'close-tabs-to-the-right',
+  'focus-second-tab',
+  'focus-third-tab',
+  'focus-fourth-tab',
+  'focus-fifth-tab',
+  'focus-sixth-tab',
+  'focus-seventh-tab',
+  'focus-eighth-tab',
+  'new-temporary-chat',
+  'open-feedback',
+  'toggle-terminal',
+  'toggle-side-chat',
+] as const;
 
 export type AppCommand = (typeof APP_COMMANDS)[number];
 

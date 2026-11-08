@@ -6,7 +6,7 @@ import { WORK_HISTORY_LABEL } from '@/features/chat/lib/agi-work';
 
 export const metadata: Metadata = {
   title: WORK_HISTORY_LABEL,
-  description: 'Your Managed Cloud work sessions and agent-run history.',
+  description: 'Your Cloud work sessions and agent-run history.',
   robots: { index: false, follow: false },
 };
 

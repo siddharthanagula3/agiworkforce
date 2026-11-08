@@ -34,7 +34,7 @@ interface WorkState {
 }
 
 /**
- * The AGI Work runs this project produced.
+ * The Work runs this project produced.
  *
  * A run stores no project of its own; the server resolves the association
  * through the conversation the run belongs to, so the list follows a chat that
@@ -116,7 +116,7 @@ export function ProjectWorkPanel({ projectId, projectName }: ProjectWorkPanelPro
             lineHeight: 1.55,
           }}
         >
-          Switch a chat in {projectName} to AGI Work and its runs will be listed here.
+          Switch a chat in {projectName} to Work and its runs will be listed here.
         </p>
       </div>
     );

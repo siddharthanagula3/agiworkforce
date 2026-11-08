@@ -1,4 +1,5 @@
 'use client';
+import { AgiMark } from '@agiworkforce/ui';
 
 import { useSession } from '@/lib/identity/client';
 import { AlertTriangle, Flag, RefreshCw } from 'lucide-react';
@@ -123,10 +124,11 @@ export default function ContentReportQueuePanel() {
             disabled={loading}
             className="inline-flex items-center justify-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground hover:bg-accent hover:text-accent-foreground disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <RefreshCw
-              className={`h-4 w-4 ${loading ? 'motion-safe:animate-spin' : ''}`}
-              aria-hidden="true"
-            />
+            {loading ? (
+              <AgiMark spinning className="h-4 w-4" aria-hidden="true" />
+            ) : (
+              <RefreshCw className="h-4 w-4" aria-hidden="true" />
+            )}
             Refresh
           </button>
         </div>

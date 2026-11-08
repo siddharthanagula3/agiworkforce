@@ -1,5 +1,11 @@
 import 'server-only';
 
+import {
+  orgSharedCatalogCache as _orgSharedCatalogCache,
+  orgSharedCacheKey,
+} from '@/lib/connectors/org-shared-catalog-cache';
+export { evictOrgSharedConnectorCaches } from '@/lib/connectors/org-shared-catalog-cache';
+
 import { z } from 'zod';
 import type { NextRequest } from 'next/server';
 import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
@@ -1719,20 +1725,6 @@ async function getOrgReachableConnectorRows(
   ]);
   const rows = [...shared, ...published];
   return limit === undefined ? rows : rows.slice(0, limit);
-}
-
-const _orgSharedCatalogCache = new Map<string, CustomCatalogState>();
-
-function orgSharedCacheKey(organizationId: string, rowId: string): string {
-  return `${encodeURIComponent(organizationId)}:${encodeURIComponent(rowId)}`;
-}
-
-export async function evictOrgSharedConnectorCaches(
-  organizationId: string,
-  rowId: string,
-): Promise<void> {
-  const cacheKey = orgSharedCacheKey(organizationId, rowId);
-  _orgSharedCatalogCache.delete(cacheKey);
 }
 
 async function buildOrgSharedConnectorCatalog(

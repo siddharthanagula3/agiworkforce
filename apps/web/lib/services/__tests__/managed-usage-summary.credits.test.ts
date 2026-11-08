@@ -3,6 +3,7 @@ import {
   MANAGED_USAGE_LIMITS,
   MICROUSD_PER_CREDIT,
   getEffectivePlanCreditAllowance,
+  parseManagedUsageSummaryResponse,
 } from '@agiworkforce/types';
 type ScanModule0 = typeof import('@/lib/services/bonus-credit-service');
 type PricingModule = typeof import('@/lib/pricing');
@@ -33,6 +34,11 @@ vi.mock('@/lib/services/credit-service', () => ({
   ledgerCentsFromMicrousd: (microusd: number) => Math.floor((microusd + 5_000) / 10_000),
 
   CreditService: { getBalance: mockGetBalance },
+}));
+
+vi.mock('@/lib/services/usage-limit-promotion-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/usage-limit-promotion-service')>()),
+  readSummaryPromotions: vi.fn(async () => null),
 }));
 
 vi.mock('@/lib/services/effective-subscription-service', () => ({
@@ -142,6 +148,29 @@ describe('managed usage summary, stated in credits', () => {
     expect(summary.effective_plan_tier).toBe('pro');
   });
 
+  it('keeps Ultra usable beyond its former session allowance and omits that window from the wire contract', async () => {
+    mockResolveEffectiveSubscription.mockResolvedValue(subscription('max_15x'));
+    mockGetBalance.mockResolvedValue({
+      credits_allocated_microusd: credits(20_000),
+      credits_used_microusd: credits(1_500),
+      credits_remaining_microusd: credits(18_500),
+      period_start: null,
+      period_end: null,
+    });
+    mockGetRollingUsage.mockResolvedValue({
+      usedMicrousd: credits(1_500),
+      usedCents: 0,
+      oldestAt: '2026-11-07T00:00:00.000Z',
+    });
+    const summary = await getManagedUsageSummary(db, 'user-1');
+    const parsed = parseManagedUsageSummaryResponse(JSON.parse(JSON.stringify(summary)));
+    expect(parsed.credits?.five_hour).toBeNull();
+    expect(parsed.session_reset_at).toBeNull();
+    expect(parsed.has_usage_remaining).toBe(true);
+    expect(parsed.credits?.weekly).toMatchObject({ allowance: 5_000, remaining: 3_500 });
+    expect(parsed.credits?.monthly).toMatchObject({ allowance: 20_000, remaining: 18_500 });
+  });
+
   it('leaves nothing to spend in a month whose credit period never opened, as the gate does', async () => {
     mockResolveEffectiveSubscription.mockResolvedValue(subscription('max_15x'));
     mockGetBalance.mockResolvedValue({
@@ -200,7 +229,7 @@ describe('managed usage summary, stated in credits', () => {
     expect(effective.monthly).toBeLessThan(MANAGED_USAGE_LIMITS.basic.monthlyCredits);
     expect(summary.credits?.monthly.allowance).toBe(effective.monthly);
     expect(summary.credits?.weekly.allowance).toBe(effective.weekly);
-    expect(summary.credits?.five_hour.allowance).toBe(effective.fiveHour);
+    expect(summary.credits?.five_hour?.allowance).toBe(effective.fiveHour);
   });
 
   it('states a subscriber with no known region in the US budget', async () => {
@@ -219,7 +248,7 @@ describe('managed usage summary, stated in credits', () => {
     const summary = await getManagedUsageSummary(db, 'user-1');
 
     expect(summary.credits?.monthly.allowance).toBe(MANAGED_USAGE_LIMITS.basic.monthlyCredits);
-    expect(summary.credits?.five_hour.allowance).toBe(MANAGED_USAGE_LIMITS.basic.fiveHourCredits);
+    expect(summary.credits?.five_hour?.allowance).toBe(MANAGED_USAGE_LIMITS.basic.fiveHourCredits);
   });
 
   it('states the Free windows in credits, measured on the Free ledger', async () => {

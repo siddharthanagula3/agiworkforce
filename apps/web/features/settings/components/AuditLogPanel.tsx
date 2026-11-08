@@ -1,4 +1,5 @@
 'use client';
+import { AgiMark } from '@agiworkforce/ui';
 
 import { useState } from 'react';
 import { ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
@@ -80,10 +81,11 @@ export function AuditLogPanel() {
             aria-label="Refresh security activity"
             className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
           >
-            <RefreshCw
-              className={`h-3.5 w-3.5 ${logsQuery.isFetching ? 'motion-safe:animate-spin' : ''}`}
-              aria-hidden="true"
-            />
+            {logsQuery.isFetching ? (
+              <AgiMark spinning className="h-3.5 w-3.5" aria-hidden="true" />
+            ) : (
+              <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+            )}
           </button>
         </div>
       </div>

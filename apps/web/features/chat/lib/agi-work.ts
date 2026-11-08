@@ -1,4 +1,6 @@
-export const AGI_WORK_LABEL = 'AGI Work';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
+
+export const AGI_WORK_LABEL = PRODUCT_NAMES.work;
 
 export const WORK_HISTORY_LABEL = 'Work history';
 
@@ -38,7 +40,7 @@ export const TASK_DOCK_CONTEXT_EMPTY = 'Tools and files this session uses show u
 export const DELIVERABLES_LABEL = 'Files this session produced';
 
 /**
- * A plain chat is not an AGI Work session, and the dock in one must not claim
+ * A plain chat is not an Work session, and the dock in one must not claim
  * to be. Both leaders title the dock with the chat and hold two sections in it.
  */
 export const CHAT_DOCK_PANEL_LABEL = 'Chat details';

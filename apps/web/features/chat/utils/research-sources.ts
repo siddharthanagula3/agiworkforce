@@ -71,7 +71,7 @@ export interface CollectedMessageSources {
 
 /**
  * The single reading of a turn's own source list. Both the transcript's
- * citation chips and the AGI Work dock's Sources section resolve a turn to the
+ * citation chips and the Work dock's Sources section resolve a turn to the
  * same rows, in the same order, with the same citation numbers.
  */
 export function collectMessageResearchSources(

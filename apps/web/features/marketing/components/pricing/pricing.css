@@ -12,6 +12,8 @@
 [data-design='agi'][data-public-reference='pricing'] .agi-pricing-pagehead {
   display: flex;
   flex-direction: column;
+  align-items: center;
+  text-align: center;
   gap: var(--space-2);
   padding-block: var(--space-5) var(--space-4);
 }
@@ -68,6 +70,45 @@ html
 
 [data-design='agi'][data-public-reference='pricing'] .agi-pricing-plans > .agi-fl-section-lede {
   margin: 0;
+}
+
+[data-design='agi'][data-public-reference='pricing'] .agi-pricing-audience-panel[hidden] {
+  display: none;
+}
+
+[data-design='agi'][data-public-reference='pricing'] #pricing-business-plans {
+  gap: var(--space-5);
+}
+
+[data-design='agi'][data-public-reference='pricing'] #pricing-business-plans:not([hidden]) {
+  display: grid;
+  align-items: start;
+}
+
+[data-design='agi'][data-public-reference='pricing'] .agi-pricing-enterprise {
+  display: grid;
+  gap: var(--space-5);
+}
+
+@media (min-width: 1024px) {
+  [data-design='agi'][data-public-reference='pricing'] #pricing-business-plans {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+[data-design='agi'][data-public-reference='pricing'] #pricing-business-plans .agi-tier--band {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+[data-design='agi'][data-public-reference='pricing'] .agi-pricing-audience {
+  margin-block-end: 0;
+  margin-inline: auto;
+  grid-auto-columns: auto;
+}
+
+[data-design='agi'][data-public-reference='pricing'] .agi-pricing-audience .agi-tier-toggle-btn {
+  padding-inline: var(--space-3);
+  white-space: normal;
 }
 
 [data-design='agi'][data-public-reference='pricing'] .agi-fl-section-lede {
@@ -133,7 +174,7 @@ html
 }
 
 @media (min-width: 1101px) {
-  [data-design='agi'][data-public-reference='pricing'] .agi-tier {
+  [data-design='agi'][data-public-reference='pricing'] .agi-tier-grid--plans > .agi-tier {
     --pricing-card-tail: var(--space-9);
     position: relative;
     isolation: isolate;
@@ -142,7 +183,7 @@ html
     background: none;
   }
 
-  [data-design='agi'][data-public-reference='pricing'] .agi-tier::before {
+  [data-design='agi'][data-public-reference='pricing'] .agi-tier-grid--plans > .agi-tier::before {
     content: '';
     position: absolute;
     inset: calc(var(--stroke-hairline) * -1);
@@ -203,8 +244,8 @@ html
 
 @media (min-width: 1024px) {
   [data-design='agi'][data-public-reference='pricing'] .agi-tier--band {
-    grid-template-columns: minmax(0, 26rem) minmax(0, 1fr);
-    column-gap: var(--space-8);
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    column-gap: var(--space-6);
   }
 
   [data-design='agi'][data-public-reference='pricing'] .agi-tier-band-includes {
@@ -214,7 +255,7 @@ html
 
   [data-design='agi'][data-public-reference='pricing'] .agi-tier-band-includes .agi-tier-features {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--space-3) var(--space-6);
   }
 
@@ -266,6 +307,13 @@ html
   padding: 0;
   list-style: none;
   border-block-start: var(--stroke-hairline) solid var(--public-rule);
+}
+
+@media (min-width: 600px) {
+  [data-design='agi'][data-public-reference='pricing'] .agi-tier-seat-rows {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--space-4);
+  }
 }
 
 [data-design='agi'][data-public-reference='pricing'] .agi-tier-seat-row {
@@ -325,6 +373,12 @@ html
   line-height: var(--public-leading-body);
   color: var(--public-ink-secondary);
   text-wrap: wrap;
+}
+
+[data-design='agi'][data-public-reference='pricing'] .agi-tier-features .agi-tier-usage-note {
+  display: block;
+  font-size: var(--public-text-meta);
+  line-height: var(--public-leading-body);
 }
 
 [data-design='agi'][data-public-reference='pricing'] .agi-tier-features {
@@ -468,10 +522,21 @@ html
 }
 
 [data-design='agi'][data-public-reference='pricing'] .agi-tier-seats {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-3);
+}
+
+[data-design='agi'][data-public-reference='pricing'] .agi-tier-seat-picker {
+  display: grid;
+  gap: var(--space-3) var(--space-4);
+}
+
+@media (min-width: 600px) {
+  [data-design='agi'][data-public-reference='pricing'] .agi-tier-seat-picker {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 [data-design='agi'][data-public-reference='pricing'] .agi-tier-seats-label {

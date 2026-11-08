@@ -97,33 +97,33 @@ function Chevron({ open }: { open: boolean }) {
 const PROCESSING_LOCATIONS: ReadonlyArray<{ feature: string; where: string }> = [
   {
     feature: 'Chat',
-    where: 'AGI Cloud, then the AI provider that serves the model you chose.',
+    where: 'Cloud, then the AI provider that serves the model you chose.',
   },
   {
     feature: 'Files you attach',
-    where: 'Stored by AGI Cloud in Cloudflare R2 and sent with your message to the model provider.',
+    where: 'Stored by Cloud in Cloudflare R2 and sent with your message to the model provider.',
   },
   {
     feature: 'Memory and past-chat search',
-    where: 'Stored in AGI Cloud and added to your message before it reaches the model provider.',
+    where: 'Stored in Cloud and added to your message before it reaches the model provider.',
   },
   {
     feature: 'Web search and Deep Research',
-    where: 'Your search queries go from AGI Cloud to Perplexity’s search service.',
+    where: 'Your search queries go from Cloud to Perplexity’s search service.',
   },
   {
     feature: 'Image and video generation',
     where:
-      'AGI Cloud sends your prompt to Google, OpenAI or Stability for images, and to Runway, Google or OpenRouter for video.',
+      'Cloud sends your prompt to Google, OpenAI or Stability for images, and to Runway, Google or OpenRouter for video.',
   },
   {
     feature: 'Dictation',
-    where: 'Your recording goes from AGI Cloud to OpenAI for transcription.',
+    where: 'Your recording goes from Cloud to OpenAI for transcription.',
   },
   {
     feature: 'Voice mode',
     where:
-      'AGI Cloud sets up the call, then your audio streams directly between your device and OpenAI.',
+      'Cloud sets up the call, then your audio streams directly between your device and OpenAI.',
   },
   {
     feature: 'Read aloud',
@@ -132,7 +132,7 @@ const PROCESSING_LOCATIONS: ReadonlyArray<{ feature: string; where: string }> = 
   {
     feature: 'Connectors',
     where:
-      'AGI Cloud calls the connected service for you, and what it returns goes to the model provider with your message.',
+      'Cloud calls the connected service for you, and what it returns goes to the model provider with your message.',
   },
 ];
 
@@ -425,14 +425,14 @@ export function PrivacySection() {
             conversations stay on your device and are never transmitted to AGI servers, and BYOK
             conversations go directly to your chosen provider using your own API key. Hosted Web and
             Desktop have neither mode: they store no provider keys of yours, so everything you send
-            there is a Managed Cloud request.
+            there is a Cloud request.
           </p>
           <p style={{ margin: 0 }}>
-            Managed Cloud conversations are encrypted in transit and at rest. We do not sell your
-            data, and we do not train AGI-owned models on your prompts, responses or files. There is
-            no training opt-in, because that data path does not exist. Managed Cloud requests are
-            routed to the hosted provider serving the model you selected, and provider-side handling
-            is governed by that provider&rsquo;s terms, the current list is at{' '}
+            Cloud conversations are encrypted in transit and at rest. We do not sell your data, and
+            we do not train AGI-owned models on your prompts, responses or files. There is no
+            training opt-in, because that data path does not exist. Cloud requests are routed to the
+            hosted provider serving the model you selected, and provider-side handling is governed
+            by that provider&rsquo;s terms, the current list is at{' '}
             <SettingsPageLink
               href="/subprocessors"
               style={{ color: 'var(--text-1)', textDecoration: 'underline' }}
@@ -461,8 +461,8 @@ export function PrivacySection() {
             ))}
           </dl>
           <p style={{ margin: 'var(--space-2) 0 0' }}>
-            AGI Cloud runs in the United States. The providers named here, and what each one
-            receives, are listed at{' '}
+            Cloud runs in the United States. The providers named here, and what each one receives,
+            are listed at{' '}
             <SettingsPageLink
               href="/subprocessors"
               style={{ color: 'var(--text-1)', textDecoration: 'underline' }}

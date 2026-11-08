@@ -53,9 +53,9 @@ export default function EuRepresentativePage() {
               <strong>No representative is currently appointed.</strong> Article 27 requires a
               controller or processor outside the Union that offers goods or services to people in
               the Union, or monitors their behaviour, to designate a representative established in a
-              member state. AGI Managed Cloud has been open to the public since 27 June 2026, so
-              this obligation is live and unmet. We have not set a date to appoint one. This page
-              will say so when one is appointed.
+              member state. Cloud has been open to the public since 27 June 2026, so this obligation
+              is live and unmet. We have not set a date to appoint one. This page will say so when
+              one is appointed.
             </Prose>
           </Stack>
         </Section>

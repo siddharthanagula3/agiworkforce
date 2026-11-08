@@ -1561,34 +1561,6 @@ html[data-contrast='more'] *:focus-visible {
   --agi-amber-soft: rgba(16, 18, 22, 0.08);
 }
 
-/* The landing keeps the flagship amber accent on the neutral grounds and inks
-   above. Its light block restates the accent because the flagship dark block
-   outranks the neutral light block. */
-body:has([data-public-palette='flagship']) [data-design='agi'] {
-  --agi-accent: #f0a84a;
-  --agi-accent-hover: #f4b866;
-  --agi-accent-ink: #1a1300;
-  --agi-accent-text: #f0a84a;
-  --agi-accent-soft: rgba(240, 168, 74, 0.16);
-  --agi-glow-soft: rgba(240, 168, 74, 0.13);
-  --agi-selection-bg: rgba(240, 168, 74, 0.32);
-  --agi-amber: #f0a84a;
-  --agi-amber-soft: rgba(240, 168, 74, 0.16);
-}
-
-[data-theme='light'] body:has([data-public-palette='flagship']) [data-design='agi'],
-body:has([data-public-palette='flagship']) [data-theme='light'][data-design='agi'] {
-  --agi-accent: #854500;
-  --agi-accent-hover: #6b3700;
-  --agi-accent-ink: #ffffff;
-  --agi-accent-text: #854500;
-  --agi-accent-soft: rgba(133, 69, 0, 0.12);
-  --agi-glow-soft: rgba(156, 84, 7, 0.1);
-  --agi-selection-bg: rgba(240, 168, 74, 0.28);
-  --agi-amber: #854500;
-  --agi-amber-soft: rgba(133, 69, 0, 0.12);
-}
-
 [data-design='agi'] *,
 [data-design='agi'] *::before,
 [data-design='agi'] *::after {

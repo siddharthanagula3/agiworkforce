@@ -5,5 +5,5 @@ export type LaneId = (typeof LANE_IDS)[number];
 export const LANE_NAMES: Record<LaneId, string> = {
   local: 'Local',
   byok: 'Your key',
-  cloud: 'AGI Cloud',
+  cloud: 'Cloud',
 };

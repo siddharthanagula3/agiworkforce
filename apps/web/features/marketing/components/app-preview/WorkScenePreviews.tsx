@@ -9,7 +9,6 @@ import {
   Folder,
   Grid2x2Plus,
   LibraryBig,
-  Loader2,
   Mic,
   Palette,
   PauseCircle,
@@ -140,7 +139,7 @@ function ToolBar({
       {status === 'awaiting-approval' ? (
         <span className="agi-work-tool-status">Waiting for your approval</span>
       ) : null}
-      {status === 'running' ? <Loader2 className="agi-work-icon agi-app-quiet" /> : null}
+      {status === 'running' ? <AgiMark spinning className="agi-work-icon agi-app-quiet" /> : null}
       {status === 'awaiting-approval' ? <PauseCircle className="agi-work-icon" /> : null}
       {status === 'awaiting-approval' ? (
         <ChevronDown className="agi-work-icon agi-app-quiet" />
@@ -191,7 +190,7 @@ export function AgentRunScenePreview({ className }: { className?: string }) {
   return (
     <WorkShell
       scene="work-run"
-      label="Authored example of an AGI Work run in AGI Chat"
+      label="Authored example of an Work run in Chat"
       className={className}
       chats={RUN_SIDEBAR_CHATS}
       composer={<WorkComposer />}
@@ -214,7 +213,7 @@ export function AgentRunScenePreview({ className }: { className?: string }) {
                 >
                   <span className="agi-work-step-mark">
                     {row.running ? (
-                      <Loader2 className="agi-work-icon" />
+                      <AgiMark spinning className="agi-work-icon" />
                     ) : (
                       <Clock3 className="agi-work-icon" />
                     )}

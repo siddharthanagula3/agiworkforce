@@ -652,10 +652,31 @@
   align-items: center;
   justify-content: center;
   gap: calc(var(--u) * 24);
+  transform: scale(var(--app-content-scale));
+  transform-origin: center;
 }
 
 [data-design='agi'] .agi-scene-step[data-align='center'] {
   justify-content: center;
+}
+
+[data-design='agi'] .agi-scene-step[data-view='new-chat'] .agi-app-composer {
+  gap: calc(var(--u) * 8);
+  padding-block-end: calc(var(--u) * 6);
+}
+
+[data-design='agi'] .agi-scene-step[data-view='new-chat'] .agi-app-composer-row,
+[data-design='agi'] .agi-scene-step[data-view='new-chat'] .agi-app-composer-modes,
+[data-design='agi'] .agi-scene-step[data-view='new-chat'] .agi-app-composer-controls {
+  gap: calc(var(--u) * 8);
+}
+
+[data-design='agi'] .agi-scene-step[data-view='new-chat'] .agi-app-seg span {
+  padding-inline: calc(var(--u) * 10);
+}
+
+[data-design='agi'] .agi-scene-step[data-view='new-chat'] .agi-scene-modechip {
+  padding-inline: calc(var(--u) * 8);
 }
 
 [data-design='agi'] .agi-scene-report-status {
@@ -1194,7 +1215,7 @@
   position: relative;
   flex: none;
   inline-size: 100%;
-  max-inline-size: calc(var(--u) * 768);
+  max-inline-size: calc(var(--u) * var(--app-content-w));
 }
 
 [data-design='agi'] .agi-scene-composer .agi-app-draft {
@@ -1202,35 +1223,8 @@
   font-size: calc(var(--u) * 16);
 }
 
-[data-design='agi'] .agi-scene-composer--chip .agi-app-composer {
-  flex-flow: row wrap;
-  align-items: center;
-  gap: calc(var(--u) * 14) calc(var(--u) * 12);
-  color: var(--chat-text-secondary);
-}
-
-[data-design='agi'] .agi-scene-composer--chip .agi-app-composer-row {
-  display: contents;
-}
-
-[data-design='agi'] .agi-scene-composer--chip .agi-app-placeholder,
-[data-design='agi'] .agi-scene-composer--chip .agi-app-draft {
-  flex: 1 0 100%;
-  box-sizing: border-box;
-}
-
-[data-design='agi'] .agi-scene-composer--chip .agi-app-composer-row > * {
-  order: 3;
-}
-
-[data-design='agi'] .agi-scene-composer--chip .agi-app-composer-row > :first-child,
-[data-design='agi'] .agi-scene-composer--chip .agi-app-composer-row > .agi-app-seg {
-  order: 1;
-}
-
 [data-design='agi'] .agi-scene-modechip {
   display: inline-flex;
-  order: 2;
   align-items: center;
   gap: calc(var(--u) * 6);
   block-size: calc(var(--u) * 32);
@@ -1359,12 +1353,12 @@
 [data-design='agi'] .agi-scene-console-group-title {
   font-size: calc(var(--u) * 12);
   font-weight: 500;
-  text-transform: uppercase;
+  text-transform: none;
   color: var(--chat-text-muted);
 }
 
 [data-design='agi'] .agi-scene-console-eyebrow {
-  letter-spacing: 0.14em;
+  letter-spacing: normal;
 }
 
 [data-design='agi'] .agi-scene-console-name {

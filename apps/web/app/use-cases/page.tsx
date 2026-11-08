@@ -106,7 +106,7 @@ export default function UseCasesPage() {
             <ul className="agi-lp-factline-list">
               <li>Local runs on hardware you already own, free</li>
               <li>BYOK bills you at your provider&rsquo;s published rates</li>
-              <li>managed cloud capacity is the part that carries a price</li>
+              <li>cloud capacity is the part that carries a price</li>
             </ul>
           </div>
         </div>
@@ -119,7 +119,7 @@ export default function UseCasesPage() {
               </h2>
               <p className="agi-lp-lede">
                 Local and BYOK stay free on our side for as long as you use them. The pricing page
-                is where managed-cloud plans are written down.
+                is where cloud plans are written down.
               </p>
               <ButtonRow>
                 <Button href="/pricing">See plans</Button>

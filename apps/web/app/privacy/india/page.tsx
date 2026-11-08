@@ -57,10 +57,10 @@ const MODES: readonly LedgerRow[] = [
     value: (
       <>
         Where it goes: from the CLI to Ollama or LM Studio on loopback. Nothing is transmitted to us
-        and nothing is silently routed to BYOK or Managed Cloud.
+        and nothing is silently routed to BYOK or Cloud.
         <br />
         What we hold: nothing about the local model request. The current Desktop and web apps use
-        Managed Cloud and do not expose Local inference.
+        Cloud and do not expose Local inference.
       </>
     ),
   },
@@ -79,7 +79,7 @@ const MODES: readonly LedgerRow[] = [
     ),
   },
   {
-    label: 'Managed Cloud',
+    label: 'Cloud',
     value: (
       <>
         Where it goes: through our gateway to the provider serving the model you selected, or, on
@@ -111,9 +111,9 @@ const PROCESSING: readonly LedgerRow[] = [
       'Purpose: taking payment and managing your subscription. Card details go to Stripe directly and never reach us. Basis: performing the paid service you signed up for.',
   },
   {
-    label: 'Conversations, files, projects, memories (Managed Cloud only)',
+    label: 'Conversations, files, projects, memories (Cloud only)',
     value:
-      'Purpose: running the assistant and syncing your work across your devices. Basis: providing the Managed Cloud service you chose to use. Local and BYOK do not produce this data for us.',
+      'Purpose: running the assistant and syncing your work across your devices. Basis: providing the Cloud service you chose to use. Local and BYOK do not produce this data for us.',
   },
   {
     label: 'Error reports and performance traces (Sentry)',
@@ -161,7 +161,7 @@ const RETENTION: readonly LedgerRow[] = [
       'Kept while your account is active. Permanently erased 24 hours after a deletion request, by a daily scheduled job that also deletes your identity at our authentication provider.',
   },
   {
-    label: 'Conversations (Managed Cloud)',
+    label: 'Conversations (Cloud)',
     value:
       'Kept until you delete them or delete your account. There is no automatic expiry on ordinary conversations today, and we will not describe one until it runs.',
   },
@@ -272,7 +272,7 @@ export default function IndiaDpdpNoticePage() {
               </Link>
               , which describes the same processing in more detail;{' '}
               <strong>where the two differ on your rights in India, this page governs.</strong> Last
-              updated: {POLICY_LAST_UPDATED.indiaPrivacy}. Managed Cloud is in public alpha.{' '}
+              updated: {POLICY_LAST_UPDATED.indiaPrivacy}. Cloud is in public alpha.{' '}
               <PolicyVersionsLink policy="indiaPrivacy" />
             </Prose>
           </Stack>
@@ -307,8 +307,8 @@ export default function IndiaDpdpNoticePage() {
                     </h2>
                     <Prose>
                       Most of this notice depends on which mode you run, because Local, BYOK and
-                      Managed Cloud are separate trust boundaries and your data goes to genuinely
-                      different places in each. Read this first.
+                      Cloud are separate trust boundaries and your data goes to genuinely different
+                      places in each. Read this first.
                     </Prose>
                   </div>
                   <Ledger caption="Trust boundaries" rows={MODES} />
@@ -381,9 +381,9 @@ export default function IndiaDpdpNoticePage() {
                       /subprocessors
                     </Link>
                     . In summary: an identity provider holds your login, Stripe holds your payments,
-                    our hosting and database vendors hold what you store in Managed Cloud, object
-                    storage holds your files, and error/analytics vendors receive only what section
-                    02 describes and only with your consent.
+                    our hosting and database vendors hold what you store in Cloud, object storage
+                    holds your files, and error/analytics vendors receive only what section 02
+                    describes and only with your consent.
                   </Prose>
                   <Prose size="sm">
                     <strong>
@@ -399,17 +399,17 @@ export default function IndiaDpdpNoticePage() {
                     up.
                   </Prose>
                   <Prose size="sm">
-                    <strong>Model providers.</strong> In Managed Cloud, the prompt and any attached
-                    content go to the provider serving the model you selected, and for routed models
-                    the request passes through OpenRouter. On the Free plan, a chat on the default
-                    model goes to a provider AGI chooses, not one you pick: Alibaba Cloud Model
-                    Studio, on AGI&rsquo;s own key at its international endpoint in Singapore, or
-                    OpenAI. Which one answers depends on what is available for that turn, and the
-                    reply shows the model that answered. Those providers handle that content under
-                    their own terms and data-use policies; our no-training statement is about
-                    AGI-owned models and is not a promise on their behalf. In BYOK the request goes
-                    from your client straight to the provider on your key, governed by your own
-                    account with them. In Local, none of them are contacted.
+                    <strong>Model providers.</strong> In Cloud, the prompt and any attached content
+                    go to the provider serving the model you selected, and for routed models the
+                    request passes through OpenRouter. On the Free plan, a chat on the default model
+                    goes to a provider AGI chooses, not one you pick: Alibaba Cloud Model Studio, on
+                    AGI&rsquo;s own key at its international endpoint in Singapore, or OpenAI. Which
+                    one answers depends on what is available for that turn, and the reply shows the
+                    model that answered. Those providers handle that content under their own terms
+                    and data-use policies; our no-training statement is about AGI-owned models and
+                    is not a promise on their behalf. In BYOK the request goes from your client
+                    straight to the provider on your key, governed by your own account with them. In
+                    Local, none of them are contacted.
                   </Prose>
                 </Stack>
               </Section>

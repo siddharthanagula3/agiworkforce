@@ -8,6 +8,7 @@ import {
   getBillingPlanProductLimits,
   getFreeDailyCap,
   getTierPolicy,
+  isMax15xPlanTier,
   toEnforceableBillingPlanLimit,
   type FreeDailyCap,
   type MonthlyMeteredUnit,
@@ -506,8 +507,11 @@ export async function assertDownloadAllowance(input: {
   }
   if (usage.limitBytes === null || usage.usedBytes + requested <= usage.limitBytes) return;
   const label = getBillingPlanPricing(planTier).label;
+  const recovery = isMax15xPlanTier(planTier)
+    ? `Downloads return on ${usage.resetsAt.slice(0, 10)}.`
+    : `Downloads return on ${usage.resetsAt.slice(0, 10)}, or upgrade for a higher limit.`;
   throw new PlanDownloadLimitError(
-    `${label} includes ${formatDownloadBytes(usage.limitBytes)} of file downloads a month, and this month’s is used up. Downloads return on ${usage.resetsAt.slice(0, 10)}, or upgrade for a higher limit.`,
+    `${label} includes ${formatDownloadBytes(usage.limitBytes)} of file downloads a month, and this month’s is used up. ${recovery}`,
     usage.resetsAt,
   );
 }

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { AgiMark } from '@shared/components/agi/AgiMark';
+import { HeroSymbol } from './HeroSymbol';
 import { ProductFrame, type ProductFrameImage, type ProductFrameVariant } from './ProductFrame';
 import { Reveal } from './Reveal';
 import { ScrollDeck } from './motion/ScrollDeck';
@@ -43,12 +43,13 @@ export function LandingHero({
   brand,
   titleLines,
   em,
+  lede,
   ctas,
   ctas2,
   visual,
   announcement,
 }: {
-  eyebrow: string;
+  eyebrow?: string;
   brand: string;
   titleLines: string[];
   em: string;
@@ -64,11 +65,8 @@ export function LandingHero({
       <div className="agi-fl-hero-split">
         <div className="agi-fl-hero-copy">
           <div className="agi-fl-hero-brand-wrap">
-            <AgiMark spinning className="agi-fl-hero-brand-mark" ariaLabel="AGI logo" />
-            <div className="agi-fl-hero-brand-text">
-              <p className="agi-fl-hero-brand">{brand}</p>
-              <p className="agi-fl-h1--single agi-fl-hero-brand-sub">{eyebrow}</p>
-            </div>
+            <HeroSymbol />
+            {eyebrow ? <p className="agi-fl-h1--single agi-fl-hero-brand-sub">{eyebrow}</p> : null}
           </div>
           {announcement ? (
             <Link href={announcement.href} className="agi-fl-announce">
@@ -104,6 +102,7 @@ export function LandingHero({
               })}
             </h1>
           )}
+          {lede ? <p className="agi-fl-lede">{lede}</p> : null}
           <div className="agi-fl-cta-row">
             {ctas.map((cta, i) => (
               <CtaButton key={cta.label} cta={cta} kind={ctaKind(i)} />

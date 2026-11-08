@@ -27,7 +27,7 @@ const AUDIENCE_ROUTES = [
 export const metadata = buildMetadata({
   title: 'Contact sales',
   description:
-    'Contact AGI sales about Enterprise readiness, security review needs, account rollout, and managed cloud access.',
+    'Contact AGI sales about Enterprise readiness, security review needs, account rollout, and cloud access.',
   path: '/contact-sales',
 });
 
@@ -88,9 +88,9 @@ export default function ContactSalesPage() {
                       audit events are recorded append-only and your owner can read, filter and
                       export them as JSONL; per-organization retention windows and legal holds are
                       shipped, with enforcement off until your owner turns it on; your owner can
-                      disallow managed compute for the whole workspace so every seat runs local or
-                      on your own keys. Dedicated capacity is not built: every plan draws on the
-                      same managed pool. The{' '}
+                      disallow cloud compute for the whole workspace so every seat runs local or on
+                      your own keys. Dedicated capacity is not built: every plan draws on the same
+                      managed pool. The{' '}
                       <a className="agi-ds-link" href="/enterprise">
                         enterprise page
                       </a>{' '}

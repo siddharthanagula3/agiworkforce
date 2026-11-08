@@ -169,7 +169,7 @@ export default async function PluginsPage() {
               <Prose size="lg">
                 A pack marked Available on Web installs into your account from the plugins section
                 of Settings, and its skills join the assistant on your next message. A pack that has
-                published an integrity-pinned artifact prints its AGI CLI install command on its own
+                published an integrity-pinned artifact prints its CLI install command on its own
                 page. {CLI_AVAILABILITY_NOTE} A pack still marked declared prints none, because
                 there is nothing published to install yet.
               </Prose>

@@ -1,12 +1,12 @@
 import type { MetadataRoute } from 'next';
-import { PRODUCT_NAMES } from '@agiworkforce/types';
+import { PRODUCT_BRAND } from '@agiworkforce/types';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: PRODUCT_NAMES.chat,
-    short_name: PRODUCT_NAMES.chat,
+    name: PRODUCT_BRAND,
+    short_name: PRODUCT_BRAND,
     description:
-      'AI workspace for chat, code, research, files, projects, artifacts, tools, connectors, memory, and automation with explicit Local, BYOK, and managed cloud modes.',
+      'AI workspace for chat, code, research, files, projects, artifacts, tools, connectors, memory, and automation with explicit Local, BYOK, and cloud modes.',
     start_url: '/',
     display: 'standalone',
     background_color: '#0a0a0a',

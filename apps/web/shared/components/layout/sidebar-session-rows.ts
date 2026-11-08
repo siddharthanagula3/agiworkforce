@@ -16,7 +16,7 @@ export interface SidebarSessionSource {
 
 export interface SidebarSessionRowOptions<T extends SidebarSessionSource> {
   isUnread: (conversationId: string) => boolean;
-  /** Run state and AGI Work marks that only the live chat shell can observe. */
+  /** Run state and Work marks that only the live chat shell can observe. */
   decorate?: (conversation: T) => Partial<SidebarSession>;
 }
 

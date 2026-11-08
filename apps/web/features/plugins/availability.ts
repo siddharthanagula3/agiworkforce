@@ -138,8 +138,8 @@ export function pluginStatusLabel(
 }
 
 export function pluginCliInstallNote(statuses: SurfaceStatusMap = SURFACE_STATUS): string {
-  if (isReleased('cli', statuses)) return 'Install it with the AGI CLI, using the command below.';
-  return `The command below is for the AGI CLI. ${cliAvailabilityNote(statuses)}`;
+  if (isReleased('cli', statuses)) return 'Install it with the CLI, using the command below.';
+  return `The command below is for the CLI. ${cliAvailabilityNote(statuses)}`;
 }
 
 const CONNECTORS_DECLARED_SENTENCE = 'A plugin declares which connectors it needs.';

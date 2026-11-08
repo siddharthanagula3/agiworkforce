@@ -835,6 +835,36 @@ describe('runResearchLoop', () => {
     expect(phases[phases.length - 1]).toBe('complete');
   });
 
+  it('persists cancellation when Stop aborts a running synthesis call', async () => {
+    const controller = new AbortController();
+    const reports: ResearchRunReport[] = [];
+    streamRequestMock
+      .mockResolvedValueOnce(planStream())
+      .mockResolvedValueOnce(
+        sseStream([
+          searchResultsEvent([{ url: 'https://a.com', title: 'A' }]),
+          contentEvent(`notes\n${READY_MARKER}`),
+          finishEvent(),
+        ]),
+      )
+      .mockImplementationOnce(async () => {
+        controller.abort();
+        throw controller.signal.reason;
+      });
+    const run = await collectRun(
+      runResearchLoop(makeProcessed(), BILLING, {
+        signal: controller.signal,
+        persistReport: async (report) => {
+          reports.push(report);
+        },
+      }),
+    );
+    expect(reports.at(-1)?.status).toBe('interrupted');
+    expect(JSON.stringify(run)).toContain('"state":"cancelled"');
+    expect(forwardedContent(run)).not.toContain('failed while writing the report');
+    expect(run.doneCount).toBe(1);
+  });
+
   it('reports an honest error (keeping sources) when the synthesis turn fails', async () => {
     streamRequestMock
       .mockResolvedValueOnce(planStream())

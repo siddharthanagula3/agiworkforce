@@ -1,11 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   conversationDeleteConfirm,
   conversationHref,
   conversationShareHref,
   projectDeleteConfirm,
+  toggleConversationArchive,
 } from '@shared/components/layout/sidebar-session-actions';
 import { projectHref, projectNewChatHref } from '@shared/components/layout/sidebar-project-actions';
 
@@ -14,6 +15,18 @@ const ROOT = join(__dirname, '../../..');
 function source(relativePath: string): string {
   return readFileSync(join(ROOT, relativePath), 'utf8');
 }
+
+describe('archive a chat from the public window', () => {
+  it('archives a chat that is still in the list', async () => {
+    const setArchived = vi.fn(async () => true);
+    const openArchived = vi.fn();
+
+    await expect(toggleConversationArchive(false, setArchived, openArchived)).resolves.toBe(true);
+
+    expect(setArchived).toHaveBeenCalledWith(true);
+    expect(openArchived).not.toHaveBeenCalled();
+  });
+});
 
 describe('conversationDeleteConfirm (WEB-84)', () => {
   it('names the generated media that survives the delete', () => {

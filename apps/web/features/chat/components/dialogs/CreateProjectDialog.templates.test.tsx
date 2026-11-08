@@ -79,6 +79,20 @@ describe('CreateProjectDialog, templates', () => {
     expect(String(payload['instructions'])).toContain('codebase');
   });
 
+  it('creates the named project when Create project is submitted', async () => {
+    const onCreated = vi.fn();
+    render(<CreateProjectDialog open onOpenChange={vi.fn()} onCreated={onCreated} />);
+
+    await userEvent.type(await screen.findByLabelText('Project name'), 'Field notes');
+    await userEvent.click(screen.getByRole('button', { name: 'Create project' }));
+
+    await waitFor(() => expect(createProject).toHaveBeenCalled());
+    expect(createProject.mock.calls[0]?.[0]).toMatchObject({ name: 'Field notes' });
+    await waitFor(() =>
+      expect(onCreated).toHaveBeenCalledWith(expect.objectContaining({ id: 'project-1' })),
+    );
+  });
+
   it('sends no description or instructions for Blank', async () => {
     open();
     await userEvent.type(await screen.findByLabelText('Project name'), 'Untitled work');

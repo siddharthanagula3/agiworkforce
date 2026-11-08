@@ -21,7 +21,7 @@ import { PolicyVersionsLink } from '@shared/components/legal/PolicyVersionsLink'
 export const metadata = buildMetadata({
   title: 'SLA',
   description:
-    'Support response commitments by plan, current today, plus the uptime and credit targets AGI Managed Cloud is building toward in public alpha. This page says which is which.',
+    'Support response commitments by plan, current today, plus the uptime and credit targets Cloud is building toward in public alpha. This page says which is which.',
   path: '/sla',
 });
 
@@ -136,7 +136,7 @@ export default function SlaPage() {
           title="Support commitments that hold today; uptime targets we are building toward."
           lede={
             <>
-              AGI Managed Cloud is in public alpha.{' '}
+              Cloud is in public alpha.{' '}
               <strong>
                 The support response commitments below are current policy. The uptime and credit
                 numbers are planned targets, not a binding commitment, and they take effect only

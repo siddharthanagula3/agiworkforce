@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { PRODUCT_BRAND, PRODUCT_COPYRIGHT_NAME } from '@agiworkforce/types';
 import { Fragment } from 'react';
 import './system.css';
 import './public-footer.css';
@@ -10,8 +11,6 @@ import { Container } from './Container';
 import { FOOTER_COLUMNS, FOOTER_LEGAL } from './nav';
 
 const COPYRIGHT_YEAR = 2026;
-const MARK_SIZE = 18;
-
 const columnHeadingId = (title: string) =>
   `agi-footer-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
 
@@ -27,8 +26,7 @@ export function MarketingFooter({ condensed = false }: { condensed?: boolean } =
           <div className="agi-ds-footer-top">
             <div className="agi-ds-footer-brand">
               <span className="agi-ds-footer-wordmark">
-                <AgiMark size={MARK_SIZE} />
-                <span>AGI</span>
+                <AgiMark className="agi-ds-brand-symbol" ariaLabel={PRODUCT_BRAND} />
               </span>
               <p className="agi-ds-footer-statement">
                 One workspace for <span className="agi-ds-footer-phrase">AI-assisted</span> work.
@@ -58,7 +56,9 @@ export function MarketingFooter({ condensed = false }: { condensed?: boolean } =
           </div>
         )}
         <div className="agi-ds-footer-legal">
-          <span>© {COPYRIGHT_YEAR} AGI. Proprietary.</span>
+          <span className="agi-ds-footer-copyright">
+            © {COPYRIGHT_YEAR} {PRODUCT_COPYRIGHT_NAME}. Proprietary.
+          </span>
           <nav aria-label="Legal" className="agi-ds-footer-legal-nav">
             {FOOTER_LEGAL.map((link) => (
               <Fragment key={link.href}>

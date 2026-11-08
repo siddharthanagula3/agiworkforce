@@ -33,6 +33,7 @@ import type { CloudCodeChanges, CloudCodePullRequestStatus } from '@agiworkforce
 import { CODE_COPY, CODE_LIMITS, changeStateLabel, continueInVsCodeHref } from '../code-surface';
 import { diffByPath } from '../code-diff';
 import { DiffBody } from './CodeDiffFile';
+import { useShowTerminal } from '../use-show-terminal';
 import styles from '../CloudCodePage.module.css';
 
 const GLYPH_SIZE = 15;
@@ -254,6 +255,7 @@ export function CodeChangesPanel({
   const [commitMessage, setCommitMessage] = useState('');
   const [command, setCommand] = useState('');
   const [terminalOpen, setTerminalOpen] = useState(false);
+  useShowTerminal(true, terminalOpen, () => setTerminalOpen((current) => !current));
   const [showExitCodes, setShowExitCodes] = useState(true);
   const [excluded, setExcluded] = useState<ReadonlySet<string>>(() => new Set());
   const { confirm, dialog: confirmDialog } = useConfirmAction();

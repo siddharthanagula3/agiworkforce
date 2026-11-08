@@ -25,6 +25,7 @@ import {
   X,
 } from 'lucide-react';
 import { formatCredits } from '@agiworkforce/types';
+import { getScheduleActionAvailability } from '@agiworkforce/cloud-contracts';
 import { describeCronCadence } from '@agiworkforce/utils/cron';
 import { describeRecurrenceRule } from '@/lib/schedules/recurrence-rule';
 import ScheduleTriggersPanel from './ScheduleTriggersPanel';
@@ -85,8 +86,6 @@ interface ScheduleCardProps {
 }
 
 const VISIBLE_UPCOMING_RUNS = 4;
-
-const TERMINAL_STATUSES = new Set<ScheduleTask['status']>(['completed', 'expired']);
 
 export function scheduleTiming(schedule: ScheduleTask): string {
   const recurrence = taskRecurrence(schedule);
@@ -164,13 +163,11 @@ export function ScheduleCard({
   onLoadMoreHistory,
   onResolveApproval,
 }: ScheduleCardProps) {
-  const terminal = TERMINAL_STATUSES.has(schedule.status);
   const supported = schedule.actionType === 'agent';
-  const canRun =
-    !readOnly && supported && schedule.isEnabled && schedule.status === 'active' && !operation;
-  const canEdit = !readOnly && supported && !terminal && !operation;
-  const canToggle =
-    !readOnly && !terminal && (!schedule.isEnabled ? supported : true) && !operation;
+  const actions = getScheduleActionAvailability(schedule);
+  const canRun = !readOnly && actions.canRun && !operation;
+  const canEdit = !readOnly && actions.canEdit && !operation;
+  const canToggle = !readOnly && actions.canToggle && !operation;
   const headingId = `schedule-title-${schedule.id}`;
   const upcoming = useMemo(() => upcomingRuns(schedule), [schedule]);
   const rawCron =

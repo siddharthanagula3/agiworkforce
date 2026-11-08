@@ -1,6 +1,8 @@
 'use client';
 
 import { FREE_PLAN_TRAINING_DATA_DISCLOSURE } from '@/lib/compliance/free-plan-training-disclosure';
+import { PAID_UPGRADE_ACCESS_NOTE } from '@/lib/billing/paid-upgrade-copy';
+import { SUBSCRIPTION_GUIDE } from '@/lib/blog-posts';
 import '@/features/marketing/components/pricing/pricing.css';
 import { PlanComparisonTable } from '@/features/marketing/components/pricing/PlanComparisonTable';
 import {
@@ -49,6 +51,7 @@ import {
   isBasicPlanTier,
   isFreeOfChargePlanTier,
   isProPlanTier,
+  isEnterprisePlanTier,
   isMaxPlanTier,
   isMax15xPlanTier,
   isSelfServeIndividualPlanTier,
@@ -111,6 +114,7 @@ import {
 } from '@features/billing/lib/localized-pricing';
 import {
   INDIVIDUAL_PLAN_CARDS,
+  BUSINESS_PLAN_CARDS,
   individualPlanFeatures,
   planCtaLabel,
   planFeatureLead,
@@ -149,9 +153,8 @@ function annualSavingsPct(plan: { monthlyPriceUsd: number; yearlyPriceUsd: numbe
 }
 
 const COMPARED_PLANS = [
-  'free',
-  ...SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
-  'team',
+  ...INDIVIDUAL_PLAN_CARDS,
+  ...BUSINESS_PLAN_CARDS,
 ] as const satisfies readonly BillingPlanTier[];
 
 type ComparedPlan = (typeof COMPARED_PLANS)[number];
@@ -295,11 +298,18 @@ export default function PricingPage() {
   const [teamPremiumSeatsChoice, setTeamPremiumSeatsChoice] = useState<number>(0);
   const [teamAnnualChoice, setTeamAnnualChoice] = useState<boolean | null>(null);
   const [subscribedInterval, setSubscribedInterval] = useState<BillingInterval | null>(null);
+  const [audience, setAudience] = useState<'individual' | 'business'>('individual');
 
   useEffect(() => {
     const revealTeamPricing = () => {
-      if (window.location.hash === '#pricing-team-title') {
-        document.getElementById('pricing-team-title')?.scrollIntoView?.({ block: 'start' });
+      if (['#pricing-team-title', '#pricing-enterprise-title'].includes(window.location.hash)) {
+        if (audience !== 'business') {
+          setAudience('business');
+        } else {
+          document
+            .getElementById(window.location.hash.slice(1))
+            ?.scrollIntoView?.({ block: 'start' });
+        }
         const requestedSeats = Number.parseInt(
           new URLSearchParams(window.location.search).get('seats') ?? '',
           10,
@@ -317,7 +327,7 @@ export default function PricingPage() {
     revealTeamPricing();
     window.addEventListener('hashchange', revealTeamPricing);
     return () => window.removeEventListener('hashchange', revealTeamPricing);
-  }, []);
+  }, [audience]);
 
   const localLabel = formatPrivacyModeLabel('local');
   const byokLabel = formatPrivacyModeLabel('byok');
@@ -687,8 +697,14 @@ export default function PricingPage() {
   const usageExplainer = pricingUsageExplainer(t);
   const comingSoon = t('models:selector.comingSoon');
 
-  const teamFeatures = teamPlanFeatures(t);
-  const teamSeatTypeRows = teamSeatRows(t, localizedPlans, teamInterval, priceLocale);
+  const teamFeatures = teamPlanFeatures(t, 'summary');
+  const teamSeatTypeRows = teamSeatRows(t, localizedPlans, teamInterval, priceLocale, 'summary');
+  const premiumSeatUsage =
+    audience === 'business'
+      ? teamSeatRows(t, localizedPlans, teamInterval, priceLocale).find(
+          (row) => row.type === 'premium',
+        )?.description
+      : null;
 
   const individualCards = INDIVIDUAL_PLAN_CARDS.filter((plan) =>
     isPlanSelectableOnSurface(plan, 'web'),
@@ -701,7 +717,13 @@ export default function PricingPage() {
     max_15x: max15xPrice,
   };
 
-  const comparedPlanIds = COMPARED_PLANS.filter((plan) => isPlanSelectableOnSurface(plan, 'web'));
+  const comparedPlanIds = COMPARED_PLANS.filter(
+    (plan) =>
+      isPlanSelectableOnSurface(plan, 'web') &&
+      (audience === 'individual'
+        ? !isPerSeatBillingPlan(plan) && !isEnterprisePlanTier(plan)
+        : isPerSeatBillingPlan(plan) || isEnterprisePlanTier(plan)),
+  );
   const priceSub = (
     plan: LocalizedPricedPlan,
     interval: BillingInterval,
@@ -717,8 +739,9 @@ export default function PricingPage() {
     max_15x: { price: perMonthPrice(max15xPrice, 'max_15x') },
     team: {
       price: `${teamInterval === 'yearly' ? teamYearlySeatPricePerMonth : teamSeatPrice} ${priceSub('team', teamInterval, t('perSeatPricingSub'))}`,
-      billing: teamInterval === 'yearly' ? t('billedYearly') : t('billedMonthly'),
+      billing: `${t('seatStandardName')} · ${teamInterval === 'yearly' ? t('billedYearly') : t('billedMonthly')}`,
     },
+    enterprise: { price: t('custom') },
   };
   const comparisonPlans: PlanComparisonPlan[] = comparedPlanIds.map((plan) => ({
     planId: plan,
@@ -752,6 +775,7 @@ export default function PricingPage() {
       mediaCapabilityCell(plan, category),
     );
   const usageCell = (plan: ComparedPlan): PlanComparisonCell => {
+    if (isEnterprisePlanTier(plan)) return textCell(t('custom'));
     const lines = usageComparisonCopy(plan, t);
     if (lines.length > 0) return textCell(...lines);
     const withoutBaseline = USAGE_WITHOUT_BASELINE_KEY[plan];
@@ -870,8 +894,16 @@ export default function PricingPage() {
 
   function renderIndividualCard(plan: IndividualPlanCard, index: number) {
     const lead = planFeatureLead(plan, t);
+    const hasUsageFootnote = isMax15xPlanTier(plan);
+    const usageFootnote = hasUsageFootnote ? 'pricing-ultra-usage-note' : undefined;
     return (
-      <Reveal key={plan} as="article" delay={index * 40} className="agi-tier">
+      <Reveal
+        key={plan}
+        as="article"
+        delay={index * 40}
+        className="agi-tier"
+        aria-describedby={usageFootnote}
+      >
         <h2 className="agi-tier-name">{BILLING_PLAN_PRICING[plan].label}</h2>
         <div className="agi-tier-price">
           <span className="agi-tier-price-num">{individualPrices[plan]}</span>
@@ -879,7 +911,10 @@ export default function PricingPage() {
             {isFreeBillingPlanTier(plan) ? t('perMonth') : priceSub(plan, 'monthly')}
           </span>
         </div>
-        <p className="agi-tier-body">{planTierBody(plan, t)}</p>
+        <p className="agi-tier-body">
+          {planTierBody(plan, t)}
+          {hasUsageFootnote ? <span aria-hidden="true">*</span> : null}
+        </p>
         <div className="agi-tier-cta-group">
           {isFreeBillingPlanTier(plan) ? (
             <Link href={freeHref} className="agi-tier-cta agi-tier-cta--ghost">
@@ -893,13 +928,26 @@ export default function PricingPage() {
           )}
         </div>
         <ul className="agi-tier-features">
-          {lead ? <li className="agi-tier-features-lead">{lead}</li> : null}
-          {individualPlanFeatures(plan, t).map((feature) => (
+          {lead ? (
+            <li className="agi-tier-features-lead">
+              {lead}
+              {hasUsageFootnote ? <span aria-hidden="true">*</span> : null}
+            </li>
+          ) : null}
+          {individualPlanFeatures(plan, t, 'summary').map((feature) => (
             <li key={feature}>
               <CheckIcon />
-              {feature}
+              <span>
+                {feature}
+                {hasUsageFootnote ? <span aria-hidden="true">*</span> : null}
+              </span>
             </li>
           ))}
+          {hasUsageFootnote ? (
+            <li id={usageFootnote} className="agi-tier-usage-note">
+              * {t('ultraUsageFootnote')}
+            </li>
+          ) : null}
         </ul>
       </Reveal>
     );
@@ -946,174 +994,243 @@ export default function PricingPage() {
         </section>
 
         <section className="agi-pricing-plans" aria-labelledby="pricing-hero-title">
-          <div className="agi-tier-grid agi-tier-grid--plans">
+          <div
+            className="agi-tier-toggle agi-pricing-audience"
+            role="group"
+            aria-label={t('pageTitle')}
+          >
+            <button
+              type="button"
+              aria-pressed={audience === 'individual'}
+              aria-controls="pricing-individual-plans"
+              className={`agi-tier-toggle-btn${audience === 'individual' ? ' agi-tier-toggle-btn--active' : ''}`}
+              onClick={() => setAudience('individual')}
+            >
+              {t('individualEyebrow')}
+            </button>
+            <button
+              type="button"
+              aria-pressed={audience === 'business'}
+              aria-controls="pricing-business-plans"
+              className={`agi-tier-toggle-btn${audience === 'business' ? ' agi-tier-toggle-btn--active' : ''}`}
+              onClick={() => setAudience('business')}
+            >
+              {t('businessAudience', {
+                team: team.label,
+                enterprise: BILLING_PLAN_PRICING.enterprise.label,
+              })}
+            </button>
+          </div>
+          <div
+            id="pricing-individual-plans"
+            className="agi-tier-grid agi-tier-grid--plans agi-pricing-audience-panel"
+            hidden={audience !== 'individual'}
+          >
             {individualCards.map(renderIndividualCard)}
           </div>
 
-          <Reveal as="article" className="agi-tier agi-tier--band">
-            <div className="agi-tier-band-offer">
-              <div className="agi-tier-head">
-                <h2 id="pricing-team-title" className="agi-tier-name">
-                  {team.label}
-                </h2>
-                {teamYearlyAvailable ? (
-                  <div className="agi-tier-toggle" role="group" aria-label="Team billing cadence">
-                    <button
-                      type="button"
-                      aria-pressed={!teamAnnual}
-                      onClick={() => setTeamAnnualChoice(false)}
-                      className={
-                        teamAnnual
-                          ? 'agi-tier-toggle-btn'
-                          : 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
-                      }
-                    >
-                      {t('monthly')}
-                    </button>
-                    <button
-                      type="button"
-                      aria-pressed={teamAnnual}
-                      onClick={() => setTeamAnnualChoice(true)}
-                      className={
-                        teamAnnual
-                          ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
-                          : 'agi-tier-toggle-btn'
-                      }
-                    >
-                      {t('annual')}
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-              <p className="agi-tier-body">{planTierBody('team', t)}</p>
-              <ul className="agi-tier-seat-rows">
-                {teamSeatTypeRows.map((row) => (
-                  <li key={row.type} className="agi-tier-seat-row">
-                    <h3 className="agi-tier-seat-name">{row.name}</h3>
-                    <p className="agi-tier-seat-price">
-                      <span className="agi-tier-seat-price-num">{row.price}</span>{' '}
-                      <span className="agi-tier-price-sub">
-                        {priceSub(
-                          row.type === 'premium' ? 'team_premium' : 'team',
-                          teamInterval,
-                          t('perSeatPricingSub'),
-                        )}
-                      </span>
-                    </p>
-                    <p className="agi-tier-seat-detail">{row.description}</p>
-                    {row.alternate ? (
-                      <p className="agi-tier-seat-detail agi-tier-seat-alternate">
-                        {row.alternate}
-                      </p>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-              <p className="agi-tier-price-sub agi-tier-seat-billing">
-                {teamInterval === 'yearly' ? t('billedYearly') : t('billedMonthly')}
-                {teamYearlyAvailable && teamSavingsPct > 0 ? (
-                  <>
-                    {' · '}
-                    <span>{t('annualSave', { pct: teamSavingsPct })}</span>
-                  </>
-                ) : null}
-              </p>
-              <div className="agi-tier-seats">
-                <label className="agi-tier-seats-label" htmlFor="team-seat-count">
-                  {t('seatCountLabel')}
-                </label>
-                <input
-                  id="team-seat-count"
-                  className="agi-tier-seats-input"
-                  type="number"
-                  inputMode="numeric"
-                  min={MIN_PURCHASABLE_SEATS}
-                  max={MAX_PURCHASABLE_SEATS}
-                  step={1}
-                  value={teamSeats}
-                  onChange={(event) => {
-                    const parsed = Number.parseInt(event.target.value, 10);
-                    if (!Number.isFinite(parsed)) {
-                      setTeamSeats(MIN_PURCHASABLE_SEATS);
-                      return;
-                    }
-                    setTeamSeats(
-                      Math.min(Math.max(parsed, MIN_PURCHASABLE_SEATS), MAX_PURCHASABLE_SEATS),
-                    );
-                  }}
-                />
-              </div>
-              {premiumSeatsOffered ? (
-                <div className="agi-tier-seats">
-                  <label className="agi-tier-seats-label" htmlFor="team-premium-seat-count">
-                    {t('premiumSeatCountLabel')}
-                  </label>
-                  <input
-                    id="team-premium-seat-count"
-                    className="agi-tier-seats-input"
-                    type="number"
-                    inputMode="numeric"
-                    min={0}
-                    max={teamSeats}
-                    step={1}
-                    value={teamPremiumSeats}
-                    onChange={(event) => {
-                      const parsed = Number.parseInt(event.target.value, 10);
-                      setTeamPremiumSeatsChoice(
-                        Number.isFinite(parsed) ? Math.min(Math.max(parsed, 0), teamSeats) : 0,
-                      );
-                    }}
-                  />
+          <div
+            id="pricing-business-plans"
+            className="agi-pricing-audience-panel"
+            hidden={audience !== 'business'}
+          >
+            <Reveal as="article" className="agi-tier agi-tier--band">
+              <div className="agi-tier-band-offer">
+                <div className="agi-tier-head">
+                  <h2 id="pricing-team-title" className="agi-tier-name">
+                    {team.label}
+                  </h2>
+                  {teamYearlyAvailable ? (
+                    <div className="agi-tier-toggle" role="group" aria-label="Team billing cadence">
+                      <button
+                        type="button"
+                        aria-pressed={!teamAnnual}
+                        onClick={() => setTeamAnnualChoice(false)}
+                        className={
+                          teamAnnual
+                            ? 'agi-tier-toggle-btn'
+                            : 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
+                        }
+                      >
+                        {t('monthly')}
+                      </button>
+                      <button
+                        type="button"
+                        aria-pressed={teamAnnual}
+                        onClick={() => setTeamAnnualChoice(true)}
+                        className={
+                          teamAnnual
+                            ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
+                            : 'agi-tier-toggle-btn'
+                        }
+                      >
+                        {t('annual')}
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
-              ) : (
+                <p className="agi-tier-body">{planTierBody('team', t)}</p>
+                <ul className="agi-tier-seat-rows">
+                  {teamSeatTypeRows.map((row) => (
+                    <li key={row.type} className="agi-tier-seat-row">
+                      <h3 className="agi-tier-seat-name">{row.name}</h3>
+                      <p className="agi-tier-seat-price">
+                        <span className="agi-tier-seat-price-num">{row.price}</span>{' '}
+                        <span className="agi-tier-price-sub">
+                          {priceSub(
+                            row.type === 'premium' ? 'team_premium' : 'team',
+                            teamInterval,
+                            t('perSeatPricingSub'),
+                          )}
+                        </span>
+                      </p>
+                      <p className="agi-tier-seat-detail">{row.description}</p>
+                      {row.alternate ? (
+                        <p className="agi-tier-seat-detail agi-tier-seat-alternate">
+                          {row.alternate}
+                        </p>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+                <p className="agi-tier-price-sub agi-tier-seat-billing">
+                  {teamInterval === 'yearly' ? t('billedYearly') : t('billedMonthly')}
+                  {teamYearlyAvailable && teamSavingsPct > 0 ? (
+                    <>
+                      {' · '}
+                      <span>{t('annualSave', { pct: teamSavingsPct })}</span>
+                    </>
+                  ) : null}
+                </p>
+                <div className="agi-tier-seat-picker">
+                  <div className="agi-tier-seats">
+                    <label className="agi-tier-seats-label" htmlFor="team-seat-count">
+                      {t('seatCountLabel')}
+                    </label>
+                    <input
+                      id="team-seat-count"
+                      className="agi-tier-seats-input"
+                      type="number"
+                      inputMode="numeric"
+                      min={MIN_PURCHASABLE_SEATS}
+                      max={MAX_PURCHASABLE_SEATS}
+                      step={1}
+                      value={teamSeats}
+                      onChange={(event) => {
+                        const parsed = Number.parseInt(event.target.value, 10);
+                        if (!Number.isFinite(parsed)) {
+                          setTeamSeats(MIN_PURCHASABLE_SEATS);
+                          return;
+                        }
+                        setTeamSeats(
+                          Math.min(Math.max(parsed, MIN_PURCHASABLE_SEATS), MAX_PURCHASABLE_SEATS),
+                        );
+                      }}
+                    />
+                  </div>
+                  {premiumSeatsOffered ? (
+                    <div className="agi-tier-seats">
+                      <label className="agi-tier-seats-label" htmlFor="team-premium-seat-count">
+                        {t('premiumSeatCountLabel')}
+                      </label>
+                      <input
+                        id="team-premium-seat-count"
+                        className="agi-tier-seats-input"
+                        type="number"
+                        inputMode="numeric"
+                        min={0}
+                        max={teamSeats}
+                        step={1}
+                        value={teamPremiumSeats}
+                        onChange={(event) => {
+                          const parsed = Number.parseInt(event.target.value, 10);
+                          setTeamPremiumSeatsChoice(
+                            Number.isFinite(parsed) ? Math.min(Math.max(parsed, 0), teamSeats) : 0,
+                          );
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <p className="agi-tier-seats-total">
+                      {hasActivePaidPlan
+                        ? t('premiumSeatsInSettings')
+                        : t('premiumSeatsUnavailable')}
+                    </p>
+                  )}
+                </div>
                 <p className="agi-tier-seats-total">
-                  {hasActivePaidPlan ? t('premiumSeatsInSettings') : t('premiumSeatsUnavailable')}
+                  {teamPremiumSeats > 0
+                    ? t(teamInterval === 'yearly' ? 'seatTotalMixedAnnual' : 'seatTotalMixed', {
+                        standard: teamStandardSeats,
+                        premium: teamPremiumSeats,
+                        total: teamMixedTotalPrice,
+                      })
+                    : teamInterval === 'yearly'
+                      ? t('seatTotalAnnual', { seats: teamSeats, total: teamYearlyTotalPrice })
+                      : t('seatTotal', { seats: teamSeats, total: teamTotalPrice })}
                 </p>
-              )}
-              <p className="agi-tier-seats-total">
-                {teamPremiumSeats > 0
-                  ? t(teamInterval === 'yearly' ? 'seatTotalMixedAnnual' : 'seatTotalMixed', {
-                      standard: teamStandardSeats,
-                      premium: teamPremiumSeats,
-                      total: teamMixedTotalPrice,
-                    })
-                  : teamInterval === 'yearly'
-                    ? t('seatTotalAnnual', { seats: teamSeats, total: teamYearlyTotalPrice })
-                    : t('seatTotal', { seats: teamSeats, total: teamTotalPrice })}
-              </p>
-              <div className="agi-tier-cta-group">
-                {renderPlanAction(
-                  'team',
-                  isPerSeatBillingPlan(billing?.plan)
-                    ? t('changeSeatsCta')
-                    : planCtaLabel('team', t),
-                )}
-                <p className="agi-tier-cta-note">
-                  {t('teamMinimumSeats', { seats: MIN_PURCHASABLE_SEATS })}
-                </p>
-                {renderRegionNotice('team')}
+                <div className="agi-tier-cta-group">
+                  {renderPlanAction(
+                    'team',
+                    isPerSeatBillingPlan(billing?.plan)
+                      ? t('changeSeatsCta')
+                      : planCtaLabel('team', t),
+                  )}
+                  <p className="agi-tier-cta-note">
+                    {t('teamMinimumSeats', { seats: MIN_PURCHASABLE_SEATS })}
+                  </p>
+                  {renderRegionNotice('team')}
+                </div>
               </div>
-            </div>
-            <div className="agi-tier-band-includes">
-              <ul className="agi-tier-features">
-                <li className="agi-tier-features-lead">
-                  {t('everythingInPlan', { plan: pro.label })}
-                </li>
-                {teamFeatures.map((feature) => (
-                  <li key={feature}>
-                    <CheckIcon />
-                    {feature}
+              <div className="agi-tier-band-includes">
+                <ul className="agi-tier-features">
+                  <li className="agi-tier-features-lead">
+                    {t('everythingInPlan', { plan: pro.label })}
                   </li>
-                ))}
-              </ul>
-              <p className="agi-tier-band-enterprise">
-                <Link href="/contact-sales" className="agi-ds-link">
-                  {t('enterpriseContactLine')}
+                  {teamFeatures.map((feature) => (
+                    <li key={feature}>
+                      <CheckIcon />
+                      {feature}
+                    </li>
+                  ))}
+                </ul>
+                <p className="agi-tier-band-enterprise">
+                  <Link href="/contact-sales" className="agi-ds-link">
+                    {t('enterpriseContactLine')}
+                  </Link>
+                </p>
+              </div>
+            </Reveal>
+            <Reveal as="article" className="agi-tier agi-pricing-enterprise">
+              <div>
+                <h2 id="pricing-enterprise-title" className="agi-tier-name">
+                  {BILLING_PLAN_PRICING.enterprise.label}
+                </h2>
+                <p className="agi-tier-price">
+                  <span className="agi-tier-price-num">{t('custom')}</span>
+                  <span className="agi-tier-price-sub">{t('customPricingSub')}</span>
+                </p>
+              </div>
+              <div className="agi-tier-band-offer">
+                <p className="agi-tier-body">{planTierBody('enterprise', t)}</p>
+                <Link href="/contact-sales" className="agi-tier-cta">
+                  {t('contactSalesCta')}
                 </Link>
-              </p>
-            </div>
-          </Reveal>
+              </div>
+            </Reveal>
+          </div>
 
+          <p className="agi-fl-section-lede">
+            <Link href="#pricing-compare-title" className="agi-ds-link">
+              {t('compareHeading')}
+            </Link>
+          </p>
+          <p className="agi-fl-section-lede">{PAID_UPGRADE_ACCESS_NOTE}</p>
+          <p className="agi-fl-section-lede">
+            <Link href={SUBSCRIPTION_GUIDE.path} className="agi-ds-link">
+              Compare a multi-model plan with separate AI subscriptions
+            </Link>
+          </p>
           <p className="agi-fl-section-lede agi-pricing-note">{usageExplainer}</p>
           <p className="agi-fl-section-lede">
             {t('pricingFootnote')}{' '}
@@ -1147,6 +1264,11 @@ export default function PricingPage() {
               status: pricingSurfaceStatus('cli', t),
             })}
           </p>
+          {premiumSeatUsage ? (
+            <p className="agi-compare-footnote">
+              {t('seatPremiumName')}: {premiumSeatUsage}
+            </p>
+          ) : null}
         </section>
 
         <section className="agi-fl-section" aria-labelledby="pricing-faq-title">

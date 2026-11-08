@@ -75,6 +75,50 @@ for (const profile of [
             expect(frame.mask, frame.label ?? route).toMatch(APPROVED_HERO_FADE);
           else expect(frame.mask, frame.label ?? route).toBe('none');
         }
+        const composerOverflow = await page
+          .locator('main .agi-app-composer')
+          .evaluateAll((composers) =>
+            composers.flatMap((composer) => {
+              const parent = composer.getBoundingClientRect();
+              const send = composer.querySelector('.agi-app-send');
+              const style = getComputedStyle(composer);
+              const scale = parent.width / (composer as HTMLElement).offsetWidth;
+              const rightInset =
+                (Number.parseFloat(style.paddingRight) +
+                  Number.parseFloat(style.borderRightWidth)) *
+                scale;
+              const sendOffset = send
+                ? Math.abs(send.getBoundingClientRect().right - (parent.right - rightInset))
+                : 0;
+              const controls = composer.querySelectorAll(
+                '.agi-app-composer-modes > *, .agi-app-composer-controls > *',
+              );
+              const overflow = [...controls].flatMap((control) => {
+                const box = control.getBoundingClientRect();
+                return box.left < parent.left - 1 ||
+                  box.right > parent.right + 1 ||
+                  box.top < parent.top - 1 ||
+                  box.bottom > parent.bottom + 1
+                  ? [
+                      {
+                        preview: composer.closest('figure')?.getAttribute('aria-label'),
+                        text: control.textContent,
+                      },
+                    ]
+                  : [];
+              });
+              return sendOffset > 1
+                ? [
+                    ...overflow,
+                    {
+                      preview: composer.closest('figure')?.getAttribute('aria-label'),
+                      text: 'The send control is detached from the right edge',
+                    },
+                  ]
+                : overflow;
+            }),
+          );
+        expect(composerOverflow).toEqual([]);
         expect(
           await page.evaluate(() => document.documentElement.scrollWidth - innerWidth),
         ).toBeLessThanOrEqual(0);

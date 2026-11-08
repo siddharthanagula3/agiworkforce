@@ -22,9 +22,9 @@ export function friendlyDeviceName(deviceType: string): string {
     case 'antigravity':
       return 'Antigravity';
     case 'desktop':
-      return 'AGI Desktop';
+      return 'Desktop';
     case 'cli':
-      return 'AGI CLI';
+      return 'CLI';
     default:
       return deviceType || 'this device';
   }

@@ -8,7 +8,7 @@ import { ARCHITECTURE_LABELS, macDownloadHref, useDesktopRelease } from './use-d
 const INSTALL_STEPS: readonly string[] = [
   'Download the installer for your Mac. The buttons above appear only for an architecture this release actually publishes.',
   'Check the file against the published SHA-256 below with shasum -a 256, and compare the two strings before you open anything.',
-  'Open the .dmg and drag AGI Desktop into your Applications folder. Installing anywhere else leaves updates unable to find the app.',
+  'Open the .dmg and drag Desktop into your Applications folder. Installing anywhere else leaves updates unable to find the app.',
   'Launch it from Applications. macOS verifies the notarization ticket on first launch, so no Gatekeeper override is needed.',
   'Sign in with the same account you use on the web. Nothing installs or updates on its own.',
 ];
@@ -28,7 +28,7 @@ function Alternatives() {
   return (
     <p className="agi-ds-availability-links">
       <Link href={WEB_ENTRY_HREF} className="agi-ds-link">
-        Use AGI Chat
+        Use Chat
       </Link>
       <Link href="/cli" className="agi-ds-link">
         See CLI availability
@@ -81,7 +81,7 @@ export function DesktopDownloadAvailability() {
             {availability.state === 'loading' && (
               <span
                 role="status"
-                aria-label="Checking AGI Desktop downloads"
+                aria-label="Checking Desktop downloads"
                 aria-live="polite"
                 aria-busy="true"
               >
@@ -112,17 +112,17 @@ export function DesktopDownloadAvailability() {
             {availability.state === 'empty' && (
               <span
                 role="status"
-                aria-label="AGI Desktop downloads unavailable"
+                aria-label="Desktop downloads unavailable"
                 aria-live="polite"
                 className="agi-ds-availability-state"
               >
-                No signed AGI Desktop installer is available right now.
+                No signed Desktop installer is available right now.
                 <Alternatives />
               </span>
             )}
             {availability.state === 'error' && (
               <span role="alert" className="agi-ds-availability-state">
-                We could not verify the AGI Desktop installer.
+                We could not verify the Desktop installer.
                 <button type="button" className="agi-ds-btn" data-variant="primary" onClick={retry}>
                   Retry release check
                 </button>
@@ -175,7 +175,7 @@ export function DesktopDownloadAvailability() {
           <Eyebrow>Install it</Eyebrow>
           <ol
             className="mt-4 list-decimal space-y-2 ps-5 text-sm"
-            aria-label="Install AGI Desktop on macOS"
+            aria-label="Install Desktop on macOS"
           >
             {INSTALL_STEPS.map((step) => (
               <li key={step}>{step}</li>

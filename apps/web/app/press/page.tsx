@@ -92,11 +92,11 @@ const PRODUCT_FACTS: { label: string; value: string }[] = [
   ...SURFACE_FACTS,
   {
     label: 'Where inference runs',
-    value: `Three separate routes: Local (models on the user’s own hardware, works offline), BYOK (the user’s own provider key, traffic goes directly to that provider), and AGI managed cloud (hosted and metered by AGI). Work does not move between routes without an explicit, labeled action. AGI Chat runs on managed cloud. Local runs in the CLI. BYOK runs on ${BYOK_SURFACES.label}. ${BYOK_SURFACES.availability}`,
+    value: `Three separate routes: Local (models on the user’s own hardware, works offline), BYOK (the user’s own provider key, traffic goes directly to that provider), and Cloud (hosted and metered by AGI). Work does not move between routes without an explicit, labeled action. Chat runs on cloud. Local runs in the CLI. BYOK runs on ${BYOK_SURFACES.label}. ${BYOK_SURFACES.availability}`,
   },
   {
     label: 'Managed cloud status',
-    value: `In ${MANAGED_CLOUD_STATUS}, not general availability. AGI Chat launched publicly on ${PUBLIC_WEB_LAUNCH_DATE}. The ${BILLING_PLAN_PRICING.free.label} plan is open by default: sign in and start, with no waitlist and no invite. ${PAID_UPGRADE_ACCESS_NOTE}`,
+    value: `In ${MANAGED_CLOUD_STATUS}, not general availability. Chat launched publicly on ${PUBLIC_WEB_LAUNCH_DATE}. The ${BILLING_PLAN_PRICING.free.label} plan is open by default: sign in and start, with no waitlist and no invite. ${PAID_UPGRADE_ACCESS_NOTE}`,
   },
   {
     label: 'Model catalog',
@@ -126,7 +126,7 @@ const NOT_CLAIMED: string[] = [
   'No named customers, logos, or testimonials, and no case studies. We publish those only with written permission, and we have none cleared to publish.',
   'No usage, revenue, headcount, or funding figures.',
   'No published uptime history or incident archive. The status page shows service levels measured over a rolling window, and the SLA page states targets, not guarantees.',
-  'No general availability claim for managed cloud.',
+  'No general availability claim for cloud.',
 ];
 
 const HERO_FACTS = [
@@ -173,9 +173,9 @@ export default function PressPage() {
                 <Prose size="sm">
                   AGI is an AI assistant designed to work across the web, desktop, and terminal, and
                   to let you choose whether each request runs on your own hardware, on your own
-                  provider key, or on AGI&rsquo;s hosted service. AGI Chat runs on the hosted
-                  service. The CLI runs models on your own hardware, and your own provider key works
-                  on {BYOK_SURFACES.label}. {surfaceAvailabilitySummary()}
+                  provider key, or on AGI&rsquo;s hosted service. Chat runs on the hosted service.
+                  The CLI runs models on your own hardware, and your own provider key works on{' '}
+                  {BYOK_SURFACES.label}. {surfaceAvailabilitySummary()}
                 </Prose>
               </Stack>
               <Stack gap="tight">
@@ -185,11 +185,10 @@ export default function PressPage() {
                   {LEGAL_ENTITY_DESCRIPTOR}. It spans {SURFACE_IDS.length} surfaces (
                   {ALL_SURFACE_NAMES}). {surfaceAvailabilitySummary()} Its distinguishing design
                   choice is that the user selects where inference happens: locally on their own
-                  hardware, through their own provider API key, or on AGI&rsquo;s managed cloud.
-                  Those three routes are separate trust boundaries, and work does not move between
-                  them without an explicit, labeled action. AGI Chat runs on managed cloud. The
-                  local route runs in the CLI, and the provider-key route runs on{' '}
-                  {BYOK_SURFACES.label}.
+                  hardware, through their own provider API key, or on AGI&rsquo;s cloud. Those three
+                  routes are separate trust boundaries, and work does not move between them without
+                  an explicit, labeled action. Chat runs on cloud. The local route runs in the CLI,
+                  and the provider-key route runs on {BYOK_SURFACES.label}.
                 </Prose>
               </Stack>
             </Stack>

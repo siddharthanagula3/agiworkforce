@@ -24,9 +24,9 @@ const ACCOUNT_CARRIES = connectorsReleased()
   : `Chats, projects and memory are the ones you have on the web. ${CONNECTORS_COMING_SOON_MESSAGE}`;
 
 export const metadata = buildMetadata({
-  title: 'AGI Desktop | Your account, on your Mac',
+  title: 'Desktop | Your account, on your Mac',
   description:
-    'AGI Desktop for macOS: managed-cloud chat in a window that stays open, plus the folders you approve, computer use that asks each session and before each app, and a menu bar shortcut. The Desktop contract does not accept provider keys or local-model connections. Check installer availability.',
+    'Desktop for macOS: cloud chat in a window that stays open, plus the folders you approve, computer use that asks each session and before each app, and a menu bar shortcut. The Desktop contract does not accept provider keys or local-model connections. Check installer availability.',
   path: '/desktop',
 });
 
@@ -39,16 +39,16 @@ export default function DesktopPage() {
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
           <div className="agi-fl-hero-split">
             <div className="agi-fl-hero-copy">
-              <p className="agi-fl-eyebrow">AGI Desktop</p>
+              <p className="agi-fl-eyebrow">Desktop</p>
               <h1 id="agi-fl-desktop-hero-title" className="sr-only">
-                AGI Desktop
+                Desktop
               </h1>
               <div className="agi-fl-cta-row">
                 <Link href="#desktop-downloads" className="agi-fl-cta agi-fl-cta--primary">
                   Check installer availability
                 </Link>
                 <Link href={WEB_ENTRY_HREF} className="agi-fl-cta agi-fl-cta--secondary">
-                  Use AGI Chat
+                  Use Chat
                 </Link>
                 <WaitlistTrigger
                   label="Discuss Enterprise access"
@@ -76,7 +76,7 @@ export default function DesktopPage() {
             {
               meta: 'Inference',
               title: 'Managed route, named',
-              body: 'Desktop chat uses the same managed-cloud account as the web app. It has no provider-key or local-model entry path.',
+              body: 'Desktop chat uses the same cloud account as the web app. It has no provider-key or local-model entry path.',
               href: '/providers',
             },
             {
@@ -98,7 +98,7 @@ export default function DesktopPage() {
               href: '/features/ai-chat',
             },
             {
-              meta: 'AGI Work',
+              meta: 'Work',
               title: 'Scheduled work',
               body: 'Schedule recurring runs. A step that needs this machine waits for it here.',
               href: '/agi-work',
@@ -112,7 +112,7 @@ export default function DesktopPage() {
           lede="Desktop is where your account meets your machine. Nothing crosses from one to the other without a label and your consent."
           cards={[
             {
-              mode: 'AGI Cloud',
+              mode: 'Cloud',
               glyph: '●',
               title: 'Your account, signed in once.',
               body: ACCOUNT_CARRIES,
@@ -162,7 +162,7 @@ export default function DesktopPage() {
               k: 'Account',
               v: 'Your AGI account · sign-in in the browser · tokens encrypted with the system keychain',
             },
-            { k: 'Inference', v: 'AGI managed cloud · no local-model or provider-key entry' },
+            { k: 'Inference', v: 'Cloud · no local-model or provider-key entry' },
             { k: 'Local access', v: 'Approved folders and programs · each grant is explicit' },
             {
               k: 'Computer use',
@@ -176,7 +176,7 @@ export default function DesktopPage() {
             },
             {
               k: 'Updates',
-              v: 'The app checks the release API every day and downloads a signed update in the background · it installs when you choose Restart to update or the next time the app starts',
+              v: 'The app checks the release API every day and downloads a signed update in the background · it installs when you choose Relaunch to update or the next time the app starts',
             },
             { k: 'Windows', v: 'Installer not published · no release date announced' },
           ]}
@@ -184,11 +184,11 @@ export default function DesktopPage() {
 
         <FinalCta
           eyebrow="macOS"
-          title="Check AGI Desktop availability."
+          title="Check Desktop availability."
           body="A download control appears only once the release API verifies a signed build for your architecture, so this page reflects what is published rather than what is built. The availability section above reports what that check finds for macOS right now. Windows and Linux installers are not published."
           ctas={[
             { href: '#desktop-downloads', label: 'Check installer availability' },
-            { href: WEB_ENTRY_HREF, label: 'Use AGI Chat' },
+            { href: WEB_ENTRY_HREF, label: 'Use Chat' },
             { label: 'Discuss Enterprise access', waitlist: true },
           ]}
           stamp="macOS · verification required before download"

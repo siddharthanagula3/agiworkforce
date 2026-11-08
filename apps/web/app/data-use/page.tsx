@@ -21,13 +21,13 @@ const QUESTIONS = [
     body: (
       <>
         <strong>No.</strong> AGI does not train AGI-owned models on your prompts, responses or
-        files. One thing to understand: in Managed Cloud we send your prompt to the model provider
-        serving the model you picked, and what <em>they</em> do with it is governed by their terms,
-        not ours. On the Free plan, a chat on the default model goes to a provider AGI chooses, not
-        one you pick: Alibaba Cloud Model Studio, on AGI&rsquo;s own key at its international
-        endpoint in Singapore, or OpenAI. Which one answers depends on what is available for that
-        turn, and the reply shows the model that answered. We make no promise on their behalf, as
-        section 02 of the{' '}
+        files. One thing to understand: in Cloud we send your prompt to the model provider serving
+        the model you picked, and what <em>they</em> do with it is governed by their terms, not
+        ours. On the Free plan, a chat on the default model goes to a provider AGI chooses, not one
+        you pick: Alibaba Cloud Model Studio, on AGI&rsquo;s own key at its international endpoint
+        in Singapore, or OpenAI. Which one answers depends on what is available for that turn, and
+        the reply shows the model that answered. We make no promise on their behalf, as section 02
+        of the{' '}
         <Link href={CANONICAL_POLICY_ROUTES.privacy} className="agi-ds-link">
           privacy policy
         </Link>{' '}
@@ -39,10 +39,10 @@ const QUESTIONS = [
     title: 'Who at AGI can read my chats?',
     body: (
       <>
-        In Managed Cloud your conversations are stored by us, so people at AGI can access them, but
-        access is limited to people who need it to operate or support the service, and two layers of
-        access control scope every request to the account that owns it. What those layers are, and
-        where they stop, is section 01 of the{' '}
+        In Cloud your conversations are stored by us, so people at AGI can access them, but access
+        is limited to people who need it to operate or support the service, and two layers of access
+        control scope every request to the account that owns it. What those layers are, and where
+        they stop, is section 01 of the{' '}
         <Link href={CANONICAL_POLICY_ROUTES.privacy} className="agi-ds-link">
           privacy policy
         </Link>{' '}
@@ -61,10 +61,10 @@ const QUESTIONS = [
         <strong>Yes.</strong> There are three modes, and they give different answers. In{' '}
         <strong>Local</strong>, the conversation runs on your machine and we receive nothing. In{' '}
         <strong>BYOK</strong>, the request goes from your client straight to the provider on your
-        own key and we are not in the path. In <strong>Managed Cloud</strong>, it goes through us
-        and we store it. Note that Local is part of the CLI, while BYOK is part of the CLI and is
-        coming soon to VS Code. <strong>Web and Desktop are cloud-only</strong>, so work on those
-        surfaces uses Managed Cloud. The full comparison is section 00 of the{' '}
+        own key and we are not in the path. In <strong>Cloud</strong>, it goes through us and we
+        store it. Note that Local is part of the CLI, while BYOK is part of the CLI and is coming
+        soon to VS Code. <strong>Web and Desktop are cloud-only</strong>, so work on those surfaces
+        uses Cloud. The full comparison is section 00 of the{' '}
         <Link href={CANONICAL_POLICY_ROUTES.privacy} className="agi-ds-link">
           privacy policy
         </Link>
@@ -137,10 +137,10 @@ const QUESTIONS = [
     body: (
       <>
         <strong>AGI stores it in the United States.</strong> We do not offer data residency in the
-        EU, the UK or India, so using Managed Cloud means your data is transferred there. If you
-        require data residency, we do not currently meet that requirement. A chat is also processed
-        where the model provider that answers it runs that model: on the Free plan&rsquo;s default
-        model that can be Alibaba Cloud Model Studio&rsquo;s international endpoint in Singapore, as
+        EU, the UK or India, so using Cloud means your data is transferred there. If you require
+        data residency, we do not currently meet that requirement. A chat is also processed where
+        the model provider that answers it runs that model: on the Free plan&rsquo;s default model
+        that can be Alibaba Cloud Model Studio&rsquo;s international endpoint in Singapore, as
         described above. The transfer mechanisms are section 08 of the{' '}
         <Link href={CANONICAL_POLICY_ROUTES.privacy} className="agi-ds-link">
           privacy policy

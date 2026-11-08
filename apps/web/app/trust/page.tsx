@@ -130,7 +130,7 @@ const COMPLIANCE: { label: string; value: string }[] = [
   {
     label: 'Subprocessor transparency',
     value:
-      'Published: corrected 14 August and 21 September 2026. A list of processors with purpose and region is published at /subprocessors, and processing terms are at /dpa. Stating the correction rather than quietly reissuing the list: a review on 14 August found six recipients missing, including a transactional email provider that had been delisted nine days earlier on the false reasoning that no email package appeared in our dependencies: it calls the provider’s HTTP API directly, so the check could not have found it. The list is now built from egress rather than from the manifest. A second review on 21 September found five inference recipients missing and one listed that receives nothing; a check now fails our build when a provider the model registry admits for Managed Cloud traffic is not on the page. As of 2026-09-21.',
+      'Published: corrected 14 August and 21 September 2026. A list of processors with purpose and region is published at /subprocessors, and processing terms are at /dpa. Stating the correction rather than quietly reissuing the list: a review on 14 August found six recipients missing, including a transactional email provider that had been delisted nine days earlier on the false reasoning that no email package appeared in our dependencies: it calls the provider’s HTTP API directly, so the check could not have found it. The list is now built from egress rather than from the manifest. A second review on 21 September found five inference recipients missing and one listed that receives nothing; a check now fails our build when a provider the model registry admits for Cloud traffic is not on the page. As of 2026-09-21.',
   },
   {
     label: 'DPDP (India): notice under s.5',
@@ -177,12 +177,12 @@ const POSTURE: { label: string; value: string }[] = [
   {
     label: 'Local mode isolation',
     value:
-      'Implemented in the CLI for Ollama and LM Studio on loopback. AGI infrastructure and subprocessors are not in that model request path. Desktop and web use Managed Cloud and do not expose Local inference. As of 2026-09-19.',
+      'Implemented in the CLI for Ollama and LM Studio on loopback. AGI infrastructure and subprocessors are not in that model request path. Desktop and web use Cloud and do not expose Local inference. As of 2026-09-19.',
   },
   {
     label: 'Desktop credential storage',
     value:
-      'Implemented. Electron Desktop writes no account credential of its own. It loads the hosted web app, whose sign-in session lives in a persistent browser profile that belongs to the app alone, apart from your default browser. Desktop uses Managed Cloud and does not accept provider API keys. As of 2026-10-18.',
+      'Implemented. Electron Desktop writes no account credential of its own. It loads the hosted web app, whose sign-in session lives in a persistent browser profile that belongs to the app alone, apart from your default browser. Desktop uses Cloud and does not accept provider API keys. As of 2026-10-18.',
   },
   {
     label: 'CLI provider-key storage',
@@ -238,9 +238,9 @@ const POSTURE: { label: string; value: string }[] = [
       'Implemented on macOS for the desktop app. Its release workflow fails without Apple signing and notarization credentials, builds a signed and notarized disk image for each Mac architecture, and verifies the signature and notarization of each before anything is uploaded. There is no Windows build of the desktop app, so nothing is signed for Windows. As of 2026-09-21.',
   },
   {
-    label: 'Managed Cloud maturity',
+    label: 'Cloud maturity',
     value:
-      'Public alpha, open by default since 27 June 2026. Signed-in users can use managed compute now. It is not general availability, and /sla describes targets rather than commitments. Hosted code execution through E2B stays off unless an operator sets an explicit flag. As of 2026-08-05.',
+      'Public alpha, open by default since 27 June 2026. Signed-in users can use cloud compute now. It is not general availability, and /sla describes targets rather than commitments. Hosted code execution through E2B stays off unless an operator sets an explicit flag. As of 2026-08-05.',
   },
   {
     label: 'Production access governance',
@@ -303,7 +303,7 @@ export default function TrustPage() {
               Last updated {LAST_UPDATED}. Next review {NEXT_REVIEW}.
             </h2>
             <Prose size="sm">
-              Managed Cloud is in public alpha. <PolicyVersionsLink policy="trust" />
+              Cloud is in public alpha. <PolicyVersionsLink policy="trust" />
             </Prose>
           </Stack>
         </Section>

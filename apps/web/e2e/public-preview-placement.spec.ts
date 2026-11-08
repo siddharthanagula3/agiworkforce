@@ -2,7 +2,16 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import { PUBLIC_APPROVED_FADES } from './lib/public-mask-paint';
 
 type Device =
-  'web' | 'desktop' | 'chrome' | 'panel' | 'editor' | 'terminal' | 'phone' | 'closeup' | 'step';
+  | 'web'
+  | 'desktop'
+  | 'chrome'
+  | 'panel'
+  | 'editor'
+  | 'terminal'
+  | 'phone'
+  | 'closeup'
+  | 'step'
+  | 'step-wide';
 type Fade = 'every-width' | 'above-900' | 'never';
 type Owner = { labelledBy: string } | { group: string } | { link: string };
 type Caller = {
@@ -24,6 +33,7 @@ const DESIGN_SIZE: Record<Device, readonly [number, number]> = {
   phone: [390, 844],
   closeup: [720, 400],
   step: [520, 540],
+  'step-wide': [880, 914],
 };
 const DISCLOSURE = /^Authored example of /u;
 const HERO_FADE_ABOVE_PX = 900;
@@ -108,7 +118,7 @@ const PLACEMENTS: Record<string, readonly Caller[]> = {
   '/web': [
     hero('agi-web-title', ARTIFACT),
     section('agi-web-proof-title', WEB_PROOF, 'closeup'),
-    section('agi-web-steps-title', RESEARCH_ASK, 'step'),
+    section('agi-web-steps-title', RESEARCH_ASK, 'step-wide'),
     section('agi-web-steps-title', RESEARCH_PLAN_STEP, 'step'),
     section('agi-web-steps-title', RESEARCH_REPORT, 'step'),
     card('/features/artifacts', ARTIFACT),

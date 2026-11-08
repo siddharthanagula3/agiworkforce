@@ -26,7 +26,7 @@ import { PolicyVersionsLink } from '@shared/components/legal/PolicyVersionsLink'
 export const metadata = buildMetadata({
   title: 'Mobile legal: privacy policy and terms of service',
   description:
-    'Planned privacy and terms for the unpublished AGI Mobile app, including its proposed Local and managed-cloud modes.',
+    'Planned privacy and terms for the unpublished Mobile app, including its proposed Local and cloud modes.',
   path: '/mobile/legal',
 });
 
@@ -42,8 +42,8 @@ const DATA_CATEGORIES: readonly LedgerRow[] = [
     value: (
       <>
         {MOBILE_UNRELEASED
-          ? 'If the app is published, its planned Local mode stores and processes conversation content on-device; its planned managed-cloud continuation is subscription-backed.'
-          : 'Text, images, voice input, and documents you share in chat. Local mode stores and processes on-device; managed cloud is subscription-backed.'}
+          ? 'If the app is published, its planned Local mode stores and processes conversation content on-device; its planned cloud continuation is subscription-backed.'
+          : 'Text, images, voice input, and documents you share in chat. Local mode stores and processes on-device; cloud is subscription-backed.'}
       </>
     ),
   },
@@ -61,11 +61,11 @@ const DATA_CATEGORIES: readonly LedgerRow[] = [
     label: 'Product usage events',
     value: (
       <>
-        Only in managed-cloud mode and only after you allow product analytics in Settings, Privacy,
-        which is off by default: event names such as a stopped or regenerated response, recorded
-        against your account. No message, file or file name is included, a workspace administrator
-        can turn it off for every member, and Local mode sends none. Collected to understand which
-        parts of the app work.
+        Only in cloud mode and only after you allow product analytics in Settings, Privacy, which is
+        off by default: event names such as a stopped or regenerated response, recorded against your
+        account. No message, file or file name is included, a workspace administrator can turn it
+        off for every member, and Local mode sends none. Collected to understand which parts of the
+        app work.
       </>
     ),
   },
@@ -246,7 +246,7 @@ const RELATED: readonly LedgerRow[] = [
     ),
   },
   {
-    label: 'AGI Mobile',
+    label: 'Mobile',
     value: (
       <>
         <Link href="/mobile" className="agi-ds-link">
@@ -269,12 +269,12 @@ export default function MobileLegalPage() {
           title="Privacy policy and terms of service."
           lede={
             <>
-              Effective {EFFECTIVE_DATE}. Applies to AGI Mobile on iOS and Android.{' '}
+              Effective {EFFECTIVE_DATE}. Applies to Mobile on iOS and Android.{' '}
               <PolicyVersionsLink policy="mobile" />{' '}
               <strong>
                 {MOBILE_UNRELEASED
-                  ? 'AGI Mobile is not published. This page describes the planned Local and managed-cloud boundaries for a future release.'
-                  : 'Local mode runs on your device. Managed-cloud mode uses explicit labels and a separate trust boundary.'}
+                  ? 'Mobile is not published. This page describes the planned Local and cloud boundaries for a future release.'
+                  : 'Local mode runs on your device. Cloud mode uses explicit labels and a separate trust boundary.'}
               </strong>
             </>
           }
@@ -291,9 +291,9 @@ export default function MobileLegalPage() {
                 01 &middot; Privacy policy.
               </h2>
               <Prose>
-                {COMPANY} ({COMPANY_STATE}) is developing AGI Mobile. Because the app is not
-                published, this policy describes planned processing for a future release, not data
-                collected from a currently installable app. Where applicable, this policy references
+                {COMPANY} ({COMPANY_STATE}) is developing Mobile. Because the app is not published,
+                this policy describes planned processing for a future release, not data collected
+                from a currently installable app. Where applicable, this policy references
                 compliance with India&rsquo;s Digital Personal Data Protection Act 2023 (DPDP Act),
                 the EU AI Act (Regulation EU 2024/1689), and the EU General Data Protection
                 Regulation (GDPR).
@@ -303,13 +303,13 @@ export default function MobileLegalPage() {
             <Stack gap="tight">
               <h3 className="agi-ds-h3">
                 {MOBILE_UNRELEASED
-                  ? 'Planned boundary: Local and managed-cloud modes.'
-                  : 'Core fact: mobile has Local and managed-cloud modes.'}
+                  ? 'Planned boundary: Local and cloud modes.'
+                  : 'Core fact: mobile has Local and cloud modes.'}
               </h3>
               <Prose size="sm">
                 {MOBILE_UNRELEASED
-                  ? 'The planned Local mode runs on-device and does not silently route to AGI Cloud. The planned managed-cloud continuation is separately labeled.'
-                  : 'In Local mode, the AI model runs on your device and is not silently routed to AGI Cloud. Managed-cloud mode is visibly labeled.'}
+                  ? 'The planned Local mode runs on-device and does not silently route to Cloud. The planned cloud continuation is separately labeled.'
+                  : 'In Local mode, the AI model runs on your device and is not silently routed to Cloud. Cloud mode is visibly labeled.'}
               </Prose>
             </Stack>
 
@@ -320,11 +320,11 @@ export default function MobileLegalPage() {
                 What this app does not collect, stated because the table above used to say
                 otherwise.
               </strong>{' '}
-              AGI Mobile ships <strong>no crash-reporting SDK and no analytics SDK</strong>. Until
+              Mobile ships <strong>no crash-reporting SDK and no analytics SDK</strong>. Until
               2026-08-14 this page declared both, along with health data. There is no
               crash-monitoring provider and no analytics provider in the app. The only usage events
-              are the first-party product usage events in the table above, sent to AGI Cloud and
-              only with your consent. <strong>HealthKit is not used at all</strong>. The feature was
+              are the first-party product usage events in the table above, sent to Cloud and only
+              with your consent. <strong>HealthKit is not used at all</strong>. The feature was
               removed from the app, the iOS privacy manifest carries no HealthKit declaration, and a
               test enforces that. If a future build adds any of these, this table gains a row in the
               same change.
@@ -335,8 +335,8 @@ export default function MobileLegalPage() {
                 AGI-owned models are not trained on customer conversations.
               </h3>
               <Prose size="sm">
-                {COMPANY} does not use your AGI Mobile conversation content to train AGI-owned
-                models. We do not sell your conversation content.
+                {COMPANY} does not use your Mobile conversation content to train AGI-owned models.
+                We do not sell your conversation content.
               </Prose>
             </Stack>
 
@@ -380,13 +380,13 @@ export default function MobileLegalPage() {
               <h3 className="agi-ds-h3">EU AI Act disclosures.</h3>
               <Prose size="sm">
                 {MOBILE_UNRELEASED
-                  ? 'The planned AGI Mobile release is a general-purpose AI assistant. Art. 50(1) of Regulation (EU) 2024/1689 requires that you be told you are interacting with an AI system, and the planned app carries that disclosure on a first-run screen you accept before it will make its first model request. Its planned on-device data export marks each chat transcript with a machine-readable Art. 50(2) marker; the per-conversation export sheet does not: its PDF, text, Markdown and copy-to-clipboard routes carry no marker today, and we would rather say so than let the first sentence cover both.'
-                  : 'AGI Mobile is a general-purpose AI assistant. Art. 50(1) of Regulation (EU) 2024/1689 requires that you be told you are interacting with an AI system, and the app carries that disclosure on a first-run screen you accept before it will make its first model request. The on-device data export marks each chat transcript with a machine-readable Art. 50(2) marker; the per-conversation export sheet does not: its PDF, text, Markdown and copy-to-clipboard routes carry no marker today, and we would rather say so than let the first sentence cover both.'}{' '}
-                AGI Mobile does not engage in practices prohibited under Art. 5, including
-                subliminal manipulation; biometric categorisation to infer protected or sensitive
-                attributes; real-time remote biometric identification in public spaces; social
-                scoring; emotion inference in workplace or educational settings; or predictive
-                policing based solely on automated profiling.
+                  ? 'The planned Mobile release is a general-purpose AI assistant. Art. 50(1) of Regulation (EU) 2024/1689 requires that you be told you are interacting with an AI system, and the planned app carries that disclosure on a first-run screen you accept before it will make its first model request. Its planned on-device data export marks each chat transcript with a machine-readable Art. 50(2) marker; the per-conversation export sheet does not: its PDF, text, Markdown and copy-to-clipboard routes carry no marker today, and we would rather say so than let the first sentence cover both.'
+                  : 'Mobile is a general-purpose AI assistant. Art. 50(1) of Regulation (EU) 2024/1689 requires that you be told you are interacting with an AI system, and the app carries that disclosure on a first-run screen you accept before it will make its first model request. The on-device data export marks each chat transcript with a machine-readable Art. 50(2) marker; the per-conversation export sheet does not: its PDF, text, Markdown and copy-to-clipboard routes carry no marker today, and we would rather say so than let the first sentence cover both.'}{' '}
+                Mobile does not engage in practices prohibited under Art. 5, including subliminal
+                manipulation; biometric categorisation to infer protected or sensitive attributes;
+                real-time remote biometric identification in public spaces; social scoring; emotion
+                inference in workplace or educational settings; or predictive policing based solely
+                on automated profiling.
               </Prose>
             </Stack>
 
@@ -408,14 +408,14 @@ export default function MobileLegalPage() {
                 <Link href="/terms" className="agi-ds-link">
                   terms
                 </Link>{' '}
-                applies to AGI Mobile: you must be at least {ACCOUNT_MINIMUM_AGE} to create an
-                account, and anyone under {PARENTAL_PERMISSION_BELOW_AGE} needs permission from a
-                parent or guardian. AGI Mobile is not offered to children under{' '}
-                {ACCOUNT_MINIMUM_AGE}, and in jurisdictions setting a higher digital-consent age,
-                including the European Union and the United Kingdom, where it may be 16, and India,
-                where processing children&rsquo;s data requires verifiable parental consent, that
-                higher threshold applies instead. We do not knowingly collect personal data from
-                children below that age. If you believe a child has provided personal data, contact{' '}
+                applies to Mobile: you must be at least {ACCOUNT_MINIMUM_AGE} to create an account,
+                and anyone under {PARENTAL_PERMISSION_BELOW_AGE} needs permission from a parent or
+                guardian. Mobile is not offered to children under {ACCOUNT_MINIMUM_AGE}, and in
+                jurisdictions setting a higher digital-consent age, including the European Union and
+                the United Kingdom, where it may be 16, and India, where processing children&rsquo;s
+                data requires verifiable parental consent, that higher threshold applies instead. We
+                do not knowingly collect personal data from children below that age. If you believe
+                a child has provided personal data, contact{' '}
                 <a href={contactMailto(CONTACT_SUBJECTS.privacy)} className="agi-ds-link">
                   {CONTACT_EMAIL}
                 </a>
@@ -448,8 +448,8 @@ export default function MobileLegalPage() {
               </h2>
               <Prose>
                 These terms are a legal agreement between you and {COMPANY} ({COMPANY_STATE}).
-                &ldquo;App&rdquo; means AGI Mobile on iOS and Android. By installing or using the
-                App, you agree to these terms. Effective date: {EFFECTIVE_DATE}.
+                &ldquo;App&rdquo; means Mobile on iOS and Android. By installing or using the App,
+                you agree to these terms. Effective date: {EFFECTIVE_DATE}.
               </Prose>
             </div>
             <Ledger caption="Terms of service" rows={TERMS} />

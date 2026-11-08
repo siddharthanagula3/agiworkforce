@@ -1,6 +1,7 @@
 import type { TFunction } from 'i18next';
 import {
   BILLING_PLAN_PRICING,
+  MANAGED_USAGE_LIMITS,
   compareManagedUsage,
   connectorsReleased,
   FLAGSHIP_OF_WEEKLY_BUDGET_RATIO,
@@ -46,10 +47,45 @@ export type BusinessPlanCard = (typeof BUSINESS_PLAN_CARDS)[number];
 
 export type PlanCard = IndividualPlanCard | BusinessPlanCard;
 
+type PlanCopyDetail = 'detailed' | 'summary';
+
+const INDIVIDUAL_PLAN_SUMMARY_KEYS = {
+  free: ['cardLimitedChat', 'cardLimitedProjects', 'cardLimitedUploads', 'freeFeature2'],
+  basic: [
+    'basicFeature2',
+    'cardExpandedProjects',
+    'cardStandardChats',
+    'cardScheduledWork',
+    'basicFeature3',
+  ],
+  pro: [
+    'cardExpandedUsage',
+    'proFeature5',
+    'cardExpandedProjects',
+    'cardMoreChats',
+    'cardExpandedScheduling',
+  ],
+  max: [
+    'cardExtendedUsage',
+    'cardFlagshipModels',
+    'cardExtendedProjects',
+    'cardHigherChats',
+    'cardExpandedScheduling',
+  ],
+  max_15x: [
+    'noSessionLimit',
+    'cardHighestUsage',
+    'max15xFeature3',
+    'cardLargestStorage',
+    'cardHighestChats',
+    'cardExpandedScheduling',
+  ],
+} as const satisfies Record<IndividualPlanCard, readonly string[]>;
+
 export const FLAGSHIP_MODEL_COUNT = getAllowedModelsForTier('flagship_additions').length;
 
 export const ENTERPRISE_TIER_BODY =
-  'SSO, SCIM, and audit are shipped and entitlement-gated; we scope capacity, data retention, and rollout to how your org actually works. Reach out and we will plan it together.';
+  'Single sign-on, SCIM directory sync and audit logs, with capacity, retention and rollout agreed in your contract.';
 
 const ENTERPRISE_GOVERNANCE_FEATURE =
   "SSO, SCIM directory sync, and audit logs: shipped, gated on the Enterprise plan's entitlement. Retention windows stay contract-scoped.";
@@ -68,28 +104,33 @@ export function presentCopy(parts: Array<string | null>): string[] {
 }
 
 export function usageComparisonCopy(plan: BillingPlanTier, t: PricingT): string[] {
+  const session = MANAGED_USAGE_LIMITS[plan].fiveHourCredits === null ? [t('noSessionLimit')] : [];
   const comparison = compareManagedUsage(plan);
-  if (!comparison) return [];
+  if (!comparison) return session;
   const baseline = BILLING_PLAN_PRICING[comparison.baseline].label;
   if (comparison.factor === 1) {
-    return [t(comparison.perSeat ? 'usageSameAsPerSeat' : 'usageSameAs', { baseline })];
+    return [...session, t(comparison.perSeat ? 'usageSameAsPerSeat' : 'usageSameAs', { baseline })];
   }
   if (comparison.factor !== null) {
     return [
+      ...session,
       t(comparison.perSeat ? 'usageMultiplierAllPerSeat' : 'usageMultiplierAll', {
         factor: comparison.factor,
         baseline,
       }),
     ];
   }
-  return presentCopy([
-    comparison.session === null
-      ? null
-      : t('usageMultiplierSession', { factor: comparison.session, baseline }),
-    comparison.weekly === null
-      ? null
-      : t('usageMultiplierWeekly', { factor: comparison.weekly, baseline }),
-  ]);
+  return [
+    ...session,
+    ...presentCopy([
+      comparison.session === null
+        ? null
+        : t('usageMultiplierSession', { factor: comparison.session, baseline }),
+      comparison.weekly === null
+        ? null
+        : t('usageMultiplierWeekly', { factor: comparison.weekly, baseline }),
+    ]),
+  ];
 }
 
 function concurrencyFeature(plan: BillingPlanTier, connectorKey: string, t: PricingT) {
@@ -146,7 +187,23 @@ function projectsAndStorageFeature(plan: BillingPlanTier, connectorKey: string, 
   });
 }
 
-export function individualPlanFeatures(plan: IndividualPlanCard, t: PricingT): string[] {
+export function individualPlanFeatures(
+  plan: IndividualPlanCard,
+  t: PricingT,
+  detail: PlanCopyDetail = 'detailed',
+): string[] {
+  if (detail === 'summary') {
+    const features = INDIVIDUAL_PLAN_SUMMARY_KEYS[plan].map((key) => t(key));
+    return plan === 'free'
+      ? [
+          ...features,
+          t('freeLocalByok', {
+            surface: SURFACE_NAMES.cli,
+            status: pricingSurfaceStatus('cli', t),
+          }),
+        ]
+      : features;
+  }
   switch (plan) {
     case 'free':
       return presentCopy([
@@ -191,13 +248,13 @@ export function individualPlanFeatures(plan: IndividualPlanCard, t: PricingT): s
   }
 }
 
-export function teamPlanFeatures(t: PricingT): string[] {
+export function teamPlanFeatures(t: PricingT, detail: PlanCopyDetail = 'detailed'): string[] {
   return presentCopy([
     t('seatTypesNote'),
     t('teamFeature2'),
     isReleased('cli') ? t('teamFeature3') : null,
     t('teamFeature4'),
-    t('teamFeature5'),
+    t(detail === 'summary' ? 'emailSupport' : 'teamFeature5'),
   ]);
 }
 
@@ -241,6 +298,7 @@ export function teamSeatRows(
   plans: LocalizedPlanPrices | undefined,
   interval: BillingInterval,
   locale: string | undefined,
+  detail: PlanCopyDetail = 'detailed',
 ): TeamSeatRow[] {
   const alternateInterval: BillingInterval | null =
     interval === 'yearly' ? 'monthly' : teamYearlyCheckoutReady(plans) ? 'yearly' : null;
@@ -253,7 +311,8 @@ export function teamSeatRows(
         type,
         name: t(SEAT_ROW_COPY[type].name),
         price: localizedPricePerMonth(plans, plan, interval, locale),
-        description,
+        description:
+          detail === 'summary' && type === 'premium' ? t('cardPremiumSeatUsage') : description,
         alternate:
           alternateInterval === null
             ? null
@@ -289,7 +348,7 @@ export function planCtaLabel(plan: SelfServePaidPlanTier, t: PricingT): string {
     case 'basic':
       return t('basicCta');
     case 'pro':
-      return t('proCta');
+      return t('proCta', { plan: BILLING_PLAN_PRICING.pro.label });
     case 'max':
       return t('maxCta', { plan: BILLING_PLAN_PRICING.max.label });
     case 'max_15x':
@@ -300,8 +359,11 @@ export function planCtaLabel(plan: SelfServePaidPlanTier, t: PricingT): string {
 }
 
 export function pricingUsageExplainer(t: PricingT): string {
-  return `${t('usageWindowsExplainer')} ${t('flagshipShare', {
-    baseline: BILLING_PLAN_PRICING.pro.label,
-    percent: Math.round(FLAGSHIP_OF_WEEKLY_BUDGET_RATIO * 100),
-  })}`;
+  return `${t('usageWindowsExplainer', { sessionExemptPlan: BILLING_PLAN_PRICING.max_15x.label })} ${t(
+    'flagshipShare',
+    {
+      baseline: BILLING_PLAN_PRICING.pro.label,
+      percent: Math.round(FLAGSHIP_OF_WEEKLY_BUDGET_RATIO * 100),
+    },
+  )}`;
 }

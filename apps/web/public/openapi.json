@@ -923,7 +923,7 @@
           "routing_profile": {
             "type": "string",
             "enum": ["auto", "speed", "quality", "cost"],
-            "description": "How Auto chooses a model when `model` is `auto`. `speed` routes to the quickest models your plan includes, `quality` to the most capable one your plan allows (a plan's ceiling still applies, so Pro is served its best balanced model), and `cost` to the lowest-cost model that can handle the task. `auto`, or leaving it out, lets Auto decide per message. Ignored when `model` names a specific model. Workspace model policy, data residency and the training opt-out still limit every choice."
+            "description": "How Auto chooses a model when `model` is `auto`. `speed` routes to the quickest models your plan includes, `quality` to the most capable one your plan allows (the plan's model-access ceiling still applies), and `cost` to the lowest-cost model that can handle the task. `auto`, or leaving it out, lets Auto decide per message. Ignored when `model` names a specific model. Workspace model policy, data residency and the training opt-out still limit every choice."
           }
         }
       },

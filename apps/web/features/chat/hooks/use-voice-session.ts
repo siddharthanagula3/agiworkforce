@@ -541,7 +541,7 @@ function startLiveVoiceSession(settings: LiveVoiceStartSettings): Promise<LiveVo
   if (!sink?.managed || !identity?.isCurrent()) {
     useVoiceSessionStore.getState().dispatch({
       type: VOICE_SESSION_EVENT.fail,
-      message: 'Live voice requires a signed-in Managed Cloud conversation.',
+      message: 'Live voice requires a signed-in Cloud conversation.',
     });
     return Promise.reject(new DOMException('Managed voice owner is unavailable', 'AbortError'));
   }
@@ -816,7 +816,7 @@ export function useVoiceSession({
     if (!managed) {
       dispatch({
         type: VOICE_SESSION_EVENT.fail,
-        message: 'Live voice requires a Managed Cloud conversation.',
+        message: 'Live voice requires a Cloud conversation.',
       });
       return undefined;
     }

@@ -78,7 +78,7 @@ export interface ImageVersion {
  * component state would reset every toggle from message 2 onward.
  */
 export interface ComposerToggleState {
-  /** Chat | AGI Work. Stamped into send meta and enforced server-side. */
+  /** Chat | Work. Stamped into send meta and enforced server-side. */
   workMode: CloudWorkMode;
   webSearchEnabled: boolean;
   researchEnabled: boolean;
@@ -158,7 +158,7 @@ export interface MessageResearchState {
   sources?: number;
   elapsedMs?: number;
   startedAt?: string;
-  /** AGI credits the managed usage ledger settled for the run, once it has. */
+  /** AGI credits the Cloud usage ledger settled for the run, once it has. */
   credits?: number;
   /** Honest error summary when the run failed mid-way. */
   error?: string;
@@ -371,7 +371,7 @@ export interface MessageMetadata {
   /** Deep Research run state (activity header + persistence). */
   research?: MessageResearchState;
   /**
-   * AGI Work plan queue (additive `x_agiwork_plan` SSE event): the
+   * Work plan queue (additive `x_agiwork_plan` SSE event): the
    * steps the planning turn committed to, with live status as execution
    * proceeds. Whole-plan, last-write-wins. Absent for a run that predates the
    * event or whose plan could not be parsed.
@@ -557,8 +557,8 @@ export interface Message {
    */
   requestedModel?: string;
   /**
-   * Whether this AGI Work turn is running on the durable transport, from
-   * `X-AGI-Tool-Loop`. Set only for AGI Work, where the run is presented as work
+   * Whether this Work turn is running on the durable transport, from
+   * `X-AGI-Tool-Loop`. Set only for Work, where the run is presented as work
    * that continues without the tab; false means it does not, and the reader is
    * owed that correction. Per-turn and not persisted.
    */
@@ -755,7 +755,7 @@ interface ChatState {
   memoryDisabledByConversation: Record<string, boolean>;
 
   /**
-   * Per-conversation Chat/AGI Work override, mirrored out of
+   * Per-conversation Chat/Work override, mirrored out of
    * `composerTogglesByConversation.workMode` for the one field of that bucket
    * that is NOT next-turn ephemeral. PERSISTED like
    * `disabledConnectorIdsByConversation` (see `partialize` below): which axis
@@ -856,7 +856,7 @@ interface ChatState {
   setToolTimeline: (id: string, tools: MessageToolEntry[], conversationId?: string) => void;
   /** Merge Deep Research run state into the message metadata. */
   setResearchState: (id: string, research: MessageResearchState, conversationId?: string) => void;
-  /** Replace the AGI Work plan queue on the message metadata (last-write-wins). */
+  /** Replace the Work plan queue on the message metadata (last-write-wins). */
   setAgiWorkPlan: (id: string, agiWorkPlan: AgiWorkPlanStep[], conversationId?: string) => void;
   /** Update a single tool entry by toolCallId within the message's tool timeline. */
   updateToolEntry: (
@@ -1298,7 +1298,7 @@ export const useChatStore = create<ChatState>()(
               // Nor its Memory opt-out.
               const { [id]: _removedMemoryDisabled, ...memoryDisabledByConversation } =
                 state.memoryDisabledByConversation;
-              // Nor its persisted Chat/AGI Work mode.
+              // Nor its persisted Chat/Work mode.
               const { [id]: _removedWorkMode, ...workModeByConversation } =
                 state.workModeByConversation;
               // A deleted conversation's leaf dies with its transcript, or a
@@ -1987,7 +1987,7 @@ export const useChatStore = create<ChatState>()(
          * and the new-chat surface writes into `PENDING_CONVERSATION_KEY`. But
          * the first send creates a real conversation and navigates to it, and
          * nothing moved the pending bucket across, so a chat started in Video
-         * (or Image, or AGI Work) reverted to a plain text composer the instant
+         * (or Image, or Work) reverted to a plain text composer the instant
          * its own conversation existed, mid-generation (founder 2026-08-13).
          * Drafts were already migrated this way; toggles were simply forgotten.
          *
@@ -2005,7 +2005,7 @@ export const useChatStore = create<ChatState>()(
          * the persisted mirror `getComposerToggles` falls back to after a
          * reload: a chat's first send is the only point a real id's mode is
          * ever set through this path, so skipping the mirror here would leave
-         * a conversation started in AGI Work reverting to Chat on reload even
+         * a conversation started in Work reverting to Chat on reload even
          * though `setComposerToggles` handles every later mode switch fine.
          */
         adoptPendingComposerToggles: (conversationId) =>
@@ -2160,7 +2160,7 @@ export const useChatStore = create<ChatState>()(
             // Same reasoning: a per-chat Memory opt-out is a standing decision
             // about that conversation, not a next-turn default.
             memoryDisabledByConversation: state.memoryDisabledByConversation,
-            // Same reasoning again: the Chat/AGI Work axis is a standing fact
+            // Same reasoning again: the Chat/Work axis is a standing fact
             // about a conversation, not a next-turn default, so it is mirrored
             // out of composerTogglesByConversation and persisted on its own.
             workModeByConversation: state.workModeByConversation,
@@ -2295,7 +2295,7 @@ export const selectError = (state: ChatState) => state.error;
 export const AGI_WORK_MODE: CloudWorkMode = 'agiwork';
 
 /**
- * Whether a conversation is an AGI Work task, from either half of the answer:
+ * Whether a conversation is an Work task, from either half of the answer:
  * the server's derived mode (durable, survives a new device) or the persisted
  * composer override (present from the first keystroke, before any run exists).
  * Returns a boolean so a subscriber re-renders only when the verdict changes.

@@ -240,13 +240,18 @@ describe('help articles follow the release registries', () => {
 });
 
 describe('help articles follow the plan catalogue', () => {
-  it('types no numbered plan label by hand', () => {
-    const numbered = (Object.keys(BILLING_PLAN_PRICING) as BillingPlanTier[])
-      .map((plan) => getBillingPlanPricing(plan).label)
-      .filter((label) => /\d/.test(label));
-    expect(numbered.length).toBeGreaterThan(1);
-    for (const label of numbered) {
-      const typed = ARTICLES.filter(({ source }) => source.includes(label)).map(({ id }) => id);
+  it('types no numbered plan label or legacy plan multiplier by hand', () => {
+    const labels = (Object.keys(BILLING_PLAN_PRICING) as BillingPlanTier[]).map(
+      (plan) => getBillingPlanPricing(plan).label,
+    );
+    expect(labels.length).toBeGreaterThan(1);
+    for (const label of labels) {
+      const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const pattern = /\d/.test(label)
+        ? new RegExp(escaped, 'i')
+        : new RegExp(`\\b${escaped}\\s+\\d+\\s*(?:x|×)`, 'i');
+      expect(pattern.test(/\d/.test(label) ? label : `${label} 5x`)).toBe(true);
+      const typed = ARTICLES.filter(({ source }) => pattern.test(source)).map(({ id }) => id);
       expect(typed, label).toEqual([]);
     }
   });

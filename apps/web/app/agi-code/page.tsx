@@ -15,9 +15,9 @@ import { SURFACE_STATUS, surfaceCta } from '../../lib/marketing-constants';
 const DEVELOPER_SURFACE_PLANS = billingPlanCapabilityPlanLabels('developer_surfaces');
 
 export const metadata = buildMetadata({
-  title: 'AGI Code | CLI + VS Code developer stack',
+  title: 'Code | CLI + VS Code developer stack',
   description:
-    'AGI Code spans the agi CLI and the VS Code extension: resumable sessions, code review, sandboxed execution, hooks, skills, MCP, and privacy modes. Local models, BYOK, or AGI managed cloud (public alpha).',
+    'Code spans the agi CLI and the VS Code extension: resumable sessions, code review, sandboxed execution, hooks, skills, MCP, and privacy modes. Local models, BYOK, or Cloud (public alpha).',
   path: '/agi-code',
 });
 
@@ -27,7 +27,7 @@ export default function AgiCodePage() {
       <Header />
       <main id="main-content" tabIndex={-1} className="agi-shell agi-surface">
         <FlagshipHero
-          eyebrow="AGI Code · for developers"
+          eyebrow="Code · for developers"
           titleLines={['Your terminal.', 'Your editor.', 'One agent.']}
           em="One agent."
           ctas={[
@@ -44,7 +44,7 @@ export default function AgiCodePage() {
           items={[
             {
               index: '01',
-              name: 'AGI CLI',
+              name: 'CLI',
               tagline: 'An agent in your terminal.',
               body: 'The agi binary is a Rust-native developer agent: sessions you can resume and fork, code review, and sandboxed execution. Works offline with local models.',
               capabilities: [
@@ -61,7 +61,7 @@ export default function AgiCodePage() {
             },
             {
               index: '02',
-              name: 'AGI Code for VS Code',
+              name: 'Code for VS Code',
               tagline: 'IDE-native assistance.',
               body: 'Chat with @agi inside your editor with workspace-scoped context. Review diffs before they land, run slash commands like /explain and /tests, and hand off to other surfaces explicitly.',
               capabilities: [
@@ -138,13 +138,13 @@ export default function AgiCodePage() {
           routes={[
             {
               meta: 'Terminal',
-              title: 'AGI CLI',
+              title: 'CLI',
               body: 'The command-line coding surface, in detail.',
               href: '/cli',
             },
             {
               meta: 'Editor',
-              title: 'AGI Code for VS Code',
+              title: 'Code for VS Code',
               body: 'Editor-native chat, diffs, and reviews.',
               href: '/vscode-extension',
             },
@@ -152,9 +152,9 @@ export default function AgiCodePage() {
         />
 
         <FinalCta
-          eyebrow="AGI Code"
+          eyebrow="Code"
           title="Bring the agent to your repo."
-          body={`The CLI is ${SURFACE_STATUS.cli.toLowerCase()} and AGI Code for VS Code is ${SURFACE_STATUS.vscode.toLowerCase()}. The download page shows what is published and takes an email to tell you when the VS Code extension is ready to install. Choose the route for every task: local models, your own keys, or AGI managed cloud, which is in public alpha and included with ${DEVELOPER_SURFACE_PLANS} on these two surfaces.`}
+          body={`The CLI is ${SURFACE_STATUS.cli.toLowerCase()} and Code for VS Code is ${SURFACE_STATUS.vscode.toLowerCase()}. The download page shows what is published and takes an email to tell you when the VS Code extension is ready to install. Choose the route for every task: local models, your own keys, or Cloud, which is in public alpha and included with ${DEVELOPER_SURFACE_PLANS} on these two surfaces.`}
           ctas={[
             { href: '/download', label: 'Check availability' },
             { href: '/cli', label: 'See the CLI' },

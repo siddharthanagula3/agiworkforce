@@ -3,7 +3,7 @@
 import { useSession } from '@/lib/identity/client';
 import { AlertTriangle, RefreshCw, ShieldAlert, UserRoundCog } from 'lucide-react';
 import { FormEvent, useCallback, useEffect, useState } from 'react';
-import { useConfirmAction } from '@agiworkforce/ui';
+import { AgiMark, useConfirmAction } from '@agiworkforce/ui';
 import {
   fetchAdminSecurityOperations,
   performAdminAccountAction,
@@ -133,10 +133,11 @@ export default function SecurityOperationsPanel() {
           disabled={loading}
           className="inline-flex items-center justify-center gap-2 rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground hover:bg-foreground/10 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          <RefreshCw
-            className={`h-4 w-4 ${loading ? 'motion-safe:animate-spin' : ''}`}
-            aria-hidden="true"
-          />
+          {loading ? (
+            <AgiMark spinning className="h-4 w-4" aria-hidden="true" />
+          ) : (
+            <RefreshCw className="h-4 w-4" aria-hidden="true" />
+          )}
           Refresh
         </button>
       </div>

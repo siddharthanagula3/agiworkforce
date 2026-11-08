@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { TIER_POLICIES } from '@agiworkforce/types';
 
@@ -6,11 +6,58 @@ import {
   assertTierUnitAllowance,
   exhaustedTierUnitRefusal,
   getTierUnitAllowance,
+  readDownloadUsage,
+  assertDownloadAllowance,
+  PlanDownloadLimitError,
 } from './tier-unit-quota-service';
 import { buildComputerUseSoftCapWarningHeader } from '@/lib/server/managed-usage-policy';
 
+const downloadMocks = vi.hoisted(() => ({ count: vi.fn(), plan: vi.fn() }));
+vi.mock('./cogs-ledger-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./cogs-ledger-service')>()),
+  countUserDownloadAllowanceGibSince: downloadMocks.count,
+}));
+vi.mock('./entitlement-resolution', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./entitlement-resolution')>()),
+  resolveEntitledPlanTier: downloadMocks.plan,
+}));
+
 const MAX_POLICY = TIER_POLICIES.max;
 const FREE_POLICY = TIER_POLICIES.free;
+
+describe('rounded monthly download allowances', () => {
+  beforeEach(() => {
+    downloadMocks.count.mockReset().mockResolvedValue(0);
+    downloadMocks.plan.mockReset().mockResolvedValue('max_15x');
+  });
+
+  it.each([
+    ['basic', 1],
+    ['pro', 3],
+    ['max', 15],
+    ['max_15x', 30],
+  ] as const)('enforces the approved %s allowance', async (planTier, gib) => {
+    const usage = await readDownloadUsage({
+      userId: 'user-test',
+      planTier,
+      now: new Date('2026-11-07T00:00:00.000Z'),
+    });
+    expect(usage.limitBytes).toBe(gib * 1024 ** 3);
+    expect(usage.resetsAt).toBe('2026-12-01T00:00:00.000Z');
+  });
+
+  it('refuses downloads above Ultra’s monthly limit without offering a nonexistent higher individual plan', async () => {
+    downloadMocks.count.mockResolvedValue(30);
+    const error = await assertDownloadAllowance({
+      db: dbReturning(0),
+      userId: 'user-test',
+      bytes: 1,
+    }).catch((error) => error);
+    expect(error).toBeInstanceOf(PlanDownloadLimitError);
+    expect(error.message).toContain('Ultra');
+    expect(error.message).not.toMatch(/upgrade/i);
+  });
+});
 
 function dbReturning(consumed: number): DatabaseAdapter {
   return {

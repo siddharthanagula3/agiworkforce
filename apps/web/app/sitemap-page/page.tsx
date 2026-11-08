@@ -4,6 +4,7 @@ import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { Eyebrow, Section, Stack } from '@/features/marketing/components/system';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/Shared';
+import { BLOG_POSTS } from '@/lib/blog-posts';
 
 export const metadata = buildMetadata({
   title: 'Sitemap',
@@ -12,6 +13,10 @@ export const metadata = buildMetadata({
 });
 
 const SECTIONS: { title: string; links: { href: string; label: string }[] }[] = [
+  {
+    title: 'Buying guides',
+    links: BLOG_POSTS.map((post) => ({ href: post.path, label: post.title })),
+  },
   {
     title: 'Product',
     links: [
@@ -22,8 +27,8 @@ const SECTIONS: { title: string; links: { href: string; label: string }[] }[] = 
       { href: '/teams', label: 'Teams' },
       { href: '/solutions', label: 'Solutions' },
       { href: '/apps', label: 'Apps and connectors' },
-      { href: '/agi-code', label: 'AGI Code' },
-      { href: '/agi-work', label: 'AGI Work' },
+      { href: '/agi-code', label: 'Code' },
+      { href: '/agi-work', label: 'Work' },
       { href: '/providers', label: 'Providers' },
       { href: '/pricing', label: 'Pricing' },
       { href: '/byok', label: 'BYOK' },

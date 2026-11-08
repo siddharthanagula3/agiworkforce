@@ -20,8 +20,70 @@
   }
 }
 [data-design='agi'] .agi-fl-hero--flagship {
-  --agi-fl-hero-mark: clamp(3rem, 6vw, 5.5rem);
-  --agi-fl-hero-brand-shift: clamp(-14px, -1.2vw, -8px);
+  --agi-fl-hero-mark: clamp(var(--space-10), 20vw, calc(var(--space-10) * 2));
+}
+
+[data-design='agi'] .agi-fl-hero--flagship .agi-fl-hero-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+[data-design='agi'] .agi-fl-hero--flagship .agi-fl-hero-brand-wrap {
+  inline-size: 100%;
+  justify-content: center;
+  margin-block-end: var(--agi-space-5);
+}
+
+[data-design='agi'] .agi-fl-hero--flagship .agi-fl-hero-brand-mark {
+  inline-size: var(--agi-fl-hero-mark);
+  block-size: var(--agi-fl-hero-mark);
+}
+
+[data-design='agi'] .agi-fl-hero-symbol {
+  position: relative;
+  display: inline-flex;
+  border: 0;
+  padding: 0;
+  background: none;
+  cursor: pointer;
+  border-radius: var(--agi-space-2);
+}
+
+[data-design='agi'] .agi-fl-ribbon-mesh {
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  pointer-events: none;
+  opacity: 0;
+}
+
+[data-design='agi'] .agi-fl-hero-symbol[data-motion='ready'] .agi-fl-ribbon-mesh {
+  opacity: 1;
+}
+
+[data-design='agi'] .agi-fl-hero-symbol[data-motion='ready'] .agi-fl-hero-brand-mark {
+  opacity: 0;
+}
+
+[data-design='agi'] .agi-fl-hero-symbol:disabled {
+  cursor: default;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-design='agi'] .agi-fl-hero-symbol .agi-fl-ribbon-mesh {
+    display: none;
+  }
+
+  [data-design='agi'] .agi-fl-hero-symbol[data-motion] .agi-fl-hero-brand-mark {
+    opacity: 1;
+  }
+}
+
+[data-design='agi'] .agi-fl-hero-symbol:focus-visible {
+  outline: 2px solid var(--agi-ink);
+  outline-offset: var(--space-1);
 }
 
 [data-design='agi'] .agi-surface .agi-fl-hero {
@@ -99,7 +161,7 @@
 }
 [data-design='agi'] .agi-fl-hero--flagship .agi-fl-announce,
 [data-design='agi'] .agi-fl-hero--flagship .agi-fl-cta-row {
-  margin-left: calc(var(--agi-fl-hero-mark) / 2);
+  margin-left: 0;
 }
 [data-design='agi'] .agi-mobile-hero-wrap {
   display: flex;

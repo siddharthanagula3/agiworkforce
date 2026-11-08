@@ -24,7 +24,11 @@ import {
 } from '../policy/hard-abstain';
 import { authoritativeCitations, helpCentreCitation } from '../policy/authoritative-links';
 import { measureGroundedness } from '../policy/groundedness';
-import { classifyOutOfScope, OUT_OF_SCOPE_COPY } from '../policy/out-of-scope';
+import {
+  classifyOutOfScope,
+  containsProgramSource,
+  OUT_OF_SCOPE_COPY,
+} from '../policy/out-of-scope';
 import { renderSupportContext } from '../prompt/render-context';
 import { callSupportModel } from './model-route';
 import { parseModelAnswer } from './schema';
@@ -203,6 +207,8 @@ async function run(rawInput: SupportAnswerInput): Promise<SupportAnswer> {
     }
     return abstain(declinedAsOutOfScope ? 'out_of_scope' : 'no_relevant_source', [], route);
   }
+
+  if (containsProgramSource(modelAnswer.answer)) return abstain('out_of_scope', [], route);
 
   const retrievedById = new Map(retrieval.chunks.map((item) => [item.chunk.id, item]));
   const citations: SupportCitation[] = [];

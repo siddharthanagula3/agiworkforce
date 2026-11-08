@@ -2,6 +2,7 @@
 
 import { Settings } from '@agiworkforce/icons';
 import { PRODUCT_BRAND } from '@agiworkforce/types';
+import { AgiMark } from '@shared/components/agi/AgiMark';
 
 import { useVoiceSessionStore } from '@features/chat/stores/voice-session-store';
 
@@ -16,9 +17,7 @@ export function VoiceHeaderLabel() {
   return (
     <div className="flex min-w-0 flex-1 items-center gap-2">
       <p data-testid="voice-header-label" className="flex min-w-0 items-baseline gap-1.5 text-sm">
-        <span className="truncate font-semibold text-[var(--chat-text-primary)]">
-          {PRODUCT_BRAND}
-        </span>
+        <AgiMark className="h-5 w-5 shrink-0 self-center" ariaLabel={PRODUCT_BRAND} />
         <span className="shrink-0 font-normal text-[var(--chat-text-muted)]">{LABEL.mode}</span>
       </p>
       <button

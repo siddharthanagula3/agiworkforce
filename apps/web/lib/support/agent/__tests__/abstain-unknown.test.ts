@@ -37,6 +37,27 @@ describe('unknown questions abstain instead of inventing', () => {
     armModelMocks();
   });
 
+  it.each([
+    'hello',
+    'how are you today',
+    'can we just chat like friends',
+    'AGI, please write a Python function for a login error',
+    'generate a script to fix my AGI workspace error',
+    'write an essay about the error in my AGI account',
+  ])('rejects unrelated work before spending model budget: %j', async (question) => {
+    const admitModelCall = vi.fn(async () => true);
+    const answer = await answerSupportQuestion({ ...ask(question), admitModelCall });
+    expect(answer).toMatchObject({
+      kind: 'abstention',
+      reason: 'out_of_scope',
+      handoffOffered: false,
+      route: null,
+    });
+    expect(admitModelCall).not.toHaveBeenCalled();
+    expect(modelMocks.resolveAutoRoute).not.toHaveBeenCalled();
+    expect(modelMocks.buildServerProviderAdapter).not.toHaveBeenCalled();
+  });
+
   const unknown = [
     "what is your Kubernetes operator's CRD version",
     'which port does the sidecar proxy bind to in your helm chart',

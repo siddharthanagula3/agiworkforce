@@ -1,17 +1,9 @@
 'use client';
 
-import { ApprovalCard, Badge, Button, Skeleton, Spinner } from '@agiworkforce/ui';
+import { AgiMark, ApprovalCard, Badge, Button, Skeleton, Spinner } from '@agiworkforce/ui';
 import { TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
 import type { ManagedCloudScheduleRunApproval } from '@agiworkforce/cloud-contracts';
-import {
-  AlertCircle,
-  CheckCircle2,
-  Clock3,
-  Coins,
-  Loader2,
-  ShieldQuestion,
-  XCircle,
-} from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock3, Coins, ShieldQuestion, XCircle } from 'lucide-react';
 import type { ScheduleRun } from '../types';
 import { scheduleErrorMessage } from '../lib/schedule-error-message';
 import {
@@ -54,12 +46,7 @@ function runStatusIcon(run: ScheduleRun) {
     return <CheckCircle2 className="h-4 w-4 text-success-text" aria-hidden="true" />;
   }
   if (run.status === 'running') {
-    return (
-      <Loader2
-        className="h-4 w-4 animate-spin text-info-text motion-reduce:animate-none"
-        aria-hidden="true"
-      />
-    );
+    return <AgiMark spinning className="h-4 w-4 text-info-text" aria-hidden="true" />;
   }
   if (run.status === 'cancelled') {
     return <AlertCircle className="h-4 w-4 text-muted-foreground" aria-hidden="true" />;

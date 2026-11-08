@@ -75,10 +75,10 @@ describe('moving up the ladder never takes something away', () => {
     for (const window of ['monthlyCredits', 'weeklyCredits', 'fiveHourCredits'] as const) {
       const before = MANAGED_USAGE_LIMITS[lower].unlimited
         ? Number.POSITIVE_INFINITY
-        : MANAGED_USAGE_LIMITS[lower][window];
+        : (MANAGED_USAGE_LIMITS[lower][window] ?? Number.POSITIVE_INFINITY);
       const after = MANAGED_USAGE_LIMITS[higher].unlimited
         ? Number.POSITIVE_INFINITY
-        : MANAGED_USAGE_LIMITS[higher][window];
+        : (MANAGED_USAGE_LIMITS[higher][window] ?? Number.POSITIVE_INFINITY);
       expect(after, `${higher} shrinks ${window}`).toBeGreaterThanOrEqual(before);
     }
   });
@@ -92,7 +92,11 @@ describe('moving up the ladder never takes something away', () => {
       const allowance = PLAN_CREDIT_ALLOWANCES[tier];
       expect(Number.isFinite(allowance.monthly)).toBe(true);
       expect(allowance.monthly).toBeGreaterThanOrEqual(allowance.weekly);
-      expect(allowance.weekly).toBeGreaterThanOrEqual(allowance.fiveHour);
+      if (Number.isFinite(allowance.fiveHour)) {
+        expect(allowance.weekly).toBeGreaterThanOrEqual(allowance.fiveHour);
+      } else {
+        expect(MANAGED_USAGE_LIMITS[tier].fiveHourCredits).toBeNull();
+      }
     }
   });
 });

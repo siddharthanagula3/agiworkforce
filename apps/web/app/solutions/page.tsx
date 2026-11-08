@@ -35,13 +35,13 @@ const IDS = {
 const ROUTES = [
   {
     meta: 'You write code',
-    title: 'AGI Code',
+    title: 'Code',
     body: `The agi binary, and the VS Code extension that spawns it over stdio: ranked review findings, a session diff landed as a git patch, and commands run under the OS sandbox. ${BYOK_SURFACES.availability}`,
     href: '/agi-code',
   },
   {
     meta: 'You want a deliverable',
-    title: 'AGI Work',
+    title: 'Work',
     body: 'A mode of the web composer that returns a plan before its first tool call, holds the run whenever a call needs your approval, and keeps every run in your task list.',
     href: '/agi-work',
   },
@@ -60,8 +60,8 @@ const ROUTES = [
 ] as const;
 
 const SOLUTION_VISUALS: Record<string, ReactNode> = {
-  'AGI Code': <EditorWindow />,
-  'AGI Work': <AgentRunWindow />,
+  Code: <EditorWindow />,
+  Work: <AgentRunWindow />,
   'AGI for Business': <ConsoleWindow view="policy" />,
   'Use cases': <ProjectWindow />,
 };

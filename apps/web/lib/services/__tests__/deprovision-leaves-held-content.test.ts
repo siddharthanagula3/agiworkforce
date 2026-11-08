@@ -9,7 +9,7 @@ vi.mock('@/lib/server/request-context-cache', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   invalidateActiveOrganizationCache: vi.fn(async () => undefined),
 }));
-vi.mock('@/lib/user-connector-tools', async (importOriginal) => ({
+vi.mock('@/lib/connectors/org-shared-catalog-cache', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   evictOrgSharedConnectorCaches: vi.fn(async () => undefined),
 }));

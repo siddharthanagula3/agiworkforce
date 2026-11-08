@@ -9,7 +9,7 @@ import { useChatStore } from '@shared/stores/web-chat-store';
 
 export const LOCAL_FORK_TITLE = 'Start a new chat for a cloud model?';
 export const LOCAL_FORK_DESCRIPTION =
-  'This chat holds answers from a model on this device. They stay on this Mac and are never uploaded. Continuing on a cloud model opens a new chat, so nothing local is sent to AGI Cloud.';
+  'This chat holds answers from a model on this device. They stay on this Mac and are never uploaded. Continuing on a cloud model opens a new chat, so nothing local is sent to Cloud.';
 export const LOCAL_FORK_CONFIRM_LABEL = 'Start a new chat';
 
 const NEW_CHAT_HREF = '/chat';

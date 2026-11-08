@@ -78,7 +78,7 @@ describe('ReferralsSection', () => {
     expect(await screen.findByRole('textbox', { name: 'Invite link' })).toHaveValue(LINK);
     expect(
       screen.getByText(
-        'Invite friends to AGI. They get 7 days of Pro free, and when their first payment goes through you each get 500 credits.',
+        'Invite friends to AGI. They get 7 days of Premium free, and when their first payment goes through you each get 500 credits.',
       ),
     ).toBeInTheDocument();
     const progress = within(screen.getByRole('region', { name: 'Your progress' }));

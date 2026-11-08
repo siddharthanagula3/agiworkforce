@@ -3,10 +3,9 @@ import { buildMetadata } from '@/lib/seo/metadata';
 export const metadata = buildMetadata({
   title: 'Create Account',
   description:
-    'Create your AGI account for the Managed Cloud trial on the web and an account-based workspace.',
+    'Create your AGI account for the Cloud trial on the web and an account-based workspace.',
   path: '/signup',
-  ogDescription:
-    'Sign up for the Managed Cloud trial on the web and an account-based AGI workspace.',
+  ogDescription: 'Sign up for the Cloud trial on the web and an account-based AGI workspace.',
   imageAlt: 'Sign up for AGI',
   robots: { index: false },
 });

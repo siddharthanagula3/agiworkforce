@@ -314,7 +314,7 @@ function ProjectSettingsSession({
                   Instructions
                 </Label>
                 <p id="ps-instructions-hint" className="text-xs text-muted-foreground">
-                  Set context and customize how AGI responds in this project.
+                  Set context and customize how the assistant responds in this project.
                 </p>
                 <Textarea
                   id="ps-instructions"

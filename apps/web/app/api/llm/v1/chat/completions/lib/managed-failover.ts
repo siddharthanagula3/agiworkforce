@@ -11,7 +11,7 @@ import 'server-only';
  *     condemns the ONE provider account whose managed key was refused and
  *     therefore skips that provider's remaining routes instead of replaying
  *     the same rejected key, never on aborts, safety stops, context or
- *     invalid-model errors, or billing errors, or, under the narrow
+ *     invalid-model errors for named selections, or billing errors, or, under the narrow
  *     conditions `isRotatableRequestRejection` states, on a request the
  *     provider itself refused;
  *   - before the first byte reaches the client, route.ts's rotation point
@@ -207,6 +207,20 @@ function isRotatableRequestRejection(
   if (classified.status !== REQUEST_REJECTION_STATUS) return false;
   if (isAutoModeModelId(processed.requestedModel)) return true;
   return isGatewayBackedHarness(servingHarnessId);
+}
+
+function isRotatableAutoModelRefusal(
+  processed: ProcessedRequest,
+  classified: ReturnType<typeof classifyError>,
+  context: FailoverStepContext | undefined,
+): boolean {
+  return (
+    context !== undefined &&
+    context.step <= FIRST_PROVIDER_STEP &&
+    isAutoModeModelId(processed.requestedModel) &&
+    classified.category === 'invalid_model' &&
+    getModelMetadataById(processed.chatRequest.model) !== null
+  );
 }
 
 /**
@@ -902,6 +916,7 @@ export function createFailoverPlan(
         !credentialRotation &&
         !billingRotation &&
         !isFailoverEligibleError(error, options.signal) &&
+        !isRotatableAutoModelRefusal(latestView, classified, context) &&
         !isRotatableRequestRejection(processed, classified, context, latestHarnessId)
       ) {
         return null;

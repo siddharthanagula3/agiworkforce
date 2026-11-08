@@ -9,7 +9,7 @@
  * The chat page (`WebChatPage`) keeps its own richer Sidebar wiring (streaming
  * state, dialogs, etc.); this is the navigation-focused variant.
  *
- * Project data is loaded through the account-scoped managed-cloud session.
+ * Project data is loaded through the account-scoped cloud session.
  * Signed-out visits never fire authenticated project requests and never reuse
  * project metadata from the previous Clerk account.
  */
@@ -224,9 +224,13 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
     const stopShortcuts = onAppCommand('open-shortcuts', () =>
       openAfterMobileNavClose(() => setKeyboardShortcutsOpen(true)),
     );
+    const stopFeedback = onAppCommand('open-feedback', () =>
+      openAfterMobileNavClose(() => setFeedbackOpen(true)),
+    );
     return () => {
       stopSearch();
       stopShortcuts();
+      stopFeedback();
     };
   }, [openAfterMobileNavClose]);
   useEffect(() => onAppCommand('open-upgrade', () => openUpgradeDialog()), [openUpgradeDialog]);

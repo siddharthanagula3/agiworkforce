@@ -258,11 +258,11 @@ export default function GovernmentRequestsPage() {
                 privacy policy
               </Link>{' '}
               lists what is collected in each mode and how long each kind of record is kept. The web
-              app runs on Managed Cloud, which is the mode where we hold conversations, files, and
-              settings. Work done in Local mode goes to a model on the person&rsquo;s own device,
-              and nothing about that request reaches us. A request made with the person&rsquo;s own
-              provider key goes from their client to that provider, and we are not in that request
-              path. We hold neither.
+              app runs on Cloud, which is the mode where we hold conversations, files, and settings.
+              Work done in Local mode goes to a model on the person&rsquo;s own device, and nothing
+              about that request reaches us. A request made with the person&rsquo;s own provider key
+              goes from their client to that provider, and we are not in that request path. We hold
+              neither.
             </Prose>
           </Stack>
         </Section>

@@ -120,6 +120,23 @@ describe('completeArtifactPrompt usage attribution', () => {
   });
 });
 
+describe('artifact tool-loop cancellation', () => {
+  it('does not deliver a partial tool-loop result after its request was aborted', async () => {
+    const controller = new AbortController();
+    const reason = new Error('Artifact request stopped');
+    mocks.reserve.mockResolvedValue({ userId: 'viewer-1', idempotencyKey: 'key-1' });
+    mocks.runToolLoop.mockImplementationOnce(async function* () {
+      yield new TextEncoder().encode(
+        'data: {"choices":[{"delta":{"content":"partial result"}}]}\n\n',
+      );
+      controller.abort(reason);
+    });
+    await expect(
+      completeArtifactPrompt(input({ plan: CONNECTOR_PLAN, signal: controller.signal })),
+    ).rejects.toBe(reason);
+  });
+});
+
 describe('completeArtifactPrompt prompt-injection boundary', () => {
   it('runs a connector call as a run carrying untrusted content', async () => {
     mocks.reserve.mockResolvedValue({ userId: 'viewer-1', idempotencyKey: 'key-1' });

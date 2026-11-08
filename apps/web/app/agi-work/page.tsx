@@ -1,4 +1,5 @@
 import { buildMetadata } from '@/lib/seo/metadata';
+import { BILLING_PLAN_PRICING } from '@agiworkforce/types';
 import { Header } from '@shared/components/layout/Header';
 import { AgiWorkRunWindow } from '@/features/marketing/components/FeatureScenes';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
@@ -13,9 +14,9 @@ import {
 } from '@/features/marketing/components/system';
 
 export const metadata = buildMetadata({
-  title: 'AGI Work: goal in, autonomous tool loop, reviewable deliverables',
+  title: 'Work: goal in, autonomous tool loop, reviewable deliverables',
   description:
-    'AGI Work is the mode built into the AGI web chat composer: switch Chat to AGI Work, give it a goal, and it runs a multi-step tool loop with approvals on sensitive steps, then returns deliverables with a full run history at /tasks.',
+    'Work is the mode built into the AGI web chat composer: switch Chat to Work, give it a goal, and it runs a multi-step tool loop with approvals on sensitive steps, then returns deliverables with a full run history at /tasks.',
   path: '/agi-work',
 });
 
@@ -31,7 +32,7 @@ const IDS = {
 
 const RUN_FACTS = [
   'three to six steps asked for before the first tool call',
-  'Pro plans and above',
+  `${BILLING_PLAN_PRICING.pro.label} plans and above`,
   'every run listed end to end at /tasks',
   'approvals pause the run, never skip it',
 ] as const;
@@ -40,12 +41,12 @@ const INSIDE_A_RUN = [
   {
     meta: 'Composer',
     title: 'A mode of the box you already type in',
-    body: 'Chat and AGI Work are two positions of one segmented control. Switching it reveals a project scope chip, and opening scope from there adds two optional fields, constraints and deliverable.',
+    body: 'Chat and Work are two positions of one segmented control. Switching it reveals a project scope chip, and opening scope from there adds two optional fields, constraints and deliverable.',
   },
   {
     meta: 'Plan',
     title: 'A plan before the first tool call, when the model returns one',
-    body: 'AGI Work asks the model for three to six concrete steps and shows them before any tool runs. The first step is marked in progress as the run starts; the rest settle when it ends. If the planning turn comes back unreadable, the run continues without a plan instead of stopping.',
+    body: 'Work asks the model for three to six concrete steps and shows them before any tool runs. The first step is marked in progress as the run starts; the rest settle when it ends. If the planning turn comes back unreadable, the run continues without a plan instead of stopping.',
   },
   {
     meta: 'Approval',
@@ -62,13 +63,13 @@ export default function AgiWorkPage() {
         <section className="agi-lp-hero" aria-labelledby={IDS.hero}>
           <div className="agi-ds-container agi-lp-hero-grid">
             <div className="agi-lp-hero-copy">
-              <p className="agi-lp-eyebrow">AGI Work</p>
+              <p className="agi-lp-eyebrow">Work</p>
               <h1 className="sr-only" id={IDS.hero}>
-                <span className="agi-lp-line">AGI Work plans the steps,</span>{' '}
+                <span className="agi-lp-line">Work plans the steps,</span>{' '}
                 <em className="agi-lp-accent">then asks before destructive or unknown actions.</em>
               </h1>
               <ButtonRow>
-                <Button href={AGI_WORK_ENTRY_HREF}>Open AGI Work</Button>
+                <Button href={AGI_WORK_ENTRY_HREF}>Open chat Work</Button>
                 <Button href="/tasks" variant="secondary">
                   See your runs
                 </Button>
@@ -119,7 +120,7 @@ export default function AgiWorkPage() {
               </h2>
             </div>
             <Ledger
-              caption="AGI Work run states"
+              caption="Work run states"
               rows={[
                 {
                   label: 'Queued',
@@ -188,16 +189,15 @@ export default function AgiWorkPage() {
           <div className="agi-ds-container">
             <div className="agi-lp-close-inner">
               <h2 className="agi-lp-h2" id={IDS.close}>
-                Give AGI Work <em className="agi-lp-accent">its first goal.</em>
+                Give Work <em className="agi-lp-accent">its first goal.</em>
               </h2>
               <p className="agi-lp-lede">
                 On a plan without the capability the control never renders, so nothing breaks at
-                send time. AGI Work runs on AGI Managed Cloud, so runs can fail or stall, and
-                behaviour may change.
+                send time. Work runs on Cloud, so runs can fail or stall, and behaviour may change.
               </p>
               <ButtonRow>
                 <Button href="/pricing" variant="secondary">
-                  See which plans include AGI Work
+                  See which plans include Work
                 </Button>
               </ButtonRow>
             </div>

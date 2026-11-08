@@ -29,6 +29,8 @@ import {
   listRecentScheduleRuns,
   listSchedules,
   listScheduleRuns,
+  mapScheduleTask,
+  mapScheduleRun,
   processClaimedScheduleRun,
   processDueScheduleRuns,
   setScheduleEnabled,
@@ -174,6 +176,69 @@ function runRow(status: 'success' | 'failed' | 'timeout' | 'cancelled', error: s
 afterEach(() => vi.useRealTimers());
 
 describe('schedule service persistence', () => {
+  it('returns string timestamps when the database driver returns Date objects', () => {
+    const instant = '2026-07-15T12:00:00.000Z';
+    const date = new Date(instant);
+    const task = mapScheduleTask({
+      ...taskRow,
+      execute_at: date,
+      expires_at: date,
+      last_executed_at: date,
+      next_execution_at: date,
+      created_at: date,
+      updated_at: date,
+    });
+    for (const field of [
+      'executeAt',
+      'expiresAt',
+      'lastExecutedAt',
+      'nextExecutionAt',
+      'createdAt',
+      'updatedAt',
+    ] as const)
+      expect(task[field]).toBe(instant);
+    const run = mapScheduleRun({
+      ...runRow('success'),
+      scheduled_for: date,
+      started_at: date,
+      completed_at: date,
+      lease_expires_at: date,
+    });
+    for (const field of ['scheduledFor', 'startedAt', 'completedAt', 'leaseExpiresAt'] as const)
+      expect(run[field]).toBe(instant);
+  });
+
+  it('edits one-time schedule preferences without replacing driver Date timestamps', async () => {
+    const stored = {
+      ...taskRow,
+      schedule_type: 'once',
+      cron_expression: null,
+      execute_at: new Date('2026-07-15T12:00:00.000Z'),
+      expires_at: new Date('2026-07-16T12:00:00.000Z'),
+      next_execution_at: new Date('2026-07-15T12:00:00.000Z'),
+      metadata: { productRecurrence: 'once' },
+    };
+    const query = vi.fn().mockResolvedValueOnce([stored]).mockResolvedValueOnce([stored]);
+    const result = await updateSchedule(
+      database(query),
+      'user-1',
+      'task-1',
+      {
+        notificationSettings: {
+          onSuccess: false,
+          onFailure: false,
+          onApproval: false,
+          push: false,
+          email: false,
+        },
+      },
+      { now: new Date('2026-07-15T11:00:00.000Z') },
+    );
+    expect(result.executeAt).toBe('2026-07-15T12:00:00.000Z');
+    expect(result.nextExecutionAt).toBe('2026-07-15T12:00:00.000Z');
+    expect(query).toHaveBeenCalledTimes(2);
+  });
+
   it('persists strict per-routine settings in existing metadata and exposes them on read', async () => {
     const notificationSettings = {
       onSuccess: false,
@@ -686,8 +751,8 @@ describe('schedule service persistence', () => {
       {
         ...taskRow,
         run_id: 'run-1',
-        run_started_at: '2026-07-15T12:00:00.000Z',
-        scheduled_for: '2026-07-15T12:00:00.000Z',
+        run_started_at: new Date('2026-07-15T12:00:00.000Z'),
+        scheduled_for: new Date('2026-07-15T12:00:00.000Z'),
         trigger_source: 'schedule',
       },
     ]);
@@ -709,6 +774,8 @@ describe('schedule service persistence', () => {
       MEMBERSHIP_STATUSES_THAT_MAY_ACT,
     ]);
     expect(sql).toMatch(/organization_members member/i);
+    expect(claims[0]?.scheduledFor).toBe('2026-07-15T12:00:00.000Z');
+    expect(claims[0]?.startedAt).toBe('2026-07-15T12:00:00.000Z');
     expect(claims[0]?.scope).toEqual({
       userId: 'user-1',
       organizationId: '11111111-1111-4111-8111-111111111111',

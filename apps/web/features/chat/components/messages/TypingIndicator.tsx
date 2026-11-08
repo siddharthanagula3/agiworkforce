@@ -13,7 +13,7 @@ export const TypingIndicator: React.FC<TypingIndicatorProps> = ({ className }) =
       data-testid="typing-indicator"
     >
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <AgiMark size={16} spinning className="animate-spin motion-reduce:animate-none" />
+        <AgiMark size={16} spinning className="" />
         <span>Preparing</span>
       </div>
     </div>

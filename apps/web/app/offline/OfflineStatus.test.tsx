@@ -1,11 +1,11 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const online = vi.hoisted(() => ({ value: false as boolean | null }));
 
 vi.mock('@agiworkforce/unified-chat', () => ({ useOnlineStatus: () => online.value }));
 
-import { OfflineCaptivePortalHint, OfflineSummary } from './OfflineStatus';
+import { OfflineCaptivePortalHint, OfflineStatus, OfflineSummary } from './OfflineStatus';
 
 describe('offline page copy', () => {
   beforeEach(() => {
@@ -35,5 +35,21 @@ describe('offline page copy', () => {
     expect(screen.queryByText(/cannot reach the network/)).toBeNull();
     expect(screen.queryByText(/captive portal/)).toBeNull();
     expect(screen.getByText(/Nothing you had open was lost/)).toBeInTheDocument();
+  });
+
+  it('reloads the public page when Retry is chosen', () => {
+    const reload = vi.fn();
+    const current = window.location;
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { ...current, reload },
+    });
+    try {
+      render(<OfflineStatus />);
+      fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+      expect(reload).toHaveBeenCalledOnce();
+    } finally {
+      Object.defineProperty(window, 'location', { configurable: true, value: current });
+    }
   });
 });

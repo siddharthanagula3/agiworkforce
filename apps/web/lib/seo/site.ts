@@ -1,11 +1,17 @@
+import { COMPANY_SITE_NAME, PRODUCT_BRAND } from '@agiworkforce/types';
+
+import { CONTACT_EMAIL, LEGAL_ENTITY } from '@/lib/legal-constants';
+
 export const SITE_URL = (process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com').replace(
   /\/$/,
   '',
 );
 
-export const SITE_NAME = 'AGI';
+export const SITE_NAME = PRODUCT_BRAND;
 
-export const SITE_LEGAL_NAME = 'AGI Automation LLC';
+export const SITE_ALTERNATE_NAME = COMPANY_SITE_NAME;
+
+export const SITE_LEGAL_NAME = LEGAL_ENTITY;
 
 export const OG_IMAGE_PATH = '/api/og';
 
@@ -13,12 +19,12 @@ export const OG_IMAGE = {
   url: `${OG_IMAGE_PATH}?v=2`,
   width: 1200,
   height: 630,
-  alt: 'AGI: ChatGPT, Claude, Gemini and more in one app, beside a preview of the AGI chat workspace',
+  alt: `${PRODUCT_BRAND}: ChatGPT, Claude, Gemini and more in one app, beside a preview of the chat workspace`,
 } as const;
 
 export const OG_IMAGE_URL = `${SITE_URL}${OG_IMAGE.url}`;
 
-export const SUPPORT_EMAIL = 'contact@agiworkforce.com';
+export const SUPPORT_EMAIL = CONTACT_EMAIL;
 
 export const DISALLOW_APP = [
   '/api/',

@@ -8,6 +8,9 @@ import {
   agiPalette,
   agiCoolPalette,
   agiBrandScale,
+  agiSymbolPalette,
+  agiSymbolShinePath,
+  agiSymbolShineBand,
   agiChatCssVars,
   agiChatTypographyCssVars,
   agiExtensionCssVars,
@@ -134,6 +137,21 @@ const foundationBlock = (selector: string): string => braceBody(foundationCss, `
 
 const foundationLight = foundationBlock(':root');
 const foundationDark = foundationBlock('.dark');
+
+describe('symbol ribbon palette', () => {
+  it('keeps the web and native shine on the same ribbon path', () => {
+    const path = foundationLight.match(/--symbol-shine-path:\s*path\(\s*['"]([^'"]+)['"]\s*\)/);
+    expect(path?.[1]).toBe(agiSymbolShinePath);
+    const band = foundationLight.match(/--symbol-shine-band:\s*path\(\s*['"]([^'"]+)['"]\s*\)/);
+    expect(band?.[1]).toBe(agiSymbolShineBand);
+  });
+  it('uses the same logo colours in CSS and native motion without theme overrides', () => {
+    for (const [name, value] of Object.entries(agiSymbolPalette)) {
+      expect(foundationLight).toContain(`--symbol-ribbon-${name}: ${value};`);
+      expect(foundationDark).not.toContain(`--symbol-ribbon-${name}:`);
+    }
+  });
+});
 
 const CORNERS: Record<string, string> = Object.fromEntries(
   [...foundationLight.matchAll(/^\s*(--corner-[a-z]+):\s*([^;]+);/gm)].map((m) => [
@@ -764,16 +782,11 @@ describe('the marketing design-system palette clears AA in both themes', () => {
   const TEXTS = ['--agi-ink', '--agi-ink-2', '--agi-ink-3', '--agi-accent-text'] as const;
   const LANES = ['local', 'byok', 'cloud'] as const;
 
-  // The landing overrides only the accent; grounds and inks resolve from the
-  // neutral blocks. `token` reads the first declaration, so the override leads.
-  const FLAGSHIP_SCOPE = "body:has([data-public-palette='flagship'])";
-  const FLAGSHIP_THEMES = {
-    dark: `${designBlock(`${FLAGSHIP_SCOPE} [data-design='agi']`, '--agi-accent')}\n${THEMES.dark}`,
-    light: `${designBlock(
-      `${FLAGSHIP_SCOPE} [data-theme='light'][data-design='agi']`,
-      '--agi-accent',
-    )}\n${THEMES.light}`,
-  };
+  const FLAGSHIP_THEMES = THEMES;
+
+  it('the landing inherits the public palette without a route-specific accent override', () => {
+    expect(globalsCss).not.toMatch(/body:has\(\[data-public-palette='flagship'\]\)/);
+  });
 
   for (const [theme, block] of Object.entries(FLAGSHIP_THEMES)) {
     for (const name of GROUNDS) {

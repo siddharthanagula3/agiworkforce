@@ -8,9 +8,9 @@ import { Reveal } from '@/features/marketing/components/Reveal';
 import { NOTIFY_CTA, SURFACE_STATUS } from '../../lib/marketing-constants';
 
 export const metadata = buildMetadata({
-  title: 'AGI Extension | Browser Context, Desktop Bridge',
+  title: 'Extension | Browser Context, Desktop Bridge',
   description:
-    'A Chrome Manifest V3 side panel that reads the tab only when you ask. Chat answers come back from AGI Managed Cloud, a paired HMAC-signed bridge passes selections and captures to AGI Desktop, and computer use posts the conversation with its screenshots, and any console messages and request records it read, to the Managed Cloud gateway directly from the extension.',
+    'A Chrome Manifest V3 side panel that reads the tab only when you ask. Chat answers come back from Cloud, a paired HMAC-signed bridge passes selections and captures to Desktop, and computer use posts the conversation with its screenshots, and any console messages and request records it read, to the Cloud gateway directly from the extension.',
   path: '/chrome-extension',
 });
 
@@ -22,13 +22,13 @@ const ARCHITECTURE_STEPS = [
   },
   {
     n: '02',
-    title: 'Managed Cloud answers',
-    body: 'Your message, the conversation so far, and any page text you attached go to AGI Managed Cloud under your signed-in account. The extension ships no local chat runtime, so this is the only road an answer can take.',
+    title: 'Cloud answers',
+    body: 'Your message, the conversation so far, and any page text you attached go to Cloud under your signed-in account. The extension ships no local chat runtime, so this is the only road an answer can take.',
   },
   {
     n: '03',
     title: 'Computer use sends the pictures too',
-    body: 'Driving a tab keeps the same gateway and changes the payload: every step posts the whole conversation, including every screenshot the run has taken of your tab, to the Managed Cloud gateway under your account token.',
+    body: 'Driving a tab keeps the same gateway and changes the payload: every step posts the whole conversation, including every screenshot the run has taken of your tab, to the Cloud gateway under your account token.',
   },
 ];
 
@@ -45,18 +45,18 @@ const CAPABILITIES = [
   },
   {
     meta: 'Chat',
-    title: 'Answers from Managed Cloud',
-    body: 'Press send and the conversation goes to AGI Managed Cloud under your account. The panel holds no provider key and offers no second chat route.',
+    title: 'Answers from Cloud',
+    body: 'Press send and the conversation goes to Cloud under your account. The panel holds no provider key and offers no second chat route.',
   },
   {
     meta: 'Bridge',
     title: 'Paired Desktop handoff',
-    body: 'Native messaging carries a selection, a page capture or a queued message to AGI Desktop on localhost port 8787, with explicit pairing and HMAC-signed messages. It moves context into Desktop rather than answering in the panel.',
+    body: 'Native messaging carries a selection, a page capture or a queued message to Desktop on localhost port 8787, with explicit pairing and HMAC-signed messages. It moves context into Desktop rather than answering in the panel.',
   },
   {
     meta: 'Computer use',
     title: 'Cloud-executed browser control',
-    body: 'Driving a tab requires Managed Cloud sign-in. Each step sends the conversation and the screenshots taken of your tab to the Managed Cloud gateway, so a secret rendered on the page travels with the picture of it.',
+    body: 'Driving a tab requires Cloud sign-in. Each step sends the conversation and the screenshots taken of your tab to the Cloud gateway, so a secret rendered on the page travels with the picture of it.',
   },
   {
     meta: 'Permissions',
@@ -79,12 +79,12 @@ const BOUNDARY_LEDGER = [
   { k: 'Manifest', v: 'Chrome MV3 with side panel' },
   {
     k: 'Bridge',
-    v: 'Optional native messaging to AGI Desktop · localhost port 8787 · selections, captures and queued messages',
+    v: 'Optional native messaging to Desktop · localhost port 8787 · selections, captures and queued messages',
   },
   { k: 'Pairing', v: 'Explicit pairing · HMAC-signed messages' },
   {
     k: 'Inference in Chrome',
-    v: 'None. Chat answers come from AGI Managed Cloud, and computer use calls the Managed Cloud gateway directly from the extension with the screenshots it takes.',
+    v: 'None. Chat answers come from Cloud, and computer use calls the Cloud gateway directly from the extension with the screenshots it takes.',
   },
   {
     k: 'Keys in Chrome',
@@ -92,11 +92,11 @@ const BOUNDARY_LEDGER = [
   },
   {
     k: 'Computer-use egress',
-    v: 'The whole conversation and every screenshot POST to the Managed Cloud gateway under your account token. Screenshots are not redacted and cannot be.',
+    v: 'The whole conversation and every screenshot POST to the Cloud gateway under your account token. Screenshots are not redacted and cannot be.',
   },
   {
     k: 'Chat-memory sync',
-    v: 'Managed Cloud chats mirror to your account by default. Turn mirroring off under Data handling in the extension options and they stay in local extension storage.',
+    v: 'Cloud chats mirror to your account by default. Turn mirroring off under Data handling in the extension options and they stay in local extension storage.',
   },
   {
     k: 'Security story',
@@ -104,7 +104,7 @@ const BOUNDARY_LEDGER = [
   },
   {
     k: 'Status',
-    v: 'Chat and computer use scoped to Managed Cloud · the Desktop bridge is an optional local handoff',
+    v: 'Chat and computer use scoped to Cloud · the Desktop bridge is an optional local handoff',
   },
 ];
 
@@ -117,16 +117,16 @@ export default function ChromeExtensionPage() {
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
           <div className="agi-fl-hero-split">
             <div className="agi-fl-hero-copy">
-              <p className="agi-fl-eyebrow">AGI Extension · {SURFACE_STATUS.chrome}</p>
+              <p className="agi-fl-eyebrow">Extension · {SURFACE_STATUS.chrome}</p>
               <h1 id="agi-fl-chrome-hero-title" className="sr-only">
-                AGI Extension
+                Extension
               </h1>
               <div className="agi-fl-cta-row">
                 <Link href={NOTIFY_CTA.href} className="agi-fl-cta agi-fl-cta--primary">
                   {NOTIFY_CTA.label}
                 </Link>
                 <Link href="/desktop" className="agi-fl-cta agi-fl-cta--secondary">
-                  See AGI Desktop
+                  See Desktop
                 </Link>
                 <Link href="/get-started" className="agi-fl-cta agi-fl-cta--ghost">
                   Get Started
@@ -142,14 +142,14 @@ export default function ChromeExtensionPage() {
         <section className="agi-fl-section" aria-labelledby="agi-fl-chrome-arch-title">
           <p className="agi-fl-eyebrow">The architecture</p>
           <h2 id="agi-fl-chrome-arch-title" className="agi-fl-h2">
-            The browser asks. Managed Cloud answers.
+            The browser asks. Cloud answers.
           </h2>
           <p className="agi-fl-section-lede">
-            AGI Extension never runs a model locally and never stores provider keys. It captures
-            what you point at, sends it to Managed Cloud under your account, and brings the answer
-            back into the panel. Pairing AGI Desktop adds a local road for selections and captures,
-            not a second place an answer can come from. Computer use keeps the same gateway and adds
-            the screenshots it takes of your tab.
+            Extension never runs a model locally and never stores provider keys. It captures what
+            you point at, sends it to Cloud under your account, and brings the answer back into the
+            panel. Pairing Desktop adds a local road for selections and captures, not a second place
+            an answer can come from. Computer use keeps the same gateway and adds the screenshots it
+            takes of your tab.
           </p>
           <ol className="agi-steps">
             {ARCHITECTURE_STEPS.map((step, i) => (
@@ -194,13 +194,13 @@ export default function ChromeExtensionPage() {
             What stays where.
           </h2>
           <p className="agi-fl-section-lede">
-            Local, BYOK, and AGI Cloud are separate trust boundaries, and the panel sits in the
-            cloud one: chat leaves for Managed Cloud under your account whatever route you run on
-            Desktop. Computer use goes further still, transmitting the conversation and its
-            screenshots to that gateway on every step, which is why starting a session is always an
-            explicit act. The session gates, the site allowlist, and the residual screenshot risk
-            are written out at <Link href="/agent-permissions">/agent-permissions</Link>. Those
-            chats mirror to your account until you turn mirroring off in the extension options.
+            Local, BYOK, and Cloud are separate trust boundaries, and the panel sits in the cloud
+            one: chat leaves for Cloud under your account whatever route you run on Desktop.
+            Computer use goes further still, transmitting the conversation and its screenshots to
+            that gateway on every step, which is why starting a session is always an explicit act.
+            The session gates, the site allowlist, and the residual screenshot risk are written out
+            at <Link href="/agent-permissions">/agent-permissions</Link>. Those chats mirror to your
+            account until you turn mirroring off in the extension options.
           </p>
           <table className="agi-ledger">
             <tbody>
@@ -217,10 +217,10 @@ export default function ChromeExtensionPage() {
         <FinalCta
           eyebrow={SURFACE_STATUS.chrome}
           title="Put AGI beside the page."
-          body={`The panel answers from AGI Managed Cloud, and computer use posts the conversation, its screenshots, and any console messages and request records it read to that same gateway. Pair AGI Desktop when you want a local road for selections and captures. AGI managed cloud is in public alpha and open by default on the web: sign in and start, no waitlist. The extension itself is ${SURFACE_STATUS.chrome.toLowerCase()}. ${NOTIFY_CTA.label} takes you to the form on the download page, where you leave an email to hear when it is ready to install.`}
+          body={`The panel answers from Cloud, and computer use posts the conversation, its screenshots, and any console messages and request records it read to that same gateway. Pair Desktop when you want a local road for selections and captures. Cloud is in public alpha and open by default on the web: sign in and start, no waitlist. The extension itself is ${SURFACE_STATUS.chrome.toLowerCase()}. ${NOTIFY_CTA.label} takes you to the form on the download page, where you leave an email to hear when it is ready to install.`}
           ctas={[
             NOTIFY_CTA,
-            { href: '/desktop', label: 'See AGI Desktop' },
+            { href: '/desktop', label: 'See Desktop' },
             { href: '/get-started', label: 'Get Started' },
           ]}
         />

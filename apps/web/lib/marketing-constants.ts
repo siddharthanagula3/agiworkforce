@@ -33,18 +33,18 @@ export const LAUNCH = {
 } as const;
 
 export const POSITIONING = {
-  wedge: 'Try AGI on the web. Run Local and BYOK from the CLI. Managed cloud, open by default.',
+  wedge: 'Try chat on the web. Run Local and BYOK from the CLI. Cloud, open by default.',
   routeBoundary: [
-    'Website users can use AGI managed cloud. The Free plan runs on a model AGI chooses, within a small usage allowance, and paid plans with more capacity start from the pricing page, which offers the upgrade waitlist or takes an access code if upgrades are not open to your account yet.',
+    'Website users can use Cloud. The Free plan runs on an automatically selected model, within a small usage allowance, and paid plans with more capacity start from the pricing page, which offers the upgrade waitlist or takes an access code if upgrades are not open to your account yet.',
     'The CLI supports Local and BYOK.',
     CLI_AVAILABILITY_NOTE,
     `VS Code BYOK is ${SURFACE_STATUS.vscode.toLowerCase()}.`,
-    'Managed cloud is open by default, not invite-only.',
+    'Cloud is open by default, not invite-only.',
   ]
     .filter(Boolean)
     .join(' '),
   cloudInvite:
-    'Managed cloud is open by default. Higher capacity is a paid subscription that starts from the pricing page; if paid upgrades are not open to your account yet, you can join the upgrade waitlist there or enter an access code.',
+    'Cloud is open by default. Higher capacity is a paid subscription that starts from the pricing page; if paid upgrades are not open to your account yet, you can join the upgrade waitlist there or enter an access code.',
 } as const;
 
 const BYOK_SURFACE_IDS = ['cli', 'vscode'] as const;
@@ -181,7 +181,7 @@ export const MARKETING_FEATURE_MATRIX: Record<PricingTabId, PlanFeatureRow[]> = 
       label: 'Enterprise',
       price: 'Custom',
       billingInterval: 'Annual contract',
-      usageCapacity: 'Managed usage set by your contract',
+      usageCapacity: 'Cloud usage set by your contract',
       bestFor: 'Organizations needing SSO, audit, and data retention',
       ctaLabel: 'Contact sales',
       ctaHref: '/contact-sales',
@@ -207,7 +207,7 @@ export const MARKETING = {
   models: { count: CATALOG_MODEL_COUNT, display: `${CATALOG_MODEL_COUNT}`, label: 'Models' },
   surfaces: { count: 6, display: '6', label: 'Platforms' },
   tagline:
-    'Local-first privacy. Explicit BYOK. Multi-provider routing. Privacy-controlled managed compute.',
+    'Local-first privacy. Explicit BYOK. Multi-provider routing. Privacy-controlled cloud compute.',
 } as const;
 
 export function approximateCount(count: number): string {

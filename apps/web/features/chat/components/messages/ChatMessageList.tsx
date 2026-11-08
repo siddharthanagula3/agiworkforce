@@ -1247,7 +1247,9 @@ const ChatMessageListComponent = ({
     // effect order guarantees, is what keeps the two apart.
     scrolledLeafRef.current = activeLeafId;
     setUserScrolledUp(false);
-  }, [activeLeafId, conversationId]);
+    stop();
+    setSpeakingMessageId(null);
+  }, [activeLeafId, conversationId, stop]);
 
   const prefersReducedMotion = useReducedMotion();
 

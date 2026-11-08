@@ -174,7 +174,7 @@ export default function ApiDocsPage() {
           eyebrow="API docs"
           title="OpenAI-compatible endpoints."
           em="endpoints."
-          lede="Use a session token or an AGI developer API key, route through the managed gateway, and stream tokens back. Calls consume the managed-cloud credits attached to the account."
+          lede="Use a session token or an AGI developer API key, route through the managed gateway, and stream tokens back. Calls consume the cloud credits attached to the account."
           ctas={[
             { href: '/openapi.json', label: 'OpenAPI bundle' },
             { href: '#quickstart', label: 'Authentication and scopes', variant: 'secondary' },

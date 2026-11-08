@@ -657,6 +657,43 @@ describe('cloud agent execution service', () => {
     );
   });
 
+  it('retains the token estimate marker when aggregating a failed provider receipt', async () => {
+    const observation = {
+      inputTokens: 10,
+      outputTokens: 5,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      cacheWrite1hTokens: 0,
+      reasoningTokens: 0,
+      tokenSource: 'estimated' as const,
+    };
+    vi.mocked(db.query).mockResolvedValueOnce([
+      {
+        provider_calls: '1',
+        input_tokens: '10',
+        output_tokens: '5',
+        cache_read_tokens: '0',
+        cache_write_tokens: '0',
+        cache_write_1h_tokens: '0',
+        reasoning_tokens: '0',
+        tool_spend_microusd: '0',
+        provider_usage_receipts: [
+          {
+            ...observation,
+            providerCallObservations: [observation],
+          },
+        ],
+      },
+    ]);
+    const usage = await getCloudAgentExecutionUsage(db, {
+      userId: 'user-1',
+      runId: RUN_ID,
+      billingIdempotencyKey: 'agi.chat.web.request-1',
+    });
+    expect(usage.providerCallObservations).toEqual([observation]);
+    expect(usage).toMatchObject({ providerCalls: 1, inputTokens: 10, outputTokens: 5 });
+  });
+
   it('rebuilds two subthreshold call observations from durable provider receipts', async () => {
     const observation = (costDollars: number) => ({
       inputTokens: 75,

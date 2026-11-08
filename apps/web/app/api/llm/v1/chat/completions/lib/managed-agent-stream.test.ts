@@ -164,7 +164,9 @@ async function* silentGenerator(): AsyncGenerator<Uint8Array> {
   yield encoder.encode('data: [DONE]\n\n');
 }
 
-async function* canonicalEventGenerator(): AsyncGenerator<Uint8Array> {
+async function* canonicalEventGenerator(
+  state: 'awaiting_input' | 'cancelled' = 'awaiting_input',
+): AsyncGenerator<Uint8Array> {
   const encoder = new TextEncoder();
   yield encoder.encode(
     `data: ${JSON.stringify({
@@ -180,8 +182,8 @@ async function* canonicalEventGenerator(): AsyncGenerator<Uint8Array> {
               event: {
                 type: 'task-state-changed',
                 taskId: 'turn-1',
-                state: 'awaiting_input',
-                summary: 'Approval required',
+                state,
+                summary: state === 'cancelled' ? 'Cancelled by the user' : 'Approval required',
               },
             },
           },
@@ -430,6 +432,13 @@ describe('managed agent stream', () => {
         { type: 'task-state-changed', taskId: 'turn-1', state: 'failed' },
         { type: 'stop', reason: 'error' },
         { type: 'task-state-changed', taskId: 'turn-1', state: 'ready_for_review' },
+      ],
+    },
+    {
+      name: 'cancelled state superseded by successful stop',
+      terminalEvents: [
+        { type: 'task-state-changed', taskId: 'turn-1', state: 'cancelled' },
+        { type: 'stop', reason: 'end-turn' },
       ],
     },
     {
@@ -748,6 +757,42 @@ describe('managed agent stream', () => {
     expect(output.match(/data: \[DONE\]/g)).toHaveLength(1);
     expect(events).toEqual(['settled', 'delivered', 'terminal-visible']);
   });
+
+  it.each([true, false])(
+    'settles a generator-reported cancellation with run journal=%s as cancelled',
+    async (withJournal) => {
+      finalize.mockClear();
+      delivered.mockClear();
+      transitionCloudAgentRun.mockClear();
+      const onTerminal = vi.fn(async (_outcome: unknown) => undefined);
+      await readAll(
+        buildManagedAgentStream({
+          generator: canonicalEventGenerator('cancelled'),
+          processed,
+          usage: createObservedProviderUsage(),
+          completionReason: 'tool_loop_completed',
+          cancellationReason: 'client_cancelled_tool_loop',
+          ...(withJournal
+            ? { runJournal: { db: {} as never, userId: 'user-1', runId: 'run-1' } }
+            : {}),
+          onTerminal,
+        }),
+      );
+      expect(finalize).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reason: 'client_cancelled_tool_loop',
+          cancelled: true,
+          attempt: { outcome: 'cancelled' },
+        }),
+      );
+      expect(delivered).not.toHaveBeenCalled();
+      expect(onTerminal).toHaveBeenCalledWith('cancelled');
+      expect(transitionCloudAgentRun).not.toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ state: 'ready_for_review' }),
+      );
+    },
+  );
 
   it('finalizes cancellation without emitting a terminal event', async () => {
     events.length = 0;

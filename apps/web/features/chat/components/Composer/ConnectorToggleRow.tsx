@@ -24,7 +24,7 @@ export interface ConnectorToggleRowProps {
 
 /**
  * The one connector toggle in the composer. Both the plus menu submenu and the
- * AGI Work bar popover write the same conversation state, so a switch in one
+ * Work bar popover write the same conversation state, so a switch in one
  * and a checkbox in the other told the user they were two different settings.
  */
 export function ConnectorToggleRow({

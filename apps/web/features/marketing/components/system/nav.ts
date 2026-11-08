@@ -1,4 +1,5 @@
 import { PRODUCT_NAMES } from '@agiworkforce/types';
+import { BLOG_DESCRIPTION } from '@/lib/blog-posts';
 import { SURFACE_STATUS } from '@/lib/surface-status';
 import {
   AUTH_LOGIN_PATH,
@@ -143,7 +144,7 @@ const RESOURCE_ITEMS: readonly NavGroupItem[] = [
   {
     href: '/blog',
     label: 'Blog',
-    description: 'No posts yet; announcements are in the release notes',
+    description: BLOG_DESCRIPTION,
   },
   { href: '/careers', label: 'Careers', description: 'Founder-led, no open roles' },
   { href: '/trust', label: 'Trust centre', description: 'Claims with dates' },

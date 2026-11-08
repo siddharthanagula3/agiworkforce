@@ -10,7 +10,6 @@ import {
   CircleDashed,
   CircleSlash,
   ListChecks,
-  LoaderCircle,
   MessageSquare,
   MessageSquarePlus,
   Pause,
@@ -41,7 +40,7 @@ import { estimateResearchCredits } from '@/lib/billing/credit-estimates';
 import { ResearchPlan } from './ResearchPlan';
 import { useResearchRunControls } from './research-run-controls';
 import type { MessageResearchState } from '@shared/stores/web-chat-store';
-import { useUiTranslation } from '@agiworkforce/ui';
+import { AgiMark, useUiTranslation } from '@agiworkforce/ui';
 import { useBrowserReplyReadyPreference } from '../../hooks/use-browser-reply-ready-preference';
 import { isResearchGuidanceStep, researchAnswersGuidance } from '../../utils/research-plan';
 
@@ -97,11 +96,9 @@ function PlanStepRow({ step }: { step: ResearchStep }) {
       ? CircleCheck
       : step.status === 'failed'
         ? CircleAlert
-        : step.status === 'running'
-          ? LoaderCircle
-          : step.status === 'dropped'
-            ? CircleSlash
-            : CircleDashed;
+        : step.status === 'dropped'
+          ? CircleSlash
+          : CircleDashed;
   const TypeIcon = step.type === 'synthesize' ? FileText : Search;
 
   return (
@@ -110,17 +107,20 @@ function PlanStepRow({ step }: { step: ResearchStep }) {
       data-testid="research-plan-step"
       data-status={step.status}
     >
-      <Icon
-        className={cn(
-          'mt-[2px] h-3 w-3 shrink-0',
-          step.status === 'completed' && 'text-primary',
-          step.status === 'failed' && 'text-danger',
-          step.status === 'running' && 'motion-safe:animate-spin text-primary',
-          step.status === 'pending' && 'text-muted-foreground',
-          step.status === 'dropped' && 'text-muted-foreground',
-        )}
-        aria-hidden="true"
-      />
+      {step.status === 'running' ? (
+        <AgiMark spinning className="mt-[2px] h-3 w-3 shrink-0 text-primary" aria-hidden="true" />
+      ) : (
+        <Icon
+          className={cn(
+            'mt-[2px] h-3 w-3 shrink-0',
+            step.status === 'completed' && 'text-primary',
+            step.status === 'failed' && 'text-danger',
+            step.status === 'pending' && 'text-muted-foreground',
+            step.status === 'dropped' && 'text-muted-foreground',
+          )}
+          aria-hidden="true"
+        />
+      )}
       <TypeIcon className="mt-[2px] h-3 w-3 shrink-0 text-muted-foreground" aria-hidden="true" />
       <span
         className={cn(
@@ -543,10 +543,11 @@ export function ResearchActivity({
               data-testid="research-retry"
               aria-label="Retry this research run"
             >
-              <RotateCw
-                className={cn('h-3 w-3', isRetrying && 'motion-safe:animate-spin')}
-                aria-hidden="true"
-              />
+              {isRetrying ? (
+                <AgiMark spinning className={cn('h-3 w-3', '')} aria-hidden="true" />
+              ) : (
+                <RotateCw className="h-3 w-3" aria-hidden="true" />
+              )}
               {isRetrying ? 'Retrying…' : 'Retry'}
             </button>
           )}

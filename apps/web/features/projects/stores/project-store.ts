@@ -1,5 +1,5 @@
 /**
- * Project Store · Web managed-cloud view model.
+ * Project Store · Web cloud view model.
  *
  * The shared Zustand store is deliberately memory-only. This adapter binds it
  * to one authenticated Web account at a time and rejects late responses from
@@ -21,11 +21,7 @@ export const useProjectStore: typeof useChatProjectStore = useChatProjectStore;
 export type { UnifiedProject as Project };
 
 export type ManagedCloudProjectSessionStatus =
-  | 'idle'
-  | 'loading'
-  | 'ready'
-  | 'error'
-  | 'signed-out';
+  'idle' | 'loading' | 'ready' | 'error' | 'signed-out';
 
 interface ManagedCloudProjectSessionState {
   accountId: string | null;

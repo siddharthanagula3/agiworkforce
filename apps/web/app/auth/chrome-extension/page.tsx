@@ -30,7 +30,7 @@ export default function ChromeExtensionAuthCompletePage() {
         >
           <Stack gap="loose">
             <div>
-              <Eyebrow>AGI Extension</Eyebrow>
+              <Eyebrow>Extension</Eyebrow>
               <h1 className="agi-ds-h1" id="chrome-auth-title">
                 {!isLoaded
                   ? 'Checking your account.'
@@ -41,12 +41,12 @@ export default function ChromeExtensionAuthCompletePage() {
             </div>
             {!isLoaded ? (
               <p className="agi-ds-prose" role="status">
-                Checking your AGI Cloud session…
+                Checking your Cloud session…
               </p>
             ) : isSignedIn ? (
               <Stack gap="tight">
                 <p className="agi-ds-prose" role="status">
-                  Your AGI Cloud session is ready for the browser extension.
+                  Your Cloud session is ready for the browser extension.
                 </p>
                 <Prose size="sm">
                   Return to Chrome. The AGI side panel picks up your account when you go back to it.
@@ -59,7 +59,7 @@ export default function ChromeExtensionAuthCompletePage() {
                   with the extension.
                 </p>
                 <ButtonRow>
-                  <Button href={webSignInHref(RETURN_PATH)}>Sign in to AGI Cloud</Button>
+                  <Button href={webSignInHref(RETURN_PATH)}>Sign in to Cloud</Button>
                   <Button href={webEntryHref(RETURN_PATH)} variant="secondary">
                     {CREATE_ACCOUNT_LABEL}
                   </Button>

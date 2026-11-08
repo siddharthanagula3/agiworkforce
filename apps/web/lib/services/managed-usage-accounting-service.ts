@@ -72,6 +72,7 @@ export interface ProviderUsageObservation {
   model?: string;
   costDollars?: number;
   costSource?: ObservedCostSource;
+  tokenSource?: 'provider_reported' | 'estimated';
   routeId?: string | null;
   upstreamProvider?: string;
   providerReportedCostUsd?: number;
@@ -219,6 +220,7 @@ function normalizeObservation(
     cacheWriteTokens: nonNegative(observation.cacheWriteTokens),
     cacheWrite1hTokens: nonNegative(observation.cacheWrite1hTokens),
     reasoningTokens: nonNegative(observation.reasoningTokens),
+    ...(observation.tokenSource ? { tokenSource: observation.tokenSource } : {}),
     ...(observation.upstreamProvider ? { upstreamProvider: observation.upstreamProvider } : {}),
     ...(providerReportedCostUsd !== undefined ? { providerReportedCostUsd } : {}),
     ...(observation.speed ? { speed: observation.speed } : {}),

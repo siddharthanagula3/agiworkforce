@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { resolveAutoRoute } from '@agiworkforce/routing';
-import { isSupportAgentEnabled } from '../answer/model-route';
+import { resolveModelFamilySlot } from '@agiworkforce/types';
+import { isSupportAgentEnabled, SUPPORT_MODEL_FAMILY } from '../answer/model-route';
 
 describe('support model route (real router)', () => {
   it.each(['free', 'pro', 'max'])('resolves a managed cloud route on the %s tier', (tier) => {
     const route = resolveAutoRoute({
-      selection: 'auto',
+      selection: resolveModelFamilySlot(SUPPORT_MODEL_FAMILY),
       taskType: 'simple_chat',
       subscriptionTier: tier,
       trustMode: 'managed_cloud',
@@ -14,6 +15,7 @@ describe('support model route (real router)', () => {
 
     expect(route.status).toBe('selected');
     if (route.status !== 'selected') return;
+    expect(route.modelKey).toBe(resolveModelFamilySlot(SUPPORT_MODEL_FAMILY));
     expect(route.provider.length).toBeGreaterThan(0);
     expect(route.modelKey.length).toBeGreaterThan(0);
     expect(route.providerModelId.length).toBeGreaterThan(0);

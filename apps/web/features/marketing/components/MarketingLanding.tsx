@@ -1,6 +1,7 @@
 import {
   CONNECTORS_COMING_SOON_MESSAGE,
   PRODUCT_NAMES,
+  PRODUCT_BRAND,
   connectorsReleased,
 } from '@agiworkforce/types';
 import { Header } from '@shared/components/layout/Header';
@@ -24,19 +25,15 @@ import {
   LandingSurfaceIndex,
   LandingTrustTriptych,
   LatestBlock,
-  ProofRow,
   StartCards,
 } from '@/features/marketing/components/FlagshipSections';
 import { RELEASES } from '@/lib/changelog-entries';
-import { CATALOG_SCOPES } from '@/lib/catalog-scopes';
 import { PublicWaitlistForm } from '@/features/marketing/components/PublicWaitlistForm';
 import { WEB_ENTRY_HREF } from '@/features/marketing/components/system/nav';
 import {
-  approximateCount,
   BYOK_SURFACES,
   CLI_AVAILABILITY_NOTE,
   CLI_LOCAL_RUNTIMES,
-  MARKETING,
   SURFACE_STATUS,
   surfaceCta,
 } from '@/lib/marketing-constants';
@@ -55,42 +52,11 @@ export function MarketingLanding() {
       <Header />
       <main id="main-content" tabIndex={-1} className="agi-shell">
         <LandingHero
-          brand="AGI"
-          eyebrow="the AI application suite"
+          brand={PRODUCT_BRAND}
           titleLines={[]}
           em=""
-          ctas={[{ href: WEB_ENTRY_HREF, label: 'Try AGI Chat' }, surfaceCta('desktop')]}
+          ctas={[{ href: WEB_ENTRY_HREF, label: 'Try chat' }, surfaceCta('desktop')]}
           visual={<MobileHeroVisual />}
-          announcement={{
-            tag: 'New',
-            label: `${approximateCount(CATALOG_SCOPES.byokModelEntries.value)} models across ${CATALOG_SCOPES.byokProviders.text}`,
-            href: '/providers',
-          }}
-        />
-
-        <ProofRow
-          label="Product facts"
-          facts={[
-            { value: approximateCount(MARKETING.models.count), label: 'models in the catalogue' },
-            {
-              value: `${CATALOG_SCOPES.byokProviders.value}`,
-              label: `${CATALOG_SCOPES.byokProviders.label} in the catalogue`,
-            },
-            {
-              value: approximateCount(CLI_LOCAL_RUNTIMES.names.length),
-              label: 'local runtimes in the CLI',
-            },
-            {
-              value: approximateCount(MARKETING.surfaces.count),
-              label: 'surfaces built for one account',
-            },
-          ]}
-        />
-
-        <RouteFlow
-          eyebrow="Routing"
-          title="Every model. One router. Your call."
-          lede="Ask for a model by name and that model answers. Leave it on Auto and the router reads each request, picks a model suited to the task and your plan while weighing cost, and prints the label under the answer. Run it local, on your keys, or in AGI Cloud."
         />
 
         <LandingSurfaceIndex
@@ -100,11 +66,11 @@ export function MarketingLanding() {
           items={[
             {
               index: '01',
-              name: 'AGI Desktop',
-              tagline: 'Your managed account on your Mac.',
-              body: 'AGI Desktop for macOS. Your managed-cloud account in a window that stays open, plus approved folders and computer use that asks each session and before each app. The current Desktop accepts no provider keys or local models.',
+              name: 'Desktop',
+              tagline: 'Your account on your Mac.',
+              body: 'Desktop for macOS. Your cloud account in a window that stays open, plus approved folders and computer use that asks each session and before each app. The current Desktop accepts no provider keys or local models.',
               capabilities: [
-                'Managed-cloud chat with visible model labels',
+                'Cloud chat with visible model labels',
                 'Approved folders and programs',
                 'Computer use on macOS, asked per session and per app',
                 'Pairs with the Chrome extension',
@@ -117,15 +83,15 @@ export function MarketingLanding() {
             },
             {
               index: '02',
-              name: 'AGI Chat',
+              name: 'Chat',
               tagline: 'Zero install.',
-              body: 'Chat in the browser. Projects, artifacts, web search, and shared links. Your account and managed cloud live here.',
+              body: 'Chat in the browser. Projects, artifacts, web search, and shared links. Your account and cloud live here.',
               capabilities: [
                 'Chat with projects & memory',
                 'Artifact sidecar',
                 'Web search',
                 'Shared conversations',
-                'Account & managed cloud',
+                'Account & cloud',
               ],
               platforms: 'Any modern browser',
               status: SURFACE_STATUS.web,
@@ -134,7 +100,7 @@ export function MarketingLanding() {
             },
             {
               index: '03',
-              name: 'AGI CLI',
+              name: 'CLI',
               tagline: 'agi, in your terminal.',
               body: 'A Rust agent for the shell. Resume and fork sessions. Review code. Execute in a sandbox. Works offline.',
               capabilities: [
@@ -151,13 +117,13 @@ export function MarketingLanding() {
             },
             {
               index: '04',
-              name: 'AGI Extension',
+              name: 'Extension',
               tagline: 'Context from any page.',
-              body: 'A side panel that reads the page when you ask. Answers come back from AGI Managed Cloud. Pairing Desktop adds a local road for selections and captures, not a second place an answer comes from.',
+              body: 'A side panel that reads the page when you ask. Answers come back from Cloud. Pairing Desktop adds a local road for selections and captures, not a second place an answer comes from.',
               capabilities: [
                 'Side panel on any page',
                 'Page context on request',
-                'Chat answered by Managed Cloud',
+                'Chat answered by Cloud',
                 'Paired Desktop handoff',
                 'Scoped permissions',
                 'Workflow recording',
@@ -169,7 +135,7 @@ export function MarketingLanding() {
             },
             {
               index: '05',
-              name: 'AGI Code for VS Code',
+              name: 'Code for VS Code',
               tagline: 'Help where you code.',
               body: 'Chat with @agi in the editor. Workspace context, diff review, slash commands. Handoffs are explicit.',
               capabilities: [
@@ -186,14 +152,14 @@ export function MarketingLanding() {
             },
             {
               index: '06',
-              name: 'AGI Mobile',
+              name: 'Mobile',
               tagline: 'Private by default.',
-              body: 'Local Mode is the planned default. Local chats and memory stay on the phone. AGI Cloud is an explicit choice after sign-in.',
+              body: 'Local Mode is the planned default. Local chats and memory stay on the phone. Cloud is an explicit choice after sign-in.',
               capabilities: [
                 'On-device Local chat',
                 'Local data stays local',
                 'Projects & recents drawer',
-                'Cloud · managed by AGI',
+                'Cloud · account required',
               ],
               platforms: 'iPhone · Android',
               status: SURFACE_STATUS.mobile,
@@ -201,6 +167,12 @@ export function MarketingLanding() {
               visual: <MobileMockup />,
             },
           ]}
+        />
+
+        <RouteFlow
+          eyebrow="Routing"
+          title="Every model. One router. Your call."
+          lede="Ask for a model by name and that model answers. Leave it on Auto and the router reads each request, picks a model suited to the task and your plan while weighing cost, and prints the label under the answer. Run it local, on your keys, or in Cloud."
         />
 
         <LandingTrustTriptych
@@ -219,7 +191,7 @@ export function MarketingLanding() {
                 'Mobile Local mode is planned, not published',
                 'No account required',
               ],
-              cta: { href: '/local', label: 'Run AGI Locally' },
+              cta: { href: '/local', label: 'Run locally' },
             },
             {
               mode: 'BYOK',
@@ -235,14 +207,14 @@ export function MarketingLanding() {
               cta: { href: '/byok', label: 'Set Up BYOK' },
             },
             {
-              mode: 'AGI Cloud',
+              mode: 'Cloud',
               glyph: '●',
               title: 'Open by default.',
               body: 'Hosted capacity, open by default.',
               points: [
                 'Sign in and start, no waitlist',
                 'Designed to be shared across Web, Mobile and Desktop',
-                'AGI-owned routing with clear labels',
+                'Cloud routing with clear labels',
                 'Usage metered and transparent',
               ],
               cta: { href: '/get-started', label: 'Get Started' },
@@ -296,9 +268,9 @@ export function MarketingLanding() {
         <LandingDevBand
           eyebrow="For developers"
           title="Serious about coding."
-          body="AGI Code spans the CLI and VS Code. Sessions resume and fork. Execution is sandboxed. The CLI can run offline on local models."
+          body="Code spans the CLI and VS Code. Sessions resume and fork. Execution is sandboxed. The CLI can run offline on local models."
           ctas={[
-            { href: '/agi-code', label: 'Explore AGI Code' },
+            { href: '/agi-code', label: 'Explore Code' },
             { href: '/cli', label: 'See the CLI' },
           ]}
           visual={
@@ -311,7 +283,7 @@ export function MarketingLanding() {
 
         <LandingDevBand
           eyebrow="Approvals"
-          title="Choose when AGI asks."
+          title="Choose when the assistant asks."
           body="In the CLI, choose whether file edits and shell commands need your approval. Modes that accept edits or run automatically can skip individual prompts. Use Shift+Tab to change modes."
           ctas={[
             { href: '/features/tools', label: 'See Tool Permissions' },
@@ -321,13 +293,13 @@ export function MarketingLanding() {
         />
 
         <section className="agi-fl-section" aria-labelledby="agi-mobile-launch-title">
-          <p className="agi-fl-eyebrow">AGI Mobile</p>
+          <p className="agi-fl-eyebrow">Mobile</p>
           <h2 id="agi-mobile-launch-title" className="agi-fl-h2">
             Local, on-device AI. Built, not yet shipped.
           </h2>
           <p className="agi-fl-section-lede">
-            AGI Mobile is planned around Local Mode: chats and memory stay on the phone unless you
-            move them. It is not on the App Store or Google Play yet, so there is nothing to install
+            Mobile is planned around Local Mode: chats and memory stay on the phone unless you move
+            them. It is not on the App Store or Google Play yet, so there is nothing to install
             today. Leave your email to be told when it lands.
           </p>
           <div className="agi-fl-launch-form">
@@ -352,14 +324,14 @@ export function MarketingLanding() {
           cards={[
             {
               title: 'Start on your own',
-              body: `AGI Chat is free to try in the browser. The CLI offers Local and BYOK routes. ${CLI_AVAILABILITY_NOTE}`,
+              body: `Chat is free to try in the browser. The CLI offers Local and BYOK routes. ${CLI_AVAILABILITY_NOTE}`,
               points: [
                 'Every admitted model behind one selector, with Auto as the default',
                 'Projects, memory, artifacts and web search on the first day',
                 'Every reply names the model that answered it',
                 'The same account carries to Desktop, the CLI and the extensions once they are released',
               ],
-              cta: { href: WEB_ENTRY_HREF, label: 'Try AGI Chat' },
+              cta: { href: WEB_ENTRY_HREF, label: 'Try chat' },
             },
             {
               title: 'Bring your organisation',

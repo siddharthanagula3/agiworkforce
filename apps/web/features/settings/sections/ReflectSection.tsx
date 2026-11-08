@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Button, translateUiPlural } from '@agiworkforce/ui';
+import { AgiMark, Button, translateUiPlural } from '@agiworkforce/ui';
 import { type ManagedCloudReflectRange } from '@agiworkforce/cloud-contracts';
 import { RefreshCw } from 'lucide-react';
 import { SettingsPageLink, SettingsSectionLink } from '../components/SettingsSectionLink';
@@ -117,10 +117,11 @@ export function ReflectSection({ active = true }: { active?: boolean } = {}) {
             onClick={refresh}
             aria-label="Refresh recap"
           >
-            <RefreshCw
-              className={`me-2 h-4 w-4 ${loading ? 'motion-safe:animate-spin' : ''}`}
-              aria-hidden="true"
-            />
+            {loading ? (
+              <AgiMark spinning className="me-2 h-4 w-4" aria-hidden="true" />
+            ) : (
+              <RefreshCw className="me-2 h-4 w-4" aria-hidden="true" />
+            )}
             Refresh
           </Button>
         </div>
@@ -362,9 +363,9 @@ export function ReflectSection({ active = true }: { active?: boolean } = {}) {
       ) : null}
 
       <p className="text-xs leading-5 text-muted-foreground">
-        Temporary Chats and AGI Work runs are excluded. Reflect returns activity statistics, broad
-        topic labels and the titles of chats you kept working on to the browser, not message text,
-        and viewing it does not use model quota.
+        Temporary Chats and Work runs are excluded. Reflect returns activity statistics, broad topic
+        labels and the titles of chats you kept working on to the browser, not message text, and
+        viewing it does not use model quota.
       </p>
     </div>
   );

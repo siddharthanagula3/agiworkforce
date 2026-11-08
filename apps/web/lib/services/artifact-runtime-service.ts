@@ -583,6 +583,7 @@ async function runArtifactToolLoop(input: {
       if (envelope.event.type === 'error' && !reportedError) reportedError = envelope.event.message;
     }
   }
+  input.signal.throwIfAborted();
   if (reportedError) throw new Error(reportedError);
   return {
     text: text.trim(),

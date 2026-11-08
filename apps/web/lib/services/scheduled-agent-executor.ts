@@ -635,6 +635,7 @@ export async function runScheduledToolLoop(input: {
     }
   }
 
+  input.signal.throwIfAborted();
   if (reportedError && !approval) throw new Error(reportedError);
 
   return {

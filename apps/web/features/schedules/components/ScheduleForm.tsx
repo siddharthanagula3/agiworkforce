@@ -154,8 +154,7 @@ export function ScheduleForm({
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-1 pb-6 pe-3">
         <div className="space-y-2 rounded-xl border border-border/70 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
           <p>
-            Scheduled runs use Managed Cloud and return text. Choose the sources each run can read
-            below.
+            Scheduled runs use Cloud and return text. Choose the sources each run can read below.
           </p>
           <p>
             When a run reaches an action your Tool approvals setting asks about, it pauses and
@@ -254,7 +253,7 @@ export function ScheduleForm({
               ))}
             </select>
             <p id="schedule-model-helper" className="text-xs text-muted-foreground">
-              Limited to the models Managed Cloud runs schedules on.
+              Limited to the models Cloud runs schedules on.
             </p>
             <FieldError field="model" errors={errors} />
           </div>

@@ -47,7 +47,7 @@ const SUBS: Subprocessor[] = [
   {
     name: 'Vercel',
     purpose:
-      'Two roles. (1) Hosting and edge delivery for the web surface (agiworkforce.com). (2) Vercel AI Gateway: an inference route that can serve a Managed Cloud chat request, sending your prompt and any attached content to the gateway, which forwards it to the provider that serves the model. That route carries a request only when AGI has configured a gateway credential for it and it is the cheapest admissible route for the model you picked, so it is neither every request nor every model. Vercel states the gateway keeps no prompts or outputs, deletes user data immediately after a request completes, and does not use prompts or responses for training (checked 2026-09-06). What happens to the content after the gateway hands it on is the serving provider’s practice, not the gateway’s. On the same condition of a configured credential, two other things can travel through this gateway: the text of files and notes when they are indexed for search, which is sent to be turned into embeddings, and, where response assessment is switched on, a shortened copy of a message that our routing sends to a small model to judge what kind of task it is.',
+      'Two roles. (1) Hosting and edge delivery for the web surface (agiworkforce.com). (2) Vercel AI Gateway: an inference route that can serve a Cloud chat request, sending your prompt and any attached content to the gateway, which forwards it to the provider that serves the model. That route carries a request only when AGI has configured a gateway credential for it and it is the cheapest admissible route for the model you picked, so it is neither every request nor every model. Vercel states the gateway keeps no prompts or outputs, deletes user data immediately after a request completes, and does not use prompts or responses for training (checked 2026-09-06). What happens to the content after the gateway hands it on is the serving provider’s practice, not the gateway’s. On the same condition of a configured credential, two other things can travel through this gateway: the text of files and notes when they are indexed for search, which is sent to be turned into embeddings, and, where response assessment is switched on, a shortened copy of a message that our routing sends to a small model to judge what kind of task it is.',
     region: 'Global edge',
     registryProviderIds: ['vercel_gateway'],
   },
@@ -67,7 +67,7 @@ const SUBS: Subprocessor[] = [
   {
     name: 'Cloudflare',
     purpose:
-      'Three roles. (1) Cloudflare R2 object storage: files you upload and files the model generates are stored here. AGI serves catalogued files through a signed-in, active-workspace-scoped app route and does not return raw storage URLs in normal responses. Generated videos use a private bucket; images and other non-video files remain in a public bucket and can be opened without AGI sign-in if their underlying URL is obtained. (2) Edge delivery and DDoS protection for the marketing site. (3) Workers AI: an inference route that can serve a Managed Cloud chat request on Cloudflare’s own hosting of open-weight models. Your prompt and any attached content go to api.cloudflare.com when an operator has turned gateway routing on, has configured this gateway’s endpoint and key, and this is the cheapest admissible route for the model you picked. It reaches Workers AI directly rather than through Cloudflare’s AI Gateway proxy, so no gateway request log sits in that path. Cloudflare states that content sent to Workers AI is stored only where the customer pairs it with a storage service, and that it does not use that content to train any model on Workers AI or to improve any Cloudflare or third-party service without explicit consent (checked 2026-09-06).',
+      'Three roles. (1) Cloudflare R2 object storage: files you upload and files the model generates are stored here. AGI serves catalogued files through a signed-in, active-workspace-scoped app route and does not return raw storage URLs in normal responses. Generated videos use a private bucket; images and other non-video files remain in a public bucket and can be opened without AGI sign-in if their underlying URL is obtained. (2) Edge delivery and DDoS protection for the marketing site. (3) Workers AI: an inference route that can serve a Cloud chat request on Cloudflare’s own hosting of open-weight models. Your prompt and any attached content go to api.cloudflare.com when an operator has turned gateway routing on, has configured this gateway’s endpoint and key, and this is the cheapest admissible route for the model you picked. It reaches Workers AI directly rather than through Cloudflare’s AI Gateway proxy, so no gateway request log sits in that path. Cloudflare states that content sent to Workers AI is stored only where the customer pairs it with a storage service, and that it does not use that content to train any model on Workers AI or to improve any Cloudflare or third-party service without explicit consent (checked 2026-09-06).',
     region: 'Global edge',
     registryProviderIds: ['workers_ai'],
   },
@@ -81,7 +81,7 @@ const SUBS: Subprocessor[] = [
   {
     name: 'E2B',
     purpose:
-      'Managed sandbox runtime. Executes code and processes files you supply during a Managed Cloud session. Sandbox execution is gated behind an explicit operator flag and is off by default; while it is off, nothing is sent here.',
+      'Sandbox runtime. Executes code and processes files you supply during a Cloud session. Sandbox execution is gated behind an explicit operator flag and is off by default; while it is off, nothing is sent here.',
     region: 'United States',
     registryProviderIds: [],
   },
@@ -93,9 +93,9 @@ const SUBS: Subprocessor[] = [
     registryProviderIds: [],
   },
   {
-    name: 'Model providers (Managed Cloud)',
+    name: 'Model providers (Cloud)',
     purpose:
-      'Inference for Managed Cloud chat: Anthropic, OpenAI, Google, xAI, DeepSeek, Moonshot and Perplexity. Your prompt and any attached content are sent to the provider serving the model you select; for the Free plan’s default model AGI chooses the provider, OpenAI or Alibaba, as the Qwen row below says, and for the support assistant AGI chooses the model, as the Cheaper Inference row below says. This applies to Managed Cloud only: in Local Mode nothing is sent, and under BYOK you contract with the provider directly.',
+      'Inference for Cloud chat: Anthropic, OpenAI, Google, xAI, DeepSeek, Moonshot and Perplexity. Your prompt and any attached content are sent to the provider serving the model you select; for the Free plan’s default model AGI chooses the provider, OpenAI or Alibaba, as the Qwen row below says, and for the support assistant AGI chooses the model, as the Cheaper Inference row below says. This applies to Cloud only: in Local Mode nothing is sent, and under BYOK you contract with the provider directly.',
     region: 'United States and other regions, per provider',
     registryProviderIds: [
       'anthropic',
@@ -119,14 +119,14 @@ const SUBS: Subprocessor[] = [
   {
     name: 'OpenRouter',
     purpose:
-      'Inference routing on Managed Cloud, in two situations. (1) For the Qwen and Zhipu models, when AGI holds no key of its own for that provider: prompt content for those passes through OpenRouter on its way to the model provider. When AGI does hold that provider’s key, the request goes direct instead and OpenRouter is not in the path. (2) As a failover for any other catalogued chat model when the direct route to its provider fails. That second case means prompt content for a model you selected from any provider can pass through OpenRouter, and we would rather say so than let the narrower first case imply otherwise.',
+      'Inference routing on Cloud, in two situations. (1) For the Qwen and Zhipu models, when AGI holds no key of its own for that provider: prompt content for those passes through OpenRouter on its way to the model provider. When AGI does hold that provider’s key, the request goes direct instead and OpenRouter is not in the path. (2) As a failover for any other catalogued chat model when the direct route to its provider fails. That second case means prompt content for a model you selected from any provider can pass through OpenRouter, and we would rather say so than let the narrower first case imply otherwise.',
     region: 'United States',
     registryProviderIds: ['open_router'],
   },
   {
     name: 'Qwen (Alibaba) and Zhipu',
     purpose:
-      'Inference for their own models on Managed Cloud. Which path a request takes is decided by our server configuration, not by anything you choose: when AGI holds its own key for one of these providers the prompt goes to that provider directly, and when it does not, and the model has an OpenRouter route, it goes through OpenRouter instead. Alibaba has a second role: it can answer a Free plan chat on the default model from a promotional allowance AGI holds. That request goes on AGI’s own key to Alibaba Cloud Model Studio’s international endpoint in Singapore, and the model that answers can be a Qwen model or another developer’s model that Alibaba hosts. AGI chooses this route, you do not, and the reply shows the model that answered. Alibaba’s published privacy notice says it never uses your data for model training; we rely on that statement and cannot verify it.',
+      'Inference for their own models on Cloud. Which path a request takes is decided by our server configuration, not by anything you choose: when AGI holds its own key for one of these providers the prompt goes to that provider directly, and when it does not, and the model has an OpenRouter route, it goes through OpenRouter instead. Alibaba has a second role: it can answer a Free plan chat on the default model from a promotional allowance AGI holds. That request goes on AGI’s own key to Alibaba Cloud Model Studio’s international endpoint in Singapore, and the model that answers can be a Qwen model or another developer’s model that Alibaba hosts. AGI chooses this route, you do not, and the reply shows the model that answered. Alibaba’s published privacy notice says it never uses your data for model training; we rely on that statement and cannot verify it.',
     region:
       'Outside the United States, per provider. Singapore for the Alibaba Cloud Model Studio international endpoint',
     registryProviderIds: ['qwen', 'zhipu', 'zhipu_anthropic'],
@@ -134,14 +134,14 @@ const SUBS: Subprocessor[] = [
   {
     name: 'Cheaper Inference (operated by Keak)',
     purpose:
-      'An inference gateway that can serve a Managed Cloud chat request. Your prompt and any attached content go to api.cheaperinference.com, which forwards them to the provider serving the model. A request reaches it only when an operator has turned gateway routing on, has configured this gateway’s endpoint and key, and this is the cheapest admissible route for the model you picked, so it is neither every request nor every model. The support assistant on the help and support pages is the one case where you pick no model: AGI chooses a fast model for it, and while gateway routing is on that route runs through this gateway, including for a visitor who is not signed in. What it sends is your question, the help-article excerpts it found for it and, if you are signed in, a short list of facts about your account: your plan and subscription status, how much of your usage allowance is used, which connectors are connected, how many API keys you hold and whether your email is verified. It does not send your chats or files. Keak states that Cheaper Inference does not store prompt or response bodies in its application database, that temporary uploads expire after an hour, and that it does not use customer prompt or response bodies to train Keak models; its operational logs are kept up to 12 months and its account and billing records for the agreement term plus seven years (checked 2026-09-06). What is kept beyond the gateway is the practice of whichever provider serves the request.',
+      'An inference gateway that can serve a Cloud chat request. Your prompt and any attached content go to api.cheaperinference.com, which forwards them to the provider serving the model. A request reaches it only when an operator has turned gateway routing on, has configured this gateway’s endpoint and key, and this is the cheapest admissible route for the model you picked, so it is neither every request nor every model. The support assistant on the help and support pages is the one case where you pick no model: AGI chooses a fast model for it, and while gateway routing is on that route runs through this gateway, including for a visitor who is not signed in. What it sends is your question, the help-article excerpts it found for it and, if you are signed in, a short list of facts about your account: your plan and subscription status, how much of your usage allowance is used, which connectors are connected, how many API keys you hold and whether your email is verified. It does not send your chats or files. Keak states that Cheaper Inference does not store prompt or response bodies in its application database, that temporary uploads expire after an hour, and that it does not use customer prompt or response bodies to train Keak models; its operational logs are kept up to 12 months and its account and billing records for the agreement term plus seven years (checked 2026-09-06). What is kept beyond the gateway is the practice of whichever provider serves the request.',
     region: 'United States, Canada, Europe and other countries where Keak operates',
     registryProviderIds: ['cheaperinference', 'cheaperinference_anthropic'],
   },
   {
     name: 'Experiential Labs (operated by Resolute Labs AI, Inc.)',
     purpose:
-      'An inference gateway that can serve a Managed Cloud chat request when gateway routing and its credential are configured, and the free-only promotional route when you explicitly select an eligible free Experiential Labs model. Your prompt, attachments and response pass through api.experientiallabs.ai and the upstream provider that serves the request. On the Experiential Labs Free organization plan, prompt and response capture is on by default; its platform privacy policy says captured content is retained for up to 30 days and may be used to develop, evaluate and improve its services and hosted models. Its no-training routing setting restricts upstream providers but does not turn off platform capture. Private mode, which turns capture off and deletes captured content, requires an eligible paid or grandfathered organization. Request metadata is retained for billing. Verified against https://platform.experientiallabs.ai/privacy and https://platform.experientiallabs.ai/docs/data-controls on 2026-09-22. The serving upstream has its own retention policy. It publishes no processing region commitment, so we do not claim one.',
+      'An inference gateway that can serve a Cloud chat request when gateway routing and its credential are configured, and the free-only promotional route when you explicitly select an eligible free Experiential Labs model. Your prompt, attachments and response pass through api.experientiallabs.ai and the upstream provider that serves the request. On the Experiential Labs Free organization plan, prompt and response capture is on by default; its platform privacy policy says captured content is retained for up to 30 days and may be used to develop, evaluate and improve its services and hosted models. Its no-training routing setting restricts upstream providers but does not turn off platform capture. Private mode, which turns capture off and deletes captured content, requires an eligible paid or grandfathered organization. Request metadata is retained for billing. Verified against https://platform.experientiallabs.ai/privacy and https://platform.experientiallabs.ai/docs/data-controls on 2026-09-22. The serving upstream has its own retention policy. It publishes no processing region commitment, so we do not claim one.',
     region: 'Not published by the operator',
     registryProviderIds: ['experientiallabs', 'experientiallabs_anthropic'],
   },
@@ -175,7 +175,7 @@ const SUBS: Subprocessor[] = [
   {
     name: 'Perplexity',
     purpose:
-      'Two distinct roles, and the second was previously undisclosed. (1) Inference for its own models on Managed Cloud, as listed in the model-provider row above. (2) The backend for the platform web-search tool: when the assistant searches the web for you, your search query is sent to Perplexity (lib/web-search/web-search-tool.ts). That happens on the model’s initiative during a conversation, not only when you visit a search box.',
+      'Two distinct roles, and the second was previously undisclosed. (1) Inference for its own models on Cloud, as listed in the model-provider row above. (2) The backend for the platform web-search tool: when the assistant searches the web for you, your search query is sent to Perplexity (lib/web-search/web-search-tool.ts). That happens on the model’s initiative during a conversation, not only when you visit a search box.',
     region: 'United States',
     registryProviderIds: [],
   },
@@ -225,11 +225,11 @@ function subRows(): LedgerRow[] {
 const CORRECTIONS = [
   {
     title: 'Five inference recipients were missing, found on 21 September 2026',
-    body: 'Three gateways that can serve a Managed Cloud chat request were absent from this page: Cheaper Inference, Experiential Labs, and Cloudflare’s Workers AI, which we listed only for storage and edge delivery. Vercel’s AI Gateway was absent the same way, under a vendor we listed only for hosting. And OpenAI was named for chat inference but not for dictation and Voice Mode, which is where microphone audio goes. All five are above, each with the condition under which it receives anything. A check now reads the model registry and fails our build when a provider with a route admissible for Managed Cloud traffic is not named on this page, so this particular gap cannot reopen quietly.',
+    body: 'Three gateways that can serve a Cloud chat request were absent from this page: Cheaper Inference, Experiential Labs, and Cloudflare’s Workers AI, which we listed only for storage and edge delivery. Vercel’s AI Gateway was absent the same way, under a vendor we listed only for hosting. And OpenAI was named for chat inference but not for dictation and Voice Mode, which is where microphone audio goes. All five are above, each with the condition under which it receives anything. A check now reads the model registry and fails our build when a provider with a route admissible for Cloud traffic is not named on this page, so this particular gap cannot reopen quietly.',
   },
   {
     title: 'One recipient received nothing, and two did not receive it the way we said',
-    body: 'MiniMax was listed as receiving Managed Cloud prompts through OpenRouter. No MiniMax route is admitted for Managed Cloud traffic, so the managed service sends it nothing; its models are reachable only where you bring your own key, and the row is gone. Qwen and Zhipu do receive Managed Cloud prompts, but not always through OpenRouter: where AGI holds its own key for one of them, the request goes to that provider directly. The word "always" described an intention rather than the code, which is the same failure as a missing row and is corrected above.',
+    body: 'MiniMax was listed as receiving Cloud prompts through OpenRouter. No MiniMax route is admitted for Cloud traffic, so the managed service sends it nothing; its models are reachable only where you bring your own key, and the row is gone. Qwen and Zhipu do receive Cloud prompts, but not always through OpenRouter: where AGI holds its own key for one of them, the request goes to that provider directly. The word "always" described an intention rather than the code, which is the same failure as a missing row and is corrected above.',
   },
   {
     title: 'A seventh recipient was missing, found on 12 September 2026',
@@ -351,10 +351,10 @@ export default function SubprocessorsPage() {
                 The web app at agiworkforce.com and the current Desktop app are cloud-only: neither
                 has a user-supplied-key path.
               </strong>{' '}
-              Every model request you make in a browser is a Managed Cloud request on our keys,
-              through the recipients listed above. We used to state the BYOK posture here without
-              naming the surface, which invited exactly the wrong inference on the one surface where
-              it does not hold. See{' '}
+              Every model request you make in a browser is a Cloud request on our keys, through the
+              recipients listed above. We used to state the BYOK posture here without naming the
+              surface, which invited exactly the wrong inference on the one surface where it does
+              not hold. See{' '}
               <Link href="/byok" className="agi-ds-link">
                 BYOK
               </Link>{' '}

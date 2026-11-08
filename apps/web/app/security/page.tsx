@@ -54,7 +54,7 @@ const BOUNDARIES = [
   {
     meta: 'Local',
     title: 'Nothing we operate is in the path.',
-    body: `CLI Local mode runs the model on your own hardware through ${CLI_LOCAL_RUNTIMES.label}. The request stays between the CLI and the loopback runtime, with no AGI server or subprocessor in the path. The current public Desktop is managed-cloud only.`,
+    body: `CLI Local mode runs the model on your own hardware through ${CLI_LOCAL_RUNTIMES.label}. The request stays between the CLI and the loopback runtime, with no AGI server or subprocessor in the path. The current public Desktop is cloud only.`,
   },
   {
     meta: 'BYOK',
@@ -62,9 +62,9 @@ const BOUNDARIES = [
     body: `On ${BYOK_SURFACES.label}, requests made with your own provider key travel from the local runtime to that provider. ${BYOK_SURFACES.availability} The key stays in that runtime, never on our servers. We are not in the request path, so we hold neither the prompt nor the completion, but the provider you chose does, under their terms.`,
   },
   {
-    meta: 'Managed Cloud',
+    meta: 'Cloud',
     title: 'We host it, so we hold it. Public alpha.',
-    body: 'Managed Cloud is the only mode where we store your content. It has been open to signed-in users by default since 27 June 2026 and is in public alpha, not general availability. Everything below about databases, access control, logging, and deletion describes this mode.',
+    body: 'Cloud is the only mode where we store your content. It has been open to signed-in users by default since 27 June 2026 and is in public alpha, not general availability. Everything below about databases, access control, logging, and deletion describes this mode.',
   },
 ];
 
@@ -72,41 +72,41 @@ const DATA_ROWS: { label: string; value: string }[] = [
   {
     label: 'Chats and messages',
     value:
-      'Local: CLI JSON and JSONL session files on your device. BYOK: those local files, plus your provider. Managed Cloud: Neon Postgres (United States).',
+      'Local: CLI JSON and JSONL session files on your device. BYOK: those local files, plus your provider. Cloud: Neon Postgres (United States).',
   },
   {
     label: 'Artifacts and generated files',
     value:
-      'Local: your device. BYOK: your device. Managed Cloud: Neon Postgres; rendered on a separate sandbox origin.',
+      'Local: your device. BYOK: your device. Cloud: Neon Postgres; rendered on a separate sandbox origin.',
   },
   {
     label: 'Uploaded and generated media',
     value:
-      'Local: your device. BYOK: your device. Managed Cloud: Cloudflare R2, catalogued in Neon and served by an authenticated owner-and-workspace-scoped app route; videos use a private bucket, while images and non-video files remain in a public bucket whose raw URLs are not returned by normal product responses.',
+      'Local: your device. BYOK: your device. Cloud: Cloudflare R2, catalogued in Neon and served by an authenticated owner-and-workspace-scoped app route; videos use a private bucket, while images and non-video files remain in a public bucket whose raw URLs are not returned by normal product responses.',
   },
   {
     label: 'Memories, projects, settings',
-    value: 'Local: your device. BYOK: your device. Managed Cloud: Neon Postgres.',
+    value: 'Local: your device. BYOK: your device. Cloud: Neon Postgres.',
   },
   {
     label: 'Provider API keys',
     value:
-      'Local: not applicable. BYOK: on your device, in the OS credential store, or in owner-only files on Linux or when the keyring is turned off. Managed Cloud: not applicable, Managed Cloud uses our provider accounts, not yours.',
+      'Local: not applicable. BYOK: on your device, in the OS credential store, or in owner-only files on Linux or when the keyring is turned off. Cloud: not applicable, Cloud uses our provider accounts, not yours.',
   },
   {
     label: 'Account identity and sessions',
     value:
-      'Local: not held by us, no AGI identity is in the request path. BYOK: account required to sync; identity at Clerk. Managed Cloud: Clerk (United States).',
+      'Local: not held by us, no AGI identity is in the request path. BYOK: account required to sync; identity at Clerk. Cloud: Clerk (United States).',
   },
   {
     label: 'Security and error logs',
     value:
-      'Local: local audit log on your device. BYOK: local audit log on your device. Managed Cloud: Neon (security events) and Sentry (errors, PII off).',
+      'Local: local audit log on your device. BYOK: local audit log on your device. Cloud: Neon (security events) and Sentry (errors, PII off).',
   },
   {
     label: 'Code execution',
     value:
-      'Local: your machine, behind the execution gate. BYOK: your machine, behind the execution gate. Managed Cloud: E2B, off unless an operator explicitly enables it.',
+      'Local: your machine, behind the execution gate. BYOK: your machine, behind the execution gate. Cloud: E2B, off unless an operator explicitly enables it.',
   },
 ];
 
@@ -137,12 +137,12 @@ const AT_REST: { label: string; value: string }[] = [
   {
     label: 'Desktop account data',
     value:
-      'The current Electron Desktop is a managed-cloud account shell. Conversations, projects, and account state use the same encrypted hosted stores as Web; this public Desktop does not keep a separate Local or BYOK chat database.',
+      'The current Electron Desktop is a cloud account shell. Conversations, projects, and account state use the same encrypted hosted stores as Web; this public Desktop does not keep a separate Local or BYOK chat database.',
   },
   {
     label: 'CLI provider credentials',
     value:
-      'The CLI stores provider credentials in the operating system credential store, or in owner-only files on Linux or when the keyring is turned off, and keeps only a non-secret provider index on disk. A bare agi login signs in to managed cloud; agi login followed by a provider name is the BYOK key path.',
+      'The CLI stores provider credentials in the operating system credential store, or in owner-only files on Linux or when the keyring is turned off, and keeps only a non-secret provider index on disk. A bare agi login signs in to cloud; agi login followed by a provider name is the BYOK key path.',
   },
   {
     label: 'Hosted API keys',
@@ -470,7 +470,7 @@ export default function SecurityPage() {
               Last updated {LAST_UPDATED}.
             </h2>
             <Prose size="sm">
-              Managed Cloud is in public alpha. No certifications are claimed.{' '}
+              Cloud is in public alpha. No certifications are claimed.{' '}
               <PolicyVersionsLink policy="security" />
             </Prose>
           </Stack>

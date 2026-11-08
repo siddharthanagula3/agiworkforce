@@ -1,3 +1,4 @@
+import { SELECTED_ROUTE } from './fixtures/model-mocks';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 type ScanModule0 = typeof import('@agiworkforce/routing');
 
@@ -13,21 +14,6 @@ vi.mock('@/lib/server/hosting', () => ({
   deployRegion: vi.fn(() => undefined),
   releaseSha: () => 'release-sha',
 }));
-
-const SELECTED_ROUTE = {
-  status: 'selected' as const,
-  requestedSelection: 'auto',
-  requestedProfile: null,
-  effectiveProfile: 'balanced',
-  taskType: 'simple_chat',
-  modelKey: 'test.model',
-  provider: 'anthropic',
-  providerModelId: 'test-provider-model-id',
-  routeId: 'test-route',
-  harnessId: 'test/chat',
-  fallbacks: [],
-  reason: 'preferred_slot',
-};
 
 vi.mock('@agiworkforce/routing', async (importOriginal) => {
   const actual = await importOriginal<ScanModule0>();
@@ -80,7 +66,7 @@ beforeEach(() => {
   streamedRequests.length = 0;
   process.env['SUPPORT_AGENT_ENABLED'] = 'true';
   drainToLlmResponseMock.mockResolvedValue({
-    model: 'test.model',
+    model: SELECTED_ROUTE.modelKey,
     content: 'Here is how to reset your password.',
     promptTokens: 120,
     completionTokens: 40,
@@ -162,7 +148,7 @@ describe('support answers and the semantic cache', () => {
     expect(refused).toEqual({
       status: 'unavailable',
       reason: 'limit_reached',
-      route: { provider: 'anthropic', modelKey: 'test.model' },
+      route: { provider: SELECTED_ROUTE.provider, modelKey: SELECTED_ROUTE.modelKey },
     });
     expect(drainToLlmResponseMock).not.toHaveBeenCalled();
     expect(store.size).toBe(0);

@@ -104,8 +104,8 @@ export default function ByokPage() {
               </h2>
               <Prose>
                 VS Code provider-key management uses its connected CLI runtime. Desktop runs on your
-                AGI account and takes no provider key. CLI Managed Cloud requests require an AGI
-                account token rather than a saved provider API key.
+                AGI account and takes no provider key. CLI Cloud requests require an AGI account
+                token rather than a saved provider API key.
               </Prose>
             </div>
             <Ledger caption="Key custody by surface" rows={CUSTODY_ROWS} />
@@ -121,7 +121,7 @@ export default function ByokPage() {
               </h2>
               <Prose>
                 With an installed CLI, use a supported provider name when adding a key. A bare{' '}
-                <code>agi login</code> starts AGI managed-cloud sign-in. See the{' '}
+                <code>agi login</code> starts AGI cloud sign-in. See the{' '}
                 <a href="/help/byok-provider-keys" className="agi-ds-link">
                   provider-key guide
                 </a>{' '}

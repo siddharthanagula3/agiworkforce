@@ -12,6 +12,7 @@ import {
 } from './project-knowledge-object-storage';
 
 vi.mock('./object-storage', () => ({
+  putPrivateObject: vi.fn(async ({ key }: { key: string }) => ({ key })),
   copyPrivateObjectIfUnchanged: vi.fn(),
   isObjectStorageConfigured: () => false,
   isPrivateObjectStorageConfigured: () => false,

@@ -793,7 +793,11 @@ function VoiceEstimateRow({
 }) {
   if (!credits) return null;
   const minutes = estimateVoiceMinutes(
-    [credits.five_hour.remaining, credits.weekly.remaining, credits.monthly.remaining],
+    [
+      credits.weekly.remaining,
+      credits.monthly.remaining,
+      ...(credits.five_hour ? [credits.five_hour.remaining] : []),
+    ],
     minuteCredits,
   );
   if (minutes === null) return null;
@@ -1246,7 +1250,7 @@ export function UsageSection() {
     return formatPlanCreditAllowanceLine(planLabel, {
       monthly: credits.monthly.allowance,
       weekly: credits.weekly.allowance,
-      fiveHour: credits.five_hour.allowance,
+      fiveHour: credits.five_hour?.allowance ?? null,
     });
   }, [credits, usage]);
 
@@ -1346,17 +1350,19 @@ export function UsageSection() {
                   {formatUpliftLine(uplift, formatAbsolute(uplift.ends_at))}
                 </p>
               ))}
-              <UsageBar
-                unknown={usageUnknown}
-                label={managedUsageBucketLabel('session')}
-                percent={sessionUsedPercent}
-                detail={usageDetail(
-                  100 - sessionUsedPercent,
-                  usage?.session_reset_at ?? null,
-                  nowMs,
-                  credits?.five_hour,
-                )}
-              />
+              {credits?.five_hour !== null && (
+                <UsageBar
+                  unknown={usageUnknown}
+                  label={managedUsageBucketLabel('session')}
+                  percent={sessionUsedPercent}
+                  detail={usageDetail(
+                    100 - sessionUsedPercent,
+                    usage?.session_reset_at ?? null,
+                    nowMs,
+                    credits?.five_hour,
+                  )}
+                />
+              )}
               <UsageBar
                 unknown={usageUnknown}
                 label={managedUsageBucketLabel('weekly')}

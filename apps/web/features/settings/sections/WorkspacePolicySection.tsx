@@ -79,7 +79,7 @@ const PRIVACY_MODES: { value: PrivacyMode; label: string; hint: string }[] = [
   },
   {
     value: 'managed',
-    label: 'Managed Cloud',
+    label: 'Cloud',
     hint: 'AGI-hosted inference, metered to your workspace.',
   },
 ];
@@ -240,7 +240,7 @@ export function WorkspacePolicySection() {
       return 'The default privacy mode must be one of the allowed modes.';
     }
     if (draft.allowManagedCompute && !draft.allowedPrivacyModes.includes('managed')) {
-      return 'Allow the Managed Cloud mode before turning on managed compute, or members would be blocked by their own policy.';
+      return 'Allow the Cloud mode before turning on cloud compute, or members would be blocked by their own policy.';
     }
     if (draft.allowedPrivacyModes.length === 0) return 'Allow at least one privacy mode.';
     if (draft.chatSyncSurfaces.length === 0) return 'Allow at least one app surface.';
@@ -320,11 +320,11 @@ export function WorkspacePolicySection() {
       ) : null}
 
       <Row
-        title="AGI-managed cloud compute"
-        description="When off, members of this workspace cannot run managed turns, images, video, embeddings, or transcription."
+        title="Cloud compute"
+        description="When off, members of this workspace cannot run Cloud turns, images, video, embeddings, or transcription."
         control={
           <Toggle
-            label="Allow AGI-managed cloud compute"
+            label="Allow Cloud compute"
             checked={draft.allowManagedCompute}
             disabled={!canEdit}
             onChange={(next) => patch({ allowManagedCompute: next })}
@@ -631,8 +631,8 @@ export function WorkspacePolicySection() {
         title="Monthly spend cap"
         description={
           draft.monthlySpendCapCredits === null
-            ? 'No cap. AGI-managed compute usage is unrestricted for this workspace.'
-            : `AGI-managed compute stops once this workspace's usage passes ${formatCredits(
+            ? 'No cap. AGI-cloud compute usage is unrestricted for this workspace.'
+            : `AGI-cloud compute stops once this workspace's usage passes ${formatCredits(
                 draft.monthlySpendCapCredits,
               )} for the month.`
         }

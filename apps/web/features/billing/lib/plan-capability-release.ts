@@ -69,7 +69,7 @@ export function planCapabilityLabel(
     const phrases = releasedManagedChatSurfaces(release).map(
       (surface) => MANAGED_CHAT_SURFACE_PHRASES[surface],
     );
-    return `Managed Cloud chat on ${joinSurfaceNames(phrases)}`;
+    return `Cloud chat on ${joinSurfaceNames(phrases)}`;
   }
   return BILLING_PLAN_CAPABILITY_LABELS[capability];
 }

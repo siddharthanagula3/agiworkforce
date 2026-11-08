@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import { SharedCodeSessionPage } from '@/features/code';
 
 export const metadata: Metadata = {
-  title: { absolute: 'Shared AGI Code session' },
-  description: 'A coding session shared with you from AGI Code.',
+  title: { absolute: 'Shared Code session' },
+  description: 'A coding session shared with you from Code.',
   robots: { index: false, follow: false },
 };
 

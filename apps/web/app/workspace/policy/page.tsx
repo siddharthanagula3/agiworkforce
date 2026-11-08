@@ -5,7 +5,7 @@ import { WorkspaceFeatureControls } from '@/features/workspace-console/component
 
 export const metadata: Metadata = {
   title: 'Workspace policy',
-  description: 'Privacy modes, managed compute, sync surfaces, retention, features and exceptions.',
+  description: 'Privacy modes, cloud compute, sync surfaces, retention, features and exceptions.',
 };
 
 export default function WorkspacePolicyPage() {

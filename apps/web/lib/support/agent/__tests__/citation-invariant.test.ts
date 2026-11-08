@@ -31,6 +31,7 @@ import {
   modelMocks,
   queueModelJson,
   queueModelRawText,
+  SELECTED_ROUTE,
 } from './fixtures/model-mocks';
 import { answerSupportQuestion } from '../answer/synthesize';
 import { retrieveSupportChunks } from '../retrieval/retrieve';
@@ -78,7 +79,7 @@ describe('citation invariant', () => {
     expect(result.citations.length).toBeGreaterThanOrEqual(1);
     expect(result.citations[0]?.chunkId).toBe(chunkId);
     expect(result.citations[0]?.url.startsWith(SITE_URL)).toBe(true);
-    expect(result.route.provider).toBe('anthropic');
+    expect(result.route.provider).toBe(SELECTED_ROUTE.provider);
     expect(result.handoffOffered).toBe(true);
   });
 
@@ -158,7 +159,7 @@ describe('citation invariant', () => {
     expect(result.kind).toBe('abstention');
     if (result.kind !== 'abstention') return;
     expect(result.reason).toBe('model_unavailable');
-    expect(result.route?.provider).toBe('anthropic');
+    expect(result.route?.provider).toBe(SELECTED_ROUTE.provider);
   });
 
   it('only echoes a proposed action id that the caller actually offered', async () => {

@@ -1,4 +1,5 @@
 'use client';
+import { AgiMark } from '@agiworkforce/ui';
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
@@ -201,10 +202,7 @@ function StatusMark({ activated }: { activated: boolean }) {
           />
         </svg>
       ) : (
-        <span
-          aria-hidden="true"
-          className="h-7 w-7 rounded-full border-[2.5px] border-white/35 border-t-white motion-safe:animate-spin"
-        />
+        <AgiMark spinning aria-hidden="true" className="h-7 w-7" />
       )}
     </div>
   );

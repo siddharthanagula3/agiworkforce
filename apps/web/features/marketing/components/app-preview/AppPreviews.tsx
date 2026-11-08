@@ -75,13 +75,27 @@ export function NewChatGreeting() {
 }
 
 export type PreviewKind =
-  'web' | 'desktop' | 'chrome' | 'panel' | 'editor' | 'terminal' | 'phone' | 'closeup' | 'step';
+  | 'web'
+  | 'desktop'
+  | 'chrome'
+  | 'panel'
+  | 'editor'
+  | 'terminal'
+  | 'phone'
+  | 'closeup'
+  | 'step'
+  | 'step-wide';
 
 interface PreviewGeometry {
   frame: number;
   width: number;
   height: number;
+  contentScale?: number;
 }
+
+const APP_CONTENT_WIDTH = 768;
+const WIDE_STEP_WIDTH = 880;
+const STEP_GEOMETRY: PreviewGeometry = { frame: 520, width: 520, height: 540 };
 
 export const PREVIEW_GEOMETRY: Record<PreviewKind, PreviewGeometry> = {
   web: { frame: 720, width: 1120, height: 700 },
@@ -92,7 +106,13 @@ export const PREVIEW_GEOMETRY: Record<PreviewKind, PreviewGeometry> = {
   terminal: { frame: 640, width: 880, height: 550 },
   phone: { frame: 270, width: 390, height: 844 },
   closeup: { frame: 720, width: 720, height: 400 },
-  step: { frame: 520, width: 520, height: 540 },
+  step: STEP_GEOMETRY,
+  'step-wide': {
+    frame: STEP_GEOMETRY.frame,
+    width: WIDE_STEP_WIDTH,
+    height: Math.round((STEP_GEOMETRY.height * WIDE_STEP_WIDTH) / STEP_GEOMETRY.width),
+    contentScale: 0.85,
+  },
 };
 
 export function PreviewRoot({
@@ -114,6 +134,8 @@ export function PreviewRoot({
     '--dev-h': Math.round((geometry.frame * geometry.height) / geometry.width),
     '--app-w': geometry.width,
     '--app-h': geometry.height,
+    '--app-content-w': APP_CONTENT_WIDTH,
+    '--app-content-scale': geometry.contentScale ?? 1,
   } as CSSProperties;
   return (
     <figure
@@ -165,7 +187,6 @@ export function AppSidebar({
       {macChrome ? <TrafficLights /> : null}
       <div className="agi-app-brand">
         <AgiMark className="agi-app-mark" />
-        <span className="agi-app-wordmark">AGI</span>
         <Bell className="agi-app-icon agi-app-end agi-app-quiet" />
       </div>
       <div className="agi-app-controls">
@@ -292,37 +313,41 @@ export function AppComposer({
     (turnActive ? WEB_COMPOSER_PLACEHOLDER.turnActive : WEB_COMPOSER_PLACEHOLDER.thread);
   return (
     <div className="agi-app-composer">
-      {children}
       {draft ? (
         <span className="agi-app-draft">{draft}</span>
       ) : (
         <span className="agi-app-placeholder">{shownPlaceholder}</span>
       )}
       <div className="agi-app-composer-row">
-        <Plus className="agi-app-icon agi-app-icon--lg" />
-        <span className="agi-app-seg">
-          <span data-on="true">Chat</span>
-          <span>AGI Work</span>
-        </span>
-        <span className="agi-app-style agi-app-end">
-          <Palette className="agi-app-icon" />
-          Style
-        </span>
-        <Marked n={markModel}>
-          <span className="agi-app-model">
-            <AgiMark className="agi-app-mark agi-app-mark--sm" />
-            Auto
-            <ChevronDown className="agi-app-icon agi-app-icon--sm" />
+        <div className="agi-app-composer-modes">
+          <Plus className="agi-app-icon agi-app-icon--lg" />
+          <span className="agi-app-seg">
+            <span data-on="true">Chat</span>
+            <span>Work</span>
           </span>
-        </Marked>
-        <Mic className="agi-app-icon agi-app-icon--lg" />
-        {turnActive ? (
-          <ComposerStop />
-        ) : (
-          <span className="agi-app-send">
-            <AudioLines className="agi-app-icon" />
+          {children}
+        </div>
+        <div className="agi-app-composer-controls">
+          <span className="agi-app-style">
+            <Palette className="agi-app-icon" />
+            Style
           </span>
-        )}
+          <Marked n={markModel}>
+            <span className="agi-app-model">
+              <AgiMark className="agi-app-mark agi-app-mark--sm" />
+              Auto
+              <ChevronDown className="agi-app-icon agi-app-icon--sm" />
+            </span>
+          </Marked>
+          <Mic className="agi-app-icon agi-app-icon--lg" />
+          {turnActive ? (
+            <ComposerStop />
+          ) : (
+            <span className="agi-app-send">
+              <AudioLines className="agi-app-icon" />
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -437,7 +462,7 @@ export function WebAppPreview({
   return (
     <AppShell
       kind="web"
-      label="Authored example of the AGI Chat interface"
+      label="Authored example of the Chat interface"
       className={className}
       chats={WEB_CHATS}
       view={view}
@@ -459,7 +484,7 @@ export function DesktopAppPreview({
   return (
     <AppShell
       kind="desktop"
-      label="Authored example of the AGI Desktop app window"
+      label="Authored example of the Desktop app window"
       className={className}
       chats={DESKTOP_CHATS}
       modeSwitch={modeSwitch}
@@ -623,11 +648,7 @@ const APPROVAL_ACTIONS = [
 
 export function EditorAppPreview({ className }: { className?: string }) {
   return (
-    <PreviewRoot
-      kind="editor"
-      label="Authored example of AGI Code for VS Code"
-      className={className}
-    >
+    <PreviewRoot kind="editor" label="Authored example of Code for VS Code" className={className}>
       <div className="agi-app-titlebar agi-app-titlebar--editor">
         <TrafficLights />
         <span className="agi-app-command">
@@ -650,8 +671,7 @@ export function EditorAppPreview({ className }: { className?: string }) {
         <div className="agi-app-view">
           <div className="agi-app-view-head">
             <AgiMark className="agi-app-mark" />
-            <span className="agi-app-view-title">AGI</span>
-            <span className="agi-app-pill">Managed</span>
+            <span className="agi-app-pill">Cloud</span>
             <Plus className="agi-app-icon agi-app-end" />
             <History className="agi-app-icon" />
             <MoreHorizontal className="agi-app-icon" />
@@ -682,7 +702,7 @@ export function EditorAppPreview({ className }: { className?: string }) {
             </div>
           </div>
           <div className="agi-app-view-composer">
-            <span className="agi-app-view-placeholder">Ask AGI to do anything…</span>
+            <span className="agi-app-view-placeholder">Ask anything…</span>
             <div className="agi-app-view-bar">
               <Plus className="agi-app-icon" />
               <Slash className="agi-app-icon" />
@@ -742,7 +762,6 @@ export function EditorAppPreview({ className }: { className?: string }) {
         <span>TypeScript</span>
         <span>
           <AgiMark className="agi-app-mark agi-app-mark--sm" />
-          AGI
         </span>
       </div>
     </PreviewRoot>
@@ -754,7 +773,7 @@ export type TerminalRouteMode = 'local' | 'byok' | 'managed';
 const TERMINAL_ACCESS: Record<TerminalRouteMode, string> = {
   local: 'Local',
   byok: 'Your key',
-  managed: 'Managed',
+  managed: 'Cloud',
 };
 
 const TERMINAL_CHOICES = ['Yes', 'No', 'Allow Session', 'Always Allow'];
@@ -793,7 +812,7 @@ export function TerminalAppPreview({
   return (
     <PreviewRoot
       kind="terminal"
-      label="Authored example of the AGI CLI in a terminal"
+      label="Authored example of the CLI in a terminal"
       className={className}
     >
       <div className="agi-app-titlebar agi-app-titlebar--terminal">
@@ -802,7 +821,7 @@ export function TerminalAppPreview({
       </div>
       <div className="agi-app-tui" data-access={routeMode}>
         <div className="agi-app-tui-head">
-          <b>AGI</b>
+          <AgiMark className="agi-app-mark" />
           <span>Auto</span>
           {provider ? <em>{provider}</em> : null}
           <span>main</span>
@@ -835,7 +854,7 @@ export function TerminalAppPreview({
         )}
         <div className="agi-app-tui-box agi-app-tui-input" data-title="Default">
           <span>
-            <b>&gt;</b> <i>Message AGI... / for commands</i>
+            <b>&gt;</b> <i>Message… / for commands</i>
           </span>
         </div>
         <div className="agi-app-tui-status">
@@ -870,7 +889,7 @@ const DRAWER_FOOTER = [
 
 export function PhoneAppPreview({
   className,
-  label = 'Authored example of the AGI Mobile chat screen',
+  label = 'Authored example of the Mobile chat screen',
   drawerOpen = false,
 }: {
   className?: string;
@@ -890,7 +909,7 @@ export function PhoneAppPreview({
       </div>
       <div className="agi-app-phone-head">
         <Menu className="agi-app-icon agi-app-icon--xl" />
-        <span className="agi-app-phone-title">AGI</span>
+        <AgiMark className="agi-app-mark agi-app-phone-title" />
         <span className="agi-app-phone-compose agi-app-end">
           <SquarePen className="agi-app-icon agi-app-icon--lg" />
         </span>
@@ -937,7 +956,7 @@ function PhoneDrawer() {
       <span className="agi-app-phone-scrim" />
       <div className="agi-app-drawer">
         <div className="agi-app-drawer-head">
-          <span className="agi-app-drawer-brand">AGI</span>
+          <AgiMark className="agi-app-mark agi-app-drawer-brand" />
           <span className="agi-app-drawer-btn">
             <Search className="agi-app-icon agi-app-icon--lg" />
           </span>

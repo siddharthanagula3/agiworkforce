@@ -159,12 +159,11 @@ export default function MemoryFeaturePage() {
               rows={[
                 {
                   label: 'Stored',
-                  value: `Kept in your AGI account for chats on AGI managed cloud. Mobile is ${SURFACE_STATUS.mobile.toLowerCase()}, and its Local mode is built to keep the list on the phone.`,
+                  value: `Kept in your AGI account for chats on Cloud. Mobile is ${SURFACE_STATUS.mobile.toLowerCase()}, and its Local mode is built to keep the list on the phone.`,
                 },
                 {
                   label: 'Recalled',
-                  value:
-                    'Up to 30 facts on AGI managed cloud, capped at 8,000 characters in total.',
+                  value: 'Up to 30 facts on Cloud, capped at 8,000 characters in total.',
                 },
                 { label: 'Per turn', value: 'A single chat turn can add at most five new facts.' },
                 { label: 'Temporary chats', value: 'A temporary chat never writes to the list.' },

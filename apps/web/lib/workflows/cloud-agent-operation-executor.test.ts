@@ -56,7 +56,10 @@ describe('durable cloud agent operation executor', () => {
     receiptMocks.fail.mockResolvedValue({ status: 'failed' });
     budgetMocks.authorize.mockResolvedValue({
       allowed: false,
-      refusal: { code: 'run_cost_cap', message: 'This run reached its spend limit of 4,000 credits.' },
+      refusal: {
+        code: 'run_cost_cap',
+        message: 'This run reached its spend limit of 4,000 credits.',
+      },
     });
     const execute = vi.fn();
 
@@ -141,6 +144,49 @@ describe('durable cloud agent operation executor', () => {
           inputTokens: 10,
           outputTokens: 2,
         },
+      }),
+    );
+  });
+
+  it('stores failed usage once and replays its failure without another provider call', async () => {
+    const failure = new Error('interrupted provider stream');
+    const spent = { providerCalls: 1, inputTokens: 14, outputTokens: 9 };
+    receiptMocks.claim
+      .mockResolvedValueOnce({
+        disposition: 'acquired',
+        operationId: '0190a000-0000-7000-8000-000000000002',
+        leaseToken: '0190a000-0000-7000-8000-000000000003',
+        attempt: 1,
+      })
+      .mockResolvedValueOnce({
+        disposition: 'failed',
+        error: { name: failure.name, message: failure.message },
+        usage: spent,
+      });
+    receiptMocks.fail.mockResolvedValue({ status: 'failed' });
+    const execute = vi.fn().mockRejectedValue(failure);
+    const failureUsage = vi.fn((error: unknown) => (error === failure ? spent : null));
+    const input = {
+      userId: 'user-1',
+      runId: '0190a000-0000-7000-8000-000000000001',
+      billingIdempotencyKey: 'agi.chat.web.request-1',
+      operationKey: 'provider:2',
+      operationKind: 'provider' as const,
+      retrySafety: 'unsafe' as const,
+      payload: {},
+      resultSchema: ResultSchema,
+      execute,
+      failureUsage,
+    };
+    await expect(executeCloudAgentOperation(db, input)).rejects.toThrow(failure.message);
+    await expect(executeCloudAgentOperation(db, input)).rejects.toThrow(failure.message);
+    expect(execute).toHaveBeenCalledOnce();
+    expect(failureUsage).toHaveBeenCalledOnce();
+    expect(receiptMocks.fail).toHaveBeenCalledOnce();
+    expect(receiptMocks.fail).toHaveBeenCalledWith(
+      db,
+      expect.objectContaining({
+        usage: { billingIdempotencyKey: input.billingIdempotencyKey, ...spent },
       }),
     );
   });

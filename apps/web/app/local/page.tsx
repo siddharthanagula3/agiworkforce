@@ -43,7 +43,7 @@ const SURFACE_FACTS = [
   },
   {
     meta: `Desktop · ${SURFACE_STATUS.desktop}`,
-    title: 'Managed Cloud only',
+    title: 'Cloud only',
     body: 'The Electron Desktop contract does not accept local-inference commands or provider keys. Local mode belongs to the CLI.',
   },
   {
@@ -68,7 +68,7 @@ export default function LocalPage() {
               <ButtonRow>
                 <Button href={CLI_CTA.href}>{CLI_CTA.label}</Button>
                 <Button href="/desktop" variant="secondary">
-                  See AGI Desktop
+                  See Desktop
                 </Button>
               </ButtonRow>
             </div>
@@ -207,11 +207,11 @@ export default function LocalPage() {
               <Prose size="lg">
                 The CLI answers from {CLI_LOCAL_RUNTIMES.label} on the machine you own. BYOK on the
                 CLI is the reviewed way out on the days a local model is not enough; Desktop is
-                managed-cloud only. {CLI_AVAILABILITY_NOTE}
+                cloud only. {CLI_AVAILABILITY_NOTE}
               </Prose>
               <ButtonRow>
                 <Button href="/desktop" variant="secondary">
-                  See AGI Desktop
+                  See Desktop
                 </Button>
                 <Button href="/byok" variant="secondary">
                   How BYOK works

@@ -98,6 +98,34 @@ describe('artifact panel header', () => {
     expect(within(menu).queryByRole('menuitem', { name: 'Download as HTML' })).toBeNull();
   });
 
+  it('refreshes the artifact preview from the public artifact menu', () => {
+    seed();
+    renderPanel();
+    const before = document.querySelector('iframe');
+    expect(before).toBeTruthy();
+
+    openMore();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Refresh preview' }));
+
+    expect(document.querySelector('iframe')).not.toBe(before);
+  });
+
+  it('opens the artifact in a new tab from the public artifact menu', () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    seed();
+    renderPanel();
+    openMore();
+
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Open in new tab' }));
+
+    expect(open).toHaveBeenCalledTimes(1);
+    const [url, target, features] = open.mock.calls[0] ?? [];
+    expect(String(url).startsWith('blob:')).toBe(true);
+    expect(target).toBe('_blank');
+    expect(features).toBe('noopener,noreferrer');
+    open.mockRestore();
+  });
+
   it('orders the bar as Preview and Source, then share, download, more and close', () => {
     seed();
     const artifact = useArtifactsStore.getState().artifacts.find((a) => a.id === ARTIFACT_ID)!;

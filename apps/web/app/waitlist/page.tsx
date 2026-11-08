@@ -64,20 +64,20 @@ const ENTERPRISE_PLAN = BILLING_PLAN_PRICING.enterprise.label;
 
 export const metadata = buildMetadata({
   title: `${ENTERPRISE_PLAN} access list: leave an email to discuss a contract`,
-  description: `The ${FREE_PLAN} plan on AGI managed cloud is open by default: sign in and start, no waitlist. Paid plans start from the pricing page. Request a conversation about contract-scoped ${ENTERPRISE_PLAN} access and additional governance requirements.`,
+  description: `The ${FREE_PLAN} plan on Cloud is open by default: sign in and start, no waitlist. Paid plans start from the pricing page. Request a conversation about contract-scoped ${ENTERPRISE_PLAN} access and additional governance requirements.`,
   path: '/waitlist',
 });
 
 const WHILE_YOU_WAIT = [
   {
     meta: 'Try it now',
-    title: 'Try AGI Chat',
+    title: 'Try chat',
     body: 'Hosted chat with projects and artifacts, in the browser today.',
     href: WEB_ENTRY_HREF,
   },
   {
     meta: `Free · ${SURFACE_NAMES.cli} ${SURFACE_STATUS.cli.toLowerCase()}`,
-    title: 'Run AGI locally',
+    title: 'Run locally',
     body: 'Free forever, offline-capable, and never silently routed to the cloud.',
     href: '/local',
   },
@@ -102,7 +102,7 @@ export default function WaitlistPage() {
       <main id="main-content">
         <PageHero
           id="agi-waitlist-title"
-          eyebrow="AGI Cloud"
+          eyebrow="Cloud"
           title={`${ENTERPRISE_PLAN} access, by contract.`}
           lede={
             <>
@@ -110,7 +110,7 @@ export default function WaitlistPage() {
               audit export, and retention controls are live for entitled workspaces; leave your
               email to discuss contracts, custom governance, and additional capabilities beyond
               self-serve {TEAM_PLAN}. You do not need this list to use AGI. The {FREE_PLAN} plan on
-              AGI managed cloud is open by default:{' '}
+              Cloud is open by default:{' '}
               <Link href="/get-started" className="agi-ds-link">
                 sign in and start
               </Link>

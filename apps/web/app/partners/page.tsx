@@ -34,7 +34,7 @@ const OPPORTUNITIES = [
   {
     meta: 'Open protocol',
     title: 'Build on MCP',
-    body: `The AGI CLI implements the Model Context Protocol, so a tool server you build against the open spec works with it, behind explicit tool-approval prompts. ${CLI_AVAILABILITY_NOTE} Desktop is ${SURFACE_STATUS.desktop.toLowerCase()}. You do not need an agreement with us, or our permission, to build one.`,
+    body: `The CLI implements the Model Context Protocol, so a tool server you build against the open spec works with it, behind explicit tool-approval prompts. ${CLI_AVAILABILITY_NOTE} Desktop is ${SURFACE_STATUS.desktop.toLowerCase()}. You do not need an agreement with us, or our permission, to build one.`,
   },
   {
     meta: 'Available today',
@@ -67,7 +67,7 @@ export default function PartnersPage() {
           eyebrow="Partners"
           title="No program yet. Two open doors."
           em="Two open doors."
-          lede={`There is no partner program yet: no reseller agreement, no tiers, no certification. What exists is the AGI CLI, which implements MCP so that a server built on that protocol works with it, and a community directory where a plugin you build can be listed once it is reviewed. ${CLI_AVAILABILITY_NOTE}`}
+          lede={`There is no partner program yet: no reseller agreement, no tiers, no certification. What exists is the CLI, which implements MCP so that a server built on that protocol works with it, and a community directory where a plugin you build can be listed once it is reviewed. ${CLI_AVAILABILITY_NOTE}`}
           ctas={[
             { href: '#apply', label: 'Apply to partner' },
             { href: '/plugins', label: 'Browse the plugin catalogue', variant: 'secondary' },

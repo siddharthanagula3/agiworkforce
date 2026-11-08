@@ -1,3 +1,4 @@
+import { withCloudAgentRunCancellation } from '@/lib/services/cloud-agent-run-cancellation';
 import 'server-only';
 import {
   contextPolicySnapshotIsCurrent,
@@ -66,7 +67,6 @@ import {
   CLOUD_AGENT_RESEARCH_INVOCATION_DEADLINE_MS,
   CLOUD_AGENT_RESEARCH_SYNTHESIS_WINDOW_MS,
   CLOUD_AGENT_STEP_INVOCATION_LIMIT_MS,
-  CLOUD_AGENT_CANCELLATION_POLL_MS,
 } from '@/lib/deadline-policy';
 import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
@@ -110,6 +110,7 @@ const ProviderCallObservationSchema = z
     model: z.string().min(1).optional(),
     costDollars: z.number().finite().nonnegative().optional(),
     costSource: z.enum(['provider_reported', 'estimated']).optional(),
+    tokenSource: z.enum(['provider_reported', 'estimated']).optional(),
     routeId: z.string().min(1).nullable().optional(),
     upstreamProvider: z.string().min(1).optional(),
     providerReportedCostUsd: z.number().finite().nonnegative().optional(),
@@ -713,7 +714,7 @@ export async function executeCloudAgentWorkflowInvocation(
       },
       shouldPropagateExecutionError: (error) =>
         error instanceof FatalError || error instanceof RetryableError,
-      providerExecutor: ({ operationKey, step, request, execute }) =>
+      providerExecutor: ({ operationKey, step, request, execute, failureUsage }) =>
         executeCloudAgentOperation<ToolLoopProviderStepResult>(db, {
           userId: input.userId,
           runId: input.runId,
@@ -728,6 +729,10 @@ export async function executeCloudAgentWorkflowInvocation(
             return persisted;
           },
           usage: (result) => ({ ...result.usage }),
+          failureUsage: () => {
+            const spent = failureUsage();
+            return spent ? { ...spent } : null;
+          },
         }),
       toolExecutor: async ({ operationKey, retrySafety, toolCall, execute }) => {
         const refused = await toolPermissionGate.refusalFor(toolCall.qualifiedName);
@@ -860,20 +865,13 @@ export async function executeCloudAgentWorkflowInvocation(
   const stream = createBoundedDurableWriter(writer, {
     onUnreadable: reportUnreadableStream(input.runId, 'projection'),
   });
-  // The loop reads the cancel request only between steps, so a Stop during a
-  // long provider stream waited for the whole answer. This poll aborts the
-  // signal the stream reads.
-  const cancellationPoll = setInterval(() => {
-    void isCloudAgentRunCancellationRequested(db, { userId: input.userId, runId: input.runId })
-      .then((requested) => {
-        if (requested) cancellation.abort();
-      })
-      .catch((error: unknown) => {
-        logger.warn({ error, runId: input.runId }, 'Could not read the run cancellation request');
-      });
-  }, CLOUD_AGENT_CANCELLATION_POLL_MS);
   try {
-    for await (const chunk of generator) {
+    for await (const chunk of withCloudAgentRunCancellation(generator, {
+      db,
+      userId: input.userId,
+      runId: input.runId,
+      controller: cancellation,
+    })) {
       for (const projected of projectCloudAgentWorkflowChunk(chunk)) {
         if (projected.envelope) {
           await journal.append(projected.envelope);
@@ -897,7 +895,6 @@ export async function executeCloudAgentWorkflowInvocation(
     }
     await journal.flush();
   } finally {
-    clearInterval(cancellationPoll);
     await journal.flush().catch((error: unknown) => {
       logger.warn(
         { error, runId: input.runId },

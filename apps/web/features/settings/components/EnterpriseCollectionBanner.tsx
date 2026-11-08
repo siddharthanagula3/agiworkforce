@@ -56,7 +56,7 @@ function adminCopy(collectionState: CollectionState): string {
     case 'past_due_90':
       return `Payment on this workspace is ${days} past due. New seats and new paid usage commitments are on hold until the outstanding invoice is resolved. Contact your billing owner.`;
     case 'read_only':
-      return `Payment on this workspace is ${days} past due. The workspace is read-only: no new managed-cloud work can be created until the outstanding invoice is resolved. Contact your billing owner.`;
+      return `Payment on this workspace is ${days} past due. The workspace is read-only: no new cloud work can be created until the outstanding invoice is resolved. Contact your billing owner.`;
     default:
       return '';
   }

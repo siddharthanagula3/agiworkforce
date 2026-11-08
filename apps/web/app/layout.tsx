@@ -59,15 +59,14 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: 'AGI | One AI workspace across models and tools.',
-    template: '%s | AGI',
+    default: `${SITE_NAME} | One AI workspace across models and tools.`,
+    template: `%s | ${SITE_NAME}`,
   },
-  description:
-    'AGI is an AI workspace for chat, coding, research, files, projects, artifacts, tools, connectors, memory, and automation with explicit Local, BYOK, and managed cloud boundaries.',
+  description: `${SITE_NAME} is an AI workspace for chat, coding, research, files, projects, artifacts, tools, connectors, memory, and automation with explicit Local, BYOK, and Cloud boundaries.`,
   keywords: [
     'AI agents',
     'automation',
-    'AGI',
+    SITE_NAME,
     'workforce',
     'autonomous agents',
     'chat-first AI',
@@ -90,7 +89,7 @@ export const metadata: Metadata = {
     locale: 'en_US',
     url: SITE_URL,
     siteName: SITE_NAME,
-    title: 'AGI | One AI workspace across models and tools.',
+    title: `${SITE_NAME} | One AI workspace across models and tools.`,
     description:
       'A practical AI workspace for chat, code, research, files, tools, artifacts, connectors, and automation.',
     images: [
@@ -98,15 +97,14 @@ export const metadata: Metadata = {
         url: OG_IMAGE.url,
         width: OG_IMAGE.width,
         height: OG_IMAGE.height,
-        alt: 'AGI - Just ask, it does',
+        alt: OG_IMAGE.alt,
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'AGI | One AI workspace across models and tools.',
-    description:
-      'Chat, code, research, files, artifacts, tools, connectors, and automation in one AGI workspace.',
+    title: `${SITE_NAME} | One AI workspace across models and tools.`,
+    description: `Chat, code, research, files, artifacts, tools, connectors, and automation in one ${SITE_NAME} workspace.`,
     images: [OG_IMAGE.url],
   },
   robots: {

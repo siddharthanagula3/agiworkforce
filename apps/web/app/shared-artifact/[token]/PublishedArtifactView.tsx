@@ -228,7 +228,7 @@ export function PublishedArtifactView({
               ? t('artifactPublish.sharedWithWorkspace')
               : audience === 'invited'
                 ? t('artifactPublish.sharedWithYou', 'Shared with you')
-                : t('artifactPublish.sharedFrom', 'Shared from AGI')}
+                : t('artifactPublish.sharedFrom', 'Shared conversation')}
           </Link>
         </p>
       </header>

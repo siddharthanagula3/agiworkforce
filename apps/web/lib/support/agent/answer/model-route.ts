@@ -3,7 +3,11 @@ import 'server-only';
 import { randomUUID } from 'node:crypto';
 import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
 import { resolveAutoRoute, type AutoRoutingRequest } from '@agiworkforce/routing';
-import { SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER } from '@agiworkforce/types';
+import {
+  resolveModelFamilySlot,
+  SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
+  type ModelFamilySlot,
+} from '@agiworkforce/types';
 import { resolveWireMode } from '@/app/api/llm/v1/chat/completions/lib/adapter-providers';
 import { drainToLlmResponse } from '@/app/api/llm/v1/chat/completions/lib/adapter-response';
 import {
@@ -37,6 +41,8 @@ const MAX_OUTPUT_TOKENS = 400;
 const SUPPORT_ROUTING_TIER = SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER[0];
 
 export const SUPPORT_SYSTEM_PROMPT_ID = 'support.system';
+
+export const SUPPORT_MODEL_FAMILY: ModelFamilySlot = 'openai/gpt-fast';
 
 /**
  * The support answer is drawn only from excerpts already inside the prompt, it
@@ -96,8 +102,11 @@ export async function callSupportModel(input: SupportModelCallInput): Promise<Su
     return { status: 'unavailable', reason: 'disabled', route: null };
   }
 
+  const modelKey = resolveModelFamilySlot(SUPPORT_MODEL_FAMILY);
   const baseRouting: AutoRoutingRequest = {
-    selection: 'auto',
+    selection: modelKey,
+    fallbackToAutoForCapabilityMismatch: false,
+    requiredCapabilities: ['structuredOutput'],
     taskType: 'simple_chat',
     subscriptionTier: SUPPORT_ROUTING_TIER,
     trustMode: 'managed_cloud',
@@ -110,6 +119,10 @@ export async function callSupportModel(input: SupportModelCallInput): Promise<Su
   const route = resolveAutoRoute(routing);
   if (route.status === 'unavailable') {
     logger.warn({ code: route.code }, '[support-agent] no managed route available');
+    return { status: 'unavailable', reason: 'no_route', route: null };
+  }
+  if (route.modelKey !== modelKey) {
+    logger.error('[support-agent] selected model does not match the support family');
     return { status: 'unavailable', reason: 'no_route', route: null };
   }
 
@@ -145,6 +158,8 @@ export async function callSupportModel(input: SupportModelCallInput): Promise<Su
     temperature: 0,
     stream: false,
   });
+  chatRequest.effort = 'none';
+  chatRequest.responseFormat = { type: 'json_object' };
 
   const wireMode = resolveWireMode(dispatchProvider);
 

@@ -1,9 +1,9 @@
 import type { Metadata } from 'next';
 import { MarketingLanding } from '@/features/marketing/components/MarketingLanding';
-import { OG_IMAGE, SITE_URL } from '@/lib/seo/site';
+import { OG_IMAGE, SITE_NAME, SITE_URL } from '@/lib/seo/site';
 import { surfaceAvailabilitySummary } from '@/lib/surface-status';
 
-const TITLE = 'AGI: ChatGPT, Claude, Gemini and more in one app';
+const TITLE = `${SITE_NAME}: ChatGPT, Claude, Gemini and more in one app`;
 const DESCRIPTION = `One AI workspace for chat, code and research, with models from OpenAI, Anthropic, Google and more. ${surfaceAvailabilitySummary()}`;
 const SHARE_DESCRIPTION =
   'Chat, code, research and automate with models from OpenAI, Anthropic, Google and more, in one workspace. Free to start.';

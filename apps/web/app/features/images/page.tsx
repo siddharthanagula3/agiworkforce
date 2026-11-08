@@ -69,8 +69,8 @@ export default function ImageGenerationPage() {
                 Start from the composer, or ask in&nbsp;a&nbsp;chat.
               </h2>
               <Prose>
-                Image generation runs in Managed Cloud chats. Describe the picture and the result
-                appears in the&nbsp;conversation.
+                Image generation runs in Cloud chats. Describe the picture and the result appears in
+                the&nbsp;conversation.
               </Prose>
             </div>
             <Ledger

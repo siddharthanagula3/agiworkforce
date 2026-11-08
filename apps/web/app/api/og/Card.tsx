@@ -32,8 +32,6 @@ const FAINT = 0.72;
 const COPY_WIDTH = 560;
 const WINDOW = { left: COPY_WIDTH + 8, top: 62, width: 600, height: 620 } as const;
 const FADE_TOP = 300;
-const WORDMARK_TRACKING = 0.08;
-const WORDMARK_DROP = 0.236;
 const LOCKUP_INSET = 6;
 
 const box = (style: CSSProperties, ...children: ReactNode[]): ReactElement =>
@@ -51,17 +49,6 @@ function mark(size: number): ReactElement {
     width: size,
     height: size,
     alt: '',
-  });
-}
-
-function wordmark(size: number): ReactElement {
-  return text('AGI', {
-    fontFamily: 'Newsreader',
-    fontSize: size,
-    fontWeight: 700,
-    letterSpacing: size * WORDMARK_TRACKING,
-    lineHeight: 1,
-    marginTop: size * WORDMARK_DROP,
   });
 }
 
@@ -117,7 +104,7 @@ function appWindow(): ReactElement {
     },
     column(
       { width: 176, padding: '22px 12px', borderRight: `1.5px solid ${C.line}`, gap: 6 },
-      row({ gap: 4, padding: '0 8px 16px' }, mark(22), wordmark(24)),
+      row({ padding: '0 8px 16px' }, mark(28)),
       ...OG_NAV.map((label, index) => navItem(label, index === 0)),
     ),
     column(
@@ -172,7 +159,7 @@ export function ogCard(): ReactElement {
     },
     column(
       { width: COPY_WIDTH, padding: '56px 0 56px 68px', justifyContent: 'space-between' },
-      row({ gap: 8, marginLeft: -LOCKUP_INSET }, mark(64), wordmark(72)),
+      row({ marginLeft: -LOCKUP_INSET }, mark(72)),
       column(
         {},
         ...OG_HEADLINE.map((line) => text(line, headline)),

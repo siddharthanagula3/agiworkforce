@@ -52,9 +52,9 @@ interface SettingsState {
   shortcutBindings: Record<string, ShortcutChord>;
   /** Sidebar destinations the user hid. Chat is never hideable. */
   hiddenNavIds: string[];
-  /** AGI Code rail items the user pinned (true) or moved under More (false), by item id. */
+  /** Code rail items the user pinned (true) or moved under More (false), by item id. */
   codeRailPins: Record<string, boolean>;
-  /** The AGI Code first-run setup was finished, skipped, or found unnecessary. */
+  /** The Code first-run setup was finished, skipped, or found unnecessary. */
   codeFirstRunCompleted: boolean;
   /**
    * Start every new conversation as a temporary chat. Honoured at creation by

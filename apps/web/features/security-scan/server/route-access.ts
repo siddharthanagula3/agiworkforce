@@ -38,7 +38,7 @@ export async function securityScanRouteContext(
   }
   if (!isManagedComputePrivateBetaEnabled()) {
     throw createError.capabilityUnavailable(
-      'Managed compute is temporarily unavailable. Use Local or BYOK in the meantime, or try again shortly.',
+      'Cloud compute is temporarily unavailable. Use Local or BYOK in the meantime, or try again shortly.',
     );
   }
   const entitlement = await resolveEntitlementBundle(db, userId);

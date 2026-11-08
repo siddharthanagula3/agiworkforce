@@ -268,6 +268,26 @@ describe('scheduled agent tool access', () => {
     vi.unstubAllEnvs();
   });
 
+  it('does not deliver a partial scheduled result after the worker signal was aborted', async () => {
+    const controller = new AbortController();
+    const reason = new Error('Scheduled worker stopped');
+    mockBuildToolLoopStream.mockImplementationOnce(
+      async () =>
+        new ReadableStream({
+          start(stream) {
+            stream.enqueue(new TextEncoder().encode(chunk({ content: 'Partial result' })));
+            setTimeout(() => {
+              controller.abort(reason);
+              stream.error(reason);
+            }, 0);
+          },
+        }),
+    );
+    await expect(
+      executeScheduledAgent(task, controller.signal, 'run-stop', executionScope),
+    ).rejects.toBe(reason);
+  });
+
   it('offers a scheduled run the platform web tools and runs the tool it calls', async () => {
     mockBuildToolLoopStream
       .mockResolvedValueOnce(

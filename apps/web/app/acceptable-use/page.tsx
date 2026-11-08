@@ -248,8 +248,8 @@ const PROHIBITED = [
         <br />
         <strong>What the product labels, and what it does not.</strong> A shared conversation opens
         as a page headed &ldquo;Read-only shared session&rdquo; and shows the model&rsquo;s name
-        when one was recorded. A shared artifact page says &ldquo;Shared from AGI&rdquo;. Neither
-        page states that the content is AI-generated. When AGI serves an image or video it
+        when one was recorded. A shared artifact page says &ldquo;Shared conversation&rdquo;.
+        Neither page states that the content is AI-generated. When AGI serves an image or video it
         generated, the response carries a machine-readable header,{' '}
         <code>{AI_GENERATED_HEADER}</code>, that marks it as AI-generated. That mark is in the
         response, not in the file, so a file you download and post elsewhere carries no label from
@@ -320,11 +320,11 @@ export default function AcceptableUsePage() {
                     These rules apply to every AGI surface (web, desktop, mobile, the Chrome
                     extension, the VS Code extension, and the CLI) and to all three trust
                     boundaries: Local on-device execution, BYOK using your own provider keys, and
-                    Managed Cloud that AGI hosts and meters.
+                    Cloud that AGI hosts and meters.
                   </Prose>
                   <Prose>
-                    <strong>Managed Cloud is in {MANAGED_CLOUD_STATUS} and open by default.</strong>{' '}
-                    Read this page as the rules for an alpha service, not as a general-availability
+                    <strong>Cloud is in {MANAGED_CLOUD_STATUS} and open by default.</strong> Read
+                    this page as the rules for an alpha service, not as a general-availability
                     contract. Where you use BYOK, the provider whose key you supply also applies
                     their own terms to your usage, and those govern that traffic. See
                     &ldquo;Third-party services and connectors&rdquo; in the{' '}
@@ -351,13 +351,13 @@ export default function AcceptableUsePage() {
                   <NoteList items={PROHIBITED} />
                   <Prose size="sm">
                     <strong>What the text filter checks, and what it does not.</strong> A rule-based
-                    filter reads chat messages, image prompts, and video prompts sent through
-                    Managed Cloud before any model sees them. The same filter runs when you publish
-                    an artifact. It refuses clear requests in five areas: sexual content involving
-                    minors; making chemical, biological, radiological, or nuclear weapons; building
-                    explosive devices or untraceable or converted firearms; stated plans of violence
-                    against a specific person or place; and sexualised or impersonating depictions
-                    of real people. A refused request gets this message: &ldquo;
+                    filter reads chat messages, image prompts, and video prompts sent through Cloud
+                    before any model sees them. The same filter runs when you publish an artifact.
+                    It refuses clear requests in five areas: sexual content involving minors; making
+                    chemical, biological, radiological, or nuclear weapons; building explosive
+                    devices or untraceable or converted firearms; stated plans of violence against a
+                    specific person or place; and sexualised or impersonating depictions of real
+                    people. A refused request gets this message: &ldquo;
                     {PLATFORM_FILTER_REFUSAL}&rdquo; The filter matches patterns of words. It is not
                     a review of everything you write, and it will miss things. It does not look for
                     the other rules on this page, including the election, self-harm, competition,

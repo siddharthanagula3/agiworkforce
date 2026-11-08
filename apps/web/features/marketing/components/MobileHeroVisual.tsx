@@ -26,7 +26,7 @@ export function MobileHeroVisual() {
       <div className="agi-mobile-hero-phone dark:hidden">
         <Image
           src="/screenshots/mobile-light-v2.png"
-          alt="AGI Mobile"
+          alt="Mobile"
           width={320}
           height={692}
           className="agi-mobile-hero-img"
@@ -36,7 +36,7 @@ export function MobileHeroVisual() {
       <div className="agi-mobile-hero-phone hidden dark:block">
         <Image
           src="/screenshots/mobile-dark-v2.png"
-          alt="AGI Mobile"
+          alt="Mobile"
           width={320}
           height={692}
           className="agi-mobile-hero-img"

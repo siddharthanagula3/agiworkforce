@@ -33,7 +33,9 @@ vi.mock('@/app/api/llm/v1/chat/completions/lib/adapter-response', async (importO
 import {
   SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
   SELF_SERVE_PAID_PLAN_TIERS,
+  resolveModelFamilySlot,
 } from '@agiworkforce/types';
+import { callSupportModel, SUPPORT_MODEL_FAMILY } from '../answer/model-route';
 import {
   admitEveryModelCall,
   armModelMocks,
@@ -41,6 +43,7 @@ import {
   BYOK_QUESTION,
   modelMocks,
   queueModelJson,
+  SELECTED_ROUTE,
 } from './fixtures/model-mocks';
 import { answerSupportQuestion } from '../answer/synthesize';
 import { retrieveSupportChunks } from '../retrieval/retrieve';
@@ -99,6 +102,8 @@ describe('the support assistant routes as a company function, not a plan entitle
       expect(request.subscriptionTier).not.toBe(viewer.planTier === 'free' ? 'free' : null);
       expect(request.taskType).toBe('simple_chat');
       expect(request.trustMode).toBe('managed_cloud');
+      expect(request.selection).toBe(resolveModelFamilySlot(SUPPORT_MODEL_FAMILY));
+      expect(request.fallbackToAutoForCapabilityMismatch).toBe(false);
     },
   );
 });
@@ -108,7 +113,7 @@ describe('the support tier against the real router', () => {
     const { resolveAutoRoute } = await vi.importActual<RoutingModule>('@agiworkforce/routing');
 
     const support = resolveAutoRoute({
-      selection: 'auto',
+      selection: resolveModelFamilySlot(SUPPORT_MODEL_FAMILY),
       taskType: 'simple_chat',
       trustMode: 'managed_cloud',
       runtimeProfileId: 'web/cloud-chat',
@@ -116,6 +121,41 @@ describe('the support tier against the real router', () => {
     });
 
     expect(support.status).toBe('selected');
+    if (support.status === 'selected')
+      expect(support.modelKey).toBe(resolveModelFamilySlot(SUPPORT_MODEL_FAMILY));
+  });
+});
+
+describe('support model confinement', () => {
+  beforeEach(() => armModelMocks());
+
+  it('offers no tools and uses concise JSON with reasoning disabled', async () => {
+    await callSupportModel({
+      userMessage: 'Retrieved help excerpts and a product question',
+      userId: null,
+      surface: 'marketing',
+      admitModelCall: admitEveryModelCall,
+    });
+    const request = modelMocks.streamedRequests.at(-1) as Record<string, unknown>;
+    expect(request.model).toBe(SELECTED_ROUTE.providerModelId);
+    expect(request.effort).toBe('none');
+    expect(request.responseFormat).toEqual({ type: 'json_object' });
+    expect(request.tools).toBeUndefined();
+    expect(request.rawVendorTools).toBeUndefined();
+  });
+
+  it('refuses an unexpected model without making a provider call or spending budget', async () => {
+    modelMocks.resolveAutoRoute.mockReturnValue({ ...SELECTED_ROUTE, modelKey: 'test.other' });
+    const admitModelCall = vi.fn(async () => true);
+    const answer = await callSupportModel({
+      userMessage: 'A product-support question',
+      userId: null,
+      surface: 'marketing',
+      admitModelCall,
+    });
+    expect(answer).toMatchObject({ status: 'unavailable', reason: 'no_route', route: null });
+    expect(admitModelCall).not.toHaveBeenCalled();
+    expect(modelMocks.buildServerProviderAdapter).not.toHaveBeenCalled();
   });
 });
 

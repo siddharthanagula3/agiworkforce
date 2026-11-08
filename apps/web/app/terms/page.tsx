@@ -32,7 +32,7 @@ import { PolicyVersionsLink } from '@shared/components/legal/PolicyVersionsLink'
 export const metadata = buildMetadata({
   title: 'Terms of service',
   description:
-    'Terms of service for AGI · eligibility, licence, your content, AI output, Managed Cloud alpha status, payment and auto-renewal, suspension, liability, and dispute resolution.',
+    'Terms of service for AGI · eligibility, licence, your content, AI output, Cloud alpha status, payment and auto-renewal, suspension, liability, and dispute resolution.',
   path: '/terms',
 });
 
@@ -45,7 +45,7 @@ const SECTIONS = [
   '03 · Licence',
   '04 · Your account',
   '05 · Your content, and what we may do with it',
-  '06 · Managed Cloud is in public alpha',
+  '06 · Cloud is in public alpha',
   '07 · Acceptable use',
   '08 · AI output: no reliance',
   '09 · Third-party services and connectors',
@@ -234,7 +234,7 @@ const DEFINITIONS_LEDGER: readonly LedgerRow[] = [
       'Bring your own key: using your own account and API key with a third-party model provider.',
   },
   {
-    label: 'Managed Cloud',
+    label: 'Cloud',
     value: `The hosted, metered inference capacity ${LEGAL_ENTITY} operates. Currently in public alpha.`,
   },
   {
@@ -248,7 +248,7 @@ const DEFINITIONS_LEDGER: readonly LedgerRow[] = [
   {
     label: 'Provider',
     value:
-      'A third-party AI company, such as Anthropic, OpenAI, or Google, whose model serves a Managed Cloud or BYOK request.',
+      'A third-party AI company, such as Anthropic, OpenAI, or Google, whose model serves a Cloud or BYOK request.',
   },
 ];
 
@@ -265,8 +265,8 @@ export default function TermsPage() {
             <>
               These terms govern your use of AGI.{' '}
               <strong>
-                By installing the software or creating an account you accept them. Managed Cloud is
-                in public alpha; section 06 says what that means for what you can rely on.
+                By installing the software or creating an account you accept them. Cloud is in
+                public alpha; section 06 says what that means for what you can rely on.
               </strong>{' '}
               Last updated: {POLICY_LAST_UPDATED.terms}. <PolicyVersionsLink policy="terms" />
             </>
@@ -378,8 +378,8 @@ export default function TermsPage() {
                     You are responsible for keeping your account credentials and provider API keys
                     secure, and for the activity that occurs through your account. The CLI stores
                     provider credentials in your operating system credential store, or in owner-only
-                    files on Linux or when the keyring is turned off; AGI Cloud does not receive
-                    those keys. See the{' '}
+                    files on Linux or when the keyring is turned off; Cloud does not receive those
+                    keys. See the{' '}
                     <Link href="/byok" className="agi-ds-link">
                       BYOK posture
                     </Link>
@@ -410,17 +410,16 @@ export default function TermsPage() {
                     contractually or legally barred from disclosing.
                   </Prose>
                   <Prose>
-                    <strong>Managed Cloud providers.</strong> To provide inference, we send prompts
-                    and attached content to the provider serving the model you select and receive
-                    its response; for routed models, the request passes through OpenRouter. On the
-                    Free plan, a chat on the default model goes to a provider AGI chooses, not one
-                    you pick: Alibaba Cloud Model Studio, on AGI&rsquo;s own key at its
-                    international endpoint in Singapore, or OpenAI. Which one answers depends on
-                    what is available for that turn, and the reply shows the model that answered.
-                    Those third parties handle that content under their applicable terms and
-                    data-use policies. Our statement that AGI does not train AGI-owned models is not
-                    a promise about a third party&rsquo;s handling. The current provider list is
-                    published at{' '}
+                    <strong>Cloud providers.</strong> To provide inference, we send prompts and
+                    attached content to the provider serving the model you select and receive its
+                    response; for routed models, the request passes through OpenRouter. On the Free
+                    plan, a chat on the default model goes to a provider AGI chooses, not one you
+                    pick: Alibaba Cloud Model Studio, on AGI&rsquo;s own key at its international
+                    endpoint in Singapore, or OpenAI. Which one answers depends on what is available
+                    for that turn, and the reply shows the model that answered. Those third parties
+                    handle that content under their applicable terms and data-use policies. Our
+                    statement that AGI does not train AGI-owned models is not a promise about a
+                    third party&rsquo;s handling. The current provider list is published at{' '}
                     <Link href="/subprocessors" className="agi-ds-link">
                       /subprocessors
                     </Link>
@@ -473,19 +472,19 @@ export default function TermsPage() {
               <Section id="s-06" labelledBy="agi-terms-s06-title" rule ground="2">
                 <Stack gap="loose">
                   <h2 className="agi-ds-h2" id="agi-terms-s06-title">
-                    06 · Managed Cloud is in public alpha
+                    06 · Cloud is in public alpha
                   </h2>
                   <Prose>
-                    AGI Managed Cloud is offered as a <strong>public alpha</strong>. It is open by
-                    default, but it may change, break, lose features, or be discontinued, and
-                    capacity and model availability may vary. No service level agreement applies to
-                    it during alpha; the targets published at{' '}
+                    Cloud is offered as a <strong>public alpha</strong>. It is open by default, but
+                    it may change, break, lose features, or be discontinued, and capacity and model
+                    availability may vary. No service level agreement applies to it during alpha;
+                    the targets published at{' '}
                     <Link href="/sla" className="agi-ds-link">
                       /sla
                     </Link>{' '}
                     are stated intentions for general availability, not commitments you can enforce
-                    today. Do not build a production dependency on Managed Cloud without accepting
-                    that. Local and BYOK modes run on your own device and your own provider account
+                    today. Do not build a production dependency on Cloud without accepting that.
+                    Local and BYOK modes run on your own device and your own provider account
                     respectively, and are not affected by this section.
                   </Prose>
                 </Stack>

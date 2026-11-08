@@ -70,7 +70,7 @@ import {
 import type { EffectiveCapabilityDocumentWire } from '@agiworkforce/cloud-contracts';
 import type { CloudCodeExecutionPolicy } from '@/lib/server/code-execution-policy';
 import {
-  getPlanSessionUsageBudgetCents,
+  getPlanSessionUsageCapCents,
   getPlanUsageBudgetCents,
   getPlanWeeklyUsageBudgetCents,
   isPlanUsageUncapped,
@@ -244,10 +244,11 @@ function buildLimits(
     {
       id: 'managed_usage_rolling_five_hour_cents',
       capabilityId: 'canUseCloudModels',
-      limit: uncapped ? null : getPlanSessionUsageBudgetCents(allowance),
+      limit: getPlanSessionUsageCapCents(allowance),
       unit: 'usage_cents',
       window: 'rolling_five_hour',
-      resetsAt: resets.rollingFiveHourResetsAt,
+      resetsAt:
+        getPlanSessionUsageCapCents(allowance) === null ? null : resets.rollingFiveHourResetsAt,
       policySource: usageSource,
     },
     {

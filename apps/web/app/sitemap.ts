@@ -1,8 +1,10 @@
 import { MetadataRoute } from 'next';
 
 import { SITE_URL } from '@/lib/seo/site';
+import { BLOG_POSTS } from '@/lib/blog-posts';
 import { RELEASES, releasePath } from '@/lib/changelog-entries';
 import { INSPIRATION, inspirationPath } from './gallery/inspiration';
+import { documentationIndex } from './docs/doc-index';
 
 type ChangeFrequency = 'always' | 'hourly' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'never';
 
@@ -115,6 +117,7 @@ const routes: RouteConfig[] = [
   { path: '/privacy/requests', priority: 0.6, changeFrequency: 'yearly' },
 
   { path: '/sitemap-page', priority: 0.4, changeFrequency: 'monthly' },
+  { path: '/blog', priority: 0.6, changeFrequency: 'monthly' },
 ];
 
 export default function sitemap(): MetadataRoute.Sitemap {
@@ -128,9 +131,24 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.5,
     changeFrequency: 'yearly',
   }));
-  return [...routes, ...templates, ...releases].map((route) => ({
+  const pages = [...routes, ...templates, ...releases].map((route) => ({
     url: `${SITE_URL}${route.path}`,
     changeFrequency: route.changeFrequency,
     priority: route.priority,
   }));
+  const guides = documentationIndex().groups.flatMap((group) =>
+    group.entries.map((entry) => ({
+      url: `${SITE_URL}${entry.href}`,
+      lastModified: entry.updated,
+      changeFrequency: 'monthly' as const,
+      priority: 0.6,
+    })),
+  );
+  const posts = BLOG_POSTS.map((post) => ({
+    url: `${SITE_URL}${post.path}`,
+    lastModified: post.updated,
+    changeFrequency: 'monthly' as const,
+    priority: 0.6,
+  }));
+  return [...pages, ...guides, ...posts];
 }

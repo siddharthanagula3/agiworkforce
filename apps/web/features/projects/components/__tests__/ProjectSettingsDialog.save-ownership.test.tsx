@@ -42,6 +42,20 @@ beforeEach(() => {
 });
 
 describe('project settings save ownership', () => {
+  it('saves edited project instructions from the public project settings', async () => {
+    updateProject.mockResolvedValue(project);
+    render(<ProjectSettingsDialog {...props()} />);
+    fireEvent.change(screen.getByLabelText('Instructions'), {
+      target: { value: 'Cite the project files' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await act(async () => {});
+    expect(updateProject).toHaveBeenCalledWith(
+      'project-a',
+      expect.objectContaining({ instructions: 'Cite the project files' }),
+    );
+  });
+
   it('admits one save, freezes fields, and blocks dismissal until it settles', async () => {
     const pending = deferred();
     updateProject.mockReturnValue(pending.promise);

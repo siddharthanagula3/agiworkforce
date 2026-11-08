@@ -8,7 +8,15 @@
  * or `aggregateRating` we cannot substantiate.
  */
 
-import { OG_IMAGE_URL, SITE_LEGAL_NAME, SITE_NAME, SITE_URL, SUPPORT_EMAIL } from './site';
+import {
+  OG_IMAGE_URL,
+  SITE_ALTERNATE_NAME,
+  SITE_LEGAL_NAME,
+  SITE_NAME,
+  SITE_URL,
+  SUPPORT_EMAIL,
+  absoluteUrl,
+} from './site';
 import {
   AVAILABLE_NOW_LABEL,
   RELEASED_SURFACES,
@@ -28,10 +36,11 @@ export function organizationSchema(): JsonLdObject {
     '@context': 'https://schema.org',
     '@type': 'Organization',
     name: SITE_NAME,
+    alternateName: SITE_ALTERNATE_NAME,
     legalName: SITE_LEGAL_NAME,
     url: SITE_URL,
     logo: `${SITE_URL}/logo.png`,
-    description: `AI workspace for chat, code, research, files, tools, artifacts, connectors, memory, and automation. ${RELEASED_ON}`,
+    description: `AI workspace for chat, projects, artifacts, memory, and web research. ${RELEASED_ON}`,
     contactPoint: {
       '@type': 'ContactPoint',
       contactType: 'Customer Support',
@@ -45,6 +54,7 @@ export function webSiteSchema(): JsonLdObject {
     '@context': 'https://schema.org',
     '@type': 'WebSite',
     name: SITE_NAME,
+    alternateName: SITE_ALTERNATE_NAME,
     url: SITE_URL,
     publisher: { '@type': 'Organization', name: SITE_NAME },
   };
@@ -73,6 +83,24 @@ export function faqPageSchema(items: readonly { q: string; a: string }[]): JsonL
       name: item.q,
       acceptedAnswer: { '@type': 'Answer', text: item.a },
     })),
+  };
+}
+
+export function articleSchema(article: {
+  title: string;
+  path: string;
+  updated: string;
+  description?: string | null;
+}): JsonLdObject {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: article.title,
+    url: absoluteUrl(article.path),
+    mainEntityOfPage: absoluteUrl(article.path),
+    dateModified: article.updated,
+    ...(article.description ? { description: article.description } : {}),
+    publisher: { '@type': 'Organization', name: SITE_NAME, url: SITE_URL },
   };
 }
 

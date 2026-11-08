@@ -1,4 +1,8 @@
 import {
+  isoToZonedLocalInput,
+  zonedLocalInputToIso,
+} from '@agiworkforce/utils/scheduling/local-input';
+import {
   MANAGED_CLOUD_SCHEDULE_DEFAULT_SOURCES,
   MANAGED_CLOUD_SCHEDULE_DEFAULT_NOTIFICATIONS,
   MANAGED_CLOUD_SCHEDULE_MAX_CREDIT_CAP,
@@ -21,6 +25,8 @@ import type {
   ScheduleTask,
 } from '../types';
 import { daypartsForPreset, presetForDayparts, taskRecurrence } from '../types';
+
+export { isoToZonedLocalInput, zonedLocalInputToIso };
 
 const MIN_INTERVAL_MS = 60_000;
 const MAX_INTERVAL_MS = 365 * 24 * 60 * 60 * 1_000;
@@ -79,126 +85,6 @@ export function createInitialScheduleDraft(): ScheduleDraft {
     sources: { ...INITIAL_SCHEDULE_DRAFT.sources },
     timezone,
   };
-}
-
-interface WallClockParts {
-  year: number;
-  month: number;
-  day: number;
-  hour: number;
-  minute: number;
-}
-
-function parseLocalInput(value: string): WallClockParts {
-  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
-  if (!match) throw new Error('Enter a complete local date and time.');
-  const parts: WallClockParts = {
-    year: Number(match[1]),
-    month: Number(match[2]),
-    day: Number(match[3]),
-    hour: Number(match[4]),
-    minute: Number(match[5]),
-  };
-  const normalized = new Date(
-    Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute),
-  );
-  if (
-    parts.month < 1 ||
-    parts.month > 12 ||
-    parts.day < 1 ||
-    parts.hour > 23 ||
-    parts.minute > 59 ||
-    normalized.getUTCFullYear() !== parts.year ||
-    normalized.getUTCMonth() + 1 !== parts.month ||
-    normalized.getUTCDate() !== parts.day
-  ) {
-    throw new Error('Enter a valid local date and time.');
-  }
-  return parts;
-}
-
-function formatterFor(timezone: string): Intl.DateTimeFormat {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: validateTimeZone(timezone),
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  });
-}
-
-function partsAt(formatter: Intl.DateTimeFormat, instant: Date): WallClockParts {
-  const values: Record<string, number> = {};
-  for (const part of formatter.formatToParts(instant)) {
-    if (part.type !== 'literal') values[part.type] = Number(part.value);
-  }
-  return {
-    year: values['year']!,
-    month: values['month']!,
-    day: values['day']!,
-    hour: values['hour']!,
-    minute: values['minute']!,
-  };
-}
-
-function sameWallClock(left: WallClockParts, right: WallClockParts): boolean {
-  return (
-    left.year === right.year &&
-    left.month === right.month &&
-    left.day === right.day &&
-    left.hour === right.hour &&
-    left.minute === right.minute
-  );
-}
-
-/**
- * Converts a datetime-local value to an instant without relying on the browser
- * or server's own timezone. DST gaps and repeated wall-clock minutes are
- * rejected so a user never schedules a different instant than the one shown.
- */
-export function zonedLocalInputToIso(value: string, timezone: string): string {
-  const target = parseLocalInput(value);
-  const formatter = formatterFor(timezone);
-  const naiveUtc = Date.UTC(target.year, target.month - 1, target.day, target.hour, target.minute);
-  const offsets = new Set<number>();
-
-  // Sampling both sides of the requested wall time discovers each offset used
-  // around a DST boundary without assuming a one-hour transition.
-  for (let hours = -48; hours <= 48; hours += 6) {
-    const sampleMs = naiveUtc + hours * 60 * 60_000;
-    const sample = new Date(sampleMs);
-    const local = partsAt(formatter, sample);
-    const localAsUtc = Date.UTC(local.year, local.month - 1, local.day, local.hour, local.minute);
-    offsets.add(localAsUtc - sampleMs);
-  }
-
-  const candidates = [...offsets]
-    .map((offset) => new Date(naiveUtc - offset))
-    .filter((candidate) => sameWallClock(partsAt(formatter, candidate), target))
-    .map((candidate) => candidate.toISOString())
-    .filter((candidate, index, all) => all.indexOf(candidate) === index)
-    .sort();
-
-  if (candidates.length === 0) {
-    throw new Error(
-      'This local time does not exist because the clock changes for daylight saving.',
-    );
-  }
-  if (candidates.length > 1) {
-    throw new Error('This local time occurs twice because the clock changes for daylight saving.');
-  }
-  return candidates[0]!;
-}
-
-export function isoToZonedLocalInput(value: string | null, timezone: string): string {
-  if (!value) return '';
-  const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) return '';
-  const parts = partsAt(formatterFor(timezone), date);
-  const pad = (number: number) => String(number).padStart(2, '0');
-  return `${parts.year}-${pad(parts.month)}-${pad(parts.day)}T${pad(parts.hour)}:${pad(parts.minute)}`;
 }
 
 function intervalFields(

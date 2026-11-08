@@ -61,7 +61,7 @@ const SEARCH_KEY_LABELS = LIST.format(CLI_SEARCH_KEYS.map((key) => key.label));
 
 export const metadata = buildMetadata({
   title: 'Providers: the catalog the CLI reads',
-  description: `The cloud providers in the shared model catalog that the CLI takes a key for, and the local runtimes it discovers. The CLI compiles that catalog into its binary. Desktop and the web app use managed cloud and accept no provider key or local-runtime URL. Catalog dated ${CATALOG_AS_OF}. ${CLI_AVAILABILITY_NOTE}`,
+  description: `The cloud providers in the shared model catalog that the CLI takes a key for, and the local runtimes it discovers. The CLI compiles that catalog into its binary. Desktop and the web app use cloud and accept no provider key or local-runtime URL. Catalog dated ${CATALOG_AS_OF}. ${CLI_AVAILABILITY_NOTE}`,
   path: '/providers',
 });
 

@@ -51,6 +51,7 @@ import {
 } from 'lucide-react';
 import {
   getToolDisplayLabel,
+  MANAGED_MEMORY_MAX_CONTENT_CHARS,
   TOOL_APPROVAL_ACTION_LABELS,
   type ManagedMemoryCreateRequest,
   type ResearchDeliverableDepth,
@@ -426,7 +427,7 @@ function ProjectSettingsDialog() {
           <div className="agi-scene-formrow">
             <span className="agi-scene-caps">Instructions</span>
             <span className="agi-scene-help">
-              Set context and customize how AGI responds in this project.
+              Set context and customize how the assistant responds in this project.
             </span>
             <span className="agi-scene-input" data-rows="5" data-field="instructions">
               {PROJECT.instructions}
@@ -567,12 +568,12 @@ export const MEMORY_SCENE_REQUESTS: readonly ManagedMemoryCreateRequest[] = MEMO
 const MEMORY_TOGGLES = [
   [
     'Save memories from chats',
-    'Let AGI save lasting details you mention in a chat without being asked. When this is off, it saves only what you ask it to remember.',
+    'Let the assistant save lasting details you mention in a chat without being asked. When this is off, it saves only what you ask it to remember.',
     true,
   ],
   [
     'Search past chats',
-    'Let AGI look up excerpts from your other conversations when answering. Never used in temporary chats.',
+    'Let the assistant look up excerpts from your other conversations when answering. Never used in temporary chats.',
     true,
   ],
   [
@@ -588,8 +589,8 @@ function MemoryControls() {
       <div className="agi-scene-pane-head">
         <span className="agi-scene-pane-title">Memory</span>
         <span className="agi-scene-pane-lede">
-          Facts the assistant should remember about you across conversations. Stored on this device,
-          and synced to your account across devices when you&apos;re signed in.
+          Facts saved in your selected Cloud workspace. Device-local and offline memories are
+          separate and are not shown or uploaded here.
         </span>
         <span className="agi-scene-helplink">
           <CircleHelp className="agi-scene-icon" />
@@ -601,7 +602,7 @@ function MemoryControls() {
           <span>
             <span className="agi-scene-setting-title">Persistent memory</span>
             <span className="agi-scene-setting-note">
-              Allow AGI to remember details across conversations
+              Allow the assistant to remember details across conversations
             </span>
           </span>
           <Toggle on />
@@ -654,7 +655,7 @@ function MemoryFacts() {
             Add
           </span>
         </span>
-        <span className="agi-scene-editor-count">0 / 280</span>
+        <span className="agi-scene-editor-count">0 / {MANAGED_MEMORY_MAX_CONTENT_CHARS}</span>
       </div>
       <span className="agi-scene-input" data-empty="true">
         Search memory
@@ -687,7 +688,7 @@ export function MemoryScenePreview({
   return (
     <SceneShell
       scene={`memory-${view}`}
-      label="Authored example of the Memory settings in AGI Chat"
+      label="Authored example of the Memory settings in Chat"
       className={className}
       chats={MEMORY_SIDEBAR_CHATS}
       overlay={
@@ -824,7 +825,7 @@ function ResearchPlanBlock({ plan }: { plan: readonly ResearchStep[] }) {
 
 function DeepResearchComposer({ draft }: { draft?: string }) {
   return (
-    <div className="agi-scene-composer agi-scene-composer--chip">
+    <div className="agi-scene-composer">
       <AppComposer draft={draft}>
         <span className="agi-scene-modechip">
           <Telescope className="agi-app-icon" />
@@ -899,7 +900,7 @@ export const RESEARCH_STEP_LABELS = {
 
 export function ResearchAskPreview() {
   return (
-    <PreviewRoot kind="step" scene="research-ask" label={RESEARCH_STEP_LABELS.ask}>
+    <PreviewRoot kind="step-wide" scene="research-ask" label={RESEARCH_STEP_LABELS.ask}>
       <div className="agi-scene-step" data-view="new-chat">
         <NewChatGreeting />
         <DeepResearchComposer draft={RESEARCH_STEPS_QUESTION} />
@@ -1158,14 +1159,14 @@ const CONSOLE_POLICY: ReadonlyArray<
   readonly [title: string, note: string, control: boolean | string]
 > = [
   [
-    'AGI-managed cloud compute',
-    'When off, members of this workspace cannot run managed turns, images, video, embeddings, or transcription.',
+    'Cloud compute',
+    'When off, members of this workspace cannot run Cloud turns, images, video, embeddings, or transcription.',
     true,
   ],
   [
     'Default privacy mode',
     'What a new conversation starts in for members of this workspace.',
-    'Managed Cloud',
+    'Cloud',
   ],
   [
     'Public sharing',
@@ -1357,7 +1358,7 @@ export function ComposerScenePreview({
   return (
     <SceneShell
       scene={`composer-${view}`}
-      label="Authored example of the AGI Chat composer"
+      label="Authored example of the Chat composer"
       className={className}
       chats={COMPOSER_SIDEBAR_CHATS}
     >

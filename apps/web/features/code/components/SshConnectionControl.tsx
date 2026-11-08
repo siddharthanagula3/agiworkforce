@@ -94,7 +94,7 @@ export function SshConnectionControl({
           <DialogHeader>
             <DialogTitle>SSH coding environment</DialogTitle>
             <DialogDescription>
-              Connect to an existing AGI CLI on a Unix host. Host keys must already be trusted. Uses
+              Connect to an existing CLI on a Unix host. Host keys must already be trusted. Uses
               your SSH agent or default keys; passwords, jump hosts, the host file editor and
               interactive terminals are unsupported. Remote credentials stay on that host.
             </DialogDescription>

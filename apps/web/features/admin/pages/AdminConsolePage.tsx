@@ -50,7 +50,7 @@ function buildReadinessRows(managedComputeOpen: boolean): ReadinessRow[] {
       evidence: `Each workspace sets its own in organization_admin_policies and is enforced server-side; a workspace with no saved policy is unrestricted. Shipped default on first save: ${DEFAULT_ENTERPRISE_ADMIN_POLICY.allowedPrivacyModes.join(', ')}.`,
     },
     {
-      area: 'Managed compute',
+      area: 'Cloud compute',
       status: managedComputeStatusLabel(managedComputeOpen),
       tone: managedComputeOpen ? 'ok' : 'warn',
       owner: 'Billing',
@@ -204,7 +204,7 @@ function buildPolicyTiles(managedComputeOpen: boolean) {
       value: managedComputeOpen ? 'Open (public alpha)' : 'Temporarily disabled',
       detail: managedComputeOpen
         ? `Open by default since 2026-06-27. ${MANAGED_COMPUTE_PRIVATE_BETA_ENV} is an incident-response kill-switch only.`
-        : `${MANAGED_COMPUTE_PRIVATE_BETA_ENV} is engaged. Managed compute is temporarily disabled as an incident-response measure.`,
+        : `${MANAGED_COMPUTE_PRIVATE_BETA_ENV} is engaged. Cloud compute is temporarily disabled as an incident-response measure.`,
     },
     {
       icon: Activity,
@@ -245,8 +245,8 @@ export default function AdminConsolePage() {
               <CircleAlert className="h-4 w-4" aria-hidden="true" />
             )}
             {managedComputeOpen
-              ? 'Managed compute: public alpha, open by default'
-              : 'Managed compute temporarily disabled (incident kill-switch)'}
+              ? 'Cloud compute: public alpha, open by default'
+              : 'Cloud compute temporarily disabled (incident kill-switch)'}
           </div>
         </header>
 

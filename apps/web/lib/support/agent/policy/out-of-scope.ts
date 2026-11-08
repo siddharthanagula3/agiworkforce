@@ -9,6 +9,7 @@ export const OUT_OF_SCOPE_CATEGORIES = [
   'rewriting',
   'general_knowledge',
   'role_play',
+  'social_chat',
 ] as const;
 
 export type OutOfScopeCategory = (typeof OUT_OF_SCOPE_CATEGORIES)[number];
@@ -46,7 +47,13 @@ const FEATURE_TALK =
   /\b(?:not working|missing|greyed|grayed|disabled|button|command|menu|option|settings?|feature|fails|failed|failing|error)\b/;
 
 const LEAD_IN =
-  /^(?:hey|hi|hello|ok|okay|so|now|then|and|also|just|please|pls|kindly|can you|could you|would you|will you|can u|i need you to|i want you to|i d like you to|i would like you to|help me to|help me|go ahead and|let s|lets)\s+/;
+  /^(?:agi(?: workforce)?|support(?: assistant)?|hey|hi|hello|ok|okay|so|now|then|and|also|just|please|pls|kindly|can you|could you|would you|will you|can u|i need you to|i want you to|i d like you to|i would like you to|help me to|help me|go ahead and|let s|lets)\s+/;
+
+const SOCIAL_CHAT =
+  /^(?:(?:hello|hi|hey)(?: there| again)?|how are you(?: doing)?(?: today)?|how(?: is| s) your day|(?:(?:can|could) we|let s|lets|i want to) (?:just )?(?:chat|talk)(?: (?:like friends|normally|for fun|about anything|for a while))?)$/;
+
+const WORK_REQUEST =
+  /^(?:write|compose|draft|implement|code|program|develop|generate|create|make|build)\b/;
 
 const REQUEST_RULES: readonly ScopeRule[] = Object.freeze([
   {
@@ -56,7 +63,6 @@ const REQUEST_RULES: readonly ScopeRule[] = Object.freeze([
   {
     category: 'code',
     pattern: new RegExp(`^${PRODUCE_VERBS}${SHORT_NOUN_PHRASE} ${CODE_ARTIFACT}\\b`),
-    unless: PRODUCT_TERMS,
   },
   {
     category: 'code',
@@ -230,6 +236,16 @@ function isMostlyCode(raw: string): boolean {
   return codeLines >= MIN_CODE_LINES && codeLines / lines.length >= MIN_CODE_SHARE;
 }
 
+export function containsProgramSource(text: string): boolean {
+  const normalized = normalizeText(text);
+  return (
+    isMostlyCode(normalized) ||
+    /\b(?:const|let|var)\s+[a-z_$][\w$]*\s*(?::[^=;\n]+)?=|\b(?:def|fn|func|function)\s+[a-z_]\w*\s*\(|\bselect\s+[^.\n]+\s+from\s+\w+|(?:^|\n)\s*<(?:html|script|style|div|main|section|button)\b/.test(
+      normalized,
+    )
+  );
+}
+
 function prepare(text: string): string {
   return text
     .replace(/[^a-z0-9+]+/g, ' ')
@@ -266,6 +282,8 @@ export function classifyOutOfScope(text: string): OutOfScopeCategory | null {
   if (!text || text.trim().length === 0) return null;
   const normalized = normalizeText(text);
 
+  if (SOCIAL_CHAT.test(prepare(normalized))) return 'social_chat';
+
   if (isMostlyCode(normalized)) return 'pasted_code';
 
   const clauses = normalized
@@ -274,8 +292,9 @@ export function classifyOutOfScope(text: string): OutOfScopeCategory | null {
     .filter((clause) => clause.length > 0);
 
   for (const clause of clauses) {
-    if (FEATURE_TALK.test(clause)) continue;
-    const category = firstMatch(REQUEST_RULES, stripLeadIn(clause));
+    const request = stripLeadIn(clause);
+    if (FEATURE_TALK.test(clause) && !WORK_REQUEST.test(request)) continue;
+    const category = firstMatch(REQUEST_RULES, request);
     if (category) return category;
   }
 
@@ -285,4 +304,4 @@ export function classifyOutOfScope(text: string): OutOfScopeCategory | null {
 }
 
 export const OUT_OF_SCOPE_COPY =
-  "I can only help with AGI: your account, plans, features, and fixing problems with the product. I can't help with other tasks here.";
+  "I can only help with product support: your account, plans, features, and troubleshooting. I can't write code, complete other tasks, or chat about unrelated topics here.";

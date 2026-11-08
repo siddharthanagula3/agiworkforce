@@ -85,7 +85,7 @@ export interface LocalTurnOutcome {
 /**
  * Answers one turn on this machine and writes it into the transcript.
  *
- * Nothing here calls the completions route, reserves managed compute, or
+ * Nothing here calls the completions route, reserves cloud compute, or
  * persists the answer: a local turn carries no usage figures because none were
  * spent, and it is not uploaded because uploading it is the thing the Local
  * boundary rules out.

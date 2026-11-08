@@ -231,7 +231,7 @@ describe('runAuthGate enterprise collection grace', () => {
     expect(mocks.dbQuery).not.toHaveBeenCalled();
   });
 
-  it('fails open to entitled when the collection state read errors', async () => {
+  it('fails closed when the collection state cannot be verified', async () => {
     mocks.getSubscription.mockResolvedValue({
       id: 'subscription-123',
       status: 'past_due',
@@ -239,12 +239,10 @@ describe('runAuthGate enterprise collection grace', () => {
     });
     mocks.readOrganizationCollectionState.mockRejectedValue(new Error('db unavailable'));
 
-    const result = await runAuthGate(makeRequest());
-
-    expect(result.ok).toBe(true);
+    await expect(runAuthGate(makeRequest())).rejects.toThrow('db unavailable');
   });
 
-  it('fails open to entitled when the funding organization lookup itself errors', async () => {
+  it('fails closed when the funding organization cannot be verified', async () => {
     mocks.getSubscription.mockResolvedValue({
       id: 'subscription-123',
       status: 'past_due',
@@ -252,9 +250,7 @@ describe('runAuthGate enterprise collection grace', () => {
     });
     mocks.dbQuery.mockRejectedValue(new Error('db unavailable'));
 
-    const result = await runAuthGate(makeRequest());
-
-    expect(result.ok).toBe(true);
+    await expect(runAuthGate(makeRequest())).rejects.toThrow('db unavailable');
   });
 });
 

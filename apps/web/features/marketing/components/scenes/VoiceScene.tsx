@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react';
 import { ArrowUp, Mic, Plus, Settings, Square, X } from 'lucide-react';
 import { waveformBarPercent } from '@/features/chat/lib/dictation-machine';
 import { PRODUCT_BRAND } from '@agiworkforce/types';
+import { AgiMark } from '@shared/components/agi/AgiMark';
 import { AppSidebar, PreviewRoot, ReplyActions, TrafficLights } from '../app-preview/AppPreviews';
 
 export type VoiceSceneView = 'session' | 'dictation';
@@ -24,15 +25,15 @@ const WAVEFORM_LEVELS = Array.from({ length: WAVEFORM_BAR_COUNT }, (_, index) =>
 );
 
 const SCENE_LABEL: Record<VoiceSceneView, string> = {
-  session: 'Authored example of a voice session in AGI Chat',
-  dictation: 'Authored example of dictation recording in the AGI Chat composer',
+  session: 'Authored example of a voice session in Chat',
+  dictation: 'Authored example of dictation recording in the Chat composer',
 };
 
 function VoiceSession() {
   return (
     <div className="agi-app-main">
       <div className="agi-voice-head">
-        <span className="agi-voice-head-name">{PRODUCT_BRAND}</span>
+        <AgiMark className="agi-app-mark" ariaLabel={PRODUCT_BRAND} />
         <span className="agi-voice-head-mode">{VOICE_SCENE_COPY.mode}</span>
         <Settings className="agi-app-icon agi-voice-head-settings" />
       </div>

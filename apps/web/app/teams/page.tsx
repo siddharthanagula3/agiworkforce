@@ -22,7 +22,7 @@ import { FactGrid, PageHero } from '@/features/marketing/components/pages/surfac
 export const metadata = buildMetadata({
   title: 'AGI for Teams: seats, roles, and the workspace console',
   description:
-    'How team membership works in AGI: seats held by members and pending invitations, the owner, admin, member and viewer roles, invitations as expiring private links, shared projects and connectors, and the workspace console that sets approved models and integrations on managed cloud.',
+    'How team membership works in AGI: seats held by members and pending invitations, the owner, admin, member and viewer roles, invitations as expiring private links, shared projects and connectors, and the workspace console that sets approved models and integrations on cloud.',
   path: '/teams',
 });
 
@@ -142,7 +142,7 @@ export default function TeamsPage() {
                 {
                   label: 'Policy',
                   value:
-                    'Which privacy modes the workspace allows, whether AGI managed cloud may be used at all, and which client surfaces may sync. A refusal comes back from the server before the turn runs and is written to the audit trail.',
+                    'Which privacy modes the workspace allows, whether Cloud may be used at all, and which client surfaces may sync. A refusal comes back from the server before the turn runs and is written to the audit trail.',
                 },
                 {
                   label: 'Models',

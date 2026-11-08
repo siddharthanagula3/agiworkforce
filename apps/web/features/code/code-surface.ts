@@ -92,9 +92,9 @@ export const CODE_TIMING = {
 } as const;
 
 export const CODE_COPY = {
-  surface: 'AGI Code',
+  surface: 'Code',
   toChat: 'Go to chat',
-  toCode: 'AGI Code',
+  toCode: 'Code',
   newSession: 'New',
   artifacts: 'Artifacts',
   more: 'More',
@@ -199,7 +199,7 @@ export const CODE_COPY = {
   deploymentDisabled:
     'Managed environments are not enabled on this deployment. Existing sessions stay readable.',
   planNotEntitled: 'Your plan does not include managed environments.',
-  upgradeHeading: 'AGI Code is on paid plans',
+  upgradeHeading: 'Code is on paid plans',
   upgradeBody:
     'Give a task to an agent that works in its own cloud environment, on your repository or from scratch.',
   upgradeFromPlan: 'It is included from the {plan} plan.',
@@ -309,7 +309,7 @@ export const CODE_COPY = {
   firstRunInstallCopy: 'Choose which repositories the environment may clone and push.',
   firstRunAction: 'Connect GitHub',
   wizardBack: 'Back',
-  wizardIntroTitle: 'Set up AGI Code',
+  wizardIntroTitle: 'Set up Code',
   wizardIntroSubtitle: 'Hand coding tasks to an agent from any device.',
   wizardIntroCloud: 'Tasks run in an isolated cloud environment, with no local clone to manage.',
   wizardIntroNetwork: 'Choose how much network access each environment gets.',
@@ -317,7 +317,7 @@ export const CODE_COPY = {
     'Continue a session in the terminal, the editor extension or the desktop app.',
   wizardStart: 'Get started',
   wizardTerminalTitle: 'Connect your terminal',
-  wizardTerminalSubtitle: 'Sign the AGI CLI in to this account to pick up sessions locally.',
+  wizardTerminalSubtitle: 'Sign the CLI in to this account to pick up sessions locally.',
   wizardTerminalCommandLabel: 'Sign-in command',
   wizardTerminalInstall: 'Install the CLI first',
   wizardCopyFailed: 'Could not copy the command',
@@ -379,7 +379,7 @@ export const CODE_COPY = {
   sharedSnapshot: 'You are viewing a shared session as it was when you opened it.',
   sharedByPrefix: 'Shared by',
   sharedUpdated: 'Updated',
-  sharedOpenCode: 'Open AGI Code',
+  sharedOpenCode: 'Open chat Code',
   editEnvironment: 'Edit environment',
   rename: 'Rename',
   renameLabel: 'Session title',

@@ -1,5 +1,9 @@
 export const TEMPORARY_CHAT_LABEL = 'Temporary chat';
 
+export const EXIT_INCOGNITO_LABEL = 'Exit incognito';
+
+export const USE_INCOGNITO_LABEL = 'Use incognito';
+
 export const TEMPORARY_CHAT_SHARE_REFUSAL =
   'A temporary chat cannot be shared. Turn off temporary chat to keep it, then share it.';
 

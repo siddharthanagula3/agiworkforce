@@ -148,7 +148,9 @@ const readSource = (path: string) => readFileSync(resolve(repoRoot, path), 'utf8
 const expectSource = (path: string, needles: readonly string[]) => {
   const source = readSource(path);
   for (const needle of needles)
-    expect(source, `${path} should contain ${needle}`).toContain(needle);
+    expect(source.replace(/\s+/g, ' '), `${path} should contain ${needle}`).toContain(
+      needle.replace(/\s+/g, ' '),
+    );
 };
 
 const texts = (container: HTMLElement, selector: string) =>
@@ -232,7 +234,7 @@ describe('the scene stylesheet keeps to the web app palette and to scale', () =>
 
   it('uses only the chat tokens the brief allows', () => {
     const allowed =
-      /^--(?:u|app-w|corner-pill|agi-shadow|font-geist-mono|agi-scene-text-(?:meta|reading|heading)|chat-(?:bg|sidebar-bg|input-bg|surface-hover|border|border-strong|text-primary|text-secondary|text-muted|text-placeholder|user-bubble-bg|success-text|destructive-text|code-[a-z-]+))$/u;
+      /^--(?:u|app-w|app-content-w|app-content-scale|corner-pill|agi-shadow|font-geist-mono|agi-scene-text-(?:meta|reading|heading)|chat-(?:bg|sidebar-bg|input-bg|surface-hover|border|border-strong|text-primary|text-secondary|text-muted|text-placeholder|user-bubble-bg|success-text|destructive-text|code-[a-z-]+))$/u;
     const used = new Set(Array.from(css.matchAll(/var\((--[a-z0-9-]+)/gu), (match) => match[1]));
     expect(used.size).toBeGreaterThan(8);
     for (const token of used) expect(token).toMatch(allowed);
@@ -272,7 +274,8 @@ describe('scenes inside the chat shell reuse the real sidebar and composer', () 
   it.each(shelled)('%s lists the navigation the signed-in app defines', (_scene, make) => {
     const { container } = render(make());
     expect(texts(container, '.agi-app-navrow')).toEqual(destinations);
-    expect(text(container, '.agi-app-wordmark')).toBe('AGI');
+    expect(container.querySelector('.agi-app-wordmark')).toBeNull();
+    expect(container.querySelector('.agi-app-brand .agi-app-mark')).not.toBeNull();
   });
 
   it('marks Projects as the open destination on the project page only', () => {
@@ -288,7 +291,7 @@ describe('scenes inside the chat shell reuse the real sidebar and composer', () 
     '%s composer keeps the real control order',
     (_scene, make) => {
       const composer = render(make()).container.querySelector('.agi-app-composer');
-      expect(texts(composer as HTMLElement, '.agi-app-seg span')).toEqual(['Chat', 'AGI Work']);
+      expect(texts(composer as HTMLElement, '.agi-app-seg span')).toEqual(['Chat', 'Work']);
       expect(text(composer as HTMLElement, '.agi-app-model')).toBe('Auto');
       expect(composer?.querySelector('.agi-app-model svg')).not.toBeNull();
     },
@@ -404,7 +407,7 @@ describe('project page with its settings dialog', () => {
     ]);
     expect(texts(dialog, '.agi-scene-input[data-empty]')).toEqual(['What is this project for?']);
     expect(texts(dialog, '.agi-scene-help')).toEqual([
-      'Set context and customize how AGI responds in this project.',
+      'Set context and customize how the assistant responds in this project.',
       'Chats here draw on what has been remembered account-wide, and anything learned here stays in this project.',
     ]);
     expect(text(dialog, '.agi-scene-checkrow-label')).toBe(
@@ -449,7 +452,7 @@ describe('project page with its settings dialog', () => {
       'Description',
       'placeholder="What is this project for?"',
       'Instructions',
-      'Set context and customize how AGI responds in this project.',
+      'Set context and customize how the assistant responds in this project.',
       'Use memories from outside this project',
       "'Chats here draw on what has been remembered account-wide, and anything learned here stays in this project.'",
       "'Delete project'",
@@ -485,7 +488,7 @@ describe('memory settings', () => {
   it('controls view shows the page as it opens', () => {
     expect(text(controls, '.agi-scene-pane-title')).toBe('Memory');
     expect(text(controls, '.agi-scene-pane-lede')).toBe(
-      "Facts the assistant should remember about you across conversations. Stored on this device, and synced to your account across devices when you're signed in.",
+      'Facts saved in your selected Cloud workspace. Device-local and offline memories are separate and are not shown or uploaded here.',
     );
     expect(text(controls, '.agi-scene-helplink')).toBe('How memory works');
     expect(texts(controls, '.agi-scene-setting-title')).toEqual([
@@ -496,9 +499,9 @@ describe('memory settings', () => {
       'Import memory from other AI providers',
     ]);
     expect(texts(controls, '.agi-scene-setting-note')).toEqual([
-      'Allow AGI to remember details across conversations',
-      'Let AGI save lasting details you mention in a chat without being asked. When this is off, it saves only what you ask it to remember.',
-      'Let AGI look up excerpts from your other conversations when answering. Never used in temporary chats.',
+      'Allow the assistant to remember details across conversations',
+      'Let the assistant save lasting details you mention in a chat without being asked. When this is off, it saves only what you ask it to remember.',
+      'Let the assistant look up excerpts from your other conversations when answering. Never used in temporary chats.',
       'Create memories from chats that use tools, connectors, code, or web search',
       'Bring what another assistant knows about you into your saved memories.',
     ]);
@@ -520,7 +523,7 @@ describe('memory settings', () => {
       'Search memory',
     ]);
     expect(text(facts, '.agi-scene-editor-row .agi-scene-btn')).toBe('Add');
-    expect(text(facts, '.agi-scene-editor-count')).toBe('0 / 280');
+    expect(text(facts, '.agi-scene-editor-count')).toBe(`0 / ${MANAGED_MEMORY_MAX_CONTENT_CHARS}`);
     const rows = facts.querySelectorAll('.agi-scene-fact');
     expect(rows).toHaveLength(5);
     for (const footer of texts(facts, '.agi-scene-fact-foot > span:first-child')) {
@@ -533,11 +536,11 @@ describe('memory settings', () => {
   it('the memory settings still ship what the scene shows', () => {
     expectSource('apps/web/features/settings/sections/MemorySection.tsx', [
       'Memory\n        </h2>',
-      'Facts the assistant should remember about you across conversations. Stored on this device,',
-      'and synced to your account across devices when you&apos;re signed in.',
+      'Facts saved in your selected Cloud workspace. Device-local and offline memories',
+      'are separate and are not shown or uploaded here.',
       '<HelpArticleLink docId="memory" label="How memory works" />',
       "'Persistent memory',",
-      "'Allow AGI to remember details across conversations',",
+      "'Allow the assistant to remember details across conversations',",
       "other: '{{count}} saved memories',",
       'Import memory from other AI providers',
       'Bring what another assistant knows about you into your saved memories.',
@@ -546,9 +549,9 @@ describe('memory settings', () => {
       'Manage memories',
       'Clear all memories',
       "'Save memories from chats',",
-      "'Let AGI save lasting details you mention in a chat without being asked. When this is off, it saves only what you ask it to remember.',",
+      "'Let the assistant save lasting details you mention in a chat without being asked. When this is off, it saves only what you ask it to remember.',",
       "'Search past chats',",
-      "'Let AGI look up excerpts from your other conversations when answering. Never used in temporary chats.',",
+      "'Let the assistant look up excerpts from your other conversations when answering. Never used in temporary chats.',",
       "'Allow memory generation from tool-assisted chats',",
       "'Create memories from chats that use tools, connectors, code, or web search',",
       "document.getElementById(MEMORY_EDITOR_ANCHOR_ID)?.scrollIntoView({ behavior: 'smooth' });",
@@ -556,7 +559,7 @@ describe('memory settings', () => {
     expectSource('packages/ui/unified-chat/src/components/MemoryEditor.tsx', [
       'Add a new fact',
       'placeholder="Example: I prefer Python over JavaScript for data work."',
-      'const MAX_FACT_CHARS = 280;',
+      'MANAGED_MEMORY_MAX_CONTENT_CHARS as MAX_FACT_CHARS,',
       '{draft.length} / {MAX_FACT_CHARS}',
       'placeholder="Search memory"',
       "return <>{fact.source ? 'Added by you' : 'Added'}</>;",
@@ -802,13 +805,13 @@ describe('workspace console', () => {
   it('policy view shows real rows with the controls the page uses', () => {
     expect(text(policy, '.agi-scene-sheet-heading')).toBe('Workspace policy');
     expect(texts(policy, '.agi-scene-rule-title')).toEqual([
-      'AGI-managed cloud compute',
+      'Cloud compute',
       'Default privacy mode',
       'Public sharing',
       'Memory',
       'Secrets typed into chat',
     ]);
-    expect(texts(policy, '.agi-scene-rule .agi-scene-picker')).toEqual(['Managed Cloud', 'Redact']);
+    expect(texts(policy, '.agi-scene-rule .agi-scene-picker')).toEqual(['Cloud', 'Redact']);
     expect(policy.querySelectorAll('.agi-scene-rule .agi-scene-tick[data-on]')).toHaveLength(3);
     expect(text(policy, '.agi-scene-sheet-foot .agi-scene-btn')).toBe('Save policy');
     expect(policy.querySelector('.agi-scene-sheet-foot .agi-scene-btn')).not.toHaveAttribute(
@@ -870,11 +873,11 @@ describe('workspace console', () => {
     expectSource('apps/web/features/settings/sections/WorkspacePolicySection.tsx', [
       'Workspace policy',
       "? 'These rules bind every member of this workspace. Personal accounts are unaffected.'",
-      'title="AGI-managed cloud compute"',
-      'description="When off, members of this workspace cannot run managed turns, images, video, embeddings, or transcription."',
+      'title="Cloud compute"',
+      'description="When off, members of this workspace cannot run Cloud turns, images, video, embeddings, or transcription."',
       'title="Default privacy mode"',
       'description="What a new conversation starts in for members of this workspace."',
-      "label: 'Managed Cloud',",
+      "label: 'Cloud',",
       'title="Public sharing"',
       "? 'Members may publish a chat or an artifact to an anonymous public link.'",
       'title="Memory"',
@@ -1425,7 +1428,7 @@ describe('memory facts correspond to the native editor', () => {
       const limit = Number(count[2]);
       expect(Number(count[1])).toBe(0);
       expect(limit).toBeGreaterThan(0);
-      expect(limit).toBeLessThan(MANAGED_MEMORY_MAX_CONTENT_CHARS);
+      expect(limit).toBe(MANAGED_MEMORY_MAX_CONTENT_CHARS);
       expect(add.disabled).toBe(true);
       expect(host.querySelector('input[type="search"]')).toBeNull();
       fireEvent.change(input, { target: { value: 'x'.repeat(limit + 1) } });
@@ -1644,12 +1647,10 @@ describe('memory facts correspond to the native editor', () => {
     );
   });
 
-  it('rejects wire-valid content that the actual native editor would clamp', () => {
+  it('rejects content beyond the shared native editor and wire limit', () => {
     const payload = { ...first, content: 'x'.repeat(native.limit + 1) };
-    expect(readMemoryRequest(payload).content).toBe(payload.content);
-    expect(() => requireMemoryCorrespondence(payload, payload.content, native, 0)).toThrowError(
-      'The fact must fit the native editor.',
-    );
+    expect(() => readMemoryRequest(payload)).toThrow();
+    expect(() => requireMemoryCorrespondence(payload, payload.content, native, 0)).toThrow();
   });
 
   it('rejects different visible content before checking the Web POST', () => {
@@ -2477,7 +2478,7 @@ describe('research correspondence negative witnesses', () => {
 describe('the /web close-up and research steps are scaled pictures of the product', () => {
   const parts: Array<[string, string, string, () => React.ReactElement]> = [
     ['proof', 'closeup', WEB_PROOF_LABEL, () => <WebProofPreview />],
-    ['research-ask', 'step', RESEARCH_STEP_LABELS.ask, () => <ResearchAskPreview />],
+    ['research-ask', 'step-wide', RESEARCH_STEP_LABELS.ask, () => <ResearchAskPreview />],
     ['research-plan', 'step', RESEARCH_STEP_LABELS.plan, () => <ResearchPlanStepPreview />],
     ['research-report', 'step', RESEARCH_STEP_LABELS.report, () => <ResearchReportPreview />],
   ];
@@ -2489,6 +2490,11 @@ describe('the /web close-up and research steps are scaled pictures of the produc
     expect(root).toHaveAttribute('data-device', kind);
     expect(root).toHaveAttribute('data-scene', scene);
     expect(root).toHaveAttribute('data-geometry', `${geometry.width}x${geometry.height}`);
+    if (geometry.contentScale !== undefined) {
+      expect((root as HTMLElement).style.getPropertyValue('--app-content-scale')).toBe(
+        String(geometry.contentScale),
+      );
+    }
     expect(root.getAttribute('aria-label')).toBe(label);
     expect(label).toMatch(/^Authored example of /u);
   });
@@ -2549,7 +2555,7 @@ describe('the /web close-up and research steps are scaled pictures of the produc
     const step = requiredNode(root, '.agi-scene-step[data-view="new-chat"]');
     expect(Array.from(step.children, (child) => child.className)).toEqual([
       'agi-app-greeting',
-      'agi-scene-composer agi-scene-composer--chip',
+      'agi-scene-composer',
     ]);
     expect(text(root, '.agi-app-greeting')).toBe(greetingHeadline('afternoon', 0));
     expect(root.querySelector('.agi-app-placeholder')).toBeNull();
@@ -2657,7 +2663,7 @@ describe('every web scene composer shows what the web chat renders in that state
   it('keeps the turn open while a tool waits for approval', () => {
     const root = draw(<ApprovalScenePreview />);
     expect(text(root, '.agi-app-placeholder')).toBe(WEB_COMPOSER_PLACEHOLDER.turnActive);
-    const slot = root.querySelector('.agi-app-composer-row')?.lastElementChild;
+    const slot = root.querySelector('.agi-app-composer-controls')?.lastElementChild;
     expect(slot).toHaveClass('agi-app-send', 'agi-app-stop');
     expect(slot?.querySelector('svg.lucide-square')).not.toBeNull();
     expect(root.querySelector('.agi-app-composer .lucide-audio-lines')).toBeNull();
@@ -2680,7 +2686,9 @@ describe('every web scene composer shows what the web chat renders in that state
       'rounded-full bg-foreground text-background',
     ]);
     expectSource('apps/web/features/chat/components/messages/MessageBubble.tsx', [
-      "// The turn's SSE connection stays open while a decision is outstanding, so",
+      'const awaitingApproval = hasPendingMessageApproval(message);',
+      "void resolveToolApproval?.(message.id, toolCallId, 'approved');",
+      "void resolveToolApproval?.(message.id, toolCallId, 'rejected');",
     ]);
   });
 });

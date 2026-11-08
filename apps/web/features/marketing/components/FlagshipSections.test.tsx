@@ -15,12 +15,11 @@ describe('landing section ownership', () => {
   it('retains the accessible title, identity, action and product preview', () => {
     render(
       <LandingHero
-        brand="AGI"
-        eyebrow="the AI application suite"
+        brand="AGIWORKFORCE"
         titleLines={['One AI workspace.', 'You choose where it runs.']}
         em="You choose where it runs."
         lede="Run each request where it belongs."
-        ctas={[{ href: '/chat', label: 'Try AGI Chat' }]}
+        ctas={[{ href: '/chat', label: 'Try chat' }]}
         visual={<div>Product preview</div>}
       />,
     );
@@ -28,10 +27,10 @@ describe('landing section ownership', () => {
     const headings = screen.getAllByRole('heading', { level: 1 });
     expect(headings).toHaveLength(1);
     expect(headings[0]).toHaveTextContent('One AI workspace. You choose where it runs.');
-    expect(screen.getByText('AGI')).toBeInTheDocument();
-    expect(screen.getByText('the AI application suite')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Try AGI Chat' })).toHaveAttribute('href', '/chat');
+    expect(screen.getByRole('img', { name: 'AGIWORKFORCE' })).toBeInTheDocument();
+    expect(screen.queryByText(/the AI application suite/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Try chat' })).toHaveAttribute('href', '/chat');
     expect(screen.getByText('Product preview')).toBeInTheDocument();
-    expect(screen.queryByText('Run each request where it belongs.')).not.toBeInTheDocument();
+    expect(screen.getByText('Run each request where it belongs.')).toBeVisible();
   });
 });

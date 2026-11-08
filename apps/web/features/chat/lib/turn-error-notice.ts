@@ -30,7 +30,7 @@ export function isStoppedTurn(message: ChatMessage | undefined | null): boolean 
 
 /**
  * A turn that never produced a usable assistant reply: either the user's
- * message is trailing with no assistant row after it (a managed-cloud turn
+ * message is trailing with no assistant row after it (a cloud turn
  * dropped before any row was persisted), or the assistant row exists but is
  * marked truncated/error by the server marker or a web-composer error row.
  * Distinct from streamError (additive mid-stream failure with partial content)

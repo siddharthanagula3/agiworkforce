@@ -6,7 +6,7 @@ import {
   isSelfServePaidPlanTier,
   quoteTopUp,
 } from '@agiworkforce/types';
-import { getIdentityProvider } from '@/lib/server/identity';
+import { createClerkSessionManager } from '@agiworkforce/identity/management';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { recordTermsAcceptance } from '@/lib/server/terms';
@@ -330,6 +330,7 @@ async function provisionSeat(
   userId: string,
   account: DevAccountSpec,
   ownerUserId: string,
+  clerkSecretKey: string,
 ): Promise<void> {
   const organizationId = await ownedOrganizationId(ownerUserId);
   if (!organizationId) {
@@ -353,10 +354,14 @@ async function provisionSeat(
     return left.map((row) => row.organization_id);
   });
   for (const leftOrganizationId of leftOrganizationIds) {
-    const revoked = await deprovisionMember(serviceDb(), getIdentityProvider(), {
-      userId,
-      organizationId: leftOrganizationId,
-    });
+    const revoked = await deprovisionMember(
+      serviceDb(),
+      createClerkSessionManager(clerkSecretKey),
+      {
+        userId,
+        organizationId: leftOrganizationId,
+      },
+    );
     if (revoked.errors.length > 0) {
       throw new Error(
         `${account.name} left workspace ${leftOrganizationId} with credentials still live: ${revoked.errors.join('; ')}`,
@@ -424,6 +429,7 @@ export async function provisionDevAccount(
   account: DevAccountSpec,
   userId: string,
   resolveOwner: (name: string) => string,
+  clerkSecretKey: string,
 ): Promise<void> {
   const seedRun = Date.now().toString(36);
   await ensureProfileExists(serviceDb(), userId, devAccountEmail(account.name));
@@ -433,7 +439,8 @@ export async function provisionDevAccount(
   if (account.billing === 'manual') await provisionManualSubscription(userId, account);
   if (account.billing === 'stripe') await provisionStripeSubscription(userId, account);
   if (account.teamSeats !== undefined) await provisionWorkspace(userId, account);
-  if (account.seatIn) await provisionSeat(userId, account, resolveOwner(account.seatIn));
+  if (account.seatIn)
+    await provisionSeat(userId, account, resolveOwner(account.seatIn), clerkSecretKey);
   if (account.extraUsageTopUpUsd !== undefined) await grantExtraUsage(userId, account, seedRun);
   if (account.fiveHourWindowPercent !== undefined) {
     await fillFiveHourWindow(userId, account, seedRun);

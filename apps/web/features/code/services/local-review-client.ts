@@ -14,7 +14,7 @@ import type {
   ThreadRevertResponse,
   WorktreeApplyResponse,
 } from '@agiworkforce/types/protocol';
-const NO_HOST_MESSAGE = 'Worktrees and checkpoints are only available in AGI Desktop.';
+const NO_HOST_MESSAGE = 'Worktrees and checkpoints are only available in Desktop.';
 
 async function invoke<T>(command: string, args: Record<string, unknown>): Promise<T> {
   const host = getHostBridge();
@@ -81,7 +81,7 @@ export function runLocalWorktreeSetup(rootId: string, sha256: string): Promise<b
 
 /**
  * How many of the newest worktrees cleanup keeps; pass `keep` to change it. A
- * read answers null while no AGI CLI is running, since the shell will not start
+ * read answers null while no CLI is running, since the shell will not start
  * one just to read a setting.
  */
 export function localWorktreeKeep(

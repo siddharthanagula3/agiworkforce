@@ -1,3 +1,4 @@
+import { withCloudAgentRunCancellation } from '@/lib/services/cloud-agent-run-cancellation';
 import 'server-only';
 import { agentAllowsConnector } from '@/lib/agents/agent-turn-config';
 
@@ -578,8 +579,10 @@ async function dispatchChatCompletions(
       // view that is actually serving so settlement and attribution price by it,
       // not by the primary that failed.
       let researchServing: ProcessedRequest = processed;
+      const researchCancellation = new AbortController();
+      const researchSignal = AbortSignal.any([request.signal, researchCancellation.signal]);
       const researchFailover = createFailoverPlan(processed, {
-        signal: request.signal,
+        signal: researchSignal,
         isProviderDispatchable: (candidate) => Boolean(ADAPTER_PROVIDERS[candidate]),
         modelPolicy: processed.modelPolicy ?? null,
         ...breakers,
@@ -697,7 +700,7 @@ async function dispatchChatCompletions(
             toolApprovalPolicy: researchToolApprovalPolicy,
             // A client cancel aborts the in-flight upstream request instead of
             // billing a full research run nobody sees.
-            signal: request.signal,
+            signal: researchSignal,
             failover: {
               next: (error) => {
                 const attempt = researchFailover.next(error);
@@ -712,7 +715,12 @@ async function dispatchChatCompletions(
         },
       );
       const researchStream = buildManagedAgentStream({
-        generator: researchGen,
+        generator: withCloudAgentRunCancellation(researchGen, {
+          db: runDb,
+          userId,
+          runId: run.id,
+          controller: researchCancellation,
+        }),
         processed,
         usage: researchUsage,
         userId,
@@ -1018,8 +1026,10 @@ async function dispatchChatCompletions(
       // The tool loop can rotate to a managed-failover candidate mid-run; keep
       // the serving view for settlement/attribution.
       let toolLoopServing: ProcessedRequest = processed;
+      const toolLoopCancellation = new AbortController();
+      const toolLoopSignal = AbortSignal.any([request.signal, toolLoopCancellation.signal]);
       const toolLoopFailover = createFailoverPlan(processed, {
-        signal: request.signal,
+        signal: toolLoopSignal,
         isProviderDispatchable: (candidate) => Boolean(ADAPTER_PROVIDERS[candidate]),
         modelPolicy: processed.modelPolicy ?? null,
         ...breakers,
@@ -1047,7 +1057,7 @@ async function dispatchChatCompletions(
         toolApprovalPolicy,
         // A client cancel aborts the in-flight provider call instead of
         // billing a full agentic turn nobody sees.
-        signal: request.signal,
+        signal: toolLoopSignal,
         failover: {
           next: (error, context) => {
             const attempt = toolLoopFailover.next(error, context);
@@ -1143,7 +1153,12 @@ async function dispatchChatCompletions(
       });
 
       const agentStream = buildManagedAgentStream({
-        generator: toolLoopGen,
+        generator: withCloudAgentRunCancellation(toolLoopGen, {
+          db: runDb,
+          userId,
+          runId: run.id,
+          controller: toolLoopCancellation,
+        }),
         processed,
         usage: toolLoopUsage,
         userId,

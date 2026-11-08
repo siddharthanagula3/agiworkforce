@@ -1,3 +1,4 @@
+import { SELECTED_ROUTE } from './fixtures/model-mocks';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 type ScanModule0 = typeof import('@agiworkforce/routing');
 
@@ -8,21 +9,6 @@ vi.mock('@/lib/server/side-call-training-policy', () => ({
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-
-const SELECTED_ROUTE = {
-  status: 'selected' as const,
-  requestedSelection: 'auto',
-  requestedProfile: null,
-  effectiveProfile: 'balanced',
-  taskType: 'simple_chat',
-  modelKey: 'test.model',
-  provider: 'anthropic',
-  providerModelId: 'test-provider-model-id',
-  routeId: 'test-route',
-  harnessId: 'test/chat',
-  fallbacks: [],
-  reason: 'preferred_slot',
-};
 
 const resolveAutoRouteMock = vi.fn(() => SELECTED_ROUTE);
 vi.mock('@agiworkforce/routing', async (importOriginal) => {
@@ -58,7 +44,7 @@ beforeEach(() => {
   process.env['SUPPORT_AGENT_ENABLED'] = 'true';
   resolveAutoRouteMock.mockReturnValue(SELECTED_ROUTE);
   drainToLlmResponseMock.mockResolvedValue({
-    model: 'test.model',
+    model: SELECTED_ROUTE.modelKey,
     content: 'Here is how to reset your password.',
     promptTokens: 120,
     completionTokens: 40,
@@ -85,8 +71,8 @@ describe('support agent COGS recording', () => {
     expect(recordSettledProviderCostMock).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: 'user_42',
-        provider: 'anthropic',
-        model: 'test.model',
+        provider: SELECTED_ROUTE.provider,
+        model: SELECTED_ROUTE.modelKey,
         customerCanonicalMicrousd: 0,
         surface: 'app',
         taskOutcome: 'delivered',
@@ -111,7 +97,7 @@ describe('support agent COGS recording', () => {
 
   it('still records the spend when the provider returns an empty response', async () => {
     drainToLlmResponseMock.mockResolvedValue({
-      model: 'test.model',
+      model: SELECTED_ROUTE.modelKey,
       content: '   ',
       promptTokens: 80,
       completionTokens: 0,

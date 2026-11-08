@@ -86,7 +86,7 @@ export default async function FeaturesPluginsPage() {
               </ButtonRow>
             </div>
             <div className="agi-lp-hero-stage">
-              <Transcript label="A plugin install in the AGI CLI" lines={INSTALL_TRANSCRIPT} />
+              <Transcript label="A plugin install in the CLI" lines={INSTALL_TRANSCRIPT} />
             </div>
           </div>
         </section>
@@ -100,7 +100,7 @@ export default async function FeaturesPluginsPage() {
               </h2>
             </div>
             <Prose size="sm">
-              {availability} The install shown above runs in the AGI CLI. {CLI_AVAILABILITY_NOTE}
+              {availability} The install shown above runs in the CLI. {CLI_AVAILABILITY_NOTE}
             </Prose>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               {FOLDER_CONTENTS.map((item) => (

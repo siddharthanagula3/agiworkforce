@@ -54,7 +54,7 @@ const EXPORT_CONTROLS = [
   {
     meta: 'Local and BYOK',
     title: 'Publishing does not move data quietly',
-    body: 'The Web panel refuses managed-cloud publication for Local, BYOK or unknown origins and points to Download instead.',
+    body: 'The Web panel refuses cloud publication for Local, BYOK or unknown origins and points to Download instead.',
   },
 ] as const;
 

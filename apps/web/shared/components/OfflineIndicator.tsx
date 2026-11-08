@@ -1,7 +1,8 @@
 'use client';
+import { AgiMark } from '@agiworkforce/ui';
 
 import { useEffect, useState } from 'react';
-import { AlertCircle, Check, Loader, Wifi, WifiOff } from 'lucide-react';
+import { AlertCircle, Check, Wifi, WifiOff } from 'lucide-react';
 import {
   initializeSyncManager,
   cleanupSyncManager,
@@ -106,7 +107,11 @@ export function OfflineIndicator({
     switch (state.state) {
       case SyncState.SYNCING:
         return (
-          <Loader className={`w-4 h-4 motion-safe:animate-spin ${iconColor}`} aria-hidden="true" />
+          <AgiMark
+            spinning
+            className={`w-4 h-4 motion-safe:animate-spin ${iconColor}`}
+            aria-hidden="true"
+          />
         );
       case SyncState.ERROR:
         return <AlertCircle className={`w-4 h-4 ${iconColor}`} />;
@@ -114,7 +119,11 @@ export function OfflineIndicator({
         return <WifiOff className={`w-4 h-4 ${iconColor}`} />;
       case SyncState.ONLINE:
         return state.queuedCount > 0 ? (
-          <Loader className={`w-4 h-4 motion-safe:animate-spin ${iconColor}`} aria-hidden="true" />
+          <AgiMark
+            spinning
+            className={`w-4 h-4 motion-safe:animate-spin ${iconColor}`}
+            aria-hidden="true"
+          />
         ) : (
           <Check className={`w-4 h-4 ${iconColor}`} />
         );

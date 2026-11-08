@@ -41,7 +41,7 @@ const ANNEX_I: readonly LedgerRow[] = [
   {
     label: 'Subject matter',
     value:
-      'Provision of the AGI Managed Cloud service to the Customer under the Terms of Service and the Customer’s subscription.',
+      'Provision of the Cloud service to the Customer under the Terms of Service and the Customer’s subscription.',
   },
   {
     label: 'Duration',
@@ -51,7 +51,7 @@ const ANNEX_I: readonly LedgerRow[] = [
   {
     label: 'Nature and purpose',
     value:
-      'Storing and retrieving conversations, projects, files, memories, schedules and settings; transmitting prompt content to the model provider serving the model the Customer selects, or, for the Free plan’s default model, the provider AGI chooses for that turn; executing code and processing files in a managed sandbox when the Customer invokes a tool and the operator has enabled sandbox execution; authentication, billing, rate limiting, abuse prevention and support.',
+      'Storing and retrieving conversations, projects, files, memories, schedules and settings; transmitting prompt content to the model provider serving the model the Customer selects, or, for the Free plan’s default model, the provider AGI chooses for that turn; executing code and processing files in a sandbox when the Customer invokes a tool and the operator has enabled sandbox execution; authentication, billing, rate limiting, abuse prevention and support.',
   },
   {
     label: 'Categories of data subjects',
@@ -286,8 +286,8 @@ const DPDP_TERMS: readonly LedgerRow[] = [
         <strong>DPDP Act term:</strong> Data Processor
         <br />
         <strong>What changes:</strong> the Act&rsquo;s structural requirement is that the engagement
-        is under a valid contract (s. 8(2)). This DPA is that contract for Managed Cloud. The Act
-        gives a Data Processor no direct duty toward the Board.
+        is under a valid contract (s. 8(2)). This DPA is that contract for Cloud. The Act gives a
+        Data Processor no direct duty toward the Board.
       </>
     ),
   },
@@ -320,7 +320,7 @@ const DPDP_DUTIES: readonly LedgerRow[] = [
   {
     label: 'Role, by boundary',
     value:
-      'Local: AGI processes nothing, so no Data Fiduciary or Data Processor relationship arises. BYOK: the Customer is the Data Fiduciary; AGI is its Data Processor for account and settings data only, and the model provider is engaged on the Customer’s own contract. Managed Cloud: the Customer is the Data Fiduciary for the content its users submit and AGI is its Data Processor, with the vendors in Annex III engaged by AGI under obligations no less protective than these. AGI is Data Fiduciary in its own right for account administration, billing, security and audit logs and service telemetry, and for its direct consumer users.',
+      'Local: AGI processes nothing, so no Data Fiduciary or Data Processor relationship arises. BYOK: the Customer is the Data Fiduciary; AGI is its Data Processor for account and settings data only, and the model provider is engaged on the Customer’s own contract. Cloud: the Customer is the Data Fiduciary for the content its users submit and AGI is its Data Processor, with the vendors in Annex III engaged by AGI under obligations no less protective than these. AGI is Data Fiduciary in its own right for account administration, billing, security and audit logs and service telemetry, and for its direct consumer users.',
   },
   {
     label: 'Notice and consent (ss. 5–6)',
@@ -365,7 +365,7 @@ const BOUNDARY_LEDGER: readonly LedgerRow[] = [
       <>
         <strong>What happens technically:</strong> conversations run on the user&rsquo;s device
         against a local model runtime and are stored on that device. Nothing is transmitted to AGI,
-        and nothing is silently routed to BYOK or Managed Cloud.
+        and nothing is silently routed to BYOK or Cloud.
         <br />
         <strong>Role allocation:</strong> AGI processes no personal data. No controller/processor
         relationship arises and this DPA has nothing to operate on. The Customer remains the
@@ -389,7 +389,7 @@ const BOUNDARY_LEDGER: readonly LedgerRow[] = [
     ),
   },
   {
-    label: 'Managed Cloud',
+    label: 'Cloud',
     value: (
       <>
         <strong>What happens technically:</strong> requests route through AGI&rsquo;s gateway to the
@@ -466,11 +466,11 @@ export default function DpaPage() {
             <>
               The full text, published so you can read it before you ask for a signature.{' '}
               <strong>
-                This addendum applies to AGI Managed Cloud. It does not apply to Local mode, where
-                AGI processes nothing, and it does not make AGI a processor of your prompt content
-                under BYOK, where you contract the model provider directly.
+                This addendum applies to Cloud. It does not apply to Local mode, where AGI processes
+                nothing, and it does not make AGI a processor of your prompt content under BYOK,
+                where you contract the model provider directly.
               </strong>{' '}
-              Last updated: {POLICY_LAST_UPDATED.dpa}. Managed Cloud is in public alpha.{' '}
+              Last updated: {POLICY_LAST_UPDATED.dpa}. Cloud is in public alpha.{' '}
               <PolicyVersionsLink policy="dpa" />
             </>
           }
@@ -500,7 +500,7 @@ export default function DpaPage() {
                     </Link>{' '}
                     (&ldquo;Customer&rdquo;). It forms part of those terms and applies where AGI
                     processes personal data on the Customer&rsquo;s behalf in connection with AGI
-                    Managed Cloud.
+                    Cloud.
                   </Prose>
                   <Prose>
                     In the event of a conflict, this DPA prevails over the Terms of Service on
@@ -813,9 +813,8 @@ export default function DpaPage() {
                     12 &middot; Alpha status, liability, and term
                   </h2>
                   <Prose>
-                    Managed Cloud is in public alpha. Its features, capacity and operational
-                    controls change as it develops, and no service level agreement applies during
-                    alpha. See{' '}
+                    Cloud is in public alpha. Its features, capacity and operational controls change
+                    as it develops, and no service level agreement applies during alpha. See{' '}
                     <Link href="/sla" className="agi-ds-link">
                       /sla
                     </Link>

@@ -24,7 +24,7 @@ export function InviteOnlyArtifact({ token, signedIn }: { token: string; signedI
           href={signedIn ? '/' : webSignInHref(`/shared-artifact/${token}`)}
           className="inline-flex rounded-lg bg-primary px-6 py-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
-          {signedIn ? 'Open AGI' : 'Sign in'}
+          {signedIn ? 'Open chat' : 'Sign in'}
         </Link>
       </div>
     </main>

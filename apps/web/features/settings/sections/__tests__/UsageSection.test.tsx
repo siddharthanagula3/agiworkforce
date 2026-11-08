@@ -378,9 +378,34 @@ describe('UsageSection stated in credits', () => {
     renderSection();
     expect(
       await screen.findByText(
-        'Pro · 2,000 credits/month · 500 credits/week · 50 credits per 5 hours',
+        'Premium · 2,000 credits/month · 500 credits/week · 50 credits per 5 hours',
       ),
     ).toBeTruthy();
+  });
+
+  it('shows Ultra’s weekly and monthly allowances without a session meter', async () => {
+    const summary = {
+      ...proSummary({
+        monthly: creditWindow(20_000, 400),
+        weekly: creditWindow(5_000, 200),
+        five_hour: null,
+        flagship_weekly: creditWindow(1_500, 100),
+      }),
+      plan_tier: 'max_15x',
+      session_usage_percentage: 0,
+      session_reset_at: null,
+    };
+    stubUsageApi({
+      summary: () => answer(summary),
+      limits: () => answer(monthlyLimits()),
+      history: () => FAILED,
+    });
+    renderSection();
+    expect(
+      await screen.findByText('Ultra · 20,000 credits/month · 5,000 credits/week'),
+    ).toBeVisible();
+    expect(screen.queryByText(managedUsageBucketLabel('session'))).toBeNull();
+    expect(screen.getByText(managedUsageBucketLabel('weekly'))).toBeVisible();
   });
 
   it('labels every bar with the amount used, the allowance, what is left and when it resets', async () => {

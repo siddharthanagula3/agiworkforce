@@ -42,12 +42,7 @@ const DAY_MS = 86_400_000;
 export function promotablePlanTiers(): BillingPlanTier[] {
   return (Object.keys(MANAGED_USAGE_LIMITS) as BillingPlanTier[]).filter((tier) => {
     const limit = MANAGED_USAGE_LIMITS[tier];
-    return (
-      !isFreeBillingPlanTier(tier) &&
-      !limit.unlimited &&
-      limit.weeklyCredits > 0 &&
-      limit.fiveHourCredits > 0
-    );
+    return !isFreeBillingPlanTier(tier) && !limit.unlimited && limit.weeklyCredits > 0;
   });
 }
 

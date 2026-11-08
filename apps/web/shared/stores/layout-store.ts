@@ -18,14 +18,14 @@ export interface UIState {
   sidebarCollapsed: boolean;
 
   /**
-   * The AGI Work autonomy disclosure has been dismissed. Deliberately NOT in
+   * The Work autonomy disclosure has been dismissed. Deliberately NOT in
    * `partialize` below: the disclosure names what a run may do on its own, so
    * it is owed once per session rather than silenced forever by one click.
    */
   agiWorkAutonomyNoticeDismissed: boolean;
 
   /**
-   * The AGI Work task dock occupies the right slot. Deliberately NOT in
+   * The Work task dock occupies the right slot. Deliberately NOT in
    * `partialize` below: the dock opens itself for each new run, so a persisted
    * "open" would reopen it over an unrelated conversation on the next load.
    */

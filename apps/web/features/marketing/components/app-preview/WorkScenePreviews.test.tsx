@@ -167,7 +167,7 @@ describe('the work stylesheet keeps to the web app palette and to scale', () => 
   });
 });
 
-describe('AGI Work run in the thread', () => {
+describe('Work run in the thread', () => {
   const container = draw(<AgentRunScenePreview />);
   const rows = Array.from(container.querySelectorAll('.agi-work-run-rows > *'));
   const tools = Array.from(container.querySelectorAll<HTMLElement>('.agi-work-tool'));
@@ -192,7 +192,14 @@ describe('AGI Work run in the thread', () => {
         node.getAttribute('data-status'),
       ),
     ).toEqual(['completed', 'running']);
-    expect(container.querySelectorAll('.agi-work-step-mark svg')).toHaveLength(2);
+    expect(
+      container.querySelectorAll('.agi-work-step[data-status="completed"] .agi-work-step-mark svg'),
+    ).toHaveLength(1);
+    expect(
+      container.querySelectorAll(
+        '.agi-work-step[data-status="running"] .agi-work-step-mark img.agi-mark-spin',
+      ),
+    ).toHaveLength(1);
   });
 
   it('lists the tool calls in order with one still running', () => {
@@ -224,7 +231,8 @@ describe('AGI Work run in the thread', () => {
       ),
     ).toEqual([null, null, null, 'running']);
     expect(text(tools[3] as HTMLElement, '.agi-work-tool-status')).toBe('Running');
-    expect(tools[3]?.querySelectorAll('.agi-work-tool-bar svg')).toHaveLength(2);
+    expect(tools[3]?.querySelectorAll('.agi-work-tool-bar svg')).toHaveLength(1);
+    expect(tools[3]?.querySelectorAll('.agi-work-tool-bar img.agi-mark-spin')).toHaveLength(1);
     for (const done of tools.slice(0, 3))
       expect(done.querySelectorAll('.agi-work-tool-bar svg')).toHaveLength(1);
     for (const elapsed of texts(container, '.agi-work-tool-time'))
@@ -243,7 +251,7 @@ describe('AGI Work run in the thread', () => {
     }
   });
 
-  it('holds the composer in AGI Work with Stop in the send slot', () => {
+  it('holds the composer in Work with Stop in the send slot', () => {
     const composer = container.querySelector('.agi-work-composer') as HTMLElement;
     expect(texts(composer, '.agi-app-seg span[data-on]')).toEqual([AGI_WORK_LABEL]);
     expect(text(composer, '.agi-app-placeholder')).toBe('Follow up');
@@ -257,7 +265,7 @@ describe('AGI Work run in the thread', () => {
       "const AGI_WORK_RUNNING_PREFIX = 'Working for';",
       'return `${AGI_WORK_RUNNING_PREFIX} ${formatElapsedDuration(activity.startedAtMs, nowMs)}`;',
       'return minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;',
-      'if (spinnerless) return null;',
+      '<AgiMark size={14} spinning />',
       'data-testid="agi-work-plan-sentence"',
       '<Clock3 className="h-3.5 w-3.5" aria-hidden="true" />',
       "case 'filesystem':\n      return 'fs-list';",
@@ -268,7 +276,7 @@ describe('AGI Work run in the thread', () => {
     ]);
     expectSource('packages/ui/unified-chat/src/components/InlineToolCall.tsx', [
       "return 'Running';",
-      '<Loader2',
+      '<AgiMark\n        spinning',
       '<ChevronRight',
     ]);
     expectSource('packages/ui/unified-chat/src/components/ToolCallCard.tsx', [
@@ -288,7 +296,7 @@ describe('AGI Work run in the thread', () => {
     ]);
     expectSource('apps/web/features/chat/components/Composer/ChatComposerNew.tsx', [
       "const TURN_ACTIVE_PLACEHOLDER = 'Follow up';",
-      "agiwork: 'AGI Work',",
+      "agiwork: 'Work',",
       "project: 'Project',",
       "files: 'Files',",
       "plugins: 'Connectors',",
@@ -305,7 +313,7 @@ describe('AGI Work run in the thread', () => {
       'rounded-full bg-foreground text-background',
     ]);
     expectSource('apps/web/features/chat/lib/agi-work.ts', [
-      "export const AGI_WORK_LABEL = 'AGI Work';",
+      'export const AGI_WORK_LABEL = PRODUCT_NAMES.work;',
     ]);
   });
 });
@@ -322,7 +330,7 @@ describe('file edit waiting for approval', () => {
 
   it('keeps the turn open in the composer while the decision is outstanding', () => {
     expect(texts(container, '.agi-app-placeholder')).toEqual([WEB_COMPOSER_PLACEHOLDER.turnActive]);
-    const slot = container.querySelector('.agi-app-composer-row')?.lastElementChild;
+    const slot = container.querySelector('.agi-app-composer-controls')?.lastElementChild;
     expect(slot).toHaveClass('agi-app-send', 'agi-app-stop');
     expect(slot?.querySelector('svg.lucide-square')).not.toBeNull();
     expect(container.querySelector('.agi-app-composer .lucide-audio-lines')).toBeNull();
@@ -482,10 +490,10 @@ describe('image in an app window', () => {
 
   it('shows the badge the caller passes and nothing of its own', () => {
     const { container } = render(
-      <ImageScenePreview title="AGI Workforce" badge="Cloud" image={SCREENSHOT} />,
+      <ImageScenePreview title="Workforce" badge="Cloud" image={SCREENSHOT} />,
     );
     expect(text(container, '.agi-work-titlebadge')).toBe('Cloud');
     expect(container.querySelector('.agi-work-titlebadge')).toHaveClass('agi-app-pill');
-    expect(sceneRoot(container).textContent).toBe('AGI WorkforceCloud');
+    expect(sceneRoot(container).textContent).toBe('WorkforceCloud');
   });
 });

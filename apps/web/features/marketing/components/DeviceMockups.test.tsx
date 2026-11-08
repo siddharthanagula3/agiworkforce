@@ -122,7 +122,9 @@ describe('Web and Desktop share the real app shell', () => {
     expect(composer?.querySelector('.agi-app-style')?.textContent).toBe('Style');
     expect(composer?.querySelector('.agi-app-model')?.textContent).toBe('Auto');
     expect(composer?.querySelector('.agi-app-model svg')).not.toBeNull();
-    expect(composer?.lastElementChild?.lastElementChild).toHaveClass('agi-app-send');
+    expect(composer?.querySelector('.agi-app-composer-controls')?.lastElementChild).toHaveClass(
+      'agi-app-send',
+    );
     expect(container.textContent).not.toMatch(/Enter to send|Best \(auto\)|Served by/u);
   });
 

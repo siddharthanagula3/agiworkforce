@@ -4,7 +4,7 @@ title: Pick a model, and control how hard it thinks
 path: /models
 category: models
 tags: model picker, choose model, auto, switch model, extended thinking, reasoning effort, thinking budget, vision, image output, video output, tools, model unavailable, retired model, prompt cache
-updated: 2026-10-12
+updated: 2026-11-07
 description: How to pick a model by name, what the capability badges mean and how to control thinking effort.
 scope: public
 ---
@@ -16,8 +16,10 @@ make available, grouped and searchable by name. Each entry carries what it can
 do: **Vision**, **Tools**, **Search**, **Image output**, **Video output**,
 **Reasoning**.
 
-Leaving the control on **Auto** picks the best model for each message. An
-explicit choice is never silently replaced with a different provider.
+In the web app, **Auto** keeps the model a chat started on while it remains
+suitable and available within your plan. If Auto moves the chat to another
+model, that reply shows a receipt line. An explicit choice is never silently
+replaced with a different provider.
 
 ## What the badges mean
 

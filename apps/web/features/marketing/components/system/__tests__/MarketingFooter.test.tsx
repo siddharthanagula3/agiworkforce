@@ -13,6 +13,12 @@ afterEach(() => {
 });
 
 describe('MarketingFooter', () => {
+  it('keeps the AGI name in the copyright instead of a symbol', () => {
+    const { container } = render(<MarketingFooter />);
+    const copyright = container.querySelector('.agi-ds-footer-copyright');
+    expect(copyright).toHaveTextContent('© 2026 AGI. Proprietary.');
+    expect(copyright?.querySelector('img')).toBeNull();
+  });
   it('makes no universal release or routing promise in its brand statement', () => {
     render(<MarketingFooter />);
     expect(

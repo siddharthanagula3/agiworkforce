@@ -500,3 +500,18 @@ describe('website rules', () => {
     expect(requested.some((u) => u.includes('blocked.example'))).toBe(false);
   });
 });
+
+describe('caller content-type restrictions', () => {
+  it('refuses a document before parsing when the caller accepts only web text', async () => {
+    resolvePublic();
+    const response = new Response('not parsed as PDF', {
+      headers: { 'content-type': 'application/pdf' },
+    });
+    const result = await executeUrlFetch(
+      { url: 'https://example.com/document' },
+      { fetchImpl: fetchReturning(response), allowedContentTypes: ['text/html', 'text/plain'] },
+    );
+    expect(result).toMatchObject({ ok: false, errorCode: 'unsupported_content_type' });
+    expect(response.bodyUsed).toBe(true);
+  });
+});

@@ -161,6 +161,7 @@ export function chunksToOpenAiSse(
       sink.usage,
       {
         ...streamUsage,
+        tokenSource: 'provider_reported',
         ...(upstreamProvider ? { upstreamProvider } : {}),
         ...(providerReportedCostUsd !== undefined ? { providerReportedCostUsd } : {}),
         ...(servedSpeed ? { speed: servedSpeed } : {}),
@@ -243,6 +244,7 @@ export function chunksToOpenAiSse(
             if (chunk.speed !== undefined) servedSpeed = chunk.speed;
           }
           const wireEvents = assembler.sseChunks(chunk);
+          if (sink && chunk.type === 'text-delta') sink.text = assembler.canonicalText();
           providerTrace.wireEvents += wireEvents.length;
           if (wireEvents.length === 0) continue;
           controller.enqueue(encoder.encode(sseDataFrames(wireEvents)));
@@ -255,7 +257,10 @@ export function chunksToOpenAiSse(
         commitUsage();
         controller.close();
       } catch (err) {
-        if (sink) sink.providerTrace = providerTrace;
+        if (sink) {
+          sink.text = assembler.canonicalText();
+          sink.providerTrace = providerTrace;
+        }
         commitUsage();
         controller.error(err);
       }

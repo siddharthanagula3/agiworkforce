@@ -1866,7 +1866,7 @@
         "prompt cache"
       ],
       "description": "How to pick a model by name, what the capability badges mean and how to control thinking effort.",
-      "updated": "2026-10-12",
+      "updated": "2026-11-07",
       "source": "content/support/models-and-reasoning.md",
       "chunks": [
         {
@@ -1874,7 +1874,7 @@
           "ordinal": 0,
           "heading": "Picking a model by name",
           "headingPath": "Pick a model, and control how hard it thinks › Picking a model by name",
-          "text": "The model control under the composer lists every model your plan and trust mode\nmake available, grouped and searchable by name. Each entry carries what it can\ndo: **Vision**, **Tools**, **Search**, **Image output**, **Video output**,\n**Reasoning**.\n\nLeaving the control on **Auto** picks the best model for each message. An\nexplicit choice is never silently replaced with a different provider."
+          "text": "The model control under the composer lists every model your plan and trust mode\nmake available, grouped and searchable by name. Each entry carries what it can\ndo: **Vision**, **Tools**, **Search**, **Image output**, **Video output**,\n**Reasoning**.\n\nIn the web app, **Auto** keeps the model a chat started on while it remains\nsuitable and available within your plan. If Auto moves the chat to another\nmodel, that reply shows a receipt line. An explicit choice is never silently\nreplaced with a different provider."
         },
         {
           "id": "models-and-reasoning#1",

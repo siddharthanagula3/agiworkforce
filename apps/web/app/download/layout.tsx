@@ -1,9 +1,9 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 
 export const metadata = buildMetadata({
-  title: 'Download AGI Desktop',
+  title: 'Download Desktop',
   description:
-    'Check verified AGI Desktop installer availability for macOS, with the Windows release status.',
+    'Check verified Desktop installer availability for macOS, with the Windows release status.',
   path: '/download',
   keywords: [
     'download AI app',
@@ -15,8 +15,8 @@ export const metadata = buildMetadata({
     'desktop automation',
   ],
   ogDescription:
-    'Live release verification for the AGI Desktop installer on macOS, with the Windows release status.',
-  imageAlt: 'AGI Desktop application preview',
+    'Live release verification for the Desktop installer on macOS, with the Windows release status.',
+  imageAlt: 'Desktop application preview',
 });
 
 export default function DownloadLayout({ children }: { children: React.ReactNode }) {

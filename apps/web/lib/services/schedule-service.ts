@@ -249,6 +249,8 @@ export type ScheduledTaskExecutor = (
   resume?: ScheduledRunResume,
 ) => Promise<ScheduledExecutionResult>;
 
+type DatabaseTimestamp = string | Date;
+
 interface TaskRow extends Record<string, unknown> {
   id: string;
   user_id: string;
@@ -259,11 +261,11 @@ interface TaskRow extends Record<string, unknown> {
   description: string | null;
   schedule_type: string;
   cron_expression: string | null;
-  execute_at: string | null;
+  execute_at: DatabaseTimestamp | null;
   interval_ms: number | string | null;
   timezone: string;
   is_enabled: boolean;
-  expires_at: string | null;
+  expires_at: DatabaseTimestamp | null;
   max_executions: number | null;
   execution_count: number;
   action_type: string;
@@ -271,18 +273,18 @@ interface TaskRow extends Record<string, unknown> {
   prompt: string | null;
   model: string | null;
   status: string;
-  last_executed_at: string | null;
-  next_execution_at: string | null;
+  last_executed_at: DatabaseTimestamp | null;
+  next_execution_at: DatabaseTimestamp | null;
   last_error: string | null;
   metadata: Record<string, unknown> | null;
-  created_at: string;
-  updated_at: string;
+  created_at: DatabaseTimestamp;
+  updated_at: DatabaseTimestamp;
   recurrence_rule?: string | null;
   dayparts?: Daypart[] | null;
   retry_max_attempts?: number | null;
   retry_backoff_seconds?: number | null;
   retry_attempt?: number | null;
-  retry_scheduled_for?: string | null;
+  retry_scheduled_for?: DatabaseTimestamp | null;
   missed_execution_policy?: string | null;
   condition?: ScheduleCondition | null;
   condition_state?: ScheduleConditionState | null;
@@ -296,29 +298,29 @@ interface RunRow extends Record<string, unknown> {
   task_id: string;
   status: string;
   trigger_source: string;
-  scheduled_for: string | null;
-  started_at: string;
-  completed_at: string | null;
+  scheduled_for: DatabaseTimestamp | null;
+  started_at: DatabaseTimestamp;
+  completed_at: DatabaseTimestamp | null;
   duration_ms: number | null;
   result: Record<string, unknown> | null;
   error: string | null;
   idempotency_key: string;
-  lease_expires_at: string | null;
+  lease_expires_at: DatabaseTimestamp | null;
   attempt_count: number;
   credits_used_microusd?: number | string | null;
   approval_checkpoint?: Record<string, unknown> | null;
   approval_request?: Record<string, unknown> | null;
-  approval_requested_at?: string | null;
-  approval_expires_at?: string | null;
+  approval_requested_at?: DatabaseTimestamp | null;
+  approval_expires_at?: DatabaseTimestamp | null;
 }
 
 type ClaimRow = TaskRow & {
   run_id: string;
-  run_started_at: string;
-  scheduled_for: string;
+  run_started_at: DatabaseTimestamp;
+  scheduled_for: DatabaseTimestamp;
   trigger_source: ScheduleTriggerSource;
   run_attempt_count?: number | null;
-  due_at?: string | null;
+  due_at?: DatabaseTimestamp | null;
 };
 
 function asTaskStatus(value: string): ScheduleTask['status'] {
@@ -344,6 +346,12 @@ function asTriggerSource(value: string): ScheduleTriggerSource {
   throw new Error(`Invalid schedule trigger source: ${value}`);
 }
 
+function timestampString<T extends DatabaseTimestamp | null>(
+  value: T,
+): T extends null ? null : string {
+  return (value instanceof Date ? value.toISOString() : value) as T extends null ? null : string;
+}
+
 export function mapScheduleTask(row: TaskRow): ScheduleTask {
   const scheduleType = row.schedule_type;
   const actionType = row.action_type;
@@ -362,11 +370,11 @@ export function mapScheduleTask(row: TaskRow): ScheduleTask {
     description: row.description,
     scheduleType: scheduleType as ScheduleTask['scheduleType'],
     cronExpression: row.cron_expression,
-    executeAt: row.execute_at,
+    executeAt: timestampString(row.execute_at),
     intervalMs: row.interval_ms === null ? null : Number(row.interval_ms),
     timezone: row.timezone,
     isEnabled: row.is_enabled,
-    expiresAt: row.expires_at,
+    expiresAt: timestampString(row.expires_at),
     maxExecutions: row.max_executions,
     executionCount: row.execution_count,
     actionType: actionType as ScheduleTask['actionType'],
@@ -374,12 +382,12 @@ export function mapScheduleTask(row: TaskRow): ScheduleTask {
     prompt: row.prompt,
     model: row.model,
     status: asTaskStatus(row.status),
-    lastExecutedAt: row.last_executed_at,
-    nextExecutionAt: row.next_execution_at,
+    lastExecutedAt: timestampString(row.last_executed_at),
+    nextExecutionAt: timestampString(row.next_execution_at),
     lastError: row.last_error,
     metadata: row.metadata,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    createdAt: timestampString(row.created_at),
+    updatedAt: timestampString(row.updated_at),
     recurrenceRule: row.recurrence_rule ?? null,
     dayparts: row.dayparts ?? null,
     retryMaxAttempts: Number(row.retry_max_attempts ?? 0),
@@ -424,15 +432,15 @@ export function mapScheduleRun(row: RunRow): ScheduleRun {
     taskId: row.task_id,
     status: asRunStatus(row.status),
     triggerSource: asTriggerSource(row.trigger_source),
-    scheduledFor: row.scheduled_for,
-    startedAt: row.started_at,
-    completedAt: row.completed_at,
+    scheduledFor: timestampString(row.scheduled_for),
+    startedAt: timestampString(row.started_at),
+    completedAt: timestampString(row.completed_at),
     durationMs: row.duration_ms,
     result: row.result,
     output: typeof row.result?.['text'] === 'string' ? row.result['text'] : null,
     error: row.error,
     idempotencyKey: row.idempotency_key,
-    leaseExpiresAt: row.lease_expires_at,
+    leaseExpiresAt: timestampString(row.lease_expires_at),
     attemptCount: row.attempt_count,
     pendingApproval: pendingApprovalOf(row),
     ...(row.credits_used_microusd === undefined
@@ -449,9 +457,9 @@ export function mapScheduleRun(row: RunRow): ScheduleRun {
 function mapClaim(row: ClaimRow): ClaimedScheduleRun {
   return {
     runId: row.run_id,
-    scheduledFor: row.scheduled_for,
+    scheduledFor: timestampString(row.scheduled_for),
     triggerSource: row.trigger_source,
-    startedAt: row.run_started_at,
+    startedAt: timestampString(row.run_started_at),
     attemptCount: Number(row.run_attempt_count ?? 1),
     ...(row.due_at ? { dueAt: new Date(row.due_at).toISOString() } : {}),
     scope: { userId: row.user_id, organizationId: row.organization_id ?? null },
@@ -1571,7 +1579,7 @@ async function createOnDemandScheduleRun(
       [input.taskId, runRow.started_at, input.userId],
     );
     task.executionCount += 1;
-    task.lastExecutedAt = runRow.started_at;
+    task.lastExecutedAt = timestampString(runRow.started_at);
 
     const run = mapScheduleRun(runRow);
     return {
@@ -1987,9 +1995,9 @@ export async function claimScheduleRunApproval(
     return {
       claim: {
         runId: resumed.id,
-        scheduledFor: resumed.scheduled_for ?? resumed.started_at,
+        scheduledFor: timestampString(resumed.scheduled_for ?? resumed.started_at),
         triggerSource: asTriggerSource(resumed.trigger_source),
-        startedAt: resumed.started_at,
+        startedAt: timestampString(resumed.started_at),
         attemptCount: Number(resumed.attempt_count ?? 1),
         scope: { userId: taskRow.user_id, organizationId: taskRow.organization_id ?? null },
         task,

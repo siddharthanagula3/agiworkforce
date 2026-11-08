@@ -1,6 +1,7 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { emitAppCommand } from '@shared/lib/app-commands';
 type ScanModule0 = typeof import('@features/projects');
 
 const push = vi.fn();
@@ -54,6 +55,18 @@ import ProjectsPage from './page';
 describe('Projects page create path', () => {
   beforeEach(() => {
     push.mockReset();
+    searchParams.delete('new');
+  });
+
+  it('opens the create dialog when File > New Project is chosen', async () => {
+    render(<ProjectsPage />);
+    expect(screen.queryByRole('button', { name: 'Create project' })).toBeNull();
+
+    await act(async () => {
+      emitAppCommand('new-project');
+    });
+
+    expect(await screen.findByRole('button', { name: 'Create project' })).toBeInTheDocument();
   });
 
   it('keeps a create control after the sort changes away from Updated (newest)', async () => {

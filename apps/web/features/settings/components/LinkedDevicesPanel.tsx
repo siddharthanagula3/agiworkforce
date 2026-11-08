@@ -40,7 +40,7 @@ const PLATFORM_LABELS: Record<string, string> = {
 
 const SURFACE_LABELS: Record<DeviceSurface, string> = {
   desktop: 'Desktop app',
-  cli: 'AGI CLI',
+  cli: 'CLI',
   vscode: 'VS Code extension',
   chrome: 'Chrome extension',
   mobile: 'Mobile app',

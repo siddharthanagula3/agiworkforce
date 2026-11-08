@@ -10,7 +10,7 @@ import { SURFACE_STATUS } from '../../lib/marketing-constants';
 import { CliInstallCommand, CliReleaseProvider, CliReleaseStatus } from './CliInstallCommand';
 
 export const metadata = buildMetadata({
-  title: 'AGI CLI: the agi agent in your terminal',
+  title: 'CLI: the agi agent in your terminal',
   description: `agi is a Rust-native developer agent: resumable sessions, code review, sandboxed execution, hooks, skills, and MCP, offline-capable with local models. ${SURFACE_STATUS.cli}.`,
   path: '/cli',
 });
@@ -96,17 +96,17 @@ function CliPageContent() {
           <div className="agi-fl-hero-split">
             <div className="agi-fl-hero-copy">
               <p className="agi-fl-eyebrow">
-                AGI CLI · <CliReleaseStatus />
+                CLI · <CliReleaseStatus />
               </p>
               <h1 id="agi-fl-cli-hero-title" className="sr-only">
-                AGI CLI
+                CLI
               </h1>
               <div className="agi-fl-cta-row">
                 <Link href="/download#cli-downloads" className="agi-fl-cta agi-fl-cta--primary">
                   Check availability
                 </Link>
                 <Link href="/agi-code" className="agi-fl-cta agi-fl-cta--secondary">
-                  Explore AGI Code
+                  Explore Code
                 </Link>
               </div>
             </div>
@@ -143,13 +143,13 @@ function CliPageContent() {
           eyebrow="Sandbox"
           title="Risky actions run inside a box."
           body="On Linux the sandbox is bubblewrap. On macOS it's Seatbelt. Tool execution runs under OS-level sandboxing by default. Riskier actions ask for explicit approval. Turning the sandbox off is a visible, deliberate choice."
-          ctas={[{ href: '/agi-code', label: 'Explore AGI Code' }]}
+          ctas={[{ href: '/agi-code', label: 'Explore Code' }]}
         />
 
         <TrustTriptych
           eyebrow="Trust modes"
           title="Your terminal, your boundary."
-          lede="Local, BYOK, and AGI Cloud stay separate in the CLI too. /privacy-mode shows the active trust boundary. A Local session only continues elsewhere when you explicitly ask."
+          lede="Local, BYOK, and Cloud stay separate in the CLI too. /privacy-mode shows the active trust boundary. A Local session only continues elsewhere when you explicitly ask."
           cards={[
             {
               mode: 'Local',
@@ -178,9 +178,9 @@ function CliPageContent() {
               cta: { href: '/byok', label: 'How provider keys work' },
             },
             {
-              mode: 'AGI Cloud',
+              mode: 'Cloud',
               glyph: '●',
-              title: 'Managed compute, public alpha.',
+              title: 'Cloud compute, public alpha.',
               body: 'Cloud execution from the CLI is public alpha, part of the higher paid plans, and still fails closed without an explicit route.',
               points: [
                 `Included with ${DEVELOPER_SURFACE_PLANS}; upgrades start from the pricing page`,
@@ -214,12 +214,12 @@ function CliPageContent() {
         </section>
 
         <FinalCta
-          eyebrow="AGI CLI"
+          eyebrow="CLI"
           title="An agent for your terminal."
-          body={`Resumable sessions, sandboxed execution, and AGI managed cloud in public alpha, included with ${DEVELOPER_SURFACE_PLANS}.`}
+          body={`Resumable sessions, sandboxed execution, and Cloud in public alpha, included with ${DEVELOPER_SURFACE_PLANS}.`}
           ctas={[
             { href: '/download#cli-downloads', label: 'Check availability' },
-            { href: '/agi-code', label: 'Explore AGI Code' },
+            { href: '/agi-code', label: 'Explore Code' },
             { label: 'Discuss Enterprise access', waitlist: true },
           ]}
         />

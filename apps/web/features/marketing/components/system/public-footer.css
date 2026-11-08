@@ -1,7 +1,11 @@
 [data-design='agi'] footer.agi-ds-footer.agi-footer-responsive {
   border-block-start: var(--stroke-hairline) solid var(--agi-rule);
   padding-block: var(--space-6) var(--space-5);
-  font-family: var(--agi-font);
+  font-family: var(--public-footer-font);
+}
+
+[data-design='agi'] footer.agi-ds-footer.agi-footer-responsive > .agi-ds-container {
+  max-inline-size: var(--agi-container);
 }
 
 [data-design='agi'] footer.agi-ds-footer.agi-footer-responsive.agi-ds-footer--condensed {
@@ -25,7 +29,7 @@
   display: inline-flex;
   align-items: center;
   gap: var(--public-footer-brand-gap);
-  font-family: var(--agi-font);
+  font-family: var(--public-footer-font);
   font-size: var(--public-footer-text-body);
   font-weight: var(--public-footer-weight-brand);
   letter-spacing: var(--type-display-tracking);
@@ -35,7 +39,7 @@
 [data-design='agi'] footer.agi-ds-footer.agi-footer-responsive .agi-ds-footer-statement {
   max-inline-size: var(--public-footer-statement-width);
   margin: 0;
-  font-family: var(--agi-font);
+  font-family: var(--public-footer-font);
   font-size: var(--public-footer-text-body);
   line-height: var(--public-footer-leading-body);
   color: var(--agi-ink-2);
@@ -73,7 +77,7 @@
 
 [data-design='agi'] footer.agi-ds-footer.agi-footer-responsive .agi-ds-footer-title {
   margin: 0 0 var(--space-4);
-  font-family: var(--agi-font);
+  font-family: var(--public-footer-font);
   font-size: var(--public-footer-text-ui);
   font-weight: var(--type-h4-weight);
   line-height: var(--public-footer-leading-ui);
@@ -92,7 +96,7 @@
   min-inline-size: var(--space-5);
   max-inline-size: 100%;
   padding-block: var(--space-1);
-  font-family: var(--agi-font);
+  font-family: var(--public-footer-font);
   font-size: var(--public-footer-text-ui);
   font-weight: var(--type-body-weight);
   line-height: var(--public-footer-leading-ui);
@@ -114,7 +118,7 @@
   margin-block-start: var(--space-5);
   padding-block-start: var(--space-4);
   border-block-start: var(--stroke-hairline) solid var(--agi-rule);
-  font-family: var(--agi-font);
+  font-family: var(--public-footer-font);
   font-size: var(--public-footer-text-meta);
   line-height: var(--public-footer-leading-body);
   color: var(--agi-ink);

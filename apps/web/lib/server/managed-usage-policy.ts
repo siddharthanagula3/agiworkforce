@@ -119,7 +119,9 @@ export function getPlanFlagshipWeeklyUsageBudgetCents(plan: PlanAllowanceSubject
 }
 
 export function getPlanSessionUsageCapCents(plan: PlanAllowanceSubject): ManagedUsageCapCents {
-  return isPlanUsageUncapped(plan) ? null : getPlanSessionUsageBudgetCents(plan);
+  return isPlanUsageUncapped(plan) || getLimit(plan)?.fiveHourCredits === null
+    ? null
+    : getPlanSessionUsageBudgetCents(plan);
 }
 
 export function getPlanWeeklyUsageCapCents(plan: PlanAllowanceSubject): ManagedUsageCapCents {
@@ -256,11 +258,11 @@ export function buildQuotaWarningHeader(input: QuotaWarningInput): string | null
   );
   if (periodPercent !== null) candidates.push({ scope: 'billing_period', percent: periodPercent });
 
-  const sessionPercent = projectedPercent(
-    input.rolling?.sessionUsedCents ?? 0,
-    estimated,
-    getPlanSessionUsageBudgetCents(input.planTier),
-  );
+  const sessionCap = getPlanSessionUsageCapCents(input.planTier);
+  const sessionPercent =
+    sessionCap === null
+      ? null
+      : projectedPercent(input.rolling?.sessionUsedCents ?? 0, estimated, sessionCap);
   if (input.rolling?.sessionUsedCents !== undefined && sessionPercent !== null) {
     candidates.push({ scope: 'rolling_five_hour', percent: sessionPercent });
   }

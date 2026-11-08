@@ -100,9 +100,8 @@ export function WaitlistDialog({
             <div className="agi-ds-waitlist-body">
               <DialogDescription className="agi-ds-prose">
                 A person will contact you to discuss contract-scoped Enterprise access for your
-                requirements. Managed Cloud is already open by default, and current availability for
-                Local and BYOK is listed on each surface page. Changed your mind? Record a
-                withdrawal at{' '}
+                requirements. Cloud is already open by default, and current availability for Local
+                and BYOK is listed on each surface page. Changed your mind? Record a withdrawal at{' '}
                 <a href="/privacy/requests" className="agi-ds-link">
                   /privacy/requests
                 </a>{' '}
@@ -118,9 +117,9 @@ export function WaitlistDialog({
             </div>
             <div className="agi-ds-waitlist-body">
               <DialogDescription className="agi-ds-prose">
-                Managed Cloud is open by default. Team pricing and current checkout availability are
-                shown on Pricing. This list is for contract-scoped Enterprise requirements such as
-                SSO, custom retention, and governance controls · no account required.
+                Cloud is open by default. Team pricing and current checkout availability are shown
+                on Pricing. This list is for contract-scoped Enterprise requirements such as SSO,
+                custom retention, and governance controls · no account required.
               </DialogDescription>
 
               <form onSubmit={handleSubmit} noValidate className="agi-ds-form">

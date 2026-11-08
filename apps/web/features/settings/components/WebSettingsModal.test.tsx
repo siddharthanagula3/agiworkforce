@@ -1050,3 +1050,20 @@ it('composes TOTP admission from open and the selected section without changing 
     expect(screen.getByTestId('device-sign-in-admission')).toHaveTextContent('true'),
   );
 });
+
+describe('WebSettingsModal keyboard section', () => {
+  it('shows the shortcut list when Keyboard is the open settings section', async () => {
+    render(<WebSettingsModal open onClose={vi.fn()} initialSection="keyboard" />);
+
+    expect(await screen.findByRole('heading', { name: 'Keyboard' })).toBeInTheDocument();
+    expect(screen.getByText('Copy last message')).toBeInTheDocument();
+    expect(screen.getByText('Send message')).toBeInTheDocument();
+  });
+
+  it('shows Dictation when Voice is the open settings section', async () => {
+    render(<WebSettingsModal open onClose={vi.fn()} initialSection="voice" />);
+
+    expect(await screen.findByRole('switch', { name: 'Dictation' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Voice' })).toBeInTheDocument();
+  });
+});

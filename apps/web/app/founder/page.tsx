@@ -47,7 +47,7 @@ export default function FounderPage() {
         <Section id="conviction" labelledBy="agi-founder-conviction-title" rule>
           <FounderBlock
             quote={<>&ldquo;You should own the choice of model.&rdquo;</>}
-            body={`The person doing the work should decide where it runs and which model answers, not a vendor holding the only key. Local Mode keeps your conversations on your device, BYOK keeps your keys on your own machine, and managed cloud is a choice you make rather than the only door. Every design decision in ${PRODUCT_NAME} follows from that.`}
+            body={`The person doing the work should decide where it runs and which model answers, not a vendor holding the only key. Local Mode keeps your conversations on your device, BYOK keeps your keys on your own machine, and cloud is a choice you make rather than the only door. Every design decision in ${PRODUCT_NAME} follows from that.`}
             name={FOUNDER_NAME}
             role={`${FOUNDER_ROLE}, ${LEGAL_ENTITY}`}
           />

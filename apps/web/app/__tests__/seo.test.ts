@@ -6,7 +6,10 @@ import robots from '@/app/robots';
 import sitemap from '@/app/sitemap';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { OG_IMAGE, SITE_URL } from '@/lib/seo/site';
+import { COMPANY_SITE_NAME, PRODUCT_BRAND } from '@agiworkforce/types';
+import { BLOG_POSTS } from '@/lib/blog-posts';
 import {
+  articleSchema,
   breadcrumbSchema,
   faqPageSchema,
   organizationSchema,
@@ -96,6 +99,8 @@ describe('robots', () => {
     'ChatGPT-User',
     'OAI-SearchBot',
     'ClaudeBot',
+    'Claude-SearchBot',
+    'Claude-User',
     'anthropic-ai',
     'PerplexityBot',
     'Perplexity-User',
@@ -104,7 +109,7 @@ describe('robots', () => {
     'Meta-ExternalAgent',
   ];
 
-  it.each(AI_BOTS)('allows AI answer-engine crawler %s', (bot) => {
+  it.each(AI_BOTS)('preserves public access for crawler or fetcher %s', (bot) => {
     const rule = rules.find((r) => r.userAgent === bot);
     expect(rule, `${bot} rule missing`).toBeDefined();
     expect(rule?.allow).toBe('/');
@@ -186,8 +191,10 @@ describe('sitemap', () => {
     }
   });
 
-  it('leaves the empty blog out while it has no posts', () => {
-    expect(paths).not.toContain('/blog');
+  it('lists the populated blog and each published guide', () => {
+    expect(BLOG_POSTS.length).toBeGreaterThan(0);
+    expect(paths).toContain('/blog');
+    for (const post of BLOG_POSTS) expect(paths).toContain(post.path);
   });
 
   it('lists the homepage at priority 1.0', () => {
@@ -211,7 +218,7 @@ describe('sitemap', () => {
 });
 
 describe('pages without published content', () => {
-  it.each(['app/blog/page.tsx', 'app/customers/page.tsx'])(
+  it.each(['app/customers/page.tsx'])(
     '%s stays reachable for people but is marked noindex',
     (relativePath) => {
       const source = readFileSync(join(process.cwd(), relativePath), 'utf8');
@@ -230,6 +237,23 @@ describe('homepage description', () => {
 });
 
 describe('structured data', () => {
+  it('describes a help article without inventing publication, author or rating claims', () => {
+    const article = articleSchema({
+      title: 'Pick a model',
+      path: '/help/models-and-reasoning',
+      updated: '2026-10-12',
+    });
+    expect(article).toMatchObject({
+      '@type': 'Article',
+      headline: 'Pick a model',
+      mainEntityOfPage: `${SITE_URL}/help/models-and-reasoning`,
+      dateModified: '2026-10-12',
+    });
+    for (const field of ['datePublished', 'author', 'aggregateRating', 'description']) {
+      expect(article).not.toHaveProperty(field);
+    }
+  });
+
   it('WebSite schema has NO SearchAction (no public site search)', () => {
     const schema = webSiteSchema();
     expect(schema['@type']).toBe('WebSite');
@@ -247,6 +271,17 @@ describe('structured data', () => {
     const serialized = JSON.stringify(organizationSchema());
     expect(organizationSchema()).not.toHaveProperty('sameAs');
     expect(serialized).not.toMatch(/twitter\.com|x\.com|github\.com/);
+  });
+
+  it.each([organizationSchema, webSiteSchema])(
+    'uses canonical brand names and their alias',
+    (build) => {
+      expect(build()).toMatchObject({ name: PRODUCT_BRAND, alternateName: COMPANY_SITE_NAME });
+    },
+  );
+
+  it('does not advertise unreleased connectors in organization structured data', () => {
+    expect(organizationSchema()['description']).not.toMatch(/connectors/i);
   });
 
   it('SoftwareApplication carries no offers, rating, download or install claims', () => {

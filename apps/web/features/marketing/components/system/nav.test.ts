@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { PRODUCT_NAMES } from '@agiworkforce/types';
+import { BLOG_DESCRIPTION, BLOG_POSTS } from '@/lib/blog-posts';
 import { RELEASE_NOTES_METADATA } from '@/app/release-notes/release-notes-metadata';
 import { USE_CASE_SLUGS } from '@/features/marketing/components/pages/business/use-cases-content';
 import { SITE_URL } from '@/lib/seo/site';
@@ -58,7 +59,6 @@ const FEATURES_INDEX = '/features';
 const APP_DIR = resolve(__dirname, '../../../../app');
 const FEATURES_DIR = resolve(APP_DIR, 'features');
 const BLOG_INDEX = '/blog';
-const BLOG_POST_ROUTE = resolve(APP_DIR, 'blog/[slug]');
 const RELEASE_ARCHIVE_ALIAS = '/changelog';
 const RELEASE_ARCHIVE_LABEL = 'Release notes';
 const RELEASE_ARCHIVE = String(RELEASE_NOTES_METADATA.alternates?.canonical).replace(SITE_URL, '');
@@ -222,7 +222,7 @@ describe('nav, header groups', () => {
     }
   });
 
-  it('links the blog index and no post beneath it', () => {
+  it('routes global blog navigation through the index', () => {
     const blogLinks = [...headerHrefs(), ...footerHrefs()].filter((href) =>
       href.startsWith(BLOG_INDEX),
     );
@@ -246,11 +246,13 @@ describe('nav, header descriptions', () => {
     expect(headerDescription(RELEASE_ARCHIVE)).toBe('What shipped, and when');
   });
 
-  it('says the blog has no posts for as long as no post page exists', () => {
-    expect(existsSync(BLOG_POST_ROUTE)).toBe(false);
-    expect(headerDescription(BLOG_INDEX)).toBe(
-      'No posts yet; announcements are in the release notes',
-    );
+  it('describes the guides the populated blog actually serves', () => {
+    expect(BLOG_POSTS.length).toBeGreaterThan(0);
+    for (const post of BLOG_POSTS) {
+      expect(existsSync(resolve(APP_DIR, `.${post.path}/page.tsx`))).toBe(true);
+    }
+    expect(headerDescription(BLOG_INDEX)).toBe(BLOG_DESCRIPTION);
+    expect(headerDescription(BLOG_INDEX)).not.toMatch(/no posts/i);
   });
 
   it('describes careers as the careers page does, and neither claims a team the founder page denies', () => {

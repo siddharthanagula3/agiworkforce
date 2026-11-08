@@ -43,6 +43,7 @@ import type {
 import { managedChatIdempotencyPurpose } from '@agiworkforce/utils/managed-chat-idempotency';
 import {
   IMAGE_CARD_KIND,
+  BILLING_PLAN_PRICING,
   EDIT_IMAGE_TOOL_NAME,
   GENERATE_IMAGE_TOOL_NAME,
   getPlanMaxAttachmentsPerMessage,
@@ -1349,7 +1350,7 @@ export function getWorkModeEntitlementError(
   }
   return {
     code: 'agi_work_plan_required',
-    message: 'AGI Work requires Pro or higher.',
+    message: `AGI Work requires ${BILLING_PLAN_PRICING.pro.label} or higher.`,
     requiredTier: 'pro',
   };
 }
@@ -1799,7 +1800,10 @@ export function extractTextContent(
     .join('\n');
 }
 
-export function collectManagedPromptMaterials(request: ChatCompletionRequest): string[] {
+export function collectManagedPromptMaterials(request: {
+  messages: ReadonlyArray<{ content: Parameters<typeof extractTextContent>[0] }>;
+  tools?: readonly unknown[];
+}): string[] {
   const materials = request.messages.map((message) => extractTextContent(message.content));
   if (request.tools?.length) materials.push(JSON.stringify(request.tools));
   return materials;

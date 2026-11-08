@@ -24,7 +24,7 @@ import { TRIAL_REMINDER_DAYS } from '@/lib/services/trial-reminder-service';
 
 export const metadata = buildMetadata({
   title: 'Your invitation',
-  description: 'A friend invited you to AGI, with a free Pro trial and bonus credits.',
+  description: `A friend invited you to AGI, with a free ${getBillingPlanPricing('pro').label} trial and bonus credits.`,
   path: REFERRAL_WELCOME_PATH,
   robots: { index: false, follow: false },
 });

@@ -51,9 +51,9 @@ export function FlagshipHero({
         <div className={hasVisual ? 'agi-fl-hero-copy' : undefined}>
           {brand ? (
             <div className="agi-fl-hero-brand-wrap">
-              <AgiMark spinning className="agi-fl-hero-brand-mark" ariaLabel="AGI logo" />
+              <AgiMark spinning className="agi-fl-hero-brand-mark" ariaLabel={brand} />
               <div className="agi-fl-hero-brand-text">
-                <h1 id="agi-fl-hero-title" className="agi-fl-hero-brand">
+                <h1 id="agi-fl-hero-title" className="sr-only">
                   {brand}
                 </h1>
                 <p className="agi-fl-h1--single agi-fl-hero-brand-sub">{eyebrow}</p>

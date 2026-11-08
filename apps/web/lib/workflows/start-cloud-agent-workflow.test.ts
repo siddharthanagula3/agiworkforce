@@ -9,6 +9,7 @@ const workflowMocks = vi.hoisted(() => ({
   attach: vi.fn(),
   buildInput: vi.fn(),
   runToolLoop: vi.fn(),
+  cancellationRequested: vi.fn(async () => false),
   buildStream: vi.fn(),
   saveApproval: vi.fn(async () => undefined),
   saveInput: vi.fn(async () => undefined),
@@ -64,7 +65,7 @@ vi.mock('@/lib/services/cloud-agent-run-service', () => ({
   appendCloudAgentEvent: vi.fn(),
   completeCloudAgentApprovalCheckpoint: workflowMocks.completeCheckpoint,
   getCloudAgentRun: vi.fn(),
-  isCloudAgentRunCancellationRequested: vi.fn(async () => false),
+  isCloudAgentRunCancellationRequested: workflowMocks.cancellationRequested,
   isCloudAgentRunPauseRequested: vi.fn(async () => false),
   saveCloudAgentPauseCheckpoint: vi.fn(),
   recordCloudAgentRunSettledUsage: vi.fn(),
@@ -100,7 +101,10 @@ vi.mock('@/lib/feature-flags/capability-gate', () => ({
   assertCapabilityAvailable: workflowMocks.assertCapabilityAvailable,
 }));
 
-import { WORKFLOW_WORLD_CALL_DEADLINE_MS } from '@/lib/deadline-policy';
+import {
+  CLOUD_AGENT_CANCELLATION_POLL_MS,
+  WORKFLOW_WORLD_CALL_DEADLINE_MS,
+} from '@/lib/deadline-policy';
 import { runCloudAgentTurn, startCloudAgentWorkflowExecution } from './start-cloud-agent-workflow';
 import { CloudAgentWorkflowBillingUnavailableError } from './cloud-agent-workflow-input';
 import {
@@ -383,6 +387,39 @@ describe('runCloudAgentTurn transport selection', () => {
     await expect(runCloudAgentTurn(turnInput({ onDurableUnavailable: 'fail' }))).rejects.toThrow(
       'transport_cooling_down',
     );
+  });
+
+  it('aborts an active inline provider stream when its run is stopped', async () => {
+    vi.useFakeTimers();
+    const parent = new AbortController();
+    let reading: Promise<IteratorResult<Uint8Array, unknown>> | undefined;
+    let signal: AbortSignal | undefined;
+    try {
+      recordDurableTransportStall();
+      workflowMocks.cancellationRequested.mockResolvedValue(false);
+      workflowMocks.runToolLoop.mockImplementationOnce((_processed, options) => {
+        signal = options.signal;
+        return (async function* () {
+          await new Promise<void>((resolve) =>
+            signal!.addEventListener('abort', () => resolve(), { once: true }),
+          );
+          yield* [];
+        })();
+      });
+      await runCloudAgentTurn(turnInput({ signal: parent.signal }));
+      reading = (streamInput()['generator'] as AsyncGenerator<Uint8Array>).next();
+      await vi.advanceTimersByTimeAsync(CLOUD_AGENT_CANCELLATION_POLL_MS);
+      expect(signal?.aborted).toBe(false);
+      workflowMocks.cancellationRequested.mockResolvedValue(true);
+      await vi.advanceTimersByTimeAsync(CLOUD_AGENT_CANCELLATION_POLL_MS);
+      expect(signal?.aborted).toBe(true);
+      await reading;
+    } finally {
+      parent.abort();
+      await reading;
+      workflowMocks.cancellationRequested.mockResolvedValue(false);
+      vi.useRealTimers();
+    }
   });
 
   it('serves the turn inline when the durable platform refuses it', async () => {

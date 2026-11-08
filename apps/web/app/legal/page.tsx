@@ -119,7 +119,7 @@ const DOCS: { href: string; label: string; body: string }[] = [
   {
     href: '/mobile/legal',
     label: 'Mobile app terms and privacy',
-    body: 'Surface-specific terms for AGI Mobile on iOS and Android, including platform disclosures. The documents above govern where they overlap.',
+    body: 'Surface-specific terms for Mobile on iOS and Android, including platform disclosures. The documents above govern where they overlap.',
   },
   {
     href: '/data-use',

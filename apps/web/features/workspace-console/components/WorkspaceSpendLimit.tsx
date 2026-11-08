@@ -256,7 +256,7 @@ export function WorkspaceSpendLimit() {
             className="rounded-md border px-3 py-2 text-xs leading-relaxed"
             style={{ borderColor: 'currentColor', color: 'var(--settings-destructive-text)' }}
           >
-            Saving this starts refusing members&rsquo; managed turns once the cap is reached. Work
+            Saving this starts refusing members&rsquo; Cloud turns once the cap is reached. Work
             already running is unaffected; new turns are declined until the cap is raised or the
             month rolls over.
           </div>

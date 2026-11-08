@@ -106,7 +106,7 @@ function assertReferenceAccent(source: string) {
   }
 }
 
-describe('the public amber accent', () => {
+describe('the neutral public accent', () => {
   it('is defined only by the legacy public scope and the canonical reference token owner', () => {
     const defining = repoFiles()
       .filter((file) => AMBER_DEFINITION.test(file.source))
@@ -119,27 +119,20 @@ describe('the public amber accent', () => {
     ).toEqual([GLOBALS, PUBLIC_TOKENS].sort());
   });
 
-  it('carries both themes in the default and the landing palette, so neither inherits the other value', () => {
+  it('defines one public palette with dark and light values', () => {
     const globals = readFileSync(join(REPO_ROOT, GLOBALS), 'utf8');
 
     expect(blockSelectorsDefining(globals).sort()).toEqual(
-      [
-        "[data-design='agi']",
-        "[data-theme='light'][data-design='agi']",
-        `${FLAGSHIP_SCOPE} [data-design='agi']`,
-        `${FLAGSHIP_SCOPE} [data-theme='light'][data-design='agi']`,
-      ].sort(),
+      ["[data-design='agi']", "[data-theme='light'][data-design='agi']"].sort(),
     );
 
     for (const token of ['--agi-amber', '--agi-amber-soft']) {
       const definitions = globals.split('\n').filter((line) => line.trim().startsWith(`${token}:`));
-      expect(definitions, `${token} needs a dark and a light value in each palette`).toHaveLength(
-        4,
-      );
+      expect(definitions, `${token} needs one dark and one light value`).toHaveLength(2);
     }
   });
 
-  it('paints every public page but the landing in neutral ink', () => {
+  it('paints every public page including the landing in neutral ink', () => {
     const sources = {
       [GLOBALS]: readFileSync(join(REPO_ROOT, GLOBALS), 'utf8'),
       [PUBLIC_TOKENS]: readFileSync(join(REPO_ROOT, PUBLIC_TOKENS), 'utf8'),
@@ -159,7 +152,6 @@ describe('the public amber accent', () => {
     let checked = 0;
     for (const [file, token] of accents) {
       for (const definition of tokenDefinitions(sources[file]!, token)) {
-        if (definition.selectors.some((selector) => selector.includes(FLAGSHIP_SCOPE))) continue;
         const where = `${token} in ${file} under ${definition.selectors.join(', ')}`;
         expect(definition.value, where).toMatch(/^#[0-9a-f]{6}$/i);
         expect(channelSpread(definition.value), where).toBeLessThanOrEqual(16);
@@ -169,13 +161,17 @@ describe('the public amber accent', () => {
     expect(checked).toBe(8);
   });
 
-  it('keeps the flagship palette on the landing alone', () => {
+  it('keeps the landing layout marker without a separate colour palette', () => {
     const carriers = repoFiles()
       .filter((file) => file.path.endsWith('.tsx'))
       .filter((file) => /data-public-palette=["']flagship["']/.test(file.source))
       .map((file) => file.path);
 
     expect(carriers).toEqual([LANDING]);
+    for (const file of [GLOBALS, PUBLIC_TOKENS]) {
+      const source = readFileSync(join(REPO_ROOT, file), 'utf8');
+      expect(source).not.toContain(FLAGSHIP_SCOPE);
+    }
   });
 
   it('loads reference accent values only from the published canonical token owner', () => {

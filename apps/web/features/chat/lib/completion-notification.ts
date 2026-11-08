@@ -1,4 +1,4 @@
-export const AGI_WORK_DONE_TITLE = 'AGI Work finished';
+export const AGI_WORK_DONE_TITLE = 'Work finished';
 export const RESEARCH_DONE_TITLE = 'Your research report is ready';
 export const REPLY_DONE_TITLE = 'Your reply is ready';
 

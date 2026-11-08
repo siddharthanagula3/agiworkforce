@@ -58,7 +58,7 @@ export const INSPIRATION: readonly InspirationCard[] = [
     content: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 60" width="200" height="60">
   <rect width="200" height="60" rx="8" fill="#1a1b17"/>
   <text x="20" y="38" font-family="Georgia, serif" font-size="26" font-weight="700" fill="#b9985c">AGI</text>
-  <text x="72" y="38" font-family="Georgia, serif" font-size="26" font-weight="400" fill="#e7e0d2"> Workforce</text>
+  <text x="72" y="38" font-family="Georgia, serif" font-size="26" font-weight="400" fill="#e7e0d2"> AGI Workforce</text>
 </svg>`,
   },
   {

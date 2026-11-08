@@ -107,7 +107,11 @@ import { redactAuditedSecrets, scanForSecrets } from '@/lib/security/secrets-aud
 import { isHighConfidenceSecretName } from '@/lib/security/secret-patterns';
 import type { McpInputRequiredState } from '@agiworkforce/mcp';
 import { getRoutePricing } from '@agiworkforce/model-registry';
-import { isSelfContainedResponseRequest, type RouteOutcomeClass } from '@agiworkforce/routing';
+import {
+  estimateTokens,
+  isSelfContainedResponseRequest,
+  type RouteOutcomeClass,
+} from '@agiworkforce/routing';
 import { publisherFromTitle, rankSources } from '@agiworkforce/search';
 import { toolInvocationIdempotencyKey } from '@agiworkforce/provider-runtime';
 
@@ -324,12 +328,14 @@ import {
   resolveCodeExecutionRequirement,
 } from '@/lib/code-execution/required-execution';
 import {
+  collectManagedPromptMaterials,
   extractTextContent,
   managedToolInventoryProviderView,
   type ProcessedRequest,
 } from './request-processor';
 import {
   addToolSpend,
+  accumulateObservedProviderUsage,
   createObservedProviderUsage,
   mergeObservedProviderUsage,
   observedTurnCost,
@@ -690,6 +696,7 @@ export interface ToolLoopProviderExecution {
   attempt: number;
   request: ProcessedRequest['llmRequest'];
   execute: () => Promise<ToolLoopProviderStepResult>;
+  failureUsage: () => ObservedProviderUsage | null;
 }
 
 // The opening attempt keeps the bare step key so receipts written before rotation existed still replay.
@@ -3976,76 +3983,99 @@ export async function* runToolLoop(
         for (const entry of heldLeadingLines) releaseLine(entry);
         heldLeadingLines.length = 0;
       };
+      const stepUsage = createObservedProviderUsage();
+      const stepSink: ToolLoopStepSink = {
+        thinkingBlocks: [],
+        text: '',
+        usage: stepUsage,
+      };
       const executeProviderStep = async (): Promise<ToolLoopProviderStepResult> => {
-        const stepUsage = createObservedProviderUsage();
-        const stepSink: ToolLoopStepSink = {
-          thinkingBlocks: [],
-          text: '',
-          usage: stepUsage,
-        };
-        const streamDeadlineMs = nestedDeadlineMs(
-          PROVIDER_STREAM_DEADLINE_MS,
-          maxDurationMs,
-          now() - startedAt,
-        );
-        const collected = await withProviderStreamDeadline(
-          async (signal, markFirstToken) => {
-            const providerStream = await buildToolLoopStream(
-              attemptProcessed.provider,
-              attemptProcessed,
-              attemptRequest,
-              responseModel,
-              stepSink,
-              signal,
-            );
-            return collectProviderStream(providerStream, (entry) => {
-              if (firstProviderLineAtMs === undefined) {
-                firstProviderLineAtMs = now();
-                markFirstToken();
-              }
-              if (holdLeadingLines) {
-                if (heldLeadingChars + entry.line.length > MAX_RETRY_HELD_PROVIDER_CHARS) {
-                  releaseHeldLines();
-                } else {
-                  heldLeadingLines.push(entry);
-                  heldLeadingChars += entry.line.length;
-                  if (
-                    entry.publicTextDelta?.trim() ||
-                    entry.toolCallDelta ||
-                    entry.serverToolStart ||
-                    (entry.serverToolResults?.length ?? 0) > 0 ||
-                    entry.searchActivity
-                  ) {
-                    releaseHeldLines();
-                  }
-                  return;
+        try {
+          const streamDeadlineMs = nestedDeadlineMs(
+            PROVIDER_STREAM_DEADLINE_MS,
+            maxDurationMs,
+            now() - startedAt,
+          );
+          const collected = await withProviderStreamDeadline(
+            async (signal, markFirstToken) => {
+              const providerStream = await buildToolLoopStream(
+                attemptProcessed.provider,
+                attemptProcessed,
+                attemptRequest,
+                responseModel,
+                stepSink,
+                signal,
+              );
+              return collectProviderStream(providerStream, (entry) => {
+                if (firstProviderLineAtMs === undefined) {
+                  firstProviderLineAtMs = now();
+                  markFirstToken();
                 }
-              }
-              releaseLine(entry);
+                if (holdLeadingLines) {
+                  if (heldLeadingChars + entry.line.length > MAX_RETRY_HELD_PROVIDER_CHARS) {
+                    releaseHeldLines();
+                  } else {
+                    heldLeadingLines.push(entry);
+                    heldLeadingChars += entry.line.length;
+                    if (
+                      entry.publicTextDelta?.trim() ||
+                      entry.toolCallDelta ||
+                      entry.serverToolStart ||
+                      (entry.serverToolResults?.length ?? 0) > 0 ||
+                      entry.searchActivity
+                    ) {
+                      releaseHeldLines();
+                    }
+                    return;
+                  }
+                }
+                releaseLine(entry);
+              });
+            },
+            streamDeadlineMs,
+            options.signal,
+            nestedDeadlineMs(PROVIDER_FIRST_TOKEN_DEADLINE_MS, streamDeadlineMs, 0),
+          );
+          if (collected.providerError) {
+            const { message, code, retryAfterSeconds } = collected.providerError;
+            const classification = isBlockedFinishReason(collected.finishReason)
+              ? classifyEmptyTurn({ finishReason: collected.finishReason })
+              : stepSink.providerErrorClassification;
+            throw Object.assign(new Error(message || 'Provider stream failed.'), {
+              ...(code && /^\d{3}$/.test(code) ? { status: Number(code) } : {}),
+              ...(retryAfterSeconds !== undefined ? { retryAfterSeconds } : {}),
+              ...(classification ? { classification } : {}),
             });
-          },
-          streamDeadlineMs,
-          options.signal,
-          nestedDeadlineMs(PROVIDER_FIRST_TOKEN_DEADLINE_MS, streamDeadlineMs, 0),
-        );
-        if (collected.providerError) {
-          const { message, code, retryAfterSeconds } = collected.providerError;
-          const classification = isBlockedFinishReason(collected.finishReason)
-            ? classifyEmptyTurn({ finishReason: collected.finishReason })
-            : stepSink.providerErrorClassification;
-          throw Object.assign(new Error(message || 'Provider stream failed.'), {
-            ...(code && /^\d{3}$/.test(code) ? { status: Number(code) } : {}),
-            ...(retryAfterSeconds !== undefined ? { retryAfterSeconds } : {}),
-            ...(classification ? { classification } : {}),
-          });
+          }
+          return {
+            ...collected,
+            thinkingBlocks: stepSink.thinkingBlocks,
+            canonicalText: stepSink.text,
+            usage: stepUsage,
+            providerTrace: stepSink.providerTrace,
+          };
+        } catch (error) {
+          if (stepUsage.providerCalls === 0 && stepSink.text.trim()) {
+            accumulateObservedProviderUsage(
+              stepUsage,
+              {
+                inputTokens: collectManagedPromptMaterials(attemptRequest).reduce(
+                  (sum, material) => sum + estimateTokens(material, attemptRequest.model),
+                  0,
+                ),
+                outputTokens: estimateTokens(stepSink.text, attemptRequest.model),
+                tokenSource: 'estimated',
+              },
+              {
+                provider: attemptProcessed.provider,
+                model: attemptRequest.model,
+                routeId: buildServingRouteId(attemptProcessed.provider, attemptRequest.model),
+              },
+            );
+          }
+          mergeObservedProviderUsage(observedUsage, stepUsage);
+          throw error;
         }
-        return {
-          ...collected,
-          thinkingBlocks: stepSink.thinkingBlocks,
-          canonicalText: stepSink.text,
-          usage: stepUsage,
-          providerTrace: stepSink.providerTrace,
-        };
       };
       try {
         const result = options.providerExecutor
@@ -4056,6 +4086,7 @@ export async function* runToolLoop(
               attempt,
               request: attemptRequest,
               execute: executeProviderStep,
+              failureUsage: () => (stepUsage.providerCalls > 0 ? stepUsage : null),
             })
           : await executeProviderStep();
         // Empty output is classified by the actual step result, including a
@@ -6239,6 +6270,12 @@ export async function* runToolLoop(
           .find((name) => name.length > 0);
         let capAnnounced = false;
         for await (const entry of liveLines.drain()) {
+          if (options.signal?.aborted) {
+            const completed = await stepPromise.catch(() => undefined);
+            if (completed) mergeObservedProviderUsage(observedUsage, completed.usage);
+            yield* flushTerminal('cancelled');
+            return;
+          }
           if (providerLineShowsSearch(entry)) {
             searchObserved = true;
             processed.toolExecutionObserved = true;
@@ -6326,6 +6363,10 @@ export async function* runToolLoop(
         );
       } catch (err) {
         if (options.shouldPropagateExecutionError?.(err)) throw err;
+        if (options.signal?.aborted) {
+          yield* flushTerminal('cancelled');
+          return;
+        }
         const msg = err instanceof Error ? err.message : String(err);
         const classified: ClassifiedError =
           err instanceof SharedProviderStreamDeadlineError

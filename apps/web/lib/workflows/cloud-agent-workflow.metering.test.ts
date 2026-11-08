@@ -358,6 +358,44 @@ describe('durable invocation rebuilds the request on the side its reservation ca
     await expect(ledgerRow.execute()).resolves.not.toHaveProperty('lines');
     expect(() => ledgerRow.resultSchema.parse(providerStepResult())).not.toThrow();
   });
+
+  it('persists a failed provider attempt through the same journal as completed attempts', async () => {
+    await executeCloudAgentWorkflowInvocation(makeInput(MANAGED_BILLING));
+    const providerExecutor = toolLoopOptions()['providerExecutor'] as (input: unknown) => unknown;
+    const failedUsage = {
+      ...(providerStepResult()['usage'] as Record<string, unknown>),
+      providerCallObservations: [
+        {
+          inputTokens: 10,
+          outputTokens: 5,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+          cacheWrite1hTokens: 0,
+          reasoningTokens: 0,
+          tokenSource: 'estimated',
+        },
+      ],
+    };
+    mocks.executeOperation.mockResolvedValue({});
+    await providerExecutor({
+      operationKey: 'provider:2',
+      step: 2,
+      request: {},
+      execute: async () => providerStepResult(),
+      failureUsage: () => failedUsage,
+    });
+    const ledgerRow = mocks.executeOperation.mock.calls[0]![1] as {
+      failureUsage: (error: unknown) => unknown;
+      resultSchema: { parse: (value: unknown) => unknown };
+    };
+    expect(ledgerRow.failureUsage(new Error('interrupted'))).toEqual(failedUsage);
+    expect(() =>
+      ledgerRow.resultSchema.parse({
+        ...providerStepResult(),
+        usage: failedUsage,
+      }),
+    ).not.toThrow();
+  });
 });
 
 /**

@@ -12,7 +12,7 @@ const LISTED_PLANS = [
   BILLING_PLAN_PRICING.max_15x.label,
   BILLING_PLAN_PRICING.team.label,
 ].join(', ');
-const DESCRIPTION = `AGI public alpha pricing for ${LISTED_PLANS}, and ${BILLING_PLAN_PRICING.enterprise.label}, with Local and BYOK choices kept separate from managed cloud.`;
+const DESCRIPTION = `AGI public alpha pricing for ${LISTED_PLANS}, and ${BILLING_PLAN_PRICING.enterprise.label}, with Local and BYOK choices kept separate from cloud.`;
 
 export const metadata = buildMetadata({
   title: TITLE,

@@ -168,7 +168,7 @@ export interface LiveVoiceSessionCallbacks {
   onToolApprovals?: (approvals: readonly LiveVoicePendingApproval[]) => void;
   /** A function tool's result, so the surface can show what the voice turn got back. */
   onToolResult?: (outcome: LiveVoiceToolOutcome) => void;
-  /** Sends a spoken goal to the chat as an AGI Work turn; false when it could not start. */
+  /** Sends a spoken goal to the chat as an Work turn; false when it could not start. */
   onStartWorkTask?: (goal: string) => boolean;
   onTranscript: (turn: LiveTranscriptTurn) => void;
   onUsage: (seconds: number) => void;
@@ -757,7 +757,7 @@ export class LiveVoiceSession {
     const goal = liveVoiceWorkTaskGoal(request.arguments);
     if (goal && this.callbacks.onStartWorkTask?.(goal)) {
       this.appendThinking(
-        `An AGI Work task started in the chat for: ${goal}. Its progress and result appear in the chat.`,
+        `An Work task started in the chat for: ${goal}. Its progress and result appear in the chat.`,
       );
       return parsed;
     }

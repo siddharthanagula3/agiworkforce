@@ -140,7 +140,10 @@ export async function getManagedUsageSummary(
     (weeklyCapMicrousd <= 0 || weekly.usedMicrousd < weeklyCapMicrousd);
 
   const sessionResetAt =
-    freeUsage?.sessionResetAt ?? rollingResetAt(session.oldestAt, ROLLING_SESSION_WINDOW_HOURS);
+    getPlanSessionUsageCapMicrousd(allowanceSubject) === null
+      ? null
+      : (freeUsage?.sessionResetAt ??
+        rollingResetAt(session.oldestAt, ROLLING_SESSION_WINDOW_HOURS));
   const weeklyResetAt =
     freeUsage?.weeklyResetAt ?? rollingResetAt(weekly.oldestAt, ROLLING_WEEKLY_WINDOW_HOURS);
   const flagshipWeeklyResetAt = rollingResetAt(
@@ -167,11 +170,14 @@ export async function getManagedUsageSummary(
           creditsFromMicrousd(freeUsage?.weeklyUsedMicrousd ?? weekly.usedMicrousd),
           weeklyResetAt,
         ),
-        five_hour: creditWindow(
-          upliftedCap(planAllowance.fiveHour, sessionUplift) ?? planAllowance.fiveHour,
-          creditsFromMicrousd(freeUsage?.fiveHourUsedMicrousd ?? session.usedMicrousd),
-          sessionResetAt,
-        ),
+        five_hour:
+          planAllowance.fiveHour === Infinity
+            ? null
+            : creditWindow(
+                upliftedCap(planAllowance.fiveHour, sessionUplift) ?? planAllowance.fiveHour,
+                creditsFromMicrousd(freeUsage?.fiveHourUsedMicrousd ?? session.usedMicrousd),
+                sessionResetAt,
+              ),
         flagship_weekly:
           planAllowance.flagshipWeekly === null
             ? null

@@ -122,6 +122,33 @@ async function drain(gen: AsyncGenerator<Uint8Array>): Promise<string> {
 }
 
 describe('provider stream shape', () => {
+  it('retains interrupted answer text and reported usage without retaining reasoning in the receipt', async () => {
+    const sink: ToolLoopStepSink = {
+      thinkingBlocks: [],
+      text: '',
+      usage: createObservedProviderUsage(),
+    };
+    const failure = new Error('interrupted stream');
+    const chunks = (async function* (): AsyncGenerator<StreamChunk> {
+      yield { type: 'thinking-delta', delta: 'private reasoning' };
+      yield { type: 'text-delta', delta: 'partial answer' };
+      yield { type: 'usage', inputTokens: 12, outputTokens: 7 };
+      throw failure;
+    })();
+    await expect(
+      new Response(chunksToOpenAiSse(chunks, ANTHROPIC_MODEL, 'openai-passthrough', sink)).text(),
+    ).rejects.toBe(failure);
+    expect(sink.text).toBe('partial answer');
+    expect(sink.usage).toMatchObject({
+      providerCalls: 1,
+      inputTokens: 12,
+      outputTokens: 7,
+      providerCallObservations: [expect.objectContaining({ tokenSource: 'provider_reported' })],
+    });
+    expect(JSON.stringify(sink.usage)).not.toContain('private reasoning');
+    expect(JSON.stringify(sink.usage)).not.toContain('partial answer');
+  });
+
   it('records metadata and counts without retaining response content', async () => {
     const sink: ToolLoopStepSink = { thinkingBlocks: [], text: '' };
     const chunks = fakeAdapterStream([

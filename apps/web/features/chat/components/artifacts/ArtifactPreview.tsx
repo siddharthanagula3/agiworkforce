@@ -265,7 +265,7 @@ interface ArtifactPreviewProps {
   projectLink?: ArtifactProjectLink;
   projectSave?: ArtifactProjectSave;
   onRequestEdits?: (prompt: string) => boolean;
-  /** The artifact came from a managed-cloud chat, so it may use AI and the owner's connected apps. */
+  /** The artifact came from a cloud chat, so it may use AI and the owner's connected apps. */
   liveRuntime?: boolean;
 }
 

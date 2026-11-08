@@ -320,11 +320,11 @@ export function WorkspaceUsageAnalytics() {
         <div style={cardStyle} className="flex flex-col items-center gap-2 px-5 py-10 text-center">
           <BarChart3 aria-hidden className="h-5 w-5" style={{ color: 'var(--text-3)' }} />
           <p className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>
-            No settled managed usage in this window
+            No settled Cloud usage in this window
           </p>
           <p className="max-w-sm text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
-            This view reports settled AGI-managed cloud usage. Local and BYOK activity is not
-            included in these managed cloud totals.
+            This view reports settled Cloud usage. Local and BYOK activity is not included in these
+            cloud totals.
           </p>
         </div>
       ) : (
@@ -337,7 +337,7 @@ export function WorkspaceUsageAnalytics() {
           />
           <BreakdownTable
             title="By product area"
-            caption="Chat, AGI Work, Deep Research, AGI Code and browser tasks. Turns settled before product areas were recorded show as not attributed."
+            caption="Chat, Work, Deep Research, Code and browser tasks. Turns settled before product areas were recorded show as not attributed."
             rows={usage.byWorkload}
             labelFor={usageWorkloadLabel}
           />

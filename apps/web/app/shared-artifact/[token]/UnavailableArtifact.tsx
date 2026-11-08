@@ -20,7 +20,7 @@ export function UnavailableArtifact() {
           href="/"
           className="inline-flex rounded-lg bg-primary px-6 py-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
-          Open AGI
+          Open chat
         </Link>
       </div>
     </main>

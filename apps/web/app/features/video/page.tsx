@@ -50,7 +50,7 @@ const VIDEO_BOUNDS = [
   'Prompts pass a safety check before a job is admitted.',
   'Video requests are rate limited per minute.',
   ...VIDEO_ALLOWANCES,
-  'A workspace owner or admin can turn off AGI-managed cloud compute, which includes video, for its members.',
+  'A workspace owner or admin can turn off Cloud compute, which includes video, for its members.',
 ] as const;
 
 export default function VideoFeaturePage() {

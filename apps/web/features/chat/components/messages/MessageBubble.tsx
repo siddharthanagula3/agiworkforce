@@ -455,7 +455,7 @@ function isGeneratedTextArtifact(file: GeneratedFileMetadataEntry): boolean {
 
 const LOCAL_BOUNDARY_LABEL = 'Local';
 const LOCAL_BOUNDARY_TITLE =
-  'Answered by a model running on this device. Nothing you wrote in this chat was sent to AGI Cloud or a provider, and it used none of your plan.';
+  'Answered by a model running on this device. Nothing you wrote in this chat was sent to Cloud or a provider, and it used none of your plan.';
 const SHARED_ATTACHMENTS_NOT_COPIED =
   'Attached in the shared chat and kept private to the person who shared it:';
 const LOCAL_PERSONAL_CONTEXT_MISSING =
@@ -551,7 +551,7 @@ interface Message {
     movedReason?: string;
     /** `X-AGI-Route-Lane` value naming the lane that served this turn. */
     routeLane?: string;
-    /** False when an AGI Work turn did not get the durable transport. */
+    /** False when an Work turn did not get the durable transport. */
     turnDetachable?: boolean;
     /** The model id the composer asked for, which Auto may have routed away from. */
     requestedModel?: string;
@@ -656,7 +656,7 @@ interface Message {
     interactiveCards?: InteractiveCard[];
     /** Deep Research run state (activity header + persistence). */
     research?: MessageResearchState;
-    /** AGI Work plan steps with their status, and the goal and approval state they belong to. */
+    /** Work plan steps with their status, and the goal and approval state they belong to. */
     agiWorkPlan?: AgiWorkPlanStep[];
     agiWorkPlanReview?: AgiWorkPlanReviewState;
     /**
@@ -697,7 +697,7 @@ interface MessageBubbleProps {
     decision: ResearchPlanDecision,
     options?: ResearchPlanOptions,
   ) => void;
-  /** Answer an AGI Work plan: start it as edited, cancel it, or retry from a stopped step. */
+  /** Answer an Work plan: start it as edited, cancel it, or retry from a stopped step. */
   onAgiWorkPlanDecision?: (messageId: string, decision: AgiWorkPlanDecision) => void;
   /** True while a research retry or approved start for THIS message is in flight. */
   isRetryingResearch?: boolean;
@@ -2202,7 +2202,7 @@ const MessageBubbleComponent = function MessageBubble({
   /**
    * A finished assistant turn that rendered NOTHING.
    *
-   * Observed live in AGI Work: the model ran for 26s, the activity trail said
+   * Observed live in Work: the model ran for 26s, the activity trail said
    * "Prepared the response → Done", `finishReason` was `stop`, and the turn
    * persisted the zero-width-space empty-content placeholder, so the transcript showed
    * a header, a model label and an action bar with no answer between them. The
@@ -2581,7 +2581,11 @@ const MessageBubbleComponent = function MessageBubble({
     >
       {/* Delete confirmation. Rendered outside the dropdown so closing the menu
           on select cannot unmount the dialog that the select just opened. */}
-      {isUser ? <h5 className="sr-only">You said:</h5> : <h6 className="sr-only">AGI said:</h6>}
+      {isUser ? (
+        <h5 className="sr-only">You said:</h5>
+      ) : (
+        <h6 className="sr-only">Assistant said:</h6>
+      )}
       {destructiveConfirmDialog}
       {/* Inner content row · constrained to max-w-3xl. No avatars: user messages
           read as a right-aligned bubble, assistant messages as a flat left column. */}
@@ -2813,7 +2817,7 @@ const MessageBubbleComponent = function MessageBubble({
             <InteractiveCardBlock cards={leadingInteractiveCards} assistantText={cleanedContent} />
           ) : null}
 
-          {!isUser && proseIsStreaming && cleanedContent.trim() ? (
+          {!isUser && proseIsStreaming && cleanedContent.trim() && !activityTimeline ? (
             <div className="mb-2 flex items-center">
               <AgiMark size={16} spinning />
             </div>

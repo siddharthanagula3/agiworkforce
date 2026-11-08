@@ -32,7 +32,7 @@ import { answerSupportQuestion } from '../answer/synthesize';
 import { retrieveSupportChunks, buildCitation } from '../retrieval/retrieve';
 import { renderSupportContext, sanitizeUntrustedText } from '../prompt/render-context';
 import { SUPPORT_SYSTEM_PROMPT } from '../prompt/system-prompt';
-import { classifyOutOfScope } from '../policy/out-of-scope';
+import { classifyOutOfScope, OUT_OF_SCOPE_COPY } from '../policy/out-of-scope';
 import { MAX_ANSWER_CHARS } from '../answer/schema';
 import { INJECTED_ATTACKER_URL, INJECTED_CHUNK } from './fixtures/injected-doc';
 import type { SupportAnswerInput } from '../types';
@@ -50,6 +50,26 @@ function ask(question: string, overrides: Partial<SupportAnswerInput> = {}): Sup
 describe('prompt injection resistance', () => {
   beforeEach(() => {
     armModelMocks();
+  });
+
+  it('rejects authored code even with a real source and otherwise grounded support text', async () => {
+    const question = 'how do I add my anthropic api key';
+    const source = retrieveSupportChunks(question);
+    expect(source.passedFloor).toBe(true);
+    queueModelJson({
+      answer:
+        'CLI Cloud requests need an account token rather than a saved provider API key. const total = 1;',
+      citedChunkIds: [source.chunks[0]!.chunk.id],
+      abstain: false,
+      abstainReason: '',
+      proposedActionId: null,
+    });
+    const result = await answerSupportQuestion(ask(question));
+    expect(result).toMatchObject({
+      kind: 'abstention',
+      reason: 'out_of_scope',
+      handoffOffered: false,
+    });
   });
 
   it('a billing question still refuses, even though the injected doc says billing is allowed', async () => {
@@ -368,7 +388,7 @@ describe('a plainly unrelated request', () => {
     expect(result.reason).toBe('out_of_scope');
     expect(result.handoffOffered).toBe(false);
     expect(result.route).toBeNull();
-    expect(result.text).toContain('I can only help with AGI:');
+    expect(result.text).toBe(OUT_OF_SCOPE_COPY);
     expect(modelMocks.resolveAutoRoute).not.toHaveBeenCalled();
     expect(modelMocks.buildServerProviderAdapter).not.toHaveBeenCalled();
     expect(admitModelCall).not.toHaveBeenCalled();

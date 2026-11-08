@@ -27,7 +27,7 @@ const PLAN_TABLE = {
   basic: { fiveHour: 10, weekly: 100, monthly: 400 },
   pro: { fiveHour: 50, weekly: 500, monthly: 2_000 },
   max: { fiveHour: 250, weekly: 2_500, monthly: 10_000 },
-  max_15x: { fiveHour: 1_000, weekly: 5_000, monthly: 20_000 },
+  max_15x: { fiveHour: 0, weekly: 5_000, monthly: 20_000 },
   team: { fiveHour: 50, weekly: 500, monthly: 2_000 },
 } as const;
 
@@ -78,6 +78,13 @@ describe('managed usage policy', () => {
     expect(getPlanWeeklyUsageBudgetCents('pro')).toBe(250);
     expect(getPlanSessionUsageBudgetCents('pro')).toBe(25);
     expect(getPlanFlagshipWeeklyUsageBudgetCents('pro')).toBe(75);
+  });
+
+  it('removes Ultra’s session cap while retaining weekly and monthly enforcement', () => {
+    expect(getPlanSessionUsageCapCents('max_15x')).toBeNull();
+    expect(getPlanWeeklyUsageCapCents('max_15x')).toBe(2_500);
+    expect(getPlanUsageBudgetCents('max_15x')).toBe(10_000);
+    expect(isPlanUsageUncapped('max_15x')).toBe(false);
   });
 
   it('fails unknown plan names closed', () => {

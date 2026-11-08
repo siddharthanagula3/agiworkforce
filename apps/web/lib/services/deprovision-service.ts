@@ -8,7 +8,7 @@ import { SESSION_STATUS_ACTIVE } from '@/lib/server/session-status';
 import { logger } from '@/lib/logger';
 import { readRecordedActiveWorkspaceId } from '@/lib/services/active-workspace-service';
 import { unshareConnector } from '@/lib/services/org-shared-connector-service';
-import { evictOrgSharedConnectorCaches } from '@/lib/user-connector-tools';
+import { evictOrgSharedConnectorCaches } from '@/lib/connectors/org-shared-catalog-cache';
 import {
   revokeMobileIntentTokens,
   revokeOrganizationMobileIntentTokens,

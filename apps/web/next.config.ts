@@ -6,7 +6,11 @@ import { withBotId } from 'botid/next/config';
 import { withWorkflow } from 'workflow/next';
 import { withSentryConfig } from '@sentry/nextjs/config';
 import { API_HOST_REWRITE_ROUTES } from './lib/api-host-route-contract';
-import { BOT_PROTECTION_MODES, resolveBotProtectionMode } from './lib/security/bot-protection';
+import {
+  BOT_PROTECTION_MODES,
+  BOT_PROTECTION_PUBLIC_ENV_VAR,
+  resolveBotProtectionMode,
+} from './lib/security/bot-protection';
 import { isPlatformHosted } from './lib/server/hosting';
 import { writeRouteIsolationCounts } from './lib/legal/route-isolation-counts';
 
@@ -50,11 +54,14 @@ const UNTRACED_TEST_FILES = [
   './playwright.config.ts',
 ];
 
-const botProtectionEnabled =
-  resolveBotProtectionMode(process.env, isPlatformHosted(process.env)) ===
-  BOT_PROTECTION_MODES.platform;
+const botProtectionMode = resolveBotProtectionMode(process.env, isPlatformHosted(process.env));
+const botProtectionEnabled = botProtectionMode === BOT_PROTECTION_MODES.platform;
 
 const nextConfig: NextConfig = {
+  env:
+    process.env.NODE_ENV === 'development'
+      ? { [BOT_PROTECTION_PUBLIC_ENV_VAR]: botProtectionMode }
+      : {},
   ...standaloneOutput,
   ...distDir,
   devIndicators: false,

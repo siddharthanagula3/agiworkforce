@@ -24,7 +24,7 @@ describe('managed usage limits follow the subscriber’s revenue', () => {
     expect(getPlanWeeklyUsageCredits(subject)).toBe(scaled.weeklyCredits);
     expect(getPlanFiveHourUsageCredits(subject)).toBe(scaled.fiveHourCredits);
     expect(getPlanSessionUsageCapMicrousd(subject)).toBe(
-      scaled.fiveHourCredits * MICROUSD_PER_CREDIT,
+      (scaled.fiveHourCredits ?? 0) * MICROUSD_PER_CREDIT,
     );
     expect(getPlanWeeklyUsageCapMicrousd(subject)).toBe(scaled.weeklyCredits * MICROUSD_PER_CREDIT);
   });

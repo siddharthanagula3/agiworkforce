@@ -2,11 +2,19 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { isAuthPath, isProductPath } from '@agiworkforce/types/product-routes';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { renderToStaticMarkup } from 'react-dom/server';
+
+vi.mock('@shared/components/layout/Header', () => ({ Header: () => null }));
+vi.mock('@/features/marketing/components/MarketingFooter', () => ({ MarketingFooter: () => null }));
 
 import { RELEASE_NOTES_METADATA } from '@/app/release-notes/release-notes-metadata';
 import sitemap from '@/app/sitemap';
 import { SITE_URL } from '@/lib/seo/site';
+import { documentationIndex } from '@/app/docs/doc-index';
+import { getHelpArticle } from '@/lib/support/help-articles';
+import { BLOG_POSTS } from '@/lib/blog-posts';
+import SitemapPage from '../page';
 
 const APP_DIR = join(__dirname, '..', '..');
 const WEB_DIR = join(APP_DIR, '..');
@@ -90,7 +98,9 @@ const publicPages = staticPages()
   .sort();
 const sitemapPageSource = readFileSync(join(APP_DIR, 'sitemap-page', PAGE_FILE), 'utf8');
 const htmlSitemap = new Set(
-  [...sitemapPageSource.matchAll(/href: '(\/[^']*)'/g)].flatMap((match) => match[1] ?? []),
+  [...renderToStaticMarkup(SitemapPage()).matchAll(/href="(\/[^"#]*)"/g)].flatMap(
+    (match) => match[1] ?? [],
+  ),
 );
 const unlisted = new Set(Object.values(UNLISTED_BY_DESIGN).flat());
 const xmlEntries = sitemap();
@@ -201,15 +211,40 @@ describe('sitemap.xml', () => {
     expect(noindex, `sitemap.xml lists noindex pages: ${noindex.join(', ')}`).toEqual([]);
   });
 
-  it('gives no last-modified date, because no page records when it last changed', () => {
+  it('lists public help articles with their owned update dates and no invented dates', () => {
+    const guides = documentationIndex().groups.flatMap((group) => group.entries);
+    expect(guides.length).toBeGreaterThan(40);
+    for (const guide of guides) {
+      const article = getHelpArticle(guide.docId);
+      expect(article, guide.href).not.toBeNull();
+      expect(xmlEntries.find((entry) => entry.url === `${SITE_URL}${guide.href}`)).toMatchObject({
+        lastModified: article?.updated,
+      });
+    }
     const dated = xmlEntries.filter((entry) => entry.lastModified !== undefined);
-    expect(dated.map((entry) => entry.url)).toEqual([]);
+    for (const post of BLOG_POSTS) {
+      expect(xmlEntries.find((entry) => entry.url === `${SITE_URL}${post.path}`)).toMatchObject({
+        lastModified: post.updated,
+      });
+    }
+    expect(dated).toHaveLength(guides.length + BLOG_POSTS.length);
+    expect(
+      dated.every(
+        (entry) =>
+          entry.url.startsWith(`${SITE_URL}/help/`) ||
+          BLOG_POSTS.some((post) => entry.url === `${SITE_URL}${post.path}`),
+      ),
+    ).toBe(true);
   });
 
-  it('keeps the blog index out of search while it carries no posts', () => {
-    expect(subdirectories(join(APP_DIR, BLOG_INDEX))).toEqual([]);
-    expect(asksNotToIndex(BLOG_INDEX)).toBe(true);
+  it('indexes the populated blog and links every guide through the rendered HTML sitemap', () => {
+    expect(BLOG_POSTS.length).toBeGreaterThan(0);
+    expect(asksNotToIndex(BLOG_INDEX)).toBe(false);
     expect(htmlSitemap.has(BLOG_INDEX)).toBe(true);
-    expect(xmlPaths.filter((path) => path.startsWith(BLOG_INDEX))).toEqual([]);
+    expect(xmlPaths.filter((path) => path.startsWith(BLOG_INDEX))).toEqual([
+      BLOG_INDEX,
+      ...BLOG_POSTS.map((post) => post.path),
+    ]);
+    for (const post of BLOG_POSTS) expect(htmlSitemap.has(post.path)).toBe(true);
   });
 });

@@ -17,7 +17,7 @@ import { BYOK_SURFACES, CLI_AVAILABILITY_NOTE, SURFACE_STATUS } from '@/lib/mark
 
 export const metadata = buildMetadata({
   title: 'Enterprise: identity, audit, and retention controls',
-  description: `The AGI CLI runs fully local or on your own provider keys, so no conversation content reaches our infrastructure. ${CLI_AVAILABILITY_NOTE} Identity, audit, and retention controls are administered by your own workspace owner, with build status stated honestly.`,
+  description: `The CLI runs fully local or on your own provider keys, so no conversation content reaches our infrastructure. ${CLI_AVAILABILITY_NOTE} Identity, audit, and retention controls are administered by your own workspace owner, with build status stated honestly.`,
   path: '/enterprise',
 });
 
@@ -72,7 +72,7 @@ export default function EnterprisePage() {
           eyebrow="AGI for enterprise"
           title="Identity, policy, audit and retention, run by your own workspace owner."
           em="run by your own workspace owner."
-          lede={`The CLI runs fully local or on your own provider keys, so that work does not reach AGI Cloud while the review runs. ${CLI_AVAILABILITY_NOTE} Identity, policy, audit and retention sit with your own owner in the workspace console.`}
+          lede={`The CLI runs fully local or on your own provider keys, so that work does not reach Cloud while the review runs. ${CLI_AVAILABILITY_NOTE} Identity, policy, audit and retention sit with your own owner in the workspace console.`}
           ctas={[
             { href: '/contact-sales', label: 'Contact sales' },
             { href: '/trust', label: 'Read the dated trust ledger', variant: 'secondary' },
@@ -127,17 +127,17 @@ export default function EnterprisePage() {
               flip
               body={
                 <p>
-                  Which routes the workspace allows, whether managed cloud may be used at all, and
-                  which client surfaces may sync. Your workspace owner sets a retention window
-                  between 1 and 3650 days and decides whether it is enforced; until enforcement is
-                  on, the window is recorded, nothing is deleted. On a plan that carries the
-                  enterprise controls entitlement that window is a contractual commitment, so the
-                  console reports it as required and not yet enforced until an owner turns
-                  enforcement on. Legal holds exempt any thread.
+                  Which routes the workspace allows, whether cloud may be used at all, and which
+                  client surfaces may sync. Your workspace owner sets a retention window between 1
+                  and 3650 days and decides whether it is enforced; until enforcement is on, the
+                  window is recorded, nothing is deleted. On a plan that carries the enterprise
+                  controls entitlement that window is a contractual commitment, so the console
+                  reports it as required and not yet enforced until an owner turns enforcement on.
+                  Legal holds exempt any thread.
                 </p>
               }
               points={[
-                'Local, BYOK and AGI Cloud allowed per workspace',
+                'Local, BYOK and Cloud allowed per workspace',
                 'Public share links and phone sync switch off server side',
                 'Retention enforced only when the owner turns it on',
                 'A plan-required window that is not enforced is reported as a gap, not as a control',
@@ -168,7 +168,7 @@ export default function EnterprisePage() {
               rows={[
                 {
                   label: 'BYOK posture',
-                  value: `The CLI can run fully local or on your own provider keys, so that work does not reach AGI Cloud. ${BYOK_SURFACES.availability} Desktop is managed-cloud only and is ${SURFACE_STATUS.desktop.toLowerCase()}. A member who moves a CLI thread to managed cloud does so through an explicit, reviewed handoff.`,
+                  value: `The CLI can run fully local or on your own provider keys, so that work does not reach Cloud. ${BYOK_SURFACES.availability} Desktop is cloud only and is ${SURFACE_STATUS.desktop.toLowerCase()}. A member who moves a CLI thread to cloud does so through an explicit, reviewed handoff.`,
                 },
                 {
                   label: 'Service levels',

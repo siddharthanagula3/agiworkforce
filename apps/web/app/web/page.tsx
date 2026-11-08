@@ -1,10 +1,10 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { billingPlanCapabilityPlanLabels } from '@agiworkforce/types';
+import { PRODUCT_NAMES, billingPlanCapabilityPlanLabels } from '@agiworkforce/types';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
-import { Bento, Eyebrow, Section, Stack } from '@/features/marketing/components/system';
+import { Bento, Eyebrow, Prose, Section, Stack } from '@/features/marketing/components/system';
 import { FinalCta } from '@/features/marketing/components/SurfaceSections';
 import {
   AgentRunWindow,
@@ -23,19 +23,20 @@ import {
 import { CLI_AVAILABILITY_NOTE, SURFACE_STATUS, surfaceCta } from '@/lib/marketing-constants';
 import { MANAGED_CLOUD_STATUS } from '@/lib/legal-constants';
 import { WEB_ENTRY_HREF } from '@/features/marketing/components/system/nav';
+import { SUBSCRIPTION_GUIDE } from '@/lib/blog-posts';
 
 export const metadata = buildMetadata({
-  title: 'AGI Chat: the workspace in your browser',
+  title: `${PRODUCT_NAMES.chat}: multi-model chat, projects and research`,
   description:
-    'Chat, projects, artifacts, memory, deep research and agents in the browser, with every admitted model behind one selector. Every reply names the model that answered in its actions menu.',
+    'Use eligible AI models, projects, editable memory and artifacts in your browser. Check research plans, usage limits and current application availability.',
   path: '/web',
 });
 
 const DESKTOP_CTA = surfaceCta('desktop');
 const RESEARCH_PLANS = billingPlanCapabilityPlanLabels('deep_research');
 const FINAL_CTA_BODY = [
-  `Free to try in the browser. AGI Chat uses managed cloud (${MANAGED_CLOUD_STATUS}).`,
-  'Desktop adds approved folders, computer use and scheduled work on the same managed-cloud account; Local and BYOK run in the CLI.',
+  `Free to try in the browser. Chat uses cloud (${MANAGED_CLOUD_STATUS}).`,
+  'Desktop adds approved folders, computer use and scheduled work on the same cloud account; Local and BYOK run in the CLI.',
   CLI_AVAILABILITY_NOTE,
 ]
   .filter(Boolean)
@@ -82,16 +83,29 @@ export default function WebSurfacePage() {
             <div className="agi-fl-hero-copy">
               <div className="agi-fl-web-bar">
                 <h1 id={IDS.hero} className="agi-fl-web-title">
-                  AGI Chat
+                  {PRODUCT_NAMES.chat}
                 </h1>
                 <span className="agi-fl-web-status">
                   <span className="agi-fl-web-status-dot" aria-hidden="true" />
                   {SURFACE_STATUS.web}
                 </span>
               </div>
+              <p className="agi-fl-lede">
+                Chat with eligible models from OpenAI, Anthropic, Google and more in one browser
+                workspace. Keep project instructions, editable memories and artifacts alongside your
+                conversations. Model access and research tools depend on your plan and available
+                routes.
+              </p>
+              <p className="agi-fl-web-caption">
+                Cloud · {MANAGED_CLOUD_STATUS}.{' '}
+                <Link href="/pricing" className="agi-ds-link">
+                  Compare plans and usage limits
+                </Link>
+                .
+              </p>
               <div className="agi-fl-cta-row">
                 <Link href={WEB_ENTRY_HREF} className="agi-fl-cta agi-fl-cta--primary">
-                  Try AGI Chat
+                  Try chat
                 </Link>
                 <Link href="/features" className="agi-fl-cta agi-fl-cta--secondary">
                   See every feature
@@ -160,7 +174,7 @@ export default function WebSurfacePage() {
               </h2>
             </div>
             <Bento
-              label="What AGI Chat includes"
+              label="What Chat includes"
               tiles={[
                 {
                   eyebrow: 'Artifacts',
@@ -200,6 +214,12 @@ export default function WebSurfacePage() {
                 },
               ]}
             />
+            <Prose>
+              Comparing this with your current subscriptions? Read{' '}
+              <Link href={SUBSCRIPTION_GUIDE.path}>{SUBSCRIPTION_GUIDE.title}</Link> for a cost
+              calculation, a practical test and the difference between model access and official app
+              subscriptions.
+            </Prose>
           </Stack>
         </Section>
 
@@ -208,7 +228,7 @@ export default function WebSurfacePage() {
           title="Open it in a tab, or take it with you."
           body={FINAL_CTA_BODY}
           ctas={[
-            { href: WEB_ENTRY_HREF, label: 'Try AGI Chat' },
+            { href: WEB_ENTRY_HREF, label: 'Try chat' },
             { href: DESKTOP_CTA.href, label: DESKTOP_CTA.label },
             { href: '/pricing', label: 'See pricing' },
           ]}

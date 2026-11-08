@@ -147,6 +147,28 @@ for (const canonical of [false, true]) {
   });
 }
 
+it('denies or always allows the tool from the public chat', () => {
+  const denied = render(
+    <ToolApprovalProvider value={resolve}>
+      <MessageBubble message={message(true, ['once', 'session', 'always'])} />
+    </ToolApprovalProvider>,
+  );
+  const deniedGroup = within(screen.getByRole('group', { name: /Decision for/ }));
+  expect(deniedGroup.getByRole('button', { name: 'Allow once' })).toBeEnabled();
+  fireEvent.click(deniedGroup.getByRole('button', { name: 'Deny' }));
+  expect(resolve).toHaveBeenCalledExactlyOnceWith('scope-message', toolCallId, 'rejected');
+  denied.unmount();
+  resolve.mockClear();
+
+  render(
+    <ToolApprovalProvider value={resolve}>
+      <MessageBubble message={message(true, ['once', 'session', 'always'])} />
+    </ToolApprovalProvider>,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Always allow' }));
+  expect(resolve).toHaveBeenCalledExactlyOnceWith('scope-message', toolCallId, 'approved-always');
+});
+
 it('keeps a decided server review disabled while canonical activity catches up', () => {
   const original = message(true, ['once', 'session']);
   render(

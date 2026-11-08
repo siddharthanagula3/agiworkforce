@@ -126,7 +126,7 @@ function recentConversationCommands(
       subtitle: formatRelativeTime(conversation.updatedAt),
       group: 'Recents',
       icon: conversation.workMode === 'agiwork' ? ListChecks : MessageSquare,
-      typeLabel: conversation.workMode === 'agiwork' ? 'AGI Work' : 'Chat',
+      typeLabel: conversation.workMode === 'agiwork' ? 'Work' : 'Chat',
       action: () => router.push(`/chat/${encodeURIComponent(conversation.id)}`),
     }));
 }

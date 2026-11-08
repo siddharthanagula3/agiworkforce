@@ -35,7 +35,7 @@ const SURFACE_GUIDES = [
     href: '/web',
     title: SURFACE_NAMES.web,
     status: SURFACE_STATUS.web,
-    body: 'Managed chat, projects, artifacts, memory, cited research, and account settings.',
+    body: 'Cloud chat, projects, artifacts, memory, cited research, and account settings.',
   },
   {
     href: '/mobile',
@@ -47,13 +47,13 @@ const SURFACE_GUIDES = [
     href: '/desktop',
     title: SURFACE_NAMES.desktop,
     status: SURFACE_STATUS.desktop,
-    body: 'The macOS app for Managed Cloud, with approved folders, computer use, Quick Ask, and dictation.',
+    body: 'The macOS app for Cloud, with approved folders, computer use, Quick Ask, and dictation.',
   },
   {
     href: '/chrome-extension',
     title: SURFACE_NAMES.chrome,
     status: SURFACE_STATUS.chrome,
-    body: 'The browser side panel for page context and approvals. Answers come back from AGI Managed Cloud; pairing Desktop is an optional local road for approved handoffs.',
+    body: 'The browser side panel for page context and approvals. Answers come back from Cloud; pairing Desktop is an optional local road for approved handoffs.',
   },
   {
     href: '/cli',

@@ -5,6 +5,7 @@ import { MarketingFooter } from '@/features/marketing/components/MarketingFooter
 import { Ledger, Prose, Section, Stack } from '@/features/marketing/components/system';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/Shared';
 import { RELEASES, releasePath } from '@/lib/changelog-entries';
+import { BLOG_DESCRIPTION, BLOG_POSTS } from '@/lib/blog-posts';
 import '@/features/marketing/components/pages/company/company.css';
 
 const RELEASE_NOTES_PATH = '/release-notes';
@@ -12,11 +13,10 @@ const LATEST_ANNOUNCEMENT_COUNT = 3;
 const LATEST_ANNOUNCEMENTS = RELEASES.slice(0, LATEST_ANNOUNCEMENT_COUNT);
 
 export const metadata = buildMetadata({
-  title: 'Writing: no posts yet, announcements are in the release notes',
-  description:
-    'AGI has not published a blog post. Product announcements are dated and published in the release notes, each on its own page.',
+  title: 'Guides to AI models, plans and workflows',
+  description: BLOG_DESCRIPTION,
   path: '/blog',
-  robots: { index: false, follow: true },
+  robots: { index: true, follow: true },
 });
 
 export default function BlogPage() {
@@ -27,10 +27,28 @@ export default function BlogPage() {
         <PageHero
           id="agi-blog-title"
           eyebrow="Writing"
-          title="No posts yet."
-          lede="We have not published a post here. Product announcements go in the release notes, where each one is dated and has its own page."
+          title="Choosing an AI workspace."
+          lede="Check what a plan includes, which models and tools fit your work, and when keeping an official app makes sense."
           ctas={[{ href: RELEASE_NOTES_PATH, label: 'Read the release notes' }]}
         />
+
+        <Section id="guides" labelledBy="agi-blog-guides-title" rule>
+          <Stack gap="loose">
+            <h2 className="agi-ds-h2" id="agi-blog-guides-title">
+              Buying guides
+            </h2>
+            {BLOG_POSTS.map((post) => (
+              <Stack key={post.path}>
+                <h3 className="agi-ds-h3">
+                  <Link href={post.path} className="agi-ds-link">
+                    {post.title}
+                  </Link>
+                </h3>
+                <Prose>{post.summary}</Prose>
+              </Stack>
+            ))}
+          </Stack>
+        </Section>
 
         <Section id="announcements" labelledBy="agi-blog-announcements-title" rule>
           <Stack gap="loose">

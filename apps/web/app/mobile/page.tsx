@@ -14,21 +14,21 @@ import { LAUNCH, NOTIFY_CTA, SURFACE_STATUS } from '../../lib/marketing-constant
 import { OG_IMAGE, absoluteUrl } from '@/lib/seo/site';
 
 export const metadata: Metadata = {
-  title: 'AGI Mobile Preview | Coming soon to iPhone & Android',
+  title: 'Mobile Preview | Coming soon to iPhone & Android',
   description:
-    'AGI Mobile is coming soon. The planned app is designed for on-device Local chat by default, with explicit managed-cloud continuation.',
+    'Mobile is coming soon. The planned app is designed for on-device Local chat by default, with explicit cloud continuation.',
   alternates: { canonical: absoluteUrl('/mobile') },
   openGraph: {
-    title: 'AGI Mobile Preview | Coming soon to iPhone & Android',
+    title: 'Mobile Preview | Coming soon to iPhone & Android',
     description:
-      'AGI Mobile is not published. Preview the planned on-device Local experience and explicit cloud boundary.',
+      'Mobile is not published. Preview the planned on-device Local experience and explicit cloud boundary.',
     type: 'website',
     url: absoluteUrl('/mobile'),
     images: [{ url: OG_IMAGE.url, width: 1200, height: 630, alt: 'AGI app preview' }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'AGI Mobile Preview | Coming soon to iPhone & Android',
+    title: 'Mobile Preview | Coming soon to iPhone & Android',
     description: `The app is not published. Local Mode is the planned default. ${LAUNCH.publicLabel}.`,
     images: [OG_IMAGE.url],
   },
@@ -47,7 +47,7 @@ const LOCAL_STORIES = [
     ],
     platforms: 'iPhone · Android',
     status: 'Planned: Local by default',
-    frame: { title: 'AGI Mobile', badge: 'Local' },
+    frame: { title: 'Mobile', badge: 'Local' },
   },
   {
     name: 'Your data stays on the phone',
@@ -61,7 +61,7 @@ const LOCAL_STORIES = [
     ],
     platforms: 'iPhone · Android',
     status: 'Planned: on-device by default',
-    frame: { title: 'AGI Mobile', badge: 'On-device' },
+    frame: { title: 'Mobile', badge: 'On-device' },
   },
   {
     name: 'A complete workspace, not a companion app',
@@ -75,7 +75,7 @@ const LOCAL_STORIES = [
     ],
     platforms: 'iPhone · Android',
     status: 'Planned Local + Cloud',
-    frame: { title: 'AGI Mobile', badge: 'Local' },
+    frame: { title: 'Mobile', badge: 'Local' },
   },
 ] as const;
 
@@ -89,10 +89,10 @@ export default function MobilePage() {
           <div className="agi-fl-hero-split">
             <div className="agi-fl-hero-copy">
               <p className="agi-fl-eyebrow">
-                AGI Mobile · iPhone &amp; Android · {SURFACE_STATUS.mobile}
+                Mobile · iPhone &amp; Android · {SURFACE_STATUS.mobile}
               </p>
               <h1 id="agi-mobile-hero-title" className="sr-only">
-                AGI Mobile
+                Mobile
               </h1>
               <div className="agi-fl-cta-row">
                 <Link href={NOTIFY_CTA.href} className="agi-fl-cta agi-fl-cta--primary">
@@ -106,7 +106,7 @@ export default function MobilePage() {
               </div>
             </div>
             <div className="agi-fl-hero-visual agi-fl-hero-frame--main" aria-hidden="true">
-              <ProductFrame variant="phone" title="AGI Mobile" badge="Local" />
+              <ProductFrame variant="phone" title="Mobile" badge="Local" />
             </div>
           </div>
         </section>
@@ -153,7 +153,7 @@ export default function MobilePage() {
         <TrustTriptych
           eyebrow="Trust boundary"
           title="Two modes. One hard line between them."
-          lede="The planned AGI Mobile design keeps Local and AGI Cloud separate. The app is not published, and these are previewed boundaries rather than current availability."
+          lede="The planned Mobile design keeps Local and Cloud separate. The app is not published, and these are previewed boundaries rather than current availability."
           cards={[
             {
               mode: 'Local',
@@ -182,9 +182,9 @@ export default function MobilePage() {
               cta: { href: '/mobile/legal', label: 'Read the Mobile Privacy Policy' },
             },
             {
-              mode: 'AGI Cloud',
+              mode: 'Cloud',
               glyph: '●',
-              title: 'Managed compute, public alpha.',
+              title: 'Cloud compute, public alpha.',
               body: 'Hosted capacity, open by default, with controls keeping pace.',
               points: [
                 'Public alpha: sign in and start, no waitlist',
@@ -243,7 +243,7 @@ export default function MobilePage() {
         <FinalCta
           eyebrow={SURFACE_STATUS.mobile}
           title="Get notified when Mobile ships."
-          body="AGI Mobile is not published. The planned iPhone and Android app uses Local Mode by default and offers an explicit managed-cloud continuation."
+          body="Mobile is not published. The planned iPhone and Android app uses Local Mode by default and offers an explicit cloud continuation."
           ctas={[NOTIFY_CTA, { label: 'Discuss Enterprise access', waitlist: true }]}
           stamp={`iPhone & Android · ${LAUNCH.shortLabel}`}
         />

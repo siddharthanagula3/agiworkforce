@@ -17,7 +17,7 @@ export const CONSENT_PURPOSES: readonly ConsentPurpose[] = [
     id: 'platform_availability_waitlist',
     label: 'Store my email address so we can tell you when this platform ships.',
     description:
-      'Your address is stored so we can email you once AGI Mobile, AGI in Chrome or AGI in VS Code has a verified installer to download. It is used for that and nothing else, and is unrelated to the Enterprise contract-access contact list.',
+      'Your address is stored so we can email you once Mobile, the Chrome extension or the VS Code extension has a verified installer to download. It is used for that and nothing else, and is unrelated to the Enterprise contract-access contact list.',
     necessaryForRequest: true,
   },
   {
