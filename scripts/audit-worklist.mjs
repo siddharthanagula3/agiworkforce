@@ -8,6 +8,7 @@
 // its cells to "done" (with evidence) in audit/ledger/ecosystem-capability-ledger.jsonl
 // and rerun; the item leaves its file, and a file with nothing left is deleted.
 import fs from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import process from 'node:process';
 
@@ -243,9 +244,23 @@ function renderWaves(items, waveSections, files) {
   const count = (rollup) => items.filter((item) => item.rollup === rollup).length;
   const unverifiedCells = items.reduce((n, item) => n + cellsWith(item, 'unverified').length, 0);
   const blockers = fs.existsSync(path.join(root, 'audit/blockers'))
-    ? fs
-        .readdirSync(path.join(root, 'audit/blockers'))
-        .filter((f) => f.endsWith('.md'))
+    ? [
+        ...new Set(
+          execFileSync(
+            'git',
+            ['ls-files', '-co', '--exclude-standard', '-z', '--', 'audit/blockers'],
+            {
+              cwd: root,
+              encoding: 'utf8',
+            },
+          ).split('\0'),
+        ),
+      ]
+        .filter(
+          (file) =>
+            /^audit\/blockers\/[^/]+\.md$/.test(file) && fs.existsSync(path.join(root, file)),
+        )
+        .map((file) => path.basename(file))
         .sort()
     : [];
   const lines = [

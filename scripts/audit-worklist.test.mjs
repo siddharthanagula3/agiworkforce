@@ -89,3 +89,74 @@ for (const value of [
     }
   });
 }
+
+function withBlockerFixture(run) {
+  const root = mkdtempSync(join(tmpdir(), 'audit-worklist-blockers-'));
+  try {
+    assert.equal(spawnSync('git', ['init', '--quiet', '-b', 'main'], { cwd: root }).status, 0);
+    assert.equal(
+      spawnSync('git', ['config', 'core.excludesFile', join(root, '.git/info/exclude')], {
+        cwd: root,
+      }).status,
+      0,
+    );
+    mkdirSync(join(root, 'audit/ledger'), { recursive: true });
+    mkdirSync(join(root, 'audit/blockers'), { recursive: true });
+    writeFileSync(join(root, 'audit/ledger/ecosystem-capability-ledger.jsonl'), '');
+    writeFileSync(
+      join(root, 'audit/ledger/ecosystem-capability-ledger.meta.json'),
+      JSON.stringify({ auditedCommit: 'fixture', sections: {} }),
+    );
+    run(root);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
+function renderBlockers(root, check = false) {
+  return spawnSync(process.execPath, [script, ...(check ? ['--check'] : [])], {
+    cwd: root,
+    encoding: 'utf8',
+  });
+}
+
+test('ignored local blockers do not change the generated repository worklist', () => {
+  withBlockerFixture((root) => {
+    writeFileSync(join(root, '.gitignore'), 'audit/blockers/private-*.md\n');
+    writeFileSync(join(root, 'audit/blockers/private-fixture.md'), 'Local notes\n');
+    writeFileSync(join(root, 'audit/blockers/visible-fixture.md'), 'Open defect\n');
+    const result = renderBlockers(root);
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    const waves = readFileSync(join(root, 'audit/plan/waves.md'), 'utf8');
+    assert.match(waves, /visible-fixture\.md/);
+    assert.doesNotMatch(waves, /private-fixture\.md/);
+    assert.equal(
+      readFileSync(join(root, 'audit/blockers/private-fixture.md'), 'utf8'),
+      'Local notes\n',
+    );
+  });
+});
+
+test('a new untracked repository blocker still makes the worklist check fail', () => {
+  withBlockerFixture((root) => {
+    assert.equal(renderBlockers(root).status, 0);
+    writeFileSync(join(root, 'audit/blockers/visible-fixture.md'), 'Open defect\n');
+    const result = renderBlockers(root, true);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /waves\.md is stale/);
+  });
+});
+
+test('a tracked blocker remains canonical after a local ignore rule is added', () => {
+  withBlockerFixture((root) => {
+    writeFileSync(join(root, 'audit/blockers/visible-fixture.md'), 'Open defect\n');
+    assert.equal(
+      spawnSync('git', ['add', 'audit/blockers/visible-fixture.md'], { cwd: root }).status,
+      0,
+    );
+    writeFileSync(join(root, '.gitignore'), 'audit/blockers/*.md\n');
+    const result = renderBlockers(root);
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.match(readFileSync(join(root, 'audit/plan/waves.md'), 'utf8'), /visible-fixture\.md/);
+  });
+});
