@@ -14,6 +14,7 @@ import {
   type ManagedCloudProjectKnowledgeFile,
 } from './project-knowledge';
 import { sha256HexOfBlob } from './file-digest';
+import { managedUploadRequestOptions } from './managed-upload';
 import {
   createManagedCloudResumableUploadClient,
   isResumableUploadUnavailable,
@@ -214,7 +215,7 @@ export function createManagedCloudProjectKnowledgeClient(
 
       const uploadResponse = await uploadFetchImpl(presign.uploadUrl, {
         method: presign.uploadMethod,
-        headers: presign.uploadHeaders,
+        ...(await managedUploadRequestOptions(presign.uploadUrl, presign.uploadHeaders, config)),
         body: file,
       });
       if (!uploadResponse.ok) {

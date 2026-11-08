@@ -144,7 +144,7 @@ describe('managed usage public contract', () => {
 
     expect(parsed.credits?.monthly.used).toBe(1.25);
     expect(parsed.credits?.weekly.allowance).toBe(3.75);
-    expect(parsed.credits?.five_hour.reset_at).toBe('2026-09-10T00:00:00.000Z');
+    expect(parsed.credits?.five_hour?.reset_at).toBe('2026-09-10T00:00:00.000Z');
     expect(parsed.credits?.flagship_weekly).toBeNull();
     expect(parsed.credits?.purchased.remaining).toBeNull();
   });

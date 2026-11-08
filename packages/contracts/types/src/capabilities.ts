@@ -297,7 +297,7 @@ export const DISCOVERABLE_SURFACE_CAPABILITIES: Readonly<
   Record<DiscoverableSurfaceCapability, SurfaceCapabilityAvailabilityDescriptor>
 > = Object.freeze({
   'managed-plugins': {
-    label: 'Managed Cloud plugins',
+    label: 'Cloud plugins',
     description: 'Install account-scoped tools from the Cloud directory.',
     availability: Object.freeze({
       web: isCapabilityEnabled('web', 'canUsePlugins'),

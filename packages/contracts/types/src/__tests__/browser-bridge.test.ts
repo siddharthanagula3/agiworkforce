@@ -28,6 +28,7 @@ describe('browser bridge contract', () => {
       'browser_click',
       'browser_type',
       'browser_navigate',
+      'browser_stop',
       'browser_open_tab',
       'browser_screenshot',
       'browser_console',

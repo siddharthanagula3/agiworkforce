@@ -51,11 +51,16 @@ describe('plan economics', () => {
     expect(managedUsageLimitsForCatalogVersion(1)).toEqual(MANAGED_USAGE_LIMITS);
   });
 
-  it('sets the 5-hour window to 10% of the week, and 20% on Max 20x', () => {
+  it('keeps five-hour limits on the other paid plans and removes only Ultra’s session cap', () => {
     for (const tier of pricedTiers) {
       const limit = MANAGED_USAGE_LIMITS[tier];
-      const share = tier === 'max_15x' ? 0.2 : 0.1;
-      expect(limit.fiveHourCredits).toBe(Math.ceil(limit.weeklyCredits * share));
+      if (tier === 'max_15x') {
+        expect(limit.fiveHourCredits).toBeNull();
+        expect(limit.weeklyCredits).toBe(5_000);
+        expect(limit.monthlyCredits).toBe(20_000);
+      } else {
+        expect(limit.fiveHourCredits).toBe(Math.ceil(limit.weeklyCredits * 0.1));
+      }
     }
     const free = MANAGED_USAGE_LIMITS.free;
     expect(free.fiveHourCredits).toBe(Math.ceil(free.weeklyCredits * 0.1));
@@ -64,7 +69,8 @@ describe('plan economics', () => {
   it('keeps each plan window no larger than the one that contains it', () => {
     for (const limit of Object.values(MANAGED_USAGE_LIMITS)) {
       if (limit.unlimited) continue;
-      expect(limit.fiveHourCredits).toBeLessThanOrEqual(limit.weeklyCredits);
+      if (limit.fiveHourCredits !== null)
+        expect(limit.fiveHourCredits).toBeLessThanOrEqual(limit.weeklyCredits);
       expect(limit.weeklyCredits).toBeLessThanOrEqual(limit.monthlyCredits);
     }
   });
@@ -76,10 +82,10 @@ describe('plan comparison copy', () => {
     expect(managedUsageComparisonLabel('max', 'pro', 'Pro')).toBe('5x more usage than Pro');
   });
 
-  it('states Max 20x per session and per week when the windows differ', () => {
+  it('states Ultra’s weekly multiple without inventing a session allowance', () => {
     expect(managedUsageMultiplier('max_15x', 'pro')).toBeNull();
     expect(managedUsageComparisonLabel('max_15x', 'pro', 'Pro')).toBe(
-      '20x more usage per session and 10x more weekly usage than Pro',
+      '10x more weekly usage than Pro',
     );
   });
 
@@ -87,12 +93,9 @@ describe('plan comparison copy', () => {
     expect(managedUsageComparisonLines('free')).toEqual([]);
     expect(managedUsageComparisonLines('basic')).toEqual(['5x more usage per session than Free']);
     expect(managedUsageComparisonLines('pro')).toEqual(['5x more usage than Basic']);
-    expect(managedUsageComparisonLines('max')).toEqual(['5x more usage than Pro']);
-    expect(managedUsageComparisonLines('max_15x')).toEqual([
-      '20x more usage per session than Pro',
-      '10x more weekly usage than Pro',
-    ]);
-    expect(managedUsageComparisonLines('team')).toEqual(['Same usage as Pro for every seat']);
+    expect(managedUsageComparisonLines('max')).toEqual(['5x more usage than Premium']);
+    expect(managedUsageComparisonLines('max_15x')).toEqual(['10x more weekly usage than Premium']);
+    expect(managedUsageComparisonLines('team')).toEqual(['Same usage as Premium for every seat']);
     expect(managedUsageComparisonLines('enterprise')).toEqual([]);
   });
 
@@ -104,7 +107,10 @@ describe('plan comparison copy', () => {
       expect(comparison, tier).not.toBeNull();
       const subject = MANAGED_USAGE_LIMITS[tier];
       const against = MANAGED_USAGE_LIMITS[baseline];
-      const session = subject.fiveHourCredits / against.fiveHourCredits;
+      const session =
+        subject.fiveHourCredits === null || against.fiveHourCredits === null
+          ? null
+          : subject.fiveHourCredits / against.fiveHourCredits;
       const weekly = subject.weeklyCredits / against.weeklyCredits;
       const monthly = subject.monthlyCredits / against.monthlyCredits;
       if (comparison!.factor !== null) {

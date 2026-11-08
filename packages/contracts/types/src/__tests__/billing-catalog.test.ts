@@ -56,10 +56,10 @@ import {
 } from '../billing-catalog';
 
 describe('billing catalog', () => {
-  it('publishes Max 20x while preserving its stored identifier and existing economics', () => {
+  it('publishes Ultra while preserving its stored identifier and existing economics', () => {
     expect(getBillingPlanPricing('max_15x')).toMatchObject({
       id: 'max_15x',
-      label: 'Max 20x',
+      label: 'Ultra',
       monthlyPriceUsd: 200,
       monthlyPriceInr: 19999,
     });
@@ -238,7 +238,7 @@ describe('billing catalog', () => {
   });
 
   describe('server-enforced capability entitlements', () => {
-    it('keeps normal chat tools available on Free while paid work surfaces start at Pro', () => {
+    it('keeps normal chat tools available on Free while paid work surfaces start at Premium', () => {
       expect(canUseBillingPlanCapability('free', 'chat_tools')).toBe(true);
       expect(canUseBillingPlanCapability('basic', 'agi_work')).toBe(false);
       expect(canUseBillingPlanCapability('pro', 'agi_work')).toBe(true);
@@ -246,7 +246,7 @@ describe('billing catalog', () => {
       expect(canUseBillingPlanCapability('pro', 'managed_api')).toBe(true);
     });
 
-    it('offers images from Pro and reserves video for Max 20x and Enterprise', () => {
+    it('offers images from Premium and reserves video for Ultra and Enterprise', () => {
       expect(canUseBillingPlanCapability('pro', 'image_generation')).toBe(true);
       expect(canUseBillingPlanCapability('pro', 'video_generation')).toBe(false);
       expect(canUseBillingPlanCapability('max', 'video_generation')).toBe(false);
@@ -256,10 +256,10 @@ describe('billing catalog', () => {
     });
 
     it('names the plans that include a capability with their customer-facing labels', () => {
-      expect(billingPlanCapabilityPlanLabels('video_generation')).toBe('Max 20x and Enterprise');
+      expect(billingPlanCapabilityPlanLabels('video_generation')).toBe('Ultra and Enterprise');
       expect(billingPlanCapabilityPlanLabels('enterprise_controls')).toBe('Enterprise');
       expect(billingPlanCapabilityPlanLabels('agi_work')).toBe(
-        'Pro, Max 5x, Max 20x, Team, and Enterprise',
+        'Premium, Max, Ultra, Team, and Enterprise',
       );
     });
 
@@ -274,7 +274,7 @@ describe('billing catalog', () => {
       expect(canUseBillingPlanCapability('free', 'skills')).toBe(true);
       expect(BILLING_PLAN_CAPABILITY_TIERS.enterprise_controls).toEqual(['enterprise']);
       expect(billingPlanCapabilityUpgradeMessage('remote_control')).toBe(
-        'Your plan does not include Remote Control. Upgrade to Basic, Pro, Max 5x, Max 20x, Team, or Enterprise to use it.',
+        'Your plan does not include Remote Control. Upgrade to Basic, Premium, Max, Ultra, Team, or Enterprise to use it.',
       );
     });
 
@@ -328,7 +328,8 @@ describe('billing catalog', () => {
       const tools = tiers.map((tier) => getPlanMaxConnectorTools(tier) ?? Number.MAX_SAFE_INTEGER);
       const tasks = tiers.map((tier) => getPlanMaxScheduledTasks(tier) ?? Number.MAX_SAFE_INTEGER);
 
-      for (const series of [turns, tools, tasks]) {
+      expect(turns).toEqual([1, 1, 3, 5, 10]);
+      for (const series of [tools, tasks]) {
         for (let index = 1; index < series.length; index += 1) {
           expect(series[index]!).toBeGreaterThan(series[index - 1]!);
         }

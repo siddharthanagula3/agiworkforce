@@ -11,7 +11,7 @@ import { BILLING_PLAN_CATALOG_VERSION } from './billing-plan-catalog';
 export interface ManagedUsageLimit {
   monthlyCredits: number;
   weeklyCredits: number;
-  fiveHourCredits: number;
+  fiveHourCredits: number | null;
   dailyCredits: number;
   unlimited: boolean;
 }
@@ -63,7 +63,7 @@ export const MANAGED_USAGE_LIMITS: Readonly<Record<BillingPlanTier, ManagedUsage
     max_15x: {
       monthlyCredits: 20_000,
       weeklyCredits: 5_000,
-      fiveHourCredits: 1_000,
+      fiveHourCredits: null,
       dailyCredits: 0,
       unlimited: false,
     },
@@ -127,11 +127,19 @@ function managedUsageRatios(
   const subject = MANAGED_USAGE_LIMITS[tier];
   const against = MANAGED_USAGE_LIMITS[baseline];
   if (!subject || !against || subject.unlimited || against.unlimited) return null;
-  if (against.monthlyCredits <= 0 || against.weeklyCredits <= 0 || against.fiveHourCredits <= 0) {
+  if (
+    against.monthlyCredits <= 0 ||
+    against.weeklyCredits <= 0 ||
+    against.fiveHourCredits === null ||
+    against.fiveHourCredits <= 0
+  ) {
     return null;
   }
   return {
-    fiveHour: subject.fiveHourCredits / against.fiveHourCredits,
+    fiveHour:
+      subject.fiveHourCredits === null
+        ? Infinity
+        : subject.fiveHourCredits / against.fiveHourCredits,
     weekly: subject.weeklyCredits / against.weeklyCredits,
     monthly: subject.monthlyCredits / against.monthlyCredits,
   };
@@ -276,7 +284,7 @@ export function planCreditAllowanceFromLimit(
   return {
     monthly: limit.monthlyCredits,
     weekly: limit.weeklyCredits,
-    fiveHour: limit.fiveHourCredits,
+    fiveHour: limit.fiveHourCredits ?? Infinity,
     flagshipWeekly: hasFlagshipWeeklyAllowance(tier)
       ? limit.weeklyCredits * FLAGSHIP_OF_WEEKLY_BUDGET_RATIO
       : null,

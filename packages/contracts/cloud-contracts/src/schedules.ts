@@ -205,6 +205,18 @@ export const ManagedCloudScheduleTaskSchema = z.object({
 });
 export type ManagedCloudScheduleTask = z.infer<typeof ManagedCloudScheduleTaskSchema>;
 
+export function getScheduleActionAvailability(
+  task: Pick<ManagedCloudScheduleTask, 'status' | 'isEnabled' | 'actionType'>,
+): { canRun: boolean; canEdit: boolean; canToggle: boolean } {
+  const terminal = task.status === 'completed' || task.status === 'expired';
+  const supported = task.actionType === 'agent';
+  return {
+    canRun: supported && task.isEnabled && task.status === 'active',
+    canEdit: supported && !terminal,
+    canToggle: !terminal && (task.isEnabled || supported),
+  };
+}
+
 export const MANAGED_CLOUD_SCHEDULE_APPROVAL_MAX_TOOL_CALLS = 32;
 
 export const ManagedCloudScheduleRunApprovalToolCallSchema = z.object({

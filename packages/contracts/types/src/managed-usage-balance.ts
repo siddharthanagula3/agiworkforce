@@ -60,7 +60,8 @@ export interface ManagedUsagePurchaseExpiry {
 export interface ManagedUsageCredits {
   monthly: ManagedUsageCreditWindow;
   weekly: ManagedUsageCreditWindow;
-  five_hour: ManagedUsageCreditWindow;
+  /** Null means this plan has no five-hour cap, not a zero allowance. */
+  five_hour: ManagedUsageCreditWindow | null;
   flagship_weekly: ManagedUsageCreditWindow | null;
   purchased: ManagedUsagePurchasedCredits;
   bonus?: ManagedUsageBonusCredits | null;
@@ -200,7 +201,10 @@ function readManagedUsageCredits(value: unknown): ManagedUsageCredits {
   return {
     monthly: readCreditWindow(record['monthly'], 'credits.monthly'),
     weekly: readCreditWindow(record['weekly'], 'credits.weekly'),
-    five_hour: readCreditWindow(record['five_hour'], 'credits.five_hour'),
+    five_hour:
+      record['five_hour'] === null
+        ? null
+        : readCreditWindow(record['five_hour'], 'credits.five_hour'),
     flagship_weekly:
       record['flagship_weekly'] === null || record['flagship_weekly'] === undefined
         ? null

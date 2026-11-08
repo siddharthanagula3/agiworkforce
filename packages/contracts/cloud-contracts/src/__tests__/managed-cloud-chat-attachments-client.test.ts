@@ -39,6 +39,85 @@ describe('createManagedCloudChatAttachmentsClient', () => {
     expect(uploadFetchImpl).toHaveBeenCalledOnce();
   });
 
+  it('authenticates a configured API relay PUT using fresh account headers', async () => {
+    let credential = 0;
+    const getHeaders = vi.fn(async () => ({
+      Authorization: `Bearer account-${++credential}`,
+      'Content-Type': 'application/json',
+    }));
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({
+          storageKey: 'owned/fixture.txt',
+          uploadUrl: 'http://localhost:3000/api/uploads/chat-attachment/put?token=fixture',
+          uploadMethod: 'PUT',
+          uploadHeaders: { 'Content-Type': 'text/plain' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          attachment: {
+            id: '00000000-0000-4000-8000-000000000001',
+            name: 'fixture.txt',
+            mimeType: 'text/plain',
+            byteCount: 1,
+            type: 'file',
+            url: '/api/files/00000000-0000-4000-8000-000000000001',
+          },
+        }),
+      );
+    const uploadFetchImpl = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) =>
+      new Headers(init?.headers).get('Authorization') === 'Bearer account-2'
+        ? Response.json({ success: true })
+        : Response.json({ error: 'Unauthorized' }, { status: 401 }),
+    );
+    const client = createManagedCloudChatAttachmentsClient({
+      baseUrl: 'http://localhost:3000',
+      getHeaders,
+      fetchImpl,
+      uploadFetchImpl,
+    });
+    await expect(
+      client.upload([new File(['x'], 'fixture.txt', { type: 'text/plain' })]),
+    ).resolves.toHaveLength(1);
+    const init = uploadFetchImpl.mock.calls[0]![1]!;
+    expect(init).toMatchObject({ credentials: 'include', redirect: 'error' });
+    expect(new Headers(init.headers).get('Content-Type')).toBe('text/plain');
+    expect(getHeaders).toHaveBeenCalledTimes(3);
+  });
+
+  it('stops before the PUT if cancellation arrives while refreshing relay credentials', async () => {
+    const controller = new AbortController();
+    let calls = 0;
+    const getHeaders = vi.fn(() => {
+      if (++calls === 2) controller.abort();
+      return { Authorization: 'Bearer account' };
+    });
+    const fetchImpl = vi.fn(async () =>
+      Response.json({
+        storageKey: 'owned/fixture.txt',
+        uploadUrl: 'http://localhost:3000/api/uploads/chat-attachment/put?token=fixture',
+        uploadMethod: 'PUT',
+        uploadHeaders: { 'Content-Type': 'text/plain' },
+      }),
+    );
+    const uploadFetchImpl = vi.fn();
+    const client = createManagedCloudChatAttachmentsClient({
+      baseUrl: 'http://localhost:3000',
+      getHeaders,
+      fetchImpl,
+      uploadFetchImpl,
+    });
+    await expect(
+      client.upload([new File(['x'], 'fixture.txt', { type: 'text/plain' })], {
+        signal: controller.signal,
+      }),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(uploadFetchImpl).not.toHaveBeenCalled();
+    expect(fetchImpl).toHaveBeenCalledOnce();
+  });
+
   it.each([
     ['http://localhost:3000', 'http://localhost:3001/private'],
     ['http://localhost:3000', 'http://127.0.0.1:3000/private'],

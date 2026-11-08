@@ -81,7 +81,43 @@ export function hostKeepsSignInInWindow(url: URL): boolean {
  * them. It is deliberately small; a command the page cannot honour is a dead
  * menu item.
  */
-export const HOST_COMMANDS = ['toggle-sidebar', 'show-keyboard-shortcuts'] as const;
+export const HOST_COMMANDS = [
+  'toggle-sidebar',
+  'show-keyboard-shortcuts',
+  'find',
+  'find-next',
+  'find-previous',
+  'find-in-files',
+  'open-search',
+  'open-folder',
+  'new-project',
+  'previous-chat',
+  'next-chat',
+  'previous-tab',
+  'next-tab',
+  'new-tab',
+  'new-temporary-chat',
+  'send-feedback',
+  'toggle-terminal',
+  'toggle-side-chat',
+  'start-performance-trace',
+  'toggle-chat-tabs',
+  'reopen-closed-tab',
+  'focus-first-tab',
+  'close-active-tab',
+  'close-other-tabs',
+  'close-tabs-to-the-right',
+  'focus-second-tab',
+  'focus-third-tab',
+  'focus-fourth-tab',
+  'focus-fifth-tab',
+  'focus-sixth-tab',
+  'focus-seventh-tab',
+  'focus-eighth-tab',
+  'toggle-changes',
+  'toggle-files',
+  'focus-follow-up',
+] as const;
 
 export type HostCommand = (typeof HOST_COMMANDS)[number];
 
@@ -228,6 +264,19 @@ export const HOST_MENU_SHORTCUTS: readonly HostMenuShortcut[] = [
   { id: 'host-actual-size', description: 'Actual size', accelerator: 'CommandOrControl+0' },
   { id: 'host-zoom-in', description: 'Zoom in', accelerator: 'CommandOrControl+Plus' },
   { id: 'host-zoom-out', description: 'Zoom out', accelerator: 'CommandOrControl+-' },
+  { id: 'host-find', description: 'Find', accelerator: 'CommandOrControl+F' },
+  { id: 'host-find-next', description: 'Find next', accelerator: 'CommandOrControl+G' },
+  { id: 'host-find-previous', description: 'Find previous', accelerator: 'CommandOrControl+Alt+G' },
+  { id: 'host-open-folder', description: 'Open folder', accelerator: 'CommandOrControl+O' },
+  {
+    id: 'host-previous-chat',
+    description: 'Previous chat',
+    accelerator: 'CommandOrControl+Shift+[',
+  },
+  { id: 'host-next-chat', description: 'Next chat', accelerator: 'CommandOrControl+Shift+]' },
+  { id: 'host-previous-tab', description: 'Previous tab', accelerator: 'Ctrl+Shift+Tab' },
+  { id: 'host-next-tab', description: 'Next tab', accelerator: 'Ctrl+Tab' },
+  { id: 'host-new-tab', description: 'New tab', accelerator: 'CommandOrControl+T' },
 ];
 
 /**
@@ -493,6 +542,16 @@ export interface HostBridge {
    */
   onRuntimeEvent(callback: (event: DesktopRuntimeEvent) => void): () => void;
   onHostCommand(callback: (command: HostCommand) => void): () => void;
+  /**
+   * Tells the window menu whether this page has a terminal pane, and whether
+   * that pane is open. Absent on a shell that predates the menu item.
+   */
+  setTerminalState?(state: { available: boolean; open: boolean }): void;
+  /**
+   * Tells the window menu whether this page can open a side chat, and whether
+   * that pane is open. Absent on a shell that predates the menu item.
+   */
+  setSideChatState?(state: { available: boolean; open: boolean }): void;
   readPreferences(): Promise<HostPreferencesState>;
   writePreferences(patch: Partial<HostPreferences>): Promise<HostPreferencesState>;
   openExternal(url: string): Promise<void>;

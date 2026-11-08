@@ -54,6 +54,7 @@ export const FILESYSTEM_COMMANDS = [
   'file_read_bytes',
   'file_write_text',
   'file_edit_text',
+  'file_delete',
   'file_glob',
   'file_grep',
 ] as const;

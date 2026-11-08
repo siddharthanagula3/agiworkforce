@@ -174,7 +174,7 @@ describe('suite contracts, trust boundaries', () => {
     const expectedPrivacyLabels: Record<PrivacyMode, string> = {
       local: 'Local',
       byok: 'BYOK',
-      managed: 'Managed Cloud',
+      managed: 'Cloud',
     };
 
     for (const privacyMode of PRIVACY_MODES) {
@@ -183,7 +183,7 @@ describe('suite contracts, trust boundaries', () => {
     }
 
     expect(PRIVACY_MODE_DISPLAY.byok.shortLabel).toBe('BYOK');
-    expect(PRIVACY_MODE_DISPLAY.managed.shortLabel).toBe('Managed');
+    expect(PRIVACY_MODE_DISPLAY.managed.shortLabel).toBe('Cloud');
   });
 
   it('states the usage implication of every trust boundary, not only Managed', () => {
@@ -192,17 +192,17 @@ describe('suite contracts, trust boundaries', () => {
         PRIVACY_MODE_USAGE_IMPLICATION[privacyMode],
       );
     }
-    expect(formatPrivacyModeUsageImplication('local')).toContain('no AGI credits');
-    expect(formatPrivacyModeUsageImplication('byok')).toContain('no AGI credits');
-    expect(formatPrivacyModeUsageImplication('managed')).toContain('credits from your AGI plan');
+    expect(formatPrivacyModeUsageImplication('local')).toContain('no plan credits');
+    expect(formatPrivacyModeUsageImplication('byok')).toContain('no plan credits');
+    expect(formatPrivacyModeUsageImplication('managed')).toContain('credits from your plan');
   });
 
   it('locks provider execution labels to their privacy boundaries', () => {
     const expectedProviderLabels: Record<ProviderMode, string> = {
       Local: 'Local',
       DirectByok: 'BYOK',
-      ManagedGateway: 'Managed Gateway',
-      ManagedNative: 'Managed Native',
+      ManagedGateway: 'Cloud gateway',
+      ManagedNative: 'Cloud service',
     };
 
     for (const providerMode of PROVIDER_MODES) {
@@ -213,13 +213,13 @@ describe('suite contracts, trust boundaries', () => {
       expect(display.description.length).toBeGreaterThan(20);
     }
 
-    expect(PROVIDER_MODE_DISPLAY.ManagedGateway.shortLabel).toBe('Managed');
+    expect(PROVIDER_MODE_DISPLAY.ManagedGateway.shortLabel).toBe('Cloud');
   });
 
   it('locks chat execution modes to privacy and provider defaults', () => {
     expect(formatChatExecutionModeLabel('local_only')).toBe('Local Mode + Local LLMs');
     expect(formatChatExecutionModeLabel('byok')).toBe('Local Mode + BYOK');
-    expect(formatChatExecutionModeLabel('cloud_managed')).toBe('Managed Cloud');
+    expect(formatChatExecutionModeLabel('cloud_managed')).toBe('Cloud');
 
     expect(chatExecutionModeToPrivacyMode('local_only')).toBe('local');
     expect(chatExecutionModeToProviderMode('local_only')).toBe('Local');
@@ -877,8 +877,8 @@ describe('summarizeSendPreview', () => {
     expect(gateway.destinationLabel).toBe('Sent to gateway.agi.example');
 
     const native = summarizeSendPreview({ providerMode: 'ManagedNative' });
-    expect(native.destinationLabel).toBe('Sent through AGI Managed gateway');
-    expect(native.bannerCopy).toMatch(/managed-mode retention/);
+    expect(native.destinationLabel).toBe('Sent through Cloud gateway');
+    expect(native.bannerCopy).toMatch(/Cloud retention/);
   });
 
   it('summarizes message body chars with a compact label', () => {
@@ -1044,7 +1044,7 @@ describe('summarizeProjectHeader', () => {
     const manual = summarizeProjectHeader({
       project: { ...baseProject, importedFrom: 'manual' },
     });
-    expect(manual.importedFromLabel).toBe('Created in AGI');
+    expect(manual.importedFromLabel).toBe('Created here');
   });
 
   it('flips staysLocal off for BYOK and Managed default modes', () => {
@@ -1062,7 +1062,7 @@ describe('summarizeProjectHeader', () => {
       },
     });
     expect(managed.staysLocal).toBe(false);
-    expect(managed.providerLabel).toContain('Managed');
+    expect(managed.providerLabel).toContain('Cloud');
   });
 
   it('passes through optional default model id + label', () => {

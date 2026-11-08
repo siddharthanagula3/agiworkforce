@@ -18,14 +18,14 @@ export const PLAN_LABEL: Readonly<Record<UIPlanTier, string>> = Object.freeze({
 export const PLAN_DESCRIPTION: Readonly<Record<UIPlanTier, string>> = Object.freeze({
   local: 'Local LLMs, Ollama / LM Studio',
   byok: 'Local app with your own provider keys',
-  free: 'Managed Cloud chat with free usage',
-  basic: 'Cloud Managed, basic models',
-  pro: 'Pro, balanced models, higher usage',
-  max: 'Max 5x, flagship models and higher usage',
+  free: 'Cloud chat with free usage',
+  basic: 'Cloud, basic models',
+  pro: `${BILLING_PLAN_PRICING.pro.label}, balanced models, higher usage`,
+  max: `${BILLING_PLAN_PRICING.max.label}, flagship models and higher usage`,
   max_15x: `${BILLING_PLAN_PRICING.max_15x.label}, flagship models and the highest individual usage`,
-  team: 'Pro capabilities with shared team administration',
-  team_premium: 'Max 5x usage and models with shared team administration',
-  enterprise: 'Managed controls and negotiated enterprise capabilities',
+  team: `${BILLING_PLAN_PRICING.pro.label} capabilities with shared team administration`,
+  team_premium: `${BILLING_PLAN_PRICING.max.label} usage and models with shared team administration`,
+  enterprise: 'Organization controls and negotiated enterprise capabilities',
 });
 
 export function normalizeUIPlanTier(

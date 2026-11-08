@@ -83,13 +83,15 @@ export function managedUsageCreditLimitPhrase(
 
 export function formatPlanCreditAllowanceLine(
   planLabel: string,
-  allowance: { monthly: number; weekly: number; fiveHour: number },
+  allowance: { monthly: number; weekly: number; fiveHour: number | null },
 ): string {
   return [
     planLabel,
     `${creditAmount(allowance.monthly)} credits/month`,
     `${creditAmount(allowance.weekly)} credits/week`,
-    `${creditAmount(allowance.fiveHour)} credits per 5 hours`,
+    ...(allowance.fiveHour === null
+      ? []
+      : [`${creditAmount(allowance.fiveHour)} credits per 5 hours`]),
   ].join(' · ');
 }
 

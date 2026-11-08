@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   createManagedCloudSchedulesClient,
+  getScheduleActionAvailability,
   ManagedCloudScheduleListResponseSchema,
   ManagedCloudScheduleMutationSchema,
   ManagedCloudScheduleRunResponseSchema,
@@ -192,5 +193,33 @@ describe('managed cloud schedules client', () => {
       'https://agi.example/api/schedules?limit=50&offset=0',
       expect.anything(),
     );
+  });
+});
+
+describe('managed schedule action availability', () => {
+  it.each([
+    ['completed', false, false, false, false],
+    ['expired', true, false, false, false],
+    ['paused', false, false, true, true],
+    ['failed', false, false, true, true],
+    ['active', false, false, true, true],
+    ['active', true, true, true, true],
+  ] as const)(
+    '%s enabled=%s follows the hosted lifecycle',
+    (status, isEnabled, canRun, canEdit, canToggle) => {
+      expect(getScheduleActionAvailability({ status, isEnabled, actionType: 'agent' })).toEqual({
+        canRun,
+        canEdit,
+        canToggle,
+      });
+    },
+  );
+  it('allows pausing unsupported actions while refusing to edit, run or enable them', () => {
+    expect(
+      getScheduleActionAvailability({ status: 'active', isEnabled: true, actionType: 'workflow' }),
+    ).toEqual({ canRun: false, canEdit: false, canToggle: true });
+    expect(
+      getScheduleActionAvailability({ status: 'paused', isEnabled: false, actionType: 'workflow' }),
+    ).toEqual({ canRun: false, canEdit: false, canToggle: false });
   });
 });

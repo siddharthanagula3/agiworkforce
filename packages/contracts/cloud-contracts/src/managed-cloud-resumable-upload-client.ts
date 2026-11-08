@@ -1,3 +1,4 @@
+import { managedUploadRequestOptions } from './managed-upload';
 import { ErrorCode, stripTrailingSlashes } from '@agiworkforce/types';
 import type { ZodType } from 'zod';
 import {
@@ -271,11 +272,13 @@ export function createManagedCloudResumableUploadClient(
     let target = signed;
     for (let attempt = 1; ; attempt += 1) {
       assertNotAborted(signal);
+      const uploadOptions = await managedUploadRequestOptions(target.url, target.headers, config);
+      assertNotAborted(signal);
       let status: number;
       try {
         const response = await uploadFetchImpl(target.url, {
+          ...uploadOptions,
           method: target.method,
-          headers: target.headers,
           body,
           signal,
         });

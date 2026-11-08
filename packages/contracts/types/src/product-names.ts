@@ -1,15 +1,17 @@
-export const PRODUCT_BRAND = 'AGI';
+export const PRODUCT_BRAND = 'AGIWORKFORCE';
+
+export const PRODUCT_COPYRIGHT_NAME = 'AGI';
 
 export const COMPANY_SITE_NAME = 'AGI Workforce';
 
 export const PRODUCT_NAMES = {
-  chat: 'AGI Chat',
-  mobile: 'AGI Mobile',
-  desktop: 'AGI Desktop',
-  cli: 'AGI CLI',
-  extension: 'AGI Extension',
-  code: 'AGI Code',
-  work: 'AGI Work',
+  chat: 'Chat',
+  mobile: 'Mobile',
+  desktop: 'Desktop',
+  cli: 'CLI',
+  extension: 'Extension',
+  code: 'Code',
+  work: 'Work',
 } as const;
 
 export type ProductKey = keyof typeof PRODUCT_NAMES;

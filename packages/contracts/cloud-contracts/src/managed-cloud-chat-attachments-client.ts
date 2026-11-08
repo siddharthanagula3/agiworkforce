@@ -14,6 +14,7 @@ import {
   type ManagedCloudChatAttachment,
 } from './chat-attachments';
 import { sha256HexOfBlob } from './file-digest';
+import { managedUploadRequestOptions } from './managed-upload';
 import {
   ManagedCloudResumableUploadError,
   createManagedCloudResumableUploadClient,
@@ -79,24 +80,6 @@ function assertNotAborted(signal?: AbortSignal): void {
 
 function normalizeBaseUrl(baseUrl: string): string {
   return stripTrailingSlashes(baseUrl);
-}
-
-function isConfiguredLoopbackUpload(uploadUrl: URL, baseUrl: string): boolean {
-  try {
-    const base = new URL(baseUrl);
-    return (
-      base.protocol === 'http:' &&
-      uploadUrl.protocol === 'http:' &&
-      ['localhost', '127.0.0.1', '[::1]'].includes(base.hostname) &&
-      !base.username &&
-      !base.password &&
-      !uploadUrl.username &&
-      !uploadUrl.password &&
-      base.origin === uploadUrl.origin
-    );
-  } catch {
-    return false;
-  }
 }
 
 const TRANSIENT_HTTP_STATUSES: ReadonlySet<number> = new Set([408, 425, 429]);
@@ -268,20 +251,16 @@ export function createManagedCloudChatAttachmentsClient(
             await readJson(presignResponse),
           );
           const uploadUrl = new URL(presign.uploadUrl);
-          const sameOrigin =
-            typeof location !== 'undefined' && uploadUrl.origin === location.origin;
-          if (
-            uploadUrl.protocol !== 'https:' &&
-            !sameOrigin &&
-            !isConfiguredLoopbackUpload(uploadUrl, baseUrl)
-          ) {
-            throw new Error(`Refusing an insecure upload destination for ${file.name}.`);
-          }
-
           reportStatus(onStatus, { index, fileName: file.name, phase: 'uploading' });
+          const uploadOptions = await managedUploadRequestOptions(
+            uploadUrl.toString(),
+            presign.uploadHeaders,
+            config,
+          );
+          assertNotAborted(signal);
           const putResponse = await uploadFetchImpl(uploadUrl.toString(), {
+            ...uploadOptions,
             method: presign.uploadMethod,
-            headers: presign.uploadHeaders,
             body: file,
             signal,
           });

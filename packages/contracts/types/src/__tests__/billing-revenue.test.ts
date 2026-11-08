@@ -84,7 +84,7 @@ describe('revenue budget ratio', () => {
     expect(revenueBudgetRatio('basic', INDIA_WEB)).toBeLessThan(1);
     expect(india.monthlyCredits).toBeLessThan(us.monthlyCredits);
     expect(india.weeklyCredits).toBeLessThan(us.weeklyCredits);
-    expect(india.fiveHourCredits).toBeLessThan(us.fiveHourCredits);
+    expect(india.fiveHourCredits).toBeLessThan(us.fiveHourCredits ?? 0);
   });
 
   it('applies the store commission to an App Store or Google Play subscription', () => {
@@ -106,7 +106,7 @@ describe('revenue budget ratio', () => {
   it('scales every window and keeps each one a whole number of ledger cents', () => {
     const scaled = effectiveManagedUsageLimit('pro', null, INDIA_WEB);
     for (const credits of [scaled.monthlyCredits, scaled.weeklyCredits, scaled.fiveHourCredits]) {
-      expect(credits % CREDITS_PER_CENT).toBe(0);
+      expect(credits === null ? null : credits % CREDITS_PER_CENT).toBe(0);
     }
     const allowance = getEffectivePlanCreditAllowance('pro', null, INDIA_WEB);
     expect(allowance.monthly).toBe(scaled.monthlyCredits);

@@ -39,6 +39,44 @@ describe('createManagedCloudProjectKnowledgeClient', () => {
     vi.unstubAllGlobals();
   });
 
+  it('authenticates the API relay before registering project knowledge', async () => {
+    let credential = 0;
+    const getHeaders = vi.fn(() => ({
+      Authorization: `Bearer account-${++credential}`,
+      'Content-Type': 'application/json',
+    }));
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          uploadUrl: 'https://cloud.example/api/uploads/knowledge-file/put?token=fixture',
+          uploadMethod: 'PUT',
+          uploadHeaders: { 'Content-Type': 'text/plain' },
+          storageKey: STORAGE_KEY,
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ file: REGISTERED_FILE }));
+    const uploadFetchImpl = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) =>
+      new Headers(init?.headers).get('Authorization') === 'Bearer account-2'
+        ? jsonResponse({ success: true })
+        : jsonResponse({ error: 'Unauthorized' }, 401),
+    );
+    const client = createManagedCloudProjectKnowledgeClient({
+      baseUrl: 'https://cloud.example',
+      sourceSurface: 'desktop',
+      getHeaders,
+      fetchImpl,
+      uploadFetchImpl,
+    });
+    await expect(
+      client.upload('project-1', new File(['hello'], 'notes.txt', { type: 'text/plain' })),
+    ).resolves.toEqual(REGISTERED_FILE);
+    expect(new Headers(uploadFetchImpl.mock.calls[0]![1]!.headers).get('Content-Type')).toBe(
+      'text/plain',
+    );
+    expect(getHeaders).toHaveBeenCalledTimes(3);
+  });
+
   it('registers the opaque object key and never sends the legacy public URL', async () => {
     const fetchImpl = vi
       .fn()

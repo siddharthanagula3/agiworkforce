@@ -74,6 +74,7 @@ const ESSENTIAL_KEYS: ReadonlySet<string> = new Set([
   'webSearchRequested',
   'webSearchAskedInText',
   'serverPersisted',
+  'agiWorkPlanDeclined',
   'requestId',
   'truncated',
   'truncationReason',

@@ -68,7 +68,7 @@ export const PRIVACY_MODE_DISPLAY = {
   local: {
     label: 'Local',
     shortLabel: 'Local',
-    description: 'Runs on this device or workspace without AGI-managed cloud execution.',
+    description: 'Runs on this device or workspace without cloud execution.',
   },
   byok: {
     label: 'BYOK',
@@ -76,16 +76,16 @@ export const PRIVACY_MODE_DISPLAY = {
     description: 'Uses the user-owned provider key; payloads go to that provider account.',
   },
   managed: {
-    label: 'Managed Cloud',
-    shortLabel: 'Managed',
-    description: 'Uses AGI-managed provider access or hosted compute behind explicit consent.',
+    label: 'Cloud',
+    shortLabel: 'Cloud',
+    description: 'Uses Cloud provider access or hosted compute with explicit consent.',
   },
 } as const satisfies Readonly<Record<PrivacyMode, TrustBoundaryDisplayCopy>>;
 
 export const PRIVACY_MODE_USAGE_IMPLICATION = {
-  local: 'Local runs use this device and spend no AGI credits.',
-  byok: 'BYOK requests are billed by the provider on your own key and spend no AGI credits.',
-  managed: 'Managed requests spend credits from your AGI plan.',
+  local: 'Local runs use this device and spend no plan credits.',
+  byok: 'BYOK requests are billed by the provider on your own key and spend no plan credits.',
+  managed: 'Cloud requests spend credits from your plan.',
 } as const satisfies Readonly<Record<PrivacyMode, string>>;
 
 export const PROVIDER_MODE_DISPLAY = {
@@ -99,19 +99,19 @@ export const PROVIDER_MODE_DISPLAY = {
     label: 'BYOK',
     shortLabel: 'BYOK',
     privacyMode: 'byok',
-    description: 'Requests use a user-owned provider key without AGI-managed model credits.',
+    description: 'Requests use a user-owned provider key without Cloud model credits.',
   },
   ManagedGateway: {
-    label: 'Managed Gateway',
-    shortLabel: 'Managed',
+    label: 'Cloud gateway',
+    shortLabel: 'Cloud',
     privacyMode: 'managed',
-    description: 'Requests route through an AGI-managed gateway or proxy with managed consent.',
+    description: 'Requests route through a Cloud gateway or proxy with explicit consent.',
   },
   ManagedNative: {
-    label: 'Managed Native',
-    shortLabel: 'Managed',
+    label: 'Cloud service',
+    shortLabel: 'Cloud',
     privacyMode: 'managed',
-    description: 'Requests use AGI-managed provider access directly from managed services.',
+    description: 'Requests use Cloud provider access directly from hosted services.',
   },
 } as const satisfies Readonly<Record<ProviderMode, ProviderModeDisplayCopy>>;
 
@@ -121,8 +121,7 @@ export const CHAT_EXECUTION_MODE_DISPLAY = {
     shortLabel: 'Local LLMs',
     privacyMode: 'local',
     defaultProviderMode: 'Local',
-    description:
-      'Runs local or on-device models and must not call AGI managed cloud or direct BYOK providers.',
+    description: 'Runs local or on-device models and must not call Cloud or direct BYOK providers.',
   },
   byok: {
     label: 'Local Mode + BYOK',
@@ -132,11 +131,11 @@ export const CHAT_EXECUTION_MODE_DISPLAY = {
     description: 'Keeps the app local while requests go directly to the user-owned provider key.',
   },
   cloud_managed: {
-    label: 'Managed Cloud',
-    shortLabel: 'Managed',
+    label: 'Cloud',
+    shortLabel: 'Cloud',
     privacyMode: 'managed',
     defaultProviderMode: 'ManagedGateway',
-    description: 'Uses AGI-managed routing, credits, or hosted compute behind explicit consent.',
+    description: 'Uses Cloud routing, credits, or hosted compute with explicit consent.',
   },
 } as const satisfies Readonly<Record<ChatExecutionMode, ChatExecutionModeDisplayCopy>>;
 
@@ -1501,7 +1500,7 @@ export function summarizeSendPreview(input: SendPreviewInput): SendPreviewPresen
   } else if (providerMode === 'DirectByok') {
     destinationLabel = 'Sent to your BYOK provider';
   } else {
-    destinationLabel = 'Sent through AGI Managed gateway';
+    destinationLabel = 'Sent through Cloud gateway';
   }
 
   const bodyChars = input.messageBody?.length ?? 0;
@@ -1537,10 +1536,10 @@ export function summarizeSendPreview(input: SendPreviewInput): SendPreviewPresen
     input.toolNames && input.toolNames.length > 0 ? joinDistinct(input.toolNames) : undefined;
 
   const bannerCopy = staysLocal
-    ? 'Local turn. The model runs on your device and nothing is uploaded to AGI cloud or third-party providers.'
+    ? 'Local turn. The model runs on your device and nothing is uploaded to the cloud or third-party providers.'
     : providerMode === 'DirectByok'
-      ? `BYOK turn. The request, attachments, and system prompt go directly to ${input.destinationHost ?? 'your configured provider'} via your API key. AGI does not receive a copy of the payload.`
-      : `Managed turn. The request, attachments, and system prompt go through ${input.destinationHost ?? 'an AGI-managed gateway'} subject to the managed-mode retention and access controls.`;
+      ? `BYOK turn. The request, attachments, and system prompt go directly to ${input.destinationHost ?? 'your configured provider'} via your API key. We do not receive a copy of the payload.`
+      : `Cloud turn. The request, attachments, and system prompt go through ${input.destinationHost ?? 'a Cloud gateway'} subject to the Cloud retention and access controls.`;
 
   return {
     providerMode,
@@ -1567,7 +1566,7 @@ const PROJECT_ACCENT_FALLBACK: ProjectAccentColor = 'zinc';
 const PROJECT_IMPORT_SOURCE_LABELS: Record<ProjectImportSource, string> = {
   claude: 'Imported from Claude',
   openai: 'Imported from ChatGPT',
-  manual: 'Created in AGI',
+  manual: 'Created here',
 };
 
 const PROJECT_MEMBER_ROLE_LABELS: Record<ProjectMemberRole, string> = {

@@ -138,7 +138,8 @@ export function effectiveManagedUsageLimit(
     ...limit,
     monthlyCredits: scaleCredits(limit.monthlyCredits, ratio),
     weeklyCredits: scaleCredits(limit.weeklyCredits, ratio),
-    fiveHourCredits: scaleCredits(limit.fiveHourCredits, ratio),
+    fiveHourCredits:
+      limit.fiveHourCredits === null ? null : scaleCredits(limit.fiveHourCredits, ratio),
     dailyCredits: scaleCredits(limit.dailyCredits, ratio),
   };
 }

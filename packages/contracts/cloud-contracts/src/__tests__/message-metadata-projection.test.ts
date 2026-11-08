@@ -26,6 +26,17 @@ function source(index: number, snippetChars = 4_000): Record<string, unknown> {
 }
 
 describe('projectPersistedMessageMetadata', () => {
+  it('keeps a plan cancellation when unrelated metadata exceeds the row budget', () => {
+    const projected = projectPersistedMessageMetadata({
+      agiWorkPlanDeclined: true,
+      ...Object.fromEntries(Array.from({ length: 2_000 }, (_, index) => [`extra-${index}`, true])),
+    });
+    expect(projected?.['agiWorkPlanDeclined']).toBe(true);
+    expect(managedCloudMetadataLength(projected)).toBeLessThanOrEqual(
+      MANAGED_CLOUD_CHAT_MAX_METADATA_LENGTH,
+    );
+  });
+
   it('passes undefined through so a turn with nothing to save still sends nothing', () => {
     expect(projectPersistedMessageMetadata(undefined)).toBeUndefined();
   });

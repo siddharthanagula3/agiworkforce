@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { createManagedCloudResumableUploadClient } from '../managed-cloud-resumable-upload-client';
 import { managedCloudResumableUploadPath } from '../resumable-uploads';
@@ -168,5 +169,99 @@ describe('resumable upload completion recovery', () => {
     expect(f.sessions.remove).not.toHaveBeenCalled();
     expect(f.sessions.write).not.toHaveBeenCalled();
     expect(f.uploadFetchImpl).not.toHaveBeenCalled();
+  });
+});
+
+describe('resumable upload relay identity', () => {
+  const attachment = {
+    id: '00000000-0000-4000-8000-000000000001',
+    name: 'fixture.txt',
+    mimeType: 'text/plain',
+    byteCount: 1,
+    type: 'file',
+    url: '/api/files/00000000-0000-4000-8000-000000000001',
+  };
+  const request = {
+    kind: 'chat-attachment' as const,
+    fileName: 'fixture.txt',
+    mimeType: 'text/plain',
+    byteCount: 1,
+    checksumSha256: createHash('sha256').update('x').digest('hex'),
+  };
+  function responses() {
+    return vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({
+          uploadId: 'upload-1',
+          session: 'fixture-session',
+          partBytes: 1,
+          partCount: 1,
+          expiresAt: '2099-01-01T00:00:00Z',
+        }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          parts: [
+            {
+              partNumber: 1,
+              url: 'https://cloud.example/api/files/uploads/upload-1?session=fixture&partNumber=1',
+              method: 'PUT',
+              headers: {},
+            },
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(Response.json({ kind: 'chat-attachment', attachment }));
+  }
+
+  it('authenticates raw relay parts using the current account without a JSON content type', async () => {
+    let calls = 0;
+    const getHeaders = vi.fn(() => ({
+      Authorization: `Bearer account-${++calls}`,
+      'Content-Type': 'application/json',
+    }));
+    const uploadFetchImpl = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) =>
+      new Headers(init?.headers).get('Authorization') === 'Bearer account-3'
+        ? Response.json({ success: true })
+        : Response.json({}, { status: 401 }),
+    );
+    const client = createManagedCloudResumableUploadClient({
+      baseUrl: 'https://cloud.example',
+      getHeaders,
+      fetchImpl: responses(),
+      uploadFetchImpl,
+      sessions: null,
+    });
+    await expect(client.upload({ file: new Blob(['x']), request })).resolves.toEqual({
+      kind: 'chat-attachment',
+      attachment,
+    });
+    expect(uploadFetchImpl).toHaveBeenCalledOnce();
+    expect(new Headers(uploadFetchImpl.mock.calls[0]![1]!.headers).has('Content-Type')).toBe(false);
+  });
+
+  it('does not retry an account-boundary refusal as a network error', async () => {
+    let calls = 0;
+    const getHeaders = vi.fn(() => {
+      if (++calls === 3) throw new Error('Account changed');
+      return { Authorization: 'Bearer account' };
+    });
+    const uploadFetchImpl = vi.fn();
+    const sleep = vi.fn();
+    const client = createManagedCloudResumableUploadClient({
+      baseUrl: 'https://cloud.example',
+      getHeaders,
+      fetchImpl: responses(),
+      uploadFetchImpl,
+      sessions: null,
+      sleep,
+    });
+    await expect(client.upload({ file: new Blob(['x']), request })).rejects.toThrow(
+      'Account changed',
+    );
+    expect(uploadFetchImpl).not.toHaveBeenCalled();
+    expect(sleep).not.toHaveBeenCalled();
+    expect(getHeaders).toHaveBeenCalledTimes(3);
   });
 });
