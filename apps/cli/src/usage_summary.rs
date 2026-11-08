@@ -55,7 +55,8 @@ pub struct PurchasedCredits {
 pub struct UsageCredits {
     pub monthly: UsageCreditWindow,
     pub weekly: UsageCreditWindow,
-    pub five_hour: UsageCreditWindow,
+    #[serde(deserialize_with = "Option::deserialize")]
+    pub five_hour: Option<UsageCreditWindow>,
     #[serde(default)]
     pub flagship_weekly: Option<UsageCreditWindow>,
     pub purchased: PurchasedCredits,
@@ -214,7 +215,8 @@ fn limit_window_reset<'a>(usage: &'a AccountUsage, code: &str) -> Option<&'a str
     let credits = usage.credits.as_ref();
     match code {
         "rolling_five_hour_limit_reached" => credits
-            .and_then(|credits| credits.five_hour.reset_at.as_deref())
+            .and_then(|credits| credits.five_hour.as_ref())
+            .and_then(|window| window.reset_at.as_deref())
             .or(usage.session_reset_at.as_deref()),
         "rolling_weekly_limit_reached" => credits
             .and_then(|credits| credits.weekly.reset_at.as_deref())
@@ -538,7 +540,9 @@ pub fn render_account_usage(usage: &AccountUsage, now: DateTime<Utc>) -> Vec<Str
 
     match usage.credits.as_ref() {
         Some(credits) => {
-            lines.push(credit_line("5-hour window", &credits.five_hour, now));
+            if let Some(window) = credits.five_hour.as_ref() {
+                lines.push(credit_line("5-hour window", window, now));
+            }
             lines.push(credit_line("Weekly", &credits.weekly, now));
             lines.push(credit_line("Monthly", &credits.monthly, now));
             if let Some(flagship) = credits.flagship_weekly.as_ref() {
@@ -930,11 +934,14 @@ mod tests {
         assert_eq!(usage.usage_allocation.as_deref(), Some("provisioned"));
 
         let credits = usage.credits.expect("fixture states credits");
-        assert_eq!(credits.five_hour.allowance, 200.0);
-        assert_eq!(credits.five_hour.used, 10.25);
-        assert_eq!(credits.five_hour.remaining, 189.75);
+        let five_hour = credits
+            .five_hour
+            .expect("fixture states a five-hour window");
+        assert_eq!(five_hour.allowance, 200.0);
+        assert_eq!(five_hour.used, 10.25);
+        assert_eq!(five_hour.remaining, 189.75);
         assert_eq!(
-            credits.five_hour.reset_at.as_deref(),
+            five_hour.reset_at.as_deref(),
             Some("2026-09-13T15:00:00.000Z")
         );
         assert_eq!(credits.weekly.remaining, 2050.0);
@@ -1071,6 +1078,27 @@ mod tests {
             tier_cache::tier_to_adopt(&usage.plan_tier, Some(&UserTier::Max15x)),
             None
         );
+    }
+
+    #[test]
+    fn a_null_five_hour_window_keeps_the_other_credit_windows() {
+        let mut body: serde_json::Value =
+            serde_json::from_str(contract_fixture()).expect("contract fixture must parse");
+        body["credits"]["five_hour"] = serde_json::Value::Null;
+        let usage = parse_account_usage(&body.to_string()).expect("null window is valid");
+        let lines = render_account_usage(&usage, fixture_now());
+        assert!(usage.credits.as_ref().unwrap().five_hour.is_none());
+        assert!(!lines.iter().any(|line| line.contains("5-hour window")));
+        assert!(lines.iter().any(|line| line.contains("Weekly")));
+        assert!(lines.iter().any(|line| line.contains("Monthly")));
+    }
+
+    #[test]
+    fn an_omitted_five_hour_window_remains_an_invalid_contract() {
+        let mut body: serde_json::Value =
+            serde_json::from_str(contract_fixture()).expect("contract fixture must parse");
+        body["credits"].as_object_mut().unwrap().remove("five_hour");
+        assert!(parse_account_usage(&body.to_string()).is_err());
     }
 
     #[test]

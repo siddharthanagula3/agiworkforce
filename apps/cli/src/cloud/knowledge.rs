@@ -71,13 +71,11 @@ pub async fn add_file(
         )
         .await?;
 
-    let mut upload = reqwest::Client::new()
-        .put(&presign.upload_url)
+    let upload = session
+        .client
+        .upload_request(&presign.upload_url, &presign.upload_headers)?
         .timeout(UPLOAD_TIMEOUT)
         .body(bytes);
-    for (name, value) in &presign.upload_headers {
-        upload = upload.header(name, value);
-    }
     let stored = upload
         .send()
         .await

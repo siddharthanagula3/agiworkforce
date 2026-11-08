@@ -49,6 +49,12 @@ static RE_AGENTIC: Lazy<Regex> = Lazy::new(|| {
     .expect("valid regex")
 });
 
+static RE_AGENTIC_CLAUSE_SEPARATOR: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"(?i)[.!?;\n]|\b(?:but|however|instead)\b").expect("valid regex"));
+static RE_AGENTIC_NEGATED_CLAUSE: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"(?i)\b(?:do\s+not|don['’]t|never|without)\b[^.!?;\n]*").expect("valid regex")
+});
+
 /// Recency / web-search signals, anything that requires fresh info.
 static RE_RESEARCH: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"(?i)\b(latest|today|2026|current|recent news|search the web|cite sources)\b")
@@ -742,7 +748,10 @@ pub fn classify_turn_task(message: &str, has_image_attachment: bool) -> RoutingT
     }
 
     // 7. Agentic orchestration / tool discovery.
-    if RE_AGENTIC.is_match(message) {
+    if RE_AGENTIC_CLAUSE_SEPARATOR
+        .split(message)
+        .any(|clause| RE_AGENTIC.is_match(&RE_AGENTIC_NEGATED_CLAUSE.replace(clause, "")))
+    {
         return RoutingTaskType::Agentic;
     }
 
@@ -823,6 +832,26 @@ mod tests {
 
     // Fixtures mirror packages/ai/routing/src/__tests__ expectations for the
     // shared priority ladder, parity with the TS canonical, not new taxonomy.
+
+    #[test]
+    fn negated_tools_do_not_request_agent_execution() {
+        for message in [
+            "Reply only with PINE-EDIT-4826. Do not browse or use tools.",
+            "Don't spawn subagents; just answer hello.",
+            "Summarize this note without autonomous agents.",
+            "Never discover tools for this reply.",
+            "Do not browse, use tools, or spawn agents.",
+        ] {
+            assert_ne!(classify_turn_task(message, false), RoutingTaskType::Agentic);
+        }
+        for message in [
+            "Use tools but do not browse.",
+            "Do not use tools; instead coordinate agents.",
+            "Never browse. Use autonomous agents for the task.",
+        ] {
+            assert_eq!(classify_turn_task(message, false), RoutingTaskType::Agentic);
+        }
+    }
 
     #[test]
     fn untyped_chat_turns_are_not_hardcoded_to_coding() {
@@ -1038,6 +1067,8 @@ mod tests {
             ("RE_REASONING_VERB", &*RE_REASONING_VERB),
             ("RE_REASONING_MATH", &*RE_REASONING_MATH),
             ("RE_AGENTIC", &*RE_AGENTIC),
+            ("RE_AGENTIC_CLAUSE_SEPARATOR", &*RE_AGENTIC_CLAUSE_SEPARATOR),
+            ("RE_AGENTIC_NEGATED_CLAUSE", &*RE_AGENTIC_NEGATED_CLAUSE),
             ("RE_RESEARCH", &*RE_RESEARCH),
             ("RE_CREATIVE_WRITING", &*RE_CREATIVE_WRITING),
             ("RE_WHITESPACE", &*RE_WHITESPACE),

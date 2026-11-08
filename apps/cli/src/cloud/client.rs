@@ -4,6 +4,7 @@
 //! one client so the credential, the API base allowlist and the 401 handling
 //! cannot drift apart between them.
 
+use std::collections::HashMap;
 use std::time::Duration;
 
 use serde::de::DeserializeOwned;
@@ -252,6 +253,41 @@ impl CloudClient {
     /// same host it just read from rather than assuming production.
     pub fn base(&self) -> &str {
         &self.base
+    }
+
+    pub fn upload_request(
+        &self,
+        upload_url: &str,
+        upload_headers: &HashMap<String, String>,
+    ) -> Result<reqwest::RequestBuilder, CloudError> {
+        let target = reqwest::Url::parse(upload_url)
+            .map_err(|_| CloudError::Transport("The upload destination is invalid.".to_string()))?;
+        let base =
+            reqwest::Url::parse(&self.base).map_err(|_| CloudError::ApiBase(self.base.clone()))?;
+        let account_destination = target.origin() == base.origin();
+        if !target.username().is_empty()
+            || target.password().is_some()
+            || (target.scheme() != "https" && !(target.scheme() == "http" && account_destination))
+        {
+            return Err(CloudError::Transport(
+                "The upload destination is not secure.".to_string(),
+            ));
+        }
+        let client = reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .map_err(|error| CloudError::Transport(error.to_string()))?;
+        let mut request = client.put(target);
+        for (name, value) in upload_headers {
+            if account_destination && name.eq_ignore_ascii_case("authorization") {
+                continue;
+            }
+            request = request.header(name, value);
+        }
+        if account_destination {
+            request = crate::cloud::handshake::apply(request.bearer_auth(&self.jwt));
+        }
+        Ok(request)
     }
 
     fn request(&self, method: reqwest::Method, path: &str) -> reqwest::RequestBuilder {
@@ -620,6 +656,70 @@ pub async fn connectivity_line(privacy: PrivacyMode) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn upload_credentials_stay_on_the_configured_account_origin() {
+        let client = CloudClient {
+            base: "https://cloud.example".to_string(),
+            jwt: "fixture-account-token".to_string(),
+            owner: "fixture-owner".to_string(),
+            http: reqwest::Client::new(),
+        };
+        let headers = HashMap::from([("Content-Type".to_string(), "text/plain".to_string())]);
+        let mut relay_headers = headers.clone();
+        relay_headers.insert("authorization".to_string(), "Bearer stale".to_string());
+        let account = client
+            .upload_request(
+                "https://cloud.example/api/upload?token=fixture",
+                &relay_headers,
+            )
+            .expect("the account relay is allowed")
+            .build()
+            .expect("request builds");
+        assert_eq!(
+            account.headers()["authorization"],
+            "Bearer fixture-account-token"
+        );
+        assert_eq!(account.headers()["content-type"], "text/plain");
+        for destination in [
+            "https://storage.example/object?signature=fixture",
+            "https://cloud.example:444/upload",
+            "https://cloud.example.attacker.example/upload",
+        ] {
+            let storage = client
+                .upload_request(destination, &headers)
+                .expect("an HTTPS storage destination is allowed")
+                .build()
+                .expect("request builds");
+            assert!(!storage.headers().contains_key("authorization"));
+        }
+        for destination in [
+            "http://storage.example/object",
+            "file:///private/upload",
+            "https://user:password@cloud.example/upload",
+        ] {
+            assert!(client.upload_request(destination, &headers).is_err());
+        }
+    }
+
+    #[test]
+    fn upload_relay_accepts_only_the_configured_development_origin_over_http() {
+        let client = CloudClient {
+            base: "http://localhost:3000".to_string(),
+            jwt: "fixture-account-token".to_string(),
+            owner: "fixture-owner".to_string(),
+            http: reqwest::Client::new(),
+        };
+        let request = client
+            .upload_request("http://localhost:3000/api/upload", &HashMap::new())
+            .expect("the configured development relay is allowed")
+            .build()
+            .expect("request builds");
+        assert!(request.headers().contains_key("authorization"));
+        assert!(client
+            .upload_request("http://localhost:3001/upload", &HashMap::new())
+            .is_err());
+    }
 
     #[test]
     fn a_local_session_never_reaches_the_account() {
