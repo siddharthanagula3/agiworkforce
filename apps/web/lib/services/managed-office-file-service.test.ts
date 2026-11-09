@@ -737,6 +737,40 @@ describe('existing workbook preservation', () => {
     });
   });
 
+  it('refuses a worksheet whose formula element is namespace-prefixed instead of reporting it value-only', async () => {
+    const input = await workbook();
+    const main = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+    input.zip.file(
+      'xl/worksheets/sheet1.xml',
+      `<worksheet xmlns="${main}" xmlns:s="${main}"><sheetData><row r="1"><c r="A1"><s:f>B1*2</s:f><v>4</v></c><c r="B1"><v>2</v></c></row></sheetData></worksheet>`,
+    );
+    const data = await input.zip.generateAsync({ type: 'nodebuffer' });
+    const result = await generateManagedOfficeFile(
+      {
+        format: 'xlsx',
+        filename: 'updated.xlsx',
+        title: 'Updated',
+        source: {
+          filename: input.filename,
+          sha256: createHash('sha256').update(data).digest('hex'),
+          edits: [{ sheet: 'Budget', cell: 'B1', expected: 2, value: 3 }],
+        },
+      },
+      {
+        attachments: [
+          { filename: input.filename, mimeType: input.mimeType, base64: data.toString('base64') },
+        ],
+      },
+    );
+    expect(result).toMatchObject({
+      ok: false,
+      message: expect.stringMatching(/prefix their SpreadsheetML elements/),
+    });
+    await expect(verifyManagedOfficePackage(data, 'xlsx')).rejects.toThrow(
+      /prefix their SpreadsheetML elements/,
+    );
+  });
+
   it.each(['xml', 'relationship'])('rejects damaged package structure: %s', async (failure) => {
     const input = await workbook();
     input.zip.file(

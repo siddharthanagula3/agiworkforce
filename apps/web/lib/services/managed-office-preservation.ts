@@ -11,6 +11,8 @@ import type { E2BExecutor } from '@/lib/e2b/types';
 
 export class ManagedOfficeProcessingError extends Error {}
 
+const SPREADSHEET_MAIN_NAMESPACE = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+
 export interface ManagedOfficeSource {
   filename: string;
   sha256: string;
@@ -75,7 +77,12 @@ async function officeParts(data: Buffer, requiredPart: string): Promise<Map<stri
     try {
       const parser = new SaxesParser({ xmlns: true });
       const relationshipIds = new Set<string>();
+      const worksheet = /^xl\/worksheets\/[^/]+\.xml$/.test(name);
       parser.on('opentag', (tag) => {
+        if (worksheet && tag.prefix && tag.uri === SPREADSHEET_MAIN_NAMESPACE)
+          throw new ManagedOfficeProcessingError(
+            'Worksheets that prefix their SpreadsheetML elements are not supported.',
+          );
         if (!name.endsWith('.rels') || tag.local !== 'Relationship') return;
         const attributes = Object.fromEntries(
           Object.values(tag.attributes).map((attribute) => [attribute.local, attribute.value]),
@@ -96,7 +103,8 @@ async function officeParts(data: Buffer, requiredPart: string): Promise<Map<stri
           throw new Error('Missing relationship target');
       });
       parser.write(bytes.toString('utf8')).close();
-    } catch {
+    } catch (error) {
+      if (error instanceof ManagedOfficeProcessingError) throw error;
       throw new ManagedOfficeProcessingError(
         'The Office package has malformed XML or broken relationships.',
       );
