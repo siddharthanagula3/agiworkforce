@@ -1121,11 +1121,8 @@ impl TuiApp {
                     });
                 }
             }
-            OverlayResult::SkillsDisabled(names) => {
-                // Persist the disabled set; discover_skills() then skips them for
-                // every consumer (prompt injection, registry, tools).
-                let set: std::collections::HashSet<String> = names.into_iter().collect();
-                if let Err(error) = crate::skills::save_disabled_skills(&set) {
+            OverlayResult::SkillChoices(choices) => {
+                if let Err(error) = crate::skills::set_skills_enabled(&choices) {
                     self.chat_messages.push(ChatMessage {
                         role: ChatRole::Error,
                         text: format!("The skill choices were not saved: {error}"),
@@ -1975,9 +1972,9 @@ struct FrameCtx<'a> {
     /// Which statusline fields the user has enabled (model/tokens/cost/branch/mode).
     statusline: &'a super::widgets::statusline_setup::StatusLineConfig,
     workspace_pane: Option<&'a [String]>,
-    /// The key bound to quit, as the keybinding config names it; `None` when
-    /// nothing is bound, so the footer offers no quit hint.
-    quit_key: Option<&'a str>,
+    /// The resolved bindings, so every on-screen shortcut hint names the chord
+    /// that actually fires; an unbound action offers no hint.
+    keybindings: &'a crate::keybindings::Keybindings,
 }
 
 /// How full the context window is: the percentage the meters draw and the
@@ -2159,9 +2156,7 @@ impl<'a> FrameCtx<'a> {
             effort_label: app.visible_effort_label(),
             cost_str: crate::output::format_session_credits(app.session.cost_ledger.total_usd),
             notice: app.live_notice(),
-            quit_key: app
-                .keybindings
-                .display(crate::keybindings::KeybindingAction::Quit),
+            keybindings: &app.keybindings,
         }
     }
 }
@@ -2453,6 +2448,29 @@ fn render_workspace_pane(frame: &mut ratatui::Frame, area: Rect, pane: &[String]
     frame.render_widget(pane, area);
 }
 
+fn start_view_key_hints(bindings: &crate::keybindings::Keybindings) -> Vec<String> {
+    use crate::keybindings::KeybindingAction;
+    let mut first = Vec::new();
+    if let Some(key) = bindings.hint(KeybindingAction::OpenPalette) {
+        let verb = if key.contains('+') { "Press" } else { "Type" };
+        first.push(format!("{verb} {key} for commands"));
+    }
+    if let Some(key) = bindings.hint(KeybindingAction::CycleMode) {
+        first.push(format!("{key} to change how much AGI does alone"));
+    }
+    let mut second = vec!["Esc clears".to_string()];
+    if let Some(key) = bindings.hint(KeybindingAction::Quit) {
+        second.push(format!("{key} twice to quit"));
+    }
+    second.push("/keys for all keys".to_string());
+    let mut lines = Vec::new();
+    if !first.is_empty() {
+        lines.push(format!("  {}.", first.join(" · ")));
+    }
+    lines.push(format!("  {}.", second.join(" · ")));
+    lines
+}
+
 fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
     let area = match ctx.workspace_pane {
         Some(pane) if area.width >= WORKSPACE_PANE_MIN_WIDTH => {
@@ -2566,14 +2584,12 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
             Style::default().fg(ui_muted()),
         )));
         lines.push(Line::from(""));
-        lines.push(Line::from(Span::styled(
-            "  Type / for commands · Shift+Tab to change how much AGI does alone.",
-            Style::default().fg(ui_muted()),
-        )));
-        lines.push(Line::from(Span::styled(
-            "  Esc clears · Ctrl+D twice to quit · /keys for all keys.",
-            Style::default().fg(ui_muted()),
-        )));
+        for hint_line in start_view_key_hints(ctx.keybindings) {
+            lines.push(Line::from(Span::styled(
+                hint_line,
+                Style::default().fg(ui_muted()),
+            )));
+        }
     } else {
         for msg in ctx.chat_messages {
             if msg.role == ChatRole::Detail {
@@ -3009,6 +3025,7 @@ static DISCOVERED_LOCAL_MODELS: std::sync::OnceLock<
 /// keyboard navigation cannot silently drop a dynamic source.
 fn available_picker_models() -> Vec<crate::model_catalog::Model> {
     let mut models = crate::model_catalog::catalog().all().to_vec();
+    crate::models::openrouter_models::refresh_cache_if_stale();
     models.extend(crate::models::openrouter_models::load_cached_models());
     models.extend(crate::models::gateway_models::cached_picker_models());
     if let Some(cache) = DISCOVERED_LOCAL_MODELS.get() {
@@ -3268,17 +3285,37 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
     // Keyboard hints in descending usefulness. The slash hint is the one that
     // teaches the app, so it is the last to go; each has a compact form, since
     // a hint that only appears at 180 columns is a hint most users never see.
-    let quit_key = ctx.quit_key;
+    use crate::keybindings::KeybindingAction;
+    let bindings = ctx.keybindings;
+    let palette_key = bindings.hint(KeybindingAction::OpenPalette);
+    let quit_key = bindings.display(KeybindingAction::Quit);
+    let mode_key = bindings.hint(KeybindingAction::CycleMode);
     let hints = move |tier: usize| -> Vec<String> {
-        let (slash, quit, mode) = if tier == 0 {
-            ("/: commands", ": quit", "Shift+Tab: mode")
-        } else {
-            ("/ cmds", " quit", "⇧⇥ mode")
-        };
-        std::iter::once(slash.to_string())
-            .chain(quit_key.map(|key| format!("{key}{quit}")))
-            .chain(std::iter::once(mode.to_string()))
-            .collect()
+        let compact = tier != 0;
+        let slash = palette_key.as_ref().map(|key| {
+            if compact {
+                format!("{key} cmds")
+            } else {
+                format!("{key}: commands")
+            }
+        });
+        let quit = quit_key.map(|key| {
+            if compact {
+                format!("{key} quit")
+            } else {
+                format!("{key}: quit")
+            }
+        });
+        let mode = mode_key.as_ref().map(|key| {
+            if !compact {
+                format!("{key}: mode")
+            } else if key == "Shift+Tab" {
+                "⇧⇥ mode".to_string()
+            } else {
+                format!("{key} mode")
+            }
+        });
+        slash.into_iter().chain(quit).chain(mode).collect()
     };
 
     let avail = area.width as usize;
@@ -3399,7 +3436,12 @@ fn render_mode_banner(frame: &mut ratatui::Frame, chat_area: Rect, app: &TuiApp)
     if shown_at.elapsed() > MODE_BANNER_TTL {
         return;
     }
-    let text = format!("  Mode: {} (shift+tab to cycle)  ", app.mode.label());
+    let cycle_hint = app
+        .keybindings
+        .display(crate::keybindings::KeybindingAction::CycleMode)
+        .map(|key| format!(" ({key} to cycle)"))
+        .unwrap_or_default();
+    let text = format!("  Mode: {}{cycle_hint}  ", app.mode.label());
     let width = (display_width(&text) as u16).min(chat_area.width.saturating_sub(2));
     if width == 0 {
         return;
@@ -3647,10 +3689,14 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
                 return InputAction::Quit(QuitReason::Interrupt);
             }
             app.exit_armed_at = Some(Instant::now());
-            app.status_notice = Some((
-                "nothing to interrupt · Ctrl-C again to exit".to_string(),
-                Instant::now(),
-            ));
+            let notice = match app
+                .keybindings
+                .hint(crate::keybindings::KeybindingAction::ClearInput)
+            {
+                Some(key) => format!("nothing to interrupt · {key} again to exit"),
+                None => "nothing to interrupt".to_string(),
+            };
+            app.status_notice = Some((notice, Instant::now()));
             return InputAction::None;
         }
         app.input.clear();
@@ -4596,10 +4642,10 @@ fn handle_agent_picker_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
             app.cursor = 0;
             InputAction::None
         }
-        AgentPickerAction::Invoke(agent_name) => {
+        AgentPickerAction::Invoke(agent_path) => {
             app.input.clear();
             app.cursor = 0;
-            match crate::agents::find_agent(&agent_name) {
+            match crate::agents::find_agent_at(&agent_path) {
                 Some(def) => {
                     def.apply_to_session(&mut app.session);
                     app.mode = InteractionMode::for_session(&app.session);
@@ -4611,13 +4657,16 @@ fn handle_agent_picker_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
                     };
                     app.chat_messages.push(ChatMessage {
                         role: ChatRole::System,
-                        text: format!("Agent `{}` activated{}", agent_name, model_note),
+                        text: format!("Agent `{}` activated{}", def.name, model_note),
                     });
                 }
                 None => {
                     app.chat_messages.push(ChatMessage {
                         role: ChatRole::System,
-                        text: format!("Agent `{}` not found.", agent_name),
+                        text: format!(
+                            "The selected agent at {} is no longer available.",
+                            agent_path.display()
+                        ),
                     });
                 }
             }
@@ -5223,7 +5272,10 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 app.session.cost_ledger.total_usd,
                 provider_access_mode(&app.session.provider),
             );
-            let mut lines = vec![format!("Turns: {} │ {}", app.session.turn_count, cost)];
+            let mut lines = vec![format!(
+                "Turns: {} │ {}",
+                app.session.cost_ledger.turns, cost
+            )];
             lines.extend(crate::usage_summary::session_model_lines(
                 &app.session.cost_ledger.model_breakdown(),
             ));
@@ -5635,13 +5687,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         "/agents" => {
             // No arg → open interactive picker; simple name → quick-invoke;
             // management subcommands (list/show/create/validate/help) → text output.
-            let is_management_subcommand = matches!(
-                arg.split_whitespace().next().unwrap_or(""),
-                "" | "list" | "ls" | "show" | "view" | "inspect" | "path" | "where"
-                    | "new" | "create" | "init" | "validate" | "doctor" | "check"
-                    | "delete" | "remove" | "rm" | "rename" | "set"
-                    | "help" | "-h" | "--help"
-            );
+            let is_management_subcommand = crate::agents::is_management_subcommand(arg);
             if arg.is_empty() {
                 // Open interactive agent picker overlay
                 app.agent_picker.open();
@@ -6013,7 +6059,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 cache_write_tokens: app.session.total_cache_creation_tokens,
                 estimated_cost_usd: app.session.cost_ledger.total_usd,
                 by_model: app.session.cost_ledger.model_breakdown(),
-                turn_count: app.session.turn_count,
+                turn_count: app.session.cost_ledger.turns,
                 model: crate::model_catalog::display_name(&app.session.model),
                 account_lines: crate::usage_summary::account_lines_blocking(),
             };
@@ -6251,6 +6297,9 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                     Ok(prompt) => SlashResult::SendPrompt(prompt),
                     Err(reason) => SlashResult::SystemMessage(reason),
                 };
+            }
+            if let Some(prompt) = crate::command_registry::expand_plugin_command_invocation(input) {
+                return SlashResult::SendPrompt(prompt);
             }
             if input.trim_start().starts_with("/mcp:") {
                 return SlashResult::SendMcpPrompt(input.to_string());
@@ -6495,20 +6544,7 @@ pub async fn run(
         }))
     };
 
-    // Populate the OpenRouter BYOK model cache in the background (public
-    // `/models` endpoint, no key needed) so the model picker can list current
-    // OpenRouter models without blocking startup. Skipped while the cache is
-    // fresh; the picker reads the cache directly, so this task just refreshes it.
-    if crate::models::openrouter_models::load_cached_models().is_empty() {
-        tokio::spawn(async move {
-            if let Ok(models) = crate::models::openrouter_models::fetch_openrouter_models().await {
-                crate::models::openrouter_models::save_cache(
-                    &models,
-                    &chrono::Utc::now().to_rfc3339(),
-                );
-            }
-        });
-    }
+    crate::models::openrouter_models::refresh_cache_if_stale();
 
     // Discover the account's managed-cloud roster without delaying terminal
     // startup. The trusted-host/JWT boundary lives in gateway_models; the
@@ -6635,7 +6671,7 @@ pub async fn run(
     crate::output::print_session_cost(
         app.session.total_input_tokens,
         app.session.total_output_tokens,
-        app.session.turn_count,
+        app.session.cost_ledger.turns,
         app.session.cost_ledger.total_usd,
         provider_access_mode(&app.session.provider),
     );
@@ -6777,7 +6813,16 @@ async fn run_event_loop(
                             msg.push_str(
                                 "\n  This means commands will execute without asking you first.",
                             );
-                            msg.push_str("\n  Press Shift+Tab again to advance to FullAuto, or cycle back to Default.");
+                            let again = app
+                                .keybindings
+                                .hint(crate::keybindings::KeybindingAction::CycleMode)
+                                .map_or_else(
+                                    || "Cycle the mode".to_string(),
+                                    |key| format!("Press {key} again"),
+                                );
+                            msg.push_str(&format!(
+                                "\n  {again} to advance to FullAuto, or cycle back to Default."
+                            ));
                         }
                         if new_mode == InteractionMode::FullAuto {
                             msg.push_str(
@@ -7202,8 +7247,10 @@ async fn run_event_loop(
                             }
                             SlashResult::NotSlash | SlashResult::SendAsPrompt => {
                                 let prompt = resolve_composer_mentions(app, &text);
-                                let (prompt, notices) =
-                                    app.session.expand_mcp_resource_mentions(&prompt).await;
+                                let (prompt, notices) = app
+                                    .session
+                                    .expand_mcp_resource_mentions(&text, &prompt)
+                                    .await;
                                 for notice in notices {
                                     app.chat_messages.push(ChatMessage {
                                         role: ChatRole::System,
@@ -7671,9 +7718,7 @@ async fn send_message_with_prompt(
                             effort_label: turn_effort_label,
                             cost_str: turn_cost_str.clone(),
                             notice: turn_notice.as_deref(),
-                            quit_key: app
-                                .keybindings
-                                .display(crate::keybindings::KeybindingAction::Quit),
+                            keybindings: &app.keybindings,
                         };
                         if let crate::tui::approval_broker::ApprovalRequestKind::Question {
                             question,
@@ -7882,9 +7927,7 @@ async fn send_message_with_prompt(
                         effort_label: turn_effort_label,
                         cost_str: turn_cost_str.clone(),
                         notice: turn_notice.as_deref(),
-                        quit_key: app
-                            .keybindings
-                            .display(crate::keybindings::KeybindingAction::Quit),
+                        keybindings: &app.keybindings,
                     };
                     render_turn_frame(terminal, &ctx, &app.input, app.queued_prompts.len())?;
 
@@ -9820,6 +9863,21 @@ mod tests {
     }
 
     #[test]
+    fn cost_counts_the_turns_its_tokens_belong_to() {
+        let mut app = minimal_app();
+        app.session.turn_count = 5;
+        app.session
+            .cost_ledger
+            .record_turn("fixture-model", 10, 5, 0, 0);
+
+        let SlashResult::SystemMessage(text) = handle_slash("/cost", &mut app) else {
+            panic!("/cost answers with a system message");
+        };
+
+        assert!(text.starts_with("Turns: 1 │"), "{text}");
+    }
+
+    #[test]
     fn ctrl_c_exits_only_on_the_second_press() {
         use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
@@ -10500,7 +10558,7 @@ mod tests {
             effort_label: "Medium",
             cost_str: "0 credits".to_string(),
             notice: None,
-            quit_key: Some("ctrl+d"),
+            keybindings: default_keybindings(),
         };
 
         let mut overlay = ApprovalOverlayState::default();
@@ -10549,6 +10607,23 @@ mod tests {
     // border characters and the abbreviation tier, not just the field values.
     // -----------------------------------------------------------------------
 
+    fn default_keybindings() -> &'static crate::keybindings::Keybindings {
+        static DEFAULTS: std::sync::OnceLock<crate::keybindings::Keybindings> =
+            std::sync::OnceLock::new();
+        DEFAULTS.get_or_init(|| {
+            crate::keybindings::Keybindings::from_config(&std::collections::BTreeMap::new())
+        })
+    }
+
+    fn rebound_keybindings() -> crate::keybindings::Keybindings {
+        crate::keybindings::Keybindings::from_config(&std::collections::BTreeMap::from([
+            ("open_palette".to_string(), "ctrl+p".to_string()),
+            ("cycle_mode".to_string(), "ctrl+y".to_string()),
+            ("quit".to_string(), "ctrl+q".to_string()),
+            ("clear_input".to_string(), "ctrl+x".to_string()),
+        ]))
+    }
+
     fn layout_fixture_ctx<'a>(
         statusline: &'a crate::tui::widgets::statusline_setup::StatusLineConfig,
         chat_messages: &'a [ChatMessage],
@@ -10588,7 +10663,7 @@ mod tests {
             effort_label,
             cost_str: "Tokens: 1234 in / 567 out (billed by your provider)".to_string(),
             notice,
-            quit_key: Some("ctrl+d"),
+            keybindings: default_keybindings(),
         }
     }
 
@@ -10858,9 +10933,73 @@ mod tests {
         assert!(matches!(action, InputAction::None));
         assert!(
             app.live_notice()
-                .is_some_and(|n| n.contains("Ctrl-C again to exit")),
+                .is_some_and(|n| n.contains("Ctrl+C again to exit")),
             "the first Ctrl-C must report what it did, got {:?}",
             app.live_notice()
+        );
+    }
+
+    #[test]
+    fn a_rebound_clear_input_chord_names_itself_and_its_repeat_exits() {
+        let mut config = crate::config::CliConfig::default();
+        config
+            .ui
+            .keybindings
+            .insert("clear_input".to_string(), "ctrl+x".to_string());
+        let mut app = minimal_app_with(config);
+        let ctrl_x = crossterm::event::KeyEvent::new(
+            crossterm::event::KeyCode::Char('x'),
+            crossterm::event::KeyModifiers::CONTROL,
+        );
+
+        assert!(matches!(
+            handle_key_event(&mut app, ctrl_x),
+            InputAction::None
+        ));
+        let notice = app.live_notice().map(str::to_owned).unwrap_or_default();
+        assert!(notice.contains("Ctrl+X again to exit"), "{notice}");
+        assert!(!notice.contains("Ctrl+C"), "{notice}");
+        assert!(matches!(
+            handle_key_event(&mut app, ctrl_x),
+            InputAction::Quit(QuitReason::Interrupt)
+        ));
+    }
+
+    #[test]
+    fn the_footer_and_start_view_name_rebound_chords() {
+        let bindings = rebound_keybindings();
+        let statusline = shipped_statusline();
+        let messages: Vec<ChatMessage> = Vec::new();
+        let cells: Vec<ToolCell> = Vec::new();
+        let mut ctx = layout_fixture_ctx(&statusline, &messages, &cells, "High", None);
+        ctx.keybindings = &bindings;
+        let footer = draw_footer_for(&ctx, 200);
+        assert!(footer.contains("Ctrl+P: commands"), "{footer}");
+        assert!(footer.contains("ctrl+q: quit"), "{footer}");
+        assert!(footer.contains("Ctrl+Y: mode"), "{footer}");
+        assert!(!footer.contains("Shift+Tab"), "{footer}");
+        assert!(!footer.contains("/: commands"), "{footer}");
+        assert!(!footer.contains("ctrl+d"), "{footer}");
+
+        let hints = start_view_key_hints(&bindings);
+        assert_eq!(
+            hints,
+            vec![
+                "  Press Ctrl+P for commands · Ctrl+Y to change how much AGI does alone."
+                    .to_string(),
+                "  Esc clears · Ctrl+Q twice to quit · /keys for all keys.".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn the_default_start_view_hints_keep_their_wording() {
+        assert_eq!(
+            start_view_key_hints(default_keybindings()),
+            vec![
+                "  Type / for commands · Shift+Tab to change how much AGI does alone.".to_string(),
+                "  Esc clears · Ctrl+D twice to quit · /keys for all keys.".to_string(),
+            ]
         );
     }
 
@@ -11000,7 +11139,7 @@ mod tests {
             effort_label: "Medium",
             cost_str: "0 credits".to_string(),
             notice: None,
-            quit_key: Some("ctrl+d"),
+            keybindings: default_keybindings(),
         };
 
         let mut terminal = Terminal::new(TestBackend::new(120, 60)).expect("terminal");
@@ -11061,7 +11200,7 @@ mod tests {
             effort_label: "Medium",
             cost_str: "0 credits".to_string(),
             notice: None,
-            quit_key: Some("ctrl+d"),
+            keybindings: default_keybindings(),
         };
 
         let diff_review = DiffReviewView::new(vec![FileDiff::new(
@@ -11351,7 +11490,7 @@ mod tests {
             effort_label: "Medium",
             cost_str: "0 credits".to_string(),
             notice: None,
-            quit_key: Some("ctrl+d"),
+            keybindings: default_keybindings(),
         };
 
         let mut terminal = Terminal::new(TestBackend::new(200, 40)).expect("terminal");

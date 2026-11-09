@@ -150,7 +150,7 @@ pub(super) async fn handle_slash_command(
             output::print_session_cost(
                 session.total_input_tokens,
                 session.total_output_tokens,
-                session.turn_count,
+                session.cost_ledger.turns,
                 session.cost_ledger.total_usd,
                 crate::design_system::AccessMode::for_provider(&session.provider),
             );
@@ -241,27 +241,7 @@ pub(super) async fn handle_slash_command(
             output::print_block(&crate::skills::format_skill_list(&all));
         }
         "/agents" | "/agent" => {
-            let is_quick_invoke = !arg.is_empty()
-                && !matches!(
-                    arg.split_whitespace().next().unwrap_or(""),
-                    "list"
-                        | "ls"
-                        | "show"
-                        | "view"
-                        | "inspect"
-                        | "path"
-                        | "where"
-                        | "new"
-                        | "create"
-                        | "init"
-                        | "validate"
-                        | "doctor"
-                        | "check"
-                        | "help"
-                        | "-h"
-                        | "--help"
-                );
-            if is_quick_invoke {
+            if !crate::agents::is_management_subcommand(arg) {
                 return SlashResult::AgentInvoke(arg.to_string());
             }
             output::print_block(&crate::agents::render_agents_command(arg));
@@ -330,7 +310,7 @@ pub(super) async fn handle_slash_command(
             output::print_block(
                 &crate::usage_summary::render_usage_report(
                     &crate::usage_summary::SessionEstimate {
-                        turns: session.turn_count,
+                        turns: session.cost_ledger.turns,
                         input_tokens: session.total_input_tokens,
                         output_tokens: session.total_output_tokens,
                         cache_read_tokens: session.total_cache_read_tokens,
@@ -672,6 +652,9 @@ pub(super) async fn handle_slash_command(
                 }
                 None => {}
             }
+            if let Some(prompt) = crate::command_registry::expand_plugin_command_invocation(input) {
+                return SlashResult::Prompt(prompt);
+            }
             if input.trim_start().starts_with("/mcp:") {
                 return SlashResult::McpPrompt(input.to_string());
             }
@@ -852,6 +835,23 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[tokio::test]
+    async fn agent_management_verbs_are_handled_instead_of_activating_an_agent() {
+        let ctx = crate::context::gather_system_context();
+        let mut session =
+            crate::agent::AgentSession::new(crate::model_catalog::default_model(), &ctx, None);
+        let mut config = crate::config::CliConfig::default();
+
+        for verb in ["rename", "set", "delete", "remove", "rm"] {
+            let result =
+                handle_slash_command(&format!("/agents {verb}"), &mut session, &mut config).await;
+            assert!(matches!(result, SlashResult::Handled), "{verb}");
+        }
+
+        let activation = handle_slash_command("/agents reviewer", &mut session, &mut config).await;
+        assert!(matches!(activation, SlashResult::AgentInvoke(name) if name == "reviewer"));
     }
 
     #[tokio::test]

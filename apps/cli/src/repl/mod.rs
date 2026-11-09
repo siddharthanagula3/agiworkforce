@@ -729,7 +729,7 @@ pub async fn run_repl(
     output::print_session_cost(
         session.total_input_tokens,
         session.total_output_tokens,
-        session.turn_count,
+        session.cost_ledger.turns,
         session.cost_ledger.total_usd,
         crate::design_system::AccessMode::for_provider(&session.provider),
     );
