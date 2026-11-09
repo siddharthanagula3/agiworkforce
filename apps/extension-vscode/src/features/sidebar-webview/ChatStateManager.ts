@@ -3870,8 +3870,18 @@ export class ChatStateManager {
     ];
   }
 
-  private async _attachmentInputs(entries: readonly PendingAttachment[]): Promise<UserInput[]> {
-    const inputs: UserInput[] = [];
+  private _unremovedAttachmentInputs(
+    owner: PendingChatSend,
+    admitted: readonly PendingAttachment[],
+  ): UserInput[] {
+    const owned = new Set(owner.attachments.map((entry) => entry.id));
+    return admitted.filter((entry) => owned.has(entry.id)).map((entry) => entry.input);
+  }
+
+  private async _admittedAttachments(
+    entries: readonly PendingAttachment[],
+  ): Promise<PendingAttachment[]> {
+    const admitted: PendingAttachment[] = [];
     for (const entry of entries) {
       if (entry.source !== undefined) {
         if (entry.source.untitled === true) {
@@ -3883,9 +3893,9 @@ export class ChatStateManager {
           if (!resolved.ok || resolved.uri.fsPath !== entry.source.filePath) continue;
         }
       }
-      inputs.push(entry.input);
+      admitted.push(entry);
     }
-    return inputs;
+    return admitted;
   }
 
   private async _buildFollowUpInputs(
@@ -3896,10 +3906,11 @@ export class ChatStateManager {
       hasVisibleReferenceToken(request.text, reference),
     );
     const mentionInputs = await buildWorkspaceReferenceInputs(workspaceUri, visibleReferences);
+    const admittedAttachments = await this._admittedAttachments(request.attachments);
     return [
       ...this._typedTextInputs(request.text, request.browseWeb),
       ...mentionInputs,
-      ...(await this._attachmentInputs(request.attachments)),
+      ...this._unremovedAttachmentInputs(request, admittedAttachments),
     ];
   }
 
@@ -4142,7 +4153,7 @@ export class ChatStateManager {
 
       try {
         const attachmentEntries = [...request.attachments];
-        const attachmentInputs = await this._attachmentInputs(attachmentEntries);
+        const admittedAttachments = await this._admittedAttachments(attachmentEntries);
         const activeProject = getActiveCloudProject(this._context.workspaceState);
         const customInstructionInput = buildCustomInstructionInput(this._context, {
           projectAppliedByServer: activeProject !== undefined && thread.trustMode === 'managed',
@@ -4163,6 +4174,12 @@ export class ChatStateManager {
         const disallowedTools = this._disallowedTools.get(thread.id);
         const filtersTools =
           disallowedTools !== undefined && (await runtime.offers('turnToolFilters'));
+        const reasoningEffort = supportedEffort(
+          requestedModel,
+          this._effort ?? Config.agentEffort(),
+          await this._syncEffortLadder(thread.runtime),
+        );
+        const attachmentInputs = this._unremovedAttachmentInputs(request, admittedAttachments);
         const startTurn = runtime.startTurn({
           threadId: thread.id,
           cwd,
@@ -4175,11 +4192,7 @@ export class ChatStateManager {
             ...attachmentInputs,
           ],
           agentMode: enforceAgentModeConsent(this._mode ?? Config.agentMode()),
-          reasoningEffort: supportedEffort(
-            requestedModel,
-            this._effort ?? Config.agentEffort(),
-            await this._syncEffortLadder(thread.runtime),
-          ),
+          reasoningEffort,
           ...(contextFiles.length === 0 ? {} : { contextFiles }),
           ...(filtersTools ? { disallowedTools: [...disallowedTools] } : {}),
           ...(activeProject === undefined ? {} : { cloudProjectId: activeProject.id }),
@@ -4241,7 +4254,7 @@ export class ChatStateManager {
           });
         }
         const attachmentIds = attachmentEntries.map((entry) => entry.id);
-        request.attachments.splice(0, attachmentEntries.length);
+        for (const id of attachmentIds) this._removeOwnedAttachment(request, id);
         if (attachmentIds.length > 0) {
           this._post({ type: 'attachmentsConsumed', payload: { ids: attachmentIds } });
         }

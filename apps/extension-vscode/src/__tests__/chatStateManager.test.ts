@@ -3376,6 +3376,65 @@ describe('ChatStateManager local turn lifecycle', () => {
     await send;
   });
 
+  it('omits an attachment removed while the turn is still being prepared', async () => {
+    const harness = makeHarness();
+    let releaseLadder!: () => void;
+    const ladderGate = new Promise<boolean>((resolve) => {
+      releaseLadder = () => resolve(false);
+    });
+    harness.runtime.offers.mockImplementation(async (capability: string) =>
+      capability === 'reasoningEffortLadder' ? ladderGate : false,
+    );
+    await harness.manager.handleMessage({
+      type: 'attachFiles',
+      payload: {
+        files: [
+          {
+            name: 'notes.txt',
+            mimeType: 'text/plain',
+            sizeBytes: 5,
+            dataUrl: 'data:text/plain;base64,aGVsbG8=',
+          },
+        ],
+      },
+    });
+    const ack = harness.posted.find((m) => m.type === 'attachFilesAck') as {
+      type: 'attachFilesAck';
+      payload: { added: Array<{ id: string }> };
+    };
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Summarize the attachment' },
+    });
+    await vi.waitFor(() =>
+      expect(harness.runtime.offers).toHaveBeenCalledWith('reasoningEffortLadder'),
+    );
+    expect(harness.runtime.startTurn).not.toHaveBeenCalled();
+
+    await harness.manager.handleMessage({
+      type: 'removePendingAttachment',
+      payload: { id: ack.payload.added[0]!.id },
+    });
+    releaseLadder();
+
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    expect(harness.runtime.startTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: [{ type: 'text', text: 'Summarize the attachment', text_elements: [] }],
+      }),
+    );
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+  });
+
   it('forwards dropped text attachments as explicitly untrusted text input', async () => {
     const harness = makeHarness();
     await harness.manager.handleMessage({

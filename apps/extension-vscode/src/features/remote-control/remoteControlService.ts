@@ -172,6 +172,7 @@ export class VscodeRemoteControl implements vscode.Disposable {
   private readonly _reportActivity: (rootId: string, event: DeveloperSessionEvent) => Promise<void>;
   private readonly _watched = new Map<string, vscode.Disposable[]>();
   private readonly _disposables: vscode.Disposable[] = [];
+  private _startAttempt = 0;
 
   readonly onDidChangeState = this._changed.event;
 
@@ -228,15 +229,25 @@ export class VscodeRemoteControl implements vscode.Disposable {
     if (workspaceRoots().length === 0) {
       throw new RemoteControlUnavailable(t('remote.openFolderFirst'));
     }
-    const token = await getAccountToken(this._context.secrets);
-    if (!token) throw new RemoteControlUnavailable(t('remote.signInFirst'));
-    const pairing = await requestPairing(token);
+    const attempt = ++this._startAttempt;
+    let pairing: RemoteControlStartRequest;
+    try {
+      const token = await getAccountToken(this._context.secrets);
+      if (attempt !== this._startAttempt) return this._state;
+      if (!token) throw new RemoteControlUnavailable(t('remote.signInFirst'));
+      pairing = await requestPairing(token);
+    } catch (error) {
+      if (attempt !== this._startAttempt) return this._state;
+      throw error;
+    }
+    if (attempt !== this._startAttempt) return this._state;
     const state = this._host.start({ ...pairing });
     this._watchRoots();
     return state;
   }
 
   stop(): RemoteControlState {
+    this._startAttempt += 1;
     this._unwatchAll();
     return this._host.stop();
   }

@@ -2,7 +2,7 @@ import { PRODUCT_NAMES } from '@agiworkforce/types';
 import * as vscode from 'vscode';
 
 import type { WorktreeSummary } from '../../integrations/localRuntimeClient';
-import type { CliCapabilityAdapter } from './cliCapabilities';
+import { CLI_WORKSPACE_REQUIREMENT, type CliCapabilityAdapter } from './cliCapabilities';
 
 const TITLE = `${PRODUCT_NAMES.code}, Session Worktrees`;
 
@@ -46,7 +46,12 @@ async function removeWorktree(cli: CliCapabilityAdapter, worktree: WorktreeSumma
   void vscode.window.showInformationMessage(`${PRODUCT_NAMES.code}: removed ${worktree.name}.`);
 }
 
-export async function manageSessionWorktrees(cli: CliCapabilityAdapter): Promise<void> {
+export async function manageSessionWorktrees(adapter: CliCapabilityAdapter): Promise<void> {
+  const cli = await adapter.pinToWorkspace();
+  if (cli === undefined) {
+    void vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: ${CLI_WORKSPACE_REQUIREMENT}`);
+    return;
+  }
   const listed = await cli.call<WorktreeSummary[]>('worktreeList');
   if (listed.status !== 'ok') {
     void vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: ${listed.reason}`);
