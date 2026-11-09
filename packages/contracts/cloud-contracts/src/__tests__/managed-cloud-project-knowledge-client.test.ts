@@ -114,6 +114,38 @@ describe('createManagedCloudProjectKnowledgeClient', () => {
     expect(String(registration[1].body)).not.toContain('public.example.test');
   });
 
+  it('hands the registration notice to the caller and still returns the file', async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          uploadUrl: 'https://upload.example.test/signed',
+          uploadMethod: 'PUT',
+          uploadHeaders: { 'Content-Type': 'text/plain' },
+          storageKey: STORAGE_KEY,
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({ file: REGISTERED_FILE, notice: 'Some pages were not read.' }, 201),
+      );
+    const client = createManagedCloudProjectKnowledgeClient({
+      sourceSurface: 'web',
+      fetchImpl,
+      uploadFetchImpl: vi.fn().mockResolvedValue(new Response(null, { status: 200 })),
+    });
+    const onNotice = vi.fn();
+
+    const result = await client.upload(
+      'project-1',
+      new File(['hello'], 'notes.txt', { type: 'text/plain' }),
+      { onNotice },
+    );
+
+    expect(result).toEqual(REGISTERED_FILE);
+    expect(onNotice).toHaveBeenCalledTimes(1);
+    expect(onNotice).toHaveBeenCalledWith('Some pages were not read.');
+  });
+
   it('deletes the uploaded object when registration fails', async () => {
     const fetchImpl = vi
       .fn()

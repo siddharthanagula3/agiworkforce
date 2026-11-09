@@ -136,6 +136,7 @@ export type ManagedCloudProjectKnowledgeRegisterRequest = z.infer<
 
 export const ManagedCloudProjectKnowledgeRegisterResponseSchema = z.object({
   file: ManagedCloudProjectKnowledgeFileSchema,
+  notice: z.string().min(1).optional(),
 });
 
 export const ManagedCloudProjectKnowledgeDeleteResponseSchema = z.object({
