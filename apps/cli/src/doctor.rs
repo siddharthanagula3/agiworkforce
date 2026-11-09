@@ -663,25 +663,39 @@ fn git_hygiene_checks() -> Vec<DoctorCheck> {
         return checks;
     }
 
-    let current_branch = layout.head.to_string();
-    let branches = stale_branches(60).unwrap_or_default();
+    checks.push(stale_branches_check(
+        &layout.head.to_string(),
+        stale_branches(60),
+    ));
+    checks
+}
+
+fn stale_branches_check(current_branch: &str, branches: Option<Vec<String>>) -> DoctorCheck {
+    let details = vec![format!("current branch: {current_branch}")];
+    let Some(branches) = branches else {
+        return check(
+            "git.stale_branches",
+            "stale branches",
+            DoctorStatus::Unknown,
+            "branch list could not be read",
+            details,
+        );
+    };
     let status = if branches.is_empty() {
         DoctorStatus::Pass
     } else {
         DoctorStatus::Warn
     };
-    checks.push(check(
+    let message = format!("{} branch(es) older than 60 days", branches.len());
+    let mut details = details;
+    details.extend(branches.into_iter().take(20));
+    check(
         "git.stale_branches",
         "stale branches",
         status,
-        format!("{} branch(es) older than 60 days", branches.len()),
-        {
-            let mut details = vec![format!("current branch: {current_branch}")];
-            details.extend(branches.into_iter().take(20));
-            details
-        },
-    ));
-    checks
+        message,
+        details,
+    )
 }
 
 /// The repository's shape as one check: a detached HEAD, a bare checkout, a
@@ -832,6 +846,30 @@ mod tests {
             .details
             .iter()
             .any(|detail| detail == "config core.bare=false"));
+    }
+
+    #[test]
+    fn a_branch_list_that_could_not_be_read_is_unknown_not_a_pass() {
+        let result = stale_branches_check("main", None);
+
+        assert_eq!(result.status, DoctorStatus::Unknown);
+        assert!(!result.message.contains("0 branch(es)"));
+        assert_eq!(result.details, vec!["current branch: main".to_string()]);
+    }
+
+    #[test]
+    fn an_empty_branch_list_passes_and_stale_branches_warn() {
+        let empty = stale_branches_check("main", Some(Vec::new()));
+        assert_eq!(empty.status, DoctorStatus::Pass);
+        assert_eq!(empty.message, "0 branch(es) older than 60 days");
+
+        let stale = (0..25)
+            .map(|index| format!("old-{index}: older than 60 days"))
+            .collect::<Vec<_>>();
+        let warned = stale_branches_check("main", Some(stale));
+        assert_eq!(warned.status, DoctorStatus::Warn);
+        assert_eq!(warned.message, "25 branch(es) older than 60 days");
+        assert_eq!(warned.details.len(), 21);
     }
 
     #[test]
