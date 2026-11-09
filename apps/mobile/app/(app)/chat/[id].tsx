@@ -19,7 +19,10 @@ import { Composer } from '@/src/features/chat/components/Composer/Composer';
 import { QuotedReplyBar } from '@/src/features/chat/components/QuotedReplyBar';
 import { trackProductEvent } from '@/services/productAnalytics';
 import { ContextWarningChip } from '@/src/features/chat/components/ContextWarningChip';
-import { resolveOnAcceptedSend } from '@/src/features/chat/utils/sendDispatch';
+import {
+  dispatchHandedOffSend,
+  resolveOnAcceptedSend,
+} from '@/src/features/chat/utils/sendDispatch';
 import { confirmShareConversation } from '@/src/features/shared-links/shareConversation';
 import { useMobileSkillSelectionStore } from '@/src/features/skills/selectionStore';
 import { WorkModeSwitch } from '@/src/features/chat/components/WorkModeSwitch';
@@ -748,7 +751,10 @@ export default function ChatScreen() {
   useEffect(() => {
     if (!id || isStreaming || isLoadingMessages) return;
     const handedOff = takeConversationSend(id);
-    if (handedOff) void handleSend(handedOff);
+    if (!handedOff) return;
+    void dispatchHandedOffSend(handedOff, handleSend, (text) =>
+      chatInputAttachRef.current?.restoreText?.(text),
+    );
   }, [handleSend, id, isLoadingMessages, isStreaming]);
 
   const handleStop = useCallback(() => {
@@ -1628,7 +1634,7 @@ export default function ChatScreen() {
     const whenCurrent = (run: () => void) => () => {
       if (isConversationActionCurrent(actionScope)) run();
     };
-    openActions(id, title, conversation?.pinned === true, {
+    openActions(id, title, {
       extraActions: [
         ...(cloud && conversation?.temporary
           ? [
@@ -1654,7 +1660,6 @@ export default function ChatScreen() {
     });
   }, [
     captureConversationAction,
-    conversation?.pinned,
     conversation?.temporary,
     conversationExecutionMode,
     handleBack,

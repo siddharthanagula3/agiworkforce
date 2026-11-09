@@ -384,11 +384,7 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
     ({ item }: { item: ChatsListItem }) => (
       <PressableBox
         onPress={() => openItem(item)}
-        onLongPress={
-          item.kind === 'chat'
-            ? () => openActions(item.id, item.title, item.pinned === true)
-            : undefined
-        }
+        onLongPress={item.kind === 'chat' ? () => openActions(item.id, item.title) : undefined}
         accessibilityRole="button"
         accessibilityLabel={`Open ${item.kind}: ${item.title}${item.unread ? ', unread' : ''}`}
         accessibilityHint={item.kind === 'chat' ? 'Long press for more actions' : undefined}
@@ -444,7 +440,7 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
           <ChevronRight size={16} color={colors.textMuted} />
         ) : item.kind === 'chat' ? (
           <PressableBox
-            onPress={() => openActions(item.id, item.title, item.pinned === true)}
+            onPress={() => openActions(item.id, item.title)}
             accessibilityRole="button"
             accessibilityLabel={`More actions for ${item.title}`}
             hitSlop={8}

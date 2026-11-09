@@ -60,6 +60,8 @@ const DELIVERY_BODY: Record<ReportDelivery['kind'], string> = {
   'email-unavailable': 'No mail app is set up on this device, but the report is still saved here.',
 };
 
+const MAIL_UNAVAILABLE_UNSENT_BODY = `${DELIVERY_BODY['email-unavailable']} Nothing was sent.`;
+
 const DELIVERY_TITLE: Record<ReportDelivery['kind'], string> = {
   'submitted-to-server': 'Report submitted for review',
   'stored-on-device': 'Send this report to AGI?',
@@ -67,6 +69,15 @@ const DELIVERY_TITLE: Record<ReportDelivery['kind'], string> = {
   'email-composer-opened': 'Report saved on this device',
   'email-unavailable': 'Report saved on this device',
 };
+
+function isAwaitingSend(saved: { report: ContentReport; delivery: ReportDelivery }): boolean {
+  if (saved.delivery.kind === 'stored-on-device') return true;
+  return (
+    saved.delivery.kind === 'email-unavailable' &&
+    !saved.report.serverAcknowledged &&
+    !saved.report.uploadConsented
+  );
+}
 
 export interface ReportTarget {
   messageId: string;
@@ -149,6 +160,7 @@ export function ReportSheet({
   }, [visible]);
 
   const handleClose = onClose;
+  const awaitingSend = saved ? isAwaitingSend(saved) : false;
 
   const handleSubmit = useCallback(async () => {
     if (!selectedCategory) return;
@@ -214,10 +226,12 @@ export function ReportSheet({
           {saved ? (
             <View style={styles.resultContainer}>
               <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>
-                {DELIVERY_TITLE[saved.delivery.kind]}
+                {DELIVERY_TITLE[awaitingSend ? 'stored-on-device' : saved.delivery.kind]}
               </Text>
               <Text style={[styles.resultBody, { color: colors.textSecondary }]}>
-                {DELIVERY_BODY[saved.delivery.kind]}
+                {awaitingSend && saved.delivery.kind === 'email-unavailable'
+                  ? MAIL_UNAVAILABLE_UNSENT_BODY
+                  : DELIVERY_BODY[saved.delivery.kind]}
               </Text>
               {errorMessage && (
                 <Text
@@ -228,7 +242,7 @@ export function ReportSheet({
                   {errorMessage}
                 </Text>
               )}
-              {saved.delivery.kind === 'stored-on-device' && (
+              {awaitingSend && (
                 <PressableBox
                   testID="report-send-stored-btn"
                   onPress={() => void handleSendStored()}
@@ -245,7 +259,7 @@ export function ReportSheet({
                   )}
                 </PressableBox>
               )}
-              {saved.delivery.kind === 'stored-on-device' ? (
+              {awaitingSend ? (
                 <PressableBox
                   testID="report-email-handoff-btn"
                   onPress={() => void handleEmailHandoff()}
@@ -282,7 +296,7 @@ export function ReportSheet({
                 testID="report-close-btn"
                 onPress={handleClose}
                 accessibilityRole="button"
-                accessibilityLabel={saved.delivery.kind === 'stored-on-device' ? 'Cancel' : 'Done'}
+                accessibilityLabel={awaitingSend ? 'Cancel' : 'Done'}
                 style={
                   saved.delivery.kind === 'email-composer-opened'
                     ? [styles.submitBtn, { backgroundColor: colors.teal }]
@@ -296,7 +310,7 @@ export function ReportSheet({
                       : [styles.cancelBtnText, { color: colors.textMuted }]
                   }
                 >
-                  {saved.delivery.kind === 'stored-on-device' ? 'Cancel' : 'Done'}
+                  {awaitingSend ? 'Cancel' : 'Done'}
                 </Text>
               </PressableBox>
             </View>

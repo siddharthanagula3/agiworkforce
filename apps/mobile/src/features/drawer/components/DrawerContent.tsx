@@ -491,13 +491,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
       <PressableBox
         key={conversation.id}
         onPress={() => navigate('/(app)/chat/[id]', { id: conversation.id })}
-        onLongPress={() =>
-          openActions(
-            conversation.id,
-            conversation.title || 'Untitled chat',
-            Boolean(conversation.pinned),
-          )
-        }
+        onLongPress={() => openActions(conversation.id, conversation.title || 'Untitled chat')}
         accessibilityRole="button"
         accessibilityLabel={`Open conversation: ${conversation.title}${conversation.unread ? ', unread' : ''}`}
         accessibilityHint="Long press for more actions"

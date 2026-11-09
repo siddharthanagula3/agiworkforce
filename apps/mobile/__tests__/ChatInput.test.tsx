@@ -1032,6 +1032,20 @@ describe('ChatInput', () => {
       expect(onSend).not.toHaveBeenCalled();
     });
 
+    it('restores returned text into an empty composer and after an existing draft', () => {
+      const ref = React.createRef<ChatInputHandle>();
+      const screen = renderInput({ attachRef: ref });
+
+      act(() => ref.current?.restoreText?.('Also cover Q3'));
+      expect(screen.getByLabelText('Message input').props.value).toBe('Also cover Q3');
+
+      fireEvent.changeText(screen.getByLabelText('Message input'), 'My existing draft');
+      act(() => ref.current?.restoreText?.('Also cover Q3'));
+      expect(screen.getByLabelText('Message input').props.value).toBe(
+        'My existing draft\n\nAlso cover Q3',
+      );
+    });
+
     it('exposes focus() and drives the real text field with it', () => {
       const focusSpy = jest.spyOn(TextInput.prototype, 'focus');
       const ref = React.createRef<ChatInputHandle>();

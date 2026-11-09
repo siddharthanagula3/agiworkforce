@@ -110,9 +110,8 @@ function mergeTranscript(previous: string, transcript: string): string {
 }
 
 function attachmentIdentity(attachment: Attachment): string {
-  return attachment.pastedText !== undefined
-    ? `text:${attachment.id}`
-    : `${attachment.mimeType}:${attachment.fileName}:${attachment.fileSize ?? attachment.uri}`;
+  if (attachment.pastedText !== undefined) return `text:${attachment.id}`;
+  return attachment.assetId ? `asset:${attachment.assetId}` : `uri:${attachment.uri}`;
 }
 
 interface QueuedFollowUp {
@@ -128,6 +127,7 @@ export interface ChatInputHandle {
   ) => ComposerAttachmentOperation | null;
   focus?: () => void;
   prefillText?: (starter: string) => void;
+  restoreText?: (text: string) => void;
 }
 
 interface ChatInputProps {
@@ -352,6 +352,9 @@ export function ChatInput({
       },
       prefillText: (starter: string) => {
         setText((current) => (current.trim() ? current : starter));
+      },
+      restoreText: (restored: string) => {
+        setText((current) => (current.trim() ? `${current}\n\n${restored}` : restored));
       },
       addAttachments,
       captureAttachmentOperation: (executionMode: 'local' | 'cloud') => {

@@ -63,18 +63,18 @@ beforeEach(() => {
   jest.spyOn(Alert, 'alert').mockImplementation(() => undefined as never);
 });
 
-function seedCloudRow(id: string): void {
+function seedCloudRow(id: string, pinned = false): void {
   useChatCloudMessageStore.getState().addCloudConversation({
     id,
     title: `Chat ${id}`,
     createdAt: T,
     updatedAt: T,
     messageCount: 0,
-    pinned: false,
+    pinned,
   });
 }
 
-function seedLocalRow(id: string): void {
+function seedLocalRow(id: string, pinned = false): void {
   useChatMessageStore.setState({
     conversations: [
       {
@@ -83,7 +83,7 @@ function seedLocalRow(id: string): void {
         createdAt: T,
         updatedAt: T,
         messageCount: 0,
-        pinned: false,
+        pinned,
         model: LOCAL_MODEL_ID,
         provider: 'local',
         executionMode: 'local',
@@ -98,7 +98,7 @@ describe('conversation row actions reach every action on both platforms', () => 
     seedCloudRow('c-1');
     const { result } = renderHook(() => useConversationActions());
 
-    act(() => result.current.openActions('c-1', 'Chat c-1', false));
+    act(() => result.current.openActions('c-1', 'Chat c-1'));
 
     const menu = result.current.rename.menu;
     expect(menu.visible).toBe(true);
@@ -120,7 +120,7 @@ describe('conversation row actions reach every action on both platforms', () => 
     seedLocalRow('l-1');
     const { result } = renderHook(() => useConversationActions());
 
-    act(() => result.current.openActions('l-1', 'Chat l-1', false));
+    act(() => result.current.openActions('l-1', 'Chat l-1'));
 
     expect(result.current.rename.menu.actions.map((action) => action.key)).toEqual([
       'rename',
@@ -135,7 +135,7 @@ describe('conversation row actions reach every action on both platforms', () => 
     seedCloudRow('c-1');
     const { result } = renderHook(() => useConversationActions());
 
-    act(() => result.current.openActions('c-1', 'Chat c-1', false));
+    act(() => result.current.openActions('c-1', 'Chat c-1'));
     const deleteAction = result.current.rename.menu.actions.find(
       (action) => action.key === 'delete',
     );
@@ -150,7 +150,7 @@ describe('conversation row actions reach every action on both platforms', () => 
     seedCloudRow('c-1');
     const { result } = renderHook(() => useConversationActions());
 
-    act(() => result.current.openActions('c-1', 'Chat c-1', false));
+    act(() => result.current.openActions('c-1', 'Chat c-1'));
     act(() => result.current.rename.menu.close());
 
     expect(result.current.rename.menu.visible).toBe(false);
@@ -162,7 +162,7 @@ describe('conversation row actions reach every action on both platforms', () => 
     const onDeleted = jest.fn();
 
     act(() =>
-      result.current.openActions('c-1', 'Chat c-1', false, {
+      result.current.openActions('c-1', 'Chat c-1', {
         extraActions: [{ key: 'export', label: 'Export', run: extraRun }],
         onDeleted,
       }),
@@ -186,15 +186,31 @@ describe('conversation row actions reach every action on both platforms', () => 
     expect(onDeleted).toHaveBeenCalledTimes(1);
   });
 
-  it('labels the pin action Unpin for a pinned chat', () => {
-    seedCloudRow('c-1');
+  it('labels the pin action from the stored conversation, not the caller', () => {
+    seedCloudRow('c-1', true);
+    seedCloudRow('c-2');
+    const { result } = renderHook(() => useConversationActions());
+    const pinLabel = () =>
+      result.current.rename.menu.actions.find((action) => action.key === 'pin')?.label;
+
+    act(() => result.current.openActions('c-1', 'Chat c-1'));
+    expect(pinLabel()).toBe('Unpin');
+
+    act(() => result.current.openActions('c-2', 'Chat c-2'));
+    expect(pinLabel()).toBe('Pin');
+  });
+
+  it('unpins a pinned Local chat only under the Unpin label', () => {
+    useChatAppModeStore.getState().setAppMode('local');
+    seedLocalRow('l-1', true);
     const { result } = renderHook(() => useConversationActions());
 
-    act(() => result.current.openActions('c-1', 'Chat c-1', true));
+    act(() => result.current.openActions('l-1', 'Chat l-1'));
+    const pin = result.current.rename.menu.actions.find((action) => action.key === 'pin');
+    expect(pin?.label).toBe('Unpin');
 
-    expect(result.current.rename.menu.actions.find((action) => action.key === 'pin')?.label).toBe(
-      'Unpin',
-    );
+    act(() => pin?.run());
+    expect(useChatMessageStore.getState().conversations[0]?.pinned).toBe(false);
   });
 });
 
@@ -229,7 +245,7 @@ async function archiveAndReadUndo() {
   seedCloudRow('c-1');
   jest.mocked(api.put).mockResolvedValueOnce(archivedWire(true));
   const view = renderHook(() => useConversationActions());
-  act(() => view.result.current.openActions('c-1', 'Chat c-1', false));
+  act(() => view.result.current.openActions('c-1', 'Chat c-1'));
   act(() =>
     view.result.current.rename.menu.actions.find((action) => action.key === 'archive')?.run(),
   );
@@ -317,7 +333,7 @@ describe('archive Undo retains the original account intent', () => {
     const archive = deferred<ReturnType<typeof archivedWire>>();
     jest.mocked(api.put).mockReturnValueOnce(archive.promise);
     const view = renderHook(() => useConversationActions());
-    act(() => view.result.current.openActions('c-1', 'Chat c-1', false));
+    act(() => view.result.current.openActions('c-1', 'Chat c-1'));
     act(() =>
       view.result.current.rename.menu.actions.find((action) => action.key === 'archive')?.run(),
     );

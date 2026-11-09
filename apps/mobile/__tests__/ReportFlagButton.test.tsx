@@ -179,6 +179,59 @@ describe('ReportFlagButton', () => {
     await waitFor(() => expect(getByText(/No mail app is set up/i)).toBeTruthy());
   });
 
+  it('keeps Send available for the saved report after the mail hand-off fails', async () => {
+    mockOpenSupportEmail.mockResolvedValue(false);
+    mockSendStoredContentReport.mockResolvedValue({ kind: 'queued-for-upload' });
+
+    const { getByLabelText, getByTestId, getByText } = renderButton();
+    fireEvent.press(getByLabelText('Report this response'));
+    fireEvent.press(getByLabelText('Harmful or dangerous'));
+    fireEvent.press(getByLabelText('Save report'));
+
+    await waitFor(() => expect(getByText('Send this report to AGI?')).toBeTruthy());
+    fireEvent.press(getByTestId('report-email-handoff-btn'));
+    await waitFor(() => expect(getByText(/No mail app is set up/i)).toBeTruthy());
+
+    expect(getByText('Send this report to AGI?')).toBeTruthy();
+    expect(getByText(/nothing was sent/i)).toBeTruthy();
+    expect(mockSendStoredContentReport).not.toHaveBeenCalled();
+    fireEvent.press(getByLabelText('Send'));
+
+    await waitFor(() => expect(mockSendStoredContentReport).toHaveBeenCalledWith('rpt_1'));
+    await waitFor(() => expect(getByText('Report queued')).toBeTruthy());
+  });
+
+  it('keeps Send available when the first send and the checked email option both fail', async () => {
+    mockSaveContentReport.mockResolvedValue({
+      report: { ...mockReport, serverAcknowledged: false },
+      delivery: { kind: 'email-unavailable' },
+    });
+
+    const { getByLabelText, getByText } = renderButton();
+    fireEvent.press(getByLabelText('Report this response'));
+    fireEvent.press(getByLabelText('Harmful or dangerous'));
+    fireEvent.press(getByLabelText('Save report'));
+
+    await waitFor(() => expect(getByText('Send this report to AGI?')).toBeTruthy());
+    expect(getByLabelText('Send')).toBeTruthy();
+    expect(mockSendStoredContentReport).not.toHaveBeenCalled();
+  });
+
+  it('offers no Send once the server accepted a report whose email option failed', async () => {
+    mockSaveContentReport.mockResolvedValue({
+      report: { ...mockReport, serverAcknowledged: true },
+      delivery: { kind: 'email-unavailable' },
+    });
+
+    const { getByLabelText, getByText, queryByLabelText } = renderButton();
+    fireEvent.press(getByLabelText('Report this response'));
+    fireEvent.press(getByLabelText('Harmful or dangerous'));
+    fireEvent.press(getByLabelText('Save report'));
+
+    await waitFor(() => expect(getByText('Report saved on this device')).toBeTruthy());
+    expect(queryByLabelText('Send')).toBeNull();
+  });
+
   it('asks before sending a report that stayed on the device, and sends it on Send', async () => {
     mockSendStoredContentReport.mockResolvedValue({ kind: 'queued-for-upload' });
     const { getByLabelText, getByText } = renderButton();
