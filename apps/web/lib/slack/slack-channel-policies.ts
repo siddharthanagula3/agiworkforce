@@ -41,19 +41,19 @@ export async function readSlackChannelSetting(
     : { mode: null, tools: null };
 }
 
-export async function readSlackChannelToolsOrNone(
+export async function readSlackChannelSettingOrNoTools(
   serviceDb: DatabaseAdapter,
   installationId: string,
   channelId: string,
-): Promise<SlackChannelTool[] | null> {
+): Promise<SlackChannelSetting> {
   try {
-    return (await readSlackChannelSetting(serviceDb, installationId, channelId)).tools;
+    return await readSlackChannelSetting(serviceDb, installationId, channelId);
   } catch (error) {
     logger.warn(
       { error, installationId, channelId },
       'Slack channel tool policy unreadable; the run gets no tools',
     );
-    return [];
+    return { mode: null, tools: [] };
   }
 }
 

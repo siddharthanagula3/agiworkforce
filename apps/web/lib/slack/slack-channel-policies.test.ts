@@ -3,7 +3,7 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 import {
   readSlackChannelSetting,
-  readSlackChannelToolsOrNone,
+  readSlackChannelSettingOrNoTools,
   setSlackChannelPolicy,
   slackRunModeFor,
 } from './slack-channel-policies';
@@ -89,6 +89,9 @@ describe('Slack channel policy', () => {
         throw new Error('connection terminated');
       }),
     } as unknown as DatabaseAdapter;
-    await expect(readSlackChannelToolsOrNone(failing, INSTALLATION, 'C111')).resolves.toEqual([]);
+    await expect(readSlackChannelSettingOrNoTools(failing, INSTALLATION, 'C111')).resolves.toEqual({
+      mode: null,
+      tools: [],
+    });
   });
 });

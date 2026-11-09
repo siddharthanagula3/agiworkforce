@@ -35,7 +35,7 @@ import {
 } from './slack-installations';
 import {
   readSlackChannelSetting,
-  readSlackChannelToolsOrNone,
+  readSlackChannelSettingOrNoTools,
   slackRunModeFor,
 } from './slack-channel-policies';
 import { issueSlackLinkRequest, resolveSlackAccountLink } from './slack-links';
@@ -485,14 +485,27 @@ export async function claimSlackApproval(input: {
       'This Slack workspace is no longer connected, so the answer cannot continue.',
     );
   }
-  const channelTools =
+  const channelSetting =
     run.surface === 'channel'
-      ? await readSlackChannelToolsOrNone(input.serviceDb, run.installationId, run.channelId)
+      ? await readSlackChannelSettingOrNoTools(input.serviceDb, run.installationId, run.channelId)
       : null;
+  const channelTools = channelSetting ? channelSetting.tools : null;
   const opened = run.mode === 'task' ? await findSlackTask(runScope, run) : null;
   const task: TaskHolder = {
     current: opened ? slackTask({ db: runScope, run, instruction: '', opened }) : null,
   };
+  if (channelSetting?.mode === 'off') {
+    await task.current?.settle({ kind: 'failed' }).catch((taskError: unknown) => {
+      logger.error({ error: taskError, runId: run.id }, 'Slack task could not be settled');
+    });
+    await settleSlackRun(runScope, run, {
+      status: 'failed',
+      error: 'slack_channel_off: the channel was turned off before approval',
+    });
+    throw new SlackApprovalUnavailableError(
+      'AGI in Slack was turned off for this channel, so the answer cannot continue.',
+    );
+  }
   return () =>
     answerSafely({
       scopedDb: runScope,
