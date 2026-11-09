@@ -57,6 +57,10 @@ vi.mock('@/lib/services/organization-policy-code-gate', () => ({
     organizationId: null,
   })),
 }));
+const mockComputePolicy = vi.fn();
+vi.mock('@/lib/services/organization-policy-gate', () => ({
+  evaluateActiveWorkspacePolicy: (...args: unknown[]) => mockComputePolicy(...args),
+}));
 vi.mock('@/lib/github-app', () => ({
   listPrReviewCommentBodies: vi.fn(async () => []),
   postPrReview: vi.fn(async () => undefined),
@@ -133,6 +137,12 @@ describe('POST /api/github/webhook', () => {
 
     mockDbQuery.mockResolvedValue([{ user_id: 'u1', pr_review_enabled: true, review_model: null }]);
     mockDbExecute.mockResolvedValue(undefined);
+    mockComputePolicy.mockResolvedValue({
+      allowed: true,
+      code: 'allowed',
+      reason: '',
+      organizationId: null,
+    });
     mockDbTransaction.mockImplementation(
       async (callback: (tx: { execute: typeof mockDbExecute }) => Promise<unknown>) =>
         callback({ execute: mockDbExecute }),
@@ -360,6 +370,46 @@ describe('POST /api/github/webhook', () => {
       { timeout: 2000 },
     );
   });
+
+  it.each(['managed_compute_disabled', 'privacy_mode_not_allowed', 'workspace_policy_unavailable'])(
+    'sends no diff to a model when the owner workspace refuses managed compute (%s)',
+    async (code) => {
+      mockComputePolicy.mockResolvedValue({
+        allowed: false,
+        code,
+        reason: 'Managed compute is not allowed in this workspace.',
+        organizationId: 'org-1',
+      });
+
+      const payload = makeBotMentionPayload();
+      const body = JSON.stringify(payload);
+      const response = await POST(
+        new NextRequest('http://localhost/api/github/webhook', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-hub-signature-256': signPayload(body, SECRET),
+            'x-github-event': 'issue_comment',
+          },
+          body,
+        }),
+      );
+      expect(response.status).toBe(200);
+
+      await vi.waitFor(
+        () => {
+          expect(mockComputePolicy).toHaveBeenCalledWith(
+            expect.anything(),
+            'u1',
+            expect.objectContaining({ resource: 'managed_compute' }),
+          );
+        },
+        { timeout: 2000 },
+      );
+      expect(mockGetInstallationAccessToken).not.toHaveBeenCalled();
+      expect(mockGetPrDiff).not.toHaveBeenCalled();
+    },
+  );
 
   it('skips processing when a pending attempt exists within debounce window', async () => {
     mockDbQuery

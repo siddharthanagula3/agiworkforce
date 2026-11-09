@@ -17,6 +17,7 @@ import {
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { assertWorkspaceCodeAccess } from '@/lib/services/organization-policy-code-gate';
+import { evaluateActiveWorkspacePolicy } from '@/lib/services/organization-policy-gate';
 import { isManagedComputePrivateBetaEnabled } from '@/lib/managed-compute-gate';
 import { normalizeBillingPlanTier } from '@agiworkforce/types';
 import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
@@ -446,6 +447,14 @@ async function runAutomatedReview(target: ReviewTarget): Promise<void> {
     });
     if (!codeGate.allowed) {
       logger.info({ owner, repo, prNumber, code: codeGate.code }, codeGate.reason);
+      return;
+    }
+    const computeGate = await evaluateActiveWorkspacePolicy(db, installation.user_id, {
+      resource: 'managed_compute',
+      surface: 'api',
+    });
+    if (!computeGate.allowed) {
+      logger.info({ owner, repo, prNumber, code: computeGate.code }, computeGate.reason);
       return;
     }
     if (!isManagedComputePrivateBetaEnabled()) {
