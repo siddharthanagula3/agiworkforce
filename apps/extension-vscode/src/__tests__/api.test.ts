@@ -260,6 +260,130 @@ describe('AGI Cloud silent reauthentication', () => {
     await expect(getAccountToken(secrets, { renew: false })).resolves.toBeUndefined();
     expect(refreshDeviceSession).not.toHaveBeenCalled();
   });
+
+  function deferredRefresh() {
+    let resolve!: (value: unknown) => void;
+    const pending = new Promise((done) => {
+      resolve = done;
+    });
+    refreshDeviceSession.mockReturnValue(pending);
+    return resolve;
+  }
+
+  it('shares one rotation between every reader that finds the session expired', async () => {
+    const secrets = expiredSession();
+    await setAccountToken(secrets, 'expired-token', NOW - 1, 'renewal-credential');
+    refreshDeviceSession.mockResolvedValue({
+      kind: 'renewed',
+      token: 'rotated-token',
+      expiresAt: NOW + 600_000,
+      refreshToken: 'next-renewal-credential',
+    });
+
+    const tokens = await Promise.all([
+      getAccountToken(secrets),
+      getAccountToken(secrets),
+      renewAccountSession(secrets),
+      getAccountToken(secrets),
+    ]);
+
+    expect(refreshDeviceSession).toHaveBeenCalledTimes(1);
+    expect(tokens[0]).toBe('rotated-token');
+    expect(tokens[1]).toBe('rotated-token');
+    expect(tokens[2]).toBe('renewed');
+    expect(tokens[3]).toBe('rotated-token');
+    await expect(getAccountRefreshToken(secrets)).resolves.toBe('next-renewal-credential');
+  });
+
+  it('does not rotate a session that a reader already renewed', async () => {
+    const secrets = expiredSession();
+    await setAccountToken(secrets, 'live-token', NOW + 600_000, 'renewal-credential');
+
+    await expect(renewAccountSession(secrets)).resolves.toBe('superseded');
+    expect(refreshDeviceSession).not.toHaveBeenCalled();
+  });
+
+  it('leaves a newer sign-in untouched when the old rotation succeeds late', async () => {
+    const secrets = expiredSession();
+    await setAccountToken(secrets, 'expired-token', NOW - 1, 'renewal-credential');
+    const release = deferredRefresh();
+
+    const renewal = renewAccountSession(secrets);
+    await vi.waitFor(() => expect(refreshDeviceSession).toHaveBeenCalledTimes(1));
+    await setAccountToken(secrets, 'second-account-token', NOW + 600_000, 'second-renewal');
+    release({
+      kind: 'renewed',
+      token: 'late-token',
+      expiresAt: NOW + 900_000,
+      refreshToken: 'late-renewal',
+    });
+
+    await expect(renewal).resolves.toBe('superseded');
+    await expect(getAccountToken(secrets)).resolves.toBe('second-account-token');
+    await expect(getAccountRefreshToken(secrets)).resolves.toBe('second-renewal');
+  });
+
+  it('leaves a newer sign-in untouched when the old rotation is revoked late', async () => {
+    const secrets = expiredSession();
+    await setAccountToken(secrets, 'expired-token', NOW - 1, 'renewal-credential');
+    const release = deferredRefresh();
+
+    const renewal = renewAccountSession(secrets);
+    await vi.waitFor(() => expect(refreshDeviceSession).toHaveBeenCalledTimes(1));
+    await setAccountToken(secrets, 'second-account-token', NOW + 600_000, 'second-renewal');
+    release({ kind: 'revoked' });
+
+    await expect(renewal).resolves.toBe('superseded');
+    await expect(getAccountAuthState(secrets)).resolves.toEqual({
+      status: 'signed-in',
+      expiresAt: NOW + 600_000,
+    });
+    await expect(getAccountRefreshToken(secrets)).resolves.toBe('second-renewal');
+  });
+
+  it('does not hold a refusal from a rotation that a sign-in replaced', async () => {
+    const secrets = expiredSession();
+    await setAccountToken(secrets, 'expired-token', NOW - 1, 'renewal-credential');
+    const release = deferredRefresh();
+    const warn = vi.mocked(vscode.window.showWarningMessage);
+    warn.mockClear();
+
+    const renewal = renewAccountSession(secrets);
+    await vi.waitFor(() => expect(refreshDeviceSession).toHaveBeenCalledTimes(1));
+    await setAccountToken(secrets, 'second-account-token', NOW - 1, 'second-renewal');
+    release({ kind: 'account-unavailable', message: 'This account is suspended.' });
+
+    await expect(renewal).resolves.toBe('superseded');
+    expect(warn).not.toHaveBeenCalled();
+
+    refreshDeviceSession.mockResolvedValue({
+      kind: 'renewed',
+      token: 'rotated-token',
+      expiresAt: NOW + 600_000,
+      refreshToken: 'next-renewal-credential',
+    });
+    await expect(getAccountToken(secrets)).resolves.toBe('rotated-token');
+  });
+
+  it('does not bring credentials back after a sign-out that finished first', async () => {
+    const secrets = expiredSession();
+    await setAccountToken(secrets, 'expired-token', NOW - 1, 'renewal-credential');
+    const release = deferredRefresh();
+
+    const renewal = renewAccountSession(secrets);
+    await vi.waitFor(() => expect(refreshDeviceSession).toHaveBeenCalledTimes(1));
+    await clearAccountToken(secrets);
+    release({
+      kind: 'renewed',
+      token: 'late-token',
+      expiresAt: NOW + 900_000,
+      refreshToken: 'late-renewal',
+    });
+
+    await renewal;
+    await expect(getAccountAuthState(secrets)).resolves.toEqual({ status: 'signed-out' });
+    await expect(getAccountRefreshToken(secrets)).resolves.toBeUndefined();
+  });
 });
 
 describe('cloud completion error envelopes', () => {

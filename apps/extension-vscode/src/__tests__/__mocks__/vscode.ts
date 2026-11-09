@@ -139,6 +139,12 @@ class Range {
       this.end = startCharacter;
     }
   }
+
+  get isEmpty(): boolean {
+    const s = this.start as Position;
+    const e = this.end as Position;
+    return s.line === e.line && s.character === e.character;
+  }
 }
 
 class CodeLens {

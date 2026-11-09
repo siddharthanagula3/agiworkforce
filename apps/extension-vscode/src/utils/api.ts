@@ -260,7 +260,8 @@ export async function getAccountToken(
 ): Promise<string | undefined> {
   let state = await getAccountAuthState(secrets);
   if (state.status === 'expired' && options.renew !== false) {
-    if ((await renewAccountSession(secrets)) === 'renewed') {
+    const renewal = await renewAccountSession(secrets);
+    if (renewal === 'renewed' || renewal === 'superseded') {
       state = await getAccountAuthState(secrets);
     }
   }
@@ -269,13 +270,39 @@ export async function getAccountToken(
   return adoptSharedAccountCredential(secrets);
 }
 
-export async function setAccountToken(
+interface AccountSessionCustody {
+  generation: number;
+  renewal: { generation: number; promise: Promise<AccountSessionRenewal> } | undefined;
+  writes: Promise<void>;
+}
+
+const accountSessionCustody = new WeakMap<vscode.SecretStorage, AccountSessionCustody>();
+
+function custodyOf(secrets: vscode.SecretStorage): AccountSessionCustody {
+  let custody = accountSessionCustody.get(secrets);
+  if (custody === undefined) {
+    custody = { generation: 0, renewal: undefined, writes: Promise.resolve() };
+    accountSessionCustody.set(secrets, custody);
+  }
+  return custody;
+}
+
+function runExclusive<T>(secrets: vscode.SecretStorage, task: () => Promise<T>): Promise<T> {
+  const custody = custodyOf(secrets);
+  const run = custody.writes.then(task, task);
+  custody.writes = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
+async function storeAccountSession(
   secrets: vscode.SecretStorage,
   token: string,
   expiresAt?: number,
   refreshToken?: string,
 ): Promise<void> {
-  heldAccountUnavailable = undefined;
   await secrets.store(ACCOUNT_TOKEN_KEY, token);
   await secrets.delete(ACCOUNT_TOKEN_EXPIRED_KEY);
   if (expiresAt !== undefined) {
@@ -292,6 +319,24 @@ export async function setAccountToken(
   }
 }
 
+async function wipeAccountSession(secrets: vscode.SecretStorage): Promise<void> {
+  await secrets.delete(ACCOUNT_TOKEN_KEY);
+  await secrets.delete(ACCOUNT_TOKEN_EXPIRES_AT_KEY);
+  await secrets.delete(ACCOUNT_TOKEN_EXPIRED_KEY);
+  await secrets.delete(ACCOUNT_REFRESH_TOKEN_KEY);
+}
+
+export async function setAccountToken(
+  secrets: vscode.SecretStorage,
+  token: string,
+  expiresAt?: number,
+  refreshToken?: string,
+): Promise<void> {
+  heldAccountUnavailable = undefined;
+  custodyOf(secrets).generation += 1;
+  await runExclusive(secrets, () => storeAccountSession(secrets, token, expiresAt, refreshToken));
+}
+
 export async function getAccountRefreshToken(
   secrets: vscode.SecretStorage,
 ): Promise<string | undefined> {
@@ -301,10 +346,8 @@ export async function getAccountRefreshToken(
 
 export async function clearAccountToken(secrets: vscode.SecretStorage): Promise<void> {
   heldAccountUnavailable = undefined;
-  await secrets.delete(ACCOUNT_TOKEN_KEY);
-  await secrets.delete(ACCOUNT_TOKEN_EXPIRES_AT_KEY);
-  await secrets.delete(ACCOUNT_TOKEN_EXPIRED_KEY);
-  await secrets.delete(ACCOUNT_REFRESH_TOKEN_KEY);
+  custodyOf(secrets).generation += 1;
+  await runExclusive(secrets, () => wipeAccountSession(secrets));
 }
 
 /**
@@ -315,16 +358,18 @@ async function invalidateAccountToken(
   secrets: vscode.SecretStorage,
   observedToken: string,
 ): Promise<void> {
-  const currentToken = await secrets.get(ACCOUNT_TOKEN_KEY);
-  if (currentToken !== observedToken) return;
-  rejectedAccountToken = observedToken;
-  await secrets.delete(ACCOUNT_TOKEN_KEY);
-  await secrets.delete(ACCOUNT_TOKEN_EXPIRES_AT_KEY);
-  await secrets.store(ACCOUNT_TOKEN_EXPIRED_KEY, '1');
+  await runExclusive(secrets, async () => {
+    const currentToken = await secrets.get(ACCOUNT_TOKEN_KEY);
+    if (currentToken !== observedToken) return;
+    rejectedAccountToken = observedToken;
+    await secrets.delete(ACCOUNT_TOKEN_KEY);
+    await secrets.delete(ACCOUNT_TOKEN_EXPIRES_AT_KEY);
+    await secrets.store(ACCOUNT_TOKEN_EXPIRED_KEY, '1');
+  });
 }
 
 export type AccountSessionRenewal =
-  'renewed' | 'unavailable' | 'revoked' | 'terms-required' | 'account-unavailable';
+  'renewed' | 'unavailable' | 'revoked' | 'terms-required' | 'account-unavailable' | 'superseded';
 
 /**
  * An account the server refused stays refused until the person signs in or out
@@ -338,27 +383,58 @@ let heldAccountUnavailable: string | undefined;
  * the device-code flow. deviceAuth is loaded here rather than imported at the
  * top because it owns the device endpoints and already imports this module.
  */
-export async function renewAccountSession(
+export function renewAccountSession(secrets: vscode.SecretStorage): Promise<AccountSessionRenewal> {
+  const custody = custodyOf(secrets);
+  const pending = custody.renewal;
+  if (pending !== undefined && pending.generation === custody.generation) return pending.promise;
+
+  const generation = custody.generation;
+  const promise: Promise<AccountSessionRenewal> = rotateAccountSession(secrets, generation).finally(
+    () => {
+      if (custody.renewal?.promise === promise) custody.renewal = undefined;
+    },
+  );
+  custody.renewal = { generation, promise };
+  return promise;
+}
+
+async function rotateAccountSession(
   secrets: vscode.SecretStorage,
+  generation: number,
 ): Promise<AccountSessionRenewal> {
   if (heldAccountUnavailable !== undefined) return 'account-unavailable';
+  const owns = (): boolean => custodyOf(secrets).generation === generation;
+
+  if ((await getAccountAuthState(secrets)).status !== 'expired') return 'superseded';
   const refreshToken = await getAccountRefreshToken(secrets);
   if (refreshToken === undefined) return 'unavailable';
 
   const { refreshDeviceSession } = await import('../features/account-auth/deviceAuth');
+  if (!owns()) return 'superseded';
   const result = await refreshDeviceSession(getCloudWebOrigin(), refreshToken);
 
   if (result.kind === 'renewed') {
-    await setAccountToken(secrets, result.token, result.expiresAt, result.refreshToken);
-    return 'renewed';
+    const applied = await runExclusive(secrets, async () => {
+      if (!owns()) return false;
+      await storeAccountSession(secrets, result.token, result.expiresAt, result.refreshToken);
+      heldAccountUnavailable = undefined;
+      return true;
+    });
+    return applied ? 'renewed' : 'superseded';
   }
   if (result.kind === 'revoked') {
-    await clearAccountToken(secrets);
-    await secrets.store(ACCOUNT_TOKEN_EXPIRED_KEY, '1');
+    const applied = await runExclusive(secrets, async () => {
+      if (!owns()) return false;
+      await wipeAccountSession(secrets);
+      await secrets.store(ACCOUNT_TOKEN_EXPIRED_KEY, '1');
+      return true;
+    });
+    if (!applied) return 'superseded';
     notifyAccountTierMayHaveChanged();
     return 'revoked';
   }
   if (result.kind === 'account-unavailable') {
+    if (!owns()) return 'superseded';
     heldAccountUnavailable = result.message;
     void vscode.window.showWarningMessage(result.message, 'Sign in again').then((action) => {
       if (action === 'Sign in again') {
@@ -367,6 +443,7 @@ export async function renewAccountSession(
     });
     return 'account-unavailable';
   }
+  if (!owns()) return 'superseded';
   return result.kind === 'terms-required' ? 'terms-required' : 'unavailable';
 }
 
@@ -399,8 +476,11 @@ type CloudCredential =
 
 async function getCloudCredential(secrets: vscode.SecretStorage): Promise<CloudCredential> {
   let accountState = await getAccountAuthState(secrets);
-  if (accountState.status === 'expired' && (await renewAccountSession(secrets)) === 'renewed') {
-    accountState = await getAccountAuthState(secrets);
+  if (accountState.status === 'expired') {
+    const renewal = await renewAccountSession(secrets);
+    if (renewal === 'renewed' || renewal === 'superseded') {
+      accountState = await getAccountAuthState(secrets);
+    }
   }
   if (accountState.status === 'signed-in') {
     const accountToken = await secrets.get(ACCOUNT_TOKEN_KEY);
