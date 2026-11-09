@@ -160,6 +160,58 @@ describe('disabling a broken build from the server', () => {
     expect(withoutVersionDisable(stored(second), 'INC-9999')).toBeNull();
   });
 
+  it('keeps incidents that differ only in separators as separate ranges', async () => {
+    const underscored: FeatureVersionDisable = {
+      ...BROKEN_DESKTOP,
+      minVersion: '1.0.0',
+      maxVersion: '1.0.0',
+      incident: 'INC_42',
+    };
+    const hyphenated: FeatureVersionDisable = {
+      ...BROKEN_DESKTOP,
+      minVersion: '2.0.0',
+      maxVersion: '2.0.0',
+      incident: 'INC-42',
+    };
+    const both = stored(
+      withVersionDisable(stored(versionDisableDefinition(underscored)), hyphenated),
+    );
+    expect(both.rules.map((rule) => rule.id)).toEqual(['disabled-inc_42', 'disabled-inc-42']);
+
+    store.definitions = [both];
+    for (const clientVersion of ['1.0.0', '2.0.0']) {
+      const gate = await readKillSwitchGate(subject({ clientVersion }), NOW);
+      expect(gate.capabilityAllowed(COMPUTER_USE_CAPABILITY)).toBe(false);
+    }
+
+    const withoutUnderscored = withoutVersionDisable(both, 'INC_42');
+    expect(withoutUnderscored?.rules.map((rule) => rule.id)).toEqual(['disabled-inc-42']);
+    store.definitions = [stored(withoutUnderscored!)];
+    expect(
+      (await readKillSwitchGate(subject({ clientVersion: '2.0.0' }), NOW)).capabilityAllowed(
+        COMPUTER_USE_CAPABILITY,
+      ),
+    ).toBe(false);
+    expect(
+      (await readKillSwitchGate(subject({ clientVersion: '1.0.0' }), NOW)).capabilityAllowed(
+        COMPUTER_USE_CAPABILITY,
+      ),
+    ).toBe(true);
+
+    expect(withoutVersionDisable(both, 'INC-42')?.rules.map((rule) => rule.id)).toEqual([
+      'disabled-inc_42',
+    ]);
+    expect(withoutVersionDisable(both, 'INC 42')).toBeNull();
+    expect(withoutVersionDisable(both, 'INC--42')).toBeNull();
+  });
+
+  it('treats an incident reference as case-insensitive, so a respelling edits the same range', () => {
+    const first = stored(versionDisableDefinition(BROKEN_DESKTOP));
+    const respelled = withVersionDisable(first, { ...BROKEN_DESKTOP, incident: 'inc-1042' });
+    expect(respelled.rules.map((rule) => rule.id)).toEqual(['disabled-inc-1042']);
+    expect(withoutVersionDisable(first, 'inc-1042')?.rules).toEqual([]);
+  });
+
   it('reads the reason back only from a switch that is holding a range off', () => {
     const definitions = [stored(versionDisableDefinition(BROKEN_DESKTOP))];
     expect(versionDisableReason(definitions, COMPUTER_USE_CAPABILITY)).toContain('INC-1042');

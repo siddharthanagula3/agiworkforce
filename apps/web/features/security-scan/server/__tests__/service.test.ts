@@ -602,6 +602,101 @@ describe('decideSecurityScanFinding', () => {
     });
   });
 
+  it('records a failed delivery on the finding so a later read still shows it', async () => {
+    const { workspace, report } = await scannedWorkspace();
+    let storedAtPush: unknown = null;
+    mocks.commitAndPush.mockImplementationOnce(async () => {
+      storedAtPush = structuredClone(workspace.report);
+      throw new CloudCodeValidationError(
+        'No connected GitHub installation can push to this repository',
+      );
+    });
+
+    await decideSecurityScanFinding(context(scriptedModel({ scan: {} })), {
+      scanId: report.scanId,
+      findingId: report.findings[0]!.id,
+      decision: 'approve',
+    });
+
+    expect(storedAtPush).toMatchObject({
+      findings: [
+        { state: 'approved', delivery: { status: 'pending', pullRequestUrl: null, error: null } },
+      ],
+    });
+    const state = await readSecurityScanState(context(scriptedModel({ scan: {} })));
+    expect(state.report).toMatchObject({
+      findings: [
+        {
+          state: 'approved',
+          delivery: {
+            status: 'failed',
+            pullRequestUrl: null,
+            error: 'No connected GitHub installation can push to this repository',
+          },
+        },
+      ],
+    });
+  });
+
+  it('records a pushed fix whose pull request could not be opened', async () => {
+    const { workspace, report } = await scannedWorkspace();
+    mocks.openPullRequest.mockRejectedValueOnce(new Error('rate limited'));
+
+    await decideSecurityScanFinding(context(scriptedModel({ scan: {} })), {
+      scanId: report.scanId,
+      findingId: report.findings[0]!.id,
+      decision: 'approve',
+    });
+
+    expect(workspace.report).toMatchObject({
+      findings: [{ state: 'approved', delivery: { status: 'pushed', pullRequestUrl: null } }],
+    });
+  });
+
+  it('leaves the delivery as not reported back when its outcome cannot be saved', async () => {
+    const { workspace, report } = await scannedWorkspace();
+    const fake = mocks.workspace as { writeReport: (next: SecurityScanReport) => Promise<void> };
+    const write = fake.writeReport;
+    let writes = 0;
+    fake.writeReport = async (next) => {
+      writes += 1;
+      if (writes > 1) throw new Error('sandbox gone');
+      await write(next);
+    };
+
+    const result = await decideSecurityScanFinding(context(scriptedModel({ scan: {} })), {
+      scanId: report.scanId,
+      findingId: report.findings[0]!.id,
+      decision: 'approve',
+    });
+
+    expect(result.delivery?.status).toBe('pushed');
+    expect(result.report.findings[0]?.delivery?.status).toBe('pushed');
+    expect(workspace.report).toMatchObject({
+      findings: [{ state: 'approved', delivery: { status: 'pending' } }],
+    });
+  });
+
+  it('does not write a delivery outcome onto a newer scan', async () => {
+    const { workspace, report } = await scannedWorkspace();
+    const newer: SecurityScanCompletedReport = {
+      ...report,
+      scanId: '44444444-4444-4444-8444-444444444444',
+    };
+    mocks.commitAndPush.mockImplementationOnce(async () => {
+      workspace.report = newer;
+      return { session: {}, push: {} };
+    });
+
+    await decideSecurityScanFinding(context(scriptedModel({ scan: {} })), {
+      scanId: report.scanId,
+      findingId: report.findings[0]!.id,
+      decision: 'approve',
+    });
+
+    expect(workspace.report).toBe(newer);
+  });
+
   it('keeps the approval and reports a push that GitHub refused', async () => {
     const { report } = await scannedWorkspace();
     mocks.commitAndPush.mockRejectedValueOnce(

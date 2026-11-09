@@ -86,6 +86,52 @@ describe('ContentReportQueuePanel', () => {
     expect(await screen.findByText(/marked actioned/)).toBeInTheDocument();
   });
 
+  it('refreshes the view the operator is on when a decision finishes after they switched', async () => {
+    const RESOLVED_REPORT = {
+      ...OVERDUE_REPORT,
+      id: '22222222-2222-4222-8222-222222222222',
+      clientReportId: 'rep-resolved',
+      contentExcerpt: 'an earlier resolved report',
+      status: 'dismissed' as const,
+      overdue: false,
+    };
+    let releasePost: (() => void) | null = null;
+    let openReports: unknown[] = [OVERDUE_REPORT];
+    mocks.fetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') {
+        await new Promise<void>((resolve) => {
+          releasePost = resolve;
+        });
+        openReports = [];
+        return jsonResponse({ report: { ...OVERDUE_REPORT, status: 'actioned', overdue: false } });
+      }
+      return url.includes('actioned')
+        ? jsonResponse({ reports: [RESOLVED_REPORT], counts: COUNTS })
+        : jsonResponse({ reports: openReports, counts: COUNTS });
+    });
+
+    render(<ContentReportQueuePanel />);
+    await screen.findByText(/explained how to hurt someone/);
+    fireEvent.change(screen.getByLabelText(/Reviewer decision note/), {
+      target: { value: 'answer removed, guardrail filed' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Actioned' }));
+    await waitFor(() => expect(releasePost).not.toBeNull());
+
+    fireEvent.change(screen.getByLabelText('Queue view'), { target: { value: 'resolved' } });
+    expect(await screen.findByText(/an earlier resolved report/)).toBeInTheDocument();
+    const readsBeforeDecision = mocks.fetch.mock.calls.length;
+
+    releasePost!();
+    expect(await screen.findByText(/marked actioned/)).toBeInTheDocument();
+    await waitFor(() => expect(mocks.fetch.mock.calls.length).toBeGreaterThan(readsBeforeDecision));
+    const refresh = mocks.fetch.mock.calls.at(-1);
+    expect(refresh?.[0]).toBe('/api/admin/content-reports?status=actioned%2Cdismissed');
+    await waitFor(() => expect(screen.getByRole('button', { name: /Refresh/ })).toBeEnabled());
+    expect(screen.getByText(/an earlier resolved report/)).toBeInTheDocument();
+    expect(screen.queryByText('No resolved reports.')).not.toBeInTheDocument();
+  });
+
   it('refuses to resolve a report with no reviewer note', async () => {
     render(<ContentReportQueuePanel />);
     await screen.findByText(/explained how to hurt someone/);

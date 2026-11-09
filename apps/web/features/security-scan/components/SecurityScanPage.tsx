@@ -16,6 +16,7 @@ import type {
   SecurityScanStateResponse,
 } from '@agiworkforce/cloud-contracts';
 import {
+  SECURITY_SCAN_DELIVERY_STATUS,
   SECURITY_SCAN_SCOPE_MAX_LENGTH,
   SECURITY_SCAN_STATUS,
 } from '@agiworkforce/cloud-contracts';
@@ -77,7 +78,15 @@ interface FindingCardProps {
 function FindingCard({ finding, busy, delivery, pullRequestUrl, onDecide }: FindingCardProps) {
   const [expanded, setExpanded] = useState(finding.state === 'open');
   const regionId = useId();
-  const linkedPullRequest = delivery?.pullRequestUrl ?? pullRequestUrl;
+  const deliveryUnsettled =
+    delivery?.status === SECURITY_SCAN_DELIVERY_STATUS.pending ||
+    delivery?.status === SECURITY_SCAN_DELIVERY_STATUS.failed;
+  const linkedPullRequest = delivery?.pullRequestUrl ?? (deliveryUnsettled ? null : pullRequestUrl);
+  const deliveryWarning =
+    delivery?.error ??
+    (delivery?.status === SECURITY_SCAN_DELIVERY_STATUS.pending
+      ? SECURITY_SCAN_COPY.deliveryUnknown
+      : null);
 
   return (
     <li className={styles['finding']}>
@@ -151,9 +160,9 @@ function FindingCard({ finding, busy, delivery, pullRequestUrl, onDecide }: Find
             </div>
           ) : finding.state === 'approved' ? (
             <div className={styles['actions']}>
-              {delivery?.error && (
+              {deliveryWarning && (
                 <p className={styles['help']} role="alert">
-                  {delivery.error}
+                  {deliveryWarning}
                 </p>
               )}
               {linkedPullRequest && (
@@ -462,7 +471,7 @@ export function SecurityScanPage({ sessionId, api = securityScanApi }: SecurityS
                   key={finding.id}
                   finding={finding}
                   busy={decidingId !== null}
-                  delivery={deliveries[finding.id] ?? null}
+                  delivery={deliveries[finding.id] ?? finding.delivery ?? null}
                   pullRequestUrl={state.session.pullRequestUrl}
                   onDecide={decide}
                 />
