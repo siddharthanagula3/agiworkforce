@@ -39,7 +39,7 @@ export interface UseSessionTimeoutReturn extends SessionTimeoutState {
   forceLogout: () => void;
 }
 
-function getLastActivity(): number {
+function getStoredActivity(): number | null {
   try {
     const stored = localStorage.getItem(ACTIVITY_STORAGE_KEY);
     if (stored) {
@@ -51,7 +51,13 @@ function getLastActivity(): number {
   } catch {
     // localStorage might not be available
   }
-  return Date.now();
+  return null;
+}
+
+function resolveLastActivity(inMemory: number, now: number): number {
+  const stored = getStoredActivity();
+  if (stored === null || stored > now) return inMemory;
+  return Math.max(inMemory, stored);
 }
 
 function setLastActivity(timestamp: number): void {
@@ -85,16 +91,28 @@ export function useSessionTimeout(options: UseSessionTimeoutOptions = {}): UseSe
     isWarningActive: false,
     secondsUntilTimeout: 0,
     timeoutMinutes: settings?.session_timeout ?? DEFAULT_SESSION_TIMEOUT_MINUTES,
-    lastActivity: getLastActivity(),
+    lastActivity: getStoredActivity() ?? Date.now(),
   }));
 
   const checkIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastActivityUpdateRef = useRef<number>(0);
+  const lastActivityMemoryRef = useRef<number>(Date.now());
   const wasWarningActiveRef = useRef<boolean>(false);
   const hasLoggedOutRef = useRef<boolean>(false);
+  const callbacksRef = useRef({ onTimeout, onWarning, onSessionExtended });
+
+  useEffect(() => {
+    callbacksRef.current = { onTimeout, onWarning, onSessionExtended };
+  });
 
   const timeoutMs = (settings?.session_timeout ?? DEFAULT_SESSION_TIMEOUT_MINUTES) * 60 * 1000;
+
+  const recordActivity = useCallback((now: number) => {
+    lastActivityMemoryRef.current = now;
+    lastActivityUpdateRef.current = now;
+    setLastActivity(now);
+  }, []);
 
   const updateActivity = useCallback(() => {
     const now = Date.now();
@@ -103,13 +121,12 @@ export function useSessionTimeout(options: UseSessionTimeoutOptions = {}): UseSe
       return;
     }
 
-    lastActivityUpdateRef.current = now;
-    setLastActivity(now);
+    recordActivity(now);
 
     setState((prev) => {
       if (prev.isWarningActive) {
         logger.debug('[SessionTimeout] User activity detected, extending session');
-        onSessionExtended?.();
+        callbacksRef.current.onSessionExtended?.();
         return {
           ...prev,
           lastActivity: now,
@@ -122,12 +139,11 @@ export function useSessionTimeout(options: UseSessionTimeoutOptions = {}): UseSe
         lastActivity: now,
       };
     });
-  }, [onSessionExtended]);
+  }, [recordActivity]);
 
   const extendSession = useCallback(() => {
     const now = Date.now();
-    lastActivityUpdateRef.current = now;
-    setLastActivity(now);
+    recordActivity(now);
     hasLoggedOutRef.current = false;
 
     setState((prev) => ({
@@ -139,8 +155,8 @@ export function useSessionTimeout(options: UseSessionTimeoutOptions = {}): UseSe
     }));
 
     logger.debug('[SessionTimeout] Session extended manually');
-    onSessionExtended?.();
-  }, [onSessionExtended]);
+    callbacksRef.current.onSessionExtended?.();
+  }, [recordActivity]);
 
   const forceLogout = useCallback(async () => {
     if (hasLoggedOutRef.current) return;
@@ -155,17 +171,18 @@ export function useSessionTimeout(options: UseSessionTimeoutOptions = {}): UseSe
       isWarningActive: false,
     }));
 
-    onTimeout?.();
+    callbacksRef.current.onTimeout?.();
     await logout();
-  }, [logout, onTimeout]);
+  }, [logout]);
 
   const checkTimeout = useCallback(() => {
     if (!isAuthenticated || !user) {
       return;
     }
 
-    const lastActivity = getLastActivity();
     const now = Date.now();
+    const lastActivity = resolveLastActivity(lastActivityMemoryRef.current, now);
+    lastActivityMemoryRef.current = lastActivity;
     const elapsed = now - lastActivity;
     const timeRemaining = timeoutMs - elapsed;
 
@@ -182,7 +199,7 @@ export function useSessionTimeout(options: UseSessionTimeoutOptions = {}): UseSe
 
     if (shouldShowWarning && !wasWarningActiveRef.current) {
       wasWarningActiveRef.current = true;
-      onWarning?.(secondsRemaining);
+      callbacksRef.current.onWarning?.(secondsRemaining);
     } else if (!shouldShowWarning) {
       wasWarningActiveRef.current = false;
     }
@@ -206,7 +223,7 @@ export function useSessionTimeout(options: UseSessionTimeoutOptions = {}): UseSe
         secondsUntilTimeout: nextSeconds,
       };
     });
-  }, [isAuthenticated, user, timeoutMs, settings?.session_timeout, forceLogout, onWarning]);
+  }, [isAuthenticated, user, timeoutMs, settings?.session_timeout, forceLogout]);
 
   useEffect(() => {
     if (!enabled || !isAuthenticated) {
@@ -224,7 +241,10 @@ export function useSessionTimeout(options: UseSessionTimeoutOptions = {}): UseSe
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === ACTIVITY_STORAGE_KEY && e.newValue) {
         const newTimestamp = parseInt(e.newValue, 10);
-        if (!isNaN(newTimestamp)) {
+        if (!isNaN(newTimestamp) && newTimestamp > 0) {
+          if (newTimestamp <= Date.now()) {
+            lastActivityMemoryRef.current = Math.max(lastActivityMemoryRef.current, newTimestamp);
+          }
           setState((prev) => ({
             ...prev,
             lastActivity: newTimestamp,
@@ -237,10 +257,6 @@ export function useSessionTimeout(options: UseSessionTimeoutOptions = {}): UseSe
 
     window.addEventListener('storage', handleStorageChange);
 
-    queueMicrotask(() => {
-      updateActivity();
-    });
-
     return () => {
       ACTIVITY_EVENTS.forEach((event) => {
         window.removeEventListener(event, handleActivity);
@@ -248,6 +264,24 @@ export function useSessionTimeout(options: UseSessionTimeoutOptions = {}): UseSe
       window.removeEventListener('storage', handleStorageChange);
     };
   }, [enabled, isAuthenticated, updateActivity]);
+
+  useEffect(() => {
+    if (!enabled || !isAuthenticated) {
+      return;
+    }
+
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      const now = Date.now();
+      recordActivity(now);
+      setState((prev) => ({ ...prev, lastActivity: now }));
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled, isAuthenticated, recordActivity]);
 
   useEffect(() => {
     if (!enabled || !isAuthenticated) {
@@ -313,6 +347,7 @@ export function useSessionTimeout(options: UseSessionTimeoutOptions = {}): UseSe
     if (!isAuthenticated) {
       hasLoggedOutRef.current = false;
       wasWarningActiveRef.current = false;
+      lastActivityMemoryRef.current = Date.now();
       clearLastActivity();
       queueMicrotask(() => {
         setState({
