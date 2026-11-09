@@ -131,6 +131,25 @@ describe('GET /api/cron/health-probe', () => {
     );
   });
 
+  it('describes a WARNING by the checks that failed, not as a billing-only outage', async () => {
+    mocks.runHealthChecks.mockResolvedValue({
+      status: 'degraded',
+      timestamp: '2026-08-09T06:15:00.000Z',
+      checks: {
+        database: { status: 'healthy' },
+        stripe: { status: 'healthy' },
+        environment: { status: 'healthy' },
+        chat: { status: 'unhealthy', message: 'every route degraded' },
+      },
+    });
+
+    await GET(req());
+
+    const [{ text }] = mocks.sendSupportEmail.mock.calls[0] as [{ text: string }];
+    expect(text).toContain('WARNING means the core checks passed and these did not: chat.');
+    expect(text).not.toMatch(/billing is degraded|chat keeps working/);
+  });
+
   it('fails the cron run when an owed alert could not be delivered', async () => {
     mocks.runHealthChecks.mockResolvedValue(health('unhealthy'));
     mocks.sendSupportEmail.mockResolvedValue({

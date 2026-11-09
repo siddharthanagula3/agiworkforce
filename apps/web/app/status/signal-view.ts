@@ -1,5 +1,5 @@
 import type { HealthCheckResult } from '@/lib/server/health-check';
-import { RENDER_CACHE_SECONDS } from '@/lib/server/render-cache';
+import { LIVE_SIGNAL_STALE_AFTER_SECONDS } from '@/lib/server/render-cache';
 
 type Checks = HealthCheckResult['checks'];
 
@@ -32,13 +32,12 @@ export interface SignalView<Row extends CheckRow> {
   failing: string[];
 }
 
-const STALE_AFTER_WINDOWS = 2;
 const MS_PER_SECOND = 1_000;
 const SECONDS_PER_MINUTE = 60;
 const MINUTES_PER_HOUR = 60;
 const HOURS_PER_DAY = 24;
 
-export const STALE_AFTER_SECONDS = STALE_AFTER_WINDOWS * RENDER_CACHE_SECONDS.liveSignal;
+export const STALE_AFTER_SECONDS = LIVE_SIGNAL_STALE_AFTER_SECONDS;
 
 function isFailing(check: Checks[CheckKey]): boolean {
   return check.status !== 'healthy';

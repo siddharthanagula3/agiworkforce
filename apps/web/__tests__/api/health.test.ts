@@ -8,6 +8,17 @@ import { logger } from '@/lib/logger';
 import { recordConfigurationState } from '@/lib/observability/metrics';
 type ScanModule0 = typeof import('@agiworkforce/types');
 type ScanModule1 = typeof import('@/lib/server/key-value');
+type ScanModule2 = typeof import('@/lib/server/render-cache');
+
+const cacheMocks = vi.hoisted(() => ({ entry: null as unknown }));
+
+vi.mock('@/lib/server/render-cache', async (importOriginal) => ({
+  ...(await importOriginal<ScanModule2>()),
+  cachedRenderInput:
+    (compute: (...args: unknown[]) => Promise<unknown>) =>
+    async (...args: unknown[]) =>
+      cacheMocks.entry ?? compute(...args),
+}));
 
 const stripeMocks = vi.hoisted(() => ({
   listProducts: vi.fn(),
@@ -95,10 +106,13 @@ vi.mock('@/lib/server/neon-db', () => ({
 }));
 
 import { GET, redactPublicCapabilityCheck } from '@/app/api/health/route';
+import { READINESS_REFRESH_TIMEOUT_MS, type HealthCheckResult } from '@/lib/server/health-check';
+import { LIVE_SIGNAL_STALE_AFTER_SECONDS } from '@/lib/server/render-cache';
 
 describe('Health Check API', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    cacheMocks.entry = null;
     process.env['DATABASE_URL'] = 'postgresql://test:test@localhost/test';
     process.env['UPSTASH_REDIS_REST_URL'] = 'https://redis.example.test';
     process.env['UPSTASH_REDIS_REST_TOKEN'] = 'test-token';
@@ -395,6 +409,108 @@ describe('Health Check API', () => {
       expect(data.checks.database.message).toBe('unavailable');
     });
   });
+
+  describe('readiness freshness', () => {
+    const MS_PER_SECOND = 1_000;
+
+    function cachedHealthyResult(ageSeconds: number): HealthCheckResult {
+      return {
+        status: 'healthy',
+        timestamp: new Date(Date.now() - ageSeconds * MS_PER_SECOND).toISOString(),
+        checks: {
+          database: { status: 'healthy' },
+          stripe: { status: 'healthy' },
+          environment: { status: 'healthy' },
+        },
+      } as HealthCheckResult;
+    }
+
+    function databaseProbes(): number {
+      return mockNeonQuery.mock.calls.filter(([sql]) => sql === 'select 1').length;
+    }
+
+    function healthRequest() {
+      return GET(new NextRequest('http://localhost/api/health', { method: 'GET' }));
+    }
+
+    it('serves a cached result inside the freshness window without probing again', async () => {
+      const cached = cachedHealthyResult(LIVE_SIGNAL_STALE_AFTER_SECONDS - 1);
+      cacheMocks.entry = cached;
+
+      const response = await healthRequest();
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.timestamp).toBe(cached.timestamp);
+      expect(data.stale).toBeUndefined();
+      expect(databaseProbes()).toBe(0);
+    });
+
+    it('replaces an expired healthy result with a fresh measurement before answering', async () => {
+      const cached = cachedHealthyResult(LIVE_SIGNAL_STALE_AFTER_SECONDS + 1);
+      cacheMocks.entry = cached;
+
+      const response = await healthRequest();
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.status).toBe('healthy');
+      expect(Date.parse(data.timestamp)).toBeGreaterThan(Date.parse(cached.timestamp));
+      expect(data.stale).toBeUndefined();
+      expect(databaseProbes()).toBe(1);
+    });
+
+    it('reports the fresh failure when an expired healthy result no longer holds', async () => {
+      cacheMocks.entry = cachedHealthyResult(LIVE_SIGNAL_STALE_AFTER_SECONDS + 1);
+      mockNeonQuery.mockImplementation(async (sql: string) => {
+        if (sql === 'select 1') throw new Error('Connection failed');
+        return [];
+      });
+
+      const response = await healthRequest();
+      const data = await response.json();
+
+      expect(response.status).toBe(503);
+      expect(data.status).toBe('unhealthy');
+      expect(data.checks.database.status).toBe('unhealthy');
+    });
+
+    it('refuses readiness on an expired result when the shared refresh misses its budget', async () => {
+      const cached = cachedHealthyResult(LIVE_SIGNAL_STALE_AFTER_SECONDS + 1);
+      cacheMocks.entry = cached;
+      let releaseDatabase: (rows: unknown[]) => void = () => {};
+      const hangingDatabase = new Promise<unknown[]>((resolve) => {
+        releaseDatabase = resolve;
+      });
+      const answer = mockNeonQuery.getMockImplementation();
+      mockNeonQuery.mockImplementation((sql: string) =>
+        sql === 'select 1' ? hangingDatabase : answer?.(sql),
+      );
+
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        const first = healthRequest();
+        const second = healthRequest();
+        await vi.advanceTimersByTimeAsync(READINESS_REFRESH_TIMEOUT_MS + 1);
+        const [firstResponse, secondResponse] = await Promise.all([first, second]);
+
+        for (const response of [firstResponse, secondResponse]) {
+          const data = await response.json();
+          expect(response.status).toBe(503);
+          expect(data.stale).toBe(true);
+          expect(data.timestamp).toBe(cached.timestamp);
+        }
+        expect(databaseProbes()).toBe(1);
+      } finally {
+        releaseDatabase([{ '?column?': 1 }]);
+        vi.useRealTimers();
+      }
+
+      const recovered = await healthRequest();
+      expect(recovered.status).toBe(200);
+      expect((await recovered.json()).stale).toBeUndefined();
+    });
+  });
 });
 
 describe('public health capability messages', () => {
@@ -436,8 +552,12 @@ describe('public health route load shape', () => {
   // means no CDN can dedupe it either, so the memoisation has to be server-side.
   it('serves from the memoised checks, not a fresh run per request', () => {
     const source = readFileSync(resolve(process.cwd(), 'app/api/health/route.ts'), 'utf8');
-    expect(source).toContain('getCachedHealthChecks');
+    expect(source).toContain('readReadinessHealthChecks');
     expect(source).not.toMatch(/\bawait runHealthChecks\(/);
+    const checks = readFileSync(resolve(process.cwd(), 'lib/server/health-check.ts'), 'utf8');
+    const reader = checks.slice(checks.indexOf('export async function readReadinessHealthChecks'));
+    expect(reader).toContain('await getCachedHealthChecks()');
+    expect(reader).toContain('refreshForReadiness()');
   });
 
   it('declares its own duration ceiling instead of inheriting dashboard state', () => {
