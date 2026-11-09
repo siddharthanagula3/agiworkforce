@@ -36,15 +36,26 @@ export function usePluginsSettingsAdapter(
   target: PluginInstallationTarget | null,
   installedEnabled = true,
 ): PluginsSettingsAdapter {
-  const [settings, setSettings] = useState<PluginInstallationSettings | null>(null);
+  const [loaded, setLoaded] = useState<{
+    key: string;
+    value: PluginInstallationSettings;
+  } | null>(null);
   const [enabled, setEnabledState] = useState(installedEnabled);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestSeq = useRef(0);
+  const viewGeneration = useRef(0);
   const targetRef = useRef<PluginInstallationTarget | null>(target);
   targetRef.current = target;
   const key = target ? pluginTargetKey(target) : null;
+  const settings = loaded !== null && loaded.key === key ? loaded.value : null;
+
+  useEffect(() => {
+    viewGeneration.current += 1;
+    setSaving(false);
+    setError(null);
+  }, [key]);
 
   useEffect(() => {
     setEnabledState(installedEnabled);
@@ -55,7 +66,7 @@ export function usePluginsSettingsAdapter(
     requestSeq.current += 1;
     const seq = requestSeq.current;
     if (!current) {
-      setSettings(null);
+      setLoaded(null);
       setError(null);
       setLoading(false);
       return;
@@ -65,10 +76,10 @@ export function usePluginsSettingsAdapter(
     try {
       const next = await fetchPluginSettings(current);
       if (seq !== requestSeq.current) return;
-      setSettings(next);
+      setLoaded({ key: pluginTargetKey(current), value: next });
     } catch (caught: unknown) {
       if (seq !== requestSeq.current) return;
-      setSettings(null);
+      setLoaded(null);
       setError(messageOf(caught, PLUGIN_SETTINGS_LOAD_FAILED_COPY));
     } finally {
       if (seq === requestSeq.current) setLoading(false);
@@ -82,14 +93,18 @@ export function usePluginsSettingsAdapter(
   const save = useCallback(async (patch: Parameters<typeof updatePluginSettings>[1]) => {
     const current = targetRef.current;
     if (!current) return;
+    const generation = viewGeneration.current;
     setSaving(true);
     setError(null);
     try {
-      setSettings(await updatePluginSettings(current, patch, await getCsrfToken()));
+      const next = await updatePluginSettings(current, patch, await getCsrfToken());
+      if (generation !== viewGeneration.current) return;
+      setLoaded({ key: pluginTargetKey(current), value: next });
     } catch (caught: unknown) {
+      if (generation !== viewGeneration.current) return;
       setError(messageOf(caught, PLUGIN_SETTINGS_SAVE_FAILED_COPY));
     } finally {
-      setSaving(false);
+      if (generation === viewGeneration.current) setSaving(false);
     }
   }, []);
 
@@ -115,17 +130,24 @@ export function usePluginsSettingsAdapter(
   const setEnabled = useCallback(async (next: boolean, withDependents = false) => {
     const current = targetRef.current;
     if (!current) return;
+    const generation = viewGeneration.current;
     setSaving(true);
     setError(null);
     try {
-      setEnabledState(
-        await setPluginInstallationEnabled(current, next, await getCsrfToken(), withDependents),
+      const confirmed = await setPluginInstallationEnabled(
+        current,
+        next,
+        await getCsrfToken(),
+        withDependents,
       );
+      if (generation !== viewGeneration.current) return;
+      setEnabledState(confirmed);
     } catch (caught: unknown) {
+      if (generation !== viewGeneration.current) return;
       if (caught instanceof PluginDependentsError) throw caught;
       setError(messageOf(caught, PLUGIN_ENABLE_FAILED_COPY));
     } finally {
-      setSaving(false);
+      if (generation === viewGeneration.current) setSaving(false);
     }
   }, []);
 

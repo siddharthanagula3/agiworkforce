@@ -26,6 +26,17 @@ import { PLUGIN_TARGET_BUILTIN } from '../../routes';
 import { usePluginsSettingsAdapter } from '../use-plugins-settings-adapter';
 
 const TARGET = { kind: PLUGIN_TARGET_BUILTIN, pluginId: 'research-pack' } as const;
+const OTHER_TARGET = { kind: PLUGIN_TARGET_BUILTIN, pluginId: 'review-kit' } as const;
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
 
 function settings(overrides: Partial<PluginInstallationSettings> = {}): PluginInstallationSettings {
   return {
@@ -148,5 +159,106 @@ describe('usePluginsSettingsAdapter', () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.settings).toBeNull();
     expect(result.current.error).not.toBeNull();
+  });
+
+  describe('when the viewed plugin changes while a write is pending', () => {
+    function renderWithSwitch() {
+      fetchMock.mockImplementation(async (target: { pluginId: string }) =>
+        target.pluginId === OTHER_TARGET.pluginId
+          ? settings({ pluginId: 'review-kit', enabledSkills: ['summarize'] })
+          : settings(),
+      );
+      return renderHook(
+        ({ target }: { target: typeof TARGET | typeof OTHER_TARGET }) =>
+          usePluginsSettingsAdapter(target),
+        { initialProps: { target: TARGET as typeof TARGET | typeof OTHER_TARGET } },
+      );
+    }
+
+    it('does not publish the earlier plugin settings over the plugin now viewed', async () => {
+      const pending = deferred<PluginInstallationSettings>();
+      updateMock.mockReturnValue(pending.promise);
+      const { result, rerender } = renderWithSwitch();
+      await waitFor(() => expect(result.current.settings).not.toBeNull());
+
+      let save!: Promise<void>;
+      act(() => {
+        save = result.current.setSkillEnabled('literature-review', false);
+      });
+      await waitFor(() => expect(updateMock).toHaveBeenCalled());
+
+      rerender({ target: OTHER_TARGET });
+      await waitFor(() => expect(result.current.settings?.pluginId).toBe('review-kit'));
+
+      await act(async () => {
+        pending.resolve(settings({ enabledSkills: [] }));
+        await save;
+      });
+
+      expect(result.current.settings?.pluginId).toBe('review-kit');
+      expect(result.current.settings?.enabledSkills).toEqual(['summarize']);
+      expect(result.current.saving).toBe(false);
+      expect(result.current.error).toBeNull();
+    });
+
+    it('does not show the earlier plugin save failure on the plugin now viewed', async () => {
+      const pending = deferred<PluginInstallationSettings>();
+      updateMock.mockReturnValue(pending.promise);
+      const { result, rerender } = renderWithSwitch();
+      await waitFor(() => expect(result.current.settings).not.toBeNull());
+
+      let save!: Promise<void>;
+      act(() => {
+        save = result.current.setSkillEnabled('literature-review', false);
+      });
+      await waitFor(() => expect(updateMock).toHaveBeenCalled());
+
+      rerender({ target: OTHER_TARGET });
+      await waitFor(() => expect(result.current.settings?.pluginId).toBe('review-kit'));
+
+      await act(async () => {
+        pending.reject(new PluginSettingsError(503, 'Plugin installs are not enabled'));
+        await save;
+      });
+
+      expect(result.current.error).toBeNull();
+      expect(result.current.saving).toBe(false);
+      expect(result.current.settings?.enabledSkills).toEqual(['summarize']);
+    });
+
+    it('does not apply the earlier plugin enabled state to the plugin now viewed', async () => {
+      const pending = deferred<boolean>();
+      setEnabledMock.mockReturnValue(pending.promise);
+      const { result, rerender } = renderWithSwitch();
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      let toggle!: Promise<void>;
+      act(() => {
+        toggle = result.current.setEnabled(false);
+      });
+      await waitFor(() => expect(setEnabledMock).toHaveBeenCalled());
+
+      rerender({ target: OTHER_TARGET });
+      await waitFor(() => expect(result.current.settings?.pluginId).toBe('review-kit'));
+
+      await act(async () => {
+        pending.resolve(false);
+        await toggle;
+      });
+
+      expect(result.current.enabled).toBe(true);
+      expect(result.current.saving).toBe(false);
+    });
+
+    it('withholds the earlier plugin settings until the new plugin has loaded', async () => {
+      const pendingLoad = deferred<PluginInstallationSettings>();
+      const { result, rerender } = renderWithSwitch();
+      await waitFor(() => expect(result.current.settings?.pluginId).toBe('research-pack'));
+
+      fetchMock.mockReturnValue(pendingLoad.promise);
+      rerender({ target: OTHER_TARGET });
+
+      expect(result.current.settings).toBeNull();
+    });
   });
 });
