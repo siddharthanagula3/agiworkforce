@@ -779,6 +779,74 @@ describe('chatStore, streaming state', () => {
       expect(capturedBody?.research).toBeUndefined();
     });
 
+    it.each(['interrupted', 'error', 'paused'] as const)(
+      'resends the approved research deliverable when a %s run is retried',
+      async (phase) => {
+        let capturedBody: Parameters<typeof streamChat>[0] | null = null;
+        seedCloudConversation(RESEARCH_MODEL);
+        useTierStore.setState({
+          tier: 'max',
+          grantedCapabilities: ['canUseWebSearch', 'canUseDeepResearch'],
+          capabilityHandshakeReceived: true,
+        } as never);
+        const createdAt = new Date().toISOString();
+        const deliverable = {
+          depth: 'executive-summary',
+          format: 'bullet-brief',
+          minSources: 4,
+          stopWhenNoNewSources: false,
+          saveToLibrary: false,
+        };
+        useChatStore.setState({
+          messages: {
+            [CONV_ID]: [
+              {
+                id: 'research-user',
+                conversationId: CONV_ID,
+                role: 'user',
+                content: 'Compare the options',
+                model: RESEARCH_MODEL,
+                createdAt,
+              },
+              {
+                id: 'research-assistant',
+                conversationId: CONV_ID,
+                role: 'assistant',
+                content: '',
+                model: RESEARCH_MODEL,
+                createdAt,
+                isStreaming: false,
+                metadata: {
+                  research: {
+                    phase,
+                    deliverable,
+                    steps: [{ id: 's1', type: 'search', description: 'Look', status: 'pending' }],
+                  },
+                },
+              },
+            ],
+          },
+        });
+        mockStreamChat.mockImplementation(
+          (body, callbacks) =>
+            new Promise<void>((resolve) => {
+              capturedBody = body;
+              callbacks.onDone();
+              resolve();
+            }),
+        );
+
+        await act(async () => {
+          await getState().resumeResearch(CONV_ID, 'research-assistant', 'retry');
+        });
+
+        expect(capturedBody?.research_resume).toMatchObject({
+          approved_steps: [expect.objectContaining({ id: 's1' })],
+          deliverable,
+        });
+      },
+    );
+
     it('uses per-send task options over persisted chat mode', async () => {
       let capturedBody: Parameters<typeof streamChat>[0] | null = null;
       seedCloudConversation();

@@ -215,6 +215,89 @@ describe('researchResumePayload', () => {
     expect(payload.sources).toHaveLength(1);
     expect(payload.steps.map((step) => step.id)).toEqual(['s1']);
     expect(payload.approvedSteps.map((step) => step.id)).toEqual(['s2']);
+    expect(payload.deliverable).toBeUndefined();
+  });
+
+  it('carries the approved deliverable so a retry keeps the chosen depth and format', () => {
+    const deliverable = {
+      depth: 'executive-summary' as const,
+      format: 'bullet-brief' as const,
+      minSources: 5,
+      stopWhenNoNewSources: false,
+      saveToLibrary: true,
+    };
+    const payload = researchResumePayload({ phase: 'interrupted', deliverable });
+    expect(payload.deliverable).toEqual(deliverable);
+  });
+});
+
+describe('research deliverable continuity', () => {
+  const plan = {
+    steps: [{ id: 's1', type: 'search', description: 'One', status: 'pending' }],
+    run: {
+      files: false,
+      allow_domains: [],
+      deny_domains: [],
+      connectors: [],
+      deliverable: {
+        depth: 'executive-summary',
+        format: 'bullet-brief',
+        minSources: 3,
+        stopWhenNoNewSources: false,
+        saveToLibrary: true,
+      },
+    },
+  };
+
+  it('captures the deliverable the server echoes on the plan event', () => {
+    const state = reduce([
+      { x_research_status: { phase: 'awaiting_approval' } } as StreamDelta,
+      { x_research_plan: plan } as StreamDelta,
+    ]);
+    expect(state?.deliverable).toEqual({
+      depth: 'executive-summary',
+      format: 'bullet-brief',
+      minSources: 3,
+      stopWhenNoNewSources: false,
+      saveToLibrary: true,
+    });
+  });
+
+  it('keeps the deliverable through an interruption into the resume payload', () => {
+    const running = reduce([
+      { x_research_plan: plan } as StreamDelta,
+      { x_research_status: { phase: 'searching' } } as StreamDelta,
+    ]);
+    const settled = settleResearchRun(running, 'interrupted');
+    expect(settled).not.toBeNull();
+    const payload = researchResumePayload(settled as ResearchRunState);
+    expect(payload.deliverable).toMatchObject({
+      depth: 'executive-summary',
+      format: 'bullet-brief',
+    });
+    expect(payload.approvedSteps.map((step) => step.id)).toEqual(['s1']);
+  });
+
+  it('recovers the deliverable from a hydrated message that persisted only runConfig', () => {
+    const hydrated = readResearchRunState({
+      phase: 'interrupted',
+      runConfig: {
+        sources: { files: false, allowDomains: [], denyDomains: [], connectors: [] },
+        deliverable: { depth: 'executive-summary', format: 'prose-with-tables' },
+      },
+    });
+    expect(hydrated?.deliverable).toMatchObject({
+      depth: 'executive-summary',
+      format: 'prose-with-tables',
+      minSources: 0,
+    });
+  });
+
+  it('leaves the deliverable absent when no run configuration was recorded', () => {
+    expect(readResearchRunState({ phase: 'interrupted' })?.deliverable).toBeUndefined();
+    expect(
+      readResearchRunState({ phase: 'interrupted', runConfig: 'nope' })?.deliverable,
+    ).toBeUndefined();
   });
 });
 
