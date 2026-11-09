@@ -86,7 +86,7 @@ export function buildConfigBackup(
   now: Date = new Date(),
 ): ConfigBackup {
   const variables: ConfigVariable[] = CONFIG_VARIABLES.map((spec) => {
-    const raw = env[spec.name]?.trim();
+    const raw = spec.secret ? env[spec.name] : env[spec.name]?.trim();
     const present = raw !== undefined && raw.length > 0;
     const variable: ConfigVariable = {
       name: spec.name,

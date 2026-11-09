@@ -87,6 +87,27 @@ describe('configBackupDrift', () => {
     expect(configBackupDrift(before, after)).toEqual(['ALLOWED_ORIGINS']);
   });
 
+  it('reports a secret whose bytes changed only by surrounding whitespace', () => {
+    for (const name of ['SIGNALING_INTERNAL_SECRET', 'ADMIN_API_KEY']) {
+      const before = buildConfigBackup({ ...ENV, [name]: 'example-token' });
+      const after = buildConfigBackup({ ...ENV, [name]: ' example-token' });
+
+      expect(configBackupDrift(before, after)).toEqual([name]);
+      expect(JSON.stringify(after)).not.toContain('example-token');
+    }
+  });
+
+  it('distinguishes an unset, empty and whitespace-only secret', () => {
+    const variable = (value: string | undefined) =>
+      buildConfigBackup({ ...ENV, ADMIN_API_KEY: value }).variables.find(
+        (v) => v.name === 'ADMIN_API_KEY',
+      );
+
+    expect(variable(undefined)?.present).toBe(false);
+    expect(variable('')?.present).toBe(false);
+    expect(variable('  ')).toMatchObject({ present: true, digest: expect.any(String) });
+  });
+
   it('is empty when nothing moved', () => {
     expect(configBackupDrift(buildConfigBackup(ENV), buildConfigBackup(ENV))).toEqual([]);
   });
