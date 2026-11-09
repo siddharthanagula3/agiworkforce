@@ -1433,6 +1433,7 @@ fn approval_overlay_for(
             .collect(),
     );
     overlay.always_allow_unavailable = !request.saves_always_allow;
+    overlay.allow_session_unavailable = request.requires_explicit_decision;
     overlay.set_targets(crate::tui::widgets::approval_overlay::targets_for(
         &request.kind,
     ));
@@ -11028,6 +11029,62 @@ mod tests {
         assert!(offers(ApprovalRequestKind::FileWrite {
             path: std::path::PathBuf::from("src/main.rs"),
         }));
+    }
+
+    #[test]
+    fn a_request_that_needs_a_decision_each_call_never_offers_allow_session() {
+        use crate::tui::approval_broker::{ApprovalRequest, ApprovalRequestKind};
+        use crate::tui::widgets::approval_overlay::ApprovalChoice;
+        use crate::tui::widgets::interactive::{InteractiveView, KeyAction};
+
+        let painted = |overlay: &crate::tui::widgets::approval_overlay::ApprovalOverlayState| {
+            let mut terminal =
+                Terminal::new(ratatui::backend::TestBackend::new(120, 30)).expect("terminal");
+            terminal
+                .draw(|frame| overlay.render_into(frame, frame.area()))
+                .expect("draw");
+            rendered_symbols(&terminal)
+        };
+
+        let policy_ask = ApprovalRequest::new(
+            ApprovalRequestKind::WorkspacePolicy {
+                tool_name: "read_file".to_string(),
+                primary_argument: "notes.txt".to_string(),
+            },
+            "Workspace policy requires approval for `read_file`",
+            vec!["argument: notes.txt".to_string()],
+        )
+        .requiring_explicit_decision();
+        let mut overlay = approval_overlay_for(&policy_ask);
+        let text = painted(&overlay);
+        assert!(!text.contains("Allow Session"), "{text}");
+        assert!(text.contains("Yes"), "{text}");
+
+        assert_eq!(
+            overlay.handle_key(KeyAction::Char('s')),
+            ViewAction::Continue
+        );
+        assert!(overlay.result.is_none(), "s must not answer for a session");
+        overlay.handle_key(KeyAction::Right);
+        assert_eq!(overlay.cursor, ApprovalChoice::No.index());
+        overlay.handle_key(KeyAction::Right);
+        assert_eq!(
+            overlay.cursor,
+            ApprovalChoice::DenyAll.index(),
+            "the cursor steps over the choices the gate cannot keep"
+        );
+
+        let ordinary = ApprovalRequest::new(
+            ApprovalRequestKind::Exec {
+                command: "cargo test".to_string(),
+            },
+            "Allow this command?",
+            vec!["cargo test".to_string()],
+        );
+        let mut overlay = approval_overlay_for(&ordinary);
+        assert!(painted(&overlay).contains("Allow Session"));
+        overlay.handle_key(KeyAction::Char('s'));
+        assert_eq!(overlay.result, Some(ApprovalChoice::AllowSession));
     }
 
     #[test]

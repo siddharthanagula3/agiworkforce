@@ -1414,14 +1414,20 @@ message -- revise and call `update_plan` again.\n\n",
                 managed_request_ids: Vec::new(),
                 incomplete: None,
             };
-            let (result, sources) = crate::sources::collect(crate::cloud::bound_to(
-                project_conversation,
-                models::managed_approvals::with_managed_tool_approval(
-                    managed_tool_approval,
-                    run_turn(&mut adapter, params, &mut tracker),
-                ),
-            ))
-            .await;
+            let ((result, side_requests), sources) =
+                crate::sources::collect(crate::cloud::bound_to(
+                    project_conversation,
+                    models::managed_approvals::with_managed_tool_approval(
+                        managed_tool_approval,
+                        crate::cost_ledger::collect_side_requests(run_turn(
+                            &mut adapter,
+                            params,
+                            &mut tracker,
+                        )),
+                    ),
+                ))
+                .await;
+            adapter.completion_usage.extend(side_requests);
             (
                 result,
                 std::mem::take(&mut adapter.completion_usage),
@@ -3340,6 +3346,7 @@ impl TurnHost for TurnHostAdapter<'_> {
 
     fn turn_cost_usd(&self, _totals: &agiworkforce_agent_core::UsageTotals) -> f64 {
         crate::cost_ledger::dollars_for_completions(&self.completion_usage)
+            + crate::cost_ledger::side_request_dollars_so_far()
     }
 
     fn on_event(&mut self, event: &TurnEvent) {
@@ -5406,6 +5413,56 @@ mod tests {
             );
         }
         settled
+    }
+
+    #[tokio::test]
+    async fn a_side_request_made_by_a_tool_counts_toward_the_turn_budget() {
+        let priced = crate::model_catalog::catalog()
+            .all()
+            .iter()
+            .find(|model| model.input_price_per_1m > 0.0 && model.output_price_per_1m > 0.0)
+            .expect("the catalog has a priced model")
+            .id
+            .clone();
+        let advisor = crate::cost_ledger::CompletionUsage {
+            model: priced,
+            input_tokens: 40_000,
+            output_tokens: 1_024,
+            cache_read_tokens: 0,
+            cache_write_tokens: 0,
+            included_in_subscription: false,
+        };
+        let config = CliConfig::default();
+        let mut session = live_session();
+        let adapter = TurnHostAdapter {
+            session: &mut session,
+            config: &config,
+            tool_defs: Vec::new(),
+            available_tool_names: HashSet::new(),
+            concurrency_safe_names: HashSet::new(),
+            plan_mode_mutating_names: HashSet::new(),
+            max_tokens: 64,
+            first_on_chunk: None,
+            search_turn: false,
+            hook_additional_contexts: Vec::new(),
+            completion_usage: Vec::new(),
+            managed_request_ids: Vec::new(),
+            incomplete: None,
+        };
+        let totals = agiworkforce_agent_core::UsageTotals::default();
+        assert_eq!(adapter.turn_cost_usd(&totals), 0.0);
+
+        let recorded = advisor.clone();
+        let (during, side_requests) = crate::cost_ledger::collect_side_requests(async {
+            crate::cost_ledger::record_side_request(recorded);
+            adapter.turn_cost_usd(&totals)
+        })
+        .await;
+        assert!(
+            (during - advisor.dollars()).abs() < 1e-12,
+            "the budget check sees the advisor's spend before the next completion"
+        );
+        assert_eq!(side_requests, vec![advisor]);
     }
 
     fn empty_generation() -> models::CompletionResult {
