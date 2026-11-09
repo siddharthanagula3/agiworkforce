@@ -204,7 +204,6 @@ import {
   normalizeAgentNotifications,
   pickableCaptureSources,
   pageMayWriteShortcut,
-  shortcutMayBeOff,
   type ShortcutKey,
   type WindowFrame,
 } from './garnishCore';
@@ -228,10 +227,11 @@ import { createDictationElsewhere } from './dictationElsewhere';
 import { closeLocalPreview } from './previewWindow';
 import { getPreferences, getShortcuts, saveSettings } from './settingsStore';
 import {
+  changeGarnishShortcuts,
   registerGarnishShortcuts,
   shortcutRegistrations,
-  shortcutStatusDetail,
   unregisterGarnishShortcuts,
+  type GarnishShortcutHandlers,
 } from './shortcuts';
 import { createTray, destroyTray, hasTray, refreshTrayMenu, type TrayActivity } from './tray';
 import { toggleGlobalDictation } from './voiceDictation';
@@ -1881,16 +1881,18 @@ const garnishHandlers = {
   activity: trayActivity,
 };
 
+const garnishShortcutHandlers: GarnishShortcutHandlers = {
+  onQuickAsk: garnishHandlers.onQuickAsk,
+  onNewChat: garnishHandlers.onNewChatWindow,
+  onScreenshot: garnishHandlers.onScreenshot,
+  onWindowShot: garnishHandlers.onWindowShot,
+  onVoice: garnishHandlers.onVoice,
+  onStop: garnishHandlers.onStopAgents,
+};
+
 function applyGarnishShortcuts(): void {
   unregisterGarnishShortcuts();
-  registerGarnishShortcuts({
-    onQuickAsk: garnishHandlers.onQuickAsk,
-    onNewChat: garnishHandlers.onNewChatWindow,
-    onScreenshot: garnishHandlers.onScreenshot,
-    onWindowShot: garnishHandlers.onWindowShot,
-    onVoice: garnishHandlers.onVoice,
-    onStop: garnishHandlers.onStopAgents,
-  });
+  registerGarnishShortcuts(garnishShortcutHandlers);
 }
 
 /**
@@ -2064,22 +2066,6 @@ function shortcutWriteRefusal(key: ShortcutKey, requested: string): string {
     : `${SHORTCUT_LABELS[key]} takes only one of the listed shortcuts. A shortcut is registered for every app on this computer, so this app does not take one a page names.`;
 }
 
-/**
- * A shortcut that is never off has to end a write still registered. A chord
- * another app holds is saved like any other and reports `taken`, which for
- * Stop Agents would leave no shortcut at all. Answers with what to tell the
- * page when the shortcut did not take; the caller puts the old chords back.
- */
-function lostAlwaysOnShortcut(): string | null {
-  const lost = shortcutRegistrations().find(
-    (registration) => !shortcutMayBeOff(registration.key) && registration.status !== 'registered',
-  );
-  if (!lost) return null;
-  return `${SHORTCUT_LABELS[lost.key]} could not take that shortcut: it ${
-    shortcutStatusDetail(lost.status) ?? 'was not registered'
-  }. The shortcut it had is kept. Choose another one.`;
-}
-
 async function writeHostPreferences(
   window: BrowserWindow | null,
   patch: Partial<HostPreferences>,
@@ -2100,17 +2086,9 @@ async function writeHostPreferences(
     SHORTCUT_KEYS.filter((key) => typeof patch[key] === 'string').map((key) => [key, patch[key]]),
   );
   if (Object.keys(shortcutPatch).length > 0) {
-    const previous = getShortcuts();
-    saveSettings(shortcutPatch);
-    applyGarnishShortcuts();
-    const lost = lostAlwaysOnShortcut();
-    if (lost) {
-      saveSettings(previous);
-      applyGarnishShortcuts();
-      refreshTrayMenu(garnishHandlers);
-      throw new Error(lost);
-    }
+    const refusal = changeGarnishShortcuts(shortcutPatch, garnishShortcutHandlers);
     refreshTrayMenu(garnishHandlers);
+    if (refusal) throw new Error(refusal);
   }
 
   if (

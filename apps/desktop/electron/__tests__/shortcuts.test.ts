@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PRODUCT_NAMES } from '@agiworkforce/types';
-import { DEFAULT_SHORTCUTS, type GarnishShortcuts } from '../garnishCore';
+import { DEFAULT_SHORTCUTS, shortcutChoices, type GarnishShortcuts } from '../garnishCore';
 
 const registered = new Map<string, () => void>();
 const rejected = new Set<string>();
@@ -32,10 +32,18 @@ vi.mock('electron', () => ({
 let stored: GarnishShortcuts = { ...DEFAULT_SHORTCUTS };
 vi.mock('../settingsStore', () => ({
   getShortcuts: () => stored,
+  saveSettings: (patch: Partial<GarnishShortcuts>) => {
+    stored = { ...stored, ...patch };
+    return stored;
+  },
 }));
 
-const { registerGarnishShortcuts, shortcutRegistrations, unregisterGarnishShortcuts } =
-  await import('../shortcuts');
+const {
+  changeGarnishShortcuts,
+  registerGarnishShortcuts,
+  shortcutRegistrations,
+  unregisterGarnishShortcuts,
+} = await import('../shortcuts');
 
 function handlers() {
   return {
@@ -167,5 +175,66 @@ describe('global shortcut registration', () => {
 
     expect(statusOf('voiceShortcut')).toBe('malformed');
     expect(registered.has('Alt Shift V')).toBe(false);
+  });
+
+  describe('changing shortcuts', () => {
+    const stopChoices = shortcutChoices('stopShortcut', DEFAULT_SHORTCUTS.stopShortcut);
+    const replacement = stopChoices.find((value) => value !== DEFAULT_SHORTCUTS.stopShortcut) ?? '';
+
+    it('keeps the working Stop Agents chord registered when the new one is refused', () => {
+      const spies = handlers();
+      registerGarnishShortcuts(spies);
+      rejected.add(replacement);
+
+      const refusal = changeGarnishShortcuts({ stopShortcut: replacement }, spies);
+
+      expect(refusal).toMatch(
+        /Stop Agents could not take that shortcut: it is already in use by another app\. The shortcut it had is kept/u,
+      );
+      expect(stored.stopShortcut).toBe(DEFAULT_SHORTCUTS.stopShortcut);
+      expect(statusOf('stopShortcut')).toBe('registered');
+      registered.get(DEFAULT_SHORTCUTS.stopShortcut)?.();
+      expect(spies.onStop).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not claim the old chord is kept when it cannot be taken back either', () => {
+      const spies = handlers();
+      registerGarnishShortcuts(spies);
+      rejected.add(replacement);
+      rejected.add(DEFAULT_SHORTCUTS.stopShortcut);
+
+      const refusal = changeGarnishShortcuts({ stopShortcut: replacement }, spies);
+
+      expect(refusal).toContain('could not be restored either');
+      expect(refusal).not.toContain('is kept');
+    });
+
+    it('applies a change to a shortcut that may be off even when another app holds it', () => {
+      const spies = handlers();
+      registerGarnishShortcuts(spies);
+      const held = shortcutChoices('voiceShortcut', DEFAULT_SHORTCUTS.voiceShortcut).find(
+        (value) => value !== DEFAULT_SHORTCUTS.voiceShortcut,
+      ) as string;
+      rejected.add(held);
+
+      const refusal = changeGarnishShortcuts({ voiceShortcut: held }, spies);
+
+      expect(refusal).toBeNull();
+      expect(stored.voiceShortcut).toBe(held);
+      expect(statusOf('voiceShortcut')).toBe('taken');
+      expect(statusOf('stopShortcut')).toBe('registered');
+    });
+
+    it('returns null and registers the new chord when it is free', () => {
+      const spies = handlers();
+      registerGarnishShortcuts(spies);
+
+      const refusal = changeGarnishShortcuts({ stopShortcut: replacement }, spies);
+
+      expect(refusal).toBeNull();
+      expect(stored.stopShortcut).toBe(replacement);
+      expect(registered.has(DEFAULT_SHORTCUTS.stopShortcut)).toBe(false);
+      expect(registered.has(replacement)).toBe(true);
+    });
   });
 });

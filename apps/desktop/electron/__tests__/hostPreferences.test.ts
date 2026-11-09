@@ -76,6 +76,7 @@ vi.mock('electron', () => {
       handle: vi.fn((channel: string, handler: Handler) => {
         handlers.set(channel, handler);
       }),
+      on: vi.fn(),
     },
     protocol: { handle: vi.fn(), registerSchemesAsPrivileged: vi.fn() },
     session: { defaultSession: {}, fromPartition: vi.fn(() => ({})) },
