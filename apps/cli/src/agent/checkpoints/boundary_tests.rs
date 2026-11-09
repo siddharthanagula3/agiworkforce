@@ -1070,3 +1070,60 @@ fn checkpoint_memory_to_disk_uses_selected_storage_owner_and_reload() {
     );
     assert_eq!(std::fs::read(path).unwrap(), b"owned before bytes");
 }
+
+#[test]
+fn checkpoint_restore_keeps_the_earliest_image_of_one_destination_named_two_ways() {
+    let fixture = Fixture::new();
+    let nested = fixture.workspace.join("nested");
+    std::fs::create_dir(&nested).unwrap();
+    let path = fixture.workspace.join("aliased.txt");
+    let alias = nested.join("..").join("aliased.txt");
+    std::fs::write(&path, b"original bytes").unwrap();
+    fixture.in_workspace(|| {
+        let authority = fixture.authority();
+        let mut log = CheckpointLog::in_memory();
+        log.push(0, "synthetic checkpoint prompt".to_string());
+        assert!(log.capture(&path, Some(&authority)));
+        std::fs::write(&path, b"intermediate bytes").unwrap();
+        assert!(log.capture(&alias, Some(&authority)));
+        std::fs::write(&path, b"final bytes").unwrap();
+        let report = log.restore_files(0, Some(&authority));
+        assert_eq!(std::fs::read(&path).unwrap(), b"original bytes");
+        assert_eq!(report.restored, vec![path]);
+    });
+}
+
+#[test]
+fn checkpoint_restore_marks_a_failed_saved_copy_retryable() {
+    use sha2::{Digest, Sha256};
+
+    let fixture = Fixture::new();
+    let target = fixture.workspace.join("ordinary.txt");
+    std::fs::write(&target, b"owned current bytes").unwrap();
+    let digest = crate::hex::encode(&Sha256::digest(b"saved bytes that were never stored"));
+    fixture.in_workspace(|| {
+        let authority = fixture.authority();
+        let log = fixture.load_snapshot(&target, digest);
+        let report = log.restore_files(0, Some(&authority));
+        assert_eq!(report.skipped.len(), 1);
+        assert!(report.retryable);
+    });
+}
+
+#[test]
+fn checkpoint_restore_does_not_mark_an_untracked_file_retryable() {
+    let fixture = Fixture::new();
+    let outside = Sentinel::new(
+        fixture.outside.join("ordinary.txt"),
+        b"synthetic outside bytes",
+    );
+    fixture.in_workspace(|| {
+        let authority = fixture.authority();
+        let mut log = CheckpointLog::in_memory();
+        log.push(0, "synthetic checkpoint prompt".to_string());
+        log.capture(&outside.path, Some(&authority));
+        let report = log.restore_files(0, Some(&authority));
+        assert!(!report.retryable);
+        assert!(report.restored.is_empty());
+    });
+}

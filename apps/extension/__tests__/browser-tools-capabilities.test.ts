@@ -263,13 +263,42 @@ describe('downloads', () => {
     vi.mocked(chrome.downloads.search).mockResolvedValue([
       { id: 901, finalUrl: 'https://blocked.example/x.exe', state: 'in_progress' },
     ] as never);
-    const stop = watchDownloadsStartedBy({ allow: [], deny: ['blocked.example'] });
+    const stop = watchDownloadsStartedBy({ allow: [], deny: ['blocked.example'] }, async () => [
+      `${SITE}/page`,
+    ]);
     const [onCreated] = vi.mocked(chrome.downloads.onCreated.addListener).mock.calls.at(-1) ?? [];
-    (onCreated as (item: { id: number }) => void)({ id: 901 });
+    (onCreated as (item: { id: number; referrer: string }) => void)({
+      id: 901,
+      referrer: `${SITE}/page`,
+    });
 
     await vi.waitFor(() => expect(chrome.downloads.cancel).toHaveBeenCalledWith(901));
     stop();
     expect(chrome.downloads.onCreated.removeListener).toHaveBeenCalledWith(onCreated);
+    vi.mocked(chrome.downloads.search).mockResolvedValue([]);
+  });
+
+  it('leaves a download another page or an unknown page started alone', async () => {
+    vi.mocked(chrome.downloads.search).mockResolvedValue([
+      { id: 902, finalUrl: 'https://blocked.example/mine.zip', state: 'in_progress' },
+      { id: 903, finalUrl: 'https://blocked.example/mine.zip', state: 'in_progress' },
+    ] as never);
+    vi.mocked(chrome.downloads.cancel).mockClear();
+    vi.mocked(chrome.downloads.removeFile).mockClear();
+    vi.mocked(chrome.downloads.erase).mockClear();
+    const stop = watchDownloadsStartedBy({ allow: [], deny: ['blocked.example'] }, async () => [
+      `${SITE}/page`,
+    ]);
+    const [onCreated] = vi.mocked(chrome.downloads.onCreated.addListener).mock.calls.at(-1) ?? [];
+    const created = onCreated as (item: { id: number; referrer: string }) => void;
+    created({ id: 902, referrer: 'https://elsewhere.example/tab-b' });
+    created({ id: 903, referrer: '' });
+
+    await new Promise((resolveTimer) => setTimeout(resolveTimer, 20));
+    stop();
+    expect(chrome.downloads.cancel).not.toHaveBeenCalled();
+    expect(chrome.downloads.removeFile).not.toHaveBeenCalled();
+    expect(chrome.downloads.erase).not.toHaveBeenCalled();
     vi.mocked(chrome.downloads.search).mockResolvedValue([]);
   });
 

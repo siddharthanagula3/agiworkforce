@@ -117,7 +117,9 @@ impl AgentSession {
             self.checkpoint_log
                 .restore_files(index, self.checkpoint_file_authority())
         });
-        if mode.restores_conversation() {
+        let files_retryable = files.as_ref().is_some_and(|report| report.retryable);
+        let restores_conversation = mode.restores_conversation() && !files_retryable;
+        if restores_conversation {
             self.messages.truncate(message_count);
             self.checkpoint_log.truncate(index);
             self.checkpoint_captures.clear();
@@ -126,7 +128,7 @@ impl AgentSession {
         Ok(RewindOutcome {
             prompt,
             files,
-            conversation_restored: mode.restores_conversation(),
+            conversation_restored: restores_conversation,
             remaining: self.checkpoint_log.len(),
         })
     }
