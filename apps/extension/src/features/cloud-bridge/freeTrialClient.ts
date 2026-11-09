@@ -366,7 +366,12 @@ export async function clearAuthToken(): Promise<void> {
   await clearLocalAuth(false);
 }
 
-async function clearLocalAuth(endClerkSession: boolean): Promise<{ webSessionEnded: boolean }> {
+export interface LocalAuthClearResult {
+  webSessionEnded: boolean;
+  profileCleared: boolean;
+}
+
+async function clearLocalAuth(endClerkSession: boolean): Promise<LocalAuthClearResult> {
   let previousContext: ManagedCloudAuthContext | null = null;
   try {
     previousContext = await getManagedCloudAuthContext();
@@ -422,13 +427,19 @@ async function clearLocalAuth(endClerkSession: boolean): Promise<{ webSessionEnd
   } catch {
     // ignore
   }
-  await clearAutofillProfile();
-  return { webSessionEnded };
+  let profileCleared = true;
+  try {
+    await clearAutofillProfile();
+  } catch (error) {
+    console.warn('[AGI] Removing the saved autofill profile failed:', error);
+    profileCleared = false;
+  }
+  return { webSessionEnded, profileCleared };
 }
 
 const LEGACY_ACCOUNT_STORAGE_KEYS = ['agi_api_key', 'agi_user_id', 'agi_user_tier', 'agi_session'];
 
-export async function signOutOfAccount(): Promise<{ webSessionEnded: boolean }> {
+export async function signOutOfAccount(): Promise<LocalAuthClearResult> {
   const result = await clearLocalAuth(true);
   await chrome.storage.local.remove(LEGACY_ACCOUNT_STORAGE_KEYS);
   return result;

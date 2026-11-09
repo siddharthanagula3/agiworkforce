@@ -1687,10 +1687,16 @@ function buildPage(): void {
       logoutBtn.textContent = 'Logging out…';
       logoutBtn.disabled = true;
       try {
-        const { webSessionEnded } = await signOutOfAccount();
+        const { webSessionEnded, profileCleared } = await signOutOfAccount();
         renderAccountRow(false);
-        if (!webSessionEnded) {
+        if (!webSessionEnded && !profileCleared) {
+          accountStatus.textContent =
+            'Signed out here. The web session could not be ended and the saved autofill profile could not be removed. Delete it from Autofill profile.';
+        } else if (!webSessionEnded) {
           accountStatus.textContent = 'Signed out here. The web session could not be ended.';
+        } else if (!profileCleared) {
+          accountStatus.textContent =
+            'Signed out here. The saved autofill profile could not be removed. Delete it from Autofill profile.';
         }
       } catch {
         logoutBtn.textContent = 'Error';

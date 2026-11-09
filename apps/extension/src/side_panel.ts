@@ -149,6 +149,7 @@ import {
 } from './features/cloud-bridge/conversationHistoryPull';
 
 import { createChromeShareLink } from './features/cloud-bridge/shareClient';
+import { createHistoryShareLink } from './features/side-panel/historyShare';
 import {
   assignConversationOwner,
   claimConversationOwner,
@@ -334,6 +335,7 @@ import {
   type ComputerUsePanelAPI,
 } from './features/side-panel/computerUsePanel';
 import {
+  createOwnedProjectCatalog,
   readStoredActiveProject,
   type ActiveProjectSelection,
 } from './features/side-panel/activeProject';
@@ -11190,6 +11192,7 @@ function buildUI(): void {
     cancelBtn.addEventListener('click', close);
     control.addEventListener('keydown', (event: Event) => {
       const key = (event as KeyboardEvent).key;
+      if (isImeComposingKey(event as KeyboardEvent)) return;
       if (key === 'Enter') {
         event.preventDefault();
         save();
@@ -11389,17 +11392,27 @@ function buildUI(): void {
       close();
     });
     createBtn.addEventListener('click', () => {
+      const owner = _ctx.managedCloudOwner;
+      if (!owner || !sameManagedCloudOwner(entry.owner, owner)) {
+        confirmRow.remove();
+        return;
+      }
       createBtn.disabled = true;
+      const confirmationIsLive = (): boolean =>
+        confirmRow.isConnected && sameManagedCloudOwner(_ctx.managedCloudOwner, owner);
       void (async () => {
-        const auth = await getManagedCloudAuthContext();
-        if (!auth) throw new Error(t('spHistoryShareSignIn'));
-        const link = await createChromeShareLink(auth.token, {
-          title: entry.title,
-          messages: entry.messages.filter((message) => message.content.trim().length > 0),
-          ...(entry.cloudSync?.conversationId
-            ? { conversationId: entry.cloudSync.conversationId }
-            : {}),
+        const shared = await createHistoryShareLink({
+          owner,
+          entryId: entry.id,
+          isLive: confirmationIsLive,
+          getAuth: getManagedCloudAuthContext,
+          getStored: getConversation,
+          createLink: createChromeShareLink,
         });
+        if (shared.status === 'retired') return;
+        if (shared.status === 'signed-out') throw new Error(t('spHistoryShareSignIn'));
+        if (shared.status === 'not-loaded') throw new Error(t('spHistoryShareNotLoaded'));
+        const { link } = shared;
         await navigator.clipboard.writeText(link.url);
         confirmRow.remove();
         const expires = link.expiresAt ? new Date(link.expiresAt) : null;
@@ -11411,6 +11424,7 @@ function buildUI(): void {
         trigger.focus();
       })()
         .catch((error: unknown) => {
+          if (!confirmationIsLive()) return;
           showHistoryStatus(error instanceof Error ? error.message : t('spHistoryShareFailed'));
         })
         .finally(() => {
@@ -13061,7 +13075,7 @@ function buildUI(): void {
   let mentionStart = -1;
   let mentionGeneration = 0;
   let mentionTabs: chrome.tabs.Tab[] = [];
-  let mentionProjects: ActiveProjectSelection[] = [];
+  const mentionProjects = createOwnedProjectCatalog();
 
   const mentionOpen = (): boolean => mentionOptions.length > 0;
 
@@ -13119,6 +13133,7 @@ function buildUI(): void {
   function closeMentionMenu(): void {
     mentionGeneration += 1;
     mentionOptions = [];
+    mentionProjects.clear();
     mentionActive = 0;
     mentionStart = -1;
     renderMentionMenu();
@@ -13135,11 +13150,13 @@ function buildUI(): void {
       const detail = pageChipLabel(url);
       return matchesQuery(label, url) ? [{ kind: 'tab', tab, label, detail }] : [];
     });
-    const projectOptions = mentionProjects.flatMap((project): MentionOption[] =>
-      matchesQuery(project.name)
-        ? [{ kind: 'project', project, label: project.name, detail: t('spMentionProjectDetail') }]
-        : [],
-    );
+    const projectOptions = mentionProjects
+      .read(_ctx.managedCloudOwner)
+      .flatMap((project): MentionOption[] =>
+        matchesQuery(project.name)
+          ? [{ kind: 'project', project, label: project.name, detail: t('spMentionProjectDetail') }]
+          : [],
+      );
     mentionOptions = [...tabOptions, ...projectOptions];
     if (mentionActive >= mentionOptions.length) mentionActive = 0;
     renderMentionMenu();
@@ -13161,6 +13178,8 @@ function buildUI(): void {
       return;
     }
     const generation = ++mentionGeneration;
+    const owner = _ctx.managedCloudOwner;
+    mentionProjects.clear();
     void pageWindowQuery().then((query) =>
       chrome.tabs.query(query, (tabs) => {
         if (generation !== mentionGeneration) return;
@@ -13173,11 +13192,18 @@ function buildUI(): void {
       }),
     );
     void listChromeProjects().then((result) => {
-      if (generation !== mentionGeneration) return;
-      mentionProjects =
+      if (
+        generation !== mentionGeneration ||
+        !sameManagedCloudOwner(owner, _ctx.managedCloudOwner)
+      ) {
+        return;
+      }
+      mentionProjects.set(
+        owner,
         result.status === 'success'
           ? result.projects.map((project) => ({ id: project.id, name: project.name }))
-          : [];
+          : [],
+      );
       recomputeMentionOptions();
     });
   }
@@ -13186,6 +13212,13 @@ function buildUI(): void {
     const option = mentionOptions[index];
     const mention = mentionAtCaret();
     if (!option || !mention) return;
+    if (
+      option.kind === 'project' &&
+      !mentionProjects.read(_ctx.managedCloudOwner).some(({ id }) => id === option.project.id)
+    ) {
+      closeMentionMenu();
+      return;
+    }
     const approval =
       option.kind === 'tab' && option.tab.id !== activePageSource?.tabId
         ? approveSiteForReading(option.tab.url ?? '')

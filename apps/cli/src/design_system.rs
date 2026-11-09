@@ -113,34 +113,22 @@ impl AccessMode {
         &[AccessMode::Local, AccessMode::Byok, AccessMode::Cloud];
 
     /// Classify the runtime provider into an access mode. Presentation only,
-    /// it never affects routing. A keyless OpenAI-compatible endpoint and local
-    /// Ollama are Local; the AGI-managed endpoint is Cloud; anything reached
-    /// with a key is BYOK.
+    /// it never affects routing, and it follows the session's privacy
+    /// classification so the label never claims more locality than the route
+    /// has: local Ollama and a keyless endpoint on this machine are Local; the
+    /// AGI-managed endpoint is Cloud; anything else is BYOK.
     pub fn for_provider(provider: &crate::models::Provider) -> AccessMode {
-        use crate::models::{OllamaMode, Provider};
-        match provider {
-            Provider::ManagedCloud => AccessMode::Cloud,
-            Provider::Ollama(OllamaMode::Local) => AccessMode::Local,
-            Provider::Ollama(OllamaMode::Cloud) => AccessMode::Byok,
-            Provider::Custom { api_key_env, .. } => {
-                if api_key_env.is_some() {
-                    AccessMode::Byok
-                } else {
-                    AccessMode::Local
-                }
+        use crate::agent::{provider_privacy_mode, PrivacyMode};
+        use crate::models::Provider;
+        if let Provider::OpenAICompatible { name, .. } = provider {
+            if name.eq_ignore_ascii_case("agi-cloud") || name.eq_ignore_ascii_case("agicloud") {
+                return AccessMode::Cloud;
             }
-            Provider::OpenAICompatible {
-                name, api_key_env, ..
-            } => {
-                if name.eq_ignore_ascii_case("agi-cloud") || name.eq_ignore_ascii_case("agicloud") {
-                    AccessMode::Cloud
-                } else if api_key_env.is_none() {
-                    AccessMode::Local
-                } else {
-                    AccessMode::Byok
-                }
-            }
-            Provider::Anthropic | Provider::Google => AccessMode::Byok,
+        }
+        match provider_privacy_mode(provider) {
+            PrivacyMode::Local => AccessMode::Local,
+            PrivacyMode::Byok => AccessMode::Byok,
+            PrivacyMode::Managed => AccessMode::Cloud,
         }
     }
 
@@ -550,6 +538,53 @@ mod tests {
         for &mode in AccessMode::ORDER {
             assert!(!mode.trust_word().to_uppercase().contains("BYOK"));
         }
+    }
+
+    #[test]
+    fn keyless_custom_provider_is_local_only_on_this_machine() {
+        use crate::models::{OllamaMode, Provider};
+
+        let custom = |base_url: &str, api_key_env: Option<&str>| Provider::Custom {
+            name: "remote-lab".to_string(),
+            base_url: base_url.to_string(),
+            api_key_env: api_key_env.map(str::to_string),
+        };
+        assert_eq!(
+            AccessMode::for_provider(&custom("http://localhost:8080/v1", None)),
+            AccessMode::Local
+        );
+        assert_eq!(
+            AccessMode::for_provider(&custom("https://inference.example/v1", None)),
+            AccessMode::Byok
+        );
+        assert_eq!(
+            AccessMode::for_provider(&custom("https://inference.example/v1", Some("LAB_KEY"))),
+            AccessMode::Byok
+        );
+        assert_eq!(
+            AccessMode::for_provider(&Provider::OpenAICompatible {
+                name: "remote-lab",
+                base_url: "https://inference.example/v1/chat/completions",
+                api_key_env: None,
+            }),
+            AccessMode::Byok
+        );
+        assert_eq!(
+            AccessMode::for_provider(&crate::models::lmstudio_provider()),
+            AccessMode::Local
+        );
+        assert_eq!(
+            AccessMode::for_provider(&Provider::Ollama(OllamaMode::Local)),
+            AccessMode::Local
+        );
+        assert_eq!(
+            AccessMode::for_provider(&Provider::Ollama(OllamaMode::Cloud)),
+            AccessMode::Byok
+        );
+        assert_eq!(
+            AccessMode::for_provider(&Provider::ManagedCloud),
+            AccessMode::Cloud
+        );
     }
 
     #[test]

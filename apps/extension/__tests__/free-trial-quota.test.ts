@@ -526,12 +526,27 @@ describe('signOutOfAccount', () => {
     clerkAuthMock.revokeSyncedWebSession.mockRejectedValueOnce(new Error('Network unavailable'));
     chromeMock._sessionStore['agi_clerk_session_token'] = 'session-token';
     chromeMock._localStore['agi_dev_bearer_token'] = 'development-token';
-    await expect(signOutOfAccount()).resolves.toEqual({ webSessionEnded: false });
+    await expect(signOutOfAccount()).resolves.toEqual({
+      webSessionEnded: false,
+      profileCleared: true,
+    });
     expect(chromeMock.runtime.sendMessage).toHaveBeenCalledBefore(
       clerkAuthMock.revokeSyncedWebSession,
     );
     expect(chromeMock._sessionStore['agi_clerk_session_token']).toBeUndefined();
     expect(chromeMock._localStore['agi_dev_bearer_token']).toBeUndefined();
+    expect(clerkAuthMock.signOutClerk).toHaveBeenCalledOnce();
+  });
+
+  it('reports a failed profile removal without blocking session cleanup', async () => {
+    chromeMock._localStore['agi_autofill_profile'] = { email: 'ada@example.test' };
+    chromeMock._sessionStore['agi_clerk_session_token'] = 'session-token';
+    chromeMock.storage.local.remove.mockImplementationOnce(async () => undefined);
+    chromeMock.storage.local.remove.mockRejectedValueOnce(new Error('Storage unavailable'));
+    const result = await signOutOfAccount();
+    expect(result).toEqual({ webSessionEnded: true, profileCleared: false });
+    expect(chromeMock._localStore['agi_autofill_profile']).toEqual({ email: 'ada@example.test' });
+    expect(chromeMock._sessionStore['agi_clerk_session_token']).toBeUndefined();
     expect(clerkAuthMock.signOutClerk).toHaveBeenCalledOnce();
   });
 });

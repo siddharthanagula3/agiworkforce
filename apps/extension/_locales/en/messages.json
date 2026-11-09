@@ -2703,6 +2703,10 @@
     "message": "Sign in to share a chat.",
     "description": "Sharing needs a signed-in account"
   },
+  "spHistoryShareNotLoaded": {
+    "message": "Open this chat once so its messages load, then share it.",
+    "description": "A chat listed from the account has not been loaded on this device, so it cannot be shared yet"
+  },
   "spSchedulesDescriptionLabel": {
     "message": "Description (optional)",
     "description": "Label of the optional schedule description field"
@@ -4251,6 +4255,10 @@
   "spAccountLogOutWebKept": {
     "message": "Signed out here. The web session could not be ended.",
     "description": "Status after signing out when the web session could not be ended"
+  },
+  "spAccountLogOutProfileKept": {
+    "message": "Signed out here. The saved autofill profile could not be removed.",
+    "description": "Status after signing out when the saved autofill profile could not be removed"
   },
   "spAccountLogOutFailed": {
     "message": "Log out did not finish. Try again.",
