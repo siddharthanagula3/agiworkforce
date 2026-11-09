@@ -9,6 +9,7 @@ export const DEVELOPER_PROJECT_NAME_MAX = 100;
 export const DEVELOPER_PROJECT_CREDIT_LIMIT_MAX = 1_000_000_000;
 
 const UNIQUE_VIOLATION = '23505';
+const PROJECT_ADMISSION_LOCK_PREFIX = 'agi:developer-project-admission:';
 
 interface DeveloperProjectRow {
   id: string;
@@ -102,28 +103,32 @@ export async function createDeveloperProject(
   input: { name: string; monthlyCreditLimit: number | null },
 ): Promise<DeveloperProject> {
   const name = input.name.trim();
-  const [count] = await db.query<{ live: string | number }>(
-    `select count(*) as live
-       from public.developer_projects
-      where user_id = $1
-        and archived_at is null`,
-    [userId],
-  );
-  if (Number(count?.live ?? 0) >= DEVELOPER_PROJECT_LIMIT) {
-    throw createError.validation(
-      `You can have ${DEVELOPER_PROJECT_LIMIT} projects at once. Archive one to make another.`,
-    );
-  }
-
   try {
-    const [row] = await db.query<DeveloperProjectRow>(
-      `insert into public.developer_projects (user_id, name, monthly_credit_limit)
-       values ($1, $2, $3)
-       returning ${PROJECT_COLUMNS}`,
-      [userId, name, input.monthlyCreditLimit],
-    );
-    if (!row) throw createError.internal('The project could not be created.');
-    return toProject(row);
+    return await db.transaction(async (tx) => {
+      await tx.query(`select pg_advisory_xact_lock(hashtextextended($1, 0))`, [
+        `${PROJECT_ADMISSION_LOCK_PREFIX}${userId}`,
+      ]);
+      const [count] = await tx.query<{ live: string | number }>(
+        `select count(*) as live
+           from public.developer_projects
+          where user_id = $1
+            and archived_at is null`,
+        [userId],
+      );
+      if (Number(count?.live ?? 0) >= DEVELOPER_PROJECT_LIMIT) {
+        throw createError.validation(
+          `You can have ${DEVELOPER_PROJECT_LIMIT} projects at once. Archive one to make another.`,
+        );
+      }
+      const [row] = await tx.query<DeveloperProjectRow>(
+        `insert into public.developer_projects (user_id, name, monthly_credit_limit)
+         values ($1, $2, $3)
+         returning ${PROJECT_COLUMNS}`,
+        [userId, name, input.monthlyCreditLimit],
+      );
+      if (!row) throw createError.internal('The project could not be created.');
+      return toProject(row);
+    });
   } catch (error) {
     if (isUniqueViolation(error)) throw duplicateNameError(name);
     throw error;
