@@ -308,6 +308,16 @@ function OwnedImportMemoryDialog({
     });
   }, [commitResult]);
 
+  const blockedSummary = useMemo(() => {
+    const count = commitResult?.blockedCount ?? 0;
+    if (count === 0) return null;
+    return translateUiPlural('settings', 'counts.blockedMemories', count, {
+      one: '{{count}} memory was blocked by your memory settings or workspace policy and was not saved.',
+      other:
+        '{{count}} memories were blocked by your memory settings or workspace policy and were not saved.',
+    });
+  }, [commitResult]);
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
@@ -525,6 +535,7 @@ function OwnedImportMemoryDialog({
               </p>
             )}
             {excludedSummary && <p className="text-xs text-muted-foreground">{excludedSummary}</p>}
+            {blockedSummary && <p className="text-xs text-muted-foreground">{blockedSummary}</p>}
           </div>
         )}
 

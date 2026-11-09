@@ -33,6 +33,7 @@ interface CommitCounts {
   insertedCount: number;
   skippedDuplicateCount: number;
   excludedCount: number;
+  blockedCount?: number;
 }
 
 function stubImportApi(counts: CommitCounts) {
@@ -63,6 +64,7 @@ function stubImportApi(counts: CommitCounts) {
         mode: 'commit',
         sourceName: 'ChatGPT',
         sourceValue: 'imported:chatgpt',
+        blockedCount: 0,
         ...counts,
         memories: [],
       }),
@@ -156,6 +158,25 @@ describe('Unexecuted cloud import says what the never remember list dropped', ()
       expect(
         screen.getByText(
           '2 memories matched a term on your never remember list and were not saved.',
+        ),
+      ).toBeVisible(),
+    );
+  });
+
+  it('names the count when workspace or memory settings blocked some memories', async () => {
+    stubImportApi({
+      insertedCount: 1,
+      skippedDuplicateCount: 0,
+      excludedCount: 0,
+      blockedCount: 2,
+    });
+
+    await runImport();
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(
+          '2 memories were blocked by your memory settings or workspace policy and were not saved.',
         ),
       ).toBeVisible(),
     );

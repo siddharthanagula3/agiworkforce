@@ -21,6 +21,10 @@ function legacyDerivedId(userId: string, source: string, normalizedKey: string):
 
 const query = vi.fn();
 
+function keep(content: string, expiresAt: string | null = null) {
+  return { content, expiresAt };
+}
+
 function issued(): { sql: string; params: unknown[] } {
   const call = query.mock.calls.find((entry) => String(entry[0]).includes('insert into'));
   expect(call).toBeDefined();
@@ -42,13 +46,15 @@ describe('persistImportedMemories row identity', () => {
       { query },
       {
         userId: VICTIM,
-        items: ['Likes dark mode'],
+        items: [keep('Likes dark mode')],
         source: SOURCE,
       },
     );
 
     const { sql } = issued();
-    expect(sql).toContain('insert into user_memories (user_id, content, source, import_key)');
+    expect(sql).toContain(
+      'insert into user_memories (user_id, content, source, import_key, expires_at)',
+    );
     expect(sql).not.toMatch(/insert into user_memories[^)]*\bid\b/);
     for (const entry of batch()) {
       expect(entry).not.toHaveProperty('id');
@@ -57,7 +63,10 @@ describe('persistImportedMemories row identity', () => {
 
   it('never writes the id an attacker could derive from the owner, source and text', async () => {
     const content = 'Lives in Bengaluru';
-    await persistImportedMemories({ query }, { userId: VICTIM, items: [content], source: SOURCE });
+    await persistImportedMemories(
+      { query },
+      { userId: VICTIM, items: [keep(content)], source: SOURCE },
+    );
 
     const guessable = legacyDerivedId(VICTIM, SOURCE, normalizeImportedMemoryKey(content));
     expect(JSON.stringify(batch())).not.toContain(guessable);
@@ -69,7 +78,7 @@ describe('persistImportedMemories row identity', () => {
       { query },
       {
         userId: VICTIM,
-        items: ['Likes dark mode', 'likes   DARK mode'],
+        items: [keep('Likes dark mode'), keep('likes   DARK mode')],
         source: SOURCE,
       },
     );
@@ -79,7 +88,27 @@ describe('persistImportedMemories row identity', () => {
       'on conflict (user_id, source, import_key) where import_key is not null do nothing',
     );
     expect(sql).not.toContain('on conflict (id)');
-    expect(batch()).toEqual([{ content: 'Likes dark mode', importKey: 'likes dark mode' }]);
+    expect(batch()).toEqual([
+      { content: 'Likes dark mode', importKey: 'likes dark mode', expiresAt: null },
+    ]);
+  });
+
+  it('stores the expiry the retention policy computed for each fact', async () => {
+    const expiresAt = '2027-01-01T00:00:00.000Z';
+    await persistImportedMemories(
+      { query },
+      {
+        userId: VICTIM,
+        items: [keep('Likes dark mode', expiresAt), keep('Prefers Python')],
+        source: SOURCE,
+      },
+    );
+
+    expect(issued().sql).toContain('expires_at');
+    expect(batch()).toEqual([
+      { content: 'Likes dark mode', importKey: 'likes dark mode', expiresAt },
+      { content: 'Prefers Python', importKey: 'prefers python', expiresAt: null },
+    ]);
   });
 
   it('reports a repeat import as skipped rather than inserted', async () => {
@@ -88,7 +117,7 @@ describe('persistImportedMemories row identity', () => {
       { query },
       {
         userId: VICTIM,
-        items: ['Likes dark mode'],
+        items: [keep('Likes dark mode')],
         source: SOURCE,
       },
     );
@@ -100,7 +129,7 @@ describe('persistImportedMemories row identity', () => {
       { query },
       {
         userId: VICTIM,
-        items: ['   ', ''],
+        items: [keep('   '), keep('')],
         source: SOURCE,
       },
     );

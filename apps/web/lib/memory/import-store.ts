@@ -16,6 +16,11 @@ export interface ImportedMemoryRow {
   updated_at: string;
 }
 
+export interface ImportedMemoryCandidate {
+  content: string;
+  expiresAt: string | null;
+}
+
 export interface PersistImportedMemoriesResult {
   memories: ImportedMemoryRow[];
   insertedCount: number;
@@ -24,17 +29,17 @@ export interface PersistImportedMemoriesResult {
 
 export async function persistImportedMemories(
   db: ImportMemoryDb,
-  params: { userId: string; items: readonly string[]; source: string },
+  params: { userId: string; items: readonly ImportedMemoryCandidate[]; source: string },
 ): Promise<PersistImportedMemoriesResult> {
   const seen = new Set<string>();
-  const batch: Array<{ content: string; importKey: string }> = [];
-  for (const raw of params.items) {
-    const content = clampImportItemLength(raw.trim());
+  const batch: Array<{ content: string; importKey: string; expiresAt: string | null }> = [];
+  for (const candidate of params.items) {
+    const content = clampImportItemLength(candidate.content.trim());
     if (!content) continue;
     const importKey = normalizeImportedMemoryKey(content);
     if (!importKey || seen.has(importKey)) continue;
     seen.add(importKey);
-    batch.push({ content, importKey });
+    batch.push({ content, importKey, expiresAt: candidate.expiresAt });
   }
   if (batch.length === 0) {
     return { memories: [], insertedCount: 0, skippedDuplicateCount: 0 };
@@ -47,11 +52,12 @@ export async function persistImportedMemories(
   const inserted = await db.query<ImportedMemoryRow>(
     `with incoming as materialized (
        select item ->> 'content' as content,
-              item ->> 'importKey' as import_key
+              item ->> 'importKey' as import_key,
+              (item ->> 'expiresAt')::timestamptz as expires_at
          from jsonb_array_elements($2::jsonb) as source(item)
      )
-     insert into user_memories (user_id, content, source, import_key)
-     select $1, incoming.content, $3, incoming.import_key
+     insert into user_memories (user_id, content, source, import_key, expires_at)
+     select $1, incoming.content, $3, incoming.import_key, incoming.expires_at
        from incoming
      on conflict (user_id, source, import_key) where import_key is not null do nothing
      returning id::text as id, content, category, source, pinned, created_at, updated_at`,
