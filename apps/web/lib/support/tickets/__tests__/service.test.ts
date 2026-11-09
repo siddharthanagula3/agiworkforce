@@ -33,12 +33,13 @@ import {
   MAX_TICKET_MESSAGE_CHARS,
   TicketClosedError,
   TicketNotFoundError,
+  listTicketsPage,
   moveTicket,
   openTicket,
   readTicket,
   replyToTicket,
 } from '../service';
-import { canTransition } from '@agiworkforce/cloud-contracts/support';
+import { MAX_TICKETS_LISTED, canTransition } from '@agiworkforce/cloud-contracts/support';
 
 function ticket(overrides: Record<string, unknown> = {}) {
   return {
@@ -56,6 +57,37 @@ function ticket(overrides: Record<string, unknown> = {}) {
     ...overrides,
   };
 }
+
+describe('listTicketsPage', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('returns every ticket and no continuation when the account fits one window', async () => {
+    store.listTicketsForUser.mockResolvedValue([ticket({ id: 'a' }), ticket({ id: 'b' })]);
+
+    await expect(listTicketsPage('user_1')).resolves.toEqual({
+      tickets: [ticket({ id: 'a' }), ticket({ id: 'b' })],
+      nextOffset: null,
+    });
+    expect(store.listTicketsForUser).toHaveBeenCalledWith('user_1', MAX_TICKETS_LISTED + 1, 0);
+  });
+
+  it('keeps the window bounded and points at the first ticket it left out', async () => {
+    const rows = Array.from({ length: MAX_TICKETS_LISTED + 1 }, (_, index) =>
+      ticket({ id: `ticket-${index}` }),
+    );
+    store.listTicketsForUser.mockResolvedValue(rows);
+
+    const page = await listTicketsPage('user_1', MAX_TICKETS_LISTED);
+
+    expect(page.tickets).toHaveLength(MAX_TICKETS_LISTED);
+    expect(page.nextOffset).toBe(MAX_TICKETS_LISTED * 2);
+    expect(store.listTicketsForUser).toHaveBeenCalledWith(
+      'user_1',
+      MAX_TICKETS_LISTED + 1,
+      MAX_TICKETS_LISTED,
+    );
+  });
+});
 
 describe('openTicket', () => {
   beforeEach(() => {

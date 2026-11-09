@@ -362,8 +362,9 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
     setHasUnsavedChanges(true);
   }, []);
 
-  const refreshOllamaState = useCallback(async () => {
+  const readOllamaState = useCallback(async (): Promise<boolean> => {
     setCheckingOllama(true);
+    let verified = false;
     try {
       const { ollamaUrl, allowPrivateNetworkRuntimes } = useSettingsStore.getState().llmConfig;
       const baseUrl = ollamaUrl || 'http://localhost:11434';
@@ -373,9 +374,10 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
       setOllamaAvailable(available);
       const rawModels =
         available && !isDesktopUiDevLocal
-          ? await ollamaListModels(baseUrl, allowPrivateNetworkRuntimes).catch(() => [])
+          ? await ollamaListModels(baseUrl, allowPrivateNetworkRuntimes).catch(() => null)
           : [];
-      const models = normalizeOllamaModelList(rawModels);
+      verified = available && rawModels !== null;
+      const models = normalizeOllamaModelList(rawModels ?? []);
       setOllamaModels(models);
       setSelectedOllamaModel((currentModel) => {
         const persistedModel = useSettingsStore.getState().llmConfig.defaultModels?.ollama;
@@ -392,7 +394,12 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
       setCheckingOllama(false);
       notifyLocalModelCatalogChanged('settings-refresh');
     }
+    return verified;
   }, []);
+
+  const refreshOllamaState = useCallback(async () => {
+    await readOllamaState();
+  }, [readOllamaState]);
 
   const handleInstallOllamaModel = useCallback(
     async (modelName: string): Promise<OllamaPullOutcome> => {
@@ -420,7 +427,13 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
           });
           return outcome;
         }
-        await refreshOllamaState();
+        if (!(await readOllamaState())) {
+          toast.warning(`${normalizedModelName} was downloaded`, {
+            description:
+              'Ollama did not list its models, so it is not selected yet. Check Ollama and refresh.',
+          });
+          return outcome;
+        }
         setSelectedOllamaModel(normalizedModelName);
         if (ollamaEnabled) {
           setDefaultModel('ollama', normalizedModelName);
@@ -439,7 +452,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
         setOllamaInstallProgress(null);
       }
     },
-    [installingOllamaModel, ollamaEnabled, refreshOllamaState, setDefaultModel],
+    [installingOllamaModel, ollamaEnabled, readOllamaState, setDefaultModel],
   );
 
   const handleCancelOllamaInstall = useCallback(() => {

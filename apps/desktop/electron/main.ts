@@ -264,8 +264,10 @@ import {
   broadcastRuntimeEvent,
   cascadeBounds,
   conversationIdFromRoute,
+  frontShellEntry,
   planSignOut,
   resolveNavigationConflict,
+  routeAfterConflict,
   type OpenWindow,
 } from './windowRegistry';
 import { handleWorkspaceDrop } from './workspaceDrop';
@@ -1203,9 +1205,11 @@ function createShellWindow(options: { primary: boolean; route?: string | null })
     const clash = resolveNavigationConflict(openWindows(), win.id, route);
     if (clash) {
       const previous = entry.route;
-      entry.returningTo = previous;
+      const returnTo = routeAfterConflict(previous, route);
+      entry.returningTo = returnTo;
+      entry.route = returnTo;
       focusWindow(clash.focus);
-      void win.loadURL(windowUrlFor(previous));
+      void win.loadURL(windowUrlFor(returnTo));
       return;
     }
 
@@ -1326,12 +1330,17 @@ function showMainWindow(): void {
 }
 
 /** The conversation the front window is on, or null when it is not on one. */
+function focusedConversationEntry(): ShellWindowEntry | null {
+  const entry = frontShellEntry(
+    shellWindows,
+    BrowserWindow.getFocusedWindow()?.id ?? null,
+    mainWindow?.id ?? null,
+  );
+  return entry && conversationIdFromRoute(entry.route) !== null ? entry : null;
+}
+
 function focusedConversationRoute(): string | null {
-  const focused = BrowserWindow.getFocusedWindow();
-  const entry =
-    (focused ? shellWindows.get(focused.id) : null) ?? shellWindows.get(mainWindow?.id ?? -1);
-  if (!entry) return null;
-  return conversationIdFromRoute(entry.route) === null ? null : entry.route;
+  return focusedConversationEntry()?.route ?? null;
 }
 
 function openNewChat(): void {
@@ -1402,14 +1411,11 @@ function openCurrentChatInNewWindow(): void {
 }
 
 function openFocusedConversationInNewWindow(): void {
-  const route = focusedConversationRoute();
-  if (route === null) return;
-  const focused = BrowserWindow.getFocusedWindow();
-  const entry = focused ? shellWindows.get(focused.id) : null;
-  if (entry) {
-    entry.route = NEW_CHAT_ROUTE;
-    void entry.win.loadURL(windowUrlFor(null));
-  }
+  const entry = focusedConversationEntry();
+  if (!entry) return;
+  const route = entry.route;
+  entry.route = NEW_CHAT_ROUTE;
+  void entry.win.loadURL(windowUrlFor(null));
   createShellWindow({ primary: false, route });
 }
 

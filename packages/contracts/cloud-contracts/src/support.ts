@@ -342,6 +342,13 @@ export const supportDiagnosticsSchema = z
 export const MAX_TICKET_SUBJECT_CHARS = 200;
 export const MAX_TICKET_MESSAGE_CHARS = 8_000;
 export const MAX_TICKETS_LISTED = 50;
+export const MAX_TICKET_LIST_OFFSET = 10_000;
+
+export const SupportTicketListQuerySchema = z
+  .object({
+    offset: z.coerce.number().int().min(0).max(MAX_TICKET_LIST_OFFSET).default(0),
+  })
+  .strict();
 
 export const APPEAL_TICKET_SUBJECT = 'Account suspension appeal';
 export const APPEAL_FOLLOW_PATH = '/login';
@@ -450,6 +457,7 @@ export interface SupportTicketThread {
 
 export interface SupportTicketListResponse {
   tickets: SupportTicket[];
+  nextOffset: number | null;
 }
 
 export interface OpenedSupportTicket {

@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   requireCsrfToken: vi.fn(async () => null as unknown),
   withRateLimit: vi.fn(async () => null as unknown),
   openTicket: vi.fn(),
-  listTickets: vi.fn(),
+  listTicketsPage: vi.fn(),
   readTicket: vi.fn(),
   replyToTicket: vi.fn(),
   moveTicket: vi.fn(),
@@ -29,7 +29,7 @@ vi.mock('@/lib/support/tickets/service', async () => {
   return {
     ...actual,
     openTicket: mocks.openTicket,
-    listTickets: mocks.listTickets,
+    listTicketsPage: mocks.listTicketsPage,
     readTicket: mocks.readTicket,
     replyToTicket: mocks.replyToTicket,
     moveTicket: mocks.moveTicket,
@@ -71,7 +71,7 @@ describe('support ticket routes', () => {
     mocks.getClerkAuthUser.mockResolvedValue({ userId: 'user_1', email: 'a@example.com' });
     mocks.requireCsrfToken.mockResolvedValue(null);
     mocks.withRateLimit.mockResolvedValue(null);
-    mocks.listTickets.mockResolvedValue([TICKET]);
+    mocks.listTicketsPage.mockResolvedValue({ tickets: [TICKET], nextOffset: null });
     mocks.openTicket.mockResolvedValue({ ticket: TICKET, staffNotified: true });
     mocks.readTicket.mockResolvedValue({ ticket: TICKET, replies: [] });
     mocks.normalizeDiagnostics.mockReturnValue(null);
@@ -83,7 +83,31 @@ describe('support ticket routes', () => {
     );
 
     expect(response.status).toBe(200);
-    expect(mocks.listTickets).toHaveBeenCalledWith('user_1');
+    expect(mocks.listTicketsPage).toHaveBeenCalledWith('user_1', 0);
+    await expect(response.json()).resolves.toEqual({ tickets: [TICKET], nextOffset: null });
+  });
+
+  it('reads the page the caller asked for and says where the next one starts', async () => {
+    mocks.listTicketsPage.mockResolvedValue({ tickets: [TICKET], nextOffset: 100 });
+
+    const response = await listTicketsRoute(
+      new Request('https://agiworkforce.com/api/support/tickets?offset=50') as never,
+    );
+
+    expect(mocks.listTicketsPage).toHaveBeenCalledWith('user_1', 50);
+    await expect(response.json()).resolves.toMatchObject({ nextOffset: 100 });
+  });
+
+  it('refuses an offset that is not a position in the list', async () => {
+    for (const offset of ['-1', '1.5', 'abc', '99999999']) {
+      mocks.listTicketsPage.mockClear();
+      const response = await listTicketsRoute(
+        new Request(`https://agiworkforce.com/api/support/tickets?offset=${offset}`) as never,
+      );
+
+      expect(response.status, offset).toBe(400);
+      expect(mocks.listTicketsPage).not.toHaveBeenCalled();
+    }
   });
 
   it('answers 201 with the created ticket and whether the support team was told', async () => {

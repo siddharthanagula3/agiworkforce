@@ -55,6 +55,31 @@ export function resolveNavigationConflict(
 }
 
 /**
+ * The shell window an app-menu command acts on. A focused window that is not a
+ * shell, such as a detached panel, has no conversation of its own and is never
+ * answered with the primary's; only when nothing is focused does the primary
+ * stand in.
+ */
+export function frontShellEntry<T>(
+  shells: ReadonlyMap<number, T>,
+  focusedId: number | null,
+  primaryId: number | null,
+): T | null {
+  const id = focusedId ?? primaryId;
+  return id === null ? null : (shells.get(id) ?? null);
+}
+
+/**
+ * Where a window goes back to after landing on a conversation another window
+ * holds. Going back to the same conversation would be the clash again, so a
+ * window that started on it returns to a new chat.
+ */
+export function routeAfterConflict(previous: string, conflicting: string): string {
+  const held = conversationIdFromRoute(conflicting);
+  return held !== null && conversationIdFromRoute(previous) === held ? NEW_CHAT_ROUTE : previous;
+}
+
+/**
  * Where a second window opens.
  *
  * Stepped down and across from the window it was opened from, then pulled back
