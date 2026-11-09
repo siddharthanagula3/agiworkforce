@@ -5,8 +5,17 @@ import { TimeFocusReminder, focusActivityStorageKey, readFocusActivity } from '.
 const preferenceMocks = vi.hoisted(() => ({ fetch: vi.fn() }));
 
 vi.mock('@/app/settings/_lib/preferences-client', () => ({
+  PREFERENCE_NAMESPACE_SAVED_EVENT: 'agi:preference-namespace-saved',
   fetchPreferenceNamespace: preferenceMocks.fetch,
 }));
+
+function announceSavedPreferences(namespace: string, value: unknown) {
+  act(() => {
+    window.dispatchEvent(
+      new CustomEvent('agi:preference-namespace-saved', { detail: { namespace, value } }),
+    );
+  });
+}
 
 const mondayNight = new Date('2026-07-20T23:00:00.000Z');
 
@@ -105,6 +114,84 @@ describe('TimeFocusReminder', () => {
     });
     act(() => vi.advanceTimersByTime(5 * 60_000));
     expect(screen.queryByRole('alertdialog')).toBeNull();
+  });
+
+  it('adopts a saved threshold while the reminder stays mounted', async () => {
+    const quietOff = {
+      enabled: false,
+      days: [],
+      startTime: '22:00',
+      endTime: '08:00',
+      timezone: 'UTC',
+    };
+    preferenceMocks.fetch.mockResolvedValue({ breakReminderMinutes: null, quietHours: quietOff });
+    localStorage.setItem(
+      focusActivityStorageKey('user-1'),
+      JSON.stringify({ dateKey: '2026-07-20', activeMs: 29 * 60_000, dismissedBreakMinutes: null }),
+    );
+    render(<TimeFocusReminder userId="user-1" onLeave={vi.fn()} activeTickMs={60_000} />);
+    await flushPreferences();
+    act(() => vi.advanceTimersByTime(60_000));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+
+    announceSavedPreferences('agi:other-namespace', {
+      breakReminderMinutes: 30,
+      quietHours: quietOff,
+    });
+    act(() => vi.advanceTimersByTime(60_000));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+
+    announceSavedPreferences('time-focus', { breakReminderMinutes: 30, quietHours: quietOff });
+    act(() => vi.advanceTimersByTime(60_000));
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('Time for a break?');
+  });
+
+  it('stops the break timer once the threshold is saved off', async () => {
+    const quietOff = {
+      enabled: false,
+      days: [],
+      startTime: '22:00',
+      endTime: '08:00',
+      timezone: 'UTC',
+    };
+    preferenceMocks.fetch.mockResolvedValue({ breakReminderMinutes: 30, quietHours: quietOff });
+    localStorage.setItem(
+      focusActivityStorageKey('user-1'),
+      JSON.stringify({ dateKey: '2026-07-20', activeMs: 29 * 60_000, dismissedBreakMinutes: null }),
+    );
+    render(<TimeFocusReminder userId="user-1" onLeave={vi.fn()} activeTickMs={60_000} />);
+    await flushPreferences();
+
+    announceSavedPreferences('time-focus', { breakReminderMinutes: null, quietHours: quietOff });
+    act(() => vi.advanceTimersByTime(5 * 60_000));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+  });
+
+  it('keeps a save announced during the initial read over the older stored value', async () => {
+    const quietOff = {
+      enabled: false,
+      days: [],
+      startTime: '22:00',
+      endTime: '08:00',
+      timezone: 'UTC',
+    };
+    let resolveRead: (value: unknown) => void = () => {};
+    preferenceMocks.fetch.mockReturnValue(
+      new Promise((resolve) => {
+        resolveRead = resolve;
+      }),
+    );
+    localStorage.setItem(
+      focusActivityStorageKey('user-1'),
+      JSON.stringify({ dateKey: '2026-07-20', activeMs: 29 * 60_000, dismissedBreakMinutes: null }),
+    );
+    render(<TimeFocusReminder userId="user-1" onLeave={vi.fn()} activeTickMs={60_000} />);
+
+    announceSavedPreferences('time-focus', { breakReminderMinutes: 30, quietHours: quietOff });
+    resolveRead({ breakReminderMinutes: null, quietHours: quietOff });
+    await flushPreferences();
+    act(() => vi.advanceTimersByTime(60_000));
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('Time for a break?');
   });
 
   it('does not count hidden-tab time and isolates activity by account', async () => {
