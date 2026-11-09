@@ -3256,10 +3256,10 @@ async fn code_interrupt() {
 
 async fn handle_devices_command(json: bool, output: Option<OutputFormat>) -> Result<()> {
     let client = cloud::CloudClient::connect(account_privacy_mode())
-        .map_err(|error| anyhow::anyhow!("{error}"))?;
+        .map_err(cloud::CloudError::into_anyhow)?;
     let devices = cloud::devices::list(&client)
         .await
-        .map_err(|error| anyhow::anyhow!("{error}"))?;
+        .map_err(cloud::CloudError::into_anyhow)?;
     render_structured(
         serde_json::to_value(&devices)?,
         cloud::devices::render(&devices),
@@ -9675,10 +9675,41 @@ mod tests {
 
         assert_eq!(resolved.mode, PermissionMode::Plan);
         assert!(!resolved.mode.auto_approves_edits());
+        assert!(!resolved.auto_approve_safe && !resolved.skip_permissions);
+
+        for args in [
+            [
+                "agiworkforce",
+                "--permission-mode",
+                "bypassPermissions",
+                "--mode",
+                "default",
+                "exec",
+                "go",
+            ],
+            [
+                "agiworkforce",
+                "--mode",
+                "default",
+                "--permission-mode",
+                "bypassPermissions",
+                "exec",
+                "go",
+            ],
+        ] {
+            let cli = Cli::try_parse_from(args).expect("both flags should parse");
+            let resolved =
+                CliOptions::from_cli(&cli).effective_permissions(cli.mode, false, false, None);
+            assert_eq!(resolved.mode, PermissionMode::Default, "{args:?}");
+            assert!(!resolved.skip_permissions, "{args:?}");
+            assert!(!resolved.auto_approve_safe, "{args:?}");
+        }
     }
 
     #[test]
     fn permission_mode_contributes_to_effective_permission_flags() {
+        use crate::cli_options::CliOptions;
+
         let bypass = Cli::try_parse_from([
             "agiworkforce",
             "--permission-mode",
@@ -9686,8 +9717,11 @@ mod tests {
             "fix bug",
         ])
         .expect("bypass permission mode should parse");
-        let bypass_options = crate::cli_options::CliOptions::from_cli(&bypass);
-        assert!(bypass_options.should_skip_permissions(false));
+        assert!(
+            CliOptions::from_cli(&bypass)
+                .effective_permissions(bypass.mode, false, false, None)
+                .skip_permissions
+        );
 
         let accept_edits = Cli::try_parse_from([
             "agiworkforce",
@@ -9696,8 +9730,11 @@ mod tests {
             "fix bug",
         ])
         .expect("accept edits permission mode should parse");
-        let accept_options = crate::cli_options::CliOptions::from_cli(&accept_edits);
-        assert!(accept_options.should_auto_approve_safe(false));
+        assert!(
+            CliOptions::from_cli(&accept_edits)
+                .effective_permissions(accept_edits.mode, false, false, None)
+                .auto_approve_safe
+        );
     }
 
     #[test]

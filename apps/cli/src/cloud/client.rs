@@ -94,6 +94,13 @@ impl CloudError {
             CloudError::SignedOut | CloudError::NotManaged(_) | CloudError::SessionExpired
         )
     }
+
+    pub fn into_anyhow(self) -> anyhow::Error {
+        match self {
+            CloudError::UpgradeRequired(error) => anyhow::Error::new(*error),
+            other => anyhow::Error::new(other),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -798,6 +805,34 @@ mod tests {
         assert_eq!(
             found.exit_code(),
             crate::errors::ExitClass::ProtocolTooOld.code()
+        );
+    }
+
+    #[test]
+    fn an_upgrade_refusal_keeps_its_exit_class_and_reads_once() {
+        let refusal = crate::cloud::handshake::upgrade_required(
+            crate::cloud::handshake::CLIENT_UPDATE_REQUIRED_STATUS,
+            Some("2026-10-01".to_string()),
+            r#"{"error":{"message":"Contract 2026-09-17 was retired."}}"#,
+        )
+        .expect("a 426 answer is an upgrade refusal");
+        let shown = refusal.to_string();
+
+        let error = CloudError::UpgradeRequired(Box::new(refusal)).into_anyhow();
+
+        assert_eq!(
+            crate::exit_code_for(&error),
+            crate::errors::ExitClass::ProtocolTooOld.code()
+        );
+        assert_eq!(format!("{error:#}"), shown);
+
+        let transport = CloudError::Transport("refused".to_string());
+        let shown = transport.to_string();
+        let error = transport.into_anyhow();
+        assert_eq!(format!("{error:#}"), shown);
+        assert_eq!(
+            crate::exit_code_for(&error),
+            crate::errors::ExitClass::Failure.code()
         );
     }
 
