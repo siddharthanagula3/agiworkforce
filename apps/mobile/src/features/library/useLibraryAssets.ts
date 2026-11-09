@@ -67,6 +67,17 @@ export function useLibraryAssets(
   });
   const [showingCachedPage, setShowingCachedPage] = useState(false);
   const requestRef = useRef(0);
+  const assetsRef = useRef(assets);
+  assetsRef.current = assets;
+  const removalEpochRef = useRef(0);
+
+  const dropLoadedAsset = useCallback((id: string) => {
+    const wasLoaded = assetsRef.current.some((asset) => asset.id === id);
+    setAssets((current) => current.filter((asset) => asset.id !== id));
+    if (!wasLoaded) return;
+    removalEpochRef.current += 1;
+    setNextOffset((current) => (current === null ? current : Math.max(0, current - 1)));
+  }, []);
 
   const loadFirstPage = useCallback(
     async (mode: 'initial' | 'refresh') => {
@@ -167,6 +178,7 @@ export function useLibraryAssets(
     )
       return;
     const request = requestRef.current;
+    const removalEpoch = removalEpochRef.current;
     const offset = nextOffset;
     setLoadingMore(true);
     void fetchLibraryPage({
@@ -180,6 +192,7 @@ export function useLibraryAssets(
     })
       .then((page) => {
         if (requestRef.current !== request || ownerIdRef.current !== ownerId) return;
+        if (removalEpochRef.current !== removalEpoch) return;
         setAssets((current) => {
           const seen = new Set(current.map((asset) => asset.id));
           return [...current, ...page.assets.filter((asset) => !seen.has(asset.id))];
@@ -217,10 +230,10 @@ export function useLibraryAssets(
       if (!ownerId) return;
       await deleteLibraryAsset(id);
       if (ownerIdRef.current !== ownerId) return;
-      setAssets((current) => current.filter((asset) => asset.id !== id));
+      dropLoadedAsset(id);
       removeLibraryAsset(ownerId, id);
     },
-    [ownerId, removeLibraryAsset],
+    [dropLoadedAsset, ownerId, removeLibraryAsset],
   );
 
   const restoreAsset = useCallback(
@@ -228,9 +241,9 @@ export function useLibraryAssets(
       if (!ownerId) return;
       await restoreLibraryAsset(id);
       if (ownerIdRef.current !== ownerId) return;
-      setAssets((current) => current.filter((asset) => asset.id !== id));
+      dropLoadedAsset(id);
     },
-    [ownerId],
+    [dropLoadedAsset, ownerId],
   );
 
   const permanentlyDeleteAsset = useCallback(
@@ -238,10 +251,10 @@ export function useLibraryAssets(
       if (!ownerId) return;
       await permanentlyDeleteLibraryAsset(id);
       if (ownerIdRef.current !== ownerId) return;
-      setAssets((current) => current.filter((asset) => asset.id !== id));
+      dropLoadedAsset(id);
       removeLibraryAsset(ownerId, id);
     },
-    [ownerId, removeLibraryAsset],
+    [dropLoadedAsset, ownerId, removeLibraryAsset],
   );
 
   return {

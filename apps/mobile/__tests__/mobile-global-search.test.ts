@@ -45,6 +45,7 @@ const artifacts: MobileArtifact[] = [
 const libraryImages: LibraryImage[] = [
   {
     id: 'image-1',
+    assetId: '11111111-1111-4111-8111-111111111111',
     conversationId: 'chat-title',
     imageUrl: '/api/files/11111111-1111-4111-8111-111111111111',
     prompt: 'Launch poster',
@@ -89,7 +90,11 @@ describe('Mobile global search projection', () => {
       }),
     ]);
     expect(result.library).toEqual([
-      expect.objectContaining({ id: 'image-1', title: 'Launch poster' }),
+      expect.objectContaining({
+        id: 'image-1',
+        targetId: '11111111-1111-4111-8111-111111111111',
+        title: 'Launch poster',
+      }),
     ]);
     expect(result.artifacts).toEqual([
       expect.objectContaining({ id: 'artifact-1', title: 'Deployment notes' }),

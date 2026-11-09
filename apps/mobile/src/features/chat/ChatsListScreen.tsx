@@ -368,7 +368,7 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
       if (item.kind === 'library') {
         router.push({
           pathname: '/(app)/library',
-          params: { imageId: item.id },
+          params: { imageId: item.targetId ?? item.id },
         });
         return;
       }

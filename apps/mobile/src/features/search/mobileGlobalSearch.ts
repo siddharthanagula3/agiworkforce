@@ -106,6 +106,7 @@ export function buildMobileGlobalSearchGroups(input: {
       .filter((image) => includesQuery(query, image.prompt, image.sourceLabel))
       .map((image) => ({
         id: image.id,
+        targetId: image.assetId,
         title: image.prompt?.trim() || 'Generated image',
         subtitle: image.sourceLabel,
       })),

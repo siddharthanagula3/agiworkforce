@@ -101,6 +101,12 @@ export function getDurableGeneratedImagePath(image: GeneratedImage | undefined):
   return candidate && DURABLE_GENERATED_IMAGE_PATH.test(candidate) ? candidate : null;
 }
 
+export function getDurableGeneratedImageAssetId(path: string): string | null {
+  const candidate = path.trim();
+  if (!DURABLE_GENERATED_IMAGE_PATH.test(candidate)) return null;
+  return candidate.slice(candidate.lastIndexOf('/') + 1).toLowerCase();
+}
+
 export function resolveGeneratedImageUri(path: string): string | null {
   const candidate = path.trim();
   if (!DURABLE_GENERATED_IMAGE_PATH.test(candidate)) return null;

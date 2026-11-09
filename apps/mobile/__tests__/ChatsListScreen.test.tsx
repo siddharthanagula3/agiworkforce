@@ -86,6 +86,7 @@ const mockArtifacts = [
 const mockLibraryImages = [
   {
     id: 'image-1',
+    assetId: '11111111-1111-4111-8111-111111111111',
     conversationId: 'chat-1',
     imageUrl: '/api/files/11111111-1111-4111-8111-111111111111',
     prompt: 'Launch poster',
@@ -383,7 +384,7 @@ describe('ChatsListScreen', () => {
     fireEvent.press(getByLabelText('Open library: Launch poster'));
     expect(mockPush).toHaveBeenCalledWith({
       pathname: '/(app)/library',
-      params: { imageId: 'image-1' },
+      params: { imageId: '11111111-1111-4111-8111-111111111111' },
     });
   });
 
