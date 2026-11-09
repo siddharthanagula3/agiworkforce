@@ -972,9 +972,12 @@ enum Command {
         /// Only items whose name or prompt matches this text.
         #[arg(long)]
         search: Option<String>,
-        /// How many items to list.
+        /// How many items to list on one page.
         #[arg(long, default_value_t = 24)]
         limit: u32,
+        /// Skip this many items; a listing with more items names the next offset.
+        #[arg(long, default_value_t = 0)]
+        offset: u64,
     },
     /// List the conversation links you shared, or revoke one.
     Shares {
@@ -2516,7 +2519,7 @@ async fn teleport_code_session(session_id: Option<&str>) -> Result<String> {
     let local_id = code_teleport::local_session_id(&detail.session.id);
     let title = code_teleport::title(&detail.session);
     let conn = sessions::open_db()?;
-    sessions::import_hosted_session(
+    let imported = sessions::import_hosted_session(
         &conn,
         &local_id,
         &title,
@@ -2524,9 +2527,8 @@ async fn teleport_code_session(session_id: Option<&str>) -> Result<String> {
         code_teleport::history(&detail),
         "the cloud Code session",
     )?;
-    eprintln!(
-        "{} `{}` from {} and loaded '{}' ({} turns). New work here stays on this computer; \
-         push the branch to share it.",
+    let checked_out = format!(
+        "{} `{}` from {}",
         if teleported.created_branch {
             "Checked out"
         } else {
@@ -2534,9 +2536,21 @@ async fn teleport_code_session(session_id: Option<&str>) -> Result<String> {
         },
         teleported.branch,
         teleported.remote,
-        title,
-        detail.turns.len()
     );
+    let loaded = match &imported {
+        sessions::HostedImport::KeptLocal => format!(
+            "kept this computer's copy of '{title}', which already holds every cloud turn plus the work you did here"
+        ),
+        _ => format!("loaded '{title}' ({} turns)", detail.turns.len()),
+    };
+    eprintln!(
+        "{checked_out} and {loaded}. New work here stays on this computer; push the branch to share it."
+    );
+    if let sessions::HostedImport::PreservedLocal { local_copy } = &imported {
+        eprintln!(
+            "The turns you took here that the cloud session does not have are kept in session {local_copy}; `agi resume {local_copy}` opens them."
+        );
+    }
     Ok(local_id)
 }
 
@@ -7020,6 +7034,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
                 kind,
                 search,
                 limit,
+                offset,
             } => {
                 let client = cloud::CloudClient::connect(account_privacy_mode())
                     .map_err(|error| anyhow::anyhow!("{error}"))?;
@@ -7030,10 +7045,11 @@ async fn run_cli(cli: Cli) -> Result<()> {
                             kind.as_deref(),
                             search.as_deref(),
                             *limit,
+                            *offset,
                         )
                         .await
                         .map_err(|error| anyhow::anyhow!("{error}"))?;
-                        println!("{}", cloud::library::render(&page));
+                        println!("{}", cloud::library::render(&page, *offset));
                     }
                     Some(LibrarySubcommand::Show { id }) => {
                         let preview = cloud::library::text(&client, id)
@@ -7119,10 +7135,10 @@ async fn run_cli(cli: Cli) -> Result<()> {
                             println!("Left {connector} connected.");
                             return Ok(());
                         }
-                        cloud::connectors::disconnect(&client, connector)
+                        let receipt = cloud::connectors::disconnect(&client, connector)
                             .await
                             .map_err(|error| anyhow::anyhow!("{error}"))?;
-                        println!("Disconnected {connector} from your account.");
+                        println!("{}", receipt.message(connector));
                     }
                 }
                 Ok(())
@@ -7197,8 +7213,9 @@ async fn run_cli(cli: Cli) -> Result<()> {
                     return doctor::run_doctor(&app_config, *json);
                 }
                 let report = doctor::collect_doctor_report(&app_config);
-                let exported = diagnostics_bundle::export(&report)
-                    .await
+                let exported =
+                    diagnostics_bundle::export(&report, app_config.account_privacy_mode())
+                        .await
                     .map_err(|error| anyhow::anyhow!("{error}"))?;
                 let path = std::env::current_dir()?.join(&exported.filename);
                 std::fs::write(&path, serde_json::to_string_pretty(&exported.diagnostics)?)?;
@@ -7427,14 +7444,12 @@ async fn run_cli(cli: Cli) -> Result<()> {
                         let keys = cloud::api_keys::list(&client)
                             .await
                             .map_err(|error| anyhow::anyhow!("{error}"))?;
-                        let found = keys
-                            .iter()
-                            .find(|candidate| candidate.id == *key || candidate.name == *key)
-                            .with_context(|| format!("No active API key '{key}'"))?;
+                        let found =
+                            cloud::api_keys::select(&keys, key).map_err(anyhow::Error::msg)?;
+                        let described = cloud::api_keys::describe(found);
                         if !confirm_destructive(
                             &format!(
-                                "Revoke API key {} ({}…)? Anything still using it stops working, and this cannot be undone.",
-                                found.name, found.key_prefix
+                                "Revoke API key {described}? Anything still using it stops working, and this cannot be undone."
                             ),
                             *yes,
                         ) {
@@ -7444,7 +7459,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
                         cloud::api_keys::revoke(&client, &found.id)
                             .await
                             .map_err(|error| anyhow::anyhow!("{error}"))?;
-                        println!("Revoked API key {}.", found.name);
+                        println!("Revoked API key {described}.");
                         Ok(())
                     }
                     KeysSubcommand::Create => {
@@ -9433,6 +9448,25 @@ mod tests {
             !subcommands.iter().any(|command| command == "cloud"),
             "managed execution uses the normal model/session path; an unwired cloud task command must not be exposed: {subcommands:?}"
         );
+    }
+
+    #[test]
+    fn library_listing_accepts_the_next_page_offset() {
+        let cli =
+            Cli::try_parse_from(["agi", "library", "--limit", "100", "--offset", "100"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Some(Command::Library {
+                limit: 100,
+                offset: 100,
+                ..
+            })
+        ));
+        let default = Cli::try_parse_from(["agi", "library"]).unwrap();
+        assert!(matches!(
+            default.command,
+            Some(Command::Library { offset: 0, .. })
+        ));
     }
 
     #[test]

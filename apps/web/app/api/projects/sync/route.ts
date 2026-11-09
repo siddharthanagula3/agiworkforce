@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ProjectsSyncPushRequestSchema, ServerVersionSchema } from '@agiworkforce/cloud-contracts';
+import {
+  MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
+  ProjectsSyncPushRequestSchema,
+  ServerVersionSchema,
+} from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -49,7 +53,12 @@ async function handlePull(request: NextRequest, url: URL) {
 
     const saturated = projects.length >= MAX_PROJECTS_PULL;
     const cursor = computeProjectsPullCursor(since, projects);
-    return NextResponse.json({ projects, cursor, hasMore: saturated });
+    return NextResponse.json({
+      projects,
+      cursor,
+      hasMore: saturated,
+      workspaceScope: organizationId ?? MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
+    });
   } catch (error) {
     logger.error({ error, userId }, 'Projects sync pull failed');
     throw createError.internal('Failed to pull project changes');

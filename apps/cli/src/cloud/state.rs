@@ -67,6 +67,8 @@ pub struct SyncState {
     pub messages: SyncSection,
     #[serde(default)]
     pub projects: SyncSection,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub projects_scope: Option<String>,
     #[serde(default)]
     pub memories: SyncSection,
 }

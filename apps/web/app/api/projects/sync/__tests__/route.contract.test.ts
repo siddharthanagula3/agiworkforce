@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
+  MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
   ProjectsSyncPullResponseSchema,
   ProjectsSyncPushResponseSchema,
 } from '@agiworkforce/cloud-contracts';
@@ -36,6 +37,7 @@ vi.mock('@/lib/services/subscription-service', () => ({
 }));
 
 import { GET, POST } from '../route';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { getProjectLimit } from '@/lib/services/free-plan-entitlements';
 
 const PROJ_ID = '018f6f2a-0000-7000-8000-000000000020';
@@ -77,10 +79,29 @@ describe('GET /api/projects/sync, shared cloud contract', () => {
     const parsed = ProjectsSyncPullResponseSchema.safeParse(await res.json());
     expect(parsed.error).toBeUndefined();
     expect(parsed.success).toBe(true);
-    if (parsed.success) expect(parsed.data.cursor).toBe('4');
+    if (parsed.success) {
+      expect(parsed.data.cursor).toBe('4');
+      expect(parsed.data.workspaceScope).toBe(ORGANIZATION_ID);
+    }
     const [sql, params] = mockQuery.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain('organization_id is not distinct from $3::uuid');
     expect(params[2]).toBe(ORGANIZATION_ID);
+  });
+
+  it('names the personal workspace a pull was resolved for', async () => {
+    vi.mocked(getUserScopedDb).mockResolvedValueOnce({
+      db: { query: (...args: unknown[]) => mockQuery(...args) },
+      userId: 'user_contract_1',
+      organizationId: null,
+    } as never);
+    mockQuery.mockResolvedValueOnce([]);
+    const res = await GET(
+      new Request('http://localhost:3000/api/projects/sync?since=0', { method: 'GET' }) as never,
+    );
+    const body = ProjectsSyncPullResponseSchema.parse(await res.json());
+    expect(body.workspaceScope).toBe(MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE);
+    const [, params] = mockQuery.mock.calls[0] as [string, unknown[]];
+    expect(params[2]).toBeNull();
   });
 
   it('empty pull page parses', async () => {

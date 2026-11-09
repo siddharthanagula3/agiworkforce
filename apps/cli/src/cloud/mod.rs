@@ -391,8 +391,16 @@ pub async fn hosted_conversation(
 pub async fn refresh_projects(privacy: PrivacyMode) -> Result<projects::ProjectCache, CloudError> {
     let mut session = CloudSession::open(privacy)?;
     let sync = projects::ProjectsSync::new(&session.client);
-    let response = sync.pull_all(&session.state.projects.cursor).await?;
+    let since = session.state.projects.cursor.clone();
+    let mut response = sync.pull_all(&since).await?;
     let mut cache = load_project_cache(&session.config_dir);
+    if let Some(scope) = projects::scope_to_adopt(&response, &cache, &session.state) {
+        projects::reset_scope(&scope, &mut cache, &mut session.state);
+        if since != state::INITIAL_CURSOR {
+            response = sync.pull_all(state::INITIAL_CURSOR).await?;
+            projects::require_scope(&response, &scope)?;
+        }
+    }
     cache.apply(&response.projects);
     projects::apply_pull_response(&response, &mut session.state);
     if let Err(error) = save_project_cache(&session.config_dir, &cache) {
