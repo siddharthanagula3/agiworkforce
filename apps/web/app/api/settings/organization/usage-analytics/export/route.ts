@@ -81,7 +81,7 @@ function omittedLinesFor(usage: OrganizationUsage, dimension: Dimension): string
 
 function headerFor(dimension: Dimension): string[] {
   return dimension === 'daily'
-    ? ['day', 'requests', 'credits']
+    ? ['day_utc', 'requests', 'credits']
     : [dimension, 'requests', 'input_tokens', 'output_tokens', 'credits'];
 }
 

@@ -164,6 +164,24 @@ describe('WorkspaceUsageAnalytics settlement visibility', () => {
     );
   });
 
+  it('labels each daily bar with its UTC calendar day rather than a browser-shifted date', () => {
+    mocks.query.mockReturnValue({
+      data: {
+        currentUserRole: 'owner',
+        usage: { ...usage(0), daily: [{ day: '2026-11-09', requests: 1, credits: 5 }] },
+      },
+      isPending: false,
+      isError: false,
+    });
+    const { container } = render(<WorkspaceUsageAnalytics />);
+
+    const bar = container.querySelector('[aria-label="Daily credits used"] span');
+    const utcDay = new Date(Date.UTC(2026, 10, 9)).toLocaleDateString(undefined, {
+      timeZone: 'UTC',
+    });
+    expect(bar?.getAttribute('title')?.startsWith(`${utcDay} UTC, `)).toBe(true);
+  });
+
   it('shows active members against seats in use and the average credits per active member', () => {
     mocks.query.mockReturnValue({
       data: {

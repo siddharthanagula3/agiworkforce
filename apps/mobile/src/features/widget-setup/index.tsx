@@ -34,7 +34,7 @@ const SIRI_ACTIONS: Array<{ icon: typeof MessageSquare; label: string; descripti
   {
     icon: HelpCircle,
     label: 'Ask AGI',
-    description: 'Dictate a question, review it in chat before sending',
+    description: 'Hear an answer without opening the app, once Ask from Siri is on',
   },
   {
     icon: FileText,
@@ -301,7 +301,7 @@ export default function WidgetSetupScreen() {
               <Text className="text-sm text-fg-muted">
                 Touch and hold your home screen, tap{' '}
                 <Text className="text-sm text-fg-secondary font-medium">Widgets</Text> and drag AGI
-                Workforce onto it.
+                Mobile onto it.
               </Text>
             </Card>
 

@@ -1,9 +1,9 @@
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Linking, Platform, ScrollView, View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ArrowLeft, Bell, CalendarDays, Clock3, ShieldCheck } from 'lucide-react-native';
 import { Input } from '@/components/ui/Input';
@@ -29,6 +29,16 @@ export default function ReminderReviewScreen() {
   const [timeInput, setTimeInput] = useState(initialDue.timeInput);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const focusedRef = useRef(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      focusedRef.current = true;
+      return () => {
+        focusedRef.current = false;
+      };
+    }, []),
+  );
 
   const dismiss = useCallback(() => {
     if (router.canGoBack()) router.back();
@@ -40,16 +50,17 @@ export default function ReminderReviewScreen() {
     setError(null);
 
     try {
-      const due = parseReminderDueInputs(dateInput, timeInput);
+      const due = parseReminderDueInputs(dateInput, timeInput, new Date(), initialDue);
       setCreating(true);
       await createIOSReminder({ title, due });
-      Alert.alert(
-        'Reminder Created',
-        due
-          ? 'The reviewed reminder was added to Apple Reminders.'
-          : 'The reviewed reminder was added without a due date.',
-        [{ text: 'Done', onPress: dismiss }],
-      );
+      const message = due
+        ? 'The reviewed reminder was added to Apple Reminders.'
+        : 'The reviewed reminder was added without a due date.';
+      if (focusedRef.current) {
+        Alert.alert('Reminder Created', message, [{ text: 'Done', onPress: dismiss }]);
+      } else {
+        Alert.alert('Reminder Created', message);
+      }
     } catch (cause) {
       if (cause instanceof ReminderCreationError) {
         const message = reminderCreationErrorMessage(cause.code);
@@ -66,7 +77,7 @@ export default function ReminderReviewScreen() {
     } finally {
       setCreating(false);
     }
-  }, [creating, dateInput, dismiss, timeInput, title]);
+  }, [creating, dateInput, dismiss, initialDue, timeInput, title]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceBase }}>

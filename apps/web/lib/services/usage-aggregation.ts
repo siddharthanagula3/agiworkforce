@@ -57,7 +57,7 @@ export interface AggregateRow {
 }
 
 export interface DayRow {
-  day: string | Date;
+  day: string;
   requests: string | number | null;
   cost_microusd: string | number | null;
 }
@@ -88,6 +88,7 @@ export interface UsageBreakdownOmitted {
 }
 
 export interface UsageDayRow {
+  /** UTC calendar date of the bucket, `YYYY-MM-DD`. */
   day: string;
   requests: number;
   credits: number;
@@ -157,7 +158,7 @@ export function toTotals(row: AggregateRow | undefined): UsageTotals {
 
 export function toDays(rows: readonly DayRow[]): UsageDayRow[] {
   return rows.map((row) => ({
-    day: row.day instanceof Date ? row.day.toISOString() : String(row.day),
+    day: row.day,
     requests: num(row.requests),
     credits: creditsFromMicrousd(num(row.cost_microusd)),
   }));

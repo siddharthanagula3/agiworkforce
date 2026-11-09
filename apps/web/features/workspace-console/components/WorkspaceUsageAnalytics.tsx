@@ -30,6 +30,12 @@ function compact(n: number): string {
   return n.toLocaleString();
 }
 
+function utcDayLabel(day: string): string {
+  const date = new Date(`${day}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime())) return day;
+  return `${date.toLocaleDateString(undefined, { timeZone: 'UTC' })} UTC`;
+}
+
 function Stat({ label, value, note }: { label: string; value: string; note?: string }) {
   return (
     <div className="flex flex-col gap-1 px-5 py-4">
@@ -71,7 +77,7 @@ function Sparkline({ days }: { days: UsageDayRow[] }) {
       {days.map((day) => (
         <span
           key={day.day}
-          title={`${new Date(day.day).toLocaleDateString()}, ${formatCredits(day.credits)}`}
+          title={`${utcDayLabel(day.day)}, ${formatCredits(day.credits)}`}
           style={{
             flex: 1,
             minWidth: 2,

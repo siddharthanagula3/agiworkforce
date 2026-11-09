@@ -117,7 +117,7 @@ function bind({
       throw new Error('Report query crossed the canonical workspace boundary');
     }
     if (/date_trunc\('day'/.test(text)) {
-      return [{ day: '2026-08-22T00:00:00.000Z', requests: 4, cost_microusd: '1200000' }];
+      return [{ day: '2026-08-22', requests: 4, cost_microusd: '1200000' }];
     }
     if (/unsettled_requests/.test(text)) {
       return [{ latest_activity_at: '2026-08-22T18:30:00.000Z', unsettled_requests: 2 }];
@@ -204,8 +204,8 @@ describe('GET /api/settings/organization/usage-analytics/export', () => {
     expect(body).toContain('# as_of');
     expect(body).toContain('# latest_activity_at,2026-08-22T18:30:00.000Z');
     expect(body).toContain('# unsettled_requests,2');
-    expect(body).toContain('day,requests,credits');
-    expect(body).toContain('2026-08-22T00:00:00.000Z,4,240');
+    expect(body).toContain('day_utc,requests,credits');
+    expect(body).toContain('\n2026-08-22,4,240');
     expect(body).not.toContain('cost_cents');
   });
 
@@ -270,7 +270,7 @@ describe('GET /api/settings/organization/usage-analytics/export', () => {
 
     const body = await (await GET(req('?dimension=passwords') as never)).text();
 
-    expect(body).toContain('day,requests,credits');
+    expect(body).toContain('day_utc,requests,credits');
   });
 
   it('neutralises a key a spreadsheet would run as a formula', async () => {
@@ -335,7 +335,7 @@ describe('canonical workspace report isolation', () => {
     }
     const body = await response.text();
     expect(body).toContain(`# organization_id,${ORG}\n`);
-    expect(body).toContain('2026-08-22T00:00:00.000Z,4,240');
+    expect(body).toContain('\n2026-08-22,4,240');
     expect(body).not.toContain(SAVED_ORG);
     expect(response.headers.get('content-type')).toContain('text/csv');
     expect(response.headers.get('content-disposition')).toContain('attachment');

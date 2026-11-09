@@ -224,7 +224,7 @@ export async function readOrganizationUsage(
     aggregateBy(db, organizationId, from, to, `usage->>'projectId'`),
     aggregateWorkloadSessions(db, organizationId, from, to),
     db.query<DayRow>(
-      `select date_trunc('day', created_at) as day,
+      `select to_char(date_trunc('day', created_at at time zone 'UTC'), 'YYYY-MM-DD') as day,
               count(*)::int as requests,
               ${COST_MICROUSD} as cost_microusd
          from public.managed_usage_requests

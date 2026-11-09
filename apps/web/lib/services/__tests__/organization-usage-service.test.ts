@@ -327,6 +327,30 @@ describe('readOrganizationUsage freshness', () => {
   });
 });
 
+describe('readOrganizationUsage daily buckets', () => {
+  const window = { from: '2026-10-11T00:00:00.000Z', to: '2026-11-10T00:00:00.000Z' };
+
+  it('groups days on the UTC calendar regardless of the database session time zone', async () => {
+    const h = harness();
+    await readOrganizationUsage(h.db, ORG, window);
+
+    const dailyQuery = h.query.mock.calls.find(([sql]) => /date_trunc\('day'/.test(String(sql)));
+    expect(String(dailyQuery?.[0])).toContain(
+      "to_char(date_trunc('day', created_at at time zone 'UTC'), 'YYYY-MM-DD') as day",
+    );
+  });
+
+  it('returns each bucket as its UTC calendar date', async () => {
+    const h = harness({
+      daily: [{ day: '2026-11-09', requests: 1, cost_microusd: credits(5) }],
+    });
+
+    const usage = await readOrganizationUsage(h.db, ORG, window);
+
+    expect(usage.daily).toEqual([{ day: '2026-11-09', requests: 1, credits: 5 }]);
+  });
+});
+
 describe('resolveUsageWindow', () => {
   it('defaults to a trailing window when nothing is asked for', () => {
     const { from, to } = resolveUsageWindow(null, null, NOW);
