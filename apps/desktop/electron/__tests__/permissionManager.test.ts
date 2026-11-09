@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -128,6 +128,63 @@ describe('listing and withdrawing decisions', () => {
     const restarted = await freshRuntime();
     expect(restarted.getPermissionState('filesystem.write', LEDGER)).toBe('prompt');
     expect(restarted.listPermissions()).toEqual([]);
+  });
+
+  describe('when the saved list cannot be updated', () => {
+    const canWriteDeniedFiles = process.getuid?.() !== 0;
+    const store = () => path.join(userData, 'desktop-permissions.json');
+
+    afterEach(async () => {
+      await fs.chmod(userData, 0o700);
+    });
+
+    // llm-guardrail-allow: root ignores file modes, so a read-only store cannot be staged
+    it.skipIf(!canWriteDeniedFiles)(
+      'replaces a read-only store so a withdrawn grant does not return after a restart',
+      async () => {
+        const first = await freshRuntime();
+        first.recordDecision('filesystem.read', LEDGER, 'granted', 'always');
+        await fs.chmod(store(), 0o400);
+
+        expect(first.revokePermission('filesystem.read', LEDGER)).toBe(true);
+
+        const restarted = await freshRuntime();
+        expect(restarted.getPermissionState('filesystem.read', LEDGER)).toBe('prompt');
+      },
+    );
+
+    // llm-guardrail-allow: root ignores file modes, so a read-only store cannot be staged
+    it.skipIf(!canWriteDeniedFiles)(
+      'reports that the withdrawal is not saved, stays withdrawn now, and saves on a retry',
+      async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        const first = await freshRuntime();
+        first.recordDecision('filesystem.read', LEDGER, 'granted', 'always');
+        await fs.chmod(userData, 0o500);
+
+        expect(first.revokePermission('filesystem.read', LEDGER)).toBe(false);
+        expect(first.getPermissionState('filesystem.read', LEDGER)).toBe('prompt');
+        expect((await freshRuntime()).getPermissionState('filesystem.read', LEDGER)).toBe(
+          'granted',
+        );
+
+        await fs.chmod(userData, 0o700);
+        expect(first.revokePermission('filesystem.read', LEDGER)).toBe(true);
+        expect((await freshRuntime()).getPermissionState('filesystem.read', LEDGER)).toBe('prompt');
+        warn.mockRestore();
+      },
+    );
+
+    // llm-guardrail-allow: root ignores file modes, so a read-only store cannot be staged
+    it.skipIf(!canWriteDeniedFiles)('reports an unsaved withdrawGrant the same way', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const first = await freshRuntime();
+      first.recordDecision('filesystem.read', LEDGER, 'granted', 'always');
+      await fs.chmod(userData, 0o500);
+
+      expect(first.withdrawGrant('filesystem.read', LEDGER)).toBe(false);
+      warn.mockRestore();
+    });
   });
 
   it('takes back every grant on one folder, leaves its refusals, and touches no other folder', async () => {

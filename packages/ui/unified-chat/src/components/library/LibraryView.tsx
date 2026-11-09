@@ -400,6 +400,7 @@ export function LibraryView({
   const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(() => new Set());
   const [projectTarget, setProjectTarget] = useState<LibraryItem | null>(null);
   const requestSeq = useRef(0);
+  const removalEpoch = useRef(0);
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => setViewMode(loadViewMode()), []);
@@ -439,8 +440,10 @@ export function LibraryView({
   const loadPage = useCallback(
     async (offset: number, append: boolean) => {
       const seq = ++requestSeq.current;
+      const epoch = removalEpoch.current;
       if (append) setLoadingMore(true);
       else {
+        setPage({ items: [], hasMore: false, nextOffset: null });
         setLoading(true);
         setHasResolvedPage(false);
       }
@@ -451,6 +454,7 @@ export function LibraryView({
         const parsed = LibraryListResponseSchema.safeParse(await res.json());
         if (!parsed.success) throw new Error('Unexpected response shape');
         if (seq !== requestSeq.current) return;
+        if (append && epoch !== removalEpoch.current) return;
         setPage((prev) => ({
           items: append ? [...prev.items, ...parsed.data.items] : parsed.data.items,
           hasMore: parsed.data.has_more,
@@ -571,7 +575,15 @@ export function LibraryView({
   );
 
   const removeFromPage = useCallback((id: string) => {
-    setPage((prev) => ({ ...prev, items: prev.items.filter((entry) => entry.id !== id) }));
+    removalEpoch.current += 1;
+    setPage((prev) => {
+      if (!prev.items.some((entry) => entry.id === id)) return prev;
+      return {
+        ...prev,
+        items: prev.items.filter((entry) => entry.id !== id),
+        nextOffset: prev.nextOffset === null ? null : Math.max(0, prev.nextOffset - 1),
+      };
+    });
   }, []);
 
   const runMutation = useCallback(
