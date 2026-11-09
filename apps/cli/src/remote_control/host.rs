@@ -320,27 +320,40 @@ impl<H: DeveloperSessionHost> CodeHost<H> {
                     .collect();
             }
         };
-        let active = self
-            .host
-            .reconnect_thread(params)
-            .await
-            .ok()
-            .and_then(|response| response.active_turn);
-        let state = self.threads.entry(thread_id.to_string()).or_default();
-        if let Some(active) = &active {
-            state.active_turn_id = Some(active.turn_id.clone());
-            state.partial_response = safe_tail(&active.partial_response, PARTIAL_RESPONSE_LENGTH);
-            for approval in &active.pending_approvals {
-                state.pending_approvals.insert(
-                    approval.request_id.clone(),
-                    PendingApproval {
-                        turn_id: active.turn_id.clone(),
-                        summary: safe_head(&approval.summary, MESSAGE_LENGTH),
-                        detail: safe_head(&approval.detail, MESSAGE_LENGTH),
-                    },
-                );
+        let mut out = Vec::new();
+        match self.host.reconnect_thread(params).await {
+            Ok(reconnected) => {
+                let state = self.threads.entry(thread_id.to_string()).or_default();
+                state.pending_approvals.clear();
+                match reconnected.active_turn {
+                    Some(active) => {
+                        state.partial_response =
+                            safe_tail(&active.partial_response, PARTIAL_RESPONSE_LENGTH);
+                        for approval in &active.pending_approvals {
+                            state.pending_approvals.insert(
+                                approval.request_id.clone(),
+                                PendingApproval {
+                                    turn_id: active.turn_id.clone(),
+                                    summary: safe_head(&approval.summary, MESSAGE_LENGTH),
+                                    detail: safe_head(&approval.detail, MESSAGE_LENGTH),
+                                },
+                            );
+                        }
+                        state.active_turn_id = Some(active.turn_id);
+                    }
+                    None => {
+                        state.active_turn_id = None;
+                        state.partial_response.clear();
+                        Self::settle_tools(state);
+                        out.extend(self.deliver_guidance(thread_id).await);
+                    }
+                }
+            }
+            Err(error) => {
+                tracing::warn!("[remote-control] running turn could not be read back: {error}");
             }
         }
+        let state = self.threads.entry(thread_id.to_string()).or_default();
         let messages: Vec<Value> = read
             .messages
             .iter()
@@ -402,7 +415,8 @@ impl<H: DeveloperSessionHost> CodeHost<H> {
             "syncedAt": now_iso(),
         });
         fit_payload(&mut payload);
-        vec![("code.session.snapshot".to_string(), payload)]
+        out.push(("code.session.snapshot".to_string(), payload));
+        out
     }
 
     async fn transcript(&self, thread_id: &str, before: Option<u64>) -> Vec<Outgoing> {
@@ -1129,5 +1143,327 @@ mod tests {
         let sent = snapshot_partial(&partial);
         assert_eq!(sent.chars().count(), PARTIAL_RESPONSE_LENGTH);
         assert!(sent.ends_with("tail"));
+    }
+
+    use agiworkforce_app_server::{DeveloperConnectionTrust, DeveloperSessionHostError};
+    use agiworkforce_protocol::developer_session::{
+        ActiveTurnSnapshot, ApprovalResponseParams, DeveloperSessionTrustMode,
+        LocalModelListResponse, ModelListParams, PendingApprovalSnapshot, ThreadForkParams,
+        ThreadListResponse, ThreadReadResponse, ThreadReconnectResponse, ThreadSummary,
+        TurnInterruptParams, TurnStartParams, TurnStatus, TurnSteerParams, TurnSummary,
+    };
+    use std::sync::Mutex;
+
+    const THREAD: &str = "thread-1";
+
+    struct IdleAfterAbsence {
+        running: Mutex<Option<String>>,
+        reconnect_fails: Mutex<bool>,
+        started: Mutex<Vec<String>>,
+        notifications: tokio::sync::broadcast::Sender<AppServerNotification>,
+    }
+
+    impl IdleAfterAbsence {
+        fn running(turn_id: &str) -> Arc<Self> {
+            Arc::new(Self {
+                running: Mutex::new(Some(turn_id.to_string())),
+                reconnect_fails: Mutex::new(false),
+                started: Mutex::new(Vec::new()),
+                notifications: tokio::sync::broadcast::channel(4).0,
+            })
+        }
+
+        fn finish_unseen(&self) {
+            *self.running.lock().expect("running") = None;
+        }
+
+        fn started(&self) -> Vec<String> {
+            self.started.lock().expect("started").clone()
+        }
+    }
+
+    fn summary() -> ThreadSummary {
+        ThreadSummary {
+            id: THREAD.to_string(),
+            title: "Phone session".to_string(),
+            model: None,
+            cwd: Some("/work".to_string()),
+            provider: None,
+            trust_mode: DeveloperSessionTrustMode::Local,
+            git_branch: None,
+            worktree_root: None,
+            client: None,
+            repository: None,
+            writer: None,
+            created_at: "2026-11-09T00:00:00Z".to_string(),
+            updated_at: "2026-11-09T00:00:00Z".to_string(),
+            created_by: DeveloperSessionSource::Cli,
+            status: ThreadStatus::Idle,
+            location: None,
+        }
+    }
+
+    fn unused() -> DeveloperSessionHostError {
+        DeveloperSessionHostError::internal("not used by remote control")
+    }
+
+    #[async_trait::async_trait]
+    impl DeveloperSessionHost for IdleAfterAbsence {
+        async fn start_thread(
+            &self,
+            _params: ThreadStartParams,
+            _client: AppServerClientInfo,
+        ) -> Result<ThreadSummary, DeveloperSessionHostError> {
+            Err(unused())
+        }
+
+        async fn list_threads(
+            &self,
+            _params: ThreadListParams,
+        ) -> Result<ThreadListResponse, DeveloperSessionHostError> {
+            Err(unused())
+        }
+
+        async fn list_local_models(
+            &self,
+            _params: ModelListParams,
+            _trust: DeveloperConnectionTrust,
+        ) -> Result<LocalModelListResponse, DeveloperSessionHostError> {
+            Err(unused())
+        }
+
+        async fn resume_thread(
+            &self,
+            _params: ThreadIdParams,
+        ) -> Result<ThreadSummary, DeveloperSessionHostError> {
+            Err(unused())
+        }
+
+        async fn read_thread(
+            &self,
+            _params: ThreadIdParams,
+        ) -> Result<ThreadReadResponse, DeveloperSessionHostError> {
+            Ok(ThreadReadResponse {
+                child_tasks: None,
+                thread: summary(),
+                messages: Vec::new(),
+                transcript_truncated: false,
+                approvals: Vec::new(),
+                file_changes: Vec::new(),
+                plan: Vec::new(),
+                todos: Vec::new(),
+            })
+        }
+
+        async fn reconnect_thread(
+            &self,
+            _params: ThreadIdParams,
+        ) -> Result<ThreadReconnectResponse, DeveloperSessionHostError> {
+            if *self.reconnect_fails.lock().expect("reconnect") {
+                return Err(DeveloperSessionHostError::internal("runtime busy"));
+            }
+            let active_turn = self
+                .running
+                .lock()
+                .expect("running")
+                .clone()
+                .map(|turn_id| ActiveTurnSnapshot {
+                    pending_approvals: vec![serde_json::from_value::<PendingApprovalSnapshot>(
+                        json!({
+                            "requestId": format!("approval-{turn_id}"),
+                            "kind": "exec",
+                            "summary": "Run the tests",
+                            "detail": "cargo test",
+                        }),
+                    )
+                    .expect("approval")],
+                    turn_id,
+                    partial_response: "working".to_string(),
+                    next_delta_index: 0,
+                    next_event_sequence: 0,
+                    pending_user_inputs: Vec::new(),
+                });
+            Ok(ThreadReconnectResponse {
+                thread: summary(),
+                active_turn,
+            })
+        }
+
+        async fn fork_thread(
+            &self,
+            _params: ThreadForkParams,
+            _client: AppServerClientInfo,
+        ) -> Result<ThreadSummary, DeveloperSessionHostError> {
+            Err(unused())
+        }
+
+        async fn archive_thread(
+            &self,
+            _params: ThreadIdParams,
+        ) -> Result<(), DeveloperSessionHostError> {
+            Err(unused())
+        }
+
+        async fn start_turn(
+            &self,
+            params: TurnStartParams,
+        ) -> Result<TurnSummary, DeveloperSessionHostError> {
+            let mut started = self.started.lock().expect("started");
+            started.push(
+                serde_json::to_value(&params).expect("params")["input"][0]["text"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_string(),
+            );
+            let id = format!("turn-after-{}", started.len());
+            *self.running.lock().expect("running") = Some(id.clone());
+            Ok(TurnSummary {
+                id,
+                thread_id: THREAD.to_string(),
+                status: TurnStatus::Running,
+            })
+        }
+
+        async fn steer_turn(
+            &self,
+            _params: TurnSteerParams,
+        ) -> Result<TurnSummary, DeveloperSessionHostError> {
+            Err(unused())
+        }
+
+        async fn interrupt_turn(
+            &self,
+            _params: TurnInterruptParams,
+        ) -> Result<(), DeveloperSessionHostError> {
+            Err(unused())
+        }
+
+        async fn respond_to_approval(
+            &self,
+            _params: ApprovalResponseParams,
+        ) -> Result<(), DeveloperSessionHostError> {
+            Err(unused())
+        }
+
+        async fn shutdown(&self) -> Result<(), DeveloperSessionHostError> {
+            Ok(())
+        }
+
+        fn subscribe(&self) -> tokio::sync::broadcast::Receiver<AppServerNotification> {
+            self.notifications.subscribe()
+        }
+    }
+
+    fn control(request_id: &str, extra: Value) -> Value {
+        let mut payload = json!({
+            "version": PROTOCOL_VERSION,
+            "requestId": request_id,
+            "rootId": "root",
+            "threadId": THREAD,
+        });
+        if let (Some(target), Some(extra)) = (payload.as_object_mut(), extra.as_object()) {
+            target.extend(extra.clone());
+        }
+        payload
+    }
+
+    fn snapshot_of(out: &[Outgoing]) -> &Value {
+        &out.iter()
+            .find(|(action, _)| action == "code.session.snapshot")
+            .expect("a snapshot")
+            .1
+    }
+
+    fn code_host(host: &Arc<IdleAfterAbsence>) -> CodeHost<IdleAfterAbsence> {
+        CodeHost::new(
+            Arc::clone(host),
+            "root".to_string(),
+            "folder".to_string(),
+            "/work".to_string(),
+        )
+    }
+
+    #[tokio::test]
+    async fn reattaching_after_a_turn_ended_unseen_shows_idle_and_runs_the_next_follow_up() {
+        let host = IdleAfterAbsence::running("turn-a");
+        let mut code = code_host(&host);
+
+        let first = code
+            .handle_control("code.session.attach", &control("r1", json!({})))
+            .await;
+        assert_eq!(snapshot_of(&first)["activeTurnId"], "turn-a");
+        assert_eq!(
+            snapshot_of(&first)["pendingApprovals"]
+                .as_array()
+                .map(Vec::len),
+            Some(1)
+        );
+
+        code.reset();
+        host.finish_unseen();
+
+        let again = code
+            .handle_control("code.session.attach", &control("r2", json!({})))
+            .await;
+        let snapshot = snapshot_of(&again);
+        assert_eq!(snapshot["activeTurnId"], Value::Null);
+        assert_eq!(snapshot["status"], "idle");
+        assert_eq!(snapshot["pendingApprovals"], json!([]));
+
+        let steered = code
+            .handle_control(
+                "code.session.steer",
+                &control("r3", json!({ "text": "now add tests" })),
+            )
+            .await;
+        assert_eq!(host.started(), vec!["now add tests".to_string()]);
+        assert!(
+            steered
+                .iter()
+                .all(|(_, payload)| payload["event"]["type"] != "guidance-queued"),
+            "the follow-up was queued behind a turn that had already finished"
+        );
+    }
+
+    #[tokio::test]
+    async fn guidance_queued_before_the_phone_left_runs_once_the_idle_thread_is_reopened() {
+        let host = IdleAfterAbsence::running("turn-a");
+        let mut code = code_host(&host);
+        code.handle_control("code.session.attach", &control("r1", json!({})))
+            .await;
+        let queued = code
+            .handle_control(
+                "code.session.steer",
+                &control("r2", json!({ "text": "then lint" })),
+            )
+            .await;
+        assert_eq!(queued[0].1["event"]["type"], "guidance-queued");
+        assert!(host.started().is_empty());
+
+        code.reset();
+        host.finish_unseen();
+
+        let again = code
+            .handle_control("code.session.attach", &control("r3", json!({})))
+            .await;
+        assert_eq!(host.started(), vec!["then lint".to_string()]);
+        let snapshot = snapshot_of(&again);
+        assert_eq!(snapshot["activeTurnId"], "turn-after-1");
+        assert_eq!(snapshot["queuedGuidance"], json!([]));
+    }
+
+    #[tokio::test]
+    async fn a_failed_read_back_keeps_the_running_turn_rather_than_reporting_idle() {
+        let host = IdleAfterAbsence::running("turn-a");
+        let mut code = code_host(&host);
+        code.handle_control("code.session.attach", &control("r1", json!({})))
+            .await;
+        code.reset();
+        *host.reconnect_fails.lock().expect("reconnect") = true;
+
+        let again = code
+            .handle_control("code.session.attach", &control("r2", json!({})))
+            .await;
+        assert_eq!(snapshot_of(&again)["activeTurnId"], "turn-a");
     }
 }

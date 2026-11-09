@@ -536,7 +536,7 @@ impl<H: DeveloperSessionHost> Relay<H> {
                     Some(Ok(_)) => Vec::new(),
                 },
                 notification = notifications.recv() => match notification {
-                    Ok(notification) if self.dispatch.is_some() => {
+                    Ok(notification) => {
                         let replies = self.code_host.handle_notification(&notification).await;
                         self.signals(replies)
                     }

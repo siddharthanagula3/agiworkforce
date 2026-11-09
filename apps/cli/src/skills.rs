@@ -1395,8 +1395,22 @@ pub fn skill_command_prompt(
 const MAX_IMPORTED_FILES: usize = 500;
 
 pub fn import_skill(source: &Path) -> std::result::Result<PathBuf, String> {
+    let skills_root = crate::config::CliConfig::config_dir()
+        .map_err(|error| error.to_string())?
+        .join("skills");
+    import_skill_into(source, &skills_root)
+}
+
+fn import_skill_into(source: &Path, skills_root: &Path) -> std::result::Result<PathBuf, String> {
     let manifest = if source.is_dir() {
-        source.join("SKILL.md")
+        let manifest = source.join("SKILL.md");
+        if std::fs::symlink_metadata(&manifest).is_ok_and(|meta| !meta.file_type().is_file()) {
+            return Err(format!(
+                "{} is a link or not a regular file; a skill folder needs a real SKILL.md.",
+                manifest.display()
+            ));
+        }
+        manifest
     } else {
         source.to_path_buf()
     };
@@ -1417,10 +1431,7 @@ pub fn import_skill(source: &Path) -> std::result::Result<PathBuf, String> {
     if name.is_empty() {
         return Err("The skill has no usable name in its frontmatter.".to_string());
     }
-    let target = crate::config::CliConfig::config_dir()
-        .map_err(|error| error.to_string())?
-        .join("skills")
-        .join(name);
+    let target = skills_root.join(name);
     if target.exists() {
         return Err(format!(
             "{} already exists; remove it first to replace it.",
@@ -1435,7 +1446,12 @@ pub fn import_skill(source: &Path) -> std::result::Result<PathBuf, String> {
             .map(|_| ())
             .map_err(|error| error.to_string())
     };
-    if let Err(error) = copied {
+    let imported = copied.and_then(|()| {
+        load_skill(&target.join("SKILL.md"))
+            .map(|_| ())
+            .map_err(|error| format!("The imported copy has no loadable SKILL.md: {error:#}"))
+    });
+    if let Err(error) = imported {
         let _ = std::fs::remove_dir_all(&target);
         return Err(error);
     }
@@ -2379,5 +2395,49 @@ mod tests {
             !store.contains_key(&project_consent_key(elsewhere.path())),
             "consent given in one folder covered another"
         );
+    }
+
+    const IMPORTABLE: &str =
+        "---\nname: linked-entry\ndescription: Import fixture.\n---\nDo the thing.\n";
+
+    #[cfg(unix)]
+    #[test]
+    fn a_folder_whose_skill_md_is_a_link_is_refused_without_leaving_a_package() {
+        let source = tempfile::tempdir().expect("source");
+        std::fs::write(source.path().join("body.txt"), IMPORTABLE).expect("body");
+        std::os::unix::fs::symlink("body.txt", source.path().join("SKILL.md")).expect("link");
+        let root = tempfile::tempdir().expect("skills root");
+
+        let error = import_skill_into(source.path(), root.path())
+            .expect_err("a linked entry manifest would be skipped by the copy");
+        assert!(error.contains("SKILL.md"), "{error}");
+        assert!(
+            !root.path().join("linked-entry").exists(),
+            "a refused import left a package behind"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_folder_import_succeeds_only_with_a_loadable_entry_and_skips_auxiliary_links() {
+        let source = tempfile::tempdir().expect("source");
+        std::fs::write(source.path().join("SKILL.md"), IMPORTABLE).expect("manifest");
+        std::fs::write(source.path().join("notes.txt"), "notes").expect("notes");
+        std::os::unix::fs::symlink("notes.txt", source.path().join("alias.txt")).expect("link");
+        let root = tempfile::tempdir().expect("skills root");
+
+        let target = import_skill_into(source.path(), root.path()).expect("imports");
+        assert_eq!(target, root.path().join("linked-entry"));
+        let loaded = load_skill(&target.join("SKILL.md")).expect("entry loads");
+        assert_eq!(loaded.name, "linked-entry");
+        assert!(target.join("notes.txt").is_file());
+        assert!(
+            !target.join("alias.txt").exists(),
+            "an auxiliary link was copied"
+        );
+
+        let again = import_skill_into(source.path(), root.path())
+            .expect_err("an existing package is not overwritten");
+        assert!(again.contains("already exists"), "{again}");
     }
 }

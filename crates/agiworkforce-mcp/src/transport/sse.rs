@@ -89,7 +89,15 @@ impl SseConn {
         let resp = self.post(frame, method).await?;
         let inline = read_body_capped(resp, self.max_response)
             .await
-            .with_context(|| format!("[{server}] SSE: POST '{method}' response"))?;
+            .map_err(|error| {
+                anyhow::Error::new(TransportFault::StreamBroke {
+                    server: server.clone(),
+                    method: method.to_string(),
+                })
+                .context(format!(
+                    "[{server}] SSE: POST '{method}' response: {error:#}"
+                ))
+            })?;
         if let Some(response) = serde_json::from_slice::<Value>(&inline)
             .ok()
             .and_then(|value| matching_response(&value, id))
@@ -100,7 +108,11 @@ impl SseConn {
         let wait = async {
             loop {
                 let Some(value) = self.rx.recv().await else {
-                    bail!("[{server}] SSE channel closed unexpectedly");
+                    return Err(TransportFault::StreamBroke {
+                        server: server.clone(),
+                        method: method.to_string(),
+                    }
+                    .into());
                 };
                 if let Some(response) = matching_response(&value, id) {
                     return Ok(Some(response));
@@ -171,11 +183,21 @@ impl SseConn {
             .await
             .with_context(|| format!("[{server}] SSE: POST '{method}' failed"))?;
         if !resp.status().is_success() {
-            let status = resp.status();
+            let status = resp.status().as_u16();
             let body = read_text_capped(resp).await;
-            bail!("[{server}] SSE: POST '{method}' returned {status}, {body}");
+            return Err(TransportFault::HttpStatus {
+                server: server.clone(),
+                status,
+                method: method.to_string(),
+                body,
+            }
+            .into());
         }
         Ok(resp)
+    }
+
+    pub(crate) fn stream_ended(&self) -> bool {
+        self.rx.is_closed() || self.drain.is_finished()
     }
 }
 
