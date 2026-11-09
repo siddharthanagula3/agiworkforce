@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   DeveloperEvalRunCreateSchema,
   DeveloperEvalRunListSchema,
-  DeveloperEvalRunSchema,
+  DeveloperEvalRunStartSchema,
 } from '@agiworkforce/cloud-contracts';
 
 import { withErrorHandler } from '@/lib/error-handler';
@@ -39,7 +39,7 @@ async function handleCreate(request: NextRequest, context: Context) {
   const { db, userId } = opened.scope;
   const input = await readPromptBody(request, DeveloperEvalRunCreateSchema);
   return NextResponse.json(
-    { run: DeveloperEvalRunSchema.parse(await createRun(db, userId, promptId, input)) },
+    { run: DeveloperEvalRunStartSchema.parse(await createRun(db, userId, promptId, input)) },
     { status: 201 },
   );
 }

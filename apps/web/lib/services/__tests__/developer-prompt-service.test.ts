@@ -1,13 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
-import { recordResult, validatePromptModel } from '../developer-prompt-service';
+import { createRun, recordResult, validatePromptModel } from '../developer-prompt-service';
 
 const PROMPT_ID = '0190a000-0000-7000-8000-0000000000f1';
 const RUN_ID = '0190a000-0000-7000-8000-0000000000f2';
 const CASE_ID = '0190a000-0000-7000-8000-0000000000c1';
 
-function db(checkKind: 'exact' | 'contains' | 'none', expected: string | null) {
+function db(
+  checkKind: 'exact' | 'contains' | 'none',
+  expected: string | null,
+  caseUpdatedAt = '2026-10-18T00:00:00Z',
+) {
   const query = vi.fn(async (sql: string, params?: unknown[]) => {
     if (sql.includes('from public.developer_eval_runs')) {
       return [
@@ -21,7 +25,8 @@ function db(checkKind: 'exact' | 'contains' | 'none', expected: string | null) {
       ];
     }
     if (sql.includes('from public.developer_eval_results') && sql.includes('select')) return [];
-    if (sql.includes('from public.developer_eval_cases')) return [{ expected_output: expected }];
+    if (sql.includes('from public.developer_eval_cases'))
+      return [{ expected_output: expected, updated_at: caseUpdatedAt }];
     if (sql.includes('insert into public.developer_eval_results')) {
       return [
         {
@@ -69,6 +74,18 @@ describe('developer prompt evaluations', () => {
     expect(none.passed).toBeNull();
   });
 
+  it('leaves a result ungraded when its case was edited after the run was admitted', async () => {
+    const edited = await recordResult(
+      db('contains', 'billing', '2026-10-19T00:00:01Z').db,
+      'user_1',
+      PROMPT_ID,
+      RUN_ID,
+      input,
+    );
+    expect(edited.passed).toBeNull();
+    expect(edited.output).toBe('Billing team');
+  });
+
   it('scopes every read and write to the caller', async () => {
     const { db: adapter, query } = db('contains', 'billing');
     await recordResult(adapter, 'user_1', PROMPT_ID, RUN_ID, input);
@@ -88,5 +105,65 @@ describe('developer prompt evaluations', () => {
     ).rejects.toThrow('A result needs an output or an error.');
     expect(validatePromptModel('auto')).toBe('auto');
     expect(() => validatePromptModel('not-a-model')).toThrow('Pick a model from the list.');
+  });
+});
+
+describe('starting a developer evaluation run', () => {
+  function runDb(caseRows: Array<Record<string, unknown>>) {
+    const query = vi.fn(async (sql: string, params?: unknown[]) => {
+      if (sql.includes('from public.developer_prompt_versions')) return [{ version: 2 }];
+      if (sql.includes('from public.developer_eval_cases')) return caseRows;
+      if (sql.includes('insert into public.developer_eval_runs')) {
+        return [
+          {
+            id: RUN_ID,
+            version: params?.[2],
+            check_kind: params?.[3],
+            case_count: params?.[4],
+            created_at: '2026-10-19T00:00:00Z',
+          },
+        ];
+      }
+      return [];
+    });
+    const adapter = { query, execute: vi.fn() } as unknown as DatabaseAdapter;
+    const transaction = vi.fn(async (work: (tx: DatabaseAdapter) => Promise<unknown>) =>
+      work(adapter),
+    );
+    return {
+      db: { ...(adapter as object), transaction } as unknown as DatabaseAdapter,
+      query,
+      transaction,
+    };
+  }
+
+  it('returns the exact cases it counted so the run cannot miss one', async () => {
+    const rows = [
+      { id: CASE_ID, variables: { ticket: 'Refund' }, expected_output: 'Billing', position: 0 },
+      {
+        id: '0190a000-0000-7000-8000-0000000000c2',
+        variables: { ticket: 'Crash' },
+        expected_output: 'Support',
+        position: 1,
+      },
+    ];
+    const { db: adapter, transaction } = runDb(rows);
+    const run = await createRun(adapter, 'user_1', PROMPT_ID, {
+      version: 2,
+      checkKind: 'contains',
+    });
+    expect(transaction).toHaveBeenCalledTimes(1);
+    expect(run.caseCount).toBe(2);
+    expect(run.cases.map((entry) => entry.id)).toEqual(rows.map((entry) => entry.id));
+    expect(run.cases[1]).toMatchObject({
+      variables: { ticket: 'Crash' },
+      expectedOutput: 'Support',
+    });
+  });
+
+  it('refuses a run with no cases', async () => {
+    await expect(
+      createRun(runDb([]).db, 'user_1', PROMPT_ID, { version: 2, checkKind: 'contains' }),
+    ).rejects.toThrow('Add at least one test case first.');
   });
 });

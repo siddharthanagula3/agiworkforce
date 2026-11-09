@@ -220,6 +220,22 @@ describe('cloud agent workflow starter', () => {
     expect(workflowRun.cancel).toHaveBeenCalledOnce();
   });
 
+  it('reports an admitted run it could not stop instead of the attachment error', async () => {
+    const workflowRun = {
+      runId: 'wrun_123',
+      getReadable: vi.fn(),
+      cancel: vi.fn().mockRejectedValue(new Error('cancel refused')),
+    };
+    workflowMocks.buildInput.mockReturnValue({ version: 1 });
+    workflowMocks.start.mockResolvedValue(workflowRun);
+    workflowMocks.attach.mockRejectedValue(new Error('attach failed'));
+
+    await expect(startCloudAgentWorkflowExecution(baseInput())).rejects.toMatchObject({
+      name: 'CloudAgentWorkflowUncertainStartError',
+      workflowRunId: 'wrun_123',
+    });
+  });
+
   it('gives up on a platform start that never answers', async () => {
     vi.useFakeTimers();
     try {
@@ -369,6 +385,60 @@ describe('runCloudAgentTurn transport selection', () => {
     expect(cancel.mock.invocationCallOrder[0]!).toBeLessThan(
       workflowMocks.runToolLoop.mock.invocationCallOrder[0]!,
     );
+  }, 20_000);
+
+  it('never runs the turn inline when the stalled durable run cannot be cancelled', async () => {
+    const cancel = vi.fn().mockRejectedValue(new Error('cancel refused'));
+    workflowMocks.start.mockResolvedValue({
+      runId: 'wrun_uncancellable',
+      getReadable: () => new ReadableStream<Uint8Array>({ start() {} }),
+      cancel,
+    });
+    workflowMocks.attach.mockResolvedValue(undefined);
+
+    const result = await runCloudAgentTurn(turnInput());
+
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(result).toMatchObject({
+      transport: 'durable',
+      workflowRunId: 'wrun_uncancellable',
+      degradedReason: 'workflow_stream_stalled',
+    });
+    expect(workflowMocks.runToolLoop).not.toHaveBeenCalled();
+    expect(workflowMocks.buildStream).not.toHaveBeenCalled();
+    const frames = await new Response(result.readable).text();
+    expect(frames).toContain(`"x_run_detached":{"run_id":"${RUN_ID}"`);
+    expect(frames).toContain('[DONE]');
+  }, 20_000);
+
+  it('never runs the turn inline when a failed attachment cannot cancel the started run', async () => {
+    const cancel = vi.fn().mockRejectedValue(new Error('cancel refused'));
+    workflowMocks.start.mockResolvedValue({
+      runId: 'wrun_unattached',
+      getReadable: vi.fn(),
+      cancel,
+    });
+    workflowMocks.attach.mockRejectedValue(new Error('attach failed'));
+
+    const result = await runCloudAgentTurn(turnInput());
+
+    expect(result).toMatchObject({ transport: 'durable', workflowRunId: 'wrun_unattached' });
+    expect(workflowMocks.runToolLoop).not.toHaveBeenCalled();
+    expect(workflowMocks.buildStream).not.toHaveBeenCalled();
+  });
+
+  it('answers for an uncancellable stalled run itself when the caller asked to', async () => {
+    workflowMocks.start.mockResolvedValue({
+      runId: 'wrun_uncancellable',
+      getReadable: () => new ReadableStream<Uint8Array>({ start() {} }),
+      cancel: vi.fn().mockRejectedValue(new Error('cancel refused')),
+    });
+    workflowMocks.attach.mockResolvedValue(undefined);
+
+    await expect(runCloudAgentTurn(turnInput({ onDurableUnavailable: 'fail' }))).rejects.toThrow(
+      'workflow_stream_stalled',
+    );
+    expect(workflowMocks.runToolLoop).not.toHaveBeenCalled();
   }, 20_000);
 
   it('skips the platform entirely while the transport is cooling down', async () => {

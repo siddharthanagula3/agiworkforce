@@ -144,6 +144,11 @@ export const DeveloperEvalRunSchema = z.object({
 });
 export type DeveloperEvalRun = z.infer<typeof DeveloperEvalRunSchema>;
 
+export const DeveloperEvalRunStartSchema = DeveloperEvalRunSchema.extend({
+  cases: z.array(DeveloperEvalCaseSchema).min(1),
+});
+export type DeveloperEvalRunStart = z.infer<typeof DeveloperEvalRunStartSchema>;
+
 export const DeveloperEvalRunListSchema = z.object({
   runs: z.array(
     DeveloperEvalRunSchema.omit({ results: true }).extend({

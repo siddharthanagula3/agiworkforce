@@ -67,6 +67,7 @@ function fakeApi(): PromptsApi {
       caseCount: 2,
       createdAt: '2026-10-19T00:00:00.000Z',
       results: [],
+      cases,
     })),
     run: vi.fn(),
     recordResult: vi.fn(async (_p, _r, input) => {
@@ -124,6 +125,36 @@ describe('PromptEvaluations', () => {
     const results = await screen.findByRole('region', { name: 'Run results' });
     await waitFor(() => expect(within(results).getByText('Pass')).toBeInTheDocument());
     expect(within(results).getByText('Fail')).toBeInTheDocument();
+  });
+
+  it('runs the cases the server admitted when this tab holds a stale case list', async () => {
+    runGatewayCompletion.mockResolvedValue({
+      content: 'Billing',
+      latencyMs: 12,
+      inputTokens: 8,
+      outputTokens: 1,
+    });
+    const api = fakeApi();
+    vi.mocked(api.cases).mockResolvedValue([cases[0]!]);
+    const onCasesChange = vi.fn();
+    render(
+      <PromptEvaluations
+        api={api}
+        prompt={prompt}
+        versions={[version]}
+        variables={['ticket']}
+        onCasesChange={onCasesChange}
+      />,
+    );
+    await userEvent.click(await screen.findByRole('button', { name: 'Run all cases' }));
+    await waitFor(() => expect(api.recordResult).toHaveBeenCalledTimes(2));
+    expect(
+      vi
+        .mocked(api.recordResult)
+        .mock.calls.map(([, , result]) => result.caseId)
+        .sort(),
+    ).toEqual(cases.map((entry) => entry.id).sort());
+    expect(onCasesChange).toHaveBeenLastCalledWith(2);
   });
 
   it('records a gateway failure as an error result instead of dropping the case', async () => {

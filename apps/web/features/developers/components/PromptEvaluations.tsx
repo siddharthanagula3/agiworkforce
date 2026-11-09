@@ -288,15 +288,23 @@ export function PromptEvaluations({
     if (!chosen || !cases || cases.length === 0) return;
     setError(null);
     let started: DeveloperEvalRun;
+    let manifest: DeveloperEvalCase[];
     try {
-      started = await api.startRun(prompt.id, chosen.version, checkKind);
+      const { cases: admitted, ...admittedRun } = await api.startRun(
+        prompt.id,
+        chosen.version,
+        checkKind,
+      );
+      started = admittedRun;
+      manifest = admitted;
     } catch (reason) {
       setError(toUserMessage(reason, 'The run could not be started.'));
       return;
     }
+    replaceCases(manifest);
     setRun(started);
-    setRunning({ done: 0, total: cases.length });
-    const queue = [...cases];
+    setRunning({ done: 0, total: manifest.length });
+    const queue = [...manifest];
     const worker = async () => {
       for (let next = queue.shift(); next; next = queue.shift()) {
         const renderedInput = renderPromptTemplate(chosen.template, next.variables);

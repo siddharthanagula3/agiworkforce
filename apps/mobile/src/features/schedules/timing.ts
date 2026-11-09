@@ -116,3 +116,12 @@ export function isoToZonedDateInput(value: string | null | undefined, timezone: 
   const pad = (number: number) => String(number).padStart(2, '0');
   return `${parts.year}-${pad(parts.month)}-${pad(parts.day)}`;
 }
+
+export function isoToZonedTimeInput(value: string | null | undefined, timezone: string): string {
+  if (!value) return '';
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return '';
+  const parts = partsAt(formatterFor(timezone), date);
+  const pad = (number: number) => String(number).padStart(2, '0');
+  return `${pad(parts.hour)}:${pad(parts.minute)}`;
+}

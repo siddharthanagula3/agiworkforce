@@ -31,6 +31,16 @@ function sseFrame(payload: unknown): Uint8Array {
 
 const DONE_FRAME = encoder.encode('data: [DONE]\n\n');
 
+export function buildRunDetachedStream(runId: string): ReadableStream<Uint8Array> {
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(detachFrame(runId));
+      controller.enqueue(DONE_FRAME);
+      controller.close();
+    },
+  });
+}
+
 function silenceFrame(): Uint8Array {
   return sseFrame({
     choices: [

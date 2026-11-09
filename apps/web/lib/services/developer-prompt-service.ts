@@ -10,6 +10,7 @@ import {
   type DeveloperEvalResult,
   type DeveloperEvalResultInput,
   type DeveloperEvalRun,
+  type DeveloperEvalRunStart,
   type DeveloperPrompt,
   type DeveloperPromptVersion,
   type DeveloperPromptVersionInput,
@@ -375,30 +376,33 @@ export async function createRun(
   userId: string,
   promptId: string,
   input: { version: number; checkKind: DeveloperEvalCheckKind },
-): Promise<DeveloperEvalRun> {
-  const [versionRow] = await db.query<{ version: number }>(
-    `select version from public.developer_prompt_versions
-      where prompt_id = $1 and user_id = $2 and version = $3`,
-    [promptId, userId, input.version],
-  );
-  if (!versionRow) throw createError.notFound('That prompt version does not exist.');
-  const cases = await listCases(db, userId, promptId);
-  if (cases.length === 0) throw createError.validation('Add at least one test case first.');
-  const [row] = await db.query<RunRow>(
-    `insert into public.developer_eval_runs (prompt_id, user_id, version, check_kind, case_count)
-     values ($1, $2, $3, $4, $5)
-     returning id, version, check_kind, case_count, created_at`,
-    [promptId, userId, input.version, input.checkKind, cases.length],
-  );
-  if (!row) throw createError.internal('The run could not be started.');
-  return {
-    id: row.id,
-    version: Number(row.version),
-    checkKind: row.check_kind,
-    caseCount: Number(row.case_count),
-    createdAt: iso(row.created_at),
-    results: [],
-  };
+): Promise<DeveloperEvalRunStart> {
+  return db.transaction(async (tx) => {
+    const [versionRow] = await tx.query<{ version: number }>(
+      `select version from public.developer_prompt_versions
+        where prompt_id = $1 and user_id = $2 and version = $3`,
+      [promptId, userId, input.version],
+    );
+    if (!versionRow) throw createError.notFound('That prompt version does not exist.');
+    const cases = await listCases(tx, userId, promptId);
+    if (cases.length === 0) throw createError.validation('Add at least one test case first.');
+    const [row] = await tx.query<RunRow>(
+      `insert into public.developer_eval_runs (prompt_id, user_id, version, check_kind, case_count)
+       values ($1, $2, $3, $4, $5)
+       returning id, version, check_kind, case_count, created_at`,
+      [promptId, userId, input.version, input.checkKind, cases.length],
+    );
+    if (!row) throw createError.internal('The run could not be started.');
+    return {
+      id: row.id,
+      version: Number(row.version),
+      checkKind: row.check_kind,
+      caseCount: Number(row.case_count),
+      createdAt: iso(row.created_at),
+      results: [],
+      cases,
+    };
+  });
 }
 
 export async function readRun(
@@ -474,13 +478,16 @@ export async function recordResult(
     throw createError.validation('A result needs an output or an error.');
   }
   const run = await readRun(db, userId, promptId, runId);
-  const [testCase] = await db.query<{ expected_output: string | null }>(
-    `select expected_output from public.developer_eval_cases
+  const [testCase] = await db.query<{ expected_output: string | null; updated_at: string | Date }>(
+    `select expected_output, updated_at from public.developer_eval_cases
       where id = $1 and prompt_id = $2 and user_id = $3`,
     [input.caseId, promptId, userId],
   );
   if (!testCase) throw createError.notFound('Test case not found');
-  const passed = evalCheckPasses(run.checkKind, input.output, testCase.expected_output);
+  const editedSinceAdmission = new Date(testCase.updated_at).getTime() > Date.parse(run.createdAt);
+  const passed = editedSinceAdmission
+    ? null
+    : evalCheckPasses(run.checkKind, input.output, testCase.expected_output);
   try {
     const [row] = await db.query<ResultRow>(
       `insert into public.developer_eval_results
