@@ -98,6 +98,7 @@ import {
 } from '../lib/imageGenerationPersistence';
 import { runDurableImageGenerationTurn } from '../lib/durableImageGenerationTurn';
 import { startVideoAfterTranscriptCommit } from '../lib/durableVideoGenerationTurn';
+import { resolveVideoRetryInputs, videoInputKindOf } from '../lib/videoRetryInputs';
 import {
   useChatStore,
   selectActiveLeafId,
@@ -1003,6 +1004,18 @@ function readVideoStartFailureProjection(value: unknown): VideoStartFailureProje
     ...(typeof metadata['videoError'] === 'string' ? { videoError: metadata['videoError'] } : {}),
     ...(typeof metadata['videoRetryable'] === 'boolean'
       ? { videoRetryable: metadata['videoRetryable'] }
+      : {}),
+    ...(typeof metadata['videoAspect'] === 'string'
+      ? { videoAspect: metadata['videoAspect'] }
+      : {}),
+    ...(typeof metadata['videoResolution'] === 'string'
+      ? { videoResolution: metadata['videoResolution'] }
+      : {}),
+    ...(typeof metadata['videoDurationSecs'] === 'number'
+      ? { videoDurationSecs: metadata['videoDurationSecs'] }
+      : {}),
+    ...(metadata['videoInputKind'] === 'first_frame' || metadata['videoInputKind'] === 'reference'
+      ? { videoInputKind: metadata['videoInputKind'] }
       : {}),
   };
   return {
@@ -3726,6 +3739,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           );
           let assistantMessageId = crypto.randomUUID();
           videoMessageAuthoritiesRef.current.set(assistantMessageId, authority);
+          const videoInputKind = videoInputKindOf(videoOptions?.inputImages);
           const placeholderMetadata: MessageMetadata = {
             toolType: 'video-generation',
             videoStatus: 'queued',
@@ -3734,6 +3748,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             ...(videoOptions?.aspectRatio ? { videoAspect: videoOptions.aspectRatio } : {}),
             ...(videoOptions?.resolution ? { videoResolution: videoOptions.resolution } : {}),
             ...(videoOptions?.durationSecs ? { videoDurationSecs: videoOptions.durationSecs } : {}),
+            ...(videoInputKind ? { videoInputKind } : {}),
           };
           addMessage(
             {
@@ -3840,6 +3855,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
               ...(videoOptions?.durationSecs
                 ? { videoDurationSecs: videoOptions.durationSecs }
                 : {}),
+              ...(videoInputKind ? { videoInputKind } : {}),
             };
             updateOwnMessage(assistantMessageId, {
               content: '',
@@ -4041,7 +4057,22 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       const authority = videoMessageAuthoritiesRef.current.get(messageId);
       if (authority && !authority.isCurrent()) return;
       const failed = assistantMessage.metadata;
-      const inputImages = videoInputImagesRef.current.get(messageId);
+      const inputs = resolveVideoRetryInputs(
+        failed.videoInputKind,
+        videoInputImagesRef.current.get(messageId),
+      );
+      if (!inputs.ok) {
+        updateMessage(
+          messageId,
+          {
+            content: inputs.message,
+            metadata: { ...failed, videoRetryable: false, videoError: inputs.message },
+          },
+          displayedConversationId,
+        );
+        return;
+      }
+      const { inputImages } = inputs;
       videoInputImagesRef.current.delete(messageId);
       handleGenerateVideo(userMessage.content, {
         authority,
@@ -4063,6 +4094,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       handleOpenUpgradeDialog,
       isStreaming,
       isTrialExhausted,
+      updateMessage,
     ],
   );
 

@@ -473,6 +473,8 @@ export interface MessageMetadata {
   videoAspect?: string;
   videoResolution?: string;
   videoDurationSecs?: number;
+  /** Which image conditioning the request carried; the images themselves are never persisted. */
+  videoInputKind?: 'first_frame' | 'reference';
   /** Latest provider progress reported by the durable reconciler. */
   videoProgress?: number;
   /** Durable terminal error projected by the server. */
