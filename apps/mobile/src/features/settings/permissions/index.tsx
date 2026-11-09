@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { useRouter } from 'expo-router';
@@ -20,6 +20,8 @@ import type { MobilePermissionKind } from './types';
 import { openInAppBrowser } from '@/lib/safeOpenURL';
 
 const PERMISSIONS_HELP_URL = 'https://agiworkforce.com/help?q=permissions+microphone+camera';
+const PERMISSION_READ_FAILURE =
+  'Could not read some permissions from your device. The statuses shown may be out of date.';
 
 interface PermissionRowProps {
   kind: MobilePermissionKind;
@@ -114,20 +116,27 @@ export default function PermissionsScreen() {
   const router = useRouter();
   const c = useThemeColors();
   const setObservedStatus = usePermissionsStore((s) => s.setObservedStatus);
+  const [readFailed, setReadFailed] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
       async function pollAll() {
+        let failed = false;
         await Promise.all(
           PERMISSION_KINDS.map(async (kind) => {
             const entry = PERMISSION_REGISTRY[kind];
-            const status = await entry.getStatus();
-            if (!cancelled) setObservedStatus(kind, status);
+            try {
+              const status = await entry.getStatus();
+              if (!cancelled) setObservedStatus(kind, status);
+            } catch {
+              failed = true;
+            }
           }),
         );
+        if (!cancelled) setReadFailed(failed);
       }
-      pollAll();
+      void pollAll();
       return () => {
         cancelled = true;
       };
@@ -157,6 +166,20 @@ export default function PermissionsScreen() {
           App Permissions
         </Text>
       </View>
+
+      {readFailed ? (
+        <Text
+          accessibilityRole="alert"
+          style={{
+            color: c.agentError,
+            fontSize: typeScale.footnote,
+            lineHeight: 18,
+            marginBottom: 12,
+          }}
+        >
+          {PERMISSION_READ_FAILURE}
+        </Text>
+      ) : null}
 
       <View
         style={{
