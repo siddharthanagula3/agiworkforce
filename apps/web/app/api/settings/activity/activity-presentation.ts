@@ -134,6 +134,28 @@ function sentenceForEndpoint(endpoint: string | null): string | null {
   return best?.sentence ?? null;
 }
 
+function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, '\\$&');
+}
+
+/**
+ * The SQL twin of presentActivity's recognition rules, built from the same
+ * maps so the rows a reader can be shown are exactly the rows a query selects.
+ * Enumerating categories, selecting a page and testing for more all use it, so
+ * none of them counts a row this module would drop. Appends its parameters to
+ * `params` and expects the audit table to be aliased `sal`.
+ */
+export function presentableAuditRowClause(params: unknown[]): string {
+  params.push(Object.keys(EVENT_TYPE_SENTENCES));
+  const eventTypes = `$${params.length}::text[]`;
+  params.push(Object.keys(ENDPOINT_SENTENCES));
+  const endpoints = `$${params.length}::text[]`;
+  params.push(ENDPOINT_PREFIX_SENTENCES.map(([prefix]) => `${escapeLikePattern(prefix)}%`));
+  const prefixes = `$${params.length}::text[]`;
+  const path = `split_part(sal.endpoint, '?', 1)`;
+  return `(sal.event_type = any(${eventTypes}) or ${path} = any(${endpoints}) or ${path} like any(${prefixes}))`;
+}
+
 export function presentActivity(row: {
   id: string;
   event_type: string;

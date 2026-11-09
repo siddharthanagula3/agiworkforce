@@ -149,12 +149,23 @@ export async function executeMapSearchTool(
       query,
       actions,
       ...(resolved ? { view: resolved.view, places: resolved.places } : {}),
+      ...(resolved && resolved.unresolvedStops.length > 0
+        ? { unresolvedStops: resolved.unresolvedStops }
+        : {}),
     },
   };
   const card = parseInteractiveCardDelta({ card: rawCard });
   if (!card?.recognized || card.kind !== 'map-search.v1') {
     return { ok: false, content: 'Map search could not be rendered safely.' };
   }
+
+  const unresolvedStops = resolved?.unresolvedStops ?? [];
+  const partialNotice =
+    resolved && unresolvedStops.length > 0
+      ? ` Only ${resolved.places.length} of ${resolved.places.length + unresolvedStops.length} stops were located; ` +
+        `these stops are NOT on the map: ${unresolvedStops.map((stop) => `"${stop}"`).join(', ')}. ` +
+        'Tell the user which stops are missing and do not describe the map as the complete trip.'
+      : '';
 
   return {
     ok: true,
@@ -164,7 +175,7 @@ export async function executeMapSearchTool(
           ? ' with a live map the user can already see'
           : ' (link-only: the location could not be geocoded)'
       }. Do not repeat the links as markdown and do not describe them as a ` +
-      'verified place or turn-by-turn route.',
+      `verified place or turn-by-turn route.${partialNotice}`,
     card,
   };
 }

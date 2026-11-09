@@ -489,6 +489,7 @@ interface GrantRow {
 }
 
 interface UpliftClaim {
+  appliedAt: string;
   expiresAt: string;
   committedMicrousd: number;
 }
@@ -519,6 +520,7 @@ async function readAccountGrants(
     if (row.kind === 'limit_uplift') {
       if (Date.parse(iso(row.expires_at)) > nowMs) {
         grants.claimedUplifts.set(row.promotion_id, {
+          appliedAt: iso(row.applied_at ?? new Date(nowMs)),
           expiresAt: iso(row.expires_at),
           committedMicrousd: amount(row.committed_microusd),
         });
@@ -612,7 +614,7 @@ export async function grantReferralResets(
 
 class CeilingReached extends Error {}
 
-/** What a claim must still commit: null when the claim already covers the promotion as it stands. */
+/** What a claim must still commit to reach the exposure its terms allow: null when it already covers them. */
 function recostOf(
   claim: UpliftClaim | undefined,
   promotion: UpliftPromotion,
@@ -622,7 +624,7 @@ function recostOf(
   const covers =
     Date.parse(claim.expiresAt) >= Date.parse(promotion.endsAt) &&
     claim.committedMicrousd >= exposureMicrousd;
-  return covers ? null : exposureMicrousd;
+  return covers ? null : Math.max(0, exposureMicrousd - claim.committedMicrousd);
 }
 
 function upliftHeldOrFunded(
@@ -640,12 +642,13 @@ function fitsCeiling(promotion: UpliftPromotion, additionalMicrousd: number): bo
 
 /**
  * Claims an uplift for an account, or re-costs a claim the promotion has
- * outgrown, if the promotion's ceiling still covers the most it can add. A
- * claim whose expiry predates the promotion's end, or whose commitment is
- * below the exposure at the promotion's current terms, is extended and charged
- * the full current exposure again under the same row lock. That over-counts what
- * the earlier commitment already covered, which keeps the ceiling above the true
- * worst case after any edit.
+ * outgrown, if the promotion's ceiling still covers the most it can add. The
+ * exposure is the most the promotion's current terms can add from the moment
+ * the account claimed to the promotion's end, so allowance already consumed
+ * under earlier terms still counts against an edit. A claim whose expiry
+ * predates the promotion's end, or whose commitment is below that exposure, is
+ * extended and topped up to it under the same row lock. The commitment never
+ * falls, which keeps the ceiling above the true worst case after any edit.
  */
 async function claimUplift(
   db: DatabaseAdapter,
@@ -687,7 +690,10 @@ async function claimUplift(
         !existing.ends_short &&
         amount(existing.committed_microusd) >= exposureMicrousd;
       if (covered) return true;
-      const additional = exposureMicrousd;
+      const additional =
+        existing && !existing.lapsed
+          ? Math.max(0, exposureMicrousd - amount(existing.committed_microusd))
+          : exposureMicrousd;
       if (amount(locked.committed_microusd) + additional > amount(locked.cost_ceiling_microusd)) {
         throw new CeilingReached();
       }
@@ -730,13 +736,19 @@ async function claimUplift(
   }
 }
 
-function exposureOf(promotion: UpliftPromotion, base: LimitCaps, nowMs: number): number {
+function exposureOf(
+  promotion: UpliftPromotion,
+  base: LimitCaps,
+  nowMs: number,
+  claim?: UpliftClaim,
+): number {
+  const fromMs = claim ? Math.min(nowMs, Date.parse(claim.appliedAt)) : nowMs;
   return upliftExposure({
     sessionCap: base.session,
     weeklyCap: base.weekly,
     percent: promotion.upliftPercent,
     windows: promotion.upliftWindows,
-    remainingMs: Date.parse(promotion.endsAt) - nowMs,
+    remainingMs: Date.parse(promotion.endsAt) - fromMs,
     sessionWindowHours: ROLLING_SESSION_WINDOW_HOURS,
     weeklyWindowHours: ROLLING_WEEKLY_WINDOW_HOURS,
   });
@@ -797,7 +809,7 @@ export async function resolvePromotionalCaps(
     for (const promotion of uplifts) {
       const claim = grants.claimedUplifts.get(promotion.id);
       if (!claim) continue;
-      const exposure = exposureOf(promotion, base, nowMs);
+      const exposure = exposureOf(promotion, base, nowMs, claim);
       const additional = recostOf(claim, promotion, exposure);
       if (additional === null) {
         claimed.push(promotion);
@@ -924,7 +936,7 @@ export async function readSummaryPromotions(
         upliftHeldOrFunded(
           grants.claimedUplifts.get(promotion.id),
           promotion,
-          exposureOf(promotion, input.caps, nowMs),
+          exposureOf(promotion, input.caps, nowMs, grants.claimedUplifts.get(promotion.id)),
         ),
     );
     const everyWorkload = uplifts.filter((promotion) => promotion.upliftWorkloads.length === 0);
