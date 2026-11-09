@@ -280,6 +280,22 @@ describe('desktop pairing rows', () => {
     expect(rows.element.querySelector('#opt-pairing-label')!.textContent).toBe('spPairingIdle');
   });
 
+  it('shows why Desktop still holds the pairing after an unpair it could not deliver', async () => {
+    const notice = 'Desktop could not be reached to remove the pairing.';
+    const rows = createDesktopPairingRows({
+      loadPairingState: async () => state('paired', { fingerprint: 'ab:cd' }),
+      beginPairing: vi.fn(),
+      submitPairingCode: vi.fn(),
+      unpair: vi.fn(async () => state('idle', { error: notice })),
+    });
+    await rows.loaded;
+    document.body.appendChild(rows.element);
+    rows.element.querySelector<HTMLButtonElement>('#opt-unpair-btn')!.click();
+    rows.element.querySelector<HTMLButtonElement>('#opt-unpair-confirm-btn')!.click();
+    await flush();
+    expect(rows.element.textContent).toContain(notice);
+  });
+
   it('asks for the code Desktop shows', async () => {
     const rows = createDesktopPairingRows({
       loadPairingState: async () => state('idle'),

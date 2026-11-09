@@ -137,9 +137,7 @@ export function createDesktopPairingRows(api: PairingApi = browserPairing): Desk
         pair.textContent = t('spPairingRetry');
         break;
     }
-    if ((state.phase === 'error' || state.phase === 'awaiting-code') && state.error) {
-      error.textContent = state.error;
-    }
+    if (state.error) error.textContent = state.error;
   };
 
   pair.addEventListener('click', () => {

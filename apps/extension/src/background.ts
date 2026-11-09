@@ -320,6 +320,8 @@ import {
 import {
   desktopPairingRejectsAccount,
   releaseStoredDesktopPairing,
+  parsePendingDesktopRevocation,
+  STORAGE_KEY_PENDING_DESKTOP_REVOCATION,
 } from './features/native-bridge/pairing';
 
 interface BackgroundState {
@@ -1140,24 +1142,42 @@ async function disconnectPairedNativeHost(reason: string): Promise<boolean> {
         ).catch(() => null)
       : null
   ) as { success?: boolean } | null;
-  if (state.nativePort === port) {
-    if (port) rejectPendingNativeRequests(port, reason);
-    state.nativePort = null;
-    nativeSessionSecret = null;
-    state.isNativeConnected = false;
-    state.connectionStatus = 'disconnected';
-    _bgCtx.nativeHandshakeInFlight = false;
-    clearNativeReconnectTimer();
-    setNativeReconnectGaveUp(true);
-    setDesktopPaired(false);
-    try {
-      port?.disconnect();
-    } catch (error) {
-      logger.debug('Native disconnect after unpair failed', error);
-    }
-    void notifyConnectionStatusChange();
-  }
+  if (state.nativePort === port) dropNativeConnection(port, reason);
   return unpaired?.success === true;
+}
+
+function dropNativeConnection(port: chrome.runtime.Port | null, reason: string): void {
+  if (port) rejectPendingNativeRequests(port, reason);
+  state.nativePort = null;
+  nativeSessionSecret = null;
+  state.isNativeConnected = false;
+  state.connectionStatus = 'disconnected';
+  _bgCtx.nativeHandshakeInFlight = false;
+  clearNativeReconnectTimer();
+  setNativeReconnectGaveUp(true);
+  setDesktopPaired(false);
+  try {
+    port?.disconnect();
+  } catch (error) {
+    logger.debug('Native disconnect after unpair failed', error);
+  }
+  void notifyConnectionStatusChange();
+}
+
+async function settlePendingDesktopRevocation(
+  port: chrome.runtime.Port,
+  revocationId: string,
+): Promise<void> {
+  const receipt = (await sendNativeRequest({
+    type: NATIVE_BROWSER_UNPAIR_MESSAGE,
+  })) as unknown as { success?: boolean } | null;
+  if (state.nativePort !== port) return;
+  if (receipt?.success !== true) throw new Error('Desktop did not remove the pairing.');
+  const owed = parsePendingDesktopRevocation(
+    await storageUtils.getItem(STORAGE_KEY_PENDING_DESKTOP_REVOCATION),
+  );
+  if (owed === revocationId) await storageUtils.removeItem(STORAGE_KEY_PENDING_DESKTOP_REVOCATION);
+  dropNativeConnection(port, 'The browser was unpaired from Desktop.');
 }
 
 function resetNativeReconnectState(): void {
@@ -1413,6 +1433,15 @@ function connectToNativeHost(): void {
         if (state.nativePort !== port) return;
         if (!pingResult?.success) {
           throw new Error(pingResult?.error ?? 'Native ping failed');
+        }
+
+        const pendingRevocation = parsePendingDesktopRevocation(
+          await storageUtils.getItem(STORAGE_KEY_PENDING_DESKTOP_REVOCATION),
+        );
+        if (state.nativePort !== port) return;
+        if (pendingRevocation) {
+          await settlePendingDesktopRevocation(port, pendingRevocation);
+          return;
         }
 
         state.isNativeConnected = true;
