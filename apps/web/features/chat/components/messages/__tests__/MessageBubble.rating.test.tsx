@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { IME_PROCESSING_KEY_CODE } from '@agiworkforce/unified-chat/ime-composition';
 type ScanModule0 = typeof import('@agiworkforce/unified-chat');
@@ -756,6 +756,52 @@ describe('telling us why an answer was bad', () => {
     expect(screen.getByRole('button', { name: 'Close feedback form' })).toHaveClass(
       'pointer-coarse:h-11',
       'pointer-coarse:w-11',
+    );
+  });
+
+  it('freezes the reason and the comment while the details are sending', async () => {
+    render(<MessageBubble message={assistantMessage()} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Bad response' }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const form = screen.getByRole('form', { name: 'Tell us more' });
+    await userEvent.click(within(form).getByRole('button', { name: 'Other' }));
+    const details = pendingResponse();
+
+    await userEvent.click(within(form).getByRole('button', { name: 'Submit' }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+
+    expect(within(form).getByRole('textbox', { name: 'Details (optional)' })).toBeDisabled();
+    expect(within(form).getByRole('button', { name: 'Other' })).toBeDisabled();
+    details.settle(false);
+    await within(form).findByRole('alert');
+    expect(within(form).getByRole('textbox', { name: 'Details (optional)' })).toBeEnabled();
+  });
+
+  it('keeps a newer draft for the same answer when an older submission settles', async () => {
+    render(<MessageBubble message={assistantMessage()} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Bad response' }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const form = screen.getByRole('form', { name: 'Tell us more' });
+    await userEvent.click(within(form).getByRole('button', { name: 'Other' }));
+    const details = pendingResponse();
+    await userEvent.click(within(form).getByRole('button', { name: 'Submit' }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+
+    act(() => {
+      useResponseRatingDraftStore.getState().closeDraft('msg-1');
+      useResponseRatingDraftStore.getState().openDraft('msg-1');
+      useResponseRatingDraftStore
+        .getState()
+        .updateDraft('msg-1', { reason: null, comment: 'A newer thought.' });
+    });
+    details.settle(true);
+
+    await waitFor(() => expect(toastMock.success).toHaveBeenCalled());
+    expect(useResponseRatingDraftStore.getState().drafts.get('msg-1')).toMatchObject({
+      comment: 'A newer thought.',
+    });
+    expect(screen.getByRole('textbox', { name: 'Details (optional)' })).toHaveValue(
+      'A newer thought.',
     );
   });
 

@@ -555,6 +555,16 @@ describe('shared artifacts', () => {
     expect(card.textContent).toContain('Workspace only');
   });
 
+  it('says a workspace sharing manager can withdraw an artifact as well as its publisher', async () => {
+    mockOverview.mockReturnValue(overview());
+
+    renderSection();
+
+    expect(
+      await screen.findByText(/only the publisher or a workspace sharing manager can withdraw it/),
+    ).toBeInTheDocument();
+  });
+
   it('names who loses access before it stops sharing, and does not promise a public link', async () => {
     mockOverview.mockReturnValue(overview());
     const user = userEvent.setup();
@@ -620,6 +630,18 @@ describe('shared conversations', () => {
     expect(card.textContent).toContain('12 messages');
     expect(card.textContent).toContain('Workspace only');
     expect(card.textContent).toContain('Expires');
+  });
+
+  it('says a workspace sharing manager can withdraw a conversation as well as its sharer', async () => {
+    mockOverview.mockReturnValue(overview());
+
+    renderSection();
+
+    expect(
+      await screen.findByText(
+        /only the person who shared it or a workspace sharing manager can withdraw it/,
+      ),
+    ).toBeInTheDocument();
   });
 
   it('names who loses access before it stops sharing, and does not reopen the link', async () => {
