@@ -35,11 +35,10 @@ interface RegionRow {
   data_region_requested_at: string | Date | null;
 }
 
-export async function readOrganizationRegion(
+async function readRegionRow(
   db: DatabaseAdapter,
   organizationId: string,
-  env: Record<string, string | undefined> = process.env,
-): Promise<OrganizationRegionState> {
+): Promise<RegionRow | null> {
   const rows = await db.query<RegionRow>(
     `select data_region, data_region_requested, data_region_requested_at
        from public.organizations
@@ -47,8 +46,14 @@ export async function readOrganizationRegion(
       limit 1`,
     [organizationId],
   );
-  const row = rows[0] ?? null;
-  const effective = normaliseDataRegion(row?.data_region ?? null) ?? DEFAULT_DATA_REGION;
+  return rows[0] ?? null;
+}
+
+function regionState(
+  row: RegionRow | null,
+  effective: DataRegionId,
+  env: Record<string, string | undefined>,
+): OrganizationRegionState {
   const resolution = resolveDataRegion(effective, env);
   const requestedAt = row?.data_region_requested_at ?? null;
   return {
@@ -59,6 +64,33 @@ export async function readOrganizationRegion(
     provisioned: resolution.provisioned,
     missing: resolution.provisioned ? [] : resolution.missing,
   };
+}
+
+export async function readOrganizationRegion(
+  db: DatabaseAdapter,
+  organizationId: string,
+  env: Record<string, string | undefined> = process.env,
+): Promise<OrganizationRegionState> {
+  const row = await readRegionRow(db, organizationId);
+  const effective = normaliseDataRegion(row?.data_region ?? null) ?? DEFAULT_DATA_REGION;
+  return regionState(row, effective, env);
+}
+
+/**
+ * Null when the handle cannot see the workspace row or its stored pin names no
+ * known region, so a residency check can refuse instead of assuming the home region.
+ */
+export async function readStoredOrganizationRegion(
+  db: DatabaseAdapter,
+  organizationId: string,
+  env: Record<string, string | undefined> = process.env,
+): Promise<OrganizationRegionState | null> {
+  const row = await readRegionRow(db, organizationId);
+  if (!row) return null;
+  const effective =
+    row.data_region == null ? DEFAULT_DATA_REGION : normaliseDataRegion(row.data_region);
+  if (!effective) return null;
+  return regionState(row, effective, env);
 }
 
 export interface RegionMoveInput {

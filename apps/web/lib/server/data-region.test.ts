@@ -22,6 +22,7 @@ import {
   keyManagementRegions,
   isRegionProvisioned,
   readOrganizationRegion,
+  readStoredOrganizationRegion,
   requestOrganizationRegionMove,
 } from './data-region';
 
@@ -87,6 +88,51 @@ describe('the region a workspace is in', () => {
     expect(state.effective).toBe('eu');
     expect(state.provisioned).toBe(false);
     expect(state.missing).toContain('AGI_DATA_REGION_EU_DATABASE_URL');
+  });
+});
+
+describe('the stored region a residency check relies on', () => {
+  it('is unknown when the workspace row cannot be read, not the home region', async () => {
+    const h = harness(null);
+    await expect(readStoredOrganizationRegion(h.db, ORG, HOME_ONLY)).resolves.toBeNull();
+    await expect(readOrganizationRegion(h.db, ORG, HOME_ONLY)).resolves.toMatchObject({
+      effective: 'us',
+    });
+  });
+
+  it('is unknown when the stored pin names no region this build declares', async () => {
+    const h = harness({
+      data_region: 'mars',
+      data_region_requested: null,
+      data_region_requested_at: null,
+    });
+    await expect(readStoredOrganizationRegion(h.db, ORG, HOME_ONLY)).resolves.toBeNull();
+  });
+
+  it('keeps a workspace that never chose a region in the home region', async () => {
+    const h = harness({
+      data_region: null,
+      data_region_requested: null,
+      data_region_requested_at: null,
+    });
+    await expect(readStoredOrganizationRegion(h.db, ORG, HOME_ONLY)).resolves.toEqual({
+      effective: 'us',
+      requested: null,
+      requestedAt: null,
+      provisioned: true,
+      missing: [],
+    });
+  });
+
+  it('reports a stored pin with its provisioning', async () => {
+    const h = harness({
+      data_region: 'eu',
+      data_region_requested: null,
+      data_region_requested_at: null,
+    });
+    const state = await readStoredOrganizationRegion(h.db, ORG, TWO_REGIONS);
+    expect(state?.effective).toBe('eu');
+    expect(state?.provisioned).toBe(true);
   });
 });
 

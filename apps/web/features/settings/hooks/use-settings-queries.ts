@@ -1185,20 +1185,35 @@ export {
   type PreparedWorkspaceMembershipAction,
 } from './use-organization-membership-mutation';
 
+const TeamMemberRemovalReceiptSchema = z.object({
+  revoked: z.object({
+    sessions: z.number().int().nonnegative(),
+    deviceTokens: z.number().int().nonnegative(),
+    apiKeys: z.number().int().nonnegative(),
+  }),
+  warnings: z.array(z.string()),
+});
+
+export type TeamMemberRemovalOutcome =
+  | { cleanup: 'confirmed'; revoked: z.infer<typeof TeamMemberRemovalReceiptSchema>['revoked'] }
+  | { cleanup: 'incomplete' | 'unconfirmed' };
+
+type TeamMemberRemovalVariables = { memberId: string; organizationId: string };
+
 export function useRemoveTeamMember(): UseMutationResult<
-  void,
+  TeamMemberRemovalOutcome,
   Error,
-  { memberId: string; organizationId: string }
+  TeamMemberRemovalVariables
 > {
   const queryClient: QueryClient = useQueryClient();
 
-  return useMutation<void, Error, { memberId: string; organizationId: string }>({
+  return useMutation<TeamMemberRemovalOutcome, Error, TeamMemberRemovalVariables>({
     mutationFn: async ({
       memberId,
     }: {
       memberId: string;
       organizationId: string;
-    }): Promise<void> => {
+    }): Promise<TeamMemberRemovalOutcome> => {
       const token = await getAuthToken();
       if (!token) throw new Error('User not authenticated');
 
@@ -1215,13 +1230,27 @@ export function useRemoveTeamMember(): UseMutationResult<
       if (!res.ok) {
         throw new Error(await readApiError(res));
       }
+      const body: unknown = await res.json().catch(() => null);
+      const receipt = TeamMemberRemovalReceiptSchema.safeParse(body);
+      if (!receipt.success) return { cleanup: 'unconfirmed' };
+      if (receipt.data.warnings.length > 0) return { cleanup: 'incomplete' };
+      return { cleanup: 'confirmed', revoked: receipt.data.revoked };
     },
-    onSuccess: (_, { organizationId }) => {
+    onSuccess: (outcome, { organizationId }) => {
       queryClient.invalidateQueries({
         queryKey: ['settings', 'team', organizationId],
       });
       queryClient.invalidateQueries({ queryKey: ['settings', 'organization'] });
-      toast.success('Team member removed');
+      if (outcome.cleanup === 'confirmed') {
+        toast.success('Team member removed');
+        return;
+      }
+      toast.warning(
+        outcome.cleanup === 'incomplete'
+          ? 'Team member removed, but some of their sessions, device tokens or API keys could not be revoked. Check their access before assuming it has ended.'
+          : 'Team member removed, but revoking their sessions, device tokens and API keys could not be confirmed. Check their access before assuming it has ended.',
+        { duration: Infinity },
+      );
     },
     onError: (error: Error) => {
       logger.error('Failed to remove team member:', error);

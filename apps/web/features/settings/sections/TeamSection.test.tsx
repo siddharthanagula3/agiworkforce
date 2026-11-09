@@ -652,6 +652,14 @@ describe('TeamSection', () => {
     );
     expect(screen.getByText('pending@example.com')).toBeVisible();
 
+    state.resendInvitation.mockImplementationOnce(
+      (_input: unknown, options: { onSuccess: (result: unknown) => void }) =>
+        options.onSuccess({
+          invitation: { id: 'invite-1' },
+          inviteToken: 'y'.repeat(32),
+          delivery: { emailSent: true },
+        }),
+    );
     fireEvent.click(
       screen.getByRole('button', { name: 'Renew invitation for pending@example.com' }),
     );
@@ -659,16 +667,21 @@ describe('TeamSection', () => {
       { organizationId: 'org-1', invitationId: 'invite-1' },
       expect.objectContaining({ onSuccess: expect.any(Function) }),
     );
+    expect(screen.getByText('Private link for pending@example.com')).toBeVisible();
 
+    state.revokeInvitation.mockImplementationOnce(
+      (_input: unknown, options: { onSuccess: () => void }) => options.onSuccess(),
+    );
     fireEvent.click(
       screen.getByRole('button', { name: 'Revoke invitation for pending@example.com' }),
     );
     expect(screen.getByRole('alertdialog')).toHaveTextContent('reserved seat becomes available');
     fireEvent.click(screen.getByRole('button', { name: 'Revoke invitation' }));
-    expect(state.revokeInvitation).toHaveBeenCalledWith({
-      organizationId: 'org-1',
-      invitationId: 'invite-1',
-    });
+    expect(state.revokeInvitation).toHaveBeenCalledWith(
+      { organizationId: 'org-1', invitationId: 'invite-1' },
+      expect.objectContaining({ onSuccess: expect.any(Function) }),
+    );
+    expect(screen.queryByText('Private link for pending@example.com')).not.toBeInTheDocument();
   });
 
   it('uses wrapping form layouts that stay usable in a narrow settings dialog', () => {
