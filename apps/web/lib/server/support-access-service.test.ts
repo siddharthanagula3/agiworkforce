@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
@@ -69,6 +71,19 @@ interface EventRecord {
 const CONSENT_TICKET = '33333333-3333-4333-8333-333333333333';
 const CONSENTING_MEMBER = 'user_member_1';
 
+function jsonbRoundTrip(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(jsonbRoundTrip);
+  if (value && typeof value === 'object') {
+    const keys = Object.keys(value).sort((a, b) =>
+      a.length !== b.length ? a.length - b.length : Buffer.compare(Buffer.from(a), Buffer.from(b)),
+    );
+    const out: Record<string, unknown> = {};
+    for (const key of keys) out[key] = jsonbRoundTrip((value as Record<string, unknown>)[key]);
+    return out;
+  }
+  return value;
+}
+
 function harness(startedAt = Date.parse('2026-09-17T09:00:00.000Z')) {
   const grants: GrantRecord[] = [];
   const consentTickets = new Map<string, { userId: string; organizationId: string }>([
@@ -77,6 +92,7 @@ function harness(startedAt = Date.parse('2026-09-17T09:00:00.000Z')) {
   const events: EventRecord[] = [];
   let clock = startedAt;
   let nextGrant = 0;
+  let eventInsertsFail = false;
 
   const now = () => new Date(clock).toISOString();
 
@@ -189,6 +205,7 @@ function harness(startedAt = Date.parse('2026-09-17T09:00:00.000Z')) {
 
   const execute = vi.fn(async (sql: string, params: unknown[] = []) => {
     if (sql.includes('insert into public.support_access_events')) {
+      if (eventInsertsFail) throw new Error('support_access_events insert failed');
       events.push({
         id: events.length + 1,
         grant_id: params[0] as string | null,
@@ -198,7 +215,7 @@ function harness(startedAt = Date.parse('2026-09-17T09:00:00.000Z')) {
         resource_type: params[4] as string | null,
         resource_id: params[5] as string | null,
         row_count: params[6] as number | null,
-        detail: JSON.parse(params[7] as string) as Record<string, unknown>,
+        detail: jsonbRoundTrip(JSON.parse(params[7] as string)) as Record<string, unknown>,
         occurred_at: params[8] as string,
         previous_hash: params[9] as string,
         entry_hash: params[10] as string,
@@ -231,6 +248,9 @@ function harness(startedAt = Date.parse('2026-09-17T09:00:00.000Z')) {
     grants,
     advance: (ms: number) => {
       clock += ms;
+    },
+    failEventInserts: (fail: boolean) => {
+      eventInsertsFail = fail;
     },
   };
 }
@@ -533,6 +553,77 @@ describe('the trail cannot be quietly rewritten', () => {
       reason: 'an entry names a predecessor that is not the entry before it',
     });
   });
+
+  it('verifies an untouched request after the database reorders its detail keys', async () => {
+    const h = harness();
+    await requestSupportAccess({
+      db: h.db,
+      organizationId: ORG,
+      requestedByUserId: REQUESTER,
+      reason: REASON,
+      ticketRef: TICKET,
+      purpose: 'support',
+      scopes: ['conversations'],
+    });
+
+    expect(Object.keys(h.events[0]?.detail ?? {})).toEqual([
+      'reason',
+      'scopes',
+      'purpose',
+      'ticketRef',
+    ]);
+    await expect(verifySupportAccessTrail(h.db, ORG)).resolves.toMatchObject({
+      intact: true,
+      entries: 1,
+    });
+  });
+
+  it('still verifies an entry written under the original digest', async () => {
+    const h = harness();
+    const occurredAt = '2026-09-17T09:00:00.000Z';
+    const detail = { scope: 'conversations' };
+    const previousHash = '0'.repeat(64);
+    const entryHash = createHash('sha256')
+      .update(
+        JSON.stringify([
+          previousHash,
+          ORG,
+          '',
+          REQUESTER,
+          'refused',
+          'conversations',
+          '',
+          null,
+          detail,
+          occurredAt,
+        ]),
+      )
+      .digest('hex');
+    h.events.push({
+      id: 1,
+      grant_id: null,
+      organization_id: ORG,
+      actor_user_id: REQUESTER,
+      event: 'refused',
+      resource_type: 'conversations',
+      resource_id: null,
+      row_count: null,
+      detail,
+      occurred_at: occurredAt,
+      previous_hash: previousHash,
+      entry_hash: entryHash,
+    });
+
+    await expect(verifySupportAccessTrail(h.db, ORG)).resolves.toMatchObject({ intact: true });
+
+    const target = h.events[0];
+    if (!target) throw new Error('expected the legacy entry');
+    target.detail = { scope: 'billing' };
+    await expect(verifySupportAccessTrail(h.db, ORG)).resolves.toMatchObject({
+      intact: false,
+      brokenAtEventId: '1',
+    });
+  });
 });
 
 const OTHER_ORG = '22222222-2222-4222-8222-222222222222';
@@ -630,6 +721,19 @@ describe('an operator listing that spans workspaces', () => {
       row_count: 1,
     });
     await expect(verifySupportAccessTrail(h.db, ORG)).resolves.toMatchObject({ intact: true });
+  });
+
+  it('serves a workspace without content when its accessed entry cannot be appended', async () => {
+    const h = harness();
+    await approvedGrant(h);
+    h.failEventInserts(true);
+
+    const view = await listing(h);
+
+    expect(view.records.every((row) => Object.keys(row.payload).length === 0)).toBe(true);
+    expect(view.grantedOrganizationIds).toEqual([]);
+    expect(view.redactedCount).toBe(3);
+    expect(h.events.filter((event) => event.event === 'accessed')).toHaveLength(0);
   });
 
   it('asks the database once for every workspace on the page', async () => {

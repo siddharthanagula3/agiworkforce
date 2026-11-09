@@ -39,6 +39,11 @@ const TARGET_LABEL: Record<CopyrightNoticeRecord['targetKind'], string> = {
 
 type View = 'received' | 'decided';
 
+interface NoticePage {
+  notices?: CopyrightNoticeRecord[];
+  nextCursor?: string | null;
+}
+
 async function postJson<T>(url: string, payload: unknown): Promise<T> {
   return requestJson<T>(url, {
     method: 'POST',
@@ -55,27 +60,53 @@ export default function CopyrightNoticeQueuePanel() {
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [pendingReference, setPendingReference] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
   const { confirm, dialog: confirmDialog } = useConfirmAction();
+
+  const fetchPage = useCallback(
+    async (before: string | null) => {
+      const params = new URLSearchParams({ status: view });
+      if (before) params.set('before', before);
+      const body = await requestJson<NoticePage | null>(`${NOTICES_ENDPOINT}?${params}`);
+      const listed = body?.notices;
+      if (!Array.isArray(listed)) throw new Error(NOTICES_UNREADABLE);
+      return { notices: listed, nextCursor: body?.nextCursor ?? null };
+    },
+    [view],
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
     try {
-      const query = view === 'received' ? '?status=received' : '';
-      const body = await requestJson<{ notices?: CopyrightNoticeRecord[] } | null>(
-        `${NOTICES_ENDPOINT}${query}`,
-      );
-      const listed = body?.notices;
-      if (!Array.isArray(listed)) throw new Error(NOTICES_UNREADABLE);
-      setNotices(
-        view === 'received' ? listed : listed.filter((notice) => notice.status !== 'received'),
-      );
+      const page = await fetchPage(null);
+      setNotices(page.notices);
+      setNextCursor(page.nextCursor);
     } catch (error) {
       setLoadError(toUserMessage(error, NOTICES_UNREADABLE));
     } finally {
       setLoading(false);
     }
-  }, [view]);
+  }, [fetchPage]);
+
+  async function loadMore() {
+    if (!nextCursor) return;
+    setLoadingMore(true);
+    setMessage(null);
+    try {
+      const page = await fetchPage(nextCursor);
+      setNotices((current) => [
+        ...current,
+        ...page.notices.filter((notice) => !current.some((shown) => shown.id === notice.id)),
+      ]);
+      setNextCursor(page.nextCursor);
+    } catch (error) {
+      setMessage(toUserMessage(error, NOTICES_UNREADABLE));
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   useEffect(() => {
     void load();
@@ -275,6 +306,22 @@ export default function CopyrightNoticeQueuePanel() {
           ))}
         </ul>
       )}
+
+      {!loading && !loadError && nextCursor ? (
+        <div>
+          <button
+            type="button"
+            className={ACTION_CLASS}
+            disabled={loadingMore}
+            onClick={() => void loadMore()}
+          >
+            {loadingMore ? (
+              <Spinner size="sm" className="me-2 inline-block" aria-hidden="true" />
+            ) : null}
+            Show more
+          </button>
+        </div>
+      ) : null}
     </section>
   );
 }

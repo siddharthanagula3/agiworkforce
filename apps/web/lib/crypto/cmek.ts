@@ -337,6 +337,7 @@ export interface OrganizationKeyRingDeps {
   resolveCustomerRing: (record: OrganizationKeyRecord) => Promise<KeyRing>;
   platformEnvName: string;
   env?: Record<string, string | undefined>;
+  resolvePlatformTenantRing?: (organizationId: string) => KeyRing;
   /** Throws unless a live grant covers the read. Absent, support is refused. */
   assertSupportAccess?: (
     organizationId: string,
@@ -367,9 +368,11 @@ export async function resolveOrganizationKeyRing(
   }
   const record = await deps.loadRecord(organizationId);
   if (!record) {
-    const ring = platformTenantKeyRing(deps.platformEnvName, organizationId, {
-      ...(deps.env ? { env: deps.env } : {}),
-    });
+    const ring = deps.resolvePlatformTenantRing
+      ? deps.resolvePlatformTenantRing(organizationId)
+      : platformTenantKeyRing(deps.platformEnvName, organizationId, {
+          ...(deps.env ? { env: deps.env } : {}),
+        });
     return {
       ring,
       source: 'platform_derived',

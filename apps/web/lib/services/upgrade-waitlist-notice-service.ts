@@ -178,21 +178,13 @@ async function emailAccount(
   if (outcome.pause) summary.emailChannel = 'paused';
 }
 
-export async function notifyUpgradeWaitlist(
+async function dueAccounts(
   db: DatabaseAdapter,
-  maxNotices: number,
-): Promise<UpgradeWaitlistNoticeSummary> {
-  const emailConfigured = isNotificationEmailConfigured();
-  const summary: UpgradeWaitlistNoticeSummary = {
-    notified: 0,
-    emailed: 0,
-    undeliverable: 0,
-    deferred: 0,
-    remaining: false,
-    emailChannel: emailConfigured ? 'available' : 'not_configured',
-  };
-
-  const due = await db.query<WaitlistedAccount>(
+  emailConfigured: boolean,
+  pageSize: number,
+  offset: number,
+): Promise<WaitlistedAccount[]> {
+  return db.query<WaitlistedAccount>(
     `select waitlisted.user_id,
             array_agg(distinct waitlisted.plan) as plans,
             count(waitlisted.upgrade_notified_at) > 0 as notified,
@@ -213,19 +205,67 @@ export async function notifyUpgradeWaitlist(
                        mins => $2::int * power(2, max(waitlisted.upgrade_email_attempts) - 1)::int)))
       order by count(waitlisted.upgrade_notified_at) > 0,
                max(waitlisted.upgrade_email_attempted_at) nulls first,
-               min(coalesce(waitlisted.joined_at, waitlisted.created_at))
-      limit $3`,
-    [emailConfigured, EMAIL_RETRY_BASE_MINUTES, maxNotices + 1, UNATTENDED_RUN_DENIED_STATUSES],
+               min(coalesce(waitlisted.joined_at, waitlisted.created_at)),
+               waitlisted.user_id
+      limit $3
+     offset $5`,
+    [
+      emailConfigured,
+      EMAIL_RETRY_BASE_MINUTES,
+      pageSize + 1,
+      UNATTENDED_RUN_DENIED_STATUSES,
+      offset,
+    ],
   );
+}
 
-  const batch = due.slice(0, maxNotices);
+export const UPGRADE_WAITLIST_SCAN_PAGES = 10;
+
+export async function notifyUpgradeWaitlist(
+  db: DatabaseAdapter,
+  maxNotices: number,
+  maxScanned: number = maxNotices * UPGRADE_WAITLIST_SCAN_PAGES,
+): Promise<UpgradeWaitlistNoticeSummary> {
+  const emailConfigured = isNotificationEmailConfigured();
+  const summary: UpgradeWaitlistNoticeSummary = {
+    notified: 0,
+    emailed: 0,
+    undeliverable: 0,
+    deferred: 0,
+    remaining: false,
+    emailChannel: emailConfigured ? 'available' : 'not_configured',
+  };
+
+  const pageSize = Math.max(1, maxNotices);
   const open: WaitlistedAccount[] = [];
-  for (const account of batch) {
-    if (await billingUpgradesOpenFor(account.user_id)) open.push(account);
+  let scanned = 0;
+  let unexamined = false;
+  for (let offset = 0; ; offset += pageSize) {
+    const page = await dueAccounts(db, emailConfigured, pageSize, offset);
+    const rows = page.slice(0, pageSize);
+    let examined = 0;
+    for (const account of rows) {
+      if (open.length >= maxNotices || scanned >= maxScanned) break;
+      examined += 1;
+      scanned += 1;
+      if (await billingUpgradesOpenFor(account.user_id)) open.push(account);
+    }
+    if (examined < rows.length) {
+      unexamined = true;
+      break;
+    }
+    if (page.length <= pageSize) break;
+    if (open.length >= maxNotices || scanned >= maxScanned) {
+      unexamined = true;
+      break;
+    }
   }
-  if (batch.length > 0 && open.length === 0) return { ...summary, skipped: 'waitlist_closed' };
 
-  summary.remaining = due.length > maxNotices;
+  summary.remaining = unexamined;
+  if (scanned > 0 && open.length === 0 && !unexamined) {
+    return { ...summary, skipped: 'waitlist_closed' };
+  }
+
   for (const account of open) {
     const notice = upgradeOpenNotice(account);
     try {

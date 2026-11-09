@@ -28,10 +28,6 @@ vi.mock('@/lib/egress-policy', () => ({
   assertResolvedPublicHostname: mocks.resolveHost,
   pinnedPublicFetch: mocks.fetch,
 }));
-vi.mock('@/lib/crypto/cmek', async (importOriginal) => ({
-  ...(await importOriginal<CompleteMockModule0>()),
-  platformTenantKeyRing: mocks.keyRing,
-}));
 vi.mock('@/lib/crypto/envelope', async (importOriginal) => ({
   ...(await importOriginal<CompleteMockModule1>()),
   openEnvelope: mocks.openEnvelope,
@@ -39,6 +35,7 @@ vi.mock('@/lib/crypto/envelope', async (importOriginal) => ({
 }));
 vi.mock('@/lib/server/organization-encryption-keys', () => ({
   PLATFORM_TENANT_KEY_ENV: 'UNUSED_WEBHOOK_FIXTURE_KEY',
+  platformTenantRing: mocks.keyRing,
 }));
 
 import { EgressPolicyError } from '@/lib/egress-policy';
@@ -536,7 +533,6 @@ describe('developer webhook cooperative cancellation', () => {
   );
 });
 
-type CompleteMockModule0 = typeof import('@/lib/crypto/cmek');
 type CompleteMockModule1 = typeof import('@/lib/crypto/envelope');
 
 type RetainedMockModule0 = typeof import('@/lib/logger');

@@ -10,7 +10,9 @@ const {
   mockGetDashboardSummary,
   mockLogSecurityEvent,
   mockBanUser,
+  mockUnbanUser,
 } = vi.hoisted(() => ({
+  mockUnbanUser: vi.fn(),
   mockAssertAccountActive: vi.fn(),
   mockGetClerkAuthUser: vi.fn(),
   mockExecute: vi.fn(),
@@ -49,7 +51,7 @@ vi.mock('@clerk/nextjs/server', () => ({
     users: {
       getUser: (...args: unknown[]) => mockGetUser(...args),
       banUser: (...args: unknown[]) => mockBanUser(...args),
-      unbanUser: vi.fn(),
+      unbanUser: (...args: unknown[]) => mockUnbanUser(...args),
     },
   }),
 }));
@@ -94,6 +96,7 @@ beforeEach(() => {
   mockExecute.mockResolvedValue(undefined);
   mockLogSecurityEvent.mockResolvedValue(undefined);
   mockBanUser.mockResolvedValue(undefined);
+  mockUnbanUser.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -169,6 +172,50 @@ describe('POST /api/admin/security, an active admin is unaffected', () => {
       expect.objectContaining({ userId: ADMIN_ID, eventType: 'admin_action' }),
       { required: true },
     );
+  });
+});
+
+describe('POST /api/admin/security reactivation reports the provider step', () => {
+  function reactivate() {
+    return POST(
+      adminRequest('https://app.test/api/admin/security?action=reactivate-user', 'POST', {
+        userId: TARGET_ID,
+        reason: 'appeal upheld',
+      }),
+    );
+  }
+
+  it('says the reactivation is incomplete when the provider unban fails', async () => {
+    mockUnbanUser.mockRejectedValue(new Error('provider unavailable'));
+
+    const response = await reactivate();
+    const body = (await response.json()) as Record<string, unknown>;
+
+    expect(mockExecute).toHaveBeenCalledWith(expect.stringContaining("'active'"), [TARGET_ID]);
+    expect(mockUnbanUser).toHaveBeenCalledWith(TARGET_ID);
+    expect(body).toMatchObject({
+      success: false,
+      complete: false,
+      provider_status: 'failed',
+      account_status: 'active',
+    });
+    expect(String(body['message'])).not.toContain('has been reactivated');
+    expect(mockLogSecurityEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        details: expect.objectContaining({ action: 'reactivate-user', providerStatus: 'failed' }),
+      }),
+    );
+  });
+
+  it('reports a completed reactivation when the provider unban succeeds', async () => {
+    const response = await reactivate();
+
+    expect(await response.json()).toMatchObject({
+      success: true,
+      complete: true,
+      provider_status: 'completed',
+      message: `User ${TARGET_ID} has been reactivated`,
+    });
   });
 });
 

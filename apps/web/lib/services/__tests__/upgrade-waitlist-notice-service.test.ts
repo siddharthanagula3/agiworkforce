@@ -177,7 +177,7 @@ describe('notifyUpgradeWaitlist', () => {
     expect(sql.replace(/\s+/g, ' ')).toContain(
       'order by count(waitlisted.upgrade_notified_at) > 0, max(waitlisted.upgrade_email_attempted_at) nulls first, min(coalesce(waitlisted.joined_at, waitlisted.created_at))',
     );
-    expect(params).toEqual([true, EMAIL_RETRY_BASE_MINUTES, 26, UNATTENDED_RUN_DENIED_STATUSES]);
+    expect(params).toEqual([true, EMAIL_RETRY_BASE_MINUTES, 26, UNATTENDED_RUN_DENIED_STATUSES, 0]);
   });
 
   it('leaves out accounts that cannot sign in, asked to be deleted, or were erased', async () => {
@@ -319,6 +319,7 @@ describe('notifyUpgradeWaitlist', () => {
       EMAIL_RETRY_BASE_MINUTES,
       101,
       UNATTENDED_RUN_DENIED_STATUSES,
+      0,
     ]);
     expect(mocks.email).not.toHaveBeenCalled();
     expect(toldInApp()).toEqual([expect.objectContaining({ params: ['user-1'] })]);
@@ -333,6 +334,61 @@ describe('notifyUpgradeWaitlist', () => {
       remaining: true,
     });
     expect(mocks.email).toHaveBeenCalledTimes(1);
+  });
+
+  describe('when earlier accounts are still closed', () => {
+    const closed = Array.from({ length: 100 }, (_, index) => ({
+      user_id: `closed-${index + 1}`,
+      plans: ['basic'],
+      notified: false,
+      email_attempts: 0,
+    }));
+    const eligible = { user_id: 'open-101', plans: ['pro'], notified: false, email_attempts: 0 };
+
+    beforeEach(() => {
+      mocks.query.mockImplementation(async (_sql: string, params: unknown[]) => {
+        const all = [...closed, eligible];
+        const limit = params[2] as number;
+        const offset = params[4] as number;
+        return all.slice(offset, offset + limit);
+      });
+      mocks.upgradesOpen.mockImplementation(async (userId: string) => userId === 'open-101');
+    });
+
+    it('reaches an open account behind a full batch of closed ones', async () => {
+      await expect(notifyUpgradeWaitlist(db, 100)).resolves.toMatchObject({
+        notified: 1,
+        remaining: false,
+      });
+      expect(mocks.record).toHaveBeenCalledTimes(1);
+      expect(mocks.record).toHaveBeenCalledWith(
+        db,
+        expect.objectContaining({ userId: 'open-101' }),
+      );
+      expect(mocks.record).not.toHaveBeenCalledWith(
+        db,
+        expect.objectContaining({ userId: 'closed-1' }),
+      );
+    });
+
+    it('says candidates remain, not that the waitlist is closed, when the scan stops early', async () => {
+      const summary = await notifyUpgradeWaitlist(db, 100, 100);
+
+      expect(summary).toMatchObject({ notified: 0, remaining: true });
+      expect(summary.skipped).toBeUndefined();
+      expect(mocks.record).not.toHaveBeenCalled();
+    });
+
+    it('reports the waitlist closed only after every candidate was checked', async () => {
+      mocks.upgradesOpen.mockResolvedValue(false);
+
+      await expect(notifyUpgradeWaitlist(db, 100)).resolves.toMatchObject({
+        notified: 0,
+        remaining: false,
+        skipped: 'waitlist_closed',
+      });
+      expect(mocks.upgradesOpen).toHaveBeenCalledTimes(101);
+    });
   });
 
   it('carries on with the next account when one fails', async () => {

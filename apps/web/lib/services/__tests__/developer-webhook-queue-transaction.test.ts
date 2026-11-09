@@ -22,13 +22,13 @@ vi.mock('@/lib/egress-policy', () => ({
   assertResolvedPublicHostname: mocks.forbidden,
   pinnedPublicFetch: mocks.forbidden,
 }));
-vi.mock('@/lib/crypto/cmek', () => ({ platformTenantKeyRing: mocks.forbidden }));
 vi.mock('@/lib/crypto/envelope', () => ({
   openEnvelope: mocks.forbidden,
   sealEnvelope: mocks.forbidden,
 }));
 vi.mock('@/lib/server/organization-encryption-keys', () => ({
   PLATFORM_TENANT_KEY_ENV: 'UNUSED_WEBHOOK_FIXTURE_KEY',
+  platformTenantRing: mocks.forbidden,
 }));
 
 import {

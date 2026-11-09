@@ -87,7 +87,34 @@ describe('SecurityOperationsPanel', () => {
     mocks.performAction.mockResolvedValue({
       message: 'User user-target has been suspended',
       account_status: 'suspended',
+      complete: true,
+      provider_status: 'not_required',
     });
+  });
+
+  it('keeps the target and reason when reactivation is only partly done', async () => {
+    const partial = 'User user-target is active here, but the sign-in provider still blocks them.';
+    mocks.performAction.mockResolvedValue({
+      message: partial,
+      account_status: 'active',
+      complete: false,
+      provider_status: 'failed',
+    });
+    render(<SecurityOperationsPanel />);
+    await screen.findByText('authorization_failed');
+
+    fireEvent.change(screen.getByLabelText('Action'), { target: { value: 'reactivate-user' } });
+    fireEvent.change(screen.getByLabelText('Target user ID'), {
+      target: { value: 'user-target' },
+    });
+    fireEvent.change(screen.getByLabelText('Audit reason'), {
+      target: { value: 'Appeal upheld' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Reactivate account' }));
+
+    expect(await screen.findByText(partial)).toBeInTheDocument();
+    expect(screen.getByLabelText('Target user ID')).toHaveValue('user-target');
+    expect(screen.getByLabelText('Audit reason')).toHaveValue('Appeal upheld');
   });
 
   it('renders live metrics, alerts, events, and source IP data', async () => {

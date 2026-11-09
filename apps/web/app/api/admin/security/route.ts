@@ -283,18 +283,46 @@ async function changeAccountStatus(
   }
   if (updated === 0) throw createError.notFound('No account has that user id').asUserSafe();
 
+  let providerStatus: 'completed' | 'failed' | 'not_required' = 'not_required';
   if (change.providerSuspended !== null) {
     try {
       await getIdentityProvider().setUserSuspended(targetUserId, change.providerSuspended);
+      providerStatus = 'completed';
     } catch (providerError) {
+      providerStatus = 'failed';
       logger.warn({ error: providerError, targetUserId }, change.providerFailure);
     }
+  }
+
+  if (providerStatus === 'failed') {
+    await logSecurityEvent({
+      userId: adminUserId,
+      eventType: 'admin_action',
+      severity: change.severity,
+      endpoint: `/api/admin/security?action=${action}`,
+      details: { action, targetUserId, accountStatus: change.status, providerStatus },
+    });
+    logger.warn(
+      { adminUserId, targetUserId, reason },
+      `User account ${change.outcome} locally but the identity provider step failed`,
+    );
+    return NextResponse.json({
+      success: false,
+      complete: false,
+      provider_status: providerStatus,
+      message: change.providerSuspended
+        ? `User ${targetUserId} is banned here, but the sign-in provider ban failed. Submit again to retry it.`
+        : `User ${targetUserId} is active here, but the sign-in provider still blocks them. Submit again to retry it.`,
+      account_status: change.status,
+    });
   }
 
   logger.info({ adminUserId, targetUserId, reason }, `User account ${change.outcome} by admin`);
 
   return NextResponse.json({
     success: true,
+    complete: true,
+    provider_status: providerStatus,
     message: `User ${targetUserId} has been ${change.outcome}`,
     account_status: change.status,
   });

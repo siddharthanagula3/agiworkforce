@@ -62,6 +62,7 @@ const MAX_SUPPORT_ACCESS_REASON_LENGTH = 2_000;
 const MIN_TICKET_REF_LENGTH = 3;
 const MAX_TICKET_REF_LENGTH = 128;
 const GENESIS_HASH = '0'.repeat(64);
+const SUPPORT_ACCESS_HASH_VERSION = 'agi:support-access-entry:v2';
 const MAX_GRANT_PAGE = 100;
 
 export interface SupportAccessGrant {
@@ -330,18 +331,53 @@ export function supportAccessEntryHash(
   return createHash('sha256')
     .update(
       JSON.stringify([
-        previousHash,
-        entry.organizationId,
-        entry.grantId ?? '',
-        entry.actorUserId,
-        entry.event,
-        entry.resourceType ?? '',
-        entry.resourceId ?? '',
-        entry.rowCount ?? null,
-        entry.detail ?? {},
-        entry.occurredAt,
+        SUPPORT_ACCESS_HASH_VERSION,
+        ...hashedFields(previousHash, entry, canonicalJsonValue(entry.detail ?? {})),
       ]),
     )
+    .digest('hex');
+}
+
+function hashedFields(
+  previousHash: string,
+  entry: SupportAccessEventInput & { occurredAt: string },
+  detail: unknown,
+): unknown[] {
+  return [
+    previousHash,
+    entry.organizationId,
+    entry.grantId ?? '',
+    entry.actorUserId,
+    entry.event,
+    entry.resourceType ?? '',
+    entry.resourceId ?? '',
+    entry.rowCount ?? null,
+    detail,
+    entry.occurredAt,
+  ];
+}
+
+function canonicalJsonValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => (item === undefined ? null : canonicalJsonValue(item)));
+  }
+  if (value && typeof value === 'object' && !(value instanceof Date)) {
+    const sorted: Record<string, unknown> = {};
+    for (const key of Object.keys(value).sort()) {
+      const child = (value as Record<string, unknown>)[key];
+      if (child !== undefined) sorted[key] = canonicalJsonValue(child);
+    }
+    return sorted;
+  }
+  return value;
+}
+
+function legacySupportAccessEntryHash(
+  previousHash: string,
+  entry: SupportAccessEventInput & { occurredAt: string },
+): string {
+  return createHash('sha256')
+    .update(JSON.stringify(hashedFields(previousHash, entry, entry.detail ?? {})))
     .digest('hex');
 }
 
@@ -746,24 +782,17 @@ export async function readOperatorContentUnderGrants<T>(
 
   const served = new Map<string, number>();
   const withheld = new Map<string, number>();
-  let redactedCount = 0;
-  let googleUserDataWithheldCount = 0;
-  const records = input.records.map((record) => {
+  for (const record of input.records) {
     const organizationId = input.organizationIdOf(record);
     const grant = organizationId ? grants.get(organizationId) : undefined;
-    if (!organizationId || !grant) {
-      redactedCount += 1;
-      return input.withoutContent(record);
-    }
+    if (!organizationId || !grant) continue;
     served.set(organizationId, (served.get(organizationId) ?? 0) + 1);
     if (input.googleUserData?.carries(record) && !grantMayReadGoogleUserData(grant)) {
-      googleUserDataWithheldCount += 1;
       withheld.set(organizationId, (withheld.get(organizationId) ?? 0) + 1);
-      return input.googleUserData.withhold(record);
     }
-    return record;
-  });
+  }
 
+  const recorded = new Set<string>();
   for (const [organizationId, rowCount] of served) {
     const grant = grants.get(organizationId);
     if (!grant) continue;
@@ -777,17 +806,34 @@ export async function readOperatorContentUnderGrants<T>(
         rowCount,
         ...(googleUserDataWithheld > 0 ? { detail: { googleUserDataWithheld } } : {}),
       });
+      recorded.add(organizationId);
     } catch (error) {
       logger.error(
         { error, organizationId, grantId: grant.id, resourceType: input.resourceType },
-        'Operator content read could not be appended to the break-glass trail',
+        'Operator content read could not be appended to the break-glass trail; serving it without content',
       );
     }
   }
 
+  let redactedCount = 0;
+  let googleUserDataWithheldCount = 0;
+  const records = input.records.map((record) => {
+    const organizationId = input.organizationIdOf(record);
+    const grant = organizationId ? grants.get(organizationId) : undefined;
+    if (!organizationId || !grant || !recorded.has(organizationId)) {
+      redactedCount += 1;
+      return input.withoutContent(record);
+    }
+    if (input.googleUserData?.carries(record) && !grantMayReadGoogleUserData(grant)) {
+      googleUserDataWithheldCount += 1;
+      return input.googleUserData.withhold(record);
+    }
+    return record;
+  });
+
   return {
     records,
-    grantedOrganizationIds: [...served.keys()].sort(),
+    grantedOrganizationIds: [...recorded].sort(),
     redactedCount,
     googleUserDataWithheldCount,
   };
@@ -888,7 +934,7 @@ export async function verifySupportAccessTrail(
         reason: 'an entry names a predecessor that is not the entry before it',
       };
     }
-    const expected = supportAccessEntryHash(previousHash, {
+    const stored = {
       grantId: entry.grantId,
       organizationId: entry.organizationId,
       actorUserId: entry.actorUserId,
@@ -898,8 +944,11 @@ export async function verifySupportAccessTrail(
       rowCount: entry.rowCount,
       detail: entry.detail,
       occurredAt: entry.occurredAt,
-    });
-    if (expected !== entry.entryHash) {
+    };
+    if (
+      supportAccessEntryHash(previousHash, stored) !== entry.entryHash &&
+      legacySupportAccessEntryHash(previousHash, stored) !== entry.entryHash
+    ) {
       return {
         organizationId,
         entries: events.length,

@@ -11,7 +11,6 @@ import {
   CustomerKeyUnavailableError,
   createCustomerKeyRingResolver,
   createLocalCmekProvider,
-  platformTenantKeyRing,
   resolveOrganizationKeyRing,
   type CmekKeyDescriptor,
   type CmekKeyStatus,
@@ -31,7 +30,9 @@ import {
   type RewrapOutcome,
   type RewrapStore,
 } from '@/lib/crypto/cmek-lifecycle';
+import { deriveTenantKeyRing, type KeyRing } from '@/lib/crypto/envelope';
 import { createKmsProviderRegistry } from '@/lib/crypto/kms-providers';
+import { platformKeyRing } from '@/lib/crypto/platform-keys';
 import {
   WORKSPACE_SEALED_STORES,
   workspaceRewrapStores,
@@ -53,6 +54,16 @@ import { isKeyRewrapState, type KeyRewrapState } from '@agiworkforce/types/encry
  * the key ring that already exists, read per tenant rather than shared.
  */
 export const PLATFORM_TENANT_KEY_ENV = 'CUSTOM_CONNECTOR_TOKEN_ENCRYPTION_KEY';
+
+export function platformTenantRing(
+  tenantId: string,
+  env?: Record<string, string | undefined>,
+): KeyRing {
+  return deriveTenantKeyRing(
+    platformKeyRing(PLATFORM_TENANT_KEY_ENV, env ? { env } : undefined),
+    tenantId,
+  );
+}
 
 const LOCAL_ROOT_ENV = 'AGI_CMEK_LOCAL_ROOT';
 
@@ -219,6 +230,7 @@ export async function organizationKeyRing(
       loadRecord: (id) => readOrganizationKeyRecord(db, id),
       resolveCustomerRing: customerRingResolver(registry),
       platformEnvName: PLATFORM_TENANT_KEY_ENV,
+      resolvePlatformTenantRing: (id) => platformTenantRing(id, options.env),
       assertSupportAccess: async (orgId, principal) => {
         if (!isSupportScope(principal.scope)) {
           throw new Error(
@@ -272,11 +284,7 @@ export async function readOrganizationKeyStatus(
   if (!record) {
     const platform = { status: null, lastRotatedAt: null, revokedAt: null };
     try {
-      const ring = platformTenantKeyRing(
-        PLATFORM_TENANT_KEY_ENV,
-        organizationId,
-        options.env ? { env: options.env } : {},
-      );
+      const ring = platformTenantRing(organizationId, options.env);
       return { ...platform, availability: { state: 'platform_derived', keyId: ring.active.id } };
     } catch (error) {
       logger.error({ organizationId, error }, 'Platform tenant key ring is unavailable');
@@ -376,11 +384,7 @@ export async function countPlatformSealedRows(
   organizationId: string,
   env?: Record<string, string | undefined>,
 ): Promise<readonly PlatformSealedCount[]> {
-  const ring = platformTenantKeyRing(
-    PLATFORM_TENANT_KEY_ENV,
-    organizationId,
-    env ? { env } : undefined,
-  );
+  const ring = platformTenantRing(organizationId, env);
   const versions = [ring.active.id, ...ring.retired.map((key) => key.id)];
   const counts: PlatformSealedCount[] = [];
   for (const store of workspaceRewrapStores(db, organizationId)) {
