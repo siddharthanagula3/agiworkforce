@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Spinner } from '@agiworkforce/ui';
 import { toUserMessage } from '@/lib/user-error-message';
 import { requestJson } from '@/shared/utils/request-json';
@@ -30,6 +30,7 @@ export default function RoutingHealthPanel() {
   const [openProvider, setOpenProvider] = useState<string | null>(null);
   const [routes, setRoutes] = useState<RouteScopeHealthRow[] | null>(null);
   const [routesError, setRoutesError] = useState<string | null>(null);
+  const routesRequest = useRef(0);
 
   const load = useCallback(async () => {
     setError(null);
@@ -45,20 +46,28 @@ export default function RoutingHealthPanel() {
   }, [load]);
 
   async function toggleProvider(provider: string) {
+    const request = ++routesRequest.current;
     if (openProvider === provider) {
       setOpenProvider(null);
       setRoutes(null);
+      setRoutesError(null);
       return;
     }
     setOpenProvider(provider);
     setRoutes(null);
     setRoutesError(null);
     try {
-      const body = await requestJson<{ routes: RouteScopeHealthRow[] }>(
+      const body = await requestJson<{ provider: string; routes: RouteScopeHealthRow[] }>(
         `${ROUTING_HEALTH_ENDPOINT}?${PROVIDER_PARAM}=${encodeURIComponent(provider)}`,
       );
+      if (request !== routesRequest.current) return;
+      if (body.provider !== provider) {
+        setRoutesError('Route lockouts came back for a different provider. Open it again.');
+        return;
+      }
       setRoutes(body.routes);
     } catch (loadError) {
+      if (request !== routesRequest.current) return;
       setRoutesError(toUserMessage(loadError, 'Could not read route lockouts.'));
     }
   }

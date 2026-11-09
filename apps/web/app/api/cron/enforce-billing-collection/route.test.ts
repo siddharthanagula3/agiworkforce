@@ -140,13 +140,72 @@ describe('enforceBillingCollection · per-run bound', () => {
     expect(orderAt).toBeGreaterThan(-1);
     expect(limitAt).toBeGreaterThan(orderAt);
   });
+
+  function pagedDb(total: number) {
+    const population = Array.from({ length: total }, (_, index) =>
+      contractRow({
+        organization_id: `org_${String(index).padStart(4, '0')}`,
+        oldest_open_invoice_due_at: daysAgoIso(10),
+        collection_stage: 'past_due_30',
+      }),
+    );
+    const loads: unknown[][] = [];
+    const query = vi.fn(async (sql: string, params: unknown[] = []) => {
+      if (!sql.includes('from public.organization_billing_contracts c')) return [];
+      loads.push(params);
+      const limit = params[1] as number;
+      const after = params[2] as string | null;
+      const start =
+        after === null ? 0 : population.findIndex((row) => row.organization_id === after) + 1;
+      return population.slice(start, start + limit);
+    });
+    const execute = vi.fn(async () => []);
+    return { db: { query, execute } as unknown as DatabaseAdapter, loads };
+  }
+
+  it('reaches contracts beyond the first page instead of re-reading the same prefix', async () => {
+    const { db, loads } = pagedDb(201);
+
+    const { outcomes, backlog } = await enforceBillingCollection(db, NOW);
+
+    expect(outcomes).toHaveLength(201);
+    expect(new Set(outcomes.map((outcome) => outcome.organizationId)).size).toBe(201);
+    expect(outcomes.at(-1)!.organizationId).toBe('org_0200');
+    expect(backlog).toBe(false);
+    expect(loads[0]![2]).toBeNull();
+    expect(loads[1]![2]).toBe(outcomes[(loads[0]![1] as number) - 1]!.organizationId);
+  });
+
+  it('reports a backlog instead of completion when the run budget ends mid-sweep', async () => {
+    const { db } = pagedDb(5);
+    const start = Date.now();
+    let reads = 0;
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => {
+      reads += 1;
+      return reads > 3 ? start + 10 * 60 * 1000 : start;
+    });
+
+    try {
+      const { outcomes, backlog } = await enforceBillingCollection(db, NOW);
+      expect(backlog).toBe(true);
+      expect(outcomes.length).toBeLessThan(5);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  it('tells the scheduler when contracts were left unreviewed', async () => {
+    dbQuery.mockResolvedValue([]);
+    const response = await GET(cronRequest('cron-secret') as never);
+    expect(await response.json()).toMatchObject({ backlog: false, contracts: 0 });
+  });
 });
 
 describe('enforceBillingCollection · stage transitions', () => {
   it('persists a stage change with collection_stage_changed_at and records an audit event', async () => {
     const { db, calls } = makeDb([contractRow({ oldest_open_invoice_due_at: daysAgoIso(10) })]);
 
-    const outcomes = await enforceBillingCollection(db, NOW);
+    const { outcomes } = await enforceBillingCollection(db, NOW);
 
     expect(outcomes[0]).toMatchObject({
       organizationId: 'org_1',
@@ -172,7 +231,7 @@ describe('enforceBillingCollection · stage transitions', () => {
       contractRow({ oldest_open_invoice_due_at: daysAgoIso(10), collection_stage: 'past_due_30' }),
     ]);
 
-    const outcomes = await enforceBillingCollection(db, NOW);
+    const { outcomes } = await enforceBillingCollection(db, NOW);
 
     expect(outcomes[0]!.changed).toBe(false);
     expect(calls.some((call) => call.sql.includes('set collection_stage'))).toBe(false);
@@ -235,7 +294,8 @@ describe('enforceBillingCollection · owner notices', () => {
       contractRow({ oldest_open_invoice_due_at: daysAgoIso(10), owner_email: null }),
     ]);
 
-    await expect(enforceBillingCollection(db, NOW)).resolves.toHaveLength(1);
+    const { outcomes } = await enforceBillingCollection(db, NOW);
+    expect(outcomes).toHaveLength(1);
   });
 });
 
@@ -259,7 +319,7 @@ describe('enforceBillingCollection · internal escalation', () => {
       }),
     ]);
 
-    const outcomes = await enforceBillingCollection(db, NOW);
+    const { outcomes } = await enforceBillingCollection(db, NOW);
 
     expect(outcomes[0]!.changed).toBe(false);
     expect(outcomes[0]!.internalNotified).toBe(true);
@@ -275,7 +335,7 @@ describe('enforceBillingCollection · internal escalation', () => {
       }),
     ]);
 
-    const outcomes = await enforceBillingCollection(db, NOW);
+    const { outcomes } = await enforceBillingCollection(db, NOW);
 
     expect(outcomes[0]!.internalNotified).toBe(false);
     expect(sendTransactionalEmail).not.toHaveBeenCalled();
@@ -286,7 +346,7 @@ describe('enforceBillingCollection · internal escalation', () => {
       contractRow({ oldest_open_invoice_due_at: daysAgoIso(10), collection_stage: 'past_due_30' }),
     ]);
 
-    const outcomes = await enforceBillingCollection(db, NOW);
+    const { outcomes } = await enforceBillingCollection(db, NOW);
 
     expect(outcomes[0]!.internalNotified).toBe(false);
     expect(sendTransactionalEmail).not.toHaveBeenCalled();
@@ -296,7 +356,8 @@ describe('enforceBillingCollection · internal escalation', () => {
     vi.stubEnv('BILLING_ALERT_EMAIL', '');
     const { db } = makeDb([contractRow({ oldest_open_invoice_due_at: daysAgoIso(10) })]);
 
-    await expect(enforceBillingCollection(db, NOW)).resolves.toHaveLength(1);
+    const { outcomes } = await enforceBillingCollection(db, NOW);
+    expect(outcomes).toHaveLength(1);
     expect(sendTransactionalEmail).not.toHaveBeenCalledWith(
       expect.objectContaining({ to: expect.stringContaining('billing-alerts') }),
     );
@@ -324,7 +385,7 @@ describe('enforceBillingCollection · seat catch-up once collection returns to c
       },
     );
 
-    const outcomes = await enforceBillingCollection(db, NOW);
+    const { outcomes } = await enforceBillingCollection(db, NOW);
 
     expect(outcomes[0]).toMatchObject({
       organizationId: 'org_1',
@@ -359,7 +420,7 @@ describe('enforceBillingCollection · seat catch-up once collection returns to c
       },
     );
 
-    const outcomes = await enforceBillingCollection(db, NOW);
+    const { outcomes } = await enforceBillingCollection(db, NOW);
 
     expect(outcomes[0]).toMatchObject({ stage: 'past_due_90', seatCatchUp: null });
     expect(
@@ -383,7 +444,7 @@ describe('enforceBillingCollection · seat catch-up once collection returns to c
       },
     );
 
-    const outcomes = await enforceBillingCollection(db, NOW);
+    const { outcomes } = await enforceBillingCollection(db, NOW);
 
     expect(outcomes[0]!.seatCatchUp).toBeNull();
     expect(

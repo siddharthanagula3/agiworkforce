@@ -35,6 +35,17 @@ function seconds(value: string | Date | null): number | null {
   return Number.isFinite(time) ? Math.floor(time / 1000) : null;
 }
 
+async function lockChargeRefundReconciliation(
+  db: DatabaseAdapter,
+  userId: string,
+  description: string,
+): Promise<void> {
+  await db.execute(
+    `select pg_advisory_xact_lock(hashtextextended('agi:charge-refund-reconciliation:' || $1 || ':' || $2, 0))`,
+    [userId, description],
+  );
+}
+
 async function alreadyRevokedMicrousd(
   db: DatabaseAdapter,
   userId: string,
@@ -152,6 +163,7 @@ async function revokeTopUpRefund(
     throw new Error(`Invalid credit top-up refund metadata for Charge ${charge.id}`);
   }
 
+  await lockChargeRefundReconciliation(db, userId, description);
   const target = proportionOf(purchasedCents * MICROUSD_PER_LEDGER_CENT, charge);
   const delta = target - (await alreadyRevokedMicrousd(db, userId, description));
   if (delta <= 0) return 0;
@@ -170,6 +182,7 @@ async function revokePlanRefund(
   charge: Stripe.Charge,
   description: string,
 ): Promise<number> {
+  await lockChargeRefundReconciliation(db, userId, description);
   const [account] = await db.query<{
     id: string;
     credits_allocated_microusd: string | number;
