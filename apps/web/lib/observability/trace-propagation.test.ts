@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { withOutboundTraceHeader } from '@/lib/egress-policy';
 import {
   TRACEPARENT_HEADER,
+  REQUEST_ID_CARRIER_KEY,
   carriedTraceContext,
   outboundTraceparent,
   runWithCarriedTrace,
@@ -105,6 +106,23 @@ describe('queue boundary', () => {
     const supplied = '00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01';
     const payload = runWithTraceContext(CONTEXT, () => withTraceCarrier({ traceparent: supplied }));
     expect(carriedTraceContext(payload)?.traceId).toBe('0af7651916cd43dd8448eb211c80319c');
+  });
+
+  it('keeps a business request id the payload already carries apart from the trace request id', () => {
+    const payload = runWithTraceContext({ ...CONTEXT, requestId: 'req_http' }, () =>
+      withTraceCarrier({ requestId: 'req_business', settledCostMicrousd: 12 }),
+    );
+    expect(payload.requestId).toBe('req_business');
+    expect(payload[REQUEST_ID_CARRIER_KEY]).toBe('req_http');
+    expect(carriedTraceContext(JSON.parse(JSON.stringify(payload)))?.requestId).toBe('req_http');
+  });
+
+  it('does not read a plain payload requestId as the correlation id', () => {
+    const payload = {
+      traceparent: `00-${CONTEXT.traceId}-${CONTEXT.spanId}-01`,
+      requestId: 'req_business',
+    };
+    expect(carriedTraceContext(payload)?.requestId).toBeUndefined();
   });
 
   it('rejoins the enqueueing trace when the worker drains the job', () => {

@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   recordQueueAge: vi.fn(),
   notifyIncident: vi.fn(),
   clearIncident: vi.fn(),
+  spanOptions: [] as unknown[],
 }));
 
 vi.mock('server-only', () => ({}));
@@ -23,8 +24,10 @@ vi.mock('@/lib/logger', () => ({
 }));
 vi.mock('@/lib/observability/error-capture', () => ({ captureWorkerFailure: vi.fn() }));
 vi.mock('@/lib/observability/span', () => ({
-  withSpan: (_name: string, _options: unknown, run: (span: unknown) => unknown) =>
-    run({ setAttributes: vi.fn() }),
+  withSpan: (_name: string, options: unknown, run: (span: unknown) => unknown) => {
+    mocks.spanOptions.push(options);
+    return run({ setAttributes: vi.fn() });
+  },
 }));
 vi.mock('@/lib/observability/metrics', () => ({
   recordFailure: vi.fn(() => undefined),
@@ -100,6 +103,7 @@ function job(overrides: Partial<BackgroundJob> = {}): BackgroundJob {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.spanOptions.length = 0;
   mocks.reapExpiredJobLeases.mockResolvedValue({ requeued: 0, deadLettered: 0 });
   mocks.pruneFinishedJobs.mockResolvedValue(0);
   mocks.completeJob.mockResolvedValue(true);
@@ -247,6 +251,31 @@ describe('drainBackgroundJobs', () => {
     });
 
     expect(seen).toBe(traceId);
+  });
+
+  it('attributes the job span to the tenant on the claimed row, not on its payload', async () => {
+    mocks.claimJobs
+      .mockResolvedValueOnce([
+        job({
+          userId: 'user-row',
+          organizationId: 'org-row',
+          payload: { organizationId: 'org-payload', userId: 'user-payload' },
+        }),
+        job({ id: 'job-2', userId: null, organizationId: null }),
+      ])
+      .mockResolvedValue([]);
+
+    await drainBackgroundJobs({
+      db,
+      handlers: { 'notifications.schedule-completed': vi.fn(async () => undefined) },
+      budgetMs: 120_000,
+      maxInFlight: 1,
+    });
+
+    expect(mocks.spanOptions).toEqual([
+      expect.objectContaining({ tenant: { organizationId: 'org-row', userId: 'user-row' } }),
+      expect.objectContaining({ tenant: {} }),
+    ]);
   });
 
   it('records how long each claimed job waited to become runnable', async () => {

@@ -34,6 +34,7 @@ export interface SpanOptions {
   readonly kind?: SpanKind;
   readonly domain: SpanDomain;
   readonly attributes?: Readonly<Record<string, unknown>>;
+  readonly tenant?: TenantScope;
 }
 
 export interface ActiveSpan {
@@ -87,7 +88,8 @@ export async function withSpan<R>(
 ): Promise<R> {
   return withScope(async (scope) => {
     const parent = getTraceContext();
-    let tenant: TenantScope = parent ?? {};
+    const inherited: TenantScope = options.tenant ?? parent ?? {};
+    let tenant: TenantScope = inherited;
     scope.addEventProcessor((event) => {
       captureEventTenant(event, tenant);
       return event;
@@ -99,8 +101,10 @@ export async function withSpan<R>(
       spanId: bridged.spanId,
       sampled: bridged.sampled,
       ...(parent?.requestId === undefined ? {} : { requestId: parent.requestId }),
-      ...(parent?.organizationId === undefined ? {} : { organizationId: parent.organizationId }),
-      ...(parent?.userId === undefined ? {} : { userId: parent.userId }),
+      ...(inherited.organizationId === undefined
+        ? {}
+        : { organizationId: inherited.organizationId }),
+      ...(inherited.userId === undefined ? {} : { userId: inherited.userId }),
     };
     tenant = context;
     const extra: Record<string, unknown> = {};

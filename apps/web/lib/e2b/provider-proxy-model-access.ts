@@ -1,5 +1,6 @@
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { canAccessModelForSubscriptionTier, getModelMetadataById } from '@agiworkforce/types';
-import { evaluateModelAccessForRequest } from '@/lib/services/model-policy-gate';
+import { evaluateModelAccessForOrganization } from '@/lib/services/model-policy-gate';
 
 export const PROVIDER_PROXY_MODEL_NOT_IN_PLAN_CODE = 'provider_proxy_model_not_in_plan';
 
@@ -7,7 +8,8 @@ export type ProviderProxyModelAccess =
   { allowed: true } | { allowed: false; code: string; message: string };
 
 export interface ProviderProxyModelAccessInput {
-  userId: string;
+  db: DatabaseAdapter;
+  organizationId: string | null;
   planTier: string;
   providerId: string;
   model: string;
@@ -17,7 +19,9 @@ export interface ProviderProxyModelAccessInput {
 /**
  * A coding agent picks its own model, so the proxy applies the same two checks a
  * chat turn gets before anything is reserved or forwarded: the person's plan
- * includes the model, and their workspace's model policy allows it.
+ * includes the model, and the model policy of the workspace that owns the
+ * session allows it. The owner organization comes from the session, never from
+ * the workspace the person has selected since.
  */
 export async function evaluateProviderProxyModelAccess(
   input: ProviderProxyModelAccessInput,
@@ -30,7 +34,7 @@ export async function evaluateProviderProxyModelAccess(
     };
   }
   const vendor = getModelMetadataById(input.model)?.provider ?? input.providerId;
-  const policy = await evaluateModelAccessForRequest(input.userId, {
+  const policy = await evaluateModelAccessForOrganization(input.db, input.organizationId, {
     provider: vendor,
     modelId: input.model,
     ...(vendor !== input.providerId ? { transportProvider: input.providerId } : {}),

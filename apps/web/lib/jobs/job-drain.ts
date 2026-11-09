@@ -165,6 +165,10 @@ async function runJob(
         {
           domain: 'queue',
           kind: 'consumer',
+          tenant: {
+            ...(job.organizationId === null ? {} : { organizationId: job.organizationId }),
+            ...(job.userId === null ? {} : { userId: job.userId }),
+          },
           attributes: {
             [OBSERVABILITY_ATTRIBUTE.queueName]: job.queue,
             [OBSERVABILITY_ATTRIBUTE.queueJobId]: job.id,
