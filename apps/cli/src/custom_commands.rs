@@ -89,8 +89,20 @@ pub(crate) fn expand_custom_slash_invocation(input: &str) -> Option<String> {
 }
 
 pub(crate) fn expand_custom_command(command: &CustomSlashCommand, args: &str) -> String {
+    expand_command_body(&command.content, args)
+}
+
+pub(crate) fn expand_command_file(path: &Path, args: &str) -> Option<String> {
+    let raw = std::fs::read_to_string(path).ok()?;
+    Some(expand_command_body(
+        &parse_command_markdown(&raw).content,
+        args,
+    ))
+}
+
+fn expand_command_body(content: &str, args: &str) -> String {
     let positional = split_positional_args(args);
-    let mut out = command.content.clone();
+    let mut out = content.to_string();
 
     if out.contains("$ARGUMENTS") {
         out = out.replace("$ARGUMENTS", args);
@@ -101,7 +113,7 @@ pub(crate) fn expand_custom_command(command: &CustomSlashCommand, args: &str) ->
         out = out.replace(&placeholder, replacement);
     }
 
-    if out == command.content && !args.trim().is_empty() {
+    if out == content && !args.trim().is_empty() {
         out.push_str("\n\n");
         out.push_str(args.trim());
     }
@@ -308,7 +320,7 @@ fn first_content_description(content: &str) -> Option<String> {
         .filter(|line| !line.is_empty())
 }
 
-fn parse_custom_invocation(input: &str) -> Option<(&str, &str)> {
+pub(crate) fn parse_custom_invocation(input: &str) -> Option<(&str, &str)> {
     let trimmed = input.trim();
     let without_slash = trimmed.strip_prefix('/')?;
     let (name, args) = without_slash

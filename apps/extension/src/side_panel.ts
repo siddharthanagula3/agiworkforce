@@ -226,7 +226,10 @@ import {
   type MessageArtifactsBinding,
   type RegenerateModelOption,
 } from './features/side-panel/bubbles';
-import type { ConnectorInputBinding } from './features/side-panel/connectorInputForm';
+import {
+  resetConnectorInputMemory,
+  type ConnectorInputBinding,
+} from './features/side-panel/connectorInputForm';
 import {
   clarifyAnswerMessage,
   clarifyAnswersFromResponse,
@@ -269,6 +272,7 @@ import {
 } from './features/side-panel/answeredModel';
 import { buildFreePlanNotices, type FreePlanNotices } from './features/side-panel/freePlanNotices';
 import { replaceComposerRange, replaceComposerText } from './features/side-panel/composerText';
+import { isImeComposingKey } from '@agiworkforce/unified-chat/ime-composition';
 import {
   expandPromptShortcut,
   expandSlashCommand,
@@ -1745,6 +1749,8 @@ async function transitionManagedCloudOwner(nextOwner: ManagedCloudOwner | null):
   resolvedRouteByStreamId.clear();
   quickModeByStreamId.clear();
   ownerByStreamId.clear();
+  quotaWarnedStreamIds.clear();
+  resetConnectorInputMemory();
   pendingManagedAdmissions.clear();
   refreshModelPickerUI();
   refreshEffortUI();
@@ -11027,7 +11033,9 @@ function buildUI(): void {
           return signOutOfAccount();
         })
         .then((result) => {
-          if (result && !result.webSessionEnded) showTitleStatus(t('spAccountLogOutWebKept'));
+          if (!result) return;
+          if (!result.profileCleared) showTitleStatus(t('spAccountLogOutProfileKept'));
+          else if (!result.webSessionEnded) showTitleStatus(t('spAccountLogOutWebKept'));
         })
         .catch(() => showTitleStatus(t('spAccountLogOutFailed')))
         .finally(() => void refreshCloudAccountUI(true));
@@ -12975,7 +12983,7 @@ function buildUI(): void {
   inputEl.addEventListener('input', refreshSlashMenu);
   inputEl.addEventListener('blur', () => closeSlashMenu());
   inputEl.addEventListener('keydown', (e: KeyboardEvent) => {
-    if (!slashOpen()) return;
+    if (!slashOpen() || isImeComposingKey(e)) return;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       slashActive = (slashActive + 1) % slashMatches.length;
@@ -13196,7 +13204,7 @@ function buildUI(): void {
   inputEl.addEventListener('input', refreshMentionMenu);
   inputEl.addEventListener('blur', () => closeMentionMenu());
   inputEl.addEventListener('keydown', (e: KeyboardEvent) => {
-    if (!mentionOpen()) return;
+    if (!mentionOpen() || isImeComposingKey(e)) return;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       mentionActive = (mentionActive + 1) % mentionOptions.length;
@@ -13221,7 +13229,7 @@ function buildUI(): void {
     updateSendButton();
   });
   inputEl.addEventListener('keydown', (e: KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && e.keyCode !== 229) {
+    if (e.key === 'Enter' && !e.shiftKey && !isImeComposingKey(e)) {
       e.preventDefault();
       const text = inputEl.value;
       if (!submitComposerText(text)) return;

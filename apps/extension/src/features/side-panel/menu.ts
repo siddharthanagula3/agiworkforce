@@ -8,12 +8,23 @@ const NAVIGATION_KEYS: ReadonlySet<string> = new Set(['ArrowDown', 'ArrowUp', 'H
 const MENU_ITEM_SELECTOR =
   '[role="menuitem"]:not([disabled]), [role="menuitemradio"]:not([disabled]), [role="menuitemcheckbox"]:not([disabled])';
 
+function hasHiddenAncestor(item: HTMLElement, menu: HTMLElement): boolean {
+  for (let node: HTMLElement | null = item; node && node !== menu; node = node.parentElement) {
+    if (node.hidden) return true;
+  }
+  return false;
+}
+
+function focusableItems(menu: HTMLElement): HTMLElement[] {
+  return Array.from(menu.querySelectorAll<HTMLElement>(MENU_ITEM_SELECTOR)).filter(
+    (item) => !hasHiddenAncestor(item, menu),
+  );
+}
+
 export function wireMenuArrowKeys(menu: HTMLElement): void {
   menu.addEventListener('keydown', (event) => {
     if (!NAVIGATION_KEYS.has(event.key)) return;
-    const list = Array.from(menu.querySelectorAll<HTMLElement>(MENU_ITEM_SELECTOR)).filter(
-      (item) => !item.hidden,
-    );
+    const list = focusableItems(menu);
     if (list.length === 0) return;
     event.preventDefault();
     const current = list.indexOf(document.activeElement as HTMLElement);
@@ -30,8 +41,7 @@ export function wireMenuArrowKeys(menu: HTMLElement): void {
 }
 
 export function wirePopupMenu(trigger: HTMLElement, menu: HTMLElement): PopupMenuHandle {
-  const items = (): HTMLElement[] =>
-    Array.from(menu.querySelectorAll<HTMLElement>(MENU_ITEM_SELECTOR));
+  const items = (): HTMLElement[] => focusableItems(menu);
 
   const onOutsidePointer = (event: Event): void => {
     const target = event.target as Node | null;

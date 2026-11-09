@@ -91,12 +91,20 @@ fn plugin_command_registry_entries(
     reserved_names: &std::collections::HashSet<String>,
 ) -> Vec<RegistryCommand> {
     let mut out: Vec<RegistryCommand> = Vec::new();
+    for path in plugin_command_files() {
+        push_plugin_command(&path, reserved_names, &mut out);
+    }
+    out
+}
+
+fn plugin_command_files() -> Vec<std::path::PathBuf> {
+    let mut files: Vec<std::path::PathBuf> = Vec::new();
     let mut plugins_mgr = crate::plugins::PluginsManager::new();
     if plugins_mgr
         .load_all(std::env::current_dir().ok().as_deref())
         .is_err()
     {
-        return out;
+        return files;
     }
     for entry in plugins_mgr.command_path_entries() {
         let plugin_root = entry.plugin_root;
@@ -106,22 +114,49 @@ fn plugin_command_registry_entries(
         }
         if command_path.is_dir() {
             if let Ok(entries) = std::fs::read_dir(&command_path) {
-                for dir_entry in entries.flatten() {
-                    let path = dir_entry.path();
+                let mut children: Vec<std::path::PathBuf> = entries
+                    .flatten()
+                    .map(|dir_entry| dir_entry.path())
+                    .collect();
+                children.sort();
+                for path in children {
                     if !crate::plugins::plugin_path_stays_within_root(&plugin_root, &path) {
                         continue;
                     }
                     if path.is_file() && path.extension().and_then(|ext| ext.to_str()) == Some("md")
                     {
-                        push_plugin_command(&path, reserved_names, &mut out);
+                        files.push(path);
                     }
                 }
             }
         } else if command_path.is_file() {
-            push_plugin_command(&command_path, reserved_names, &mut out);
+            files.push(command_path);
         }
     }
-    out
+    files
+}
+
+fn plugin_command_name(path: &std::path::Path) -> Option<String> {
+    match path.file_stem().and_then(|stem| stem.to_str()) {
+        Some(stem) if !stem.is_empty() => Some(stem.to_string()),
+        _ => None,
+    }
+}
+
+pub(crate) fn expand_plugin_command_invocation(input: &str) -> Option<String> {
+    let (name, args) = crate::custom_commands::parse_custom_invocation(input)?;
+    expand_plugin_command_from_files(&plugin_command_files(), name, args)
+}
+
+fn expand_plugin_command_from_files(
+    files: &[std::path::PathBuf],
+    name: &str,
+    args: &str,
+) -> Option<String> {
+    let path = files.iter().find(|path| {
+        plugin_command_name(path).is_some_and(|candidate| candidate.eq_ignore_ascii_case(name))
+    })?;
+    crate::custom_commands::expand_command_file(path, args)
 }
 
 fn push_plugin_command(
@@ -129,9 +164,8 @@ fn push_plugin_command(
     reserved_names: &std::collections::HashSet<String>,
     out: &mut Vec<RegistryCommand>,
 ) {
-    let name = match path.file_stem().and_then(|stem| stem.to_str()) {
-        Some(stem) if !stem.is_empty() => stem.to_string(),
-        _ => return,
+    let Some(name) = plugin_command_name(path) else {
+        return;
     };
     if reserved_names.contains(&name) {
         return;
@@ -536,6 +570,43 @@ mod tests {
         assert_eq!(
             registry.find("app").map(|command| command.name.as_str()),
             Some("desktop")
+        );
+    }
+
+    #[test]
+    fn plugin_command_invocation_loads_the_command_body() {
+        let temp = tempfile::tempdir().unwrap();
+        let file = temp.path().join("registry-audit-example.md");
+        std::fs::write(
+            &file,
+            "---\ndescription: Audit the registry\n---\nAudit $1 against $ARGUMENTS",
+        )
+        .unwrap();
+        let files = vec![file];
+
+        assert_eq!(
+            expand_plugin_command_from_files(&files, "registry-audit-example", "main release"),
+            Some("Audit main against main release".to_string())
+        );
+        assert_eq!(
+            expand_plugin_command_from_files(&files, "Registry-Audit-Example", ""),
+            Some("Audit  against ".to_string())
+        );
+    }
+
+    #[test]
+    fn plugin_command_invocation_ignores_unknown_names_and_unreadable_files() {
+        let temp = tempfile::tempdir().unwrap();
+        let file = temp.path().join("known.md");
+        std::fs::write(&file, "Body").unwrap();
+        let missing = temp.path().join("gone.md");
+        let files = vec![file, missing];
+
+        assert_eq!(expand_plugin_command_from_files(&files, "other", ""), None);
+        assert_eq!(expand_plugin_command_from_files(&files, "gone", ""), None);
+        assert_eq!(
+            expand_plugin_command_from_files(&files, "known", ""),
+            Some("Body".to_string())
         );
     }
 }
