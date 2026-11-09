@@ -391,7 +391,10 @@ class SettingsService {
         return { data: '', error: `Upload failed (HTTP ${putRes.status})` };
       }
 
-      await this.updateProfile({ avatar_url: presign.publicUrl });
+      const profileUpdate = await this.updateProfile({ avatar_url: presign.publicUrl });
+      if (profileUpdate.error) {
+        return { data: '', error: profileUpdate.error };
+      }
 
       return { data: presign.publicUrl };
     } catch (error) {

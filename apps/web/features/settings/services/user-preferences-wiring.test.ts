@@ -324,3 +324,57 @@ describe('settingsService · getAPIKeys owned transport', () => {
     expect(getAuthToken).not.toHaveBeenCalled();
   });
 });
+
+describe('settingsService · uploadAvatar', () => {
+  const file = new File([new Uint8Array(8)], 'me.png', { type: 'image/png' });
+  const presign = {
+    uploadUrl: 'https://storage.example.com/put',
+    publicUrl: 'https://cdn.example.com/me.png',
+  };
+
+  beforeEach(async () => {
+    fetchMock.mockReset();
+    await setupMocks();
+  });
+
+  it('returns the public URL once the profile write is acknowledged', async () => {
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(presign))
+      .mockResolvedValueOnce(makeResponse({}))
+      .mockResolvedValueOnce(makeResponse({ id: 'u1' }));
+
+    const { settingsService } = await import('./user-preferences');
+    const result = await settingsService.uploadAvatar(file);
+
+    expect(result).toEqual({ data: presign.publicUrl });
+  });
+
+  it.each([401, 403, 429, 500])(
+    'fails when the profile write returns HTTP %i after the object upload',
+    async (status) => {
+      fetchMock
+        .mockResolvedValueOnce(makeResponse(presign))
+        .mockResolvedValueOnce(makeResponse({}))
+        .mockResolvedValueOnce(makeResponse({ error: 'denied' }, status));
+
+      const { settingsService } = await import('./user-preferences');
+      const result = await settingsService.uploadAvatar(file);
+
+      expect(result.data).toBe('');
+      expect(result.error).toBeTruthy();
+    },
+  );
+
+  it('fails when the profile write throws after the object upload', async () => {
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(presign))
+      .mockResolvedValueOnce(makeResponse({}))
+      .mockRejectedValueOnce(new Error('network down'));
+
+    const { settingsService } = await import('./user-preferences');
+    const result = await settingsService.uploadAvatar(file);
+
+    expect(result.data).toBe('');
+    expect(result.error).toBeTruthy();
+  });
+});

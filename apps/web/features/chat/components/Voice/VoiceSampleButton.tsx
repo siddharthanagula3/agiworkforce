@@ -38,6 +38,7 @@ export function VoiceSampleButton({
     let active = true;
     setUrl(null);
     setPlaying(false);
+    setStarting(false);
     setErrorMessage(null);
     void loadVoiceSamples().then((samples) => {
       const file = samples[voiceUri];
@@ -45,8 +46,13 @@ export function VoiceSampleButton({
     });
     return () => {
       active = false;
-      audioRef.current?.pause();
+      const retired = audioRef.current;
       audioRef.current = null;
+      if (retired) {
+        retired.onended = null;
+        retired.onerror = null;
+        retired.pause();
+      }
     };
   }, [voiceUri]);
 
@@ -61,8 +67,12 @@ export function VoiceSampleButton({
     const audio = audioRef.current ?? new Audio(url);
     audioRef.current = audio;
     audio.currentTime = 0;
-    audio.onended = () => setPlaying(false);
+    const isCurrent = () => audioRef.current === audio;
+    audio.onended = () => {
+      if (isCurrent()) setPlaying(false);
+    };
     audio.onerror = () => {
+      if (!isCurrent()) return;
       setPlaying(false);
       setStarting(false);
       setErrorMessage('The sample could not play. Try again later.');
@@ -71,10 +81,12 @@ export function VoiceSampleButton({
     setStarting(true);
     void audio.play().then(
       () => {
+        if (!isCurrent()) return;
         setStarting(false);
         setPlaying(true);
       },
       () => {
+        if (!isCurrent()) return;
         setStarting(false);
         setPlaying(false);
         setErrorMessage('The sample could not play. Try again later.');

@@ -23,8 +23,20 @@ interface SyncEvent {
   event_type: string;
   user_email: string | null;
   error: string | null;
+  raw_payload?: unknown;
   created_at: string;
 }
+
+type RemovalReceipt =
+  | { scope: string; outcome: 'unconfirmed' }
+  | {
+      scope: string;
+      outcome: 'reported';
+      memberships: number;
+      credentials: number;
+      ownersRetained: number;
+      warnings: number;
+    };
 
 type MappedRole = 'admin' | 'member' | 'viewer';
 
@@ -57,6 +69,46 @@ const PROVIDERS = [
   { value: 'generic_scim', label: 'Generic SCIM 2.0' },
 ] as const;
 
+function nonNegativeCount(value: unknown): number | null {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null;
+}
+
+function parseRemovalReceipt(body: unknown, scope: string): RemovalReceipt {
+  const record = body && typeof body === 'object' ? (body as Record<string, unknown>) : null;
+  const revoked =
+    record?.['revoked'] && typeof record['revoked'] === 'object'
+      ? (record['revoked'] as Record<string, unknown>)
+      : null;
+  const memberships = nonNegativeCount(revoked?.['memberships']);
+  const credentials = nonNegativeCount(revoked?.['credentials']);
+  const ownersRetained = nonNegativeCount(record?.['ownersRetained']);
+  const warnings = record?.['warnings'];
+  if (
+    record?.['success'] !== true ||
+    memberships === null ||
+    credentials === null ||
+    ownersRetained === null ||
+    !Array.isArray(warnings)
+  ) {
+    return { scope, outcome: 'unconfirmed' };
+  }
+  return {
+    scope,
+    outcome: 'reported',
+    memberships,
+    credentials,
+    ownersRetained,
+    warnings: warnings.length,
+  };
+}
+
+function eventCleanupWarningCount(event: SyncEvent): number {
+  const payload = event.raw_payload;
+  if (!payload || typeof payload !== 'object') return 0;
+  const warnings = (payload as Record<string, unknown>)['revocationWarnings'];
+  return Array.isArray(warnings) ? warnings.length : 0;
+}
+
 function formatTimestamp(value: string | null): string {
   if (!value) return 'Never';
   const parsed = new Date(value);
@@ -81,6 +133,7 @@ export default function DirectorySyncAdminPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [removalReceipt, setRemovalReceipt] = useState<RemovalReceipt | null>(null);
 
   const [provider, setProvider] = useState<string>('okta');
   const [directoryId, setDirectoryId] = useState('');
@@ -184,6 +237,7 @@ export default function DirectorySyncAdminPage({
   const deleteConnection = async (connectionId: string) => {
     setBusy(true);
     setError(null);
+    setRemovalReceipt(null);
     try {
       const csrf = await getCsrfToken();
       const response = await fetch(
@@ -198,6 +252,8 @@ export default function DirectorySyncAdminPage({
         setError(await responseErrorMessage(response));
         return;
       }
+      const receipt = parseRemovalReceipt(await response.json().catch(() => null), orgQuery);
+      setRemovalReceipt(receipt);
       await load();
     } finally {
       setBusy(false);
@@ -312,6 +368,50 @@ export default function DirectorySyncAdminPage({
           >
             {error}
           </p>
+        ) : null}
+
+        {removalReceipt && removalReceipt.scope === orgQuery ? (
+          <div
+            role={
+              removalReceipt.outcome === 'unconfirmed' || removalReceipt.warnings > 0
+                ? 'alert'
+                : 'status'
+            }
+            className="flex flex-wrap items-start justify-between gap-3 rounded-md border border-border bg-card p-3 text-sm text-foreground"
+          >
+            <div className="flex flex-col gap-1">
+              {removalReceipt.outcome === 'unconfirmed' ? (
+                <p>
+                  The connection was removed, but the cleanup report could not be read. Check Team
+                  settings for members this connection provisioned before assuming their access has
+                  ended.
+                </p>
+              ) : (
+                <>
+                  <p>
+                    Connection removed. Memberships removed: {removalReceipt.memberships}.
+                    Credential cleanup attempted for: {removalReceipt.credentials}. Owners kept:{' '}
+                    {removalReceipt.ownersRetained}.
+                  </p>
+                  {removalReceipt.warnings > 0 ? (
+                    <p className="text-warning-text">
+                      Some credential cleanup could not be confirmed. Check Team settings for
+                      remaining sessions and keys before assuming all access has ended.
+                    </p>
+                  ) : (
+                    <p className="text-muted-foreground">No cleanup problems were reported.</p>
+                  )}
+                </>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setRemovalReceipt(null)}
+              className="rounded-compact border border-border px-3 py-1 text-xs text-foreground"
+            >
+              Dismiss
+            </button>
+          </div>
         ) : null}
 
         {loading ? <p className="text-sm text-muted-foreground">Loading directory sync…</p> : null}
@@ -572,6 +672,9 @@ export default function DirectorySyncAdminPage({
                   {event.event_type}
                   {event.user_email ? ` · ${event.user_email}` : ''}
                   {event.error ? <span className="text-danger-text"> · {event.error}</span> : null}
+                  {eventCleanupWarningCount(event) > 0 ? (
+                    <span className="text-warning-text"> · credential cleanup incomplete</span>
+                  ) : null}
                 </li>
               ))}
             </ul>
