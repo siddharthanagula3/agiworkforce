@@ -61,11 +61,16 @@ export function buildMobileGlobalSearchGroups(input: {
   artifacts: ReadonlyArray<MobileArtifact>;
   remoteChats?: ReadonlyArray<RemoteSearchMatch>;
   remoteProjects?: ReadonlyArray<RemoteSearchMatch>;
+  remoteChatsOnlyFromConversations?: boolean;
 }): MobileGlobalSearchGroups {
   const query = input.query.trim().toLocaleLowerCase();
   if (!query) {
     return { chats: [], projects: [], files: [], library: [], artifacts: [] };
   }
+  const listedConversationIds = new Set(input.conversations.map((conversation) => conversation.id));
+  const remoteChats = input.remoteChatsOnlyFromConversations
+    ? (input.remoteChats ?? []).filter((match) => listedConversationIds.has(match.id))
+    : (input.remoteChats ?? []);
 
   return {
     chats: withRemoteMatches(
@@ -82,7 +87,7 @@ export function buildMobileGlobalSearchGroups(input: {
             ? 'Matched message content'
             : (conversation.lastMessage ?? 'Chat'),
         })),
-      input.remoteChats ?? [],
+      remoteChats,
     ),
     projects: withRemoteMatches(
       input.projects

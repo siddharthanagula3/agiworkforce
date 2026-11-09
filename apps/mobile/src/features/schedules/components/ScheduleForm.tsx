@@ -363,7 +363,12 @@ export function ScheduleForm({
         </View>
       </ScrollView>
 
-      <ModelPickerSheet sheetRef={modelPickerRef} modelScope="cloud" onSelect={setModel} />
+      <ModelPickerSheet
+        sheetRef={modelPickerRef}
+        modelScope="cloud"
+        selectedModelId={model}
+        onSelect={setModel}
+      />
     </KeyboardAvoidingView>
   );
 }

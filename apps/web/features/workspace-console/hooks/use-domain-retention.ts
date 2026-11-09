@@ -75,7 +75,13 @@ export function useSaveDomainRetention() {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         }),
-        body: JSON.stringify({ policies }),
+        body: JSON.stringify({
+          policies: policies.map(({ domain, retentionDays, enforced }) => ({
+            domain,
+            retentionDays,
+            enforced,
+          })),
+        }),
       });
       if (!res.ok) throw new Error(await readApiError(res));
       return (await res.json()) as DomainRetentionResult;

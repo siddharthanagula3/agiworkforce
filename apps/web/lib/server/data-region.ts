@@ -146,13 +146,15 @@ export async function cancelOrganizationRegionMove(
   const env = input.env ?? process.env;
   const current = await readOrganizationRegion(input.db, input.organizationId, env);
   if (!current.requested) return current;
-  await input.db.execute(
+  const cleared = await input.db.execute(
     `update public.organizations
         set data_region_requested = null,
             data_region_requested_at = null
-      where id = $1`,
-    [input.organizationId],
+      where id = $1
+        and data_region_requested = $2`,
+    [input.organizationId, current.requested],
   );
+  if (cleared === 0) return readOrganizationRegion(input.db, input.organizationId, env);
   await recordAuditEvent({
     eventType: 'data_region_change_cancelled',
     userId: input.actorUserId,
@@ -224,14 +226,18 @@ export async function completeOrganizationRegionMove(
   if (current.requested !== input.target) {
     throw new RegionMoveNotRequestedError(input.organizationId, input.target);
   }
-  await input.db.execute(
+  const applied = await input.db.execute(
     `update public.organizations
         set data_region = $2,
             data_region_requested = null,
             data_region_requested_at = null
-      where id = $1`,
+      where id = $1
+        and data_region_requested = $2`,
     [input.organizationId, input.target],
   );
+  if (applied === 0) {
+    throw new RegionMoveNotRequestedError(input.organizationId, input.target);
+  }
   await recordAuditEvent({
     eventType: 'data_region_changed',
     userId: input.actorUserId,

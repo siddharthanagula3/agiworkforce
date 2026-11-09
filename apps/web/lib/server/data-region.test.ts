@@ -18,6 +18,7 @@ import { DataRegionUnavailableError } from '@agiworkforce/compliance';
 import {
   CustomerKeyRegionError,
   assertCustomerKeyRegion,
+  cancelOrganizationRegionMove,
   completeOrganizationRegionMove,
   keyManagementRegions,
   isRegionProvisioned,
@@ -43,7 +44,13 @@ const TWO_REGIONS = {
 
 function harness(row: Record<string, unknown> | null = null) {
   const query = vi.fn(async () => (row ? [row] : []));
-  const execute = vi.fn(async () => undefined);
+  const execute = vi.fn(async () => 1);
+  return { db: { query, execute } as unknown as DatabaseAdapter, query, execute };
+}
+
+function racingHarness(readBefore: Record<string, unknown>, readAfter: Record<string, unknown>) {
+  const query = vi.fn().mockResolvedValueOnce([readBefore]).mockResolvedValue([readAfter]);
+  const execute = vi.fn(async () => 0);
   return { db: { query, execute } as unknown as DatabaseAdapter, query, execute };
 }
 
@@ -222,9 +229,75 @@ describe('moving an existing workspace to another region', () => {
     const sql = String((h.execute.mock.calls[0] as unknown as [string])[0]);
     expect(sql).toMatch(/set data_region = \$2/);
     expect(sql).toMatch(/data_region_requested = null/);
+    expect(sql).toMatch(/and data_region_requested = \$2/);
     const [event] = mocks.recordAuditEvent.mock.calls[0] as unknown as [Record<string, unknown>];
     expect(event['eventType']).toBe('data_region_changed');
     expect((event['detail'] as Record<string, unknown>)['previousRegion']).toBe('us');
+  });
+
+  it('refuses a cutover whose request was cancelled after it was read', async () => {
+    const h = racingHarness(
+      {
+        data_region: null,
+        data_region_requested: 'eu',
+        data_region_requested_at: '2026-09-16T00:00:00.000Z',
+      },
+      { data_region: null, data_region_requested: null, data_region_requested_at: null },
+    );
+
+    await expect(
+      completeOrganizationRegionMove({
+        db: h.db,
+        organizationId: ORG,
+        actorUserId: ACTOR,
+        target: 'eu',
+        env: TWO_REGIONS,
+      }),
+    ).rejects.toThrow(/no outstanding move/);
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('clears only the request it read when cancelling', async () => {
+    const h = harness({
+      data_region: null,
+      data_region_requested: 'eu',
+      data_region_requested_at: '2026-09-16T00:00:00.000Z',
+    });
+
+    const state = await cancelOrganizationRegionMove({
+      db: h.db,
+      organizationId: ORG,
+      actorUserId: ACTOR,
+      env: TWO_REGIONS,
+    });
+
+    expect(state).toMatchObject({ effective: 'us', requested: null, requestedAt: null });
+    const [sql, params] = h.execute.mock.calls[0] as unknown as [string, unknown[]];
+    expect(sql).toMatch(/and data_region_requested = \$2/);
+    expect(params).toEqual([ORG, 'eu']);
+    const [event] = mocks.recordAuditEvent.mock.calls[0] as unknown as [Record<string, unknown>];
+    expect(event['eventType']).toBe('data_region_change_cancelled');
+  });
+
+  it('reports the committed state when a cutover won the race against a cancel', async () => {
+    const h = racingHarness(
+      {
+        data_region: null,
+        data_region_requested: 'eu',
+        data_region_requested_at: '2026-09-16T00:00:00.000Z',
+      },
+      { data_region: 'eu', data_region_requested: null, data_region_requested_at: null },
+    );
+
+    const state = await cancelOrganizationRegionMove({
+      db: h.db,
+      organizationId: ORG,
+      actorUserId: ACTOR,
+      env: TWO_REGIONS,
+    });
+
+    expect(state).toMatchObject({ effective: 'eu', requested: null });
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
   });
 });
 

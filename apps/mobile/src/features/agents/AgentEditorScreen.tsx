@@ -166,6 +166,7 @@ export function AgentEditorScreen() {
       <ModelPickerSheet
         sheetRef={modelSheetRef}
         modelScope="cloud"
+        selectedModelId={editor.draft.model ?? DEFAULT_AUTO_MODE_ID}
         onSelect={(model) =>
           editor.change({ model: model === DEFAULT_AUTO_MODE_ID ? null : model })
         }

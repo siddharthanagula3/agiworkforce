@@ -481,11 +481,13 @@ export default function CompareScreen() {
           <ModelPickerSheet
             sheetRef={modelPickerARef}
             modelScope="cloud"
+            selectedModelId={modelA}
             onSelect={handleSelectModelA}
           />
           <ModelPickerSheet
             sheetRef={modelPickerBRef}
             modelScope="cloud"
+            selectedModelId={modelB}
             onSelect={handleSelectModelB}
           />
         </>

@@ -298,11 +298,13 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
         artifacts,
         remoteChats: remoteSearchChats,
         remoteProjects: remoteSearchProjects,
+        remoteChatsOnlyFromConversations: filter !== 'all',
       }),
     [
       artifacts,
       contentMatchIds,
       files,
+      filter,
       filteredHistory,
       libraryImages,
       projects,

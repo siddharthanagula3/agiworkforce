@@ -211,4 +211,33 @@ describe('Mobile global search projection', () => {
     expect(result.chats[0]!.title).toBe('Launch checklist');
     expect(result.projects.map((row) => row.id)).toEqual(['proj-local', 'proj-cloud']);
   });
+
+  it('keeps server chats outside the listed conversations out of a filtered search', () => {
+    const result = buildMobileGlobalSearchGroups({
+      query: 'launch',
+      conversations: [
+        {
+          id: 'pinned-1',
+          title: 'Pinned plan',
+          createdAt: '',
+          updatedAt: '',
+          messageCount: 1,
+          pinned: true,
+        },
+      ] as never,
+      conversationContentMatchIds: new Set<string>(),
+      projects: [],
+      files: [],
+      libraryImages: [],
+      artifacts: [],
+      remoteChats: [
+        { id: 'pinned-1', title: 'Server copy', subtitle: 'Matched message content' },
+        { id: 'unpinned-1', title: 'Launch retro', subtitle: 'Matched message content' },
+      ],
+      remoteChatsOnlyFromConversations: true,
+    });
+
+    expect(result.chats.map((row) => row.id)).toEqual(['pinned-1']);
+    expect(result.chats[0]!.subtitle).toBe('Matched message content');
+  });
 });

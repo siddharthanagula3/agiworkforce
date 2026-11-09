@@ -236,6 +236,7 @@ interface ModelPickerSheetProps {
   sheetRef: React.RefObject<BottomSheet | null>;
   openSignal?: number;
   onSelect?: (modelId: string) => void;
+  selectedModelId?: string;
   onOpenCloudAccess?: (defaultTab?: 'invite' | 'waitlist') => void;
   modelScope?: 'local' | 'cloud' | 'all';
   conversationId?: string;
@@ -246,6 +247,7 @@ export function ModelPickerSheet({
   sheetRef,
   openSignal,
   onSelect,
+  selectedModelId,
   onOpenCloudAccess,
   modelScope = 'local',
   conversationId,
@@ -256,6 +258,7 @@ export function ModelPickerSheet({
   const snapPoints = useMemo(() => ['58%', '90%'], []);
 
   const selectedModel = useModelStore((s) => s.selectedModel);
+  const rowSelectedModel = selectedModelId ?? selectedModel;
   const routingProfile = useModelStore((s) => s.routingProfile);
   const setRoutingProfile = useModelStore((s) => s.setRoutingProfile);
   const favorites = useModelStore((s) => s.favorites);
@@ -482,7 +485,7 @@ export function ModelPickerSheet({
         return;
       }
 
-      if (id === selectedModel && !isAutoMode(id)) {
+      if (id === rowSelectedModel && !isAutoMode(id)) {
         if (chosenModel.surface === 'cloud_managed' && chosenModel.supportsThinking) {
           setExpandedModelId((prev) => (prev === id ? null : id));
           return;
@@ -500,8 +503,8 @@ export function ModelPickerSheet({
       openInvite,
       openUpgrade,
       prepareModel,
+      rowSelectedModel,
       selectAndClose,
-      selectedModel,
       sheetRef,
       statusForModel,
     ],
@@ -547,9 +550,9 @@ export function ModelPickerSheet({
         <ModelRow
           key={`${keyPrefix}-${model.id}`}
           model={model}
-          isSelected={selectedModel === model.id}
+          isSelected={rowSelectedModel === model.id}
           isFavorite={favorites.includes(model.id)}
-          isExpanded={expandedModelId === model.id && selectedModel === model.id}
+          isExpanded={expandedModelId === model.id && rowSelectedModel === model.id}
           thinkingEnabled={thinkingEnabledPerModel[model.id] ?? false}
           installStatus={installStatus}
           onSelect={handleSelectModel}
@@ -568,7 +571,7 @@ export function ModelPickerSheet({
       openInvite,
       openUpgrade,
       readySystemModelIds,
-      selectedModel,
+      rowSelectedModel,
       statusForModel,
       thinkingEnabledPerModel,
       toggleFavorite,
@@ -795,7 +798,7 @@ export function ModelPickerSheet({
                 <AutoModeRow
                   key={mode.id}
                   mode={mode}
-                  selected={selectedModel === mode.id && activeRoutingProfile === 'auto'}
+                  selected={rowSelectedModel === mode.id && activeRoutingProfile === 'auto'}
                   onPress={() => handleSelectAutoMode(mode.id)}
                 />
               ))}
