@@ -585,7 +585,7 @@ describe.skipIf(!live)('store purchases against the real statements', () => {
           note: 'Refunded through App Store.',
         });
 
-        expect(closed.status).toBe('refunded');
+        expect(closed.request.status).toBe('refunded');
         expect(await readRefundRequests(account)).toEqual([
           expect.objectContaining({
             status: 'refunded',

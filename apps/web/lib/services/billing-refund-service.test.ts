@@ -2,15 +2,15 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { STORE_CHARGE_ID_PREFIX } from '@/lib/billing/refund-requests';
-import { recordNotification } from './notification-service';
-import { recordStoreRefund } from './billing-refund-service';
+import { insertNotification } from './notification-service';
+import { declineRefundRequest, recordStoreRefund } from './billing-refund-service';
 
 type NotificationModule = typeof import('./notification-service');
 
 vi.mock('server-only', () => ({}));
 vi.mock('./notification-service', async (importOriginal) => ({
   ...(await importOriginal<NotificationModule>()),
-  recordNotification: vi.fn(),
+  insertNotification: vi.fn(),
 }));
 
 const REQUEST = {
@@ -58,9 +58,11 @@ describe('recordStoreRefund ownership', () => {
       ]);
     const db = { query } as unknown as DatabaseAdapter;
 
+    vi.mocked(insertNotification).mockResolvedValueOnce('inserted');
+
     await expect(recordStoreRefund(db, INPUT)).resolves.toMatchObject({
-      userId: REQUEST.user_id,
-      status: 'refunded',
+      request: { userId: REQUEST.user_id, status: 'refunded' },
+      customerNotified: true,
     });
 
     expect(query).toHaveBeenCalledTimes(2);
@@ -79,7 +81,7 @@ describe('recordStoreRefund ownership', () => {
       STORE_CHARGE_ID_PREFIX,
       REQUEST.user_id,
     ]);
-    expect(recordNotification).toHaveBeenCalledWith(
+    expect(insertNotification).toHaveBeenCalledWith(
       db,
       expect.objectContaining({ userId: REQUEST.user_id }),
     );
@@ -96,7 +98,7 @@ describe('recordStoreRefund ownership', () => {
     await expect(recordStoreRefund(db, INPUT)).rejects.toMatchObject({ status: 409 });
 
     expect(query).toHaveBeenCalledTimes(1);
-    expect(recordNotification).not.toHaveBeenCalled();
+    expect(insertNotification).not.toHaveBeenCalled();
   });
 
   it('does not notify success when the owner-bound update no longer matches', async () => {
@@ -107,6 +109,76 @@ describe('recordStoreRefund ownership', () => {
 
     expect(query).toHaveBeenCalledTimes(2);
     expect(query.mock.calls[1]?.[1]?.[5]).toBe(REQUEST.user_id);
-    expect(recordNotification).not.toHaveBeenCalled();
+    expect(insertNotification).not.toHaveBeenCalled();
+  });
+});
+
+const DECIDED_STORE = {
+  ...REQUEST,
+  status: 'refunded',
+  refund_amount_cents: REQUEST.charge_amount_cents,
+  decision_note: INPUT.note,
+  decided_at: '2026-10-02T00:00:00.000Z',
+};
+const DECIDED_DECLINE = {
+  ...REQUEST,
+  status: 'declined',
+  decision_note: 'Outside the refund window.',
+  decided_at: '2026-10-02T00:00:00.000Z',
+};
+const DECLINE_INPUT = {
+  operatorUserId: 'operator-1',
+  requestId: REQUEST.id,
+  note: DECIDED_DECLINE.decision_note,
+};
+
+describe('operator decision receipts', () => {
+  it('keeps the recorded store refund and says the customer was not told when the notification insert throws', async () => {
+    const query = vi.fn().mockResolvedValueOnce([REQUEST]).mockResolvedValueOnce([DECIDED_STORE]);
+    const db = { query } as unknown as DatabaseAdapter;
+    vi.mocked(insertNotification).mockRejectedValueOnce(new Error('insert failed'));
+
+    await expect(recordStoreRefund(db, INPUT)).resolves.toMatchObject({
+      request: { id: REQUEST.id, status: 'refunded' },
+      customerNotified: false,
+    });
+    expect(query).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps the decline and says the customer was not told when the notification insert throws', async () => {
+    const query = vi.fn().mockResolvedValueOnce([DECIDED_DECLINE]);
+    const db = { query } as unknown as DatabaseAdapter;
+    vi.mocked(insertNotification).mockRejectedValueOnce(new Error('insert failed'));
+
+    await expect(declineRefundRequest(db, DECLINE_INPUT)).resolves.toMatchObject({
+      request: { id: REQUEST.id, status: 'declined' },
+      customerNotified: false,
+    });
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+
+  it('says the customer was not told when no notification was written', async () => {
+    const query = vi.fn().mockResolvedValueOnce([DECIDED_DECLINE]);
+    const db = { query } as unknown as DatabaseAdapter;
+    vi.mocked(insertNotification).mockResolvedValueOnce('invalid');
+
+    await expect(declineRefundRequest(db, DECLINE_INPUT)).resolves.toMatchObject({
+      customerNotified: false,
+    });
+  });
+
+  it('counts a notification that already exists for this decision as told', async () => {
+    const query = vi.fn().mockResolvedValueOnce([DECIDED_DECLINE]);
+    const db = { query } as unknown as DatabaseAdapter;
+    vi.mocked(insertNotification).mockResolvedValueOnce('duplicate');
+
+    await expect(declineRefundRequest(db, DECLINE_INPUT)).resolves.toMatchObject({
+      request: { status: 'declined' },
+      customerNotified: true,
+    });
+    expect(insertNotification).toHaveBeenCalledWith(
+      db,
+      expect.objectContaining({ dedupeKey: `refund-request:${REQUEST.id}:declined` }),
+    );
   });
 });

@@ -30,7 +30,7 @@ vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
 }));
 vi.mock('../notification-service', async (importOriginal) => ({
   ...(await importOriginal<NotificationModule>()),
-  recordNotification: vi.fn(),
+  insertNotification: vi.fn(),
 }));
 
 import { fileRefundRequest } from '../billing-refund-service';

@@ -96,6 +96,11 @@ export interface OperatorRefundRequestView extends RefundRequestView {
   statutoryWithdrawal: boolean;
 }
 
+export interface OperatorRefundDecision {
+  request: OperatorRefundRequestView;
+  customerNotified: boolean;
+}
+
 export interface OperatorDisputeView {
   id: string;
   chargeId: string;

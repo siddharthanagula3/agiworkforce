@@ -139,4 +139,58 @@ describe('GET /api/cron/purge-deleted-organizations', () => {
       }),
     );
   });
+
+  it('reaches a healthy workspace queued behind a full page of held ones', async () => {
+    const heldPage = Array.from({ length: 25 }, (_, index) => ({
+      id: `org-held-${index}`,
+      scheduled_for: `2026-10-01 00:00:${String(index).padStart(2, '0')}.123456+00`,
+    }));
+    const healthy = { id: 'org-healthy', scheduled_for: '2026-10-02 00:00:00.000001+00' };
+    mocks.query.mockImplementation(async (_sql: string, params: unknown[]) =>
+      params[1] === null ? heldPage : params[1] === 'org-held-24' ? [healthy] : [],
+    );
+    mocks.eraseOrganizationData.mockImplementation(async (id: string) =>
+      id.startsWith('org-held')
+        ? baseReport(id, { complete: false, organizationRetained: true, blockedByLegalHold: true })
+        : baseReport(id),
+    );
+
+    const res = await GET(request() as never);
+    const body = (await res.json()) as {
+      candidates: number;
+      purged: number;
+      held: number;
+      deferred: number;
+    };
+
+    expect(body).toMatchObject({ candidates: 26, purged: 1, held: 25, deferred: 0 });
+    expect(mocks.query).toHaveBeenNthCalledWith(1, expect.any(String), [null, null]);
+    expect(mocks.query).toHaveBeenNthCalledWith(2, expect.any(String), [
+      '2026-10-01 00:00:24.123456+00',
+      'org-held-24',
+    ]);
+    expect(mocks.eraseOrganizationData).toHaveBeenLastCalledWith('org-healthy');
+  });
+
+  it('stops paging and counts the rest as deferred once the sweep budget is spent', async () => {
+    const page = Array.from({ length: 25 }, (_, index) => ({
+      id: `org-${index}`,
+      scheduled_for: '2026-10-01 00:00:00+00',
+    }));
+    mocks.query.mockResolvedValue(page);
+    mocks.eraseOrganizationData.mockImplementation(async (id: string) => baseReport(id));
+    const now = vi.spyOn(Date, 'now');
+    now
+      .mockReturnValueOnce(0)
+      .mockReturnValueOnce(0)
+      .mockReturnValue(10 * 60_000);
+
+    const res = await GET(request() as never);
+    const body = (await res.json()) as { purged: number; deferred: number };
+    now.mockRestore();
+
+    expect(body.purged).toBe(1);
+    expect(body.deferred).toBe(24);
+    expect(mocks.query).toHaveBeenCalledTimes(1);
+  });
 });

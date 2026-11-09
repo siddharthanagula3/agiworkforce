@@ -10,6 +10,7 @@ import {
   UNUSED_REFUND_WINDOW_DAYS,
   type OperatorAccountBilling,
   type OperatorDisputeView,
+  type OperatorRefundDecision,
   type OperatorRefundRequestView,
   type OperatorRefundStripeReason,
   type RefundAssessment,
@@ -39,7 +40,7 @@ import {
   retrieveStripeCharge,
 } from '@/lib/server/payments/stripe-provider';
 import { isStripeCustomerId, isStripeSubscriptionId } from '@/lib/server/stripe-resource-ids';
-import { recordNotification } from '@/lib/services/notification-service';
+import { insertNotification } from '@/lib/services/notification-service';
 
 const DAY_MS = 86_400_000;
 const CUSTOMER_CHARGE_LIMIT = 24;
@@ -543,22 +544,31 @@ async function recordRefundDecision(
   return row ?? null;
 }
 
-async function notifyRefundDecision(db: DatabaseAdapter, row: RefundRequestRow): Promise<void> {
+async function notifyRefundDecision(db: DatabaseAdapter, row: RefundRequestRow): Promise<boolean> {
   const refunded = row.status === 'refunded';
   const store = refundingStoreOf(row.charge_id);
-  await recordNotification(db, {
-    userId: row.user_id,
-    category: 'billing',
-    severity: refunded ? 'info' : 'warning',
-    title: refunded ? 'Your refund is on its way' : 'Your refund request was declined',
-    message: refunded
-      ? store
-        ? `${store} refunded this purchase to the payment method you used there. ${store} sets how long it takes to show.`
-        : 'We refunded your payment to the card you paid with. Your bank usually shows it within 5 to 10 business days.'
-      : `We could not refund this payment. ${row.decision_note ?? ''}`.trim(),
-    target: { kind: 'settings', id: 'billing' },
-    dedupeKey: `refund-request:${row.id}:${row.status}`,
-  });
+  try {
+    const write = await insertNotification(db, {
+      userId: row.user_id,
+      category: 'billing',
+      severity: refunded ? 'info' : 'warning',
+      title: refunded ? 'Your refund is on its way' : 'Your refund request was declined',
+      message: refunded
+        ? store
+          ? `${store} refunded this purchase to the payment method you used there. ${store} sets how long it takes to show.`
+          : 'We refunded your payment to the card you paid with. Your bank usually shows it within 5 to 10 business days.'
+        : `We could not refund this payment. ${row.decision_note ?? ''}`.trim(),
+      target: { kind: 'settings', id: 'billing' },
+      dedupeKey: `refund-request:${row.id}:${row.status}`,
+    });
+    return write === 'inserted' || write === 'duplicate';
+  } catch (error) {
+    logger.warn(
+      { error, requestId: row.id, status: row.status },
+      'Refund decision notification could not be recorded',
+    );
+    return false;
+  }
 }
 
 async function endPlanAfterRefund(
@@ -986,7 +996,7 @@ export async function issueOperatorRefund(
 export async function recordStoreRefund(
   db: DatabaseAdapter,
   input: { operatorUserId: string; requestId: string; amountCents: number | null; note: string },
-): Promise<OperatorRefundRequestView> {
+): Promise<OperatorRefundDecision> {
   const pending = await readPendingRequest(db, input.requestId);
   const [decided] = await db.query<RefundRequestRow>(
     `update public.billing_refund_requests
@@ -1019,14 +1029,14 @@ export async function recordStoreRefund(
       409,
     );
   }
-  await notifyRefundDecision(db, decided);
-  return toOperatorRequestView(decided);
+  const customerNotified = await notifyRefundDecision(db, decided);
+  return { request: toOperatorRequestView(decided), customerNotified };
 }
 
 export async function declineRefundRequest(
   db: DatabaseAdapter,
   input: { operatorUserId: string; requestId: string; note: string },
-): Promise<OperatorRefundRequestView> {
+): Promise<OperatorRefundDecision> {
   const decided = await recordRefundDecision(db, {
     requestId: input.requestId,
     status: 'declined',
@@ -1037,6 +1047,6 @@ export async function declineRefundRequest(
     note: input.note,
   });
   if (!decided) throw new RefundRequestRefusal('That refund request is no longer pending.', 409);
-  await notifyRefundDecision(db, decided);
-  return toOperatorRequestView(decided);
+  const customerNotified = await notifyRefundDecision(db, decided);
+  return { request: toOperatorRequestView(decided), customerNotified };
 }
