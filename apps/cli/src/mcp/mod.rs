@@ -1722,6 +1722,15 @@ fn parse_mcp_config_contents(
     path: &std::path::Path,
     strict: bool,
 ) -> Result<HashMap<String, McpServerConfig>> {
+    parse_mcp_config_contents_reporting(contents, path, strict, &mut Vec::new())
+}
+
+fn parse_mcp_config_contents_reporting(
+    contents: &str,
+    path: &std::path::Path,
+    strict: bool,
+    skipped: &mut Vec<String>,
+) -> Result<HashMap<String, McpServerConfig>> {
     let mut configs = HashMap::new();
 
     let parsed = match serde_json::from_str::<serde_json::Value>(contents) {
@@ -1730,7 +1739,10 @@ fn parse_mcp_config_contents(
             return Err(err)
                 .with_context(|| format!("Invalid MCP config JSON in {}", path.display()));
         }
-        Err(_) => return Ok(configs),
+        Err(err) => {
+            skipped.push(format!("{}: invalid JSON: {err}", path.display()));
+            return Ok(configs);
+        }
     };
 
     let Some(root) = parsed.as_object() else {
@@ -1740,6 +1752,7 @@ fn parse_mcp_config_contents(
                 path.display()
             );
         }
+        skipped.push(format!("{}: must be a JSON object", path.display()));
         return Ok(configs);
     };
 
@@ -1754,6 +1767,7 @@ fn parse_mcp_config_contents(
             if strict {
                 bail!("mcpServers in {} must be an object", path.display());
             }
+            skipped.push(format!("{}: mcpServers must be an object", path.display()));
             return Ok(configs);
         };
         for (name, config) in servers {
@@ -1764,6 +1778,7 @@ fn parse_mcp_config_contents(
                     });
                 }
                 eprintln!("MCP: skipped a server in {}: {error}", path.display());
+                skipped.push(format!("{}: server skipped: {error}", path.display()));
                 continue;
             }
             let config = normalize_nested_transport(config).unwrap_or_else(|| config.clone());
@@ -1780,7 +1795,12 @@ fn parse_mcp_config_contents(
                         )
                     });
                 }
-                Err(_) => {}
+                Err(err) => {
+                    skipped.push(format!(
+                        "{}: server `{name}` skipped: {err}",
+                        path.display()
+                    ));
+                }
             }
         }
     } else {
@@ -1808,6 +1828,7 @@ fn parse_mcp_config_contents(
                             });
                         }
                         eprintln!("MCP: skipped a server in {}: {error}", path.display());
+                        skipped.push(format!("{}: server skipped: {error}", path.display()));
                         continue;
                     }
                     configs.insert(name, config);
@@ -1821,7 +1842,9 @@ fn parse_mcp_config_contents(
                     )
                 });
             }
-            Err(_) => {}
+            Err(err) => {
+                skipped.push(format!("{}: no server loaded: {err}", path.display()));
+            }
         }
     }
 
@@ -1868,6 +1891,40 @@ fn user_servers() -> HashMap<String, McpServerConfig> {
         .into_iter()
         .map(|(name, config)| (name, config.with_scope_default(false)))
         .collect()
+}
+
+fn config_file_problems(path: &std::path::Path) -> Vec<String> {
+    let contents = match std::fs::read_to_string(path) {
+        Ok(contents) => contents,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Vec::new(),
+        Err(err) => return vec![format!("{}: unreadable: {err}", path.display())],
+    };
+    let mut problems = Vec::new();
+    let _ = parse_mcp_config_contents_reporting(&contents, path, false, &mut problems);
+    problems
+}
+
+impl McpManager {
+    pub fn default_config_problems(project: Option<&std::path::Path>) -> Vec<String> {
+        let mut problems = Vec::new();
+        let project = project
+            .map(std::path::Path::to_path_buf)
+            .or_else(|| std::env::current_dir().ok());
+        if let Some(project) = project {
+            for filename in consent::PROJECT_CONFIG_FILES {
+                problems.extend(config_file_problems(&project.join(filename)));
+            }
+        }
+        match crate::config::CliConfig::config_dir() {
+            Ok(config_dir) => {
+                for filename in [".mcp.json", "mcp.json"] {
+                    problems.extend(config_file_problems(&config_dir.join(filename)));
+                }
+            }
+            Err(err) => problems.push(format!("configuration folder unavailable: {err}")),
+        }
+        problems
+    }
 }
 
 fn load_explicit_mcp_configs(
@@ -3521,6 +3578,70 @@ mod tests {
             configs.get("remote").expect("sse server").as_transport(),
             McpTransport::Sse { .. }
         ));
+    }
+
+    #[test]
+    fn config_file_problems_name_malformed_and_unreadable_default_files() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+
+        let truncated = tmp.path().join("truncated.json");
+        std::fs::write(&truncated, r#"{"mcpServers":{"docs":{"command":"#).expect("write");
+        let problems = config_file_problems(&truncated);
+        assert_eq!(problems.len(), 1);
+        assert!(problems[0].contains("invalid JSON"));
+        assert!(!problems[0].contains("docs"));
+
+        let not_object = tmp.path().join("array.json");
+        std::fs::write(&not_object, "[]").expect("write");
+        assert_eq!(config_file_problems(&not_object).len(), 1);
+
+        let bad_servers = tmp.path().join("servers.json");
+        std::fs::write(&bad_servers, r#"{"mcpServers":[]}"#).expect("write");
+        assert_eq!(config_file_problems(&bad_servers).len(), 1);
+
+        let unreadable = tmp.path().join("directory.json");
+        std::fs::create_dir(&unreadable).expect("mkdir");
+        let problems = config_file_problems(&unreadable);
+        assert_eq!(problems.len(), 1);
+        assert!(problems[0].contains("unreadable"));
+    }
+
+    #[test]
+    fn config_file_problems_flag_a_skipped_entry_beside_a_valid_one() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let path = tmp.path().join("mcp.json");
+        std::fs::write(
+            &path,
+            r#"{"mcpServers":{"docs":{"command":"node"},"broken":{"transport":"smoke"},"a__b":{"command":"node"}}}"#,
+        )
+        .expect("write");
+
+        let problems = config_file_problems(&path);
+
+        assert_eq!(problems.len(), 2);
+        assert!(problems
+            .iter()
+            .any(|p| p.contains("server `broken` skipped")));
+        assert!(problems.iter().any(|p| p.contains("must not contain '__'")));
+        assert!(!problems.iter().any(|p| p.contains("docs")));
+    }
+
+    #[test]
+    fn config_file_problems_accept_missing_and_valid_files() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        assert!(config_file_problems(&tmp.path().join("absent.json")).is_empty());
+
+        let empty = tmp.path().join("empty.json");
+        std::fs::write(&empty, r#"{"mcpServers":{}}"#).expect("write");
+        assert!(config_file_problems(&empty).is_empty());
+
+        let valid = tmp.path().join("valid.json");
+        std::fs::write(
+            &valid,
+            r#"{"mcpServers":{"docs":{"command":"node","args":["server.js"]}}}"#,
+        )
+        .expect("write");
+        assert!(config_file_problems(&valid).is_empty());
     }
 
     #[test]

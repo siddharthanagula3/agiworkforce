@@ -35,6 +35,10 @@ pub fn init_home_dir(home: &Path) -> Result<()> {
     Ok(())
 }
 
+pub fn home_receipt(home: &Path) -> String {
+    format!("Initialized {} directory structure.", home.display())
+}
+
 /// Generate `~/.agiworkforce/config.toml` from `CliConfig::default()` if it doesn't exist.
 fn write_default_config(home: &Path) -> Result<()> {
     let config_path = home.join("config.toml");
@@ -45,8 +49,9 @@ fn write_default_config(home: &Path) -> Result<()> {
     let default_config = CliConfig::default();
     let toml_body = toml::to_string_pretty(&default_config)?;
 
-    let header = r#"# AGI CLI Configuration
-# Global: ~/.agiworkforce/config.toml
+    let header = format!(
+        r#"# AGI CLI Configuration
+# Global: {global}
 # Project override: .agiworkforce/config.toml
 #
 # Documentation: https://agiworkforce.com/cli
@@ -71,7 +76,9 @@ fn write_default_config(home: &Path) -> Result<()> {
 	# review_model = "<review-model-from-agi-models-list>"
 	# cloud_model = "<cloud-model-from-agi-models-list>"
 
-"#;
+"#,
+        global = config_path.display()
+    );
 
     let contents = format!("{}{}", header, toml_body);
     fs::write(&config_path, &contents)
@@ -281,6 +288,26 @@ fn write_builtin_skills(home: &Path) -> Result<()> {
 mod tests {
     use super::*;
     use crate::keybindings::KeybindingAction;
+
+    #[test]
+    fn the_receipt_and_config_header_name_the_resolved_home() {
+        let home = tempfile::tempdir().expect("temp home");
+        write_default_config(home.path()).expect("write config");
+        let written = fs::read_to_string(home.path().join("config.toml")).expect("read config");
+        let global_line = written
+            .lines()
+            .find(|line| line.starts_with("# Global:"))
+            .expect("the template names the global file");
+        assert_eq!(
+            global_line,
+            format!("# Global: {}", home.path().join("config.toml").display())
+        );
+        assert_eq!(
+            home_receipt(home.path()),
+            format!("Initialized {} directory structure.", home.path().display())
+        );
+        assert!(!home_receipt(home.path()).contains('~'));
+    }
 
     #[test]
     fn the_config_template_lists_every_rebindable_action() {

@@ -2,12 +2,12 @@
 
 use anyhow::Result;
 use serde::Serialize;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::process::Command as StdCommand;
 
 use crate::config::CliConfig;
-use crate::mcp::{McpManager, McpTransport};
+use crate::mcp::{McpManager, McpServerConfig, McpTransport};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -415,10 +415,20 @@ fn writable_path_check(id: &str, title: &str, path: &Path) -> DoctorCheck {
 }
 
 fn mcp_checks() -> Vec<DoctorCheck> {
-    match McpManager::load_configs() {
+    mcp_check_results(
+        McpManager::load_configs(),
+        McpManager::default_config_problems(None),
+    )
+}
+
+fn mcp_check_results(
+    loaded: Result<HashMap<String, McpServerConfig>>,
+    load_problems: Vec<String>,
+) -> Vec<DoctorCheck> {
+    match loaded {
         Ok(configs) => {
             let mut transport_counts: BTreeMap<&'static str, usize> = BTreeMap::new();
-            let mut invalid = Vec::new();
+            let mut invalid = load_problems;
             for (name, config) in &configs {
                 match config.as_transport() {
                     McpTransport::Stdio { command, .. } => {
@@ -870,6 +880,42 @@ mod tests {
         assert_eq!(warned.status, DoctorStatus::Warn);
         assert_eq!(warned.message, "25 branch(es) older than 60 days");
         assert_eq!(warned.details.len(), 21);
+    }
+
+    #[test]
+    fn mcp_load_problems_fail_the_check_instead_of_passing_with_zero_servers() {
+        let problems = vec!["/home/u/.agiworkforce/mcp.json: invalid JSON: EOF".to_string()];
+
+        let results = mcp_check_results(Ok(HashMap::new()), problems.clone());
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].status, DoctorStatus::Fail);
+        assert!(results[0].details.contains(&problems[0]));
+    }
+
+    #[test]
+    fn an_empty_mcp_configuration_without_problems_still_passes() {
+        let results = mcp_check_results(Ok(HashMap::new()), Vec::new());
+
+        assert_eq!(results[0].status, DoctorStatus::Pass);
+        assert_eq!(results[0].message, "0 configured server(s)");
+    }
+
+    #[test]
+    fn a_valid_server_keeps_its_inventory_beside_a_load_problem() {
+        let servers: HashMap<String, McpServerConfig> = serde_json::from_value(serde_json::json!({
+            "docs": { "command": "node", "args": ["server.js"] }
+        }))
+        .expect("server config");
+
+        let results = mcp_check_results(
+            Ok(servers),
+            vec!["mcp.json: server `broken` skipped: invalid".to_string()],
+        );
+
+        assert_eq!(results[0].status, DoctorStatus::Fail);
+        assert_eq!(results[0].message, "1 configured server(s)");
+        assert!(results[0].details.contains(&"stdio: 1".to_string()));
     }
 
     #[test]

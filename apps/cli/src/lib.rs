@@ -7405,7 +7405,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
             Command::Init => {
                 let home = config::CliConfig::config_dir()?;
                 init::init_home_dir(&home)?;
-                println!("Initialized ~/.agiworkforce/ directory structure.");
+                println!("{}", init::home_receipt(&home));
 
                 let cwd = std::env::current_dir()?;
                 let project_root = project_scope::resolve_project_scope(&cwd);
