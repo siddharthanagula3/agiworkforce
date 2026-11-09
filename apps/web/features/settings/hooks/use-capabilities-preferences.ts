@@ -89,6 +89,8 @@ export function useCapabilitiesPreferences(): UseCapabilitiesPreferencesResult {
           version: null as string | null,
           latestChoice: 0,
           pending: {} as CapabilitiesPatch,
+          keyChoice: {} as Partial<Record<keyof CapabilitiesSettings, number>>,
+          rejected: {} as CapabilitiesPatch,
           queue: Promise.resolve(),
         },
         { binding: { owner } },
@@ -155,6 +157,7 @@ export function useCapabilitiesPreferences(): UseCapabilitiesPreferencesResult {
     setLoadedOwner(null);
     setSaveError(null);
     setRejected(null);
+    lane.rejected = {};
     setSaving(false);
     setSavedAt(null);
     readOwnedPreferences(owner)
@@ -180,17 +183,29 @@ export function useCapabilitiesPreferences(): UseCapabilitiesPreferencesResult {
     };
   }, [reloadKey, owner, lane, capture]);
 
+  const publishRejected = useCallback(() => {
+    if (Object.keys(lane.rejected).length === 0) {
+      setRejected(null);
+      setSaveError(null);
+      return;
+    }
+    setRejected({ ...lane.rejected });
+  }, [lane]);
+
   const persist = useCallback(
     (patch: CapabilitiesPatch) => {
       if (!owner || loadedOwner !== owner) return;
       const current = capture();
       if (!current()) return;
       const choice = (lane.latestChoice += 1);
+      for (const key of Object.keys(patch) as Array<keyof CapabilitiesSettings>) {
+        lane.keyChoice[key] = choice;
+        delete lane.rejected[key];
+      }
       lane.pending = { ...lane.pending, ...patch };
       setSettings((current) => ({ ...current, ...patch }));
       setSaving(true);
-      setSaveError(null);
-      setRejected(null);
+      publishRejected();
       // One write at a time, and each write carries every choice made while the
       // one before it was in flight. Sending the changed keys rather than the
       // whole namespace is what stops a second tab's unrelated toggle from being
@@ -199,6 +214,7 @@ export function useCapabilitiesPreferences(): UseCapabilitiesPreferencesResult {
         if (!current()) return;
         const batch = lane.pending;
         lane.pending = {};
+        const batchChoices = { ...lane.keyChoice };
         if (Object.keys(batch).length === 0) {
           if (choice === lane.latestChoice) setSaving(false);
           return;
@@ -222,23 +238,36 @@ export function useCapabilitiesPreferences(): UseCapabilitiesPreferencesResult {
           if (!current()) return;
           lane.version = result?.version ?? null;
           lane.acknowledged = { ...lane.acknowledged, ...batch };
+          for (const key of Object.keys(batch) as Array<keyof CapabilitiesSettings>) {
+            delete lane.rejected[key];
+          }
           setSettings({ ...lane.acknowledged, ...lane.pending });
           resetMemoryCapabilityCache();
           if ('cloudCodeExecution' in batch) void useBillingStore.getState().refreshUser();
+          publishRejected();
           setSavedAt(Date.now());
         } catch (error) {
           if (!current()) return;
+          // A key chosen again after this batch was taken is no longer this
+          // batch's intent: the newer choice is already queued and owns the outcome.
+          let rejectedHere = false;
+          for (const key of Object.keys(batch) as Array<keyof CapabilitiesSettings>) {
+            if (lane.keyChoice[key] !== batchChoices[key]) continue;
+            Object.assign(lane.rejected, { [key]: batch[key] });
+            rejectedHere = true;
+          }
           // The optimistic value has to go back to what the server acknowledged,
           // or the control keeps claiming a preference the account does not hold.
-          setSettings(lane.acknowledged);
-          setRejected(batch);
-          setSaveError(toUserMessage(error, 'Failed to save settings'));
+          // Choices still waiting in the lane stay on screen.
+          setSettings({ ...lane.acknowledged, ...lane.pending });
+          publishRejected();
+          if (rejectedHere) setSaveError(toUserMessage(error, 'Failed to save settings'));
         } finally {
           if (current() && choice === lane.latestChoice) setSaving(false);
         }
       });
     },
-    [owner, loadedOwner, lane, capture],
+    [owner, loadedOwner, lane, capture, publishRejected],
   );
 
   const setBoolean = useCallback(

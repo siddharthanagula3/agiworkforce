@@ -227,6 +227,113 @@ describe('a capability save only claims the key the user changed', () => {
   });
 });
 
+describe('a failed save does not outlive the newer choice that replaced it', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.fetchPreferenceNamespace.mockResolvedValue({
+      ...DEFAULT_CAPABILITIES_SETTINGS,
+      cloudCodeExecution: false,
+    });
+    mocks.readPreferencesVersion.mockResolvedValue(STORED_VERSION);
+  });
+
+  function holdFirstWrite() {
+    const first: { reject: (error: Error) => void } = { reject: () => undefined };
+    mocks.savePreferenceNamespace
+      .mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            first.reject = reject;
+          }),
+      )
+      .mockResolvedValue({ version: NEXT_VERSION });
+    return first;
+  }
+
+  it('retires the failed enable and its retry once a later disable is saved', async () => {
+    const first = holdFirstWrite();
+    const { result } = renderHook(() => useCapabilitiesPreferences());
+    await waitFor(() => expect(result.current.loaded).toBe(true));
+
+    act(() => result.current.setBoolean('cloudCodeExecution', true));
+    await waitFor(() => expect(mocks.savePreferenceNamespace).toHaveBeenCalledTimes(1));
+    act(() => result.current.setBoolean('cloudCodeExecution', false));
+
+    await act(async () => {
+      first.reject(new Error('rate limited'));
+    });
+    expect(result.current.settings.cloudCodeExecution).toBe(false);
+
+    await waitFor(() => expect(result.current.saving).toBe(false));
+    expect(mocks.savePreferenceNamespace).toHaveBeenCalledTimes(2);
+    expect(mocks.savePreferenceNamespace.mock.calls[1]?.[1]).toEqual({
+      cloudCodeExecution: false,
+    });
+    expect(result.current.saveError).toBeNull();
+    expect(result.current.retrySave).toBeNull();
+    expect(result.current.settings.cloudCodeExecution).toBe(false);
+  });
+
+  it('keeps the latest unresolved choice recoverable when the newer save fails too', async () => {
+    const first: { reject: (error: Error) => void } = { reject: () => undefined };
+    mocks.savePreferenceNamespace
+      .mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            first.reject = reject;
+          }),
+      )
+      .mockRejectedValueOnce(new Error('still limited'))
+      .mockResolvedValue({ version: NEXT_VERSION });
+
+    const { result } = renderHook(() => useCapabilitiesPreferences());
+    await waitFor(() => expect(result.current.loaded).toBe(true));
+
+    act(() => result.current.setBoolean('cloudCodeExecution', true));
+    await waitFor(() => expect(mocks.savePreferenceNamespace).toHaveBeenCalledTimes(1));
+    act(() => result.current.setBoolean('cloudCodeExecution', false));
+
+    await act(async () => {
+      first.reject(new Error('rate limited'));
+    });
+    await waitFor(() => expect(result.current.saving).toBe(false));
+
+    expect(result.current.saveError).not.toBeNull();
+    expect(result.current.settings.cloudCodeExecution).toBe(false);
+    expect(result.current.retrySave).not.toBeNull();
+
+    act(() => result.current.retrySave?.());
+    await waitFor(() => expect(mocks.savePreferenceNamespace).toHaveBeenCalledTimes(3));
+    expect(mocks.savePreferenceNamespace.mock.calls[2]?.[1]).toEqual({
+      cloudCodeExecution: false,
+    });
+    await waitFor(() => expect(result.current.saving).toBe(false));
+    expect(result.current.saveError).toBeNull();
+    expect(result.current.retrySave).toBeNull();
+  });
+
+  it('keeps an unrelated failed key recoverable after another key saves', async () => {
+    mocks.savePreferenceNamespace
+      .mockRejectedValueOnce(new Error('rate limited'))
+      .mockResolvedValue({ version: NEXT_VERSION });
+    const { result } = renderHook(() => useCapabilitiesPreferences());
+    await waitFor(() => expect(result.current.loaded).toBe(true));
+
+    act(() => result.current.setBoolean('memory', true));
+    await waitFor(() => expect(result.current.saveError).not.toBeNull());
+
+    act(() => result.current.setBoolean('searchPastChats', true));
+    await waitFor(() => expect(result.current.saving).toBe(false));
+
+    expect(result.current.saveError).not.toBeNull();
+    expect(result.current.settings.memory).toBe(false);
+    expect(result.current.settings.searchPastChats).toBe(true);
+    act(() => result.current.retrySave?.());
+    await waitFor(() => expect(mocks.savePreferenceNamespace).toHaveBeenCalledTimes(3));
+    expect(mocks.savePreferenceNamespace.mock.calls[2]?.[1]).toEqual({ memory: true });
+  });
+});
+
 type SessionSnapshotModule = typeof import('@/lib/identity/useSessionSnapshot');
 vi.mock('@/lib/identity/useSessionSnapshot', async (original) => {
   const session = {
