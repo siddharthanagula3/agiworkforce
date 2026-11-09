@@ -27,8 +27,8 @@ use crate::error::{
 use crate::events::{ChatOutcome, StreamEvent, Usage};
 use crate::serialize::{
     add_message_cache_breakpoint, anthropic_tools_json, anthropic_unsupported_document,
-    build_gemini_tool_name_map, compact_ollama_message_values, convert_message_to_anthropic,
-    convert_message_to_gemini, convert_message_to_openai, convert_message_to_openai_responses,
+    compact_ollama_message_values, convert_message_to_anthropic, convert_message_to_openai,
+    convert_message_to_openai_responses, convert_messages_to_gemini,
     gemini_function_declarations_json, ollama_chat_request_body, ollama_nativize_message_values,
     openai_function_tools_json, openai_responses_function_tools_json, set_openai_max_tokens,
 };
@@ -1597,13 +1597,7 @@ where
 /// without a socket. (The model path/URL handling stays in the stream driver.)
 pub fn build_gemini_request_body(req: &ChatRequest<'_>) -> Value {
     // Gemini uses a different message format: contents with parts
-    let gemini_tool_names = build_gemini_tool_name_map(req.messages);
-    let contents: Vec<Value> = req
-        .messages
-        .iter()
-        .filter(|m| m.role != "system")
-        .map(|m| convert_message_to_gemini(m, &gemini_tool_names))
-        .collect();
+    let contents = convert_messages_to_gemini(req.messages);
 
     let system_instruction = req.messages.iter().find(|m| m.role == "system").map(|m| {
         serde_json::json!({
