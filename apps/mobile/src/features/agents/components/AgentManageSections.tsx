@@ -197,10 +197,12 @@ function AgentPublishSection({
   agent,
   dirty,
   onAgent,
+  onRestored,
 }: {
   agent: ManagedCloudAgent;
   dirty: boolean;
   onAgent: (agent: ManagedCloudAgent) => void;
+  onRestored: (agent: ManagedCloudAgent) => void;
 }) {
   const colors = useThemeColors();
   const [note, setNote] = useState('');
@@ -230,9 +232,9 @@ function AgentPublishSection({
         () => restoreAgentVersion(agent.id, version.version),
         `Could not restore version ${version.version}.`,
       );
-      if (next) onAgent(next);
+      if (next) onRestored(next);
     },
-    [agent.id, onAgent, run],
+    [agent.id, onRestored, run],
   );
 
   const canPublish = !dirty && (agent.publishedVersion === null || agent.hasUnpublishedChanges);
@@ -658,17 +660,19 @@ export function AgentManageSections({
   agent,
   dirty,
   onAgent,
+  onRestored,
   onDeleted,
 }: {
   agent: ManagedCloudAgent;
   dirty: boolean;
   onAgent: (agent: ManagedCloudAgent) => void;
+  onRestored: (agent: ManagedCloudAgent) => void;
   onDeleted: () => void;
 }) {
   return (
     <View style={{ gap: 12 }}>
       <AgentFilesSection agent={agent} />
-      <AgentPublishSection agent={agent} dirty={dirty} onAgent={onAgent} />
+      <AgentPublishSection agent={agent} dirty={dirty} onAgent={onAgent} onRestored={onRestored} />
       <AgentShareSection agent={agent} />
       <AgentActivitySection agent={agent} />
       <AgentLifecycleSection agent={agent} onAgent={onAgent} onDeleted={onDeleted} />

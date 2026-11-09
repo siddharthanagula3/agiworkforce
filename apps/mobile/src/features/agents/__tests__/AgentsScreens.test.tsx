@@ -11,6 +11,9 @@ const mockCreateAgent = jest.fn();
 const mockUpdateAgent = jest.fn();
 const mockStartConversation = jest.fn();
 const mockPublishAgent = jest.fn();
+const mockSetAgentStatus = jest.fn();
+const mockRestoreAgentVersion = jest.fn();
+const mockListAgentVersions = jest.fn();
 const mockStorage = new Map<string, string>();
 
 jest.mock('expo-router', () => ({
@@ -63,7 +66,9 @@ jest.mock('../service', () => ({
   startAgentConversation: (...args: unknown[]) => mockStartConversation(...args),
   publishAgent: (...args: unknown[]) => mockPublishAgent(...args),
   listAgentFiles: jest.fn(async () => []),
-  listAgentVersions: jest.fn(async () => []),
+  setAgentStatus: (...args: unknown[]) => mockSetAgentStatus(...args),
+  restoreAgentVersion: (...args: unknown[]) => mockRestoreAgentVersion(...args),
+  listAgentVersions: (...args: unknown[]) => mockListAgentVersions(...args),
   getAgentShare: jest.fn(async () => ({ visibility: 'private', workspaceName: null, members: [] })),
   getAgentUsage: jest.fn(async () => ({ windowDays: 30, conversations: 3, people: 1, turns: 9 })),
   getAgentActivity: jest.fn(async () => ({ conversations: [], routines: [] })),
@@ -123,6 +128,7 @@ describe('mobile agents', () => {
     useAuthStore.setState({ isClerkLoaded: true, isClerkSignedIn: true, clerkUserId: 'user-1' });
     useChatAppModeStore.setState({ appMode: 'cloud' });
     mockListAgents.mockResolvedValue([AGENT, SHARED]);
+    mockListAgentVersions.mockResolvedValue([]);
   });
 
   it('groups owned, shared and retired agents', () => {
@@ -195,6 +201,60 @@ describe('mobile agents', () => {
     await waitFor(() => expect(mockPublishAgent).toHaveBeenCalledWith(AGENT.id, ''));
     expect(await findByText('Last 30 days: 3 chats, 1 people, 9 messages')).toBeTruthy();
     expect(getByText('Delete agent')).toBeTruthy();
+  });
+
+  it('keeps unsaved instruction edits when the agent is paused and resumed', async () => {
+    mockParams.id = AGENT.id;
+    mockGetAgent.mockResolvedValue({ ...AGENT, instructions: 'Saved instructions' });
+    mockSetAgentStatus
+      .mockResolvedValueOnce({ ...AGENT, instructions: 'Saved instructions', status: 'paused' })
+      .mockResolvedValueOnce({ ...AGENT, instructions: 'Saved instructions', status: 'active' });
+    const { findByLabelText, findByText, getByLabelText, getByText } = render(
+      <AgentEditorScreen />,
+    );
+
+    fireEvent.changeText(await findByLabelText('Instructions'), 'Unsaved instructions');
+    fireEvent.press(getByText('Pause agent'));
+
+    expect(await findByText('Resume agent')).toBeTruthy();
+    expect(mockSetAgentStatus).toHaveBeenLastCalledWith(AGENT.id, 'paused');
+    expect(getByLabelText('Instructions').props.value).toBe('Unsaved instructions');
+
+    fireEvent.press(getByText('Resume agent'));
+
+    expect(await findByText('Pause agent')).toBeTruthy();
+    expect(getByLabelText('Instructions').props.value).toBe('Unsaved instructions');
+
+    mockUpdateAgent.mockResolvedValue({ ...AGENT, instructions: 'Unsaved instructions' });
+    fireEvent.press(getByLabelText('Save changes as a draft'));
+    await waitFor(() =>
+      expect(mockUpdateAgent).toHaveBeenCalledWith(
+        AGENT.id,
+        expect.objectContaining({ instructions: 'Unsaved instructions' }),
+      ),
+    );
+  });
+
+  it('replaces the draft when a saved version is restored', async () => {
+    mockParams.id = AGENT.id;
+    mockGetAgent.mockResolvedValue({ ...AGENT, instructions: 'Saved instructions' });
+    mockListAgentVersions.mockResolvedValue([
+      {
+        version: 1,
+        note: '',
+        publishedAt: '2026-10-02T00:00:00.000Z',
+        publishedByName: 'Ana',
+      },
+    ]);
+    mockRestoreAgentVersion.mockResolvedValue({ ...AGENT, instructions: 'Older instructions' });
+    const { findByLabelText, getByLabelText } = render(<AgentEditorScreen />);
+
+    fireEvent.changeText(await findByLabelText('Instructions'), 'Unsaved instructions');
+    fireEvent.press(await findByLabelText('Restore version 1 as the draft'));
+
+    await waitFor(() =>
+      expect(getByLabelText('Instructions').props.value).toBe('Older instructions'),
+    );
   });
 
   it('keeps a recipient read only', async () => {
