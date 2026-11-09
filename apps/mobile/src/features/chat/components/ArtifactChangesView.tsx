@@ -79,20 +79,19 @@ export function ArtifactChangesView({
       : kind === 'removed'
         ? colors.diffRemovedText
         : colors.textPrimary;
-  const summary =
-    changes.added === 0 && changes.removed === 0
-      ? `No changes since version ${fromVersion}`
-      : `Since version ${fromVersion}: ${
-          changes.unit === 'line'
-            ? translatePlural('chat', 'counts.lines', changes.added, {
-                one: '{{count}} line',
-                other: '{{count}} lines',
-              })
-            : translatePlural('chat', 'counts.words', changes.added, {
-                one: '{{count}} word',
-                other: '{{count}} words',
-              })
-        } added, ${changes.removed} removed`;
+  const summary = !changes.changed
+    ? `No changes since version ${fromVersion}`
+    : `Since version ${fromVersion}: ${
+        changes.unit === 'line'
+          ? translatePlural('chat', 'counts.lines', changes.added, {
+              one: '{{count}} line',
+              other: '{{count}} lines',
+            })
+          : translatePlural('chat', 'counts.words', changes.added, {
+              one: '{{count}} word',
+              other: '{{count}} words',
+            })
+      } added, ${changes.removed} removed`;
   const header = (
     <Text
       style={{ fontSize: typeScale.caption, color: colors.textSecondary, marginBottom: 12 }}

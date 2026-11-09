@@ -1,5 +1,5 @@
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, ScrollView, TextInput, View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
@@ -28,6 +28,7 @@ export function NewSkillSheet({
   const [body, setBody] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const sessionRef = useRef(0);
   const canSave = !saving && Boolean(name.trim() && description.trim() && body.trim());
   const editing = editingName !== undefined;
 
@@ -39,6 +40,8 @@ export function NewSkillSheet({
   }, [initialDraft, visible]);
 
   const close = useCallback(() => {
+    sessionRef.current += 1;
+    setSaving(false);
     setName('');
     setDescription('');
     setBody('');
@@ -47,6 +50,7 @@ export function NewSkillSheet({
   }, [onClose]);
 
   const save = useCallback(async () => {
+    const session = sessionRef.current;
     setSaving(true);
     setError(null);
     try {
@@ -56,11 +60,13 @@ export function NewSkillSheet({
         await createPersonalSkill({ name, description, body });
       }
       onCreated();
-      close();
+      if (session === sessionRef.current) close();
     } catch (saveError) {
-      setError(toUserMessage(saveError, 'Could not save this skill. Try again.'));
+      if (session === sessionRef.current) {
+        setError(toUserMessage(saveError, 'Could not save this skill. Try again.'));
+      }
     } finally {
-      setSaving(false);
+      if (session === sessionRef.current) setSaving(false);
     }
   }, [body, close, description, editingName, name, onCreated]);
 
@@ -110,7 +116,7 @@ export function NewSkillSheet({
           <TextInput
             value={name}
             onChangeText={(next) => setName(next.toLowerCase())}
-            editable={!editing}
+            editable={!editing && !saving}
             placeholder="weekly-report"
             placeholderTextColor={colors.textMuted}
             autoCapitalize="none"
@@ -121,6 +127,7 @@ export function NewSkillSheet({
           <TextInput
             value={description}
             onChangeText={setDescription}
+            editable={!saving}
             placeholder="When to use this skill"
             placeholderTextColor={colors.textMuted}
             accessibilityLabel="Skill description"
@@ -129,6 +136,7 @@ export function NewSkillSheet({
           <TextInput
             value={body}
             onChangeText={setBody}
+            editable={!saving}
             placeholder="Instructions the assistant follows when this skill is used"
             placeholderTextColor={colors.textMuted}
             accessibilityLabel="Skill instructions"
