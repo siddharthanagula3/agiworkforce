@@ -21,6 +21,7 @@ export interface SharedLink {
 
 interface SharedLinkResponse {
   shares?: unknown;
+  complete?: unknown;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -52,13 +53,21 @@ export interface SharedLinksRequestOptions {
   signal?: AbortSignal;
 }
 
-export async function fetchSharedLinks(options: SharedLinksRequestOptions): Promise<SharedLink[]> {
+export interface SharedLinkInventory {
+  links: SharedLink[];
+  complete: boolean;
+}
+
+export async function fetchSharedLinks(
+  options: SharedLinksRequestOptions,
+): Promise<SharedLinkInventory> {
   assertCloudAccountEpochCurrent(options.accountEpoch);
   const response = await api.get<SharedLinkResponse>('/api/share', options);
   assertCloudAccountEpochCurrent(options.accountEpoch);
   const shares = response?.shares;
-  if (!Array.isArray(shares)) return [];
-  return shares.map(toSharedLink).filter((link): link is SharedLink => link !== null);
+  if (!Array.isArray(shares)) return { links: [], complete: false };
+  const links = shares.map(toSharedLink).filter((link): link is SharedLink => link !== null);
+  return { links, complete: response?.complete === true && links.length === shares.length };
 }
 
 export async function revokeSharedLink(

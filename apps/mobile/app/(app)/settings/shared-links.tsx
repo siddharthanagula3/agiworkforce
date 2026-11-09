@@ -30,6 +30,7 @@ interface LinkSession {
 interface OwnedLinks {
   owner: LinkSession;
   links: SharedLink[];
+  complete: boolean;
 }
 
 type LoadState =
@@ -40,6 +41,8 @@ type LoadState =
   | { kind: 'error' };
 
 const LOAD_FAILED_MESSAGE = 'Check your connection and try again.';
+const INCOMPLETE_LIST_MESSAGE =
+  'This list may not include every link you shared. Older links stay open until they expire.';
 const REVOKE_FAILED_MESSAGE =
   'Could not confirm whether the link was revoked. Refresh the list before trying again.';
 
@@ -106,12 +109,12 @@ export default function SharedLinksScreen() {
       setRefreshing(refresh);
       const ownsRead = () => isCurrent(owner) && owner.read === request;
       try {
-        const links = await fetchSharedLinks({
+        const { links, complete } = await fetchSharedLinks({
           accountEpoch: owner.account,
           signal: request.controller.signal,
         });
         if (!ownsRead()) return;
-        const next = { owner, links };
+        const next = { owner, links, complete };
         linksRef.current = next;
         setState({ kind: 'ready', ...next });
       } catch (error) {
@@ -251,6 +254,7 @@ export default function SharedLinksScreen() {
                     const next = {
                       owner,
                       links: current.links.filter((row) => row.token !== link.token),
+                      complete: current.complete,
                     };
                     linksRef.current = next;
                     setState({ kind: 'ready', ...next });
@@ -347,47 +351,58 @@ export default function SharedLinksScreen() {
         </View>
       )}
 
-      {visibleState.kind === 'ready' && visibleState.links.length === 0 && (
-        <View testID="shared-links-empty" style={{ flex: 1, justifyContent: 'center' }}>
-          <Card>
-            <View className="items-center py-8 gap-3">
-              <View
-                style={{
-                  width: 56,
-                  height: 56,
-                  borderRadius: 14,
-                  backgroundColor: c.accentSurface,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Link2 size={26} color={c.teal} strokeWidth={1.5} />
-              </View>
-              <Text
-                style={{
-                  fontSize: typeScale.headline,
-                  fontWeight: '600',
-                  color: c.textPrimary,
-                  textAlign: 'center',
-                }}
-              >
-                No shared links yet
-              </Text>
-              <Text
-                style={{
-                  fontSize: typeScale.footnote,
-                  color: c.textSecondary,
-                  textAlign: 'center',
-                  lineHeight: 18,
-                  maxWidth: 280,
-                }}
-              >
-                Links you share appear here so you can revoke them.
-              </Text>
-            </View>
-          </Card>
-        </View>
+      {visibleState.kind === 'ready' && !visibleState.complete && (
+        <Text
+          testID="shared-links-incomplete"
+          style={{ color: c.textSecondary, fontSize: typeScale.footnote, lineHeight: 18 }}
+        >
+          {INCOMPLETE_LIST_MESSAGE}
+        </Text>
       )}
+
+      {visibleState.kind === 'ready' &&
+        visibleState.complete &&
+        visibleState.links.length === 0 && (
+          <View testID="shared-links-empty" style={{ flex: 1, justifyContent: 'center' }}>
+            <Card>
+              <View className="items-center py-8 gap-3">
+                <View
+                  style={{
+                    width: 56,
+                    height: 56,
+                    borderRadius: 14,
+                    backgroundColor: c.accentSurface,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Link2 size={26} color={c.teal} strokeWidth={1.5} />
+                </View>
+                <Text
+                  style={{
+                    fontSize: typeScale.headline,
+                    fontWeight: '600',
+                    color: c.textPrimary,
+                    textAlign: 'center',
+                  }}
+                >
+                  No shared links yet
+                </Text>
+                <Text
+                  style={{
+                    fontSize: typeScale.footnote,
+                    color: c.textSecondary,
+                    textAlign: 'center',
+                    lineHeight: 18,
+                    maxWidth: 280,
+                  }}
+                >
+                  Links you share appear here so you can revoke them.
+                </Text>
+              </View>
+            </Card>
+          </View>
+        )}
 
       {visibleState.kind === 'ready' &&
         visibleState.links.map((link) => (

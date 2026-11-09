@@ -56,12 +56,18 @@ export function LocalRunningCommands({
   const [error, setError] = useState<string | null>(null);
   const [previewErrors, setPreviewErrors] = useState<PreviewErrors | null>(null);
   const [stopping, setStopping] = useState<ReadonlySet<string>>(new Set());
+  const [stopFailures, setStopFailures] = useState<ReadonlyMap<string, string>>(new Map());
 
   const load = useCallback(async () => {
     try {
       const activity = await readBackgroundActivity();
       const here = activity.commands.filter((run) => run.rootId === rootId);
       setRuns(here);
+      setStopFailures((current) => {
+        const listed = new Set(here.map((run) => run.runId));
+        const next = new Map([...current].filter(([runId]) => listed.has(runId)));
+        return next.size === current.size ? current : next;
+      });
       setError(null);
       setPreviewErrors(onSendToAgent ? await previewErrorsOf(here) : null);
     } catch (cause: unknown) {
@@ -97,18 +103,33 @@ export function LocalRunningCommands({
     }
   };
 
-  const stop = async (runIds: string[]) => {
+  const stop = async (targets: BackgroundCommandRun[]) => {
+    const runIds = targets.map((target) => target.runId);
     setStopping((current) => new Set([...current, ...runIds]));
-    try {
-      await Promise.all(runIds.map((runId) => cancelLocalCommand(runId)));
-    } finally {
-      setStopping((current) => {
-        const next = new Set(current);
-        for (const runId of runIds) next.delete(runId);
-        return next;
+    setStopFailures((current) => {
+      const next = new Map(current);
+      for (const runId of runIds) next.delete(runId);
+      return next;
+    });
+    const outcomes = await Promise.allSettled(
+      targets.map((target) => cancelLocalCommand(target.runId)),
+    );
+    setStopping((current) => {
+      const next = new Set(current);
+      for (const runId of runIds) next.delete(runId);
+      return next;
+    });
+    setStopFailures((current) => {
+      const next = new Map(current);
+      outcomes.forEach((outcome, index) => {
+        const target = targets[index];
+        if (outcome.status === 'rejected' && target) {
+          next.set(target.runId, LOCAL_CODE_COPY.stopCommandFailed(target.command));
+        }
       });
-      await load();
-    }
+      return next;
+    });
+    await load();
   };
 
   if (runs.length === 0 && error === null) return null;
@@ -121,7 +142,7 @@ export function LocalRunningCommands({
           <button
             type="button"
             className={styles['secondaryButton']}
-            onClick={() => void stop(runs.map((run) => run.runId))}
+            onClick={() => void stop(runs)}
           >
             {LOCAL_CODE_COPY.stopAllCommands}
           </button>
@@ -132,6 +153,11 @@ export function LocalRunningCommands({
           {error}
         </p>
       )}
+      {[...stopFailures].map(([runId, message]) => (
+        <p key={runId} className={styles['changesEmpty']} role="alert">
+          {message}
+        </p>
+      ))}
       {onSendToAgent && previewErrors && (
         <button
           type="button"
@@ -169,7 +195,7 @@ export function LocalRunningCommands({
               className={styles['headerButton']}
               aria-label={LOCAL_CODE_COPY.stopCommand(run.command)}
               disabled={stopping.has(run.runId)}
-              onClick={() => void stop([run.runId])}
+              onClick={() => void stop([run])}
             >
               <Square size={GLYPH_SIZE} aria-hidden="true" />
             </button>

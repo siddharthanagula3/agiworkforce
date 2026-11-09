@@ -44,30 +44,46 @@ describe('shared links service', () => {
   });
 
   it('lists the account own shares from the real endpoint', async () => {
-    mockGet.mockResolvedValue({ shares: [row()] });
+    mockGet.mockResolvedValue({ shares: [row()], complete: true });
 
-    const links = await fetchSharedLinks(options);
+    const { links, complete } = await fetchSharedLinks(options);
 
     expect(mockGet).toHaveBeenCalledWith('/api/share', options);
     expect(links).toHaveLength(1);
     expect(links[0]).toMatchObject({ token: 'tok-1', title: 'Planning session', expired: false });
+    expect(complete).toBe(true);
+  });
+
+  it('keeps a truncated inventory marked incomplete, and never infers completeness', async () => {
+    mockGet.mockResolvedValueOnce({ shares: [row()], complete: false });
+    await expect(fetchSharedLinks(options)).resolves.toMatchObject({ complete: false });
+
+    mockGet.mockResolvedValueOnce({ shares: [] });
+    await expect(fetchSharedLinks(options)).resolves.toEqual({ links: [], complete: false });
+
+    mockGet.mockResolvedValueOnce({ shares: [], complete: 'yes' });
+    await expect(fetchSharedLinks(options)).resolves.toEqual({ links: [], complete: false });
   });
 
   it('drops rows that cannot be opened or revoked', async () => {
-    mockGet.mockResolvedValue({ shares: [row(), { title: 'broken' }, row({ token: '' })] });
+    mockGet.mockResolvedValue({
+      shares: [row(), { title: 'broken' }, row({ token: '' })],
+      complete: true,
+    });
 
-    const links = await fetchSharedLinks(options);
+    const { links, complete } = await fetchSharedLinks(options);
     expect(links).toHaveLength(1);
+    expect(complete).toBe(false);
   });
 
-  it('returns an empty list when the response has no shares array', async () => {
-    mockGet.mockResolvedValue({});
-    await expect(fetchSharedLinks(options)).resolves.toEqual([]);
+  it('returns an unconfirmed empty list when the response has no shares array', async () => {
+    mockGet.mockResolvedValue({ complete: true });
+    await expect(fetchSharedLinks(options)).resolves.toEqual({ links: [], complete: false });
   });
 
   it('preserves the server expiry verdict rather than recomputing it', async () => {
     mockGet.mockResolvedValue({ shares: [row({ expired: true })] });
-    const links = await fetchSharedLinks(options);
+    const { links } = await fetchSharedLinks(options);
     expect(links[0]?.expired).toBe(true);
   });
 

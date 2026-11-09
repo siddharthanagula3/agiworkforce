@@ -85,6 +85,60 @@ describe('the commands running in a local folder', () => {
     await waitFor(() => expect(cancelLocalCommand).toHaveBeenCalledWith('run-3'));
   });
 
+  it('keeps a failed stop visible after the list refreshes, until the run ends', async () => {
+    const user = userEvent.setup();
+    readBackgroundActivity.mockResolvedValue(
+      activity([
+        run('run-1', 'pnpm dev', 'root-1', 1),
+        run('run-3', 'pnpm storybook', 'root-1', 2),
+      ]),
+    );
+    cancelLocalCommand.mockRejectedValueOnce(new Error('bridge closed'));
+    const { rerender } = render(
+      <LocalRunningCommands rootId="root-1" refreshKey={0} now={() => NOW} />,
+    );
+
+    const stopButton = await screen.findByRole('button', { name: 'Stop pnpm dev' });
+    await user.click(stopButton);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'pnpm dev could not be stopped and may still be running.',
+    );
+    await waitFor(() => expect(readBackgroundActivity).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole('alert')).toHaveTextContent('pnpm dev could not be stopped');
+    expect(stopButton).toBeEnabled();
+
+    readBackgroundActivity.mockResolvedValue(
+      activity([run('run-3', 'pnpm storybook', 'root-1', 2)]),
+    );
+    rerender(<LocalRunningCommands rootId="root-1" refreshKey={1} now={() => NOW} />);
+    await waitFor(() => expect(screen.queryByText('pnpm dev')).not.toBeInTheDocument());
+    expect(screen.getByText('pnpm storybook')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('reports each run of a stop-all on its own', async () => {
+    const user = userEvent.setup();
+    readBackgroundActivity.mockResolvedValue(
+      activity([
+        run('run-1', 'pnpm dev', 'root-1', 0),
+        run('run-3', 'pnpm storybook', 'root-1', 2),
+      ]),
+    );
+    cancelLocalCommand.mockImplementation(async (runId: string) => {
+      if (runId === 'run-1') throw new Error('refused');
+      return true;
+    });
+    render(<LocalRunningCommands rootId="root-1" refreshKey={0} now={() => NOW} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Stop all' }));
+
+    const alerts = await screen.findAllByRole('alert');
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0]).toHaveTextContent('pnpm dev could not be stopped');
+    expect(cancelLocalCommand).toHaveBeenCalledWith('run-3');
+  });
+
   it('shows nothing while nothing runs here', async () => {
     readBackgroundActivity.mockResolvedValue(activity([run('run-2', 'npm start', 'root-2', 1)]));
     const { container } = render(<LocalRunningCommands rootId="root-1" refreshKey={0} />);

@@ -120,6 +120,8 @@ export const LOCAL_CODE_COPY = {
   runningSince: (minutes: number): string =>
     minutes < 1 ? 'Started just now' : `Running for ${minutes} min`,
   stopCommand: (command: string): string => `Stop ${command}`,
+  stopCommandFailed: (command: string): string =>
+    `${command} could not be stopped and may still be running.`,
   stopAllCommands: 'Stop all',
   openPreview: 'Preview',
   openPreviewOf: (url: string): string => `Open a preview of ${url}`,
