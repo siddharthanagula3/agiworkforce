@@ -188,3 +188,33 @@ describe('choosing what a research run may read', () => {
     ).toEqual(['web', 'web-excluded', 'files']);
   });
 });
+
+describe('a connector step that completed only in part', () => {
+  it('shows what was not answered on the completed row', () => {
+    render(
+      <ResearchActivity
+        isStreaming={false}
+        research={{
+          phase: 'complete',
+          label: 'Research complete',
+          searches: 2,
+          sources: 1,
+          elapsedMs: 1000,
+          startedAt: '2026-08-05T10:00:00.000Z',
+          steps: [
+            {
+              id: 'connector-notion',
+              type: 'read',
+              description: 'Search Notion',
+              status: 'completed',
+              note: 'only 1 of 2 searches in this app were answered, so its results may be incomplete',
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId('research-plan-step')).toHaveAttribute('data-status', 'completed');
+    expect(screen.getByText(/only 1 of 2 searches in this app were answered/)).toBeInTheDocument();
+  });
+});

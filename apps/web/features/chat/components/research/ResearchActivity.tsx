@@ -131,7 +131,8 @@ function PlanStepRow({ step }: { step: ResearchStep }) {
         )}
       >
         {step.description}
-        {(step.status === 'dropped' || step.status === 'failed') && step.note ? (
+        {(step.status === 'dropped' || step.status === 'failed' || step.status === 'completed') &&
+        step.note ? (
           <span className="block text-caption text-muted-foreground">{step.note}</span>
         ) : null}
       </span>

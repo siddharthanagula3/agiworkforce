@@ -152,7 +152,9 @@ export async function readResearchConnectorSources(input: {
     return {
       connectorId,
       label,
-      outcome: 'read',
+      outcome: answered < queries.length ? 'partial' : 'read',
+      searchesAsked: queries.length,
+      searchesAnswered: answered,
       sources: [...hits.values()].map(({ url, title, snippet }) => ({ url, title, snippet })),
     };
   };

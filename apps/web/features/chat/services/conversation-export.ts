@@ -3,6 +3,7 @@ import type { ChatSession, ChatMessage } from '../types';
 
 export interface ExportContentOptions {
   includeTimestamps?: boolean;
+  includeMetadata?: boolean;
 }
 
 export const EXPIRING_LINK_PLACEHOLDER = '[expiring link removed from export]';
@@ -35,11 +36,14 @@ export class ChatExportService {
     options: ExportContentOptions = {},
   ): string {
     const includeTimestamps = options.includeTimestamps !== false;
-    let markdown = `# ${session.title}\n\n`;
-    markdown += `**Created:** ${session.createdAt.toLocaleString()}\n`;
-    markdown += `**Last Updated:** ${session.updatedAt.toLocaleString()}\n`;
-    markdown += `**Messages:** ${messages.length}\n\n`;
-    markdown += `---\n\n`;
+    let markdown = '';
+    if (options.includeMetadata !== false) {
+      markdown += `# ${session.title}\n\n`;
+      markdown += `**Created:** ${session.createdAt.toLocaleString()}\n`;
+      markdown += `**Last Updated:** ${session.updatedAt.toLocaleString()}\n`;
+      markdown += `**Messages:** ${messages.length}\n\n`;
+      markdown += `---\n\n`;
+    }
 
     for (const message of messages) {
       const role = message.role === 'user' ? '👤 User' : '🤖 Assistant';

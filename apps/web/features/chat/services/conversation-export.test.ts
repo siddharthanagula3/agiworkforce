@@ -85,6 +85,45 @@ describe('includeTimestamps reaches every format that offers it', () => {
   });
 });
 
+describe('includeMetadata reaches the markdown body', () => {
+  const service = new ChatExportService();
+  const stamp = new Date('2026-01-01T12:00:00.000Z').toLocaleString();
+
+  it('keeps the title, dates and message count when the option is omitted or on', () => {
+    for (const markdown of [
+      service.exportAsMarkdown(session('Private title'), messages()),
+      service.exportAsMarkdown(session('Private title'), messages(), { includeMetadata: true }),
+    ]) {
+      expect(markdown).toContain('# Private title');
+      expect(markdown).toContain('**Created:**');
+      expect(markdown).toContain('**Last Updated:**');
+      expect(markdown).toContain('**Messages:** 2');
+    }
+  });
+
+  it('leaves the title, dates and message count out when disabled, keeping every message', () => {
+    const markdown = service.exportAsMarkdown(session('Private title'), messages(), {
+      includeMetadata: false,
+    });
+
+    expect(markdown).not.toContain('Private title');
+    expect(markdown).not.toContain('**Created:**');
+    expect(markdown).not.toContain('**Last Updated:**');
+    expect(markdown).not.toContain('**Messages:**');
+    expect(markdown).toContain('hello');
+    expect(markdown).toContain('hi');
+  });
+
+  it('keeps per-message timestamps independent of the metadata option', () => {
+    const markdown = service.exportAsMarkdown(session('t'), messages(), {
+      includeMetadata: false,
+      includeTimestamps: true,
+    });
+
+    expect(markdown).toContain(stamp);
+  });
+});
+
 const SIGNED_ATTACHMENT_URL =
   'https://bucket.objects.example.test/private-media/clip.mp4?X-Amz-Algorithm=AWS4-HMAC-SHA256' +
   '&X-Amz-Date=20260901T000000Z&X-Amz-Expires=300&X-Amz-Signature=deadbeef';
