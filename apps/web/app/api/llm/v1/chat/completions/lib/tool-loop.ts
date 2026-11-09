@@ -100,6 +100,7 @@ import {
 } from '@agiworkforce/types';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { agentAllowsSkill } from '@/lib/agents/agent-turn-config';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { recordAuditEvent, type AuditEventType } from '@/lib/security-audit';
 import { resolveSecretHandlingPolicy } from '@/lib/services/organization-policy-gate';
@@ -2247,6 +2248,7 @@ async function runMcpTool(
     inputResponses?: Record<string, unknown>;
     requestState?: string;
     loadSkillInstallOverrides?: () => Promise<ReadonlyMap<string, boolean>>;
+    allowSkill?: (skillName: string) => boolean;
     temporaryChat?: boolean;
     queueSandboxFiles?: SandboxSeedQueue;
     conversationId?: string | null;
@@ -2271,12 +2273,17 @@ async function runMcpTool(
     const enabledPluginIds = userId
       ? await listPermittedPluginIds(callerScopedDb(executionContext, userId), userId)
       : null;
+    const allowSkill = executionContext?.allowSkill;
     const result = enabledPluginIds
       ? await executeManagedSkillToolForPlugins(enabledPluginIds, toolCall.args, {
           availableTools,
           installOverrides: await executionContext?.loadSkillInstallOverrides?.(),
+          ...(allowSkill ? { allowSkill } : {}),
         })
-      : await executeManagedSkillTool(toolCall.args, { availableTools });
+      : await executeManagedSkillTool(toolCall.args, {
+          availableTools,
+          ...(allowSkill ? { allowSkill } : {}),
+        });
     if (result.code === 'skill_loaded' && requestedSkillName) {
       return withSkillSandboxNote(
         result,
@@ -2285,7 +2292,12 @@ async function runMcpTool(
         queueSandboxFiles,
       );
     }
-    if (result.code === 'skill_not_found' && userId && requestedSkillName) {
+    if (
+      result.code === 'skill_not_found' &&
+      userId &&
+      requestedSkillName &&
+      (allowSkill?.(requestedSkillName) ?? true)
+    ) {
       const pluginsAllowed = await workspaceAllowsPlugins(
         callerScopedDb(executionContext, userId),
         userId,
@@ -5210,6 +5222,8 @@ export async function* runToolLoop(
               sourcePositionFor,
               isRetrievedSource,
               loadSkillInstallOverrides,
+              allowSkill: (skillName) =>
+                agentAllowsSkill(processed.agentTurn?.config ?? null, skillName),
               queueSandboxFiles,
               ...(processed.chatRequest?.client_timezone
                 ? { clientTimeZone: processed.chatRequest.client_timezone }

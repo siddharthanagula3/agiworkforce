@@ -345,11 +345,13 @@ async function acquireIngestLease(
   return lease;
 }
 
-async function existingRecordsForIngest(rebuild: boolean): Promise<readonly DirectoryRecord[]> {
+async function existingRecordsForIngest(
+  rebuild: boolean,
+): Promise<readonly DirectoryRecord[] | null> {
   try {
-    return (await readSnapshotRecordsForIngest()) ?? [];
+    return await readSnapshotRecordsForIngest();
   } catch (error) {
-    if (rebuild && error instanceof DirectorySnapshotUnreadableError) return [];
+    if (rebuild && error instanceof DirectorySnapshotUnreadableError) return null;
     throw error;
   }
 }
@@ -373,7 +375,9 @@ async function runIngest(
   const fetchImpl = options.fetchImpl ?? fetch;
   const runStartedAt = new Date(startedAtMs).toISOString();
   const storedState = await readSyncState();
-  const syncState = options.rebuild ? DEFAULT_SYNC_STATE : storedState;
+  const baseline = await existingRecordsForIngest(options.rebuild === true);
+  const syncState = options.rebuild || baseline === null ? DEFAULT_SYNC_STATE : storedState;
+  const existing = baseline ?? [];
 
   const mode: IngestMode = syncState.bootstrapComplete ? 'incremental' : 'bootstrap';
   const resumingBootstrap = mode === 'bootstrap' && syncState.nextIngestCursor !== null;
@@ -393,7 +397,6 @@ async function runIngest(
   );
   const crawlEndedAtMs = now();
 
-  const existing = await existingRecordsForIngest(options.rebuild === true);
   const existingRegistry = existing.filter((record) => record.sourceRegistry === REGISTRY_SOURCE);
   const removedIds = new Set(crawl.removedIds);
   const existingRegistryById = new Map(existingRegistry.map((record) => [record.id, record]));

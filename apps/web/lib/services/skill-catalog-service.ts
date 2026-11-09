@@ -460,6 +460,7 @@ export interface ExecuteManagedSkillToolOptions extends Pick<
   availableEnvironmentVariables?: ReadonlySet<string>;
   platform?: string;
   installOverrides?: ReadonlyMap<string, boolean>;
+  allowSkill?: (skillName: string) => boolean;
 }
 
 const EMPTY_INSTALL_OVERRIDES: ReadonlyMap<string, boolean> = new Map();
@@ -479,7 +480,11 @@ const managedSkillFileAccess: SkillToolFileAccess = {
 };
 
 function skillToolRuntimeContext(options: ExecuteManagedSkillToolOptions): SkillToolRuntimeContext {
-  const { installOverrides: _installOverrides, ...runtimeOptions } = options;
+  const {
+    installOverrides: _installOverrides,
+    allowSkill: _allowSkill,
+    ...runtimeOptions
+  } = options;
   return {
     ...runtimeOptions,
     availableEnvironmentVariables:
@@ -500,7 +505,7 @@ export async function executeManagedSkillTool(
   const catalog = filterSkillsByInstallOverrides(
     await getManagedSkillCatalog(),
     options.installOverrides ?? EMPTY_INSTALL_OVERRIDES,
-  );
+  ).filter((skill) => options.allowSkill?.(skill.name) ?? true);
   return executeSkillToolWithFiles(
     catalog,
     args,
@@ -517,7 +522,7 @@ export async function executeManagedSkillToolForPlugins(
   const catalog = filterSkillsByInstallOverrides(
     await getManagedSkillCatalogForPlugins(enabledPluginIds),
     options.installOverrides ?? EMPTY_INSTALL_OVERRIDES,
-  );
+  ).filter((skill) => options.allowSkill?.(skill.name) ?? true);
   return executeSkillToolWithFiles(
     catalog,
     args,

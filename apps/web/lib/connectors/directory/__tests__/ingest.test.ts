@@ -275,6 +275,59 @@ describe('ingestConnectorDirectory', () => {
     expect(mocks.writeSnapshotRecords).not.toHaveBeenCalled();
   });
 
+  it('bootstraps from the first page when the checkpoint is complete but the baseline snapshot is gone', async () => {
+    mocks.readSyncState.mockResolvedValueOnce(
+      syncState({ bootstrapComplete: true, lastSyncAt: T0, authProbeCursor: 'a' }),
+    );
+    mocks.readSnapshotRecords.mockResolvedValueOnce(null);
+    mocks.fetchRegistryPage.mockResolvedValueOnce(
+      page([activeEntry('unchanged'), activeEntry('updated')]),
+    );
+
+    const summary = await run();
+
+    expect(mocks.fetchRegistryPage.mock.calls[0]?.[0]).toEqual({
+      cursor: null,
+      updatedSince: null,
+    });
+    expect(summary.mode).toBe('bootstrap');
+    expect(summary.bootstrapComplete).toBe(true);
+    expect(writtenSnapshot().map((record) => record.id)).toEqual(['unchanged', 'updated']);
+    expect(writtenSyncState().authProbeCursor).not.toBe('a');
+  });
+
+  it('restarts an in-progress bootstrap from the first page when its baseline snapshot is gone', async () => {
+    mocks.readSyncState.mockResolvedValueOnce(
+      syncState({ nextIngestCursor: 'existing.example/mcp:1.0.0' }),
+    );
+    mocks.readSnapshotRecords.mockResolvedValueOnce(null);
+    mocks.fetchRegistryPage.mockResolvedValueOnce(page([activeEntry('one')]));
+
+    await run();
+
+    expect(mocks.fetchRegistryPage.mock.calls[0]?.[0]).toEqual({
+      cursor: null,
+      updatedSince: null,
+    });
+  });
+
+  it('keeps the incremental request when the baseline snapshot exists', async () => {
+    mocks.readSyncState.mockResolvedValueOnce(
+      syncState({ bootstrapComplete: true, lastSyncAt: T0 }),
+    );
+    mocks.readSnapshotRecords.mockResolvedValueOnce([registryRecord('kept')]);
+    mocks.fetchRegistryPage.mockResolvedValueOnce(page([activeEntry('changed')]));
+
+    const summary = await run();
+
+    expect(mocks.fetchRegistryPage.mock.calls[0]?.[0]).toEqual({
+      cursor: null,
+      updatedSince: T0,
+    });
+    expect(summary.mode).toBe('incremental');
+    expect(writtenSnapshot().map((record) => record.id)).toEqual(['kept', 'changed']);
+  });
+
   it('rebuilds from the first page when asked, even after a completed bootstrap', async () => {
     mocks.readSyncState.mockResolvedValueOnce(
       syncState({ bootstrapComplete: true, lastSyncAt: '2026-09-01T00:00:00.000Z' }),
