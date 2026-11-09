@@ -164,13 +164,15 @@ function world(state: WorldState): { db: DatabaseAdapter; state: WorldState } {
     return [];
   };
 
-  const db = {
+  const db: Record<string, unknown> = {
     query: vi.fn(run),
     execute: vi.fn(run),
-    transaction: vi.fn(),
     withUser: vi.fn(),
     dispose: vi.fn(),
   };
+  db.transaction = vi.fn(async (fn: (tx: DatabaseAdapter) => Promise<unknown>) =>
+    fn(db as unknown as DatabaseAdapter),
+  );
   return { db: db as unknown as DatabaseAdapter, state };
 }
 
@@ -256,7 +258,12 @@ describe('plugin lifecycle admin actions', () => {
       actorUserId: ADMIN,
     });
 
-    const rolled = await rollbackPlugin(db, { pluginId: PLUGIN_ID, actorUserId: ADMIN });
+    const rolled = await rollbackPlugin(db, {
+      pluginId: PLUGIN_ID,
+      actorUserId: ADMIN,
+      from: '1.1.0',
+      to: '1.0.0',
+    });
 
     expect(rolled.restored.version).toBe('1.0.0');
     expect(rolled.from).toBe('1.1.0');
@@ -274,7 +281,80 @@ describe('plugin lifecycle admin actions', () => {
     });
 
     await expect(
-      rollbackPlugin(db, { pluginId: PLUGIN_ID, actorUserId: ADMIN }),
+      rollbackPlugin(db, { pluginId: PLUGIN_ID, actorUserId: ADMIN, from: '1.1.0', to: '1.0.0' }),
+    ).rejects.toBeInstanceOf(PluginLifecycleError);
+  });
+
+  it('refuses a confirmed rollback when a later publication moved the entry', async () => {
+    const { db, state } = world(baseWorld());
+    await publishPluginVersion(db, {
+      pluginId: PLUGIN_ID,
+      version: '1.2.0',
+      actorUserId: 'user_other_admin',
+    });
+    state.installations.push({ userId: 'user_2', version: '1.2.0', enabled: true });
+    const eventsBefore = state.events.length;
+
+    await expect(
+      rollbackPlugin(db, { pluginId: PLUGIN_ID, actorUserId: ADMIN, from: '1.1.0', to: '1.0.0' }),
+    ).rejects.toThrow(/now on 1\.2\.0, not 1\.1\.0/);
+
+    expect(state.entryVersion).toBe('1.2.0');
+    expect(state.installations.map((row) => row.version)).toEqual(['1.1.0', '1.2.0']);
+    expect(state.events).toHaveLength(eventsBefore);
+  });
+
+  it('rolls back to the named version rather than the newest other one', async () => {
+    const { db, state } = world({
+      ...baseWorld(),
+      entryVersion: '1.2.0',
+      versions: [
+        { version: '1.0.0', status: 'published', publishedAt: '2026-09-01T00:00:00.000Z' },
+        { version: '1.1.0', status: 'published', publishedAt: '2026-09-05T00:00:00.000Z' },
+        { version: '1.2.0', status: 'published', publishedAt: '2026-09-09T00:00:00.000Z' },
+      ],
+      installations: [
+        { userId: 'user_1', version: '1.2.0', enabled: true },
+        { userId: 'user_2', version: '1.1.0', enabled: true },
+      ],
+    });
+
+    const rolled = await rollbackPlugin(db, {
+      pluginId: PLUGIN_ID,
+      actorUserId: ADMIN,
+      from: '1.2.0',
+      to: '1.0.0',
+    });
+
+    expect(rolled.restored.version).toBe('1.0.0');
+    expect(state.entryVersion).toBe('1.0.0');
+    expect(state.installations.map((row) => row.version)).toEqual(['1.0.0', '1.1.0']);
+  });
+
+  it('refuses a named destination that is no longer published', async () => {
+    const { db, state } = world(baseWorld());
+    await suspendPluginVersion(db, {
+      pluginId: PLUGIN_ID,
+      version: '1.0.0',
+      reason: 'Bad build.',
+      actorUserId: ADMIN,
+    });
+
+    await expect(
+      rollbackPlugin(db, { pluginId: PLUGIN_ID, actorUserId: ADMIN, from: '1.1.0', to: '1.0.0' }),
+    ).rejects.toThrow(/1\.0\.0 is suspended/);
+
+    expect(state.entryVersion).toBe('1.1.0');
+  });
+
+  it('refuses a destination that does not exist and a rollback onto itself', async () => {
+    const { db } = world(baseWorld());
+
+    await expect(
+      rollbackPlugin(db, { pluginId: PLUGIN_ID, actorUserId: ADMIN, from: '1.1.0', to: '0.9.0' }),
+    ).rejects.toThrow(/no version 0\.9\.0/);
+    await expect(
+      rollbackPlugin(db, { pluginId: PLUGIN_ID, actorUserId: ADMIN, from: '1.1.0', to: '1.1.0' }),
     ).rejects.toBeInstanceOf(PluginLifecycleError);
   });
 

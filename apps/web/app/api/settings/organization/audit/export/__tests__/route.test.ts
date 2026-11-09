@@ -108,9 +108,24 @@ describe('organization audit export', () => {
       expect.objectContaining({
         eventType: 'data_exported',
         outcome: 'success',
+        requireWorkspaceTrail: true,
         detail: expect.objectContaining({ changedKeys: ['action'] }),
       }),
     );
+  });
+
+  it('does not open the stream when the workspace trail row cannot be written', async () => {
+    mocks.recordAuditEvent.mockRejectedValueOnce(
+      Object.assign(new Error('The workspace audit trail is unavailable. Try again.'), {
+        statusCode: 503,
+      }),
+    );
+
+    const response = await GET(request());
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get('Content-Disposition')).toBeNull();
+    expect(mocks.iterate).not.toHaveBeenCalled();
   });
 
   it('refuses when the workspace policy switches export off, and says so in the trail', async () => {

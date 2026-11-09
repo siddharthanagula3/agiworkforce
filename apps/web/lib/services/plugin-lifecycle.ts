@@ -507,51 +507,71 @@ export interface PluginRollbackResult {
 }
 
 /**
- * Restore the last known-good pin: the newest version still published, other
- * than the one the entry currently points at. Installations sitting on the
- * withdrawn version are moved back to it, because leaving them pinned to a
- * version nobody may install is the state rollback exists to end.
+ * Move the entry from the version the operator reviewed to the published
+ * version they named. The entry row is locked and compared with `from` before
+ * anything is written, so a publication that landed after the operator opened
+ * the confirmation is a conflict, never a rollback of a different release.
+ * Installations sitting on the withdrawn version are moved to the target,
+ * because leaving them pinned to a version nobody may install is the state
+ * rollback exists to end.
  */
 export async function rollbackPlugin(
   db: DatabaseAdapter,
-  input: { pluginId: string; actorUserId: string },
+  input: { pluginId: string; actorUserId: string; from: string; to: string },
 ): Promise<PluginRollbackResult> {
   const pluginId = PluginIdSchema.parse(input.pluginId);
-  const current = await currentEntryVersion(db, pluginId);
-  if (current === null) throw new PluginLifecycleError(`${pluginId} is not in the registry.`);
-
-  const rows = await db.query<PluginVersionRow>(
-    `select ${VERSION_COLUMNS} from public.plugin_registry_versions
-      where plugin_id = $1 and status = 'published' and version <> $2
-      order by published_at desc
-      limit 1`,
-    [pluginId, current],
-  );
-  const target = rows[0] ? mapVersion(rows[0]) : null;
-  if (!target) {
-    throw new PluginLifecycleError(
-      `${pluginId} has no earlier published version to roll back to, so ${current} cannot be withdrawn this way.`,
-    );
+  const from = VersionSchema.parse(input.from);
+  const to = VersionSchema.parse(input.to);
+  if (from === to) {
+    throw new PluginLifecycleError(`${pluginId} ${from} cannot be rolled back to itself.`);
   }
 
-  await pointEntryAtVersion(db, target, 'published');
-  const moved = await db.query<{ id: string }>(
-    `update public.plugin_installations
-        set installed_version = $3, updated_at = now()
-      where plugin_id = $1 and installed_version = $2
-      returning id`,
-    [pluginId, current, target.version],
-  );
-  await recordLifecycleEvent(db, {
-    pluginId,
-    version: target.version,
-    action: 'rollback',
-    fromStatus: current,
-    toStatus: 'published',
-    reason: `Rolled back from ${current}.`,
-    actorUserId: input.actorUserId,
+  return db.transaction(async (tx) => {
+    const entry = await tx.query<{ version: string }>(
+      `select version from public.plugin_registry_entries where id = $1 for update`,
+      [pluginId],
+    );
+    const current = entry[0]?.version ?? null;
+    if (current === null) throw new PluginLifecycleError(`${pluginId} is not in the registry.`);
+    if (current !== from) {
+      throw new PluginLifecycleError(
+        `${pluginId} is now on ${current}, not ${from}. Reload the plugin and confirm the rollback again.`,
+      );
+    }
+
+    const rows = await tx.query<PluginVersionRow>(
+      `select ${VERSION_COLUMNS} from public.plugin_registry_versions
+        where plugin_id = $1 and version = $2
+        for update`,
+      [pluginId, to],
+    );
+    const target = rows[0] ? mapVersion(rows[0]) : null;
+    if (!target) throw new PluginLifecycleError(`${pluginId} has no version ${to}.`);
+    if (target.status !== 'published') {
+      throw new PluginLifecycleError(
+        `${pluginId} ${to} is ${target.status} now, so it cannot be restored. Reload the plugin and confirm the rollback again.`,
+      );
+    }
+
+    await pointEntryAtVersion(tx, target, 'published');
+    const moved = await tx.query<{ id: string }>(
+      `update public.plugin_installations
+          set installed_version = $3, updated_at = now()
+        where plugin_id = $1 and installed_version = $2
+        returning id`,
+      [pluginId, current, target.version],
+    );
+    await recordLifecycleEvent(tx, {
+      pluginId,
+      version: target.version,
+      action: 'rollback',
+      fromStatus: current,
+      toStatus: 'published',
+      reason: `Rolled back from ${current}.`,
+      actorUserId: input.actorUserId,
+    });
+    return { restored: target, from: current, installationsMoved: moved.length };
   });
-  return { restored: target, from: current, installationsMoved: moved.length };
 }
 
 export interface PluginUpdateOffer {

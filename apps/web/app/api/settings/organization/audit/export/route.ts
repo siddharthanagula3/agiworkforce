@@ -97,7 +97,8 @@ async function handleGet(request: NextRequest): Promise<Response> {
 
   // Reading the trail is itself an audited act. Recorded BEFORE the stream
   // opens: an export that fails halfway still has to leave evidence that
-  // someone asked for the data.
+  // someone asked for the data. The workspace trail row is required, because
+  // the audit page promises the export is recorded there.
   await recordAuditEvent({
     userId,
     eventType: 'data_exported',
@@ -105,6 +106,7 @@ async function handleGet(request: NextRequest): Promise<Response> {
     request,
     outcome: 'success',
     severity: 'warning',
+    requireWorkspaceTrail: true,
     detail: {
       resourceType: 'enterprise_audit_events',
       resourceId: membership.organizationId,

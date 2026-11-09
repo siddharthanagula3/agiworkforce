@@ -148,12 +148,32 @@ describe('POST /api/plugins/[id]/lifecycle', () => {
       from: '1.1.0',
       installationsMoved: 2,
     });
-    const response = await POST(post(PLUGIN_ID, { action: 'rollback' }), params(PLUGIN_ID));
+    const response = await POST(
+      post(PLUGIN_ID, { action: 'rollback', from: '1.1.0', to: '1.0.0' }),
+      params(PLUGIN_ID),
+    );
     expect(response.status).toBe(200);
     expect(rollbackPluginMock).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ pluginId: PLUGIN_ID, actorUserId: 'admin-1' }),
+      expect.objectContaining({
+        pluginId: PLUGIN_ID,
+        actorUserId: 'admin-1',
+        from: '1.1.0',
+        to: '1.0.0',
+      }),
     );
+  });
+
+  it.each([
+    ['no versions', { action: 'rollback' }],
+    ['no destination', { action: 'rollback', from: '1.1.0' }],
+    ['no source', { action: 'rollback', to: '1.0.0' }],
+    ['a malformed destination', { action: 'rollback', from: '1.1.0', to: 'latest' }],
+  ])('rejects a rollback with %s and never mutates', async (_label, body) => {
+    const response = await POST(post(PLUGIN_ID, body), params(PLUGIN_ID));
+    expect(response.status).toBe(400);
+    expect(rollbackPluginMock).not.toHaveBeenCalled();
+    expect(recordAuditEventMock).not.toHaveBeenCalled();
   });
 
   it('records every lifecycle action in the platform audit trail', async () => {
