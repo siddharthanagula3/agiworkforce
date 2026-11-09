@@ -1370,15 +1370,16 @@ impl CliDeveloperSessionHost {
         ThreadStatus::Idle
     }
 
-    /// Held for the life of the connection: every local runtime is probed and
-    /// every route's credential looked up, so this cannot run per request.
-    async fn host_models(&self, refresh: bool) -> Vec<HostModelSummary> {
+    /// Held for the life of the connection: every route's credential and plan
+    /// is looked up, so this cannot run per request. Local runtimes are not
+    /// held; each response reports the ones it just probed.
+    async fn catalog_host_models(&self, refresh: bool) -> Vec<HostModelSummary> {
         if !refresh {
             if let Some(cached) = self.host_models.read().await.clone() {
                 return cached;
             }
         }
-        let resolved = crate::model_reachability::host_models(&self.config).await;
+        let resolved = crate::model_reachability::catalog_host_models(&self.config).await;
         *self.host_models.write().await = Some(resolved.clone());
         resolved
     }
@@ -2180,8 +2181,12 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 local_servers: Vec::new(),
             });
         }
-        let host_models = self.host_models(params.refresh).await;
+        let catalog_models = self.catalog_host_models(params.refresh).await;
         let probes = crate::local_models::discover_all(&self.config).await;
+        let host_models = crate::model_reachability::with_running_local_models(
+            catalog_models,
+            crate::model_reachability::running_local_models(&probes),
+        );
         let local_servers = probes
             .iter()
             .filter_map(surfaces::local_server_status)

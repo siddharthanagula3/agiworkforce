@@ -106,6 +106,7 @@ export function createDictationLanguageRow(
     'aria-describedby': 'opt-dictation-hint',
   });
   select.disabled = true;
+  let saved = '';
 
   const loaded = readDictationLanguage().then((stored) => {
     const choices = dictationLanguageChoices(stored, environment);
@@ -117,6 +118,7 @@ export function createDictationLanguageRow(
       select.appendChild(el('option', { value: choice.tag }, choice.label));
     }
     select.value = resolveDictationLanguage(stored, environment) ?? choices[0]!.tag;
+    saved = select.value;
     select.disabled = false;
   });
 
@@ -125,9 +127,11 @@ export function createDictationLanguageRow(
     select.disabled = true;
     void writeDictationLanguage(next)
       .then(() => {
+        saved = next;
         status.textContent = t('spDictationLanguageSaved');
       })
       .catch(() => {
+        select.value = saved;
         status.textContent = t('spPreferenceSaveFailed');
       })
       .finally(() => {
