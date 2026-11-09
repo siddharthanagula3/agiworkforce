@@ -93,6 +93,38 @@ describe('s3 object store', () => {
     expect(head?.metadata).toEqual({ 'agi-region': 'us-east-1', 'agi-encryption': 'aws:kms' });
   });
 
+  it('asks for the configured encryption when it copies an object into place', async () => {
+    const { client } = createFakeS3Endpoint(CONFIG);
+    const send = vi.spyOn(client, 'send');
+    const store = createS3ObjectStore({
+      client,
+      requestTimeoutMs: REQUEST_TIMEOUT_MS,
+      encryption: { algorithm: 'aws:kms', keyId: 'key-id' },
+    });
+    await store.put({
+      bucket: 'contract-bucket',
+      key: 'source.png',
+      body: new Uint8Array([1, 2, 3]),
+      contentType: 'image/png',
+    });
+    const head = await store.head('contract-bucket', 'source.png');
+
+    await store.copyIfMatch({
+      bucket: 'contract-bucket',
+      sourceKey: 'source.png',
+      destinationKey: 'destination.png',
+      etag: head?.etag ?? '',
+    });
+
+    const copy = send.mock.calls
+      .map(([command]) => command as { constructor: { name: string }; input: object })
+      .find((command) => command.constructor.name === 'CopyObjectCommand');
+    expect(copy?.input).toMatchObject({
+      ServerSideEncryption: 'aws:kms',
+      SSEKMSKeyId: 'key-id',
+    });
+  });
+
   it('refuses an encryption algorithm the host does not offer', async () => {
     const store = createS3ObjectStore({
       client: createFakeS3Endpoint(CONFIG).client,

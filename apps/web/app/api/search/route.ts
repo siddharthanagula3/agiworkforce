@@ -319,23 +319,26 @@ async function handleGet(request: NextRequest) {
   const requestedKinds = url.searchParams.getAll('kind').filter(isSearchSourceKind);
   const strategy =
     parseSearchRetrievalStrategy(url.searchParams.get('mode')) ?? DEFAULT_SEARCH_RETRIEVAL_STRATEGY;
-  const indexSearch = createPostgresSearchProvider({
-    db,
-    userId,
-    organizationId,
-    semantic: true,
-    residency,
-    includeHealthSpaces: true,
-    googleUserData: 'include',
-  }).search({
-    text: q,
-    kinds: requestedKinds.length > 0 ? requestedKinds : SEARCH_SOURCE_KINDS,
-    limit,
-    maxPerSource: 3,
-    match: 'all_terms',
-    mode: 'private_knowledge',
-    strategy,
-  });
+  const rowFiltersApply = Boolean(role || startDate || endDate);
+  const indexSearch = rowFiltersApply
+    ? Promise.resolve({ hits: [], semantic: 'unavailable' as const })
+    : createPostgresSearchProvider({
+        db,
+        userId,
+        organizationId,
+        semantic: true,
+        residency,
+        includeHealthSpaces: true,
+        googleUserData: 'include',
+      }).search({
+        text: q,
+        kinds: requestedKinds.length > 0 ? requestedKinds : SEARCH_SOURCE_KINDS,
+        limit,
+        maxPerSource: 3,
+        match: 'all_terms',
+        mode: 'private_knowledge',
+        strategy,
+      });
 
   const [sessionRows, projectRows, fileRows, messageRows, indexed] = await Promise.all([
     db.query<SessionRow>(

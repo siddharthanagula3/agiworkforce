@@ -79,4 +79,59 @@ describe('account style writes wait for the account copy', () => {
 
     expect(mocks.save).toHaveBeenCalledTimes(1);
   });
+
+  it('keeps an edit to an existing style made before the account copy was read', async () => {
+    mocks.fetchStored.mockRejectedValueOnce(new Error('offline'));
+    const store = await freshStore();
+    store.setState({ customStyles: [SERVER_STYLE] });
+
+    await store.getState().hydrateFromServer();
+    store.getState().updateCustomStyle('server-style', { instruction: 'Write tersely.' });
+    mocks.fetchStored.mockResolvedValueOnce({ customStyles: [SERVER_STYLE] });
+    await store.getState().hydrateFromServer();
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(store.getState().customStyles).toEqual([
+      { ...SERVER_STYLE, instruction: 'Write tersely.' },
+    ]);
+    expect(mocks.save).toHaveBeenCalledWith(
+      'response-style',
+      expect.objectContaining({
+        customStyles: [{ ...SERVER_STYLE, instruction: 'Write tersely.' }],
+      }),
+    );
+  });
+
+  it('keeps a deletion made before the account copy was read', async () => {
+    mocks.fetchStored.mockRejectedValueOnce(new Error('offline'));
+    const store = await freshStore();
+    store.setState({ customStyles: [SERVER_STYLE] });
+
+    await store.getState().hydrateFromServer();
+    store.getState().deleteCustomStyle('server-style');
+    mocks.fetchStored.mockResolvedValueOnce({
+      customStyles: [SERVER_STYLE, { ...SERVER_STYLE, id: 'other', name: 'Other' }],
+    });
+    await store.getState().hydrateFromServer();
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(store.getState().customStyles.map((style) => style.id)).toEqual(['other']);
+    expect(mocks.save).toHaveBeenCalledWith(
+      'response-style',
+      expect.objectContaining({
+        customStyles: [expect.objectContaining({ id: 'other' })],
+      }),
+    );
+  });
+
+  it('does not save when nothing was changed before the account copy was read', async () => {
+    mocks.fetchStored.mockResolvedValue({ customStyles: [SERVER_STYLE] });
+    const store = await freshStore();
+
+    await store.getState().hydrateFromServer();
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(store.getState().customStyles).toEqual([SERVER_STYLE]);
+    expect(mocks.save).not.toHaveBeenCalled();
+  });
 });

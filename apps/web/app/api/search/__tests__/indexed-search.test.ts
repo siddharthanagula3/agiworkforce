@@ -118,4 +118,26 @@ describe('GET /api/search over the retrieval index', () => {
     expect(params[5]).toBe('quarterly & plan:*');
     expect(mocks.query.mock.calls.some(([sql]) => String(sql).includes('as present'))).toBe(false);
   });
+
+  it.each([['role=user'], ['startDate=2026-01-01'], ['endDate=2026-02-01']])(
+    'leaves indexed passages out when %s narrows the message search',
+    async (filter) => {
+      const response = await GET(
+        new NextRequest(`http://localhost/api/search?q=quarterly&${filter}`),
+      );
+      const body = (await response.json()) as {
+        documents: unknown[];
+        stats: { documentMatches: number };
+      };
+
+      expect(response.status).toBe(200);
+      expect(body.documents).toEqual([]);
+      expect(body.stats.documentMatches).toBe(0);
+      expect(
+        (mocks.query.mock.calls as Array<[string]>).some(([sql]) =>
+          sql.includes('from retrieval_chunks c'),
+        ),
+      ).toBe(false);
+    },
+  );
 });

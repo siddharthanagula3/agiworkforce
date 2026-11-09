@@ -242,6 +242,7 @@ export function createS3ObjectStore(options: S3ObjectStoreOptions): ObjectStore 
             CopySource: encodeCopySource(input.bucket, input.sourceKey),
             CopySourceIfMatch: input.etag,
             MetadataDirective: COPY_METADATA_DIRECTIVE,
+            ...encryptionHeaders(),
           }),
         );
         return true;
