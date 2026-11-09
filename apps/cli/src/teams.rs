@@ -239,6 +239,21 @@ impl TeamManager {
                     USER
                 ));
             }
+            let stopped = teammates
+                .get(to)
+                .is_some_and(|teammate| teammate.status == TeammateStatus::Completed)
+                || self
+                    .stops
+                    .read()
+                    .await
+                    .get(to)
+                    .is_some_and(|stop| stop.load(Ordering::Acquire));
+            if stopped {
+                return Err(anyhow::anyhow!(
+                    "Teammate '{}' has stopped and will not read new messages.",
+                    to
+                ));
+            }
         }
 
         let message = TeamMessage {
@@ -1072,6 +1087,31 @@ mod tests {
         // Messages should be drained after reading
         let messages_after = tm.read_messages("bob").await.unwrap();
         assert!(messages_after.is_empty());
+    }
+
+    #[tokio::test]
+    async fn stopped_teammates_refuse_new_messages() {
+        let tm = TeamManager::new();
+        tm.spawn_teammate("alice", "engineer", "").await.unwrap();
+        tm.spawn_teammate("bob", "tester", "").await.unwrap();
+        tm.stops
+            .write()
+            .await
+            .insert("alice".to_string(), Arc::new(AtomicBool::new(false)));
+
+        tm.stop_teammate("alice").await.unwrap();
+        let reply = team_command(Some(&tm), "alice follow-up").await;
+        assert!(reply.contains("has stopped"), "{reply}");
+        assert!(tm.send_message(LEAD, "alice", "more").await.is_err());
+        assert!(tm.read_messages("alice").await.unwrap().is_empty());
+
+        tm.update_teammate_status("bob", TeammateStatus::Completed)
+            .await;
+        assert!(tm.send_message(USER, "bob", "hello").await.is_err());
+        assert!(tm.read_messages("bob").await.unwrap().is_empty());
+
+        assert!(tm.send_message("alice", LEAD, "final report").await.is_ok());
+        assert!(tm.send_message(LEAD, "nobody", "hi").await.is_err());
     }
 
     #[tokio::test]
