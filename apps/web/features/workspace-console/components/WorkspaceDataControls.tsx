@@ -97,6 +97,10 @@ function BacklogStrip({ backlog }: { backlog: RetentionBacklog }) {
   if (!backlog.enforced) return null;
 
   const caughtUp = backlog.pendingDeletions === 0;
+  const noneDue =
+    backlog.retentionDays === null
+      ? 'No conversation is past the retention window.'
+      : `No conversation is older than the ${backlog.retentionDays}-day window.`;
   const completion = backlog.estimatedCompletionAt
     ? when(backlog.estimatedCompletionAt)
     : 'Known after two sweeps set a pace';
@@ -113,7 +117,12 @@ function BacklogStrip({ backlog }: { backlog: RetentionBacklog }) {
           label="Waiting to be deleted"
           value={caughtUp ? 'Nothing' : backlog.pendingDeletions.toLocaleString()}
           {...(caughtUp
-            ? { hint: 'The sweep has reached the whole retention window.' }
+            ? {
+                hint:
+                  backlog.lastSweptAt === null
+                    ? noneDue
+                    : 'The sweep has reached the whole retention window.',
+              }
             : { hint: `Older than the ${backlog.retentionDays}-day window.` })}
         />
         {backlog.heldFromDeletion > 0 ? (
@@ -473,14 +482,21 @@ export function WorkspaceDataControls() {
             <p className="text-sm font-medium" style={{ color: 'var(--text-1)' }}>
               No sweep has run
             </p>
-            <p className="max-w-sm text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
-              Retention is not enforced for this workspace, so nothing is being deleted. Turn it on
-              in{' '}
-              <Link href="/workspace/policy" style={{ textDecoration: 'underline' }}>
-                policy
-              </Link>{' '}
-              once you are ready for permanent deletion.
-            </p>
+            {data.backlog.enforced ? (
+              <p className="max-w-sm text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
+                Retention is enforced for this workspace. The first sweep will appear here once it
+                has run.
+              </p>
+            ) : (
+              <p className="max-w-sm text-xs leading-relaxed" style={{ color: 'var(--text-3)' }}>
+                Retention is not enforced for this workspace, so nothing is being deleted. Turn it
+                on in{' '}
+                <Link href="/workspace/policy" style={{ textDecoration: 'underline' }}>
+                  policy
+                </Link>{' '}
+                once you are ready for permanent deletion.
+              </p>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">

@@ -173,7 +173,10 @@ async function sendScheduleCompletionEmailJob(
   });
   if (result.delivered) return { delivered: true, providerMessageId: result.providerMessageId };
   if (result.reason === 'not_configured') return { skipped: 'not_configured' };
-  if (result.reason === 'invalid_recipient' || result.reason === 'rejected') {
+  if (
+    result.reason === 'invalid_recipient' ||
+    (result.reason === 'rejected' && !result.retryable)
+  ) {
     throw new PermanentJobError(`The provider refused the message: ${result.detail}`);
   }
   throw new Error(`Schedule email could not be sent (${result.reason}): ${result.detail}`);

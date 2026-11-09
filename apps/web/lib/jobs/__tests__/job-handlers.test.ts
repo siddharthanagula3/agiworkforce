@@ -246,6 +246,39 @@ describe('email.schedule-completed', () => {
     });
     await expect(handler(context(notice))).rejects.toBeInstanceOf(PermanentJobError);
   });
+
+  it('keeps a rate-limited or unavailable provider response on the retry budget', async () => {
+    for (const status of [429, 503]) {
+      mocks.sendScheduleCompletionEmail.mockResolvedValue({
+        delivered: false,
+        reason: 'rejected',
+        detail: `${status} try later`,
+        status,
+        retryable: true,
+      });
+      const failure = await handler(context(notice)).catch((error: unknown) => error);
+      expect(failure).toBeInstanceOf(Error);
+      expect(failure).not.toBeInstanceOf(PermanentJobError);
+    }
+  });
+
+  it('gives up on a provider refusal that no retry can change', async () => {
+    mocks.sendScheduleCompletionEmail.mockResolvedValue({
+      delivered: false,
+      reason: 'rejected',
+      detail: '422 invalid parameter',
+      status: 422,
+      retryable: false,
+    });
+    await expect(handler(context(notice))).rejects.toBeInstanceOf(PermanentJobError);
+
+    mocks.sendScheduleCompletionEmail.mockResolvedValue({
+      delivered: false,
+      reason: 'rejected',
+      detail: 'idempotency key must be 1-256 visible ASCII characters',
+    });
+    await expect(handler(context(notice))).rejects.toBeInstanceOf(PermanentJobError);
+  });
 });
 
 describe('webhooks.audit-stream-delivery', () => {
