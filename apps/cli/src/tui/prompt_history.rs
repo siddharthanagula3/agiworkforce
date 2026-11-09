@@ -33,6 +33,16 @@ impl PromptHistory {
         }
     }
 
+    #[cfg(test)]
+    pub(crate) fn in_memory() -> Self {
+        Self {
+            entries: FileHistory::new(),
+            path: None,
+            position: None,
+            draft: String::new(),
+        }
+    }
+
     pub(crate) fn record(&mut self, prompt: &str) {
         self.position = None;
         self.draft.clear();

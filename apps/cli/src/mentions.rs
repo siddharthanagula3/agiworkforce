@@ -90,6 +90,7 @@ pub fn workspace_file_candidates(root: &Path) -> Vec<MentionCandidate> {
     paths.sort_by(|a, b| a.len().cmp(&b.len()).then_with(|| a.cmp(b)));
     let mut ordered = recent;
     ordered.extend(paths);
+    ordered.retain(|path| mention_token(path).is_some());
     ordered.truncate(MAX_CANDIDATES);
     ordered.into_iter().map(MentionCandidate::new).collect()
 }
@@ -235,16 +236,44 @@ pub fn active_mention_query(input: &str, cursor: usize) -> Option<(usize, &str)>
 /// path rather than as part of it.
 const TRAILING_PUNCTUATION: [char; 8] = ['.', ',', ';', ':', '!', '?', ')', ']'];
 
+/// The composer text that names `path` so [`parse_mentions`] reads back exactly
+/// `path`. A path with whitespace, or one that opens with a quote, is quoted;
+/// `None` when no token round-trips, so the picker never offers that path.
+pub fn mention_token(path: &str) -> Option<String> {
+    if path.is_empty() {
+        return None;
+    }
+    let needs_quotes = path.contains(char::is_whitespace) || path.starts_with('"');
+    if !needs_quotes {
+        return Some(format!("@{path}"));
+    }
+    if path.contains('"') {
+        return None;
+    }
+    Some(format!("@\"{path}\""))
+}
+
 /// Every `@path` token in a submitted message, in the order they appear, with
-/// duplicates removed.
+/// duplicates removed. `@"…"` names a path that holds whitespace.
 pub fn parse_mentions(text: &str, root: &Path) -> Vec<String> {
     let mut seen = HashSet::new();
     let mut out = Vec::new();
+    let mut quoted_until = 0;
     for (index, _) in text.match_indices('@') {
-        if !may_start_mention(&text[..index]) {
+        if index < quoted_until || !may_start_mention(&text[..index]) {
             continue;
         }
         let rest = &text[index + 1..];
+        if let Some(quoted) = rest.strip_prefix('"') {
+            if let Some(close) = quoted.find('"') {
+                quoted_until = index + 1 + 1 + close + 1;
+                let token = &quoted[..close];
+                if !token.is_empty() && seen.insert(token.to_string()) {
+                    out.push(token.to_string());
+                }
+                continue;
+            }
+        }
         let end = rest.find(char::is_whitespace).unwrap_or(rest.len());
         let mut token = &rest[..end];
         while !token.is_empty()
@@ -570,6 +599,51 @@ mod tests {
             vec!["src/lib.rs"]
         );
         assert_eq!(parse_mentions("see (@a.rs)", &root), vec!["a.rs"]);
+    }
+
+    #[test]
+    fn every_offered_token_parses_back_to_the_chosen_path() {
+        let root = std::env::temp_dir();
+        for path in [
+            "src/lib.rs",
+            "report final.txt",
+            "dir with space/a b.rs",
+            "odd\"name.rs",
+        ] {
+            let token = mention_token(path).expect("a supported name has a token");
+            assert_eq!(
+                parse_mentions(&format!("see {token} please"), &root),
+                vec![path.to_string()],
+                "{path} did not round-trip through {token}"
+            );
+        }
+        assert_eq!(mention_token("a \"b\" c"), None);
+        assert_eq!(mention_token("\"lead.rs"), None);
+        assert_eq!(mention_token(""), None);
+    }
+
+    #[test]
+    fn an_at_inside_a_quoted_mention_is_not_a_second_mention() {
+        let root = std::env::temp_dir();
+        assert_eq!(
+            parse_mentions("@\"notes @home.txt\" and @b.rs", &root),
+            vec!["notes @home.txt".to_string(), "b.rs".to_string()]
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_name_no_token_can_carry_is_not_offered() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(dir.path().join("a \"b\" c.txt"), "x").expect("write");
+        std::fs::write(dir.path().join("plain.txt"), "x").expect("write");
+        let found = bounded_walk(dir.path());
+        assert_eq!(found.len(), 2);
+        let offered: Vec<String> = workspace_file_candidates(dir.path())
+            .into_iter()
+            .map(|candidate| candidate.path)
+            .collect();
+        assert_eq!(offered, vec!["plain.txt".to_string()]);
     }
 
     #[test]
