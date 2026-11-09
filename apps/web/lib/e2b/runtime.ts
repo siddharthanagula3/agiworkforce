@@ -1095,8 +1095,9 @@ export const getE2BExecutor = tracedCodeAction(
     }
 
     const activeSinceMs = Date.now();
+    let intervalHandedToPause = false;
     async function persistSession(): Promise<void> {
-      if (!scope) return;
+      if (!scope || intervalHandedToPause) return;
       const session: E2BSession = {
         sandboxId,
         contexts,
@@ -1448,6 +1449,7 @@ export const getE2BExecutor = tracedCodeAction(
       async pause(): Promise<void> {
         if (!scope) return;
         await persistSession();
+        intervalHandedToPause = true;
         await pauseE2BSession(scope);
       },
       async dispose(): Promise<void> {
