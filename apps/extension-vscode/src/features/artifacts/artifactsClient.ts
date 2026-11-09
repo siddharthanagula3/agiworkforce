@@ -15,6 +15,8 @@ import { accountRequestHeaders } from '../../platform/accountHeaders';
 import { createExtensionManagedCloudChat } from '../../utils/managedCloudChat';
 import { readAccountRefusal } from '../../utils/accountRefusal';
 
+const PUBLISHED_PAGE_MAX_COUNT = 100;
+
 export class ArtifactsHttpError extends Error {
   constructor(
     message: string,
@@ -69,13 +71,25 @@ export function createExtensionArtifactsWorkspace(token: string): ArtifactsWorks
         return parsed.data.artifacts;
       },
       async listPublishedArtifacts() {
-        const parsed = ManagedCloudPublishedArtifactListResponseSchema.safeParse(
-          await readJson(`${baseUrl}${MANAGED_CLOUD_PUBLISHED_ARTIFACTS_PATH}`, token),
-        );
-        if (!parsed.success) {
-          throw new ArtifactsHttpError('AGI Cloud returned an unreadable published list', 502);
+        const artifacts: ManagedCloudPublishedArtifact[] = [];
+        const seenCursors = new Set<string>();
+        let cursor: string | undefined;
+        for (let page = 0; page < PUBLISHED_PAGE_MAX_COUNT; page += 1) {
+          const suffix = cursor === undefined ? '' : `?cursor=${encodeURIComponent(cursor)}`;
+          const parsed = ManagedCloudPublishedArtifactListResponseSchema.safeParse(
+            await readJson(`${baseUrl}${MANAGED_CLOUD_PUBLISHED_ARTIFACTS_PATH}${suffix}`, token),
+          );
+          if (!parsed.success) {
+            throw new ArtifactsHttpError('AGI Cloud returned an unreadable published list', 502);
+          }
+          artifacts.push(...parsed.data.artifacts);
+          const next = parsed.data.pageInfo?.nextCursor ?? null;
+          if (next === null) return artifacts;
+          if (seenCursors.has(next)) break;
+          seenCursors.add(next);
+          cursor = next;
         }
-        return parsed.data.artifacts;
+        throw new ArtifactsHttpError('AGI Cloud returned an incomplete published list', 502);
       },
     },
     chat: createExtensionManagedCloudChat(token),

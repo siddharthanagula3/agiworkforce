@@ -1164,6 +1164,8 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     register('agi-workforce.signIn', async () => {
       const ok = await signInPreferringCli(context.secrets, cliCapabilities);
       if (ok) {
+        artifactContentProvider.clear();
+        artifactsTreeProvider.refresh();
         await refreshAccountTierCache(context);
         sidebarProvider.refreshAccountPresentation();
         ChatEditorPanel.refreshAccountPresentation();
@@ -1189,6 +1191,8 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         );
       }
       await clearAccountTierCache(context);
+      artifactContentProvider.clear();
+      artifactsTreeProvider.refresh();
       sidebarProvider.refreshAccountPresentation();
       ChatEditorPanel.refreshAccountPresentation();
     }),
