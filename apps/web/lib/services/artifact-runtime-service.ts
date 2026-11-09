@@ -975,23 +975,35 @@ export async function setLiveArtifactRefreshPolicy(
         set refresh_policy = $3::text
       where user_id = $1::text
         and artifact_id = $2::uuid
+        and exists (
+          select 1
+            from public.web_conversations conversations
+           where conversations.id = live_artifacts.conversation_id
+             and conversations.deleted_at is null
+             and conversations.organization_id is not distinct from $4::uuid)
       returning artifact_id`,
-    [owner.userId, artifactId, refreshPolicy],
+    [owner.userId, artifactId, refreshPolicy, owner.organizationId],
   );
   return rows.length > 0 ? readLiveArtifact(db, owner, artifactId) : null;
 }
 
 export async function removeLiveArtifact(
   db: DatabaseAdapter,
-  userId: string,
+  owner: LiveArtifactOwner,
   artifactId: string,
 ): Promise<boolean> {
   const rows = await db.query<{ artifact_id: string }>(
     `delete from public.live_artifacts
       where user_id = $1::text
         and artifact_id = $2::uuid
+        and exists (
+          select 1
+            from public.web_conversations conversations
+           where conversations.id = live_artifacts.conversation_id
+             and conversations.deleted_at is null
+             and conversations.organization_id is not distinct from $3::uuid)
       returning artifact_id`,
-    [userId, artifactId],
+    [owner.userId, artifactId, owner.organizationId],
   );
   return rows.length > 0;
 }
