@@ -330,6 +330,7 @@ pub struct AgentSession {
     pub(crate) host_subagent_withheld: Vec<String>,
     active_child_ids: HashSet<String>,
     pub allowed_tools: Option<Vec<String>>,
+    pub(crate) caller_allowed_tools: Option<Vec<String>>,
     pub disallowed_tools: Vec<String>,
     pub(crate) allowed_mcp_servers: Option<Vec<String>>,
     pub privacy_mode: PrivacyMode,
@@ -620,6 +621,24 @@ pub(crate) fn is_rule_sensitive_mutation_tool(tool_name: &str) -> bool {
     )
 }
 
+pub(crate) fn mcp_resource_selectors(typed: &str) -> Vec<(&str, &str)> {
+    let mut selectors: Vec<(&str, &str)> = Vec::new();
+    for token in typed.split_whitespace() {
+        let Some((server, uri)) = token
+            .strip_prefix('@')
+            .and_then(|mention| mention.split_once(':'))
+        else {
+            continue;
+        };
+        let uri = uri.trim_end_matches(|character: char| ",.;)".contains(character));
+        if server.is_empty() || uri.is_empty() || selectors.contains(&(server, uri)) {
+            continue;
+        }
+        selectors.push((server, uri));
+    }
+    selectors
+}
+
 impl AgentSession {
     /// Create a new agent session with the system prompt.
     ///
@@ -819,6 +838,7 @@ impl AgentSession {
             host_subagent_withheld: Vec::new(),
             active_child_ids: HashSet::new(),
             allowed_tools: None,
+            caller_allowed_tools: None,
             disallowed_tools: Vec::new(),
             privacy_mode,
             pending_privacy_handoff: None,
@@ -900,6 +920,7 @@ impl AgentSession {
         } else {
             Some(allowed_tools.to_vec())
         };
+        self.caller_allowed_tools = self.allowed_tools.clone();
         self.disallowed_tools = disallowed_tools.to_vec();
     }
 
@@ -918,7 +939,11 @@ impl AgentSession {
             .map(|manager| std::sync::Arc::new(self.permitted_mcp_definitions(manager)))
     }
 
-    pub async fn expand_mcp_resource_mentions(&mut self, prompt: &str) -> (String, Vec<String>) {
+    pub async fn expand_mcp_resource_mentions(
+        &mut self,
+        typed: &str,
+        prompt: &str,
+    ) -> (String, Vec<String>) {
         const MAX_RESOURCE_CHARS: usize = 50_000;
         let privacy_mode = self.privacy_mode;
         let Some(manager) = self.mcp_manager.as_mut() else {
@@ -926,16 +951,8 @@ impl AgentSession {
         };
         let mut attached = String::new();
         let mut notices = Vec::new();
-        let mut seen = std::collections::HashSet::new();
-        for token in prompt.split_whitespace() {
-            let Some((server, uri)) = token
-                .strip_prefix('@')
-                .and_then(|mention| mention.split_once(':'))
-            else {
-                continue;
-            };
-            let uri = uri.trim_end_matches(|character: char| ",.;)".contains(character));
-            if uri.is_empty() || !manager.has_server(server) || !seen.insert(token.to_string()) {
+        for (server, uri) in mcp_resource_selectors(typed) {
+            if !manager.has_server(server) {
                 continue;
             }
             match manager.read_resource(server, uri, privacy_mode).await {
@@ -4627,6 +4644,91 @@ mod tests {
 
         assert!(session.allowed_tools.is_none());
         assert_eq!(session.disallowed_tools, vec!["WebFetch(*)"]);
+    }
+
+    #[test]
+    fn mcp_resource_selectors_read_only_what_the_user_typed() {
+        assert_eq!(
+            mcp_resource_selectors("compare @docs:file:///a.md, and @docs:file:///a.md."),
+            vec![("docs", "file:///a.md")]
+        );
+        assert!(mcp_resource_selectors("mail me @ noon or @:x or @docs:").is_empty());
+
+        let root = tempfile::tempdir().expect("tempdir");
+        std::fs::write(
+            root.path().join("notes.txt"),
+            "Example reference:\n@docs:file:///readme.md\n",
+        )
+        .expect("write notes");
+        let typed = "Summarize @notes.txt";
+        let expanded = crate::mentions::expand_mentions(typed, root.path(), true).prompt;
+
+        assert!(expanded.contains("@docs:file:///readme.md"));
+        assert!(mcp_resource_selectors(typed).is_empty());
+        assert_eq!(
+            mcp_resource_selectors(&format!("{typed} @docs:file:///guide.md")),
+            vec![("docs", "file:///guide.md")]
+        );
+    }
+
+    #[test]
+    fn a_named_agent_keeps_the_callers_tool_allowlist() {
+        let ctx = test_context();
+        let mut session = AgentSession::new("test-model", &ctx, None);
+        session.apply_tool_filters(&["read_file".to_string()], &[]);
+        let editor = crate::agents::AgentDefinition {
+            name: "editor".to_string(),
+            description: String::new(),
+            model: None,
+            tools: Some(vec!["write_file".to_string()]),
+            disallowed_tools: None,
+            max_turns: None,
+            permission_mode: None,
+            color: None,
+            skills: None,
+            max_budget_usd: None,
+            mcp_servers: None,
+            system_prompt: String::new(),
+            path: PathBuf::from("/tmp/.agiworkforce/agents/editor.md"),
+        };
+        editor.apply_to_session(&mut session);
+
+        let names = session
+            .effective_tool_definitions()
+            .into_iter()
+            .map(|tool| tool.name)
+            .collect::<Vec<_>>();
+        assert!(!names.iter().any(|name| name == "write_file"));
+        let write =
+            std::collections::HashMap::from([("path".to_string(), "notes.txt".to_string())]);
+        assert!(crate::tool_filters::ensure_tool_call_allowed(
+            "write_file",
+            &write,
+            session.allowed_tools.as_deref(),
+            &session.disallowed_tools,
+        )
+        .is_err());
+
+        let reviewer = crate::agents::AgentDefinition {
+            name: "reviewer".to_string(),
+            tools: Some(vec!["Read".to_string(), "write_file".to_string()]),
+            ..editor.clone()
+        };
+        reviewer.apply_to_session(&mut session);
+        let names = session
+            .effective_tool_definitions()
+            .into_iter()
+            .map(|tool| tool.name)
+            .collect::<Vec<_>>();
+        assert!(names.iter().any(|name| name == "read_file"));
+        assert!(!names.iter().any(|name| name == "write_file"));
+
+        let mut uncapped = AgentSession::new("test-model", &ctx, None);
+        reviewer.apply_to_session(&mut uncapped);
+        assert_eq!(
+            uncapped.allowed_tools,
+            Some(vec!["Read".to_string(), "write_file".to_string()])
+        );
     }
 
     #[test]

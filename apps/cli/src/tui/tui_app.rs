@@ -3066,40 +3066,8 @@ fn discovered_local_to_catalog_model(
     }
 }
 
-/// Classify the active runtime provider into an access mode for the status
-/// chip. Presentation only, mirrors the model-picker grouping and never
-/// affects routing. A keyless OpenAI-compatible endpoint (e.g. LM Studio) and
-/// Ollama are Local; the AGI-managed endpoint is Cloud; anything with a key is
-/// BYOK.
 fn provider_access_mode(provider: &crate::models::Provider) -> crate::design_system::AccessMode {
-    use crate::design_system::AccessMode;
-    use crate::models::{OllamaMode, Provider};
-    match provider {
-        Provider::ManagedCloud => AccessMode::Cloud,
-        // Local Ollama is on-device; Ollama Cloud is a hosted service reached
-        // with the user's key, so it is BYOK (data leaves the device).
-        Provider::Ollama(OllamaMode::Local) => AccessMode::Local,
-        Provider::Ollama(OllamaMode::Cloud) => AccessMode::Byok,
-        Provider::Custom { api_key_env, .. } => {
-            if api_key_env.is_some() {
-                AccessMode::Byok
-            } else {
-                AccessMode::Local
-            }
-        }
-        Provider::OpenAICompatible {
-            name, api_key_env, ..
-        } => {
-            if name.eq_ignore_ascii_case("agi-cloud") || name.eq_ignore_ascii_case("agicloud") {
-                AccessMode::Cloud
-            } else if api_key_env.is_none() {
-                AccessMode::Local
-            } else {
-                AccessMode::Byok
-            }
-        }
-        Provider::Anthropic | Provider::Google => AccessMode::Byok,
-    }
+    crate::design_system::AccessMode::for_provider(provider)
 }
 
 /// Total terminal columns a row of spans occupies.
