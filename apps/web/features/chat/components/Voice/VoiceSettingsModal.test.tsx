@@ -118,3 +118,23 @@ describe('the voice page dots', () => {
     expect(onVoiceChange).toHaveBeenCalledWith('voice-b');
   });
 });
+
+describe('the intelligence control is scoped to the chat', () => {
+  beforeEach(() => {
+    stubCanvasContext();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('names the setting as chat intelligence and does not promise it shapes a voice turn', () => {
+    renderModal();
+
+    expect(screen.getByText('Chat intelligence')).toBeInTheDocument();
+    expect(screen.queryByText(/how much intelligence a voice turn gets/)).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/the intelligence this chat uses for typed replies/),
+    ).toBeInTheDocument();
+  });
+});

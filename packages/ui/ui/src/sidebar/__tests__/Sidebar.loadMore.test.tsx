@@ -79,4 +79,29 @@ describe('WEB-WEB-CHAT-PAGE-SIDEBAR-RECENTS-LIST-HARD-01', () => {
 
     expect(screen.queryByRole('button', { name: SHOW_MORE })).toBeNull();
   });
+
+  it('keeps offering the next page when every loaded conversation is archived', async () => {
+    const onLoadMoreSessions = vi.fn();
+    renderSidebar({
+      sessions: loadedSessions.map((session) => ({ ...session, archived: true })),
+      hasMoreSessions: true,
+      onLoadMoreSessions,
+    });
+
+    expect(screen.queryByText('No conversations yet')).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: SHOW_MORE }));
+
+    expect(onLoadMoreSessions).toHaveBeenCalledTimes(1);
+  });
+
+  it('claims an empty history only once the archived-only history has no further page', () => {
+    renderSidebar({
+      sessions: loadedSessions.map((session) => ({ ...session, archived: true })),
+      hasMoreSessions: false,
+      onLoadMoreSessions: vi.fn(),
+    });
+
+    expect(screen.getByText('No conversations yet')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: SHOW_MORE })).toBeNull();
+  });
 });

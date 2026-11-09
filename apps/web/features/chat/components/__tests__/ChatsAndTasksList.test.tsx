@@ -338,6 +338,40 @@ describe('Chats and tasks page', () => {
     expect(state.fetchConversations).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps Load more and does not claim an empty account when a page holds only archived chats', () => {
+    state.conversations = [
+      {
+        id: 'a1',
+        title: 'Old archived',
+        updatedAt: at(MINUTE),
+        createdAt: at(MINUTE),
+        isArchived: true,
+      },
+    ];
+    state.hasMore = true;
+    render(<ChatsAndTasksList />);
+    expect(screen.queryByText(/No chats or tasks yet/)).toBeNull();
+    expect(screen.getByText(/Older chats may be further back/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
+    expect(state.loadMoreConversations).toHaveBeenCalledTimes(1);
+  });
+
+  it('says nothing is left once an archived-only history has no further page', () => {
+    state.conversations = [
+      {
+        id: 'a1',
+        title: 'Old archived',
+        updatedAt: at(MINUTE),
+        createdAt: at(MINUTE),
+        isArchived: true,
+      },
+    ];
+    state.hasMore = false;
+    render(<ChatsAndTasksList />);
+    expect(screen.getByText('No chats or tasks yet. Start one with New.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
+  });
+
   it('loads the next page when more history exists', () => {
     state.hasMore = true;
     render(<ChatsAndTasksList />);

@@ -237,7 +237,8 @@ export function ChatsAndTasksList() {
   const now = Date.now();
   const showInitialLoading = rows.length === 0 && isLoading;
   const showLoadFailure = rows.length === 0 && !isLoading && Boolean(listError);
-  const showEmpty = rows.length === 0 && !isLoading && !listError;
+  const showEmpty = rows.length === 0 && !isLoading && !listError && !hasMoreConversations;
+  const showEarlierHistory = rows.length === 0 && !isLoading && !listError && hasMoreConversations;
   const showNoMatch = rows.length > 0 && visibleRows.length === 0;
 
   return (
@@ -377,6 +378,12 @@ export function ChatsAndTasksList() {
           </p>
         )}
 
+        {showEarlierHistory && (
+          <p className="py-10 text-sm text-muted-foreground">
+            Nothing to show in what has loaded so far. Older chats may be further back.
+          </p>
+        )}
+
         {showNoMatch && (
           <p className="py-10 text-sm text-muted-foreground">
             {normalizedQuery
@@ -402,7 +409,7 @@ export function ChatsAndTasksList() {
           </ul>
         )}
 
-        {hasMoreConversations && rows.length > 0 && (
+        {hasMoreConversations && !showInitialLoading && !showLoadFailure && (
           <div className="mt-4 flex justify-center">
             <Button
               type="button"

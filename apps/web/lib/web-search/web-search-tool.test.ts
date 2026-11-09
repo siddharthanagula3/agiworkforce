@@ -577,6 +577,38 @@ describe('enrichWebSearchResultTitles', () => {
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
+  it('reads the title of a page by its declared charset', async () => {
+    resolvesToPublicAddress();
+    const html = '<html><head><title>Caf\u00e9</title></head><body></body></html>';
+    const body = [...html].map((ch) => (ch === '\u00e9' ? 0xe9 : ch.charCodeAt(0)));
+    const fetchImpl = fetchReturning(
+      new Response(new Uint8Array(body), {
+        status: 200,
+        headers: { 'content-type': 'text/html; charset=iso-8859-1' },
+      }),
+    );
+    const enriched = await enrichWebSearchResultTitles(
+      [{ url: 'https://example.com/latin', title: '', snippet: '' }],
+      { fetchImpl },
+    );
+    expect(enriched[0]?.title).toBe('Caf\u00e9');
+  });
+
+  it('adds no metadata from a page in an undecodable charset', async () => {
+    resolvesToPublicAddress();
+    const fetchImpl = fetchReturning(
+      new Response('<title>Real</title>', {
+        status: 200,
+        headers: { 'content-type': 'text/html; charset=x-not-a-charset' },
+      }),
+    );
+    const enriched = await enrichWebSearchResultTitles(
+      [{ url: 'https://example.com/odd', title: '', snippet: '' }],
+      { fetchImpl },
+    );
+    expect(enriched[0]?.title).not.toBe('Real');
+  });
+
   it("fills a missing snippet and date from the page's own metadata", async () => {
     resolvesToPublicAddress();
     const fetchImpl = fetchReturning(

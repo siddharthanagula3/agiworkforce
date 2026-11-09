@@ -297,6 +297,10 @@ export function Sidebar(props: SidebarProps) {
    * which groups happen to be open.
    */
   const hasMatchingConversations = filtered.length > 0 || pinned.length > 0;
+  const showLoadMore =
+    hasMoreSessions &&
+    Boolean(onLoadMoreSessions) &&
+    (hasMatchingConversations || sessions.length > 0);
 
   /*
    * A failed list is not an empty account. Emptiness is only claimable when
@@ -975,7 +979,7 @@ export function Sidebar(props: SidebarProps) {
                 `hasMore` and `nextOffset` and nothing rendered them. Archived
                 is its own filtered view, so it pages through the same control
                 rather than a second one. */}
-              {hasMoreSessions && onLoadMoreSessions && hasMatchingConversations && (
+              {showLoadMore && (
                 <div className="mb-4 flex justify-center">
                   <button
                     type="button"
@@ -1035,7 +1039,7 @@ export function Sidebar(props: SidebarProps) {
                 </div>
               )}
 
-              {!hasMatchingConversations && !isLoading && !showLoadFailure && (
+              {!hasMatchingConversations && !isLoading && !showLoadFailure && !showLoadMore && (
                 <div className="flex flex-col items-center justify-center px-4 py-12 text-center">
                   <MessageSquare className="mb-2 h-7 w-7 text-muted-foreground" />
                   <p className="text-sm text-muted-foreground">
