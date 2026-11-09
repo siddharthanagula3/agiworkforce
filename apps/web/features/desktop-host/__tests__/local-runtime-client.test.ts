@@ -30,6 +30,7 @@ import {
   stopComputerUse,
   writeLocalCommandPolicy,
   readPreviewConsoleErrors,
+  setDeveloperSkillConsent,
 } from '../lib/runtime-client';
 import { hostBridgeStub } from '@/test/host-bridge-stub';
 
@@ -186,10 +187,12 @@ describe('reading the preview console errors', () => {
 
     await expect(readPreviewConsoleErrors(false)).resolves.toEqual(report);
     await readPreviewConsoleErrors(true);
+    await readPreviewConsoleErrors(true, 'http://localhost:5173/');
 
     expect(calls.map((call) => [call.command, call.args])).toEqual([
       ['app_preview_errors', { clear: false }],
       ['app_preview_errors', { clear: true }],
+      ['app_preview_errors', { clear: true, url: 'http://localhost:5173/' }],
     ]);
   });
 });
@@ -602,5 +605,26 @@ describe('computer use client', () => {
 
     await expect(stopComputerUse()).resolves.toEqual({ stopped: true });
     expect(calls.map((call) => call.command)).toEqual(['computer_stop']);
+  });
+});
+
+describe('project skill consent client', () => {
+  it('sends the reviewed digest with a grant and nothing with a revoke', async () => {
+    const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+    installHost(async (command, args) => {
+      calls.push({ command, args });
+      return ok(true);
+    });
+
+    await setDeveloperSkillConsent('root-1', true, 'digest-a');
+    await setDeveloperSkillConsent('root-1', false, 'digest-a');
+
+    expect(calls).toEqual([
+      {
+        command: 'developer_skill_consent',
+        args: { rootId: 'root-1', granted: true, digest: 'digest-a' },
+      },
+      { command: 'developer_skill_consent', args: { rootId: 'root-1', granted: false } },
+    ]);
   });
 });

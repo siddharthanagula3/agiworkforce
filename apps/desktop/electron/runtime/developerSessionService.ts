@@ -59,6 +59,7 @@ import type {
   MemoryAddResponse,
   MemoryScope,
   PluginSummary,
+  SkillListResponse,
   SkillSummary,
   DeveloperSessionSource,
   DeveloperSessionTrustMode,
@@ -2674,11 +2675,15 @@ function isPluginSummary(value: unknown): value is PluginSummary {
   );
 }
 
-export async function listDeveloperSkills(rootId: string): Promise<SkillSummary[]> {
+export async function listDeveloperSkills(rootId: string): Promise<SkillListResponse> {
   const server = await readyServer(await resolveRoot(rootId));
   const result = await request(server, 'skills/list', {});
   const skills = isRecord(result) ? result['skills'] : null;
-  return Array.isArray(skills) ? skills.filter(isSkillSummary) : [];
+  const projectSkillsDigest = isRecord(result) ? readString(result, 'projectSkillsDigest') : null;
+  return {
+    skills: Array.isArray(skills) ? skills.filter(isSkillSummary) : [],
+    ...(projectSkillsDigest === null ? {} : { projectSkillsDigest }),
+  };
 }
 
 export async function setDeveloperSkillEnabled(
@@ -2691,9 +2696,17 @@ export async function setDeveloperSkillEnabled(
   return enabled;
 }
 
-export async function setDeveloperSkillConsent(rootId: string, granted: boolean): Promise<boolean> {
+export async function setDeveloperSkillConsent(
+  rootId: string,
+  granted: boolean,
+  digest?: string,
+): Promise<boolean> {
   const server = await readyServer(await resolveRoot(rootId));
-  const result = await request(server, 'skills/consent', { granted });
+  const result = await request(
+    server,
+    'skills/consent',
+    granted && digest !== undefined ? { granted, digest } : { granted },
+  );
   return isRecord(result) && result['consented'] === true;
 }
 

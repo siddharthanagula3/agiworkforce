@@ -72,7 +72,7 @@ import type { BrowserPageSummary, BrowserTabSummary } from '@agiworkforce/types'
 import type {
   MemoryAddResponse,
   PluginSummary,
-  SkillSummary,
+  SkillListResponse,
   ThreadCompactResponse,
   ThreadDeleteResponse,
 } from '@agiworkforce/types/protocol';
@@ -318,8 +318,14 @@ export function openLocalPreview(url: string): Promise<{ url: string }> {
   return invoke<{ url: string }>('app_open_preview', { url });
 }
 
-export function readPreviewConsoleErrors(clear: boolean): Promise<PreviewConsoleReport> {
-  return invoke<PreviewConsoleReport>('app_preview_errors', { clear });
+export function readPreviewConsoleErrors(
+  clear: boolean,
+  url?: string,
+): Promise<PreviewConsoleReport> {
+  return invoke<PreviewConsoleReport>('app_preview_errors', {
+    clear,
+    ...(url ? { url } : {}),
+  });
 }
 
 export function openWorkspacePath(rootId: string, path: string): Promise<ApplicationOpenResult> {
@@ -803,8 +809,8 @@ export function switchLocalBranch(rootId: string, branch: string): Promise<strin
   return invoke<string>('developer_branch_switch', { rootId, branch });
 }
 
-export function listDeveloperSkills(rootId: string): Promise<SkillSummary[]> {
-  return invoke<SkillSummary[]>('developer_skills_list', { rootId });
+export function listDeveloperSkills(rootId: string): Promise<SkillListResponse> {
+  return invoke<SkillListResponse>('developer_skills_list', { rootId });
 }
 
 export function setDeveloperSkillEnabled(
@@ -815,8 +821,16 @@ export function setDeveloperSkillEnabled(
   return invoke<boolean>('developer_skill_set_enabled', { rootId, name, enabled });
 }
 
-export function setDeveloperSkillConsent(rootId: string, granted: boolean): Promise<boolean> {
-  return invoke<boolean>('developer_skill_consent', { rootId, granted });
+export function setDeveloperSkillConsent(
+  rootId: string,
+  granted: boolean,
+  digest?: string,
+): Promise<boolean> {
+  return invoke<boolean>('developer_skill_consent', {
+    rootId,
+    granted,
+    ...(granted && digest !== undefined ? { digest } : {}),
+  });
 }
 
 export function listDeveloperPlugins(rootId: string): Promise<PluginSummary[]> {

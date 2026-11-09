@@ -2682,6 +2682,49 @@ describe('developer session runtime', () => {
     ).toEqual([{}, { keep: 4 }]);
   });
 
+  it('carries the project skills digest out of the list and back with a grant', async () => {
+    const listed = {
+      name: 'team-lint',
+      description: 'Review lint results',
+      scope: 'project',
+      path: '/approved/project/.agiworkforce/skills/team-lint',
+      enabled: false,
+      consented: false,
+      requiredTools: [],
+      requiredEnvVars: [],
+      missingTools: [],
+      missingEnvVars: [],
+    };
+    const { service, children } = await loadService((method) =>
+      method === 'skills/list'
+        ? { skills: [listed, { nonsense: true }], projectSkillsDigest: 'digest-a' }
+        : method === 'skills/consent'
+          ? { consented: true, path: '/Users/qa/consent.json' }
+          : defaultResponder(method),
+    );
+
+    const response = await service.listDeveloperSkills(root.id);
+    expect(response).toEqual({ skills: [listed], projectSkillsDigest: 'digest-a' });
+
+    await expect(
+      service.setDeveloperSkillConsent(root.id, true, response.projectSkillsDigest),
+    ).resolves.toBe(true);
+    await service.setDeveloperSkillConsent(root.id, false, 'digest-a');
+    expect(
+      children[0]?.written
+        .filter((entry) => entry.method === 'skills/consent')
+        .map((entry) => entry.params),
+    ).toEqual([{ granted: true, digest: 'digest-a' }, { granted: false }]);
+  });
+
+  it('lists no digest for a workspace that supplies no skills of its own', async () => {
+    const { service } = await loadService((method) =>
+      method === 'skills/list' ? { skills: [] } : defaultResponder(method),
+    );
+
+    await expect(service.listDeveloperSkills(root.id)).resolves.toEqual({ skills: [] });
+  });
+
   it('starts a fresh runtime after one exits, and says the old one stopped', async () => {
     const { service, children, events, spawn } = await loadService();
     await service.listDeveloperSessions();

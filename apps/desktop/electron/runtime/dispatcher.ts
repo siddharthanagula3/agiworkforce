@@ -34,6 +34,7 @@ import {
   isDeveloperWorktreeStart,
   isPermissionScope,
   isSystemPermissionKind,
+  localPreviewOrigin,
   localPreviewUrl,
   isWorkspaceRootKind,
   normalizeShellPolicy,
@@ -479,6 +480,11 @@ function requireRegionFields(region: Args): DeviceStepRegion {
 }
 
 class InvalidArguments extends Error {}
+
+class PermissionNotSaved extends Error {}
+
+const PERMISSION_NOT_SAVED =
+  'The permission was withdrawn for now, but the saved list could not be updated, so it may return after the app restarts. Try withdrawing it again.';
 
 /**
  * Every step that drives the screen, taken from the contract rather than listed
@@ -1074,8 +1080,9 @@ async function revokeGrant(
   }
   if (capability === 'computer.use') stopScreenControl();
   if (capability === 'host.remote') stopRemoteControl();
-  revokePermission(capability, scope);
+  const saved = revokePermission(capability, scope);
   emitRuntimeEvent(window, { kind: 'permission-changed', capability, scope });
+  if (saved === false) throw new PermissionNotSaved(PERMISSION_NOT_SAVED);
   return reviewPermissions();
 }
 
@@ -1998,7 +2005,7 @@ async function execute(
         command: requireString(args, 'command'),
         ...(timeoutMs === undefined ? {} : { timeoutMs }),
         policy: readShellPolicy(),
-        sandbox: await shellSandbox(),
+        sandbox: shellSandbox(),
         protectedPaths: [app.getPath('userData')],
         approve: (request) => approveShellCommand(window, request),
         emit: (chunk) => emitRuntimeEvent(window, { kind: 'shell-output', ...chunk }),
@@ -2015,7 +2022,7 @@ async function execute(
         relativePath: optionalString(args, 'path', ''),
         command: requireString(args, 'command'),
         policy: readShellPolicy(),
-        sandbox: await shellSandbox(),
+        sandbox: shellSandbox(),
         protectedPaths: [app.getPath('userData')],
         approve: (request) => approveShellCommand(window, request),
         emit: (chunk) => emitRuntimeEvent(window, { kind: 'shell-output', ...chunk }),
@@ -2051,8 +2058,12 @@ async function execute(
       if (!url) throw new InvalidArguments('Only a page served on this computer can be previewed.');
       return openLocalPreview(url);
     }
-    case 'app_preview_errors':
-      return readPreviewConsoleErrors(args['clear'] === true);
+    case 'app_preview_errors': {
+      if (args['url'] === undefined) return readPreviewConsoleErrors(args['clear'] === true);
+      const origin = localPreviewOrigin(args['url']);
+      if (!origin) throw new InvalidArguments('Only a page served on this computer has errors.');
+      return readPreviewConsoleErrors(args['clear'] === true, origin);
+    }
     case 'app_open_in_editor':
       return openInEditor(resolveRoot(args));
     case 'clipboard_read':
@@ -2462,11 +2473,14 @@ async function execute(
         requireString(args, 'name'),
         requireBoolean(args, 'enabled'),
       );
-    case 'developer_skill_consent':
+    case 'developer_skill_consent': {
+      const granted = requireBoolean(args, 'granted');
       return setDeveloperSkillConsent(
         requireString(args, 'rootId'),
-        requireBoolean(args, 'granted'),
+        granted,
+        granted ? requireString(args, 'digest') : undefined,
       );
+    }
     case 'developer_plugins_list':
       return listDeveloperPlugins(requireString(args, 'rootId'));
     case 'developer_plugin_set_enabled':
@@ -2528,6 +2542,7 @@ function toFailure(error: unknown): DesktopRuntimeResponse<never> {
     return runtimeFailure(REFUSAL_CODES[error.reason], error.message);
   }
   if (error instanceof InvalidArguments) return runtimeFailure('invalid-arguments', error.message);
+  if (error instanceof PermissionNotSaved) return runtimeFailure('io-error', error.message);
   if (error instanceof TextEditRefused) return runtimeFailure('invalid-arguments', error.message);
   if (error instanceof WriteConflict) return runtimeFailure('conflict', error.message);
   if (error instanceof InvalidBrowserArguments) {
