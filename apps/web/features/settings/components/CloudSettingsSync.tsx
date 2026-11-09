@@ -254,7 +254,10 @@ export function CloudSettingsSync() {
       hiddenNavIds: hiddenNavIds ?? [],
     });
     const delta = appearanceDelta(acknowledged.current, next);
-    if (!delta) return;
+    if (!delta) {
+      pendingAppearanceWrite.current = null;
+      return;
+    }
 
     pendingAppearanceWrite.current = delta as Record<string, unknown>;
     if (debounce.current) clearTimeout(debounce.current);
