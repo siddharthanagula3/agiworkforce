@@ -18,6 +18,7 @@ import {
 import {
   ManagedSkillsResponseSchema,
   type AgentConfig,
+  type AgentVisibility,
   type ManagedCloudAgent,
 } from '@agiworkforce/cloud-contracts';
 
@@ -198,6 +199,14 @@ export function AgentEditorPage({
 
   const acceptAgentState = useCallback((next: ManagedCloudAgent) => {
     setLoad({ status: 'ready', agent: next });
+  }, []);
+
+  const acceptVisibility = useCallback((agentId: string, visibility: AgentVisibility) => {
+    setLoad((current) =>
+      current.status === 'ready' && current.agent?.id === agentId
+        ? { status: 'ready', agent: { ...current.agent, visibility } }
+        : current,
+    );
   }, []);
 
   const save = async () => {
@@ -433,6 +442,7 @@ export function AgentEditorPage({
                   agent={agent}
                   dirty={dirty}
                   onAgentChange={acceptAgentState}
+                  onVisibilityChange={acceptVisibility}
                   onRestored={acceptAgent}
                 />
               ) : null}
