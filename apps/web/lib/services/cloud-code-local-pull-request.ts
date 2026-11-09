@@ -8,6 +8,7 @@ import {
   getInstallationAccessToken,
   type GitHubChecksState,
 } from '@/lib/github-app';
+import { logger } from '@/lib/logger';
 import { getUserGithubInstallations } from '@/lib/user-connector-tools';
 
 const GITHUB_REMOTE_RE =
@@ -108,6 +109,23 @@ async function describe(
   };
 }
 
+async function describeCreated(
+  installationId: number,
+  owner: string,
+  repo: string,
+  created: { number: number; url: string },
+): Promise<LocalPullRequestState> {
+  try {
+    return await describe(installationId, owner, repo, created);
+  } catch (error) {
+    logger.warn(
+      { error, owner, repo, pullRequest: created.number },
+      'Could not read the status of a pull request that was just opened',
+    );
+    return { number: created.number, url: created.url, state: 'open', checks: 'none' };
+  }
+}
+
 export async function readLocalPullRequest(
   userId: string,
   remoteUrl: unknown,
@@ -157,7 +175,7 @@ export async function openLocalPullRequest(
       head,
       base,
     });
-    return await describe(installationId, owner, repo, created);
+    return await describeCreated(installationId, owner, repo, created);
   } catch (error) {
     if (!(error instanceof GitHubPullRequestError) || error.status !== UNPROCESSABLE_STATUS)
       throw error;

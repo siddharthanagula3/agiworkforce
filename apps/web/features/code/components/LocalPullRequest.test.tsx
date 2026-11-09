@@ -79,3 +79,36 @@ describe('the checks on a local session pull request', () => {
     expect(readLocalPullRequest).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('a pull request lookup that is overtaken by a newer one', () => {
+  it('keeps the newer result when the older lookup settles last', async () => {
+    let settleOlder: (value: ReturnType<typeof lookup>) => void = () => undefined;
+    const older = new Promise<ReturnType<typeof lookup>>((resolve) => {
+      settleOlder = resolve;
+    });
+    const newer = lookup('passing');
+    newer.pullRequest.number = 13;
+    newer.pullRequest.url = 'https://github.com/acme/app/pull/13';
+    readLocalPullRequest.mockReturnValueOnce(older).mockResolvedValueOnce(newer);
+
+    const { rerender } = render(<LocalPullRequest rootId="root-1" title="Fix" refreshKey={0} />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    rerender(<LocalPullRequest rootId="root-1" title="Fix" refreshKey={1} />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(screen.getByText(/Pull request #13/u)).toBeInTheDocument();
+
+    await act(async () => {
+      settleOlder(lookup('pending'));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(screen.getByText(/Pull request #13/u)).toBeInTheDocument();
+    expect(screen.queryByText(/Pull request #12/u)).not.toBeInTheDocument();
+  });
+});
