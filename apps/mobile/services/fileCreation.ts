@@ -267,6 +267,9 @@ export async function shareFile(
     jpg: 'public.jpeg',
     jpeg: 'public.jpeg',
     zip: 'public.zip-archive',
+    mp4: 'public.mpeg-4',
+    mov: 'com.apple.quicktime-movie',
+    webm: 'public.movie',
   };
   const mimeMap: Record<string, string> = {
     pdf: 'application/pdf',
@@ -282,6 +285,9 @@ export async function shareFile(
     jpg: 'image/jpeg',
     jpeg: 'image/jpeg',
     zip: 'application/zip',
+    mp4: 'video/mp4',
+    mov: 'video/quicktime',
+    webm: 'video/webm',
   };
   if (options.isCurrent?.() === false) return;
   await Sharing.shareAsync(uri, {
@@ -401,12 +407,25 @@ export interface LocalVideoPlayer {
   directoryUri: string;
 }
 
+const PLAYABLE_VIDEO_EXTENSIONS: Readonly<Record<string, string>> = {
+  'video/mp4': 'mp4',
+  'video/webm': 'webm',
+  'video/quicktime': 'mov',
+};
+
 export async function prepareLocalVideoPlayer(
   url: string,
   background: string,
 ): Promise<LocalVideoPlayer> {
   const key = videoFileKey(url);
-  const videoUri = await downloadGeneratedFile(url, `video-${key}.mp4`);
+  const downloaded = await fetchGeneratedFileBytes(url);
+  const extension = downloaded.contentType
+    ? PLAYABLE_VIDEO_EXTENSIONS[downloaded.contentType]
+    : undefined;
+  if (!extension) {
+    throw new Error('The saved video format is not supported.');
+  }
+  const videoUri = await writeGeneratedFileBytes(`video-${key}.${extension}`, downloaded.base64);
   const directoryUri = videoUri.slice(0, videoUri.lastIndexOf('/') + 1);
   const videoName = videoUri.slice(videoUri.lastIndexOf('/') + 1);
   const playerUri = `${directoryUri}player.html`;

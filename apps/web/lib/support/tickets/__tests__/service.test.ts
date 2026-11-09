@@ -304,6 +304,28 @@ describe('replyToTicket', () => {
     expect(store.insertReply).not.toHaveBeenCalled();
   });
 
+  it('reports a closed ticket when the ticket closes between the status read and the insert', async () => {
+    store.getTicketForUser
+      .mockResolvedValueOnce(ticket({ status: 'open' }))
+      .mockResolvedValueOnce(ticket({ status: 'closed' }));
+    store.insertReply.mockResolvedValue(null);
+
+    await expect(
+      replyToTicket({ ticketId: 'ticket-1', userId: 'user_1', message: 'still broken' }),
+    ).rejects.toBeInstanceOf(TicketClosedError);
+  });
+
+  it('keeps reporting a missing ticket when the insert is refused and the ticket is gone', async () => {
+    store.getTicketForUser
+      .mockResolvedValueOnce(ticket({ status: 'open' }))
+      .mockResolvedValueOnce(null);
+    store.insertReply.mockResolvedValue(null);
+
+    await expect(
+      replyToTicket({ ticketId: 'ticket-1', userId: 'user_1', message: 'still broken' }),
+    ).rejects.toBeInstanceOf(TicketNotFoundError);
+  });
+
   /**
    * Answering "did this fix it?" with "no" has to put the ticket back in the
    * queue. Leaving it resolved hides the person from the queue they need.

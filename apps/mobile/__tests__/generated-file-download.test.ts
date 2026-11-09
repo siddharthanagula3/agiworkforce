@@ -182,7 +182,17 @@ describe('downloadGeneratedFile', () => {
     );
   });
 
+  function respondWithContentType(contentType: string) {
+    mockGuardedFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: () => contentType },
+      blob: async () => ({}),
+    });
+  }
+
   it('downloads each video preparation and places its player beside the new video', async () => {
+    respondWithContentType('video/mp4');
     const first = await prepareLocalVideoPlayer(
       'https://agiworkforce.com/api/files/video-1',
       '#000',
@@ -201,6 +211,50 @@ describe('downloadGeneratedFile', () => {
       second.playerUri,
       expect.stringContaining('<video src="video-video-1.mp4"'),
       { encoding: 'utf8' },
+    );
+  });
+
+  it.each([
+    ['video/webm', 'webm'],
+    ['video/quicktime', 'mov'],
+  ])('keeps the %s container in the local video name', async (contentType, extension) => {
+    respondWithContentType(contentType);
+
+    const prepared = await prepareLocalVideoPlayer(
+      'https://agiworkforce.com/api/files/video-2',
+      '#000',
+    );
+
+    expect(prepared.videoUri).toBe(`${prepared.directoryUri}video-video-2.${extension}`);
+    expect(mockWriteAsStringAsync).toHaveBeenCalledWith(
+      prepared.playerUri,
+      expect.stringContaining(`<video src="video-video-2.${extension}"`),
+      { encoding: 'utf8' },
+    );
+  });
+
+  it.each(['text/html', 'application/octet-stream'])(
+    'refuses to name %s bytes as a video',
+    async (contentType) => {
+      respondWithContentType(contentType);
+
+      await expect(
+        prepareLocalVideoPlayer('https://agiworkforce.com/api/files/video-3', '#000'),
+      ).rejects.toThrow(/video format is not supported/);
+      expect(mockWriteAsStringAsync).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    ['mp4', 'public.mpeg-4', 'video/mp4'],
+    ['mov', 'com.apple.quicktime-movie', 'video/quicktime'],
+    ['webm', 'public.movie', 'video/webm'],
+  ])('shares a .%s file with video metadata', async (extension, uti, mimeType) => {
+    await shareFile(`file:///docs/exports/export-1/video.${extension}`);
+
+    expect(Sharing.shareAsync).toHaveBeenCalledWith(
+      `file:///docs/exports/export-1/video.${extension}`,
+      { UTI: uti, mimeType },
     );
   });
 

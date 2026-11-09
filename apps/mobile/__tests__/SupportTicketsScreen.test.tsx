@@ -3,6 +3,11 @@ import React from 'react';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockListSupportTickets = jest.fn();
+let mockAuth: { isClerkLoaded: boolean; isClerkSignedIn: boolean; clerkUserId: string | null } = {
+  isClerkLoaded: true,
+  isClerkSignedIn: true,
+  clerkUserId: 'user_a',
+};
 
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
@@ -34,8 +39,7 @@ jest.mock('@/components/ui/Button', () => {
 jest.mock('@/components/ui/Text', () => ({ Text: require('react-native').Text }));
 
 jest.mock('@/src/features/auth/store', () => ({
-  useAuthStore: (selector: (state: Record<string, boolean>) => unknown) =>
-    selector({ isClerkLoaded: true, isClerkSignedIn: true }),
+  useAuthStore: (selector: (state: typeof mockAuth) => unknown) => selector(mockAuth),
 }));
 
 jest.mock('@/src/features/chat/store/appModeStore', () => ({
@@ -48,7 +52,7 @@ jest.mock('@/src/features/settings/Common', () => {
   return {
     CloudAccountRequired: () => null,
     SettingsGroup: ({ children }: { children: React.ReactNode }) => <View>{children}</View>,
-    SettingsInfo: () => null,
+    SettingsInfo: ({ body }: { body: string }) => <Text>{body}</Text>,
     SettingsScreenShell: ({ children }: { children: React.ReactNode }) => <View>{children}</View>,
     SettingsRow: ({
       label,
@@ -88,6 +92,7 @@ function ticket(id: string, subject: string) {
 describe('SupportTicketsScreen ticket history', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockAuth = { isClerkLoaded: true, isClerkSignedIn: true, clerkUserId: 'user_a' };
   });
 
   it('reaches tickets beyond the first window through the page continuation', async () => {
@@ -129,5 +134,44 @@ describe('SupportTicketsScreen ticket history', () => {
 
     expect(await screen.findByText('Recent one')).toBeTruthy();
     expect(screen.queryByLabelText('Show older tickets')).toBeNull();
+  });
+
+  it('tells the customer that support replies also reach them by email', async () => {
+    mockListSupportTickets.mockResolvedValueOnce({ tickets: [], nextOffset: null });
+    const screen = render(<SupportTicketsScreen />);
+
+    expect(await screen.findByText(/also by email to your account address/)).toBeTruthy();
+    expect(screen.queryByText(/not emailed/i)).toBeNull();
+  });
+
+  it('drops the loaded tickets when the account signs out and does not show them to the next account', async () => {
+    mockListSupportTickets
+      .mockResolvedValueOnce({ tickets: [ticket('t1', 'First account ticket')], nextOffset: null })
+      .mockImplementationOnce(() => new Promise(() => undefined));
+    const screen = render(<SupportTicketsScreen />);
+    expect(await screen.findByText('First account ticket')).toBeTruthy();
+
+    mockAuth = { isClerkLoaded: true, isClerkSignedIn: false, clerkUserId: null };
+    screen.rerender(<SupportTicketsScreen />);
+    expect(screen.queryByText('First account ticket')).toBeNull();
+
+    mockAuth = { isClerkLoaded: true, isClerkSignedIn: true, clerkUserId: 'user_b' };
+    screen.rerender(<SupportTicketsScreen />);
+    expect(screen.queryByText('First account ticket')).toBeNull();
+    expect(screen.getByLabelText('Loading your tickets')).toBeTruthy();
+  });
+
+  it('starts from a clean list when the signed-in account changes in place', async () => {
+    mockListSupportTickets
+      .mockResolvedValueOnce({ tickets: [ticket('t1', 'First account ticket')], nextOffset: null })
+      .mockImplementationOnce(() => new Promise(() => undefined));
+    const screen = render(<SupportTicketsScreen />);
+    expect(await screen.findByText('First account ticket')).toBeTruthy();
+
+    mockAuth = { isClerkLoaded: true, isClerkSignedIn: true, clerkUserId: 'user_b' };
+    screen.rerender(<SupportTicketsScreen />);
+
+    expect(screen.queryByText('First account ticket')).toBeNull();
+    expect(screen.getByLabelText('Loading your tickets')).toBeTruthy();
   });
 });

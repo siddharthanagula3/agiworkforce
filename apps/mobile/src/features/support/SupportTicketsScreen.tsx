@@ -33,10 +33,28 @@ function formatDate(iso: string): string {
 
 export function SupportTicketsScreen() {
   const router = useRouter();
-  const colors = useThemeColors();
   const isClerkLoaded = useAuthStore((state) => state.isClerkLoaded);
   const isClerkSignedIn = useAuthStore((state) => state.isClerkSignedIn);
+  const clerkUserId = useAuthStore((state) => state.clerkUserId);
   const appMode = useChatAppModeStore((state) => state.appMode);
+
+  if (!isClerkLoaded || !isClerkSignedIn || appMode !== 'cloud') {
+    return (
+      <SettingsScreenShell title="Support" backHref="/(app)/about">
+        <CloudAccountRequired
+          isLoading={!isClerkLoaded}
+          onSignIn={() => router.push('/(auth)/login' as Parameters<typeof router.push>[0])}
+        />
+      </SettingsScreenShell>
+    );
+  }
+
+  return <SupportTicketList key={clerkUserId ?? ''} />;
+}
+
+function SupportTicketList() {
+  const router = useRouter();
+  const colors = useThemeColors();
   const [tickets, setTickets] = useState<SupportTicketView[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [composing, setComposing] = useState(false);
@@ -87,14 +105,13 @@ export function SupportTicketsScreen() {
   }, [loadingMore, nextOffset]);
 
   useEffect(() => {
-    if (!isClerkSignedIn || appMode !== 'cloud') return;
     const controller = new AbortController();
     void load(controller.signal);
     return () => {
       generation.current += 1;
       controller.abort();
     };
-  }, [appMode, isClerkSignedIn, load]);
+  }, [load]);
 
   const submit = useCallback(() => {
     const trimmedSubject = subject.trim();
@@ -129,17 +146,6 @@ export function SupportTicketsScreen() {
     })();
   }, [includeDiagnostics, load, message, subject]);
 
-  if (!isClerkLoaded || !isClerkSignedIn || appMode !== 'cloud') {
-    return (
-      <SettingsScreenShell title="Support" backHref="/(app)/about">
-        <CloudAccountRequired
-          isLoading={!isClerkLoaded}
-          onSignIn={() => router.push('/(auth)/login' as Parameters<typeof router.push>[0])}
-        />
-      </SettingsScreenShell>
-    );
-  }
-
   const inputStyle = [
     styles.input,
     { backgroundColor: colors.inputSurface, borderColor: colors.border, color: colors.textPrimary },
@@ -149,7 +155,7 @@ export function SupportTicketsScreen() {
     <SettingsScreenShell title="Support" backHref="/(app)/about">
       <SettingsInfo
         title="Raise a ticket"
-        body="Describe what went wrong and the support team replies here. Replies are not emailed."
+        body="Describe what went wrong. The support team replies here, and also by email to your account address."
         icon={LifeBuoy}
       />
       {composing ? (

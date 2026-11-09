@@ -225,7 +225,11 @@ export async function replyToTicket(input: {
     message: clamp(input.message, MAX_TICKET_MESSAGE_CHARS),
     isStaff: input.isStaff ?? false,
   });
-  if (!reply) throw new TicketNotFoundError();
+  if (!reply) {
+    const current = await getTicketForUser(input.ticketId, input.userId);
+    if (current && !OPEN_TICKET_STATUSES.includes(current.status)) throw new TicketClosedError();
+    throw new TicketNotFoundError();
+  }
 
   if (ticket.status === 'resolved') {
     await updateTicketStatus({
