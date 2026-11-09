@@ -7,6 +7,7 @@ import {
   type ConnectResult,
   type ConnectedConnector,
   type ConnectorDirectory,
+  type ConnectorDisconnectResult,
   type ConnectorOAuthStart,
   type ConnectorOperationScope,
   type ConnectorToolPermission,
@@ -149,8 +150,8 @@ export async function connectConnector(connectorId: string): Promise<ConnectConn
   };
 }
 
-export async function disconnectConnector(connectorId: string): Promise<void> {
-  await runtime.disconnect(connectorId);
+export async function disconnectConnector(connectorId: string): Promise<ConnectorDisconnectResult> {
+  return runtime.disconnect(connectorId);
 }
 
 export async function fetchConnectorToolPermissions(): Promise<ConnectorToolPermission[]> {
@@ -178,8 +179,8 @@ export async function addCustomConnector(
   return runtime.addCustomConnector(input, captureOperationScope());
 }
 
-export async function deleteCustomConnector(id: string): Promise<void> {
-  await runtime.deleteCustomConnector(id);
+export async function deleteCustomConnector(id: string): Promise<ConnectorDisconnectResult> {
+  return runtime.deleteCustomConnector(id);
 }
 
 function listingHref(filter: ConnectorListingFilter): string {

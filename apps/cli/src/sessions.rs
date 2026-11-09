@@ -609,10 +609,27 @@ pub fn import_hosted_session(
     model: Option<&str>,
     messages: Vec<Message>,
     origin: &str,
-) -> Result<()> {
-    let mut session = match find_session_path(&conn.base_dir, session_id) {
-        Some(path) => load_managed_session_from_path(&path)?,
-        None => ManagedSession::new(session_id.to_string(), Utc::now()),
+) -> Result<HostedImport> {
+    let existing = find_session_path(&conn.base_dir, session_id)
+        .map(|path| load_managed_session_from_path(&path))
+        .transpose()?;
+    let (mut session, outcome) = match existing {
+        None => (
+            ManagedSession::new(session_id.to_string(), Utc::now()),
+            HostedImport::Created,
+        ),
+        Some(session) => {
+            let local = synced_turns(&session.messages);
+            let incoming = synced_turns(&messages);
+            if incoming.starts_with(&local) {
+                (session, HostedImport::Replaced)
+            } else if local.starts_with(&incoming) {
+                return Ok(HostedImport::KeptLocal);
+            } else {
+                let local_copy = fork_session(conn, session_id)?;
+                (session, HostedImport::PreservedLocal { local_copy })
+            }
+        }
     };
     session.messages = messages;
     session.conversation_replaced();
@@ -631,7 +648,16 @@ pub fn import_hosted_session(
     if let Some(model) = model {
         metadata.model = Some(model.to_string());
     }
-    write_metadata(&conn.base_dir, session_id, &metadata)
+    write_metadata(&conn.base_dir, session_id, &metadata)?;
+    Ok(outcome)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HostedImport {
+    Created,
+    Replaced,
+    KeptLocal,
+    PreservedLocal { local_copy: String },
 }
 
 fn managed_cloud_authority() -> crate::platform::runtime::session::ManagedSessionRoutingAuthority {
@@ -816,7 +842,6 @@ pub fn search_sessions(conn: &Connection, query: &str) -> Result<Vec<SessionSumm
 }
 
 /// Fork an existing managed session into a new managed session id.
-#[allow(dead_code)]
 pub fn fork_session(conn: &Connection, source_id: &str) -> Result<String> {
     let source_path = resolve_reference_path(&conn.base_dir, source_id)?;
     let source_session = load_managed_session_from_path(&source_path)?;
@@ -1138,6 +1163,126 @@ mod tests {
             kept.messages.last().unwrap().text_content(),
             "asked here, not synced yet"
         );
+    }
+
+    const TELEPORTED_ID: &str = "code-5b1e0c3a-8f43-4b0e-9a57-1f7f3e2d9c10";
+
+    fn cloud_turns(turns: &[(&str, &str)]) -> Vec<Message> {
+        turns
+            .iter()
+            .map(|&(role, text)| Message::text(role, text))
+            .collect()
+    }
+
+    fn teleport(conn: &Connection, turns: &[(&str, &str)]) -> HostedImport {
+        import_hosted_session(
+            conn,
+            TELEPORTED_ID,
+            "Fix the build",
+            None,
+            cloud_turns(turns),
+            "the cloud Code session",
+        )
+        .unwrap()
+    }
+
+    fn continue_locally(conn: &Connection, turns: &[(&str, &str)]) {
+        let path = find_session_path(&conn.base_dir, TELEPORTED_ID).unwrap();
+        let mut session = load_managed_session_from_path(&path).unwrap();
+        session.messages.extend(cloud_turns(turns));
+        session.save_to_path(&path).unwrap();
+    }
+
+    fn texts(conn: &Connection, session_id: &str) -> Vec<String> {
+        load_session(conn, session_id)
+            .unwrap()
+            .iter()
+            .map(Message::text_content)
+            .collect()
+    }
+
+    #[test]
+    fn teleporting_an_unchanged_cloud_session_again_keeps_the_local_continuation() {
+        let (_tempdir, conn) = temp_connection();
+        let cloud = [("user", "goal"), ("assistant", "done in the cloud")];
+        assert_eq!(teleport(&conn, &cloud), HostedImport::Created);
+        continue_locally(
+            &conn,
+            &[("user", "continued here"), ("assistant", "answered here")],
+        );
+
+        assert_eq!(teleport(&conn, &cloud), HostedImport::KeptLocal);
+
+        assert_eq!(
+            texts(&conn, TELEPORTED_ID),
+            [
+                "goal",
+                "done in the cloud",
+                "continued here",
+                "answered here"
+            ]
+        );
+    }
+
+    #[test]
+    fn a_diverged_local_continuation_is_kept_in_its_own_session_before_the_cloud_replaces_it() {
+        let (_tempdir, conn) = temp_connection();
+        teleport(
+            &conn,
+            &[("user", "goal"), ("assistant", "done in the cloud")],
+        );
+        continue_locally(&conn, &[("user", "continued here")]);
+
+        let imported = teleport(
+            &conn,
+            &[
+                ("user", "goal"),
+                ("assistant", "done in the cloud"),
+                ("user", "next cloud goal"),
+                ("assistant", "next cloud answer"),
+            ],
+        );
+
+        let HostedImport::PreservedLocal { local_copy } = imported else {
+            panic!("expected the local continuation to be preserved, got {imported:?}");
+        };
+        assert_ne!(local_copy, TELEPORTED_ID);
+        assert_eq!(
+            texts(&conn, &local_copy),
+            ["goal", "done in the cloud", "continued here"]
+        );
+        assert_eq!(
+            texts(&conn, TELEPORTED_ID),
+            [
+                "goal",
+                "done in the cloud",
+                "next cloud goal",
+                "next cloud answer"
+            ]
+        );
+    }
+
+    #[test]
+    fn new_cloud_turns_replace_a_local_copy_with_nothing_of_its_own() {
+        let (_tempdir, conn) = temp_connection();
+        teleport(
+            &conn,
+            &[("user", "goal"), ("assistant", "done in the cloud")],
+        );
+
+        let imported = teleport(
+            &conn,
+            &[
+                ("user", "goal"),
+                ("assistant", "done in the cloud"),
+                ("user", "next cloud goal"),
+                ("assistant", "next cloud answer"),
+            ],
+        );
+
+        assert_eq!(imported, HostedImport::Replaced);
+        assert_eq!(texts(&conn, TELEPORTED_ID).len(), 4);
+        assert_eq!(list_sessions(&conn, 10).unwrap().len(), 1);
     }
 
     #[test]

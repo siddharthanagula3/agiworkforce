@@ -117,15 +117,53 @@ pub async fn list(client: &CloudClient) -> Result<ConnectorList, CloudError> {
     client.get(CONNECTORS_PATH, &[]).await
 }
 
-pub async fn disconnect(client: &CloudClient, connector_id: &str) -> Result<(), CloudError> {
-    let _: Value = client
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DisconnectReceipt {
+    pub success: bool,
+    #[serde(default)]
+    pub vendor_notice: Option<String>,
+}
+
+impl DisconnectReceipt {
+    fn confirmed(self) -> Result<Self, CloudError> {
+        if self.success {
+            Ok(self)
+        } else {
+            Err(CloudError::Decode(
+                "the disconnect was not confirmed, so the connector may still be connected"
+                    .to_string(),
+            ))
+        }
+    }
+
+    pub fn message(&self, connector_id: &str) -> String {
+        let connector = crate::terminal_text::sanitize_terminal_text(connector_id);
+        let disconnected = format!("Disconnected {connector} from your account.");
+        match self
+            .vendor_notice
+            .as_deref()
+            .map(crate::terminal_text::sanitize_terminal_text)
+            .filter(|notice| !notice.trim().is_empty())
+        {
+            Some(notice) => format!("{disconnected}\n{}", notice.trim()),
+            None => disconnected,
+        }
+    }
+}
+
+pub async fn disconnect(
+    client: &CloudClient,
+    connector_id: &str,
+) -> Result<DisconnectReceipt, CloudError> {
+    let receipt: DisconnectReceipt = client
         .call(
             &Route::delete(CONNECTORS_PATH),
             &[("connectorId", connector_id.to_string())],
             None,
         )
         .await?;
-    Ok(())
+    receipt.confirmed()
 }
 
 pub fn connect_url(connector_id: &str) -> Option<String> {
@@ -193,4 +231,61 @@ pub fn render_list(list: &ConnectorList) -> String {
     lines
         .push("  agi connectors disconnect <connector> removes one from your account.".to_string());
     lines.join("\n")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn receipt(body: Value) -> Result<DisconnectReceipt, CloudError> {
+        serde_json::from_value::<DisconnectReceipt>(body)
+            .map_err(|error| CloudError::Decode(error.to_string()))?
+            .confirmed()
+    }
+
+    #[test]
+    fn a_provider_warning_reaches_the_disconnect_message() {
+        let receipt = receipt(serde_json::json!({
+            "success": true,
+            "vendorNotice": "Disconnected here, but Notion access may remain until you remove it in Notion."
+        }))
+        .unwrap();
+
+        let message = receipt.message("notion");
+
+        assert!(message.starts_with("Disconnected notion from your account."));
+        assert!(
+            message.contains("Notion access may remain until you remove it in Notion."),
+            "{message}"
+        );
+    }
+
+    #[test]
+    fn a_confirmed_revocation_prints_only_the_disconnect() {
+        let receipt = receipt(serde_json::json!({ "success": true })).unwrap();
+
+        assert_eq!(
+            receipt.message("notion"),
+            "Disconnected notion from your account."
+        );
+    }
+
+    #[test]
+    fn terminal_controls_in_a_notice_are_stripped() {
+        let receipt = receipt(serde_json::json!({
+            "success": true,
+            "vendorNotice": "Access may remain\u{1b}]52;c;cGF5bG9hZA==\u{7} at the provider."
+        }))
+        .unwrap();
+
+        assert!(!receipt.message("notion").contains('\u{1b}'));
+    }
+
+    #[test]
+    fn an_unconfirmed_or_malformed_disconnect_is_not_success() {
+        assert!(receipt(serde_json::json!({ "success": false })).is_err());
+        assert!(receipt(serde_json::json!({})).is_err());
+        assert!(receipt(serde_json::json!({ "success": "yes" })).is_err());
+        assert!(receipt(serde_json::json!({ "success": true, "vendorNotice": 3 })).is_err());
+    }
 }

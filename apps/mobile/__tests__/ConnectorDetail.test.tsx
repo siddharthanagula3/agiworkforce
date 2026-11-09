@@ -170,8 +170,8 @@ describe('Connector detail', () => {
     ]);
     mockSetPermission.mockResolvedValue(undefined);
     mockResetPermission.mockResolvedValue(undefined);
-    mockDisconnect.mockResolvedValue(undefined);
-    mockDeleteCustom.mockResolvedValue(undefined);
+    mockDisconnect.mockResolvedValue({ vendorNotice: null });
+    mockDeleteCustom.mockResolvedValue({ vendorNotice: null });
   });
 
   it("shows account and connection metadata plus only this connector's tools", async () => {
@@ -341,6 +341,28 @@ describe('Connector detail', () => {
 
     await waitFor(() => expect(mockDisconnect).toHaveBeenCalledWith('github'));
     expect(mockDeleteCustom).not.toHaveBeenCalled();
+    expect(mockReplace).toHaveBeenCalledWith('/(app)/connectors');
+    expect(alert.mock.calls.map(([title]) => title)).not.toContain('GitHub disconnected');
+  });
+
+  it('shows the provider notice when the provider did not confirm the revocation', async () => {
+    const notice = 'Disconnected here, but GitHub access may remain until you remove it in GitHub.';
+    mockDisconnect.mockResolvedValue({ vendorNotice: notice });
+    const alert = jest.spyOn(Alert, 'alert');
+    const screen = render(<ConnectorDetailScreen connectorId="github" />);
+
+    await waitFor(() => expect(screen.getByLabelText('Disconnect GitHub')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('Disconnect GitHub'));
+    const disconnectAction = alert.mock.calls
+      .at(-1)?.[2]
+      ?.find((button) => button.text === 'Disconnect');
+
+    await act(async () => {
+      disconnectAction?.onPress?.();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(alert).toHaveBeenCalledWith('GitHub disconnected', notice));
     expect(mockReplace).toHaveBeenCalledWith('/(app)/connectors');
   });
 

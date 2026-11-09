@@ -17,6 +17,8 @@ import {
 import {
   addCustomConnector,
   browseConnectorListings,
+  deleteCustomConnector,
+  disconnectConnector,
   fetchConnectorDirectory,
   fetchConnectorListing,
   fetchConnectorToolPermissions,
@@ -349,5 +351,31 @@ describe('saveConnectorApiKey', () => {
     await expect(saveConnectorApiKey('/api/connectors/x/credentials', 'k')).rejects.toThrow(
       'Invalid connector key response',
     );
+  });
+});
+
+describe('disconnect receipts', () => {
+  const mockDelete = () => jest.requireMock('../services/api').api.delete as jest.Mock;
+  const notice = 'Disconnected here, but Notion access may remain until you remove it in Notion.';
+
+  it('returns the provider notice from a confirmed disconnect', async () => {
+    mockDelete().mockResolvedValueOnce({ success: true, vendorNotice: notice });
+
+    await expect(disconnectConnector('notion')).resolves.toEqual({ vendorNotice: notice });
+    expect(mockDelete()).toHaveBeenCalledWith('/api/connectors?connectorId=notion');
+  });
+
+  it('returns the provider notice from a custom connector removal', async () => {
+    mockDelete().mockResolvedValueOnce({ success: true, vendorNotice: notice });
+
+    await expect(deleteCustomConnector('row-1')).resolves.toEqual({ vendorNotice: notice });
+  });
+
+  it('does not treat a reply without success true as a disconnect', async () => {
+    mockDelete().mockResolvedValueOnce({ success: false });
+    await expect(disconnectConnector('notion')).rejects.toThrow('may still be connected');
+
+    mockDelete().mockResolvedValueOnce(undefined);
+    await expect(disconnectConnector('notion')).rejects.toThrow('may still be connected');
   });
 });

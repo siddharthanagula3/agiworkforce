@@ -14,6 +14,7 @@ import {
   resolveConnectorHealth,
 } from './policy';
 import {
+  parseConnectorDisconnect,
   parseConnectorList,
   parseConnectorOAuthStart,
   parseConnectorPolicy,
@@ -28,6 +29,7 @@ import type {
   ConnectorAccessPolicy,
   ConnectorDirectory,
   ConnectorDirectoryEntry,
+  ConnectorDisconnectResult,
   ConnectorOAuthStart,
   ConnectorSurface,
   ConnectorToolPermission,
@@ -129,7 +131,7 @@ export interface ConnectorRuntime {
     authType?: string,
     scope?: ConnectorOperationScope,
   ): Promise<ConnectResult>;
-  disconnect(connectorId: string): Promise<void>;
+  disconnect(connectorId: string): Promise<ConnectorDisconnectResult>;
   startOAuth(connectorId: string, scope?: ConnectorOperationScope): Promise<ConnectorOAuthStart>;
   listToolPermissions(): Promise<ConnectorToolPermission[]>;
   setToolPermission(
@@ -142,7 +144,7 @@ export interface ConnectorRuntime {
     input: AddCustomConnectorInput,
     scope?: ConnectorOperationScope,
   ): Promise<CustomConnectorResult>;
-  deleteCustomConnector(id: string): Promise<void>;
+  deleteCustomConnector(id: string): Promise<ConnectorDisconnectResult>;
 }
 
 function statusOf(error: unknown): number | null {
@@ -340,9 +342,11 @@ export function createConnectorRuntime(options: ConnectorRuntimeOptions): Connec
     async disconnect(connectorId: string) {
       if (local) {
         await local.disconnect(connectorId);
-        return;
+        return { vendorNotice: null };
       }
-      await http.delete(`${endpoints.connectors}?connectorId=${encodeURIComponent(connectorId)}`);
+      return parseConnectorDisconnect(
+        await http.delete(`${endpoints.connectors}?connectorId=${encodeURIComponent(connectorId)}`),
+      );
     },
     startOAuth,
     async listToolPermissions() {
@@ -373,7 +377,9 @@ export function createConnectorRuntime(options: ConnectorRuntimeOptions): Connec
       return parseCustomConnector(created);
     },
     async deleteCustomConnector(id: string) {
-      await http.delete(`${endpoints.custom}?id=${encodeURIComponent(id)}`);
+      return parseConnectorDisconnect(
+        await http.delete(`${endpoints.custom}?id=${encodeURIComponent(id)}`),
+      );
     },
   };
 }

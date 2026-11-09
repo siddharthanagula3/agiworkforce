@@ -13,6 +13,7 @@ export type {
   ConnectorAccessPolicy,
   ConnectorDirectory,
   ConnectorDirectoryEntry,
+  ConnectorDisconnectResult,
   ConnectorHealth,
   ConnectorOAuthStart,
   ConnectorSource,
@@ -32,6 +33,7 @@ export {
 
 export {
   ConnectorResponseError,
+  parseConnectorDisconnect,
   parseConnectorList,
   parseConnectorOAuthStart,
   parseConnectorPolicy,

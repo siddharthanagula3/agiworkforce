@@ -7216,7 +7216,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
                 let exported =
                     diagnostics_bundle::export(&report, app_config.account_privacy_mode())
                         .await
-                    .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        .map_err(|error| anyhow::anyhow!("{error}"))?;
                 let path = std::env::current_dir()?.join(&exported.filename);
                 std::fs::write(&path, serde_json::to_string_pretty(&exported.diagnostics)?)?;
                 println!(
@@ -7407,12 +7407,9 @@ async fn run_cli(cli: Cli) -> Result<()> {
                 init::init_home_dir(&home)?;
                 println!("Initialized ~/.agiworkforce/ directory structure.");
 
-                // Register current directory as a project
                 let cwd = std::env::current_dir()?;
                 let project_root = project_scope::resolve_project_scope(&cwd);
-                project_registry::ProjectRegistry::update(&home, |registry| {
-                    registry.register_project(&project_root, "trusted")
-                })?;
+                trust::grant(&cwd)?;
                 println!("Registered project: {}", project_root.display());
                 Ok(())
             }
