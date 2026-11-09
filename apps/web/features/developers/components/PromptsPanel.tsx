@@ -147,11 +147,13 @@ function PromptWorkspace({
   api,
   prompt,
   onPromptChange,
+  onCaseCountChange,
   onDeleted,
 }: {
   api: PromptsApi;
   prompt: DeveloperPrompt;
   onPromptChange: (prompt: DeveloperPrompt) => void;
+  onCaseCountChange: (caseCount: number) => void;
   onDeleted: () => void;
 }) {
   const id = useId();
@@ -177,14 +179,17 @@ function PromptWorkspace({
 
   const unchanged = sameAsVersion(draft, prompt.latest);
   const variables = useMemo(() => promptTemplateVariables(draft.template), [draft.template]);
+  const savedTemplate = prompt.latest?.template ?? '';
+  const savedVariables = useMemo(() => promptTemplateVariables(savedTemplate), [savedTemplate]);
 
   const save = async () => {
+    const submitted = draft;
     setSaving(true);
     setError(null);
     try {
-      const next = await api.saveVersion(prompt.id, versionInputOf(draft));
+      const next = await api.saveVersion(prompt.id, versionInputOf(submitted));
       onPromptChange(next);
-      setDraft(draftOf(next.latest));
+      setDraft((current) => (current === submitted ? draftOf(next.latest) : current));
       loadVersions();
     } catch (reason) {
       setError(toUserMessage(reason, 'The version could not be saved.'));
@@ -381,8 +386,8 @@ function PromptWorkspace({
         api={api}
         prompt={prompt}
         versions={versions}
-        variables={promptTemplateVariables(prompt.latest?.template ?? '')}
-        onCasesChange={(caseCount) => onPromptChange({ ...prompt, caseCount })}
+        variables={savedVariables}
+        onCasesChange={onCaseCountChange}
       />
 
       <div>
@@ -521,6 +526,13 @@ export function PromptsPanel({ api = promptsApi }: { api?: PromptsApi }) {
             onPromptChange={(next) =>
               setPrompts((current) =>
                 (current ?? []).map((prompt) => (prompt.id === next.id ? next : prompt)),
+              )
+            }
+            onCaseCountChange={(caseCount) =>
+              setPrompts((current) =>
+                (current ?? []).map((prompt) =>
+                  prompt.id === selected.id ? { ...prompt, caseCount } : prompt,
+                ),
               )
             }
             onDeleted={() => {

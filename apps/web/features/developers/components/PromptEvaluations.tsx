@@ -46,7 +46,16 @@ function CaseForm({
   const id = useId();
   const [draft, setDraft] = useState<DeveloperEvalCaseInput>(() => emptyCase(variables));
   const [saving, setSaving] = useState(false);
-  useEffect(() => setDraft(emptyCase(variables)), [variables]);
+  useEffect(
+    () =>
+      setDraft((current) => ({
+        ...current,
+        variables: Object.fromEntries(
+          variables.map((name) => [name, current.variables[name] ?? '']),
+        ),
+      })),
+    [variables],
+  );
   const add = async () => {
     setSaving(true);
     try {
