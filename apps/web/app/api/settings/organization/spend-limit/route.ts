@@ -23,6 +23,12 @@ import {
 } from '@/lib/services/organization-permission-service';
 import { requireTeamAdminAccess } from '@/app/api/settings/team/team-admin-access';
 import {
+  MAX_ALERT_THRESHOLD_PCT,
+  MAX_MONTHLY_CAP_CREDITS,
+  MIN_ALERT_THRESHOLD_PCT,
+  MIN_MONTHLY_CAP_CREDITS,
+} from '@/lib/spend-limit-bounds';
+import {
   deleteSpendLimit,
   readSpendState,
   upsertSpendLimit,
@@ -31,13 +37,11 @@ import {
 
 export const runtime = 'nodejs';
 
-const MAX_MONTHLY_CAP_CENTS = 100_000_000;
-
 const PutSchema = z
   .object({
-    monthlyCapCredits: z.number().int().min(1).max(creditsFromCents(MAX_MONTHLY_CAP_CENTS)),
+    monthlyCapCredits: z.number().int().min(MIN_MONTHLY_CAP_CREDITS).max(MAX_MONTHLY_CAP_CREDITS),
     enforcement: z.enum(['off', 'notify', 'block']),
-    alertThresholdPct: z.number().int().min(1).max(100),
+    alertThresholdPct: z.number().int().min(MIN_ALERT_THRESHOLD_PCT).max(MAX_ALERT_THRESHOLD_PCT),
   })
   .strict();
 
