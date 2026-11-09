@@ -154,11 +154,23 @@ export function updateOfferFor(
   return updates.find((update) => update.pluginId === pluginId);
 }
 
-export function versionSwitchSummary(offer: PluginUpdateOfferWire): string {
-  const parts = [`Moves from ${offer.installedVersion} to ${offer.latestVersion}.`];
-  if (offer.diff.addedPermissions.length > 0) {
-    parts.push(`It also asks for: ${offer.diff.addedPermissions.join(', ')}.`);
+export function versionMoveSummary(
+  installedVersion: string,
+  targetVersion: string,
+  permissions: readonly string[],
+): string {
+  const parts = [`Moves from ${installedVersion} to ${targetVersion}.`];
+  if (permissions.length > 0) {
+    parts.push(`It also asks for: ${permissions.join(', ')}.`);
   }
+  return parts.join(' ');
+}
+
+export function versionSwitchSummary(
+  offer: PluginUpdateOfferWire,
+  permissions: readonly string[] = offer.diff.addedPermissions,
+): string {
+  const parts = [versionMoveSummary(offer.installedVersion, offer.latestVersion, permissions)];
   if (offer.diff.addedSkills.length > 0) {
     parts.push(`It adds these skills: ${offer.diff.addedSkills.join(', ')}.`);
   }

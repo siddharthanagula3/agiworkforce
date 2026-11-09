@@ -281,6 +281,8 @@ describe('mobile plugins', () => {
     fireEvent.press(getByText('Switch version'));
 
     await waitFor(() => expect(mockMove).toHaveBeenCalledWith('mail', '1.1.0', ['send mail']));
+    expect(alert.mock.calls[0]?.[0]).toBe('Switch to version 1.1.0?');
+    expect(alert.mock.calls[0]?.[1]).toContain('It also asks for: send mail.');
     alert.mockRestore();
   });
 

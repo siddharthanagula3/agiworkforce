@@ -25,14 +25,18 @@ jest.mock('@/lib/safeOpenURL', () => ({
 const mockCreateConversation = jest.fn();
 const mockLoadMessages = jest.fn().mockResolvedValue(undefined);
 const mockDeleteConversation = jest.fn().mockResolvedValue(undefined);
-jest.mock('@/stores/chatStore', () => ({
-  useChatStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({
-      createConversation: mockCreateConversation,
-      loadMessages: mockLoadMessages,
-      deleteConversation: mockDeleteConversation,
-    }),
-}));
+let mockConversations: Array<{ id: string }> = [];
+jest.mock('@/stores/chatStore', () => {
+  const state = () => ({
+    createConversation: mockCreateConversation,
+    loadMessages: mockLoadMessages,
+    deleteConversation: mockDeleteConversation,
+    conversations: mockConversations,
+  });
+  const useChatStore = (selector: (value: Record<string, unknown>) => unknown) => selector(state());
+  useChatStore.getState = state;
+  return { useChatStore };
+});
 
 jest.mock('@/services/managedCloudProjects', () => ({
   managedCloudProjects: { getProject: jest.fn() },
@@ -272,6 +276,36 @@ describe('projects shared with the member', () => {
       ?.onPress?.();
 
     await waitFor(() => expect(mockDeleteConversation).toHaveBeenCalledWith('copy-2'));
+    await waitFor(() =>
+      expect(alert.mock.calls.at(-1)?.[1]).toBe(
+        'The shared messages could not be copied, so no new conversation was kept.',
+      ),
+    );
+  });
+
+  it('does not claim the copy was discarded when it could not be deleted', async () => {
+    (api.get as jest.Mock).mockImplementation(async (path: string) =>
+      path.startsWith('/api/share/')
+        ? { title: 'Launch retro', messages: [{ role: 'user', content: 'Hi' }] }
+        : overview(),
+    );
+    (api.post as jest.Mock).mockRejectedValue(new Error('HTTP 500'));
+    mockCreateConversation.mockResolvedValue('copy-3');
+    mockConversations = [{ id: 'copy-3' }];
+    const alert = jest.spyOn(Alert, 'alert');
+    render(<SharedWithYouScreen />);
+
+    fireEvent.press(await screen.findByLabelText('Launch retro, Shared by Dana'));
+    (alert.mock.calls.at(-1)?.[2] as Array<{ text: string; onPress?: () => void }>)
+      .find((button) => button.text === 'Continue in a new chat')
+      ?.onPress?.();
+
+    await waitFor(() => expect(mockDeleteConversation).toHaveBeenCalledWith('copy-3'));
+    await waitFor(() =>
+      expect(alert.mock.calls.at(-1)?.[1]).toContain('The partial copy is still in your chats'),
+    );
+    expect(alert.mock.calls.at(-1)?.[1]).not.toContain('no new conversation was kept');
+    mockConversations = [];
   });
 
   it('says an expired shared chat has expired and creates nothing', async () => {

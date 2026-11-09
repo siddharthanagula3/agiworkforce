@@ -48,8 +48,17 @@ function tableCells(line: string): string[] {
     .map((cell) => cell.trim());
 }
 
+const DELIMITER_CELL = /^:?-{3,}:?$/;
+
+export function tableRows(lines: string[]): string[][] {
+  const rows = lines.map(tableCells);
+  const delimiter = rows[1];
+  if (delimiter && delimiter.every((cell) => DELIMITER_CELL.test(cell))) rows.splice(1, 1);
+  return rows;
+}
+
 function table(lines: string[]): Table {
-  const rows = lines.filter((line) => !/^\s*\|?\s*:?-{3,}/.test(line)).map(tableCells);
+  const rows = tableRows(lines);
   const width = Math.max(1, ...rows.map((row) => row.length));
   return new Table({
     width: { size: 100, type: WidthType.PERCENTAGE },
