@@ -242,8 +242,6 @@ import {
   SEAM_INSPECTION_WINDOW,
   type CitationSpan,
 } from '@agiworkforce/unified-chat';
-import { parseQualifiedMcpToolName } from '@/features/connectors/lib/mcp-tool-name';
-import { useToolPermissionsStore } from '@/features/connectors/stores/tool-permissions-store';
 import { networkErrorMessage, toUserMessage } from '@/lib/user-error-message';
 import {
   buildApiMessageContent,
@@ -1336,24 +1334,6 @@ function patchInteractiveCardSubmissionError(
     },
     binding.conversationId,
   );
-}
-
-function autoResolvePendingApprovals(
-  assistantMessageId: string,
-  calls: PendingApprovalCall[],
-  resolve: ResolveToolApprovalFn,
-): void {
-  const permissions = useToolPermissionsStore.getState();
-  for (const call of calls) {
-    const parsed = parseQualifiedMcpToolName(call.name);
-    if (!parsed) continue;
-    const level = permissions.getToolPermission(parsed.serverId, parsed.toolName);
-    if (level === 'allow') {
-      void resolve(assistantMessageId, call.toolCallId, 'approved');
-    } else if (level === 'deny') {
-      void resolve(assistantMessageId, call.toolCallId, 'rejected');
-    }
-  }
 }
 
 const REMOTE_APPROVAL_POLL_INTERVAL_MS = 5_000;
@@ -4002,11 +3982,7 @@ export function useChatStream(
   }, [activeConversationId, followActiveConversation, userId, isSignedIn, captureSessionSnapshot]);
 
   const resolveToolApproval = useResolveToolApproval(abortControllersRef, requestSettlements);
-  const resolveToolInput = useResolveToolInput(
-    abortControllersRef,
-    resolveToolApproval,
-    requestSettlements,
-  );
+  const resolveToolInput = useResolveToolInput(abortControllersRef, requestSettlements);
 
   const sendMessage = useCallback(
     async (content: string, options: SendMessageOptions = {}): Promise<boolean> => {
@@ -4637,11 +4613,6 @@ export function useChatStream(
               decisions: new Map(),
               resolving: false,
             });
-            autoResolvePendingApprovals(
-              assistantMessageId,
-              settled.pendingCalls,
-              resolveToolApproval,
-            );
             followRemoteApproval(assistantMessageId, getAuthToken);
             break;
           }
@@ -4764,7 +4735,6 @@ export function useChatStream(
       setLoading,
       setError,
       getToken,
-      resolveToolApproval,
       beginConversationRequest,
       endConversationRequest,
       captureSessionSnapshot,
@@ -5596,11 +5566,6 @@ export function useResolveToolApproval(
               decisions: new Map(),
               resolving: false,
             });
-            autoResolvePendingApprovals(
-              assistantMessageId,
-              settled.pendingCalls,
-              resolveToolApproval,
-            );
             followRemoteApproval(assistantMessageId, getAuthToken);
           } else {
             pendingTurns.delete(assistantMessageId);
@@ -5664,7 +5629,6 @@ const ANSWERED_APPROVAL_STATUSES = new Set([404, 409, 410]);
 
 function useResolveToolInput(
   sharedAbortControllers: MutableRefObject<Map<string, AbortController>>,
-  resolveToolApproval: UseChatStreamReturn['resolveToolApproval'],
   requests: ChatRequestSettlements,
 ): UseChatStreamReturn['resolveToolInput'] {
   const captureSessionSnapshot = useSessionSnapshot();
@@ -5855,7 +5819,6 @@ function useResolveToolInput(
               decisions: new Map(),
               resolving: false,
             });
-            autoResolvePendingApprovals(assistantMessageId, pendingCalls, resolveToolApproval);
             followRemoteApproval(assistantMessageId, getAuthToken);
           }
           if (runId && pendingInputs.length > 0) {
@@ -5909,7 +5872,7 @@ function useResolveToolInput(
         request.finish();
       }
     },
-    [abortControllers, captureSessionSnapshot, resolveToolApproval, requests],
+    [abortControllers, captureSessionSnapshot, requests],
   );
 }
 

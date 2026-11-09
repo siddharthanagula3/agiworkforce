@@ -80,10 +80,7 @@ export function ReflectSection({ active = true }: { active?: boolean } = {}) {
     [recap],
   );
   const visibleActivity = recap?.dailyActivity.slice(-60) ?? [];
-  const maxDailyCount = Math.max(
-    1,
-    ...(recap?.dailyActivity.map((day) => day.conversationCount) ?? []),
-  );
+  const maxDailyCount = Math.max(1, ...visibleActivity.map((day) => day.conversationCount));
 
   return (
     <div className="space-y-8">

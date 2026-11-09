@@ -26,6 +26,10 @@ const SAME_ORIGIN: RequestCredentials = 'same-origin';
 
 export const PERMISSION_SAVE_FAILED_COPY =
   'That permission was not saved, so the assistant still follows the level shown here. Try again.';
+export const PERMISSION_PARTIAL_SAVE_COPY =
+  'Part of that change was saved. The levels shown are what is saved on your account. Try again to finish.';
+export const PERMISSION_PARTIAL_UNVERIFIED_COPY =
+  'Part of that change was saved, but the saved levels could not be checked. Reload to see what is saved.';
 export const PERMISSION_RESET_FAILED_COPY =
   'These permissions were not reset, so the assistant still follows the levels shown here. Try again.';
 
@@ -64,10 +68,15 @@ class PermissionWriteError extends Error {
   }
 }
 
+interface WriteProgress {
+  committed: number;
+}
+
 async function writePermissionToServer(
   connectorId: string,
   toolNames: readonly string[],
   level: PermissionLevel,
+  progress: WriteProgress,
   category?: ConnectorToolCategory,
 ): Promise<void> {
   const csrf = await getCsrfToken();
@@ -79,6 +88,7 @@ async function writePermissionToServer(
       body: JSON.stringify(body),
     });
     if (!response.ok) throw new PermissionWriteError(response.status);
+    progress.committed += 1;
   };
   if (category) await put({ connectorId, level, category });
   for (
@@ -126,6 +136,27 @@ async function fetchPermissionsFromServer(): Promise<ConnectorToolPermission[]> 
   const parsed = ListConnectorToolPermissionsResponseSchema.safeParse(await res.json());
   if (!parsed.success) throw new Error('connector permissions response was not readable');
   return parsed.data.permissions;
+}
+
+function snapshotFromRows(rows: readonly ConnectorToolPermission[]): ToolPermissionsMap {
+  const snapshot: ToolPermissionsMap = {};
+  for (const row of rows) {
+    snapshot[row.connectorId] = { ...snapshot[row.connectorId], [row.toolName]: row.level };
+  }
+  return snapshot;
+}
+
+function keepingInFlight(snapshot: ToolPermissionsMap, state: ToolPermissionsState) {
+  const next: ToolPermissionsMap = { ...snapshot };
+  for (const [connectorId, toolNames] of Object.entries(state.saving)) {
+    for (const toolName of toolNames) {
+      const level = state.permissions[connectorId]?.[toolName];
+      if (level !== undefined) {
+        next[connectorId] = { ...next[connectorId], [toolName]: level };
+      }
+    }
+  }
+  return next;
 }
 
 function withoutConnector(map: ToolPermissionsMap, connectorId: string): ToolPermissionsMap {
@@ -199,29 +230,62 @@ export const useToolPermissionsStore = create<Store>()(
         const unmarkAll = (saving: Record<string, readonly string[]>) =>
           toolNames.reduce((next, name) => unmarkSaving(next, connectorId, name), saving);
 
-        void writePermissionToServer(connectorId, listedToolNames, level, category)
+        const progress: WriteProgress = { committed: 0 };
+        void writePermissionToServer(connectorId, listedToolNames, level, progress, category)
           .then(() => {
             set((state) => ({ saving: unmarkAll(state.saving) }));
           })
-          .catch((err: unknown) => {
-            logger.warn('[ToolPermissions] server write refused, reverting:', err);
-            set((state) => {
-              const connector = { ...state.permissions[connectorId] };
-              for (const name of toolNames) {
-                const prior = previous[name];
-                if (prior === undefined) delete connector[name];
-                else connector[name] = prior;
-              }
-              const permissions =
-                Object.keys(connector).length === 0
-                  ? withoutConnector(state.permissions, connectorId)
-                  : { ...state.permissions, [connectorId]: connector };
-              return {
-                permissions,
+          .catch(async (err: unknown) => {
+            if (progress.committed === 0) {
+              logger.warn('[ToolPermissions] server write refused, reverting:', err);
+              set((state) => {
+                const connector = { ...state.permissions[connectorId] };
+                for (const name of toolNames) {
+                  const prior = previous[name];
+                  if (prior === undefined) delete connector[name];
+                  else connector[name] = prior;
+                }
+                const permissions =
+                  Object.keys(connector).length === 0
+                    ? withoutConnector(state.permissions, connectorId)
+                    : { ...state.permissions, [connectorId]: connector };
+                return {
+                  permissions,
+                  saving: unmarkAll(state.saving),
+                  saveError: { ...state.saveError, [connectorId]: PERMISSION_SAVE_FAILED_COPY },
+                };
+              });
+              return;
+            }
+            logger.warn('[ToolPermissions] server write partly committed, rereading:', err);
+            await queryClient.invalidateQueries({ queryKey: queryKeys.connectors.permissions() });
+            try {
+              const rows = await fetchPermissionsFromServer();
+              set((state) => {
+                const settled = { ...state, saving: unmarkAll(state.saving) };
+                const fromServer = snapshotFromRows(rows)[connectorId];
+                const inFlight = keepingInFlight({}, settled)[connectorId];
+                const connector = { ...fromServer, ...inFlight };
+                const others = withoutConnector(state.permissions, connectorId);
+                return {
+                  permissions:
+                    Object.keys(connector).length === 0
+                      ? others
+                      : { ...others, [connectorId]: connector },
+                  saving: settled.saving,
+                  saveError: { ...state.saveError, [connectorId]: PERMISSION_PARTIAL_SAVE_COPY },
+                };
+              });
+            } catch (rereadError) {
+              logger.warn('[ToolPermissions] reread after partial write failed:', rereadError);
+              set((state) => ({
                 saving: unmarkAll(state.saving),
-                saveError: { ...state.saveError, [connectorId]: PERMISSION_SAVE_FAILED_COPY },
-              };
-            });
+                saveError: {
+                  ...state.saveError,
+                  [connectorId]: PERMISSION_PARTIAL_UNVERIFIED_COPY,
+                },
+              }));
+            }
           });
       },
 
@@ -268,14 +332,9 @@ export const useToolPermissionsStore = create<Store>()(
             meta: { silent: true },
             retry: false,
           });
-          if (!permissions.length) return;
-          set((state) => {
-            const merged: ToolPermissionsMap = { ...state.permissions };
-            for (const p of permissions) {
-              merged[p.connectorId] = { ...merged[p.connectorId], [p.toolName]: p.level };
-            }
-            return { permissions: merged };
-          });
+          set((state) => ({
+            permissions: keepingInFlight(snapshotFromRows(permissions), state),
+          }));
         } catch (err) {
           logger.warn('[ToolPermissions] server hydrate failed (using local):', err);
         }

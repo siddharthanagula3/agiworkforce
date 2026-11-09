@@ -7,6 +7,7 @@ import {
   hasPendingMessageApproval,
 } from '@/features/chat/lib/pending-approval';
 import { useFreeTrialStore } from '@/features/chat/stores/freeTrialStore';
+import { useToolPermissionsStore } from '@/features/connectors/stores/tool-permissions-store';
 import { useChatStream, __resetPendingTurnsForTests, isApprovalTurnLive } from './useChatStream';
 import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/cloud-contracts';
 import { hasOpenApprovalDecision, settledActivityStatus } from '@agiworkforce/unified-chat';
@@ -113,6 +114,7 @@ describe('useChatStream, tool approval → resume', () => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+    useToolPermissionsStore.setState({ permissions: {} });
   });
 
   it('surfaces an awaiting_approval card when the turn suspends on a tool', async () => {
@@ -133,6 +135,31 @@ describe('useChatStream, tool approval → resume', () => {
     expect(awaiting?.name).toBe(TOOL);
     expectApprovalStateAfterDone(true);
   });
+
+  it.each(['allow', 'deny'] as const)(
+    'leaves a server approval request pending when the stored level is %s',
+    async (level) => {
+      useToolPermissionsStore.setState({
+        permissions: { github: { get_pull_request_diff: level } },
+      });
+      mockSseStream([approvalEvent]);
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.sendMessage('summarize PR 7', {
+          conversationId: TEMP_CONVERSATION.id,
+        });
+      });
+
+      const awaiting = assistantMessage()?.metadata?.tools?.find((t) => t.toolCallId === 'call_1');
+      expect(awaiting?.status).toBe('awaiting_approval');
+      const resumeCalls = vi
+        .mocked(fetch)
+        .mock.calls.filter((c) => String(c[0]).includes('/api/llm/v1/chat/completions/approve'));
+      expect(resumeCalls).toHaveLength(0);
+      expectApprovalStateAfterDone(true);
+    },
+  );
 
   it('dispatches the resume request on approve and streams the continuation', async () => {
     mockSseStream([approvalEvent]);
