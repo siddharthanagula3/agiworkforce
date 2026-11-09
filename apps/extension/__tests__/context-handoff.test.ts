@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   contextHandoffCliCommand,
   contextHandoffVsCodeUri,
@@ -70,6 +70,12 @@ describe('selected-context handoff contract', () => {
 describe('context-handoff preview', () => {
   beforeEach(() => {
     document.body.replaceChildren();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(NOW + 1_000);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('shows the exact redacted payload and named local destination before approval', () => {
@@ -144,6 +150,12 @@ describe('context-handoff preview', () => {
 describe('selected-context handoff to the local developer surfaces', () => {
   beforeEach(() => {
     document.body.innerHTML = '';
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(NOW + 1_000);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   function mountWith(overrides: Record<string, unknown> = {}) {
@@ -228,5 +240,51 @@ describe('selected-context handoff to the local developer surfaces', () => {
       ),
     ).toBe('false');
     expect(options.onApprove).not.toHaveBeenCalled();
+  });
+
+  it('does not copy the command or start the VS Code link once the mounted preview has expired', () => {
+    const options = mountWith();
+    vi.setSystemTime(NOW + CONTEXT_HANDOFF_TTL_MS + 1);
+
+    (document.querySelector('[data-context-handoff-cli]') as HTMLButtonElement).click();
+    expect(options.onCopyCliCommand).not.toHaveBeenCalled();
+    expect(document.body.textContent).toContain('This context preview expired');
+
+    const link = document.querySelector('[data-context-handoff-vscode]') as HTMLAnchorElement;
+    const click = new MouseEvent('click', { bubbles: true, cancelable: true });
+    link.dispatchEvent(click);
+    expect(click.defaultPrevented).toBe(true);
+    expect(options.onOpenInVsCode).not.toHaveBeenCalled();
+    expect(options.onApprove).not.toHaveBeenCalled();
+  });
+
+  it('prevents the default VS Code launch when the preview expired before the click', () => {
+    const options = mountWith();
+    vi.setSystemTime(NOW + CONTEXT_HANDOFF_TTL_MS + 1);
+
+    const link = document.querySelector('[data-context-handoff-vscode]') as HTMLAnchorElement;
+    const click = new MouseEvent('click', { bubbles: true, cancelable: true });
+    link.dispatchEvent(click);
+
+    expect(click.defaultPrevented).toBe(true);
+    expect(options.onOpenInVsCode).not.toHaveBeenCalled();
+    expect(link.hasAttribute('href')).toBe(false);
+  });
+
+  it('retires every destination when the preview ages out while mounted', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW + 1_000);
+    const options = mountWith();
+
+    vi.advanceTimersByTime(CONTEXT_HANDOFF_TTL_MS);
+
+    expect(document.body.textContent).toContain('This context preview expired');
+    expect(
+      (document.querySelector('[data-context-handoff-cli]') as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(
+      (document.querySelector('[data-context-handoff-approve]') as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(options.onCopyCliCommand).not.toHaveBeenCalled();
   });
 });

@@ -14,6 +14,7 @@ export {
 
 export const CONTEXT_HANDOFF_STORAGE_KEY = 'agi_pending_context_handoff_v1';
 export const CONTEXT_HANDOFF_TTL_MS = 5 * 60 * 1000;
+const CONTEXT_HANDOFF_EXPIRED_MESSAGE = 'This context preview expired. Select the context again.';
 
 export const CONTEXT_HANDOFF_DESTINATION = Object.freeze({
   id: 'agi-desktop-native' as const,
@@ -354,10 +355,12 @@ export function mountContextHandoffPreview(
     }
   };
   const destroy = () => {
+    clearTimeout(expiryTimer);
     document.removeEventListener('keydown', handleKeydown);
     overlay.remove();
   };
   const settle = (message: string) => {
+    clearTimeout(expiryTimer);
     settled = true;
     status.textContent = message;
     setDestinationsDisabled(true);
@@ -393,8 +396,12 @@ export function mountContextHandoffPreview(
     sendingMessage: string,
     sentMessage: string,
     failureMessage: string,
-  ) => {
-    if (busy || settled) return;
+  ): boolean => {
+    if (busy || settled) return false;
+    if (!isPendingContextHandoff(pending)) {
+      settle(CONTEXT_HANDOFF_EXPIRED_MESSAGE);
+      return false;
+    }
     busy = true;
     setDestinationsDisabled(true);
     cancel.disabled = true;
@@ -421,6 +428,7 @@ export function mountContextHandoffPreview(
       .finally(() => {
         busy = false;
       });
+    return true;
   };
 
   cancel.addEventListener('click', () => void cancelHandoff());
@@ -433,16 +441,13 @@ export function mountContextHandoffPreview(
     );
   });
   openInVsCode.addEventListener('click', (event) => {
-    if (busy || settled) {
-      event.preventDefault();
-      return;
-    }
-    sendTo(
+    const started = sendTo(
       options.onOpenInVsCode,
       `Handing the approved preview to ${CONTEXT_HANDOFF_VSCODE_DESTINATION.label}…`,
       `Handed to ${CONTEXT_HANDOFF_VSCODE_DESTINATION.label}. If no window opened, VS Code is not installed on this machine.`,
       `${CONTEXT_HANDOFF_VSCODE_DESTINATION.label} did not receive the selected context.`,
     );
+    if (!started) event.preventDefault();
   });
   copyCliCommand.addEventListener('click', () => {
     sendTo(
@@ -453,6 +458,13 @@ export function mountContextHandoffPreview(
     );
   });
   document.addEventListener('keydown', handleKeydown);
+  const expiryTimer = setTimeout(
+    () => {
+      if (busy || settled) return;
+      settle(CONTEXT_HANDOFF_EXPIRED_MESSAGE);
+    },
+    Math.max(0, pending.expiresAt - Date.now() + 1),
+  );
   approve.focus();
 
   return { destroy };
