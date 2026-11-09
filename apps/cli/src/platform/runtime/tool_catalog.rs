@@ -316,6 +316,15 @@ pub fn policy_alias_matches_tool(alias: &str, tool_name: &str) -> bool {
     policy_alias_tool_names(normalized.as_str()).contains(&tool_name)
 }
 
+pub fn policy_alias_tools(alias: &str) -> Vec<String> {
+    let names = policy_alias_tool_names(normalize_policy_alias(alias).as_str());
+    if names.is_empty() {
+        vec![alias.to_string()]
+    } else {
+        names.iter().map(|name| (*name).to_string()).collect()
+    }
+}
+
 fn policy_alias_tool_names(alias: &str) -> &'static [&'static str] {
     match alias {
         "bash" | "shell" | "runcommand" => &["run_command"],
@@ -533,7 +542,7 @@ fn core_tool_definitions() -> Vec<ToolDefinition> {
                 "properties": {
                     "id": {"type": "string", "description": "The id run_command returned for the background command, such as shell_1"},
                     "input": {"type": "string", "description": "Text to type into the command before reading. End a line with \\n to press Enter; \\u0003 is Ctrl+C and \\u0004 is Ctrl+D."},
-                    "wait_seconds": {"type": "number", "description": format!("How long to wait for more output before returning, at most {}. Returns early when the command ends. Defaults to {}.", crate::terminals::MAX_WAIT.as_secs(), crate::terminals::DEFAULT_WAIT.as_secs())}
+                    "wait_seconds": {"type": "number", "minimum": 0, "maximum": crate::terminals::MAX_WAIT.as_secs(), "description": format!("How long to wait for more output before returning, at most {}. Returns early when the command ends. Defaults to {}.", crate::terminals::MAX_WAIT.as_secs(), crate::terminals::DEFAULT_WAIT.as_secs())}
                 }
             }),
         ).with_size_cap(50_000),

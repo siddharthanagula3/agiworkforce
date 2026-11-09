@@ -420,13 +420,7 @@ pub(super) async fn execute_command_output(
             return Ok(result(false, format!("{error:#}")));
         }
     }
-    let wait = args
-        .get("wait_seconds")
-        .and_then(|value| value.trim().parse::<f64>().ok())
-        .filter(|seconds| seconds.is_finite() && *seconds >= 0.0)
-        .map(|seconds| std::time::Duration::from_secs_f64(seconds).min(crate::terminals::MAX_WAIT))
-        .unwrap_or(crate::terminals::DEFAULT_WAIT);
-    let output = crate::terminals::read_new(&background, wait).await;
+    let output = crate::terminals::read_new(&background, command_output_wait(args)).await;
     Ok(result(
         true,
         truncate_output_with_save(
@@ -434,6 +428,18 @@ pub(super) async fn execute_command_output(
             crate::terminals::report(&background, &output),
         ),
     ))
+}
+
+fn command_output_wait(args: &HashMap<String, String>) -> std::time::Duration {
+    args.get("wait_seconds")
+        .and_then(|value| value.trim().parse::<f64>().ok())
+        .filter(|seconds| seconds.is_finite() && *seconds >= 0.0)
+        .map(|seconds| {
+            std::time::Duration::from_secs_f64(
+                seconds.min(crate::terminals::MAX_WAIT.as_secs_f64()),
+            )
+        })
+        .unwrap_or(crate::terminals::DEFAULT_WAIT)
 }
 
 pub(super) async fn execute_command_stop(args: &HashMap<String, String>) -> Result<ToolResult> {
@@ -785,6 +791,45 @@ pub(super) fn saved_command_decision(
 mod tests {
     use super::*;
     use std::sync::{Arc, Mutex};
+
+    fn wait_for(value: &str) -> std::time::Duration {
+        command_output_wait(&HashMap::from([(
+            "wait_seconds".to_string(),
+            value.to_string(),
+        )]))
+    }
+
+    #[test]
+    fn command_output_wait_is_capped_instead_of_overflowing() {
+        let max = crate::terminals::MAX_WAIT;
+        for oversized in [
+            "1e20",
+            "1e300",
+            "1.7976931348623157e308",
+            "18446744073709551616",
+        ] {
+            assert_eq!(wait_for(oversized), max, "{oversized}");
+        }
+        assert_eq!(wait_for("31"), max);
+        assert_eq!(wait_for("30"), max);
+    }
+
+    #[test]
+    fn command_output_wait_keeps_representable_values_and_defaults() {
+        assert_eq!(wait_for("0"), std::time::Duration::ZERO);
+        assert_eq!(wait_for(" 1.5 "), std::time::Duration::from_secs_f64(1.5));
+        for unusable in ["-1", "NaN", "inf", "-inf", "soon", ""] {
+            assert_eq!(
+                wait_for(unusable),
+                crate::terminals::DEFAULT_WAIT,
+                "{unusable}"
+            );
+        }
+        assert_eq!(
+            command_output_wait(&HashMap::new()),
+            crate::terminals::DEFAULT_WAIT
+        );
+    }
 
     #[test]
     fn working_directory_cannot_use_an_additional_root() {

@@ -46,7 +46,7 @@ export interface FreePlanNotices {
 
 interface ShownOnceNotice {
   element: HTMLElement;
-  decided: string | null;
+  decided: { decision: string; shown: Promise<boolean>; applied: boolean } | null;
 }
 
 function buildNotice(
@@ -122,19 +122,38 @@ export function buildFreePlanNotices(
     account: FreePlanNoticeAccount,
   ): Promise<FreeModelPromotionOffer | null> => {
     if (promotionRead?.accountId !== account.accountId) {
-      const offer = fetchPromotion(account.token).catch(() => {
-        promotionRead = null;
-        return null;
-      });
+      const offer: Promise<FreeModelPromotionOffer | null> = fetchPromotion(account.token).catch(
+        () => {
+          if (promotionRead?.offer === offer) promotionRead = null;
+          return null;
+        },
+      );
       promotionRead = { accountId: account.accountId, offer };
     }
     return promotionRead.offer;
+  };
+
+  let generation = 0;
+  let owner: string | null = null;
+  let claims: Promise<unknown> = Promise.resolve();
+  const claim = (storageKey: string, accountId: string): Promise<boolean> => {
+    const next = claims.then(() => claimFirstShowing(store, storageKey, accountId));
+    claims = next.catch(() => undefined);
+    return next;
+  };
+
+  const retire = (): void => {
+    for (const notice of [training, promotion]) {
+      notice.decided = null;
+      notice.element.classList.remove('visible');
+    }
   };
 
   const decide = async (
     notice: ShownOnceNotice,
     storageKey: string | null,
     accountId: string | null,
+    current: number,
   ): Promise<void> => {
     if (!storageKey || !accountId) {
       notice.decided = null;
@@ -142,41 +161,48 @@ export function buildFreePlanNotices(
       return;
     }
     const decision = `${storageKey} ${accountId}`;
-    if (notice.decided === decision) return;
-    notice.decided = decision;
-    notice.element.classList.toggle(
-      'visible',
-      await claimFirstShowing(store, storageKey, accountId),
-    );
+    if (notice.decided?.decision !== decision) {
+      notice.decided = { decision, shown: claim(storageKey, accountId), applied: false };
+    }
+    const decided = notice.decided;
+    const shown = await decided.shown;
+    if (current !== generation || decided.applied) return;
+    decided.applied = true;
+    notice.element.classList.toggle('visible', shown);
   };
 
-  const run = async (account: FreePlanNoticeAccount | null): Promise<void> => {
-    const freeAccount =
-      account && isFreeBillingPlanTier(normalizeBillingPlanTier(account.subscriptionTier))
-        ? account
-        : null;
-    if (!freeAccount) promotionRead = null;
-    await decide(
-      training,
-      freeAccount ? FREE_PLAN_TRAINING_NOTICE_STORAGE_KEY : null,
-      freeAccount?.accountId ?? null,
-    );
+  const run = async (freeAccount: FreePlanNoticeAccount, current: number): Promise<void> => {
+    await decide(training, FREE_PLAN_TRAINING_NOTICE_STORAGE_KEY, freeAccount.accountId, current);
 
-    const offer = freeAccount ? await promotionFor(freeAccount) : null;
+    const offer = await promotionFor(freeAccount);
+    if (current !== generation) return;
     const running = offer && Date.parse(offer.endsAt) > now() ? offer : null;
     const modelName = running ? getModelMetadataById(running.modelId)?.name : undefined;
     if (running && modelName) headline.textContent = freeModelPromotionHeadline(modelName);
     await decide(
       promotion,
       running && modelName ? promotionStorageKey(running) : null,
-      freeAccount?.accountId ?? null,
+      freeAccount.accountId,
+      current,
     );
   };
 
-  let queue: Promise<void> = Promise.resolve();
   const update = (account: FreePlanNoticeAccount | null): Promise<void> => {
-    queue = queue.then(() => run(account)).catch(() => undefined);
-    return queue;
+    generation += 1;
+    const freeAccount =
+      account && isFreeBillingPlanTier(normalizeBillingPlanTier(account.subscriptionTier))
+        ? account
+        : null;
+    const accountId = freeAccount?.accountId ?? null;
+    if (accountId !== owner) {
+      owner = accountId;
+      retire();
+    }
+    if (!freeAccount) {
+      promotionRead = null;
+      return Promise.resolve();
+    }
+    return run(freeAccount, generation).catch(() => undefined);
   };
 
   return { element, update };

@@ -73,9 +73,11 @@ import {
 import { settleDetachedAssistantTurn } from './features/background/conversation-history';
 import { createMaintenanceAlarmController } from './features/background/maintenance-alarm';
 import {
+  captureAdmittedTab,
   deliverPageCapture,
   pageCaptureFailureMessage,
   PAGE_CAPTURE_SITE_NOT_APPROVED_MESSAGE,
+  PAGE_CAPTURE_TAB_CHANGED_MESSAGE,
   PAGE_CAPTURE_UNAVAILABLE_MESSAGE,
   PAGE_CAPTURE_UNDELIVERED_TITLE,
 } from './features/background/page-capture';
@@ -6688,9 +6690,18 @@ async function captureCurrentPage(): Promise<void> {
       return;
     }
 
-    const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'png' });
-
     const tabId = tab.id;
+    const dataUrl = await captureAdmittedTab(
+      { id: tabId, windowId: tab.windowId, url: tab.url },
+      {
+        visibleTab: async (windowId) => (await chrome.tabs.query({ active: true, windowId }))[0],
+        capture: (windowId) => chrome.tabs.captureVisibleTab(windowId, { format: 'png' }),
+      },
+    );
+    if (dataUrl === null) {
+      showNotification(PAGE_CAPTURE_UNDELIVERED_TITLE, PAGE_CAPTURE_TAB_CHANGED_MESSAGE);
+      return;
+    }
     await deliverPageCapture({
       send: () =>
         sendNativeRequest({
