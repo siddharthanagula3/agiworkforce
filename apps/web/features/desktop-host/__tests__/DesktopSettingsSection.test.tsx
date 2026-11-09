@@ -71,7 +71,7 @@ function installHost(
     agiHost: {
       platform: 'electron-darwin',
       appVersion: '1.2.0',
-      readPreferences: vi.fn(async () => state),
+      readPreferences: vi.fn(async () => ({ ...state })),
       writePreferences,
       checkForUpdate: vi.fn(async () => ({
         available: false,
@@ -93,7 +93,7 @@ function installHost(
       notify: vi.fn(),
     },
   });
-  return { writePreferences };
+  return { writePreferences, state };
 }
 
 afterEach(() => {
@@ -423,6 +423,75 @@ describe('the desktop settings section', () => {
     });
     await waitFor(() => expect(screen.getByLabelText('Approval requests')).toBeDisabled());
     expect(screen.getByLabelText('Questions')).toBeDisabled();
+  });
+
+  it('applies a notification change to what another window already saved', async () => {
+    const { writePreferences, state } = installHost({
+      preferences: {
+        ...DEFAULT_STATE.preferences,
+        agentNotifications: { when: 'unfocused', muted: [], sound: true },
+      },
+    });
+    render(<DesktopSettingsSection />);
+    await screen.findByLabelText('Agent notifications');
+
+    state.preferences = {
+      ...state.preferences,
+      agentNotifications: { when: 'never', muted: ['question'], sound: true },
+    };
+    await userEvent.click(screen.getByLabelText('Notification sound'));
+
+    expect(writePreferences).toHaveBeenLastCalledWith({
+      agentNotifications: { when: 'never', muted: ['question'], sound: false },
+      sessionCompletionAlerts: 'background',
+      sessionApprovalAlerts: true,
+    });
+    await waitFor(() => expect(screen.getByLabelText('Agent notifications')).toHaveValue('never'));
+  });
+
+  it('applies quick consecutive notification changes one after the other', async () => {
+    const { writePreferences } = installHost({
+      preferences: {
+        ...DEFAULT_STATE.preferences,
+        agentNotifications: { when: 'unfocused', muted: [], sound: true },
+      },
+    });
+    render(<DesktopSettingsSection />);
+    await screen.findByLabelText('Agent notifications');
+
+    await Promise.all([
+      userEvent.click(screen.getByLabelText('Finished turns')),
+      userEvent.click(screen.getByLabelText('Questions')),
+    ]);
+
+    expect(writePreferences).toHaveBeenLastCalledWith({
+      agentNotifications: {
+        when: 'unfocused',
+        muted: ['turn-complete', 'question'],
+        sound: true,
+      },
+      sessionCompletionAlerts: 'background',
+      sessionApprovalAlerts: true,
+    });
+  });
+
+  it('shows what another window saved once this one is focused again', async () => {
+    const { state } = installHost({
+      preferences: {
+        ...DEFAULT_STATE.preferences,
+        agentNotifications: { when: 'unfocused', muted: [], sound: true },
+      },
+    });
+    render(<DesktopSettingsSection />);
+    await screen.findByLabelText('Agent notifications');
+
+    state.preferences = {
+      ...state.preferences,
+      agentNotifications: { when: 'never', muted: [], sound: true },
+    };
+    window.dispatchEvent(new Event('focus'));
+
+    await waitFor(() => expect(screen.getByLabelText('Agent notifications')).toHaveValue('never'));
   });
 
   it('shows one set of notification choices, and keeps what the older alert rows saved', async () => {

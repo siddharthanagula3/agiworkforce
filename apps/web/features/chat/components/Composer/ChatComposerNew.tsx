@@ -863,9 +863,7 @@ const ChatComposerNewComponent = ({
   }, []);
   const [localNotice, setLocalNotice] = useState<string | null>(null);
   const [statusLines, setStatusLines] = useState<readonly ChatStatusLine[] | null>(null);
-  const [pastedTextUndo, setPastedTextUndo] = useState<{ fileName: string; text: string } | null>(
-    null,
-  );
+  const [pastedTextUndo, setPastedTextUndo] = useState<{ file: File; text: string } | null>(null);
   const [pastedCodeUndo, setPastedCodeUndo] = useState<{ fenced: string; raw: string } | null>(
     null,
   );
@@ -2343,10 +2341,10 @@ const ChatComposerNewComponent = ({
       if (decision.kind !== 'attachment') return;
       const { file } = decision;
       if (plainText !== undefined) {
-        setPastedTextUndo({ fileName: file.name, text: plainText });
+        setPastedTextUndo({ file, text: plainText });
         return;
       }
-      void readPastedText(file).then((text) => setPastedTextUndo({ fileName: file.name, text }));
+      void readPastedText(file).then((text) => setPastedTextUndo({ file, text }));
     },
     [addChatAttachments],
   );
@@ -4920,14 +4918,14 @@ const ChatComposerNewComponent = ({
         </div>
       )}
 
-      {pastedTextUndo && (
+      {pastedTextUndo && attachments.includes(pastedTextUndo.file) && (
         <div
           role="status"
           data-testid="pasted-text-notice"
           className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-border bg-muted/60 px-3 py-2 text-xs text-muted-foreground"
         >
           <span>
-            That paste was long, so it was attached as {pastedTextUndo.fileName} instead of filling
+            That paste was long, so it was attached as {pastedTextUndo.file.name} instead of filling
             the message box.
           </span>
           <button
@@ -4935,7 +4933,7 @@ const ChatComposerNewComponent = ({
             data-testid="pasted-text-undo"
             className="font-medium text-foreground underline underline-offset-2 transition-colors hover:no-underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={() => {
-              const index = attachments.findIndex((file) => file.name === pastedTextUndo.fileName);
+              const index = attachments.indexOf(pastedTextUndo.file);
               if (index >= 0) removeFile(index);
               appendComposerMessage(pastedTextUndo.text);
               setPastedTextUndo(null);
