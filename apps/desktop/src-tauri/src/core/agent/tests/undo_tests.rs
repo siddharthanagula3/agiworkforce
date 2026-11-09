@@ -479,6 +479,149 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_undo_modified_file_edited_later_keeps_the_later_edit() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("edited_after_agent.txt");
+        fs::write(&file_path, "agent version").await.unwrap();
+
+        let tracker = Arc::new(ChangeTracker::new());
+        let change_id = tracker
+            .record_file_modified(
+                file_path.clone(),
+                "original".to_string(),
+                "agent version".to_string(),
+                "task-modify".to_string(),
+            )
+            .await;
+        fs::write(&file_path, "user edit").await.unwrap();
+
+        let manager = UndoManager::new(tracker.clone());
+        let error = manager.undo_last(None).await.unwrap_err();
+
+        assert!(error.contains("was changed after the agent wrote it"));
+        assert_eq!(fs::read_to_string(&file_path).await.unwrap(), "user edit");
+        let revertible = tracker.get_revertible_changes(None).await;
+        assert_eq!(revertible.len(), 1);
+        assert_eq!(revertible[0].id, change_id);
+    }
+
+    #[tokio::test]
+    async fn test_undo_modified_file_removed_later_is_not_recreated() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("removed_after_agent.txt");
+
+        let tracker = Arc::new(ChangeTracker::new());
+        tracker
+            .record_file_modified(
+                file_path.clone(),
+                "original".to_string(),
+                "agent version".to_string(),
+                "task-modify".to_string(),
+            )
+            .await;
+
+        let manager = UndoManager::new(tracker);
+        assert!(manager.undo_last(None).await.is_err());
+        assert!(!file_path.exists());
+    }
+
+    #[tokio::test]
+    async fn test_undo_modified_without_recorded_final_version_is_refused() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("no_final_version.txt");
+        fs::write(&file_path, "current").await.unwrap();
+
+        let tracker = Arc::new(ChangeTracker::new());
+        tracker
+            .record_tool_executed_with_path(
+                "file_write".to_string(),
+                file_path.clone(),
+                Some("original".to_string()),
+                None,
+                "task-modify".to_string(),
+                true,
+                None,
+            )
+            .await;
+
+        let manager = UndoManager::new(tracker);
+        assert!(manager.undo_last(None).await.is_err());
+        assert_eq!(fs::read_to_string(&file_path).await.unwrap(), "current");
+    }
+
+    #[tokio::test]
+    async fn test_undo_created_file_edited_later_is_kept() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("created_then_edited.txt");
+        fs::write(&file_path, "agent version").await.unwrap();
+
+        let tracker = Arc::new(ChangeTracker::new());
+        tracker
+            .record_file_created(
+                file_path.clone(),
+                "agent version".to_string(),
+                "task-create".to_string(),
+            )
+            .await;
+        fs::write(&file_path, "user edit").await.unwrap();
+
+        let manager = UndoManager::new(tracker.clone());
+        let error = manager.undo_last(None).await.unwrap_err();
+
+        assert!(error.contains("was changed after the agent wrote it"));
+        assert_eq!(fs::read_to_string(&file_path).await.unwrap(), "user edit");
+        assert_eq!(tracker.get_revertible_changes(None).await.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_undo_created_file_replaced_by_unrelated_file_is_kept() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("created_then_replaced.txt");
+        fs::write(&file_path, "agent version").await.unwrap();
+
+        let tracker = Arc::new(ChangeTracker::new());
+        tracker
+            .record_file_created(
+                file_path.clone(),
+                "agent version".to_string(),
+                "task-create".to_string(),
+            )
+            .await;
+        fs::remove_file(&file_path).await.unwrap();
+        fs::write(&file_path, "unrelated file").await.unwrap();
+
+        let manager = UndoManager::new(tracker);
+        assert!(manager.undo_last(None).await.is_err());
+        assert_eq!(
+            fs::read_to_string(&file_path).await.unwrap(),
+            "unrelated file"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_undo_deleted_file_recreated_later_is_kept() {
+        let temp_dir = TempDir::new().unwrap();
+        let file_path = temp_dir.path().join("deleted_then_recreated.txt");
+        fs::write(&file_path, "recreated by user").await.unwrap();
+
+        let tracker = Arc::new(ChangeTracker::new());
+        tracker
+            .record_file_deleted(
+                file_path.clone(),
+                "deleted by agent".to_string(),
+                "task-delete".to_string(),
+            )
+            .await;
+
+        let manager = UndoManager::new(tracker);
+        assert!(manager.undo_last(None).await.is_err());
+        assert_eq!(
+            fs::read_to_string(&file_path).await.unwrap(),
+            "recreated by user"
+        );
+    }
+
+    #[tokio::test]
     async fn test_undo_file_deleted() {
         let temp_dir = TempDir::new().unwrap();
         let file_path = temp_dir.path().join("deleted_file.txt");
