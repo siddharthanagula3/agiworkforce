@@ -98,9 +98,9 @@ export function WorkspaceIdentityPanels() {
             can still use it.
           </li>
           <li>
-            <strong style={{ color: 'var(--text-2)' }}>Group-scoped entitlements.</strong> Directory
-            groups map to an organization role. They do not yet carry sharing grants, policy scope,
-            or budgets.
+            <strong style={{ color: 'var(--text-2)' }}>Group-scoped sharing and budgets.</strong>{' '}
+            Directory groups map to an organization role, and extra roles and policy exceptions for
+            a group are set in Roles and Policy. They do not yet carry sharing grants or budgets.
           </li>
         </ul>
       </div>
