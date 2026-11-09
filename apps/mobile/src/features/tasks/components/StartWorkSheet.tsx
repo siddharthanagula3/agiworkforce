@@ -1,5 +1,5 @@
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, ScrollView, TextInput, View } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -44,12 +44,16 @@ export function StartWorkSheet({
     [projects],
   );
 
-  const handleClose = useCallback(() => {
-    if (submitting) return;
+  useEffect(() => {
+    if (visible) return;
     setGoal('');
     setConstraints('');
     setDeliverable('');
     setProjectId(undefined);
+  }, [visible]);
+
+  const handleClose = useCallback(() => {
+    if (submitting) return;
     onClose();
   }, [onClose, submitting]);
 

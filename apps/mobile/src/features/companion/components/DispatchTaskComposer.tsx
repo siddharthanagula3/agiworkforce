@@ -7,16 +7,14 @@ import { Card } from '@/components/ui/Card';
 import { Text } from '@/components/ui/Text';
 import { cancelDispatchTask, sendDispatchTask } from '@/services/companion';
 import { useDispatchTaskStore } from '@/stores/dispatchTaskStore';
+import {
+  isDispatchTaskFinished,
+  keepUnfinishedAndRecentFinished,
+} from '@/stores/dispatchTaskLifecycle';
 import { useThemeColors } from '@/src/ui/theme';
 import { DispatchTaskReply } from './DispatchTaskReply';
 
-const TERMINAL_STATUSES = new Set([
-  'ready_for_review',
-  'completed',
-  'failed',
-  'cancelled',
-  'rejected',
-]);
+const FINISHED_HISTORY_LIMIT = 4;
 
 const STATUS_LABELS: Record<string, string> = {
   sending: 'Sending',
@@ -38,7 +36,10 @@ export function DispatchTaskComposer() {
   const [sendError, setSendError] = useState<string | null>(null);
   const [expandedResult, setExpandedResult] = useState<string | null>(null);
   const tasks = useDispatchTaskStore((state) => state.tasks);
-  const visibleTasks = useMemo(() => tasks.slice(0, 4), [tasks]);
+  const visibleTasks = useMemo(
+    () => keepUnfinishedAndRecentFinished(tasks, FINISHED_HISTORY_LIMIT),
+    [tasks],
+  );
   const canSend = !isSending && prompt.trim().length > 0 && prompt.trim().length <= 20_000;
 
   const handleSend = async () => {
@@ -122,7 +123,7 @@ export function DispatchTaskComposer() {
               Recent Dispatch tasks
             </Text>
             {visibleTasks.map((task) => {
-              const isTerminal = TERMINAL_STATUSES.has(task.status);
+              const isTerminal = isDispatchTaskFinished(task.status);
               const isError = task.status === 'failed' || task.status === 'rejected';
               const pending =
                 task.status === 'awaiting_input' && task.pending?.length ? task.pending : null;
