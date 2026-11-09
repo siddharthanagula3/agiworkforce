@@ -50,6 +50,7 @@ export type {
   ConnectorEndpoints,
   ConnectorHttpClient,
   ConnectorLocalBridge,
+  ConnectorOperationScope,
   ConnectorRuntime,
   ConnectorRuntimeOptions,
 } from './runtime';

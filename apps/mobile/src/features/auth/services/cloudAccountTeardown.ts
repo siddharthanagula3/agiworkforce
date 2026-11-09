@@ -161,6 +161,11 @@ function clearLocalCloudAccountStateNow(): void {
     useScheduleStore.getState().clearAccountSchedules();
   });
 
+  runTeardownStep('connector policy', () => {
+    const { invalidateConnectorPolicy } = require('@/services/connectors');
+    invalidateConnectorPolicy();
+  });
+
   runTeardownStep('API authentication work', () => {
     const { resetApiAccountState } = require('@/services/api');
     resetApiAccountState();

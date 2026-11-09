@@ -8,6 +8,7 @@ import {
   type ConnectedConnector,
   type ConnectorDirectory,
   type ConnectorOAuthStart,
+  type ConnectorOperationScope,
   type ConnectorToolPermission,
   type ConnectorToolPermissionLevel,
   type CustomConnectorResult,
@@ -57,6 +58,10 @@ import {
 
 import { api } from './api';
 import { ApiHttpError } from './apiErrors';
+import {
+  assertCloudAccountEpochCurrent,
+  captureCloudAccountEpoch,
+} from '@/src/features/auth/services/cloudAccountSession';
 import { API_URL } from '@/lib/constants';
 
 export { ConnectorPolicyError };
@@ -116,16 +121,25 @@ export function invalidateConnectorPolicy(): void {
   runtime.invalidatePolicy();
 }
 
+function captureOperationScope(): ConnectorOperationScope {
+  const account = captureCloudAccountEpoch();
+  const scope: ConnectorOperationScope = {
+    assertCurrent: () => assertCloudAccountEpochCurrent(account),
+  };
+  scope.assertCurrent();
+  return scope;
+}
+
 export async function fetchConnectorDirectory(): Promise<ConnectorDirectory> {
   return runtime.loadDirectory();
 }
 
 export async function startConnectorOAuth(connectorId: string): Promise<ConnectorOAuthStart> {
-  return runtime.startOAuth(connectorId);
+  return runtime.startOAuth(connectorId, captureOperationScope());
 }
 
 export async function connectConnector(connectorId: string): Promise<ConnectConnectorResult> {
-  const result = await runtime.connect(connectorId);
+  const result = await runtime.connect(connectorId, undefined, captureOperationScope());
   if (result.kind !== 'install-required') return result;
   return {
     kind: 'oauth-required',
@@ -161,7 +175,7 @@ export async function resetConnectorToolPermission(
 export async function addCustomConnector(
   input: AddCustomConnectorInput,
 ): Promise<CustomConnectorResult> {
-  return runtime.addCustomConnector(input);
+  return runtime.addCustomConnector(input, captureOperationScope());
 }
 
 export async function deleteCustomConnector(id: string): Promise<void> {

@@ -10,6 +10,11 @@ jest.mock('../services/api', () => ({
 }));
 
 import {
+  StaleCloudAccountOperationError,
+  __resetCloudAccountSessionForTests,
+  activateCloudAccount,
+} from '../src/features/auth/services/cloudAccountSession';
+import {
   addCustomConnector,
   browseConnectorListings,
   fetchConnectorDirectory,
@@ -26,6 +31,8 @@ import { isLikelyHttpsUrl } from '../src/features/settings/cloud-connectors/AddC
 beforeEach(() => {
   jest.clearAllMocks();
   invalidateConnectorPolicy();
+  __resetCloudAccountSessionForTests();
+  activateCloudAccount('account-a');
 });
 
 describe('addCustomConnector', () => {
@@ -86,6 +93,61 @@ describe('addCustomConnector', () => {
       name: 'n',
       url: 'https://x.y',
     });
+  });
+});
+
+describe('addCustomConnector account custody', () => {
+  const EMPTY_POLICY = { organizationId: 'org-1', configured: false, policy: null };
+
+  function delayedPolicy() {
+    const mockGet = jest.requireMock('../services/api').api.get as jest.Mock;
+    let settle!: (value: unknown) => void;
+    let fail!: (error: Error) => void;
+    mockGet.mockReturnValueOnce(
+      new Promise((resolve, reject) => {
+        settle = resolve;
+        fail = reject;
+      }),
+    );
+    return { settle, fail };
+  }
+
+  it('sends no request under the replacement account when the policy answer lands late', async () => {
+    const policy = delayedPolicy();
+    const pending = addCustomConnector({
+      name: 'Account A tools',
+      url: 'https://account-a.example.com/sse',
+      authToken: 'account-a-secret',
+    });
+
+    activateCloudAccount('account-b');
+    policy.settle(EMPTY_POLICY);
+
+    await expect(pending).rejects.toBeInstanceOf(StaleCloudAccountOperationError);
+    expect(mockPost).not.toHaveBeenCalled();
+  });
+
+  it('treats a policy read that failed for the retired account as terminal, not as ungoverned', async () => {
+    const policy = delayedPolicy();
+    const pending = addCustomConnector({
+      name: 'Account A tools',
+      url: 'https://account-a.example.com/sse',
+    });
+
+    activateCloudAccount('account-b');
+    policy.fail(new Error('Cloud account changed while this API request was in flight'));
+
+    await expect(pending).rejects.toBeInstanceOf(StaleCloudAccountOperationError);
+    expect(mockPost).not.toHaveBeenCalled();
+  });
+
+  it('refuses to start when no Cloud account is active', async () => {
+    __resetCloudAccountSessionForTests();
+
+    await expect(
+      addCustomConnector({ name: 'n', url: 'https://mcp.example.com/sse' }),
+    ).rejects.toBeInstanceOf(StaleCloudAccountOperationError);
+    expect(mockPost).not.toHaveBeenCalled();
   });
 });
 

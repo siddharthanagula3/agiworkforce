@@ -86,6 +86,10 @@ jest.mock('../services/api', () => ({
   resetApiAccountState: jest.fn(),
 }));
 
+jest.mock('../services/connectors', () => ({
+  invalidateConnectorPolicy: jest.fn(),
+}));
+
 jest.mock('../src/features/chat/upload/uploadLifecycle', () => ({
   useUploadLifecycleStore: { getState: jest.fn() },
 }));
@@ -200,6 +204,9 @@ const { useScheduleStore } = require('../src/features/schedules/store') as {
 };
 const { resetApiAccountState } = require('../services/api') as {
   resetApiAccountState: jest.Mock;
+};
+const { invalidateConnectorPolicy } = require('../services/connectors') as {
+  invalidateConnectorPolicy: jest.Mock;
 };
 const { useUploadLifecycleStore } = require('../src/features/chat/upload/uploadLifecycle') as {
   useUploadLifecycleStore: { getState: jest.Mock };
@@ -322,6 +329,7 @@ describe('clearLocalCloudAccountState', () => {
     expect(clearCapabilitySwitches).toHaveBeenCalledTimes(1);
     expect(clearSchedules).toHaveBeenCalledTimes(1);
     expect(resetApiAccountState).toHaveBeenCalledTimes(1);
+    expect(invalidateConnectorPolicy).toHaveBeenCalledTimes(1);
     expect(resetCloudUploads).toHaveBeenCalledTimes(1);
     expect(notificationCenterStore.clear).toHaveBeenCalledTimes(1);
     expect(resetBackgroundFetchAccountState).toHaveBeenCalledTimes(1);
