@@ -2619,6 +2619,7 @@ ${capabilityTabs}
               control.value = String(value);
             }
             control.disabled = false;
+            control.removeAttribute('aria-invalid');
           });
 
           var modelPreference = document.getElementById('setting-model');
@@ -2873,6 +2874,21 @@ ${capabilityTabs}
           count.textContent = textarea.value.length.toLocaleString() + ' / 8,000';
         }
 
+        function describeInvalidValue(control, value) {
+          if (control.getAttribute('data-kind') === 'number') {
+            if (control.value.trim() === '' || !Number.isInteger(value)) {
+              return 'must be a whole number.';
+            }
+            var min = control.getAttribute('min');
+            var max = control.getAttribute('max');
+            if (min !== null && value < Number(min)) return 'must be at least ' + min + '.';
+            if (max !== null && value > Number(max)) return 'must be at most ' + max + '.';
+            return '';
+          }
+          if (typeof value === 'string' && value.trim() === '') return 'cannot be empty.';
+          return '';
+        }
+
         function readControlValue(control) {
           if (control instanceof HTMLInputElement && control.type === 'checkbox') {
             return control.checked;
@@ -2917,12 +2933,20 @@ ${capabilityTabs}
           control.addEventListener('change', function () {
             var key = control.getAttribute('data-setting');
             if (!key) return;
+            var value = readControlValue(control);
+            var problem = describeInvalidValue(control, value);
+            if (problem) {
+              control.setAttribute('aria-invalid', 'true');
+              setStatus((settingLabels[key] || key) + ' ' + problem, 'error');
+              return;
+            }
+            control.removeAttribute('aria-invalid');
             control.disabled = true;
             setStatus('Saving ' + (settingLabels[key] || key) + '…');
             vscode.postMessage({
               type: 'settings.update',
               key: key,
-              value: readControlValue(control)
+              value: value
             });
           });
         });

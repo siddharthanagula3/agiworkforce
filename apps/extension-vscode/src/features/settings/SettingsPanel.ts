@@ -14,6 +14,7 @@ import { clearAccountTierCache, refreshAccountTierCache } from '../../integratio
 import { getNonce } from '../sidebar-webview/webviewContent';
 import {
   isSettingsSection,
+  isRejectedSettingsUpdate,
   parseSettingsWebviewMessage,
   type SettingsCommand,
   type SettingsLocalCapabilities,
@@ -186,6 +187,14 @@ export class SettingsPanel {
         const message = parseSettingsWebviewMessage(input);
         if (message === undefined) {
           console.warn(`[${PRODUCT_NAMES.code}] dropped malformed settings webview message`);
+          if (isRejectedSettingsUpdate(input)) {
+            await this.refresh();
+            await this.post({
+              type: 'settings.error',
+              message:
+                'That value is not valid for this setting. Your previous value is unchanged.',
+            });
+          }
           return;
         }
 
