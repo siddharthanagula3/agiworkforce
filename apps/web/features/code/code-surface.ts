@@ -8,6 +8,7 @@ import {
   CLOUD_CODE_SESSION_COPY,
   cloudCodeRepositoryLabel,
   cloudCodeSessionPagePath,
+  cloudTaskRepositoryName,
   type CloudCodeChangeState,
   type CloudCodeGoalCommand,
   type CloudCodeNetworkAccess,
@@ -502,15 +503,17 @@ export function changeStateLabel(state: CloudCodeChangeState): string {
 }
 
 export function continueInVsCodeHref(
-  session: Pick<CloudCodeSession, 'id' | 'title' | 'workingBranch'>,
+  session: Pick<CloudCodeSession, 'id' | 'title' | 'workingBranch' | 'repositoryUrl'>,
 ): string | null {
-  if (session.workingBranch === null) return null;
+  const repository = cloudTaskRepositoryName(session.repositoryUrl);
+  if (session.workingBranch === null || repository === null) return null;
   try {
     return buildVsCodeCloudTaskHandoffUri({
       runId: session.id,
       goal: session.title,
       plan: [],
       branch: session.workingBranch,
+      repository,
     });
   } catch {
     return null;

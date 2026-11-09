@@ -3881,6 +3881,7 @@ export function getWebviewContent(
     let streaming = false;
     let mentionIndex = -1;
     let mentionStart = -1;
+    let mentionQuery = null;
     let pendingFileReferences = [];
     let activePlanCard = null;
     let currentAssistantEl = null;
@@ -5273,6 +5274,9 @@ export function getWebviewContent(
           closeSlashMenu();
           return;
         }
+      }
+      if (e.key === 'Escape' && mentionQuery !== null && !mentionDropdown.classList.contains('visible')) {
+        hideMentionDropdown();
       }
       // @mention dropdown navigation
       if (mentionDropdown.classList.contains('visible')) {
@@ -7170,7 +7174,7 @@ export function getWebviewContent(
       }
 
       else if (msg.type === 'fileSearchResults') {
-        showMentionResults(msg.payload.files);
+        if (msg.payload.query === mentionQuery) showMentionResults(msg.payload.files);
       }
 
       else if (msg.type === 'composerDraft') {
@@ -7442,6 +7446,7 @@ export function getWebviewContent(
         var query = val.substring(i + 1, pos);
         if (query.length > 0 && !/\\s/.test(query)) {
           mentionStart = i;
+          mentionQuery = query;
           vscode.postMessage({ type: 'fileSearch', payload: { query: query } });
           return;
         }
@@ -7454,6 +7459,7 @@ export function getWebviewContent(
       mentionDropdown.innerHTML = '';
       mentionIndex = -1;
       mentionStart = -1;
+      mentionQuery = null;
       userInput.setAttribute('aria-expanded', 'false');
       userInput.removeAttribute('aria-activedescendant');
     }
@@ -7497,6 +7503,11 @@ export function getWebviewContent(
 
     function insertMention(file) {
       var val = userInput.value;
+      if (mentionStart < 0 || mentionQuery === null
+        || val.substring(mentionStart, userInput.selectionStart) !== '@' + mentionQuery) {
+        hideMentionDropdown();
+        return;
+      }
       var before = val.substring(0, mentionStart);
       var after = val.substring(userInput.selectionStart);
       var referencedEndLine = file.range && file.range.endCharacter === 0 && file.range.endLine > file.range.startLine

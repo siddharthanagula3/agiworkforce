@@ -438,7 +438,7 @@ export type ExtToWebviewMessage =
     }
   | {
       type: 'fileSearchResults';
-      payload: { files: Array<WorkspaceFileReference & { label: string }> };
+      payload: { query: string; files: Array<WorkspaceFileReference & { label: string }> };
     }
   | { type: 'conversationCleared' }
   | { type: 'sessionBinding'; payload: { epoch: number } }
@@ -910,6 +910,10 @@ export class ChatStateManager {
   private _lastMeterBoundary: string | undefined;
   private readonly _servedModelByTurn = new Map<string, string>();
   private readonly _writtenFilesByTurn = new Map<string, Set<string>>();
+  private readonly _pendingWritesByToolCall = new Map<
+    string,
+    { turnId: string; filePath: string }
+  >();
   private _lastChangedTurn:
     { threadId: string; turnId: string; files: readonly string[] } | undefined;
   private readonly _pendingAttachments: PendingAttachment[] = [];
@@ -968,6 +972,11 @@ export class ChatStateManager {
       vscode.window.onDidChangeTextEditorSelection(() => void this.pushEditorContext()),
       vscode.languages.onDidChangeDiagnostics(() => void this.pushEditorContext()),
       onApprovalAnsweredOnPhone((answer) => this._approvalAnsweredOnPhone(answer)),
+      vscode.workspace.onDidChangeConfiguration((event) => {
+        if (event.affectsConfiguration('agiWorkforce.agent.effort')) {
+          this._syncEffortFromConfiguration();
+        }
+      }),
     );
     if (this._workspaceState !== undefined) {
       this._meterCollapsed = this._workspaceState.get<boolean>(
@@ -1207,10 +1216,10 @@ export class ChatStateManager {
         try {
           this._post({
             type: 'fileSearchResults',
-            payload: { files: await searchMentionTargets(query) },
+            payload: { query, files: await searchMentionTargets(query) },
           });
         } catch {
-          this._post({ type: 'fileSearchResults', payload: { files: [] } });
+          this._post({ type: 'fileSearchResults', payload: { query, files: [] } });
         }
         break;
       }
@@ -2601,6 +2610,19 @@ export class ChatStateManager {
     });
   }
 
+  private _syncEffortFromConfiguration(): void {
+    this._effort = undefined;
+    const model = this._activeModel;
+    this._post({
+      type: 'effortChanged',
+      payload: {
+        effort: this._shownEffort(),
+        supportsEffort: this.modelSupportsEffort(model),
+        efforts: this.modelEffortLevels(model),
+      },
+    });
+  }
+
   public syncActiveModelFromConfiguration(): void {
     if (this._thread !== undefined) return;
     this._followDefaultModel();
@@ -2614,13 +2636,36 @@ export class ChatStateManager {
    * classification that decides when a thread must be restarted on a boundary
    * change, and never from a fixed literal.
    */
-  private _noteWrittenFile(turnId: string, toolName: string, input: unknown): void {
+  private _noteWriteAttempt(
+    turnId: string,
+    toolCallId: string,
+    toolName: string,
+    input: unknown,
+  ): void {
     const filePath = writtenFilePath(toolName, input);
     const cwd = this._thread?.cwd;
     if (filePath === undefined || cwd === undefined) return;
-    const written = this._writtenFilesByTurn.get(turnId) ?? new Set<string>();
-    written.add(path.resolve(cwd, filePath));
-    this._writtenFilesByTurn.set(turnId, written);
+    this._pendingWritesByToolCall.set(toolCallId, {
+      turnId,
+      filePath: path.resolve(cwd, filePath),
+    });
+  }
+
+  private _confirmWrite(toolCallId: string, failed: boolean): void {
+    const attempt = this._pendingWritesByToolCall.get(toolCallId);
+    if (attempt === undefined) return;
+    this._pendingWritesByToolCall.delete(toolCallId);
+    if (failed) return;
+    const written = this._writtenFilesByTurn.get(attempt.turnId) ?? new Set<string>();
+    written.add(attempt.filePath);
+    this._writtenFilesByTurn.set(attempt.turnId, written);
+  }
+
+  private _clearTurnWrites(turnId: string): void {
+    this._writtenFilesByTurn.delete(turnId);
+    for (const [toolCallId, attempt] of this._pendingWritesByToolCall) {
+      if (attempt.turnId === turnId) this._pendingWritesByToolCall.delete(toolCallId);
+    }
   }
 
   private async _undoTurn(turnId: string): Promise<void> {
@@ -4843,7 +4888,7 @@ export class ChatStateManager {
       return;
     }
     if (event.type === 'tool_execution_start') {
-      this._noteWrittenFile(event.turnId, event.name, event.input);
+      this._noteWriteAttempt(event.turnId, event.toolCallId, event.name, event.input);
       const plan = event.name === 'update_plan' ? parsePlanVisualization(event.input) : undefined;
       if (plan !== undefined) {
         this._latestPlan = { threadId: event.threadId, plan };
@@ -4866,12 +4911,14 @@ export class ChatStateManager {
     if (event.type === 'tool_execution_end') {
       const entry = this._activityEntry('tool', event.toolCallId);
       const elapsedMs = entry?.elapsedMs ?? event.elapsedMs;
+      const failed = entry === undefined ? event.isError : entry.status === 'failed';
+      this._confirmWrite(event.toolCallId, failed);
       this._post({
         type: 'toolCallEnd',
         payload: {
           toolUseId: event.toolCallId,
           output: entry?.output ?? event.output,
-          isError: entry === undefined ? event.isError : entry.status === 'failed',
+          isError: failed,
           ...(elapsedMs === undefined ? {} : { elapsedMs }),
         },
       });
@@ -4958,7 +5005,7 @@ export class ChatStateManager {
       const servedModel = this._servedModelByTurn.get(event.turnId);
       this._servedModelByTurn.delete(event.turnId);
       const writtenFiles = [...(this._writtenFilesByTurn.get(event.turnId) ?? [])];
-      this._writtenFilesByTurn.delete(event.turnId);
+      this._clearTurnWrites(event.turnId);
       if (writtenFiles.length > 0) {
         this._lastChangedTurn = {
           threadId: event.threadId,
@@ -5010,14 +5057,14 @@ export class ChatStateManager {
     if (event.type === 'turn_interrupted') {
       this._expirePendingApprovals(event.turnId);
       this._servedModelByTurn.delete(event.turnId);
-      this._writtenFilesByTurn.delete(event.turnId);
+      this._clearTurnWrites(event.turnId);
       this._post({ type: 'done', payload: { stopped: true } });
       complete();
       return;
     }
     this._expirePendingApprovals(event.turnId);
     this._servedModelByTurn.delete(event.turnId);
-    this._writtenFilesByTurn.delete(event.turnId);
+    this._clearTurnWrites(event.turnId);
     if (event.failure !== undefined && event.failure !== null) {
       this._recoveryHref = safeRecoveryHref(event.failure.recoveryHref);
       this._post({ type: 'error', payload: presentTurnFailure(event.failure) });

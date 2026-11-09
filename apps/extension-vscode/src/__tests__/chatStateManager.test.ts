@@ -42,6 +42,7 @@ import { SYNTHETIC_LOCAL_MODEL_ID, requireCatalogModel } from './catalogModelFix
 import { getTokenCounter } from '../data/tokenCounter';
 import { modelDisplayNameById } from '@agiworkforce/types';
 import * as api from '../utils/api';
+import { Config } from '../platform/config';
 import * as accountAccess from '../features/surfaces/accountAccess';
 import * as proposedChangeReview from '../features/permissions/proposedChangeReview';
 import * as tierResolver from '../integrations/tierResolver';
@@ -468,6 +469,7 @@ describe('ChatStateManager local turn lifecycle', () => {
     expect(harness.posted).toContainEqual({
       type: 'fileSearchResults',
       payload: {
+        query: 'app',
         files: [
           {
             path: 'src/app.ts',
@@ -2042,6 +2044,49 @@ describe('ChatStateManager local turn lifecycle', () => {
     await send;
   });
 
+  it('sends the effort a later settings change chose, not the earlier composer pick', async () => {
+    const harness = makeHarness();
+    harness.runtime.offers.mockImplementation(
+      async (capability: string) => capability === 'reasoningEffortLadder',
+    );
+    await realContextWorkspace(harness);
+    const handlers = vi
+      .mocked(vscode.workspace.onDidChangeConfiguration)
+      .mock.calls.map(([listener]) => listener as (event: vscode.ConfigurationChangeEvent) => void);
+    await harness.manager.handleMessage({ type: 'setEffort', payload: { effort: 'high' } });
+
+    const effortSpy = vi.spyOn(Config, 'agentEffort').mockReturnValue('low');
+    for (const handler of handlers) {
+      handler({
+        affectsConfiguration: (section: string) => section === 'agiWorkforce.agent.effort',
+      });
+    }
+
+    expect(harness.posted.filter((message) => message.type === 'effortChanged').at(-1)).toEqual({
+      type: 'effortChanged',
+      payload: expect.objectContaining({ effort: 'low' }),
+    });
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Think less' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    expect(harness.runtime.startTurn).toHaveBeenCalledWith(
+      expect.objectContaining({ reasoningEffort: 'low' }),
+    );
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+    effortSpy.mockRestore();
+  });
+
   it('sends an older CLI only a level it accepts, and offers it only those four', async () => {
     const harness = makeHarness();
     await realContextWorkspace(harness);
@@ -2949,6 +2994,109 @@ describe('ChatStateManager local turn lifecycle', () => {
     );
   });
 
+  it('counts only edits that finished, not attempts that failed', async () => {
+    const harness = makeHarness();
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Fix the bug' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    const edit = (toolCallId: string, path: string, sequence: number) =>
+      harness.emit({
+        type: 'tool_execution_start',
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        sequence,
+        emittedAtMs: sequence,
+        toolCallId,
+        name: 'edit_file',
+        category: 'filesystem',
+        summary: `Edit ${path}`,
+        input: { path, old_string: 'a', new_string: 'b' },
+      });
+    const finish = (toolCallId: string, isError: boolean, sequence: number) =>
+      harness.emit({
+        type: 'tool_execution_end',
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        sequence,
+        emittedAtMs: sequence,
+        toolCallId,
+        name: 'edit_file',
+        output: isError ? 'old_string not found' : 'Edited',
+        isError,
+      });
+    edit('call-1', 'src/missing.ts', 1);
+    finish('call-1', true, 2);
+    edit('call-2', 'src/retry.ts', 3);
+    finish('call-2', true, 4);
+    edit('call-3', 'src/retry.ts', 5);
+    finish('call-3', false, 6);
+    edit('call-4', 'src/unfinished.ts', 7);
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'Done.',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+
+    expect(harness.posted).toContainEqual({
+      type: 'done',
+      payload: expect.objectContaining({ turnId: 'turn-1', changedFiles: 1 }),
+    });
+  });
+
+  it('reports no changed files when every edit failed', async () => {
+    const harness = makeHarness();
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Fix the bug' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    harness.emit({
+      type: 'tool_execution_start',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      sequence: 1,
+      emittedAtMs: 1,
+      toolCallId: 'call-1',
+      name: 'edit_file',
+      category: 'filesystem',
+      summary: 'Edit src/example.txt',
+      input: { path: 'src/example.txt', old_string: 'absent', new_string: 'x' },
+    });
+    harness.emit({
+      type: 'tool_execution_end',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      sequence: 2,
+      emittedAtMs: 2,
+      toolCallId: 'call-1',
+      name: 'edit_file',
+      output: 'old_string not found',
+      isError: true,
+    });
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'I could not apply that edit.',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+
+    expect(harness.posted).toContainEqual({
+      type: 'done',
+      payload: expect.not.objectContaining({ changedFiles: expect.anything() }),
+    });
+  });
+
   it('refuses automatic Undo when checkpoints cannot prove reply ownership', async () => {
     const harness = makeHarness();
     const rewindThread = vi.fn().mockResolvedValue({
@@ -2991,6 +3139,17 @@ describe('ChatStateManager local turn lifecycle', () => {
       category: 'filesystem',
       summary: 'Edit src/math.ts',
       input: { path: 'src/math.ts', old_string: '<=', new_string: '<' },
+    });
+    harness.emit({
+      type: 'tool_execution_end',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      sequence: 2,
+      emittedAtMs: 2,
+      toolCallId: 'call-1',
+      name: 'edit_file',
+      output: 'Edited src/math.ts',
+      isError: false,
     });
     harness.emit({
       type: 'turn_completed',

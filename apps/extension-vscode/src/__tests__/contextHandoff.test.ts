@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { agentTaskStateLabel, type AgentTaskState } from '@agiworkforce/types';
 import {
@@ -8,10 +8,12 @@ import {
   handleContextHandoffUri,
   parseCloudTaskHandoffQuery,
   pullCloudResultIntoCheckout,
+  resolveGitCheckoutHost,
   VSCODE_CLOUD_TASK_HANDOFF_PATH,
   type CloudResultPullHost,
   type CloudTaskHandoff,
   type LocalCheckoutRepository,
+  type LocalRepositoryLookup,
 } from '../features/context-handoff';
 import { cloudRunStateLabel } from '../features/cloud-tasks/cloudRunPresentation';
 
@@ -20,6 +22,7 @@ const HANDOFF: CloudTaskHandoff = {
   goal: 'fix the flaky clock test',
   plan: ['read the fixture', 'pin the clock'],
   branch: 'agi/fix-the-flaky-test',
+  repository: 'acme/widgets',
 };
 
 function cloudUri(query: string): vscode.Uri {
@@ -28,6 +31,7 @@ function cloudUri(query: string): vscode.Uri {
 
 function repository(dirtyPaths: string[]): LocalCheckoutRepository {
   return {
+    repository: 'acme/widgets',
     rootPath: '/workspace',
     dirtyPaths,
     fetch: vi.fn().mockResolvedValue(undefined),
@@ -36,11 +40,17 @@ function repository(dirtyPaths: string[]): LocalCheckoutRepository {
 }
 
 function host(
-  repo: LocalCheckoutRepository | null,
+  repo: LocalCheckoutRepository | LocalRepositoryLookup | null,
   confirm = false,
 ): CloudResultPullHost & { confirmOverwrite: ReturnType<typeof vi.fn> } {
+  const lookup: LocalRepositoryLookup =
+    repo === null
+      ? { status: 'missing' }
+      : 'status' in repo
+        ? repo
+        : { status: 'found', repository: repo };
   return {
-    findRepository: vi.fn().mockResolvedValue(repo),
+    findRepository: vi.fn().mockResolvedValue(lookup),
     confirmOverwrite: vi.fn().mockResolvedValue(confirm),
     report: vi.fn(),
   };
@@ -55,7 +65,7 @@ describe('cloud to local handoff', () => {
   it('carries the goal, the plan and the branch into the composer', async () => {
     const target = { prefillComposer: vi.fn(), reveal: vi.fn().mockResolvedValue(undefined) };
     const uri = cloudUri(
-      'runId=run_12345678&goal=fix%20the%20flaky%20clock%20test&plan=read%20the%20fixture&plan=pin%20the%20clock&branch=agi%2Ffix-the-flaky-test',
+      'runId=run_12345678&goal=fix%20the%20flaky%20clock%20test&plan=read%20the%20fixture&plan=pin%20the%20clock&branch=agi%2Ffix-the-flaky-test&repo=Acme%2FWidgets',
     );
 
     await expect(handleContextHandoffUri(uri, target)).resolves.toBe(true);
@@ -65,6 +75,7 @@ describe('cloud to local handoff', () => {
     expect(draft).toContain('run_12345678');
     expect(draft).toContain('fix the flaky clock test');
     expect(draft).toContain('agi/fix-the-flaky-test');
+    expect(draft).toContain('acme/widgets');
     expect(draft).toContain('- read the fixture');
     expect(draft).toContain('- pin the clock');
     expect(draft).toBe(buildCloudTaskHandoffDraft(HANDOFF));
@@ -87,6 +98,7 @@ describe('cloud to local handoff', () => {
       goal: '',
       plan: [],
       branch: null,
+      repository: null,
     });
   });
 
@@ -95,7 +107,7 @@ describe('cloud to local handoff', () => {
     const pullHost = host(repository([]));
 
     await handleContextHandoffUri(
-      cloudUri('runId=run_1&branch=agi%2Ffix'),
+      cloudUri('runId=run_1&branch=agi%2Ffix&repo=acme%2Fwidgets'),
       target,
       async () => pullHost,
     );
@@ -113,7 +125,7 @@ describe('cloud to local handoff', () => {
     );
 
     await handleContextHandoffUri(
-      cloudUri('runId=run_1&branch=agi%2Ffix'),
+      cloudUri('runId=run_1&branch=agi%2Ffix&repo=acme%2Fwidgets'),
       target,
       async () => pullHost,
     );
@@ -134,6 +146,7 @@ describe('the dirty working tree guard', () => {
     expect(pullHost.confirmOverwrite).toHaveBeenCalledWith(
       ['src/a.ts', 'src/b.ts'],
       'agi/fix-the-flaky-test',
+      '/workspace',
     );
     expect(repo.fetch).not.toHaveBeenCalled();
     expect(repo.checkout).not.toHaveBeenCalled();
@@ -169,12 +182,46 @@ describe('the dirty working tree guard', () => {
   });
 
   it('refuses when there is no repository or no branch, without touching anything', async () => {
-    await expect(pullCloudResultIntoCheckout(HANDOFF, host(null))).resolves.toEqual({
+    const missing = host(null);
+    await expect(pullCloudResultIntoCheckout(HANDOFF, missing)).resolves.toEqual({
       status: 'no-repository',
     });
+    expect(missing.findRepository).toHaveBeenCalledWith('acme/widgets');
     await expect(
       pullCloudResultIntoCheckout({ ...HANDOFF, branch: null }, host(repository([]))),
     ).resolves.toEqual({ status: 'no-branch' });
+  });
+
+  it('refuses a link that names no repository instead of using whichever folder is first', async () => {
+    const repo = repository([]);
+    const pullHost = host(repo);
+
+    await expect(
+      pullCloudResultIntoCheckout({ ...HANDOFF, repository: null }, pullHost),
+    ).resolves.toEqual({ status: 'unknown-repository' });
+
+    expect(pullHost.findRepository).not.toHaveBeenCalled();
+    expect(repo.fetch).not.toHaveBeenCalled();
+    expect(repo.checkout).not.toHaveBeenCalled();
+  });
+
+  it('refuses when several open folders are clones of the repository', async () => {
+    const pullHost = host({ status: 'ambiguous', rootPaths: ['/a', '/b'] });
+
+    await expect(pullCloudResultIntoCheckout(HANDOFF, pullHost)).resolves.toEqual({
+      status: 'ambiguous-repository',
+    });
+    expect(pullHost.report).toHaveBeenCalledWith(expect.stringContaining('/a, /b'));
+  });
+
+  it('names the repository and folder in the receipt', async () => {
+    const pullHost = host(repository([]));
+
+    await pullCloudResultIntoCheckout(HANDOFF, pullHost);
+
+    expect(pullHost.report).toHaveBeenCalledWith(
+      '/workspace (acme/widgets) is now on agi/fix-the-flaky-test.',
+    );
   });
 
   it('reports a failed checkout rather than claiming the workspace moved', async () => {
@@ -213,5 +260,73 @@ describe('cloud task state reads the same here as on the web', () => {
 
   it.each(STATES)('says the same word for %s', (state) => {
     expect(cloudRunStateLabel(state)).toBe(agentTaskStateLabel(state));
+  });
+});
+
+describe('the git host picks the repository the cloud task ran on', () => {
+  afterEach(() => {
+    (vscode.workspace as { workspaceFolders: unknown }).workspaceFolders = undefined;
+  });
+
+  function gitRepository(root: string, remote: string) {
+    return {
+      rootUri: vscode.Uri.file(root),
+      state: {
+        workingTreeChanges: [],
+        indexChanges: [],
+        remotes: [{ name: 'origin', fetchUrl: remote }],
+      },
+      fetch: vi.fn().mockResolvedValue(undefined),
+      checkout: vi.fn().mockResolvedValue(undefined),
+    };
+  }
+
+  function openRepositories(repositories: ReturnType<typeof gitRepository>[]): void {
+    (vscode.workspace as { workspaceFolders: unknown }).workspaceFolders = repositories.map(
+      (candidate) => ({ uri: candidate.rootUri }),
+    );
+    vi.mocked(vscode.extensions.getExtension).mockReturnValueOnce({
+      isActive: true,
+      exports: { getAPI: () => ({ repositories }) },
+    } as never);
+  }
+
+  it('selects the second root when the first holds an unrelated repository with the same branch', async () => {
+    const unrelated = gitRepository('/work/other', 'https://github.com/acme/other.git');
+    const match = gitRepository('/work/widgets', 'git@github.com:Acme/Widgets.git');
+    openRepositories([unrelated, match]);
+    const pullHost = await resolveGitCheckoutHost();
+
+    await pullCloudResultIntoCheckout(HANDOFF, pullHost);
+
+    expect(match.fetch).toHaveBeenCalledOnce();
+    expect(match.checkout).toHaveBeenCalledWith('agi/fix-the-flaky-test');
+    expect(unrelated.fetch).not.toHaveBeenCalled();
+    expect(unrelated.checkout).not.toHaveBeenCalled();
+  });
+
+  it('does not fall back to the first repository when none matches', async () => {
+    const unrelated = gitRepository('/work/other', 'https://github.com/acme/other.git');
+    openRepositories([unrelated]);
+
+    await expect(
+      pullCloudResultIntoCheckout(HANDOFF, await resolveGitCheckoutHost()),
+    ).resolves.toEqual({ status: 'no-repository' });
+
+    expect(unrelated.fetch).not.toHaveBeenCalled();
+    expect(unrelated.checkout).not.toHaveBeenCalled();
+  });
+
+  it('refuses when two open folders are clones of the same repository', async () => {
+    const first = gitRepository('/work/one', 'https://github.com/acme/widgets');
+    const second = gitRepository('/work/two', 'https://github.com/acme/widgets.git');
+    openRepositories([first, second]);
+
+    await expect(
+      pullCloudResultIntoCheckout(HANDOFF, await resolveGitCheckoutHost()),
+    ).resolves.toEqual({ status: 'ambiguous-repository' });
+
+    expect(first.checkout).not.toHaveBeenCalled();
+    expect(second.checkout).not.toHaveBeenCalled();
   });
 });

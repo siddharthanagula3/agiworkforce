@@ -1,3 +1,4 @@
+import { cloudCodeRepositoryLabel } from './cloud-code';
 import { VSCODE_CONTEXT_HANDOFF_AUTHORITY } from './context-handoff-uri';
 
 export const VSCODE_CLOUD_TASK_HANDOFF_PATH = '/cloud-task';
@@ -6,6 +7,7 @@ const MAX_CLOUD_TASK_FIELD_LENGTH = 4_000;
 const MAX_CLOUD_TASK_PLAN_STEPS = 40;
 const MAX_CLOUD_TASK_RUN_ID_LENGTH = 200;
 const CLOUD_TASK_BRANCH_RE = /^[A-Za-z0-9._\-/]{1,255}$/;
+const CLOUD_TASK_REPOSITORY_RE = /^[a-z0-9._-]{1,100}\/[a-z0-9._-]{1,100}$/;
 
 /**
  * A cloud task as the IDE continues it: what it was asked to do, the plan it
@@ -17,6 +19,13 @@ export interface CloudTaskHandoff {
   goal: string;
   plan: string[];
   branch: string | null;
+  repository: string | null;
+}
+
+export function cloudTaskRepositoryName(repositoryUrl: string | null): string | null {
+  if (repositoryUrl === null) return null;
+  const name = cloudCodeRepositoryLabel(repositoryUrl).toLowerCase();
+  return CLOUD_TASK_REPOSITORY_RE.test(name) ? name : null;
 }
 
 function field(params: URLSearchParams, name: string): string {
@@ -28,6 +37,7 @@ export function parseCloudTaskHandoffQuery(query: string): CloudTaskHandoff | nu
   const runId = field(params, 'runId');
   if (runId === '' || runId.length > MAX_CLOUD_TASK_RUN_ID_LENGTH) return null;
   const branch = field(params, 'branch');
+  const repository = field(params, 'repo').toLowerCase();
   return {
     runId,
     goal: field(params, 'goal'),
@@ -37,6 +47,7 @@ export function parseCloudTaskHandoffQuery(query: string): CloudTaskHandoff | nu
       .filter((step) => step !== '')
       .slice(0, MAX_CLOUD_TASK_PLAN_STEPS),
     branch: branch !== '' && CLOUD_TASK_BRANCH_RE.test(branch) ? branch : null,
+    repository: CLOUD_TASK_REPOSITORY_RE.test(repository) ? repository : null,
   };
 }
 
@@ -48,6 +59,9 @@ export function encodeCloudTaskHandoffQuery(handoff: CloudTaskHandoff): string {
   if (handoff.branch !== null && !CLOUD_TASK_BRANCH_RE.test(handoff.branch)) {
     throw new Error('A cloud task link can only name a branch git accepts.');
   }
+  if (handoff.repository !== null && !CLOUD_TASK_REPOSITORY_RE.test(handoff.repository)) {
+    throw new Error('A cloud task link can only name a repository as owner/name.');
+  }
   const params = new URLSearchParams();
   params.set('runId', runId);
   const goal = handoff.goal.slice(0, MAX_CLOUD_TASK_FIELD_LENGTH).trim();
@@ -57,6 +71,7 @@ export function encodeCloudTaskHandoffQuery(handoff: CloudTaskHandoff): string {
     if (trimmed !== '') params.append('plan', trimmed);
   }
   if (handoff.branch !== null) params.set('branch', handoff.branch);
+  if (handoff.repository !== null) params.set('repo', handoff.repository);
   return params.toString();
 }
 

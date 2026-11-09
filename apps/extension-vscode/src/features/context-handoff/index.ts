@@ -35,6 +35,7 @@ export const PULL_CLOUD_TASK_COMMAND = 'agi-workforce.pullCloudTaskIntoWorkspace
 export function buildCloudTaskHandoffDraft(handoff: CloudTaskHandoff): string {
   const lines = [`Continuing cloud task ${handoff.runId} here.`];
   if (handoff.goal !== '') lines.push('', `Goal: ${handoff.goal}`);
+  if (handoff.repository !== null) lines.push('', `Repository: ${handoff.repository}`);
   if (handoff.branch !== null) lines.push('', `Cloud branch: ${handoff.branch}`);
   if (handoff.plan.length > 0) {
     lines.push('', 'Plan so far:', ...handoff.plan.map((step) => `- ${step}`));
@@ -43,6 +44,7 @@ export function buildCloudTaskHandoffDraft(handoff: CloudTaskHandoff): string {
 }
 
 export interface LocalCheckoutRepository {
+  repository: string;
   rootPath: string;
   /** Paths the working tree or index has changed and no commit holds yet. */
   dirtyPaths: string[];
@@ -50,10 +52,19 @@ export interface LocalCheckoutRepository {
   checkout: (branch: string) => Promise<void>;
 }
 
+export type LocalRepositoryLookup =
+  | { status: 'found'; repository: LocalCheckoutRepository }
+  | { status: 'missing' }
+  | { status: 'ambiguous'; rootPaths: string[] };
+
 export interface CloudResultPullHost {
-  findRepository: () => Promise<LocalCheckoutRepository | null>;
+  findRepository: (repository: string) => Promise<LocalRepositoryLookup>;
   /** Must name what is lost. Returning false leaves the checkout untouched. */
-  confirmOverwrite: (dirtyPaths: readonly string[], branch: string) => Promise<boolean>;
+  confirmOverwrite: (
+    dirtyPaths: readonly string[],
+    branch: string,
+    rootPath: string,
+  ) => Promise<boolean>;
   report: (message: string) => void;
 }
 
@@ -61,6 +72,8 @@ export type CloudResultPullOutcome =
   | { status: 'pulled'; branch: string }
   | { status: 'cancelled' }
   | { status: 'no-repository' }
+  | { status: 'unknown-repository' }
+  | { status: 'ambiguous-repository' }
   | { status: 'no-branch' }
   | { status: 'failed'; reason: string };
 
@@ -79,13 +92,32 @@ export async function pullCloudResultIntoCheckout(
     host.report('That cloud task carries no branch to bring into this workspace.');
     return { status: 'no-branch' };
   }
-  const repository = await host.findRepository();
-  if (repository === null) {
-    host.report('Open the repository this cloud task ran on before pulling its result in.');
+  if (handoff.repository === null) {
+    host.report(
+      'That cloud task does not say which repository it ran on, so its branch was not checked out.',
+    );
+    return { status: 'unknown-repository' };
+  }
+  const lookup = await host.findRepository(handoff.repository);
+  if (lookup.status === 'missing') {
+    host.report(
+      `Open a clone of ${handoff.repository} before pulling this cloud task's result in.`,
+    );
     return { status: 'no-repository' };
   }
+  if (lookup.status === 'ambiguous') {
+    host.report(
+      `More than one open folder is a clone of ${handoff.repository} (${lookup.rootPaths.join(', ')}). Keep one open and try again.`,
+    );
+    return { status: 'ambiguous-repository' };
+  }
+  const repository = lookup.repository;
   if (repository.dirtyPaths.length > 0) {
-    const confirmed = await host.confirmOverwrite(repository.dirtyPaths, handoff.branch);
+    const confirmed = await host.confirmOverwrite(
+      repository.dirtyPaths,
+      handoff.branch,
+      repository.rootPath,
+    );
     if (!confirmed) return { status: 'cancelled' };
   }
   try {
@@ -96,7 +128,7 @@ export async function pullCloudResultIntoCheckout(
     host.report(`The cloud branch could not be checked out, ${reason}`);
     return { status: 'failed', reason };
   }
-  host.report(`This workspace is now on ${handoff.branch}.`);
+  host.report(`${repository.rootPath} (${repository.repository}) is now on ${handoff.branch}.`);
   return { status: 'pulled', branch: handoff.branch };
 }
 
@@ -129,20 +161,59 @@ interface GitRepositoryApi {
   checkout: (branch: string) => Promise<void>;
 }
 
-async function workspaceGitRepository(): Promise<GitRepositoryApi | null> {
-  const folder = vscode.workspace.workspaceFolders?.[0];
-  if (folder === undefined) return null;
+async function openGitRepositories(): Promise<GitRepositoryApi[] | null> {
+  if (vscode.workspace.workspaceFolders?.[0] === undefined) return null;
   const extension = vscode.extensions.getExtension('vscode.git');
   if (extension === undefined) return null;
   if (!extension.isActive) await extension.activate();
-  const api = (
-    extension.exports as { getAPI: (version: number) => { repositories: GitRepositoryApi[] } }
-  ).getAPI(1);
   return (
-    api.repositories.find((candidate) => candidate.rootUri.fsPath === folder.uri.fsPath) ??
-    api.repositories[0] ??
+    extension.exports as { getAPI: (version: number) => { repositories: GitRepositoryApi[] } }
+  ).getAPI(1).repositories;
+}
+
+async function workspaceGitRepository(): Promise<GitRepositoryApi | null> {
+  const repositories = await openGitRepositories();
+  const folder = vscode.workspace.workspaceFolders?.[0];
+  if (repositories === null || folder === undefined) return null;
+  return (
+    repositories.find((candidate) => candidate.rootUri.fsPath === folder.uri.fsPath) ??
+    repositories[0] ??
     null
   );
+}
+
+function repositoryRemoteNames(repository: GitRepositoryApi): string[] {
+  return repository.state.remotes
+    .map((remote) => (remote.fetchUrl ? githubRepositoryName(remote.fetchUrl) : null))
+    .filter((name): name is string => name !== null);
+}
+
+function checkoutRepository(repository: string, git: GitRepositoryApi): LocalCheckoutRepository {
+  return {
+    repository,
+    rootPath: git.rootUri.fsPath,
+    dirtyPaths: [...git.state.workingTreeChanges, ...git.state.indexChanges].map((change) =>
+      vscode.workspace.asRelativePath(change.uri),
+    ),
+    fetch: () => git.fetch(),
+    checkout: (branch: string) => git.checkout(branch),
+  };
+}
+
+async function findGitRepositoryByName(repository: string): Promise<LocalRepositoryLookup> {
+  const repositories = await openGitRepositories();
+  const matches = (repositories ?? []).filter((candidate) =>
+    repositoryRemoteNames(candidate).includes(repository),
+  );
+  const [only, ...others] = matches;
+  if (only === undefined) return { status: 'missing' };
+  if (others.length > 0) {
+    return {
+      status: 'ambiguous',
+      rootPaths: matches.map((candidate) => candidate.rootUri.fsPath),
+    };
+  }
+  return { status: 'found', repository: checkoutRepository(repository, only) };
 }
 
 const GITHUB_REMOTE_RE = /github\.com[:/]([^/\s]+)\/([^/\s]+?)(?:\.git)?\/?$/i;
@@ -155,9 +226,7 @@ export function githubRepositoryName(remoteUrl: string): string | null {
 export async function workspaceGitHubRepositories(): Promise<string[]> {
   const repository = await workspaceGitRepository().catch(() => null);
   if (repository === null) return [];
-  return repository.state.remotes
-    .map((remote) => (remote.fetchUrl ? githubRepositoryName(remote.fetchUrl) : null))
-    .filter((name): name is string => name !== null);
+  return repositoryRemoteNames(repository);
 }
 
 export interface WorkspaceCloudSource {
@@ -195,23 +264,12 @@ export async function readWorkspaceCloudSource(): Promise<WorkspaceCloudSource |
 /** The workspace's own git repository, through the editor's git extension. */
 export async function resolveGitCheckoutHost(): Promise<CloudResultPullHost> {
   return {
-    findRepository: async () => {
-      const repository = await workspaceGitRepository();
-      if (repository === null) return null;
-      return {
-        rootPath: repository.rootUri.fsPath,
-        dirtyPaths: [...repository.state.workingTreeChanges, ...repository.state.indexChanges].map(
-          (change) => vscode.workspace.asRelativePath(change.uri),
-        ),
-        fetch: () => repository.fetch(),
-        checkout: (branch: string) => repository.checkout(branch),
-      };
-    },
-    confirmOverwrite: async (dirtyPaths, branch) => {
+    findRepository: findGitRepositoryByName,
+    confirmOverwrite: async (dirtyPaths, branch, rootPath) => {
       const { message, detail } = describeDirtyOverwrite(dirtyPaths, branch);
       const choice = await vscode.window.showWarningMessage(
         message,
-        { modal: true, detail },
+        { modal: true, detail: `${rootPath}\n\n${detail}` },
         'Switch anyway',
       );
       return choice === 'Switch anyway';
@@ -305,9 +363,9 @@ export async function continueCloudWorkHere(
   await target.reveal();
   // Opening a link must never move the checkout on its own. The branch comes
   // in only when the reader asks, and the dirty-tree guard still runs after.
-  if (handoff.branch !== null && resolvePullHost !== undefined) {
+  if (handoff.branch !== null && handoff.repository !== null && resolvePullHost !== undefined) {
     const choice = await vscode.window.showInformationMessage(
-      `${PRODUCT_NAMES.code}: this cloud task works on ${handoff.branch}.`,
+      `${PRODUCT_NAMES.code}: this cloud task works on ${handoff.branch} in ${handoff.repository}.`,
       BRING_CLOUD_BRANCH_IN,
     );
     if (choice === BRING_CLOUD_BRANCH_IN) {
