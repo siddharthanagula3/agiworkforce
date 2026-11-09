@@ -1630,6 +1630,12 @@ mod conflict_tests {
         assert!(conflict_marker_refusal("app.txt", CONFLICTED, "resolved\n").is_none());
         assert!(conflict_marker_refusal("app.txt", "clean\n", "still clean\n").is_none());
     }
+
+    #[test]
+    fn a_markdown_setext_heading_is_not_a_conflict_marker() {
+        assert!(conflict_marker_refusal("README.md", "", "Title\n==========\n\nBody\n").is_none());
+        assert!(conflict_view(Path::new("README.md"), "Title\n==========\n").is_none());
+    }
 }
 
 #[cfg(test)]

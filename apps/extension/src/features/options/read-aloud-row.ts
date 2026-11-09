@@ -75,6 +75,9 @@ export function createReadAloudRow(
   }
 
   let current: ReadAloudSettings = DEFAULT_READ_ALOUD_SETTINGS;
+  let hydrated = false;
+  voiceSelect.disabled = true;
+  rateSelect.disabled = true;
 
   const renderVoices = (): void => {
     voiceSelect.replaceChildren(el('option', { value: '' }, t('optReadAloudVoiceDefault')));
@@ -89,6 +92,7 @@ export function createReadAloudRow(
   synth.addEventListener?.('voiceschanged', renderVoices);
 
   const save = (next: ReadAloudSettings): void => {
+    if (!hydrated) return;
     const previous = current;
     current = next;
     status.textContent = t('optSaving');
@@ -132,12 +136,19 @@ export function createReadAloudRow(
   const loaded = storage
     .get(READ_ALOUD_STORAGE_KEY)
     .then((items) => parseReadAloudSettings(items[READ_ALOUD_STORAGE_KEY]))
-    .catch(() => DEFAULT_READ_ALOUD_SETTINGS)
-    .then((settings) => {
-      current = settings;
-      renderVoices();
-      rateSelect.value = String(settings.rate);
-    });
+    .then(
+      (settings) => {
+        current = settings;
+        hydrated = true;
+        renderVoices();
+        rateSelect.value = String(settings.rate);
+        voiceSelect.disabled = false;
+        rateSelect.disabled = false;
+      },
+      () => {
+        status.textContent = t('optReadAloudLoadFailed');
+      },
+    );
 
   return { element, voiceSelect, rateSelect, previewButton, status, loaded };
 }

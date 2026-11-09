@@ -182,11 +182,21 @@ impl fmt::Display for ResolveRefusal {
 impl std::error::Error for ResolveRefusal {}
 
 pub fn has_conflict_markers(text: &str) -> bool {
-    text.lines().any(|line| {
-        line.starts_with(OURS_MARKER)
-            || line.starts_with(SPLIT_MARKER)
-            || line.starts_with(THEIRS_MARKER)
+    text.lines().any(is_resolution_marker)
+}
+
+fn is_marker_line(line: &str, marker: &str) -> bool {
+    line.strip_prefix(marker).is_some_and(|rest| {
+        rest.chars()
+            .next()
+            .is_none_or(|next| next.is_ascii_whitespace())
     })
+}
+
+fn is_resolution_marker(line: &str) -> bool {
+    is_marker_line(line, OURS_MARKER)
+        || is_marker_line(line, SPLIT_MARKER)
+        || is_marker_line(line, THEIRS_MARKER)
 }
 
 fn marker_label(line: &str, marker: &str) -> String {
@@ -211,7 +221,7 @@ pub fn parse_conflicts(path: &Path, text: &str) -> ConflictedFile {
     let mut hunks = Vec::new();
     let mut cursor = 0usize;
     while cursor < lines.len() {
-        if !lines[cursor].starts_with(OURS_MARKER) {
+        if !is_marker_line(&lines[cursor], OURS_MARKER) {
             cursor += 1;
             continue;
         }
@@ -227,13 +237,13 @@ pub fn parse_conflicts(path: &Path, text: &str) -> ConflictedFile {
         let mut scan = cursor + 1;
         while scan < lines.len() {
             let line = &lines[scan];
-            if line.starts_with(BASE_MARKER) {
+            if is_marker_line(line, BASE_MARKER) {
                 base_label = Some(marker_label(line, BASE_MARKER));
                 base = Some(Vec::new());
                 section = ConflictSide::Base;
-            } else if line.starts_with(SPLIT_MARKER) {
+            } else if is_marker_line(line, SPLIT_MARKER) {
                 section = ConflictSide::Theirs;
-            } else if line.starts_with(THEIRS_MARKER) {
+            } else if is_marker_line(line, THEIRS_MARKER) {
                 closed = Some((scan, marker_label(line, THEIRS_MARKER)));
                 break;
             } else {
@@ -293,11 +303,7 @@ fn resolved_lines(
         }
         Resolution::Custom(lines) => lines.clone(),
     };
-    if lines.iter().any(|line| {
-        line.starts_with(OURS_MARKER)
-            || line.starts_with(SPLIT_MARKER)
-            || line.starts_with(THEIRS_MARKER)
-    }) {
+    if lines.iter().any(|line| is_resolution_marker(line)) {
         return Err(ResolveRefusal::MarkersInResolution(hunk.index));
     }
     Ok(lines)
@@ -925,6 +931,31 @@ mod tests {
         .expect_err("markers are refused");
 
         assert_eq!(refusal, ResolveRefusal::MarkersInResolution(1));
+    }
+
+    #[test]
+    fn a_setext_underline_is_content_not_a_marker() {
+        assert!(!has_conflict_markers("Title\n==========\nbody\n"));
+        assert!(!has_conflict_markers("<<<<<<<<< not a marker\n>>>>>>>>\n"));
+        assert!(has_conflict_markers("=======\n"));
+        assert!(has_conflict_markers("======= \n"));
+        assert!(has_conflict_markers("<<<<<<< HEAD\r\n"));
+        assert!(has_conflict_markers(">>>>>>>\n"));
+
+        let conflicted = "Guide\n==========\n<<<<<<< HEAD\nOld\n=======\nNew heading\n================\n>>>>>>> f\n";
+        let file = parse_conflicts(Path::new("README.md"), conflicted);
+        assert_eq!(file.hunks.len(), 1);
+        assert_eq!(
+            file.hunks[0].theirs,
+            vec!["New heading", "================"]
+        );
+        let resolved = render_resolution(&file, &[(1, Resolution::Take(ConflictSide::Theirs))])
+            .expect("an underline in the chosen side is content");
+        assert_eq!(
+            resolved,
+            "Guide\n==========\nNew heading\n================\n"
+        );
+        assert!(!has_conflict_markers(&resolved));
     }
 
     #[test]

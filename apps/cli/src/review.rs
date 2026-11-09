@@ -86,13 +86,18 @@ pub async fn run_review(
             )
         })
         .unwrap_or_default();
-    let prompt = format!(
-        "Review this diff:\n```diff\n{}\n```{}",
-        truncate_on_char_boundary(&diff, 100_000),
-        extra_instructions
-    );
+    let reviewed = truncate_on_char_boundary(&diff, REVIEW_DIFF_LIMIT_BYTES);
+    let omission =
+        (reviewed.len() < diff.len()).then(|| omitted_diff_notice(reviewed.len(), diff.len()));
+    if let Some(notice) = omission.as_deref() {
+        eprintln!("{}", ts::warning(notice));
+    }
+    let prompt = review_prompt(reviewed, omission.as_deref(), &extra_instructions);
     let result = session.send(config, &prompt, Box::new(|_chunk| {})).await?;
-    let review = parse_review(&result.response);
+    let mut review = parse_review(&result.response);
+    if let Some(notice) = omission.as_deref() {
+        disclose_omitted_diff(&mut review, notice);
+    }
     print_review(&review);
     if let (Some(pull_request), true) = (options.pull_request.as_deref(), options.post) {
         post_review(pull_request, &review).await?;
@@ -102,6 +107,33 @@ pub async fn run_review(
         );
     }
     Ok(review)
+}
+
+const REVIEW_DIFF_LIMIT_BYTES: usize = 100_000;
+
+fn omitted_diff_notice(reviewed_bytes: usize, total_bytes: usize) -> String {
+    format!(
+        "Only the first {reviewed_bytes} of {total_bytes} bytes of the diff were reviewed. The changes after that point were not reviewed."
+    )
+}
+
+fn review_prompt(diff: &str, omission: Option<&str>, extra_instructions: &str) -> String {
+    let omission = omission
+        .map(|notice| {
+            format!(
+                "\n\n<omitted_diff>\n{notice} Do not describe the unreviewed part as clean, and say in overall_explanation that the review is partial.\n</omitted_diff>"
+            )
+        })
+        .unwrap_or_default();
+    format!("Review this diff:\n```diff\n{diff}\n```{omission}{extra_instructions}")
+}
+
+fn disclose_omitted_diff(review: &mut ReviewOutput, notice: &str) {
+    review.overall_explanation = if review.overall_explanation.trim().is_empty() {
+        notice.to_string()
+    } else {
+        format!("{}\n\n{notice}", review.overall_explanation)
+    };
 }
 
 async fn run_gh(args: &[&str], stdin: Option<&str>) -> Result<String> {
@@ -244,13 +276,21 @@ async fn gather_diff(opts: &ReviewOptions) -> Result<String> {
 }
 
 async fn review_git(command: tokio::process::Command) -> Result<std::process::Output> {
-    crate::process_tree::output(
+    let output = crate::process_tree::output(
         command,
         None,
         Some(crate::platform::runtime::git::GIT_OPERATION_TIMEOUT),
     )
     .await
-    .map_err(|error| anyhow::anyhow!(crate::platform::runtime::git::host_git_failure(&error)))
+    .map_err(|error| anyhow::anyhow!(crate::platform::runtime::git::host_git_failure(&error)))?;
+    if !output.status.success() {
+        let detail = String::from_utf8_lossy(&output.stderr);
+        match sanitize_terminal_text(detail.trim()).trim() {
+            "" => anyhow::bail!("git could not read the changes to review."),
+            detail => anyhow::bail!("git could not read the changes to review: {detail}"),
+        }
+    }
+    Ok(output)
 }
 
 /// Truncate `s` to at most `max_bytes`, never splitting a multi-byte UTF-8
@@ -414,6 +454,68 @@ mod tests {
                 "{refused}"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn a_failed_git_read_is_an_error_not_an_empty_diff() {
+        let repository = tempfile::tempdir().expect("temp dir");
+        let mut init = agiworkforce_worktree::host_git_async();
+        init.current_dir(repository.path())
+            .args(["init", "--quiet"]);
+        review_git(init).await.expect("git init");
+
+        let mut clean_diff = agiworkforce_worktree::host_git_async();
+        clean_diff.current_dir(repository.path()).arg("diff");
+        let clean = review_git(clean_diff)
+            .await
+            .expect("an empty diff is a result");
+        assert!(clean.stdout.is_empty());
+
+        let mut missing_revision = agiworkforce_worktree::host_git_async();
+        missing_revision.current_dir(repository.path()).args([
+            "show",
+            "--patch",
+            "--end-of-options",
+            "no-such-revision",
+        ]);
+        let refused = review_git(missing_revision)
+            .await
+            .expect_err("an unknown revision must not read as no changes");
+        assert!(
+            refused
+                .to_string()
+                .starts_with("git could not read the changes to review"),
+            "{refused}"
+        );
+    }
+
+    #[test]
+    fn a_diff_past_the_limit_is_reviewed_as_partial_and_says_so() {
+        let diff = format!("{}é tail", "a".repeat(REVIEW_DIFF_LIMIT_BYTES - 1));
+        let reviewed = truncate_on_char_boundary(&diff, REVIEW_DIFF_LIMIT_BYTES);
+        assert_eq!(reviewed.len(), REVIEW_DIFF_LIMIT_BYTES - 1);
+        let notice = omitted_diff_notice(reviewed.len(), diff.len());
+        assert!(notice.contains(&format!("{} of {}", reviewed.len(), diff.len())));
+
+        let prompt = review_prompt(reviewed, Some(&notice), "");
+        assert!(!prompt.contains("tail"));
+        assert!(prompt.contains("<omitted_diff>"));
+        assert!(prompt.contains(&notice));
+
+        let mut review =
+            parse_review(r#"{"overall_explanation":"Looks fine.","severity":"clean"}"#);
+        disclose_omitted_diff(&mut review, &notice);
+        assert_eq!(
+            review.overall_explanation,
+            format!("Looks fine.\n\n{notice}")
+        );
+        assert!(format_review_markdown(&review).contains(&notice));
+    }
+
+    #[test]
+    fn a_diff_within_the_limit_has_no_omission_notice() {
+        let prompt = review_prompt("+one line", None, "");
+        assert_eq!(prompt, "Review this diff:\n```diff\n+one line\n```");
     }
 
     #[test]

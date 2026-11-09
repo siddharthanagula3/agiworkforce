@@ -3404,6 +3404,10 @@
     "message": "This browser cannot read text aloud.",
     "description": "Status when speech synthesis is unavailable."
   },
+  "optReadAloudLoadFailed": {
+    "message": "Your read-aloud settings could not be loaded. Reopen this page to try again.",
+    "description": "Status when the saved read-aloud voice and speed cannot be read, so the controls stay locked."
+  },
   "optKeyboardTitle": {
     "message": "Keyboard shortcuts",
     "description": "Options section title."

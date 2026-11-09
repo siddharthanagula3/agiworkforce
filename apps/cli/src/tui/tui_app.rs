@@ -880,6 +880,7 @@ impl TuiApp {
                             agent.name
                         ))
                     })
+                    .filter(|candidate| crate::mentions::mention_token(&candidate.path).is_some())
                     .collect();
             candidates.extend(crate::mentions::workspace_file_candidates(&root));
             self.mention_candidates = Some(candidates);
@@ -896,7 +897,10 @@ impl TuiApp {
         if anchor > self.input.len() || cursor > self.input.len() {
             return;
         }
-        let replacement = format!("@{path} ");
+        let Some(token) = crate::mentions::mention_token(path) else {
+            return;
+        };
+        let replacement = format!("{token} ");
         self.input.replace_range(anchor..cursor, &replacement);
         self.cursor = anchor + replacement.len();
     }
@@ -3590,7 +3594,8 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
     }
     if key.code == KeyCode::Esc && key.modifiers.is_empty() {
         if !app.input.is_empty() {
-            app.prompt_history.record(&app.input);
+            let draft = app.pasted_texts.expand(&app.input);
+            app.prompt_history.record(&draft);
             app.input.clear();
             app.cursor = 0;
             app.rewind_armed_at = None;
@@ -4847,19 +4852,20 @@ fn detect_mode_intent(text: &str) -> Option<InteractionMode> {
     // Normalize to the bare command phrase: trim surrounding whitespace and a
     // single leading slash so both "/yolo" and "yolo mode" map to one trigger.
     let exact = lower.trim();
+    let slash_command = lower.trim_start().starts_with('/');
     let exact = exact.strip_prefix('/').unwrap_or(exact).trim();
 
     // Plan mode triggers, non-escalating (read-only), natural language allowed.
-    if lower == "/plan"
-        || lower.contains("go to plan mode")
-        || lower.contains("enter plan mode")
-        || lower.contains("switch to plan")
-        || lower.contains("plan mode")
-        || lower.contains("plan this first")
-        || lower.contains("plan first")
-        || lower.contains("plan before")
-        || lower.contains("plan properly")
-        || lower.contains("make a plan first")
+    if !slash_command
+        && (lower.contains("go to plan mode")
+            || lower.contains("enter plan mode")
+            || lower.contains("switch to plan")
+            || lower.contains("plan mode")
+            || lower.contains("plan this first")
+            || lower.contains("plan first")
+            || lower.contains("plan before")
+            || lower.contains("plan properly")
+            || lower.contains("make a plan first"))
     {
         return Some(InteractionMode::Plan);
     }
@@ -4904,10 +4910,11 @@ fn detect_mode_intent(text: &str) -> Option<InteractionMode> {
     }
 
     // Back to chat mode, non-escalating (de-escalates), natural language allowed.
-    if lower.contains("normal mode")
-        || lower.contains("chat mode")
-        || lower.contains("exit plan")
-        || lower.contains("stop planning")
+    if !slash_command
+        && (lower.contains("normal mode")
+            || lower.contains("chat mode")
+            || lower.contains("exit plan")
+            || lower.contains("stop planning"))
     {
         return Some(InteractionMode::Chat);
     }
@@ -6880,6 +6887,7 @@ async fn run_event_loop(
                     // handled above; skip slash/prompt dispatch (the loop still
                     // renders below).
                     if !handled_as_mode_command {
+                        let mode_before_slash = app.mode;
                         match handle_slash(&text, app) {
                             SlashResult::Quit => {
                                 run_stop_hook(app, QuitReason::ExitCommand).await;
@@ -6891,6 +6899,26 @@ async fn run_event_loop(
                                         role: ChatRole::System,
                                         text: msg,
                                     });
+                                }
+                                if app.mode != mode_before_slash {
+                                    let hcfg = app.session.hooks_config().clone();
+                                    crate::hooks::run_hooks(
+                                        &hcfg,
+                                        crate::hooks::HookEvent::PlanModeChanged,
+                                        &crate::hooks::HookInput {
+                                            event: "PlanModeChanged".to_string(),
+                                            session_id: Some(
+                                                app.session.runtime_session_id.clone(),
+                                            ),
+                                            model: Some(app.session.model.clone()),
+                                            tool_name: None,
+                                            tool_args: None,
+                                            tool_output: None,
+                                            message: Some(app.mode.label().to_string()),
+                                            tool_execution: None,
+                                        },
+                                    )
+                                    .await;
                                 }
                             }
                             SlashResult::RunLogin(provider) => {
@@ -8367,6 +8395,44 @@ mod tests {
     }
 
     #[test]
+    fn a_slash_command_is_never_also_read_as_a_plan_or_chat_phrase() {
+        for command in [
+            "/plan",
+            "/plan reject plan first, then code",
+            "/rename plan mode work",
+            "/compact keep the chat mode notes",
+        ] {
+            assert_eq!(detect_mode_intent(command), None, "{command}");
+        }
+        assert_eq!(
+            detect_mode_intent("let's plan first"),
+            Some(InteractionMode::Plan)
+        );
+        assert_eq!(
+            detect_mode_intent("back to chat mode"),
+            Some(InteractionMode::Chat)
+        );
+    }
+
+    #[test]
+    fn one_bare_plan_command_enters_plan_mode() {
+        let mut app = minimal_app();
+        assert_ne!(app.mode, InteractionMode::Plan);
+        assert_eq!(detect_mode_intent("/plan"), None);
+
+        let SlashResult::SystemMessage(receipt) = handle_slash("/plan", &mut app) else {
+            panic!("/plan answers with a system message");
+        };
+
+        assert_eq!(app.mode, InteractionMode::Plan);
+        assert!(app.session.plan_mode);
+        assert!(
+            receipt.starts_with(InteractionMode::Plan.label()),
+            "{receipt}"
+        );
+    }
+
+    #[test]
     fn auto_mode_is_entered_only_by_the_bare_phrase() {
         for phrase in ["auto mode", "/auto-mode", "  Auto Mode  "] {
             assert_eq!(
@@ -9475,6 +9541,25 @@ mod tests {
     }
 
     #[test]
+    fn a_chosen_file_with_a_space_is_sent_as_that_file_not_its_prefix() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(dir.path().join("report final.txt"), "chosen").expect("write");
+        std::fs::write(dir.path().join("report"), "prefix").expect("write");
+        let mut app = minimal_app();
+        app.input = "summarise @final".to_string();
+        app.cursor = app.input.len();
+        app.mention_anchor = Some(10);
+
+        app.insert_mention("report final.txt");
+
+        assert_eq!(app.input, "summarise @\"report final.txt\" ");
+        let expanded = crate::mentions::expand_mentions(&app.input, dir.path(), true);
+        assert_eq!(expanded.inlined, vec!["report final.txt".to_string()]);
+        assert!(expanded.prompt.contains("chosen"));
+        assert!(!expanded.prompt.contains("prefix"));
+    }
+
+    #[test]
     fn the_composer_shows_no_chip_row_until_something_is_staged() {
         let mut app = minimal_app();
         assert_eq!(attachment_chip_rows(&app.staged_images), 0);
@@ -9567,6 +9652,26 @@ mod tests {
             "Esc twice on an empty composer opens rewind, as in Claude Code, and never quits"
         );
         assert!(app.active_overlay.is_some(), "the rewind picker opened");
+    }
+
+    #[test]
+    fn a_cleared_paste_comes_back_as_its_text_after_another_send() {
+        use crossterm::event::KeyCode;
+
+        let mut app = minimal_app();
+        app.prompt_history = super::super::prompt_history::PromptHistory::in_memory();
+        let pasted = "one\ntwo\nthree\nfour\nfive";
+        handle_paste_text(&mut app, pasted);
+        assert_ne!(app.input, pasted, "a long paste shows as a marker");
+
+        handle_key_event(&mut app, make_key(KeyCode::Esc));
+        app.input = "something else".to_string();
+        app.cursor = app.input.len();
+        let sent = handle_key_event(&mut app, make_key(KeyCode::Enter));
+        assert!(matches!(sent, InputAction::SendMessage(_)));
+
+        handle_key_event(&mut app, make_key(KeyCode::Up));
+        assert_eq!(app.input, pasted);
     }
 
     /// Regression: Esc on the `/history` listing fell straight through to the
