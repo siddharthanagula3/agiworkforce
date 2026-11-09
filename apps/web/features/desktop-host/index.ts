@@ -85,6 +85,7 @@ export {
   writeLocalModelSettings,
   type LocalChatDelta,
   type LocalChatRun,
+  type LocalBackgroundCommandStart,
   type LocalCommandOutput,
   type LocalCommandRun,
 } from './lib/runtime-client';

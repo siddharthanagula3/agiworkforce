@@ -301,17 +301,26 @@ export function startLocalCommand(
   return { runId, result };
 }
 
+export interface LocalBackgroundCommandStart {
+  runId: string;
+  started: Promise<BackgroundShellOutput>;
+}
+
 export function startBackgroundLocalCommand(input: {
   rootId: string;
   command: string;
   path?: string;
-}): Promise<BackgroundShellOutput> {
-  return invoke<BackgroundShellOutput>('shell_start', {
-    runId: crypto.randomUUID(),
-    rootId: input.rootId,
-    command: input.command,
-    ...(input.path ? { path: input.path } : {}),
-  });
+}): LocalBackgroundCommandStart {
+  const runId = crypto.randomUUID();
+  return {
+    runId,
+    started: invoke<BackgroundShellOutput>('shell_start', {
+      runId,
+      rootId: input.rootId,
+      command: input.command,
+      ...(input.path ? { path: input.path } : {}),
+    }),
+  };
 }
 
 export function openLocalPreview(url: string): Promise<{ url: string }> {

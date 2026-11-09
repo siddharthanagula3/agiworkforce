@@ -25,6 +25,7 @@ import {
   startDeveloperSession,
   startDeveloperTurn,
   startLocalChat,
+  startBackgroundLocalCommand,
   startLocalCommand,
   steerDeveloperTurn,
   stopComputerUse,
@@ -93,6 +94,21 @@ describe('local command client', () => {
     expect(calls[0]?.command).toBe('shell_run');
     expect(calls[0]?.args).toMatchObject({ runId: run.runId, rootId: 'root-1' });
     expect(result.runId).toBe(run.runId);
+  });
+
+  it('names a background start before it settles so it can be cancelled', async () => {
+    const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+    installHost(async (command, args) => {
+      calls.push({ command, args });
+      return ok({ runId: String(args?.['runId']), running: true });
+    });
+
+    const start = startBackgroundLocalCommand({ rootId: 'root-1', command: 'pnpm dev' });
+
+    expect(start.runId).toHaveLength(36);
+    expect(calls[0]?.command).toBe('shell_start');
+    expect(calls[0]?.args).toMatchObject({ runId: start.runId, rootId: 'root-1' });
+    await expect(start.started).resolves.toMatchObject({ runId: start.runId });
   });
 
   it('passes a subfolder and a timeout only when given', async () => {
