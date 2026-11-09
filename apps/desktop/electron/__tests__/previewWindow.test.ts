@@ -131,6 +131,23 @@ describe('reading the errors of the preview window', () => {
     expect(readPreviewConsoleErrors(false).errors).toHaveLength(0);
   });
 
+  it('reads and clears nothing for a server other than the one the preview shows', async () => {
+    await openLocalPreview(PAGE);
+    FakeWindow.last!.webContents.emit('console-message', {
+      level: 'error',
+      message: 'mine',
+      sourceId: '',
+      lineNumber: 0,
+    });
+
+    const other = readPreviewConsoleErrors(true, 'http://localhost:3000');
+    expect(other).toEqual({ url: PAGE, errors: [], dropped: 0 });
+    expect(readPreviewConsoleErrors(false).errors).toHaveLength(1);
+
+    expect(readPreviewConsoleErrors(true, 'http://localhost:5173').errors).toHaveLength(1);
+    expect(readPreviewConsoleErrors(false).errors).toHaveLength(0);
+  });
+
   it('drops what it held when the preview window closes', async () => {
     await openLocalPreview(PAGE);
     FakeWindow.last!.webContents.emit('console-message', {

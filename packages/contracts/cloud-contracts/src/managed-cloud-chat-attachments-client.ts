@@ -85,6 +85,7 @@ function normalizeBaseUrl(baseUrl: string): string {
 const TRANSIENT_HTTP_STATUSES: ReadonlySet<number> = new Set([408, 425, 429]);
 
 export function isRetryableAttachmentUploadError(error: unknown): boolean {
+  if (error instanceof ManagedCloudResumableUploadError && error.status === 0) return true;
   if (
     error instanceof ManagedCloudChatAttachmentHttpError ||
     error instanceof ManagedCloudResumableUploadError

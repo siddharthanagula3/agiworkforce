@@ -80,6 +80,7 @@ export function CloudSettingsSync() {
 
   const [hydrateKey, setHydrateKey] = useState(0);
   const [hydratedAt, setHydratedAt] = useState<number | null>(null);
+  const [acknowledgedWrites, setAcknowledgedWrites] = useState(0);
   const acknowledged = useRef<AppearanceNamespace | null>(null);
   const acknowledgedLocale = useRef<string | null>(null);
   const acknowledgedCommands = useRef<CustomCommand[] | null>(null);
@@ -155,6 +156,7 @@ export function CloudSettingsSync() {
           } else {
             acknowledgedLocale.current = String(patch['locale'] ?? acknowledgedLocale.current);
           }
+          setAcknowledgedWrites((count) => count + 1);
           setStatus(null, null);
         } catch (error) {
           setStatus(toUserMessage(error, 'Your settings did not reach your account.'), () =>
@@ -266,6 +268,7 @@ export function CloudSettingsSync() {
       if (debounce.current) clearTimeout(debounce.current);
     };
   }, [
+    acknowledgedWrites,
     accentColor,
     chatFont,
     chatTextSize,
@@ -290,14 +293,14 @@ export function CloudSettingsSync() {
     if (hydratedAt === null || !isSignedIn) return;
     if (sameCustomCommands(acknowledgedCommands.current, customCommands)) return;
     write(CUSTOM_COMMANDS_NAMESPACE, { commands: customCommands });
-  }, [customCommands, hydratedAt, isSignedIn, write]);
+  }, [acknowledgedWrites, customCommands, hydratedAt, isSignedIn, write]);
 
   useEffect(() => {
     if (hydratedAt === null || !isSignedIn) return;
     if (!SUPPORTED_LOCALES.includes(currentLocale)) return;
     if (acknowledgedLocale.current === currentLocale) return;
     write(LANGUAGE_NAMESPACE, { locale: currentLocale });
-  }, [currentLocale, hydratedAt, isSignedIn, write]);
+  }, [acknowledgedWrites, currentLocale, hydratedAt, isSignedIn, write]);
 
   useEffect(() => {
     const flush = () => {

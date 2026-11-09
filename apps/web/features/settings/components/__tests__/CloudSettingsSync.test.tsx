@@ -220,6 +220,58 @@ describe('signing in', () => {
     );
   });
 
+  it('sends the language the user returned to while the first change was still being saved', async () => {
+    session.isSignedIn = true;
+    preferences.fetchStoredPreferenceNamespace.mockImplementation(async (namespace: string) =>
+      namespace === 'appearance' ? {} : { locale: 'en' },
+    );
+    const view = render(<CloudSettingsSync />);
+    await settle();
+
+    let finishFirst: () => void = () => {};
+    preferences.savePreferenceNamespace.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishFirst = () => resolve({ version: null });
+        }),
+    );
+
+    language.code = 'es';
+    view.rerender(<CloudSettingsSync />);
+    await settle();
+    language.code = 'en';
+    view.rerender(<CloudSettingsSync />);
+    await settle();
+
+    finishFirst();
+    await settle();
+    await settle();
+
+    const languageWrites = preferences.savePreferenceNamespace.mock.calls
+      .filter(([namespace]) => namespace === 'language')
+      .map(([, patch]) => patch);
+    expect(languageWrites).toEqual([{ locale: 'es' }, { locale: 'en' }]);
+  });
+
+  it('sends nothing extra when the language was changed once and saved', async () => {
+    session.isSignedIn = true;
+    preferences.fetchStoredPreferenceNamespace.mockImplementation(async (namespace: string) =>
+      namespace === 'appearance' ? {} : { locale: 'en' },
+    );
+    const view = render(<CloudSettingsSync />);
+    await settle();
+
+    language.code = 'es';
+    view.rerender(<CloudSettingsSync />);
+    await settle();
+    await settle();
+
+    const languageWrites = preferences.savePreferenceNamespace.mock.calls.filter(
+      ([namespace]) => namespace === 'language',
+    );
+    expect(languageWrites).toHaveLength(1);
+  });
+
   it('writes nothing at all when the account could not be read', async () => {
     session.isSignedIn = true;
     preferences.fetchStoredPreferenceNamespace.mockRejectedValue(new Error('offline'));

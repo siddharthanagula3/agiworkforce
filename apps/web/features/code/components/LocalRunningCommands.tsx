@@ -2,7 +2,10 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { ExternalLink, Square } from '@agiworkforce/icons';
-import type { BackgroundCommandRun } from '@agiworkforce/local-runtime-contract';
+import {
+  localPreviewOrigin,
+  type BackgroundCommandRun,
+} from '@agiworkforce/local-runtime-contract';
 import {
   cancelLocalCommand,
   openLocalPreview,
@@ -17,12 +20,21 @@ const GLYPH_SIZE = 15;
 const POLL_MS = 3000;
 const MINUTE_MS = 60_000;
 
-async function countPreviewErrors(): Promise<number> {
+interface PreviewErrors {
+  url: string;
+  count: number;
+}
+
+async function previewErrorsOf(runs: BackgroundCommandRun[]): Promise<PreviewErrors | null> {
+  const served = new Set(runs.flatMap((run) => localPreviewOrigin(run.previewUrl) ?? []));
+  if (served.size === 0) return null;
   try {
     const report = await readPreviewConsoleErrors(false);
-    return report.errors.length + report.dropped;
+    const count = report.errors.length + report.dropped;
+    if (report.url === null || count === 0) return null;
+    return served.has(localPreviewOrigin(report.url)) ? { url: report.url, count } : null;
   } catch {
-    return 0;
+    return null;
   }
 }
 
@@ -42,7 +54,7 @@ export function LocalRunningCommands({
 }: LocalRunningCommandsProps) {
   const [runs, setRuns] = useState<BackgroundCommandRun[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [errorCount, setErrorCount] = useState(0);
+  const [previewErrors, setPreviewErrors] = useState<PreviewErrors | null>(null);
   const [stopping, setStopping] = useState<ReadonlySet<string>>(new Set());
 
   const load = useCallback(async () => {
@@ -51,9 +63,7 @@ export function LocalRunningCommands({
       const here = activity.commands.filter((run) => run.rootId === rootId);
       setRuns(here);
       setError(null);
-      setErrorCount(
-        onSendToAgent && here.some((run) => run.previewUrl) ? await countPreviewErrors() : 0,
-      );
+      setPreviewErrors(onSendToAgent ? await previewErrorsOf(here) : null);
     } catch (cause: unknown) {
       setError(toUserMessage(cause, LOCAL_CODE_COPY.runningCommandsFailed));
     }
@@ -75,10 +85,10 @@ export function LocalRunningCommands({
   };
 
   const sendErrors = async () => {
-    if (!onSendToAgent) return;
+    if (!onSendToAgent || !previewErrors) return;
     try {
-      const report = await readPreviewConsoleErrors(true);
-      setErrorCount(0);
+      const report = await readPreviewConsoleErrors(true, previewErrors.url);
+      setPreviewErrors(null);
       if (report.errors.length === 0) return;
       onSendToAgent(localPreviewErrorsMessage(report));
       setError(null);
@@ -122,13 +132,13 @@ export function LocalRunningCommands({
           {error}
         </p>
       )}
-      {onSendToAgent && errorCount > 0 && (
+      {onSendToAgent && previewErrors && (
         <button
           type="button"
           className={styles['secondaryButton']}
           onClick={() => void sendErrors()}
         >
-          {LOCAL_CODE_COPY.sendConsoleErrors(errorCount)}
+          {LOCAL_CODE_COPY.sendConsoleErrors(previewErrors.count)}
         </button>
       )}
       <ul className={styles['fileList']}>

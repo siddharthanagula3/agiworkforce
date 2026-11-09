@@ -194,7 +194,7 @@ describe('sending the preview console errors to the agent', () => {
       await screen.findByRole('button', { name: 'Send the 4 preview errors to the agent' }),
     );
 
-    expect(readPreviewConsoleErrors).toHaveBeenLastCalledWith(true);
+    expect(readPreviewConsoleErrors).toHaveBeenLastCalledWith(true, PAGE);
     expect(onSendToAgent).toHaveBeenCalledWith(
       [
         'The page I opened in the preview, http://localhost:5173/, logged these errors in its console:',
@@ -206,6 +206,43 @@ describe('sending the preview console errors to the agent', () => {
       ].join('\n'),
     );
     expect(screen.queryByRole('button', { name: /preview error/u })).not.toBeInTheDocument();
+  });
+
+  it('offers only the errors of a page this folder is serving', async () => {
+    const onSendToAgent = vi.fn();
+    previewRun();
+    readPreviewConsoleErrors.mockResolvedValue({ ...report, url: 'http://localhost:3000/' });
+    render(
+      <LocalRunningCommands
+        rootId="root-1"
+        refreshKey={0}
+        now={() => NOW}
+        onSendToAgent={onSendToAgent}
+      />,
+    );
+    await screen.findByText('pnpm dev');
+    await waitFor(() => expect(readPreviewConsoleErrors).toHaveBeenCalled());
+    expect(screen.queryByRole('button', { name: /preview error/u })).not.toBeInTheDocument();
+    expect(readPreviewConsoleErrors).not.toHaveBeenCalledWith(true, expect.anything());
+  });
+
+  it('offers the errors of another page of the same server, and asks for that server only', async () => {
+    const user = userEvent.setup();
+    const onSendToAgent = vi.fn();
+    previewRun();
+    const inner = `${PAGE}settings`;
+    readPreviewConsoleErrors.mockResolvedValue({ ...report, url: inner });
+    render(
+      <LocalRunningCommands
+        rootId="root-1"
+        refreshKey={0}
+        now={() => NOW}
+        onSendToAgent={onSendToAgent}
+      />,
+    );
+    await user.click(await screen.findByRole('button', { name: /preview errors/u }));
+    expect(readPreviewConsoleErrors).toHaveBeenLastCalledWith(true, inner);
+    expect(onSendToAgent).toHaveBeenCalledTimes(1);
   });
 
   it('sends nothing when the errors were read elsewhere in the meantime', async () => {
