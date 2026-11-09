@@ -604,14 +604,11 @@ pub fn grant(root: &Path) -> Result<TrustStatus> {
     let config_dir = CliConfig::config_dir()?;
     let scope = crate::project_scope::resolve_project_scope(root);
     let identity = identity::workspace_identity(&scope);
-    let mut registry = ProjectRegistry::load(&config_dir)?;
-    registry.trust(
-        &scope,
-        &identity.key,
-        &identity::current_actor(),
-        &identity::current_machine(),
-    )?;
-    registry.save(&config_dir)?;
+    let actor = identity::current_actor();
+    let machine = identity::current_machine();
+    ProjectRegistry::update(&config_dir, |registry| {
+        registry.trust(&scope, &identity.key, &actor, &machine)
+    })?;
     invalidate();
     Ok(status_for(root))
 }
@@ -621,9 +618,9 @@ pub fn grant(root: &Path) -> Result<TrustStatus> {
 pub fn decline(root: &Path) -> Result<()> {
     let config_dir = CliConfig::config_dir()?;
     let scope = crate::project_scope::resolve_project_scope(root);
-    let mut registry = ProjectRegistry::load(&config_dir)?;
-    registry.register_project(&scope, "untrusted")?;
-    registry.save(&config_dir)?;
+    ProjectRegistry::update(&config_dir, |registry| {
+        registry.register_project(&scope, "untrusted")
+    })?;
     invalidate();
     Ok(())
 }
@@ -638,25 +635,25 @@ pub fn revoke(root: &Path) -> Result<usize> {
     let config_dir = CliConfig::config_dir()?;
     let scope = crate::project_scope::resolve_project_scope(root);
     let identity = identity::workspace_identity(&scope);
-    let mut registry = ProjectRegistry::load(&config_dir)?;
-    if registry.entry_for(&scope, &identity.key).is_none() {
-        registry.register_project(&scope, "untrusted")?;
-    }
-    let process_revoked = if let Ok(mut active) = process_grant().write() {
-        if active
-            .as_ref()
-            .is_some_and(|grant| grant.identity == identity)
-        {
-            active.take();
-            1
+    let (revoked, process_revoked) = ProjectRegistry::update(&config_dir, |registry| {
+        if registry.entry_for(&scope, &identity.key).is_none() {
+            registry.register_project(&scope, "untrusted")?;
+        }
+        let process_revoked = if let Ok(mut active) = process_grant().write() {
+            if active
+                .as_ref()
+                .is_some_and(|grant| grant.identity == identity)
+            {
+                active.take();
+                1
+            } else {
+                0
+            }
         } else {
             0
-        }
-    } else {
-        0
-    };
-    let revoked = registry.revoke(&scope, &identity.key);
-    registry.save(&config_dir)?;
+        };
+        Ok((registry.revoke(&scope, &identity.key), process_revoked))
+    })?;
     invalidate();
     Ok(revoked.max(process_revoked))
 }

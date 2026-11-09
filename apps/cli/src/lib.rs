@@ -3649,9 +3649,9 @@ async fn handle_projects_command(
                 .ok_or_else(|| anyhow::anyhow!("No project '{project}' in your AGI account"))?;
             let cwd = std::env::current_dir()?;
             let home = config::CliConfig::config_dir()?;
-            let mut registry = project_registry::ProjectRegistry::load(&home)?;
-            registry.link_cloud_project(&cwd, &found.id)?;
-            registry.save(&home)?;
+            project_registry::ProjectRegistry::update(&home, |registry| {
+                registry.link_cloud_project(&cwd, &found.id)
+            })?;
             println!(
                 "{} is linked to the account project '{}'. Managed turns here use its instructions and knowledge files, and their conversations are filed under it.",
                 cwd.display(),
@@ -7393,9 +7393,9 @@ async fn run_cli(cli: Cli) -> Result<()> {
                 // Register current directory as a project
                 let cwd = std::env::current_dir()?;
                 let project_root = project_scope::resolve_project_scope(&cwd);
-                let mut registry = project_registry::ProjectRegistry::load(&home)?;
-                registry.register_project(&project_root, "trusted")?;
-                registry.save(&home)?;
+                project_registry::ProjectRegistry::update(&home, |registry| {
+                    registry.register_project(&project_root, "trusted")
+                })?;
                 println!("Registered project: {}", project_root.display());
                 Ok(())
             }
