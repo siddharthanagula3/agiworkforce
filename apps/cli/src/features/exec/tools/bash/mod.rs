@@ -472,6 +472,26 @@ pub(super) async fn approve_command(
     tool_name: &str,
     command: &str,
     extra_details: Vec<String>,
+    require_confirmation: bool,
+    approval_callback: Option<&ApprovalCallback>,
+) -> Result<std::result::Result<bool, ToolResult>> {
+    let policy = crate::features::exec::exec_policy::load_policy()?;
+    approve_command_under_policy(
+        &policy,
+        tool_name,
+        command,
+        extra_details,
+        require_confirmation,
+        approval_callback,
+    )
+    .await
+}
+
+async fn approve_command_under_policy(
+    policy: &agiworkforce_execpolicy::Policy,
+    tool_name: &str,
+    command: &str,
+    extra_details: Vec<String>,
     mut require_confirmation: bool,
     approval_callback: Option<&ApprovalCallback>,
 ) -> Result<std::result::Result<bool, ToolResult>> {
@@ -479,13 +499,16 @@ pub(super) async fn approve_command(
     // ones after `&&`, `;`, `|` or inside `$(...)`, is evaluated before anything
     // executes. A `Forbidden` decision is a hard block that no confirmation can
     // override. Confirmation is only waived when EVERY segment matched an explicit
-    // allow rule.
+    // allow rule, and an explicit prompt rule asks even for a command the
+    // heuristics call safe.
     let asks = require_confirmation
         && crate::permissions::PermissionStore::load_or_ask().asks_before(command);
+    let policy_requires_approval;
     {
-        use crate::features::exec::exec_policy::{evaluate_command, load_policy};
+        use crate::features::exec::exec_policy::evaluate_command;
         use agiworkforce_execpolicy::Decision;
-        let evaluation = evaluate_command(&load_policy()?, command);
+        let evaluation = evaluate_command(policy, command);
+        policy_requires_approval = evaluation.explicit_prompt_rule;
         match evaluation.decision {
             Decision::Forbidden => {
                 return Ok(Err(ToolResult {
@@ -508,10 +531,12 @@ pub(super) async fn approve_command(
     if require_confirmation {
         let safety = classify_command(command);
         let hook_bypass = bypasses_git_hooks(command);
-        if asks || !matches!(safety, CommandSafety::Safe) {
+        if policy_requires_approval || asks || !matches!(safety, CommandSafety::Safe) {
             let perms = crate::permissions::PermissionStore::load_or_ask();
+            let saved = saved_command_decision(&perms, command, safety)
+                .filter(|allowed| !(*allowed && policy_requires_approval));
 
-            match saved_command_decision(&perms, command, safety) {
+            match saved {
                 Some(true) => {
                     // Previously allowed, skip prompt
                 }
@@ -558,7 +583,10 @@ pub(super) async fn approve_command(
                             details,
                         )
                         .saving_always_allow(
-                            crate::features::exec::exec_policy::can_persist_allow_command(command),
+                            !policy_requires_approval
+                                && crate::features::exec::exec_policy::can_persist_allow_command(
+                                    command,
+                                ),
                         ),
                     )
                     .await
@@ -1269,5 +1297,112 @@ mod tests {
         assert!(!policy_waives_confirmation(&dangerous, "rm -rf build"));
         let routine = evaluate_command(&policy, "cargo build");
         assert!(policy_waives_confirmation(&routine, "cargo build"));
+    }
+
+    fn counting_callback(
+        decision: ApprovalDecision,
+    ) -> (ApprovalCallback, Arc<std::sync::atomic::AtomicUsize>) {
+        let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counted = Arc::clone(&calls);
+        let callback: ApprovalCallback = Arc::new(move |_| {
+            counted.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Box::pin(async move { decision })
+        });
+        (callback, calls)
+    }
+
+    fn policy_with_pwd(
+        decision: agiworkforce_execpolicy::Decision,
+    ) -> agiworkforce_execpolicy::Policy {
+        let mut policy = agiworkforce_execpolicy::Policy::empty();
+        policy
+            .add_prefix_rule(&["pwd".to_string()], decision)
+            .expect("pwd rule");
+        policy
+    }
+
+    #[tokio::test]
+    async fn an_explicit_prompt_rule_asks_before_a_safe_command_and_a_denial_stops_it() {
+        use agiworkforce_execpolicy::Decision;
+        assert_eq!(classify_command("pwd"), CommandSafety::Safe);
+        let policy = policy_with_pwd(Decision::Prompt);
+        let evaluation = crate::features::exec::exec_policy::evaluate_command(&policy, "pwd");
+        assert!(evaluation.explicit_prompt_rule);
+
+        let (deny, denied_calls) = counting_callback(ApprovalDecision::Deny);
+        let refused = approve_command_under_policy(
+            &policy,
+            "run_command",
+            "pwd",
+            Vec::new(),
+            true,
+            Some(&deny),
+        )
+        .await
+        .expect("approval")
+        .expect_err("a denied prompt rule must refuse");
+        assert_eq!(denied_calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert!(!refused.success);
+        assert_eq!(refused.output, "User denied command execution");
+
+        let (allow, allowed_calls) = counting_callback(ApprovalDecision::AllowOnce);
+        let approved = approve_command_under_policy(
+            &policy,
+            "run_command",
+            "pwd",
+            Vec::new(),
+            false,
+            Some(&allow),
+        )
+        .await
+        .expect("approval");
+        assert_eq!(allowed_calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert!(matches!(approved, Ok(true)));
+    }
+
+    #[tokio::test]
+    async fn a_safe_command_without_a_prompt_rule_keeps_running_without_a_request() {
+        use agiworkforce_execpolicy::{Decision, Policy};
+        for policy in [Policy::empty(), policy_with_pwd(Decision::Allow)] {
+            let evaluation = crate::features::exec::exec_policy::evaluate_command(&policy, "pwd");
+            assert!(!evaluation.explicit_prompt_rule);
+            let (callback, calls) = counting_callback(ApprovalDecision::Deny);
+            let outcome = approve_command_under_policy(
+                &policy,
+                "run_command",
+                "pwd",
+                Vec::new(),
+                true,
+                Some(&callback),
+            )
+            .await
+            .expect("approval");
+            assert!(outcome.is_ok());
+            assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 0);
+        }
+
+        let forbidden = policy_with_pwd(Decision::Forbidden);
+        let (callback, calls) = counting_callback(ApprovalDecision::AllowOnce);
+        let refused = approve_command_under_policy(
+            &forbidden,
+            "run_command",
+            "pwd",
+            Vec::new(),
+            true,
+            Some(&callback),
+        )
+        .await
+        .expect("approval")
+        .expect_err("a forbidden rule must refuse");
+        assert!(refused.output.contains("forbidden"));
+        assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn a_fallback_prompt_is_not_an_explicit_prompt_rule() {
+        let policy = agiworkforce_execpolicy::Policy::empty();
+        let evaluation =
+            crate::features::exec::exec_policy::evaluate_command(&policy, "echo 'open");
+        assert!(!evaluation.explicit_prompt_rule);
     }
 }

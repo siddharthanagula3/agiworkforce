@@ -531,6 +531,10 @@ fn delete_managed_session_in(base_dir: &Path, reference: ManagedSessionReference
         "{file_name}.{}",
         super::writer_lease::WRITER_LEASE_EXTENSION
     );
+    let arbiter = format!(
+        "{file_name}.{}",
+        super::writer_lease::WRITER_LEASE_ARBITER_EXTENSION
+    );
     let conflict_prefix = format!("{file_name}.conflict-");
     let Some(dir) = resolved.path.parent() else {
         return Ok(());
@@ -543,7 +547,7 @@ fn delete_managed_session_in(base_dir: &Path, reference: ManagedSessionReference
         let Some(name) = name.to_str() else {
             continue;
         };
-        if name == lease || name.starts_with(&conflict_prefix) {
+        if name == lease || name == arbiter || name.starts_with(&conflict_prefix) {
             fs::remove_file(entry.path())
                 .with_context(|| format!("Failed to delete {}", entry.path().display()))?;
         }
