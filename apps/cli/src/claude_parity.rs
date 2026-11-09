@@ -1352,7 +1352,7 @@ pub fn output_style_arg_persists(arg: &str) -> bool {
     let mut words = arg.split_whitespace();
     matches!(
         (words.next(), words.next()),
-        (Some(name), None) if !matches!(name, "new" | "create" | "delete" | "remove")
+        (Some(name), None) if !crate::output_styles::is_command_action(name)
     )
 }
 

@@ -185,6 +185,12 @@ fn split_frontmatter(source: &str) -> (&str, &str) {
     }
 }
 
+pub const COMMAND_ACTIONS: [&str; 4] = ["new", "create", "delete", "remove"];
+
+pub fn is_command_action(name: &str) -> bool {
+    COMMAND_ACTIONS.contains(&name)
+}
+
 fn valid_style_name(name: &str) -> bool {
     !name.is_empty()
         && name.len() <= 40
@@ -199,6 +205,11 @@ pub fn create(name: &str, description: &str, instructions: &str) -> Result<PathB
     }
     if builtin().iter().any(|style| style.name == name) {
         return Err(format!("{name} is a built-in style; choose another name."));
+    }
+    if is_command_action(name) {
+        return Err(format!(
+            "{name} is an /output-style command, so a style with that name could not be selected; choose another name."
+        ));
     }
     if instructions.trim().is_empty() {
         return Err("Give the style its instructions after the name.".to_string());
@@ -315,6 +326,15 @@ mod tests {
         assert_eq!(delete_in(Some(dir.path()), "focused").unwrap(), notes);
         assert!(!notes.exists());
         assert!(user_styles(dir.path()).is_empty());
+    }
+
+    #[test]
+    fn create_refuses_names_the_command_reads_as_actions() {
+        for action in COMMAND_ACTIONS {
+            let reason = create(action, "Short", "Keep replies short").unwrap_err();
+            assert!(reason.contains("/output-style command"), "{reason}");
+        }
+        assert!(!is_command_action("focused"));
     }
 
     #[test]

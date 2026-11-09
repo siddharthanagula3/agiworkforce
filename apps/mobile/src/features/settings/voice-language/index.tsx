@@ -176,7 +176,9 @@ export default function VoiceLanguageScreen() {
   const colors = useThemeColors();
   const speechOwner = useVoiceOutputOwner('local', 'voice-preview');
   const [voices, setVoices] = useState<VoiceInfo[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [inventory, setInventory] = useState<'loading' | 'ready' | 'failed'>('loading');
+  const [inventoryAttempt, setInventoryAttempt] = useState(0);
+  const loading = inventory === 'loading';
   const isCloud = useChatAppModeStore((s) => s.appMode) === 'cloud';
 
   const selectedVoiceId = useSettingsStore((s) => s.selectedVoiceId);
@@ -205,21 +207,30 @@ export default function VoiceLanguageScreen() {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+    setInventory('loading');
     TTS.getVoicesForLanguage(speechLanguage)
       .then((items) => {
-        if (!cancelled) setVoices(items);
+        if (cancelled) return;
+        setVoices(items);
+        setInventory('ready');
       })
       .catch(() => {
-        if (!cancelled) setVoices([]);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (cancelled) return;
+        setVoices([]);
+        setInventory('failed');
       });
     return () => {
       cancelled = true;
     };
-  }, [speechLanguage]);
+  }, [speechLanguage, inventoryAttempt]);
+
+  const retryInventory = useCallback(() => setInventoryAttempt((attempt) => attempt + 1), []);
+  const keepsChosenVoice = selectedVoiceId !== null;
+  const emptyInventoryTitle =
+    inventory === 'failed' ? "Couldn't load installed voices" : 'No installed voices returned';
+  const emptyInventoryDetail = keepsChosenVoice
+    ? 'Your chosen voice is kept but cannot be checked right now. Choose System default to stop using it.'
+    : 'AGI uses the device default.';
 
   const visibleSystemVoices = useMemo(() => voices.slice(0, 12), [voices]);
 
@@ -350,7 +361,7 @@ export default function VoiceLanguageScreen() {
             <Text
               style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}
             >
-              No installed voices returned
+              {emptyInventoryTitle}
             </Text>
             <Text
               style={{
@@ -360,8 +371,21 @@ export default function VoiceLanguageScreen() {
                 marginTop: 3,
               }}
             >
-              AGI will keep using the device default.
+              {emptyInventoryDetail}
             </Text>
+            {inventory === 'failed' ? (
+              <Pressable
+                onPress={retryInventory}
+                accessibilityRole="button"
+                accessibilityLabel="Try loading installed voices again"
+                hitSlop={8}
+                style={{ alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center' }}
+              >
+                <Text style={{ color: colors.teal, fontSize: typeScale.body, fontWeight: '600' }}>
+                  Try again
+                </Text>
+              </Pressable>
+            ) : null}
           </View>
         ) : (
           visibleSystemVoices.map((voice, index) => (
