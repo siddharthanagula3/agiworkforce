@@ -5,7 +5,7 @@ vi.mock('server-only', () => ({}));
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { MICROUSD_PER_CREDIT } from '@agiworkforce/types';
 import { readOrganizationUsage } from '../organization-usage-service';
-import { resolveUsageWindow, USAGE_MAX_WINDOW_DAYS } from '../usage-aggregation';
+import { BREAKDOWN_LIMIT, resolveUsageWindow, USAGE_MAX_WINDOW_DAYS } from '../usage-aggregation';
 
 const ORG = '11111111-1111-4111-8111-111111111111';
 const NOW = new Date('2026-08-23T00:00:00.000Z');
@@ -177,6 +177,48 @@ describe('readOrganizationUsage', () => {
       if (/date_trunc/.test(String(sql))) continue;
       expect(String(sql)).toMatch(/limit \d+/);
     }
+  });
+});
+
+describe('readOrganizationUsage breakdown completeness', () => {
+  const window = { from: '2026-07-24T00:00:00.000Z', to: '2026-08-23T00:00:00.000Z' };
+
+  function members(count: number) {
+    return Array.from({ length: count }, (_, index) =>
+      agg({ key: `user-${index}`, requests: 1, cost_microusd: credits(10) }),
+    );
+  }
+
+  it('reports the requests and credits a capped breakdown leaves out of the totals', async () => {
+    const h = harness({
+      totals: [
+        agg({ requests: BREAKDOWN_LIMIT + 1, cost_microusd: credits(10 * (BREAKDOWN_LIMIT + 1)) }),
+      ],
+      member: members(BREAKDOWN_LIMIT),
+    });
+    const usage = await readOrganizationUsage(h.db, ORG, window);
+
+    expect(usage.byMember).toHaveLength(BREAKDOWN_LIMIT);
+    expect(usage.omitted.byMember).toEqual({ requests: 1, credits: 10 });
+  });
+
+  it('reports nothing omitted when every group fits', async () => {
+    const h = harness({
+      totals: [agg({ requests: 3, cost_microusd: credits(30) })],
+      member: members(3),
+    });
+    const usage = await readOrganizationUsage(h.db, ORG, window);
+
+    expect(usage.omitted.byMember).toEqual({ requests: 0, credits: 0 });
+    expect(usage.omitted.byModel).toEqual({ requests: 0, credits: 0 });
+  });
+
+  it('orders ties by key so the same members are listed on every read', async () => {
+    const h = harness();
+    await readOrganizationUsage(h.db, ORG, window);
+
+    const memberQuery = h.query.mock.calls.find(([sql]) => /user_id as key/.test(String(sql)));
+    expect(String(memberQuery?.[0])).toMatch(/order by cost_microusd desc, requests desc, 1 asc/);
   });
 });
 

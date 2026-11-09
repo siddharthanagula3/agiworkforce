@@ -8,6 +8,7 @@ import { formatCredits, usageWorkloadLabel } from '@agiworkforce/types';
 import { WorkspaceSpendLimit } from './WorkspaceSpendLimit';
 import {
   useWorkspaceUsage,
+  type UsageBreakdownOmitted,
   type UsageBreakdownRow,
   type UsageDayRow,
 } from '../hooks/use-workspace-usage';
@@ -94,12 +95,14 @@ function BreakdownTable({
   rows,
   labelFor,
   ranked = false,
+  omitted,
 }: {
   title: string;
   caption: string;
   rows: UsageBreakdownRow[];
   labelFor?: (key: string) => string;
   ranked?: boolean;
+  omitted?: UsageBreakdownOmitted;
 }) {
   const headingId = `${title.toLowerCase().replace(/\s+/g, '-')}-heading`;
 
@@ -175,6 +178,15 @@ function BreakdownTable({
           </table>
         </div>
       )}
+
+      {omitted && omitted.requests > 0 ? (
+        <p
+          className="border-t px-5 py-3 text-xs leading-relaxed"
+          style={{ borderColor: 'var(--settings-border)', color: 'var(--text-3)' }}
+        >
+          {`Showing the top ${rows.length}. ${compact(omitted.requests)} more turns and ${formatCredits(omitted.credits)} are not listed here; the totals above include them.`}
+        </p>
+      ) : null}
     </section>
   );
 }
@@ -333,23 +345,27 @@ export function WorkspaceUsageAnalytics() {
             title="By member"
             caption="Who is using credits, most first. Volume and credits only, this surface never carries what anyone asked the model."
             rows={usage.byMember}
+            omitted={usage.omitted.byMember}
             ranked
           />
           <BreakdownTable
             title="By product area"
             caption="Chat, Work, Deep Research, Code and browser tasks. Turns settled before product areas were recorded show as not attributed."
             rows={usage.byWorkload}
+            omitted={usage.omitted.byWorkload}
             labelFor={usageWorkloadLabel}
           />
           <BreakdownTable
             title="By model"
             caption="Where the credits go, which is usually the fastest lever on a workspace bill."
             rows={usage.byModel}
+            omitted={usage.omitted.byModel}
           />
           <BreakdownTable
             title="By provider"
             caption="Grouped by upstream provider."
             rows={usage.byProvider}
+            omitted={usage.omitted.byProvider}
           />
         </>
       )}

@@ -248,6 +248,8 @@ export function WorkspacePolicyDiagnostics({ organizationId }: { organizationId:
                   : 'all'}
               </p>
             </>
+          ) : decision?.allowed === false ? (
+            <p>This workspace has no policy yet.</p>
           ) : (
             <p>This workspace has no policy yet, so nothing is restricted.</p>
           )}

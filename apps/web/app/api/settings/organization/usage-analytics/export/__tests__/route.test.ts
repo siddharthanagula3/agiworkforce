@@ -218,6 +218,53 @@ describe('GET /api/settings/organization/usage-analytics/export', () => {
     expect(body).toContain('user-a,4,90,10,240');
   });
 
+  it('declares what a dimension export leaves out, and nothing on the daily sheet', async () => {
+    bind({ role: 'owner' });
+
+    const member = await (await GET(req('?dimension=member') as never)).text();
+    const daily = await (await GET(req('?dimension=daily') as never)).text();
+
+    expect(member).toContain('# breakdown_row_limit,50\n');
+    expect(member).toContain('# omitted_requests,0\n');
+    expect(member).toContain('# omitted_credits,0\n');
+    expect(daily).not.toContain('# omitted_requests');
+  });
+
+  it('reports the requests and credits a capped member list omits', async () => {
+    bind({ role: 'owner' });
+    const answer = mockQuery.getMockImplementation()!;
+    mockQuery.mockImplementation(async (sql: string, params: unknown[] = []) => {
+      const text = String(sql);
+      if (/user_id as key/.test(text)) {
+        return Array.from({ length: 50 }, (_, index) => ({
+          key: `user-${index}`,
+          requests: 1,
+          input_tokens: '1',
+          output_tokens: '1',
+          cost_microusd: '1000000',
+        }));
+      }
+      if (/count\(distinct user_id\)/.test(text)) {
+        return [
+          {
+            key: null,
+            requests: 52,
+            input_tokens: '52',
+            output_tokens: '52',
+            cost_microusd: '52000000',
+          },
+        ];
+      }
+      return answer(sql, params);
+    });
+
+    const body = await (await GET(req('?dimension=member') as never)).text();
+
+    expect(body).toContain('# omitted_requests,2\n');
+    expect(body).toMatch(/# omitted_credits,\d/);
+    expect(body).not.toContain('# omitted_credits,0\n');
+  });
+
   it('falls back to the daily sheet for an unknown dimension', async () => {
     bind({ role: 'owner' });
 

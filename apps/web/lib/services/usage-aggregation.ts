@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { creditsFromMicrousd } from '@agiworkforce/types';
+import { creditsFromMicrousd, microusdFromCredits } from '@agiworkforce/types';
 
 /**
  * The one definition of what "usage" means when it is read back.
@@ -82,6 +82,11 @@ export interface UsageBreakdownRow {
   credits: number;
 }
 
+export interface UsageBreakdownOmitted {
+  requests: number;
+  credits: number;
+}
+
 export interface UsageDayRow {
   day: string;
   requests: number;
@@ -120,6 +125,23 @@ export function toRow(row: AggregateRow): UsageBreakdownRow {
     inputTokens: num(row.input_tokens),
     outputTokens: num(row.output_tokens),
     credits: creditsFromMicrousd(num(row.cost_microusd)),
+  };
+}
+
+export function toOmitted(
+  totals: UsageTotals,
+  rows: readonly UsageBreakdownRow[],
+): UsageBreakdownOmitted {
+  if (rows.length < BREAKDOWN_LIMIT) return { requests: 0, credits: 0 };
+  const shownRequests = rows.reduce((sum, row) => sum + row.requests, 0);
+  const shownMicrousd = rows.reduce(
+    (sum, row) => sum + Math.round(microusdFromCredits(row.credits)),
+    0,
+  );
+  const omittedMicrousd = Math.round(microusdFromCredits(totals.credits)) - shownMicrousd;
+  return {
+    requests: Math.max(0, totals.requests - shownRequests),
+    credits: creditsFromMicrousd(Math.max(0, omittedMicrousd)),
   };
 }
 

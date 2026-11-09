@@ -9,6 +9,8 @@ vi.mock('../../hooks/use-workspace-usage', () => ({
 }));
 vi.mock('../WorkspaceSpendLimit', () => ({ WorkspaceSpendLimit: () => null }));
 
+const NONE_OMITTED = { requests: 0, credits: 0 };
+
 function usage(unsettledRequests: number) {
   return {
     organizationId: 'qa-workspace',
@@ -21,6 +23,13 @@ function usage(unsettledRequests: number) {
     byProvider: [],
     byWorkload: [],
     byProject: [],
+    omitted: {
+      byMember: NONE_OMITTED,
+      byModel: NONE_OMITTED,
+      byProvider: NONE_OMITTED,
+      byWorkload: NONE_OMITTED,
+      byProject: NONE_OMITTED,
+    },
     daily: [],
     freshness: { asOf: '2026-09-19T10:00:00.000Z', latestActivityAt: null, unsettledRequests },
   };
@@ -106,6 +115,35 @@ describe('WorkspaceUsageAnalytics settlement visibility', () => {
     ).toBeNull();
     expect(screen.getByText('2,500 credits')).toBeInTheDocument();
     expect(container).not.toHaveTextContent('$');
+  });
+
+  it('says how much usage a capped member list leaves out and that the totals include it', () => {
+    mocks.query.mockReturnValue({
+      data: {
+        currentUserRole: 'owner',
+        usage: {
+          ...usage(0),
+          totals: { requests: 51, credits: 510, inputTokens: 0, outputTokens: 0 },
+          byMember: [
+            { key: 'ada@example.com', requests: 50, inputTokens: 0, outputTokens: 0, credits: 500 },
+          ],
+          omitted: {
+            ...usage(0).omitted,
+            byMember: { requests: 1, credits: 10 },
+          },
+        },
+      },
+      isPending: false,
+      isError: false,
+    });
+    render(<WorkspaceUsageAnalytics />);
+
+    const byMember = screen.getByRole('region', { name: 'By member' });
+    expect(byMember).toHaveTextContent('Showing the top 1.');
+    expect(byMember).toHaveTextContent('1 more turns and 10 credits are not listed here');
+    expect(
+      within(screen.getByRole('region', { name: 'By model' })).queryByText(/not listed here/),
+    ).toBeNull();
   });
 
   it('tells someone who does not administer the workspace why there is no breakdown', () => {
