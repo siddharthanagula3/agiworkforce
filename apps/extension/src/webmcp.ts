@@ -313,6 +313,18 @@ async function callToolImperative(
   return null;
 }
 
+const nativeFormAction = Object.getOwnPropertyDescriptor(
+  typeof HTMLFormElement === 'undefined' ? {} : HTMLFormElement.prototype,
+  'action',
+)?.get;
+
+function resolveFormDestination(form: HTMLFormElement): string {
+  const resolved = nativeFormAction ? nativeFormAction.call(form) : null;
+  if (typeof resolved !== 'string' || !resolved)
+    throw new Error('The site-tool form destination could not be resolved.');
+  return new URL(resolved).href;
+}
+
 function callToolViaDom(
   name: string,
   args: Record<string, unknown>,
@@ -416,18 +428,14 @@ export async function callTool(request: WebMCPCallToolRequest): Promise<WebMCPCa
 
   let assertFormCurrent: (() => void) | undefined;
   if (request.assertCurrent) {
-    const destination = new URL(
-      fallbackForm.getAttribute('action') || window.location.href,
-      window.location.href,
-    ).href;
+    const destination = resolveFormDestination(fallbackForm);
     await authorizeBrowserToolUrl(destination);
     assertFormCurrent = (): void => {
       request.assertCurrent!();
       if (
         !fallbackForm.isConnected ||
         findToolForm(name) !== fallbackForm ||
-        new URL(fallbackForm.getAttribute('action') || window.location.href, window.location.href)
-          .href !== destination
+        resolveFormDestination(fallbackForm) !== destination
       )
         throw new Error('The approved site-tool form destination changed.');
     };
