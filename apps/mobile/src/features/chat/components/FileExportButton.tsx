@@ -8,6 +8,7 @@ import { FileText, FileDown, Copy, Share2, X, Check } from 'lucide-react-native'
 
 import { Text } from '@/components/ui/Text';
 import { useCopyAction } from '@/src/shared/hooks/useCopyAction';
+import { preferredImpactHaptic, preferredNotificationHaptic } from '@/src/shared/utils/haptics';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { exportToPDF, exportToText, shareFile, type ExportResult } from '@/services/fileCreation';
@@ -82,7 +83,7 @@ export function FileExportButton({
 
   const showSuccess = useCallback((action: ExportAction) => {
     setSuccess(action);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    preferredNotificationHaptic(Haptics.NotificationFeedbackType.Success);
     setTimeout(() => {
       setSuccess(null);
     }, 1500);
@@ -92,7 +93,7 @@ export function FileExportButton({
     async (action: ExportAction) => {
       if (loading) return;
       setLoading(action);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      preferredImpactHaptic(Haptics.ImpactFeedbackStyle.Light);
 
       try {
         let result: ExportResult | null = null;
@@ -120,7 +121,7 @@ export function FileExportButton({
           }
         }
       } catch (err) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        preferredNotificationHaptic(Haptics.NotificationFeedbackType.Error);
         setLoading(null);
       } finally {
         setLoading(null);

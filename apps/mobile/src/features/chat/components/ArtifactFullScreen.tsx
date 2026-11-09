@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import * as Haptics from 'expo-haptics';
+import { preferredNotificationHaptic } from '@/src/shared/utils/haptics';
 import {
   X,
   Copy,
@@ -412,7 +413,7 @@ export function ArtifactFullScreen({
             .join('\n'),
         });
       }
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      preferredNotificationHaptic(Haptics.NotificationFeedbackType.Success);
     } catch {
       Alert.alert('Share failed', 'This generated file is not available to share right now.');
     }
@@ -435,7 +436,7 @@ export function ArtifactFullScreen({
         }
         await shareFile(await exportArtifact(activeContent, artifact.title, option));
       }
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      preferredNotificationHaptic(Haptics.NotificationFeedbackType.Success);
     } catch {
       Alert.alert('Download failed', 'Could not download or share this file. Try again.');
     } finally {
@@ -514,7 +515,7 @@ export function ArtifactFullScreen({
     if (!artifactId) return;
     if (restoreArtifactVersion(artifactId, shownVersionIndex)) {
       setViewedVersionIndex(null);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      preferredNotificationHaptic(Haptics.NotificationFeedbackType.Success);
     }
   }, [artifactId, restoreArtifactVersion, shownVersionIndex]);
 
@@ -532,7 +533,7 @@ export function ArtifactFullScreen({
       if (restoreArtifactVersion(artifactId, index)) {
         setViewedVersionIndex(null);
         setVersionHistoryOpen(false);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        preferredNotificationHaptic(Haptics.NotificationFeedbackType.Success);
       }
     },
     [artifactId, restoreArtifactVersion],
@@ -548,7 +549,7 @@ export function ArtifactFullScreen({
     if (!storedArtifact || editDraft === null) return;
     if (editDraft !== activeContent && editDraft.trim().length > 0) {
       addArtifacts([{ ...storedArtifact, content: editDraft }]);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      preferredNotificationHaptic(Haptics.NotificationFeedbackType.Success);
     }
     setEditDraft(null);
   }, [activeContent, addArtifacts, editDraft, storedArtifact]);

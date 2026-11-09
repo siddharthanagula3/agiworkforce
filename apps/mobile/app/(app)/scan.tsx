@@ -29,6 +29,7 @@ import type { Attachment } from '@/src/features/chat/components/AttachmentPrevie
 import { useFullScreenChrome } from '@/src/features/chat/chrome/fullScreenChrome';
 import { useKeyboardSafeComposer } from '@/src/features/chat/chrome/keyboardSafeComposer';
 import { useGoBack } from '@/src/shared/hooks/useGoBack';
+import { preferredImpactHaptic, preferredNotificationHaptic } from '@/src/shared/utils/haptics';
 import { translatePlural } from '@/src/i18n/plural';
 
 type ScanPhase = 'camera' | 'processing' | 'preview';
@@ -84,6 +85,7 @@ export default function ScanScreen() {
     setPhase('processing');
     setOcrError(null);
 
+    let recognized = false;
     try {
       const result = await recognizeText(uri);
       setExtractedText(result.text);
@@ -93,14 +95,16 @@ export default function ScanScreen() {
         ? `Summarize this:\n\n${result.text.trim()}`
         : 'What does this image say?';
       setPromptText(prefill);
-
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      recognized = true;
     } catch {
       setOcrError('Text could not be read from this image. Retake the scan or type your question.');
       setPromptText('');
     }
 
     setPhase('preview');
+    if (recognized) {
+      preferredNotificationHaptic(Haptics.NotificationFeedbackType.Success);
+    }
   }, []);
 
   // "Scan with AGI" can hand over an image instead of opening the camera.
@@ -160,7 +164,7 @@ export default function ScanScreen() {
     if (!extractedText.trim()) return;
     await Clipboard.setStringAsync(extractedText);
     setCopied(true);
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    preferredImpactHaptic(Haptics.ImpactFeedbackStyle.Light);
     setTimeout(() => setCopied(false), 1800);
   }, [extractedText]);
 

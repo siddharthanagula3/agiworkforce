@@ -4,6 +4,7 @@ import { PressableBox } from '@/components/ui/PressableBox';
 import { Image } from 'expo-image';
 import { Check, Copy, Download, Flag, Paintbrush, Share2, Trash2, X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
+import { preferredImpactHaptic } from '@/src/shared/utils/haptics';
 import { copyGeneratedImage } from '@/services/fileCreation';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { GestureDetector, Gesture, GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -202,7 +203,7 @@ function ImageFullScreenOwner({
       if (!imageUrl) return;
       const action = beginAction();
       if (!action) return;
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      preferredImpactHaptic(Haptics.ImpactFeedbackStyle.Light);
       try {
         const options = { isCurrent: action.isCurrent };
         if (kind === 'share') await shareGeneratedImage(imageUrl, undefined, options);
