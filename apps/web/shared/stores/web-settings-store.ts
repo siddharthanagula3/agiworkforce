@@ -25,6 +25,14 @@ export interface CustomCommand {
   template: string;
 }
 
+export function isCustomCommandNameTaken(
+  commands: readonly CustomCommand[],
+  name: string,
+  exceptId?: string,
+): boolean {
+  return commands.some((command) => command.id !== exceptId && command.name === name);
+}
+
 export type MotionPreference = 'system' | 'reduced';
 
 /** 'default' leaves the app's own prose font in place. */
@@ -171,16 +179,30 @@ export const useSettingsStore = create<SettingsState>()(
       setAccentColor: (accent) => set({ accentColor: accent }),
       setHighContrast: (on) => set({ highContrast: on }),
       addCustomCommand: (cmd) =>
-        set((s) => ({
-          customCommands: [
-            ...s.customCommands,
-            { ...cmd, id: `custom-${Date.now()}-${Math.random().toString(36).slice(2, 7)}` },
-          ],
-        })),
+        set((s) =>
+          isCustomCommandNameTaken(s.customCommands, cmd.name)
+            ? s
+            : {
+                customCommands: [
+                  ...s.customCommands,
+                  {
+                    ...cmd,
+                    id: `custom-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+                  },
+                ],
+              },
+        ),
       updateCustomCommand: (id, patch) =>
-        set((s) => ({
-          customCommands: s.customCommands.map((c) => (c.id === id ? { ...c, ...patch } : c)),
-        })),
+        set((s) => {
+          const current = s.customCommands.find((c) => c.id === id);
+          if (!current) return s;
+          const nextName = patch.name ?? current.name;
+          if (nextName !== current.name && isCustomCommandNameTaken(s.customCommands, nextName, id))
+            return s;
+          return {
+            customCommands: s.customCommands.map((c) => (c.id === id ? { ...c, ...patch } : c)),
+          };
+        }),
       deleteCustomCommand: (id) =>
         set((s) => ({ customCommands: s.customCommands.filter((c) => c.id !== id) })),
     }),

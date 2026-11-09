@@ -51,6 +51,7 @@ import {
   claimSlackRunApproval,
   parkSlackRunForApproval,
   settleSlackRun,
+  slackApprovalGeneration,
   startSlackRun,
   type SlackRun,
 } from './slack-runs';
@@ -184,7 +185,10 @@ async function publishOutcome(input: {
     const subject = run.mode === 'task' ? 'task' : 'answer';
     await sendPrivately(
       destination,
-      approvalMessage(outcome.approval.toolCalls, settingsUrl, subject, run.id),
+      approvalMessage(outcome.approval.toolCalls, settingsUrl, subject, {
+        runId: run.id,
+        generation: slackApprovalGeneration(outcome.approval.checkpoint),
+      }),
     );
     await recordNotification(scopedDb, {
       userId: run.userId,
@@ -457,6 +461,7 @@ export async function claimSlackApproval(input: {
   userId: string;
   runId: string;
   approval: ManagedCloudScheduleRunApproval;
+  generation?: string;
 }): Promise<() => Promise<void>> {
   const origin = slackAppOrigin();
   if (!origin) throw new SlackApprovalUnavailableError('AGI in Slack is not configured');
@@ -464,6 +469,7 @@ export async function claimSlackApproval(input: {
     userId: input.userId,
     runId: input.runId,
     approval: input.approval,
+    ...(input.generation === undefined ? {} : { generation: input.generation }),
   });
   const runScope = createClaimedUserScopedDb(input.serviceDb, {
     userId: run.userId,

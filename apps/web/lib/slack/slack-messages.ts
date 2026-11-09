@@ -8,6 +8,21 @@ import { SLACK_LINK_TTL_SECONDS } from './slack-config';
 export const SLACK_APPROVE_ACTION_ID = 'slack_approve_run';
 export const SLACK_DENY_ACTION_ID = 'slack_deny_run';
 
+const APPROVAL_VALUE_SEPARATOR = ':';
+
+export function slackApprovalButtonValue(runId: string, generation: string): string {
+  return `${runId}${APPROVAL_VALUE_SEPARATOR}${generation}`;
+}
+
+export function parseSlackApprovalButtonValue(
+  value: string | undefined,
+): { runId: string; generation: string | null } | null {
+  if (!value) return null;
+  const [runId, generation, ...extra] = value.split(APPROVAL_VALUE_SEPARATOR);
+  if (!runId || extra.length > 0) return null;
+  return { runId, generation: generation || null };
+}
+
 const SECTION_TEXT_LIMIT = 2_900;
 const SECTIONS_PER_MESSAGE = 4;
 const FALLBACK_PREVIEW_CHARS = 280;
@@ -220,12 +235,12 @@ export function approvalMessage(
   toolCalls: readonly ManagedCloudScheduleRunApprovalToolCall[],
   settingsUrl: string,
   subject: 'answer' | 'task',
-  runId?: string,
+  approval?: { runId: string; generation: string },
 ): SlackOutgoingMessage {
   const shown = toolCalls.slice(0, APPROVAL_SUMMARY_LIMIT);
   const lines = shown.map((call) => `• ${escapeMrkdwn(call.summary || call.name)}`);
   if (toolCalls.length > shown.length) lines.push(`• and ${toolCalls.length - shown.length} more`);
-  const text = runId
+  const text = approval
     ? `This ${subject} needs your approval before it can continue. Approve or deny it here, or ` +
       'review it in AGI; nothing runs until you decide.'
     : `This ${subject} needs your approval before it can continue. Review it in AGI on ` +
@@ -235,7 +250,7 @@ export function approvalMessage(
     blocks: [
       section(text),
       section(lines.join('\n')),
-      ...(runId
+      ...(approval
         ? [
             {
               type: 'actions',
@@ -244,14 +259,14 @@ export function approvalMessage(
                   type: 'button',
                   style: 'primary',
                   action_id: SLACK_APPROVE_ACTION_ID,
-                  value: runId,
+                  value: slackApprovalButtonValue(approval.runId, approval.generation),
                   text: { type: 'plain_text', text: 'Approve' },
                 },
                 {
                   type: 'button',
                   style: 'danger',
                   action_id: SLACK_DENY_ACTION_ID,
-                  value: runId,
+                  value: slackApprovalButtonValue(approval.runId, approval.generation),
                   text: { type: 'plain_text', text: 'Deny' },
                 },
               ],
