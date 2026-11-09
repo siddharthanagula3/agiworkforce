@@ -310,6 +310,8 @@ describe('Managed Cloud account/session authority', () => {
       transition.indexOf('_ctx.managedCloudOwner = nextOwner'),
     );
     expect(transition).toContain('ownerByStreamId.clear()');
+    expect(transition).toContain('quotaWarnedStreamIds.clear()');
+    expect(transition).toContain('resetConnectorInputMemory()');
     expect(transition).toContain("type: 'MANAGED_CLOUD_AUTH_CHANGED'");
     expect(sidePanelSource).toContain('isManagedCloudBroadcastOwnedBy(');
   });

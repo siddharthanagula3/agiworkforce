@@ -210,15 +210,34 @@ impl ProjectRegistry {
 
     /// Look up the entry that governs `path`: the identity-keyed grant first,
     /// then a legacy path-only entry. A path entry for another identity must
-    /// not survive a remote change.
+    /// not survive a remote change. Several checkouts can carry one identity;
+    /// the row for this very folder governs it, otherwise the most recent
+    /// decision does, and an undecided tie resolves to the untrusted row.
     pub fn entry_for(&self, path: &Path, identity: &str) -> Option<&ProjectEntry> {
         let path_key = Self::path_key(path);
         if !identity.is_empty() {
-            if let Some(entry) = self
+            let decided_at = |entry: &ProjectEntry| {
+                [entry.trusted_at.as_deref(), entry.revoked_at.as_deref()]
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|stamp| chrono::DateTime::parse_from_rfc3339(stamp).ok())
+                    .max()
+            };
+            let governing = self
                 .projects
-                .values()
-                .find(|entry| entry.identity.as_deref() == Some(identity))
-            {
+                .iter()
+                .filter(|(_, entry)| entry.identity.as_deref() == Some(identity))
+                .max_by(|(left_key, left), (right_key, right)| {
+                    (**left_key == path_key)
+                        .cmp(&(**right_key == path_key))
+                        .then_with(|| decided_at(*left).cmp(&decided_at(*right)))
+                        .then_with(|| {
+                            (left.trust_level == "untrusted")
+                                .cmp(&(right.trust_level == "untrusted"))
+                        })
+                        .then_with(|| right_key.cmp(left_key))
+                });
+            if let Some((_, entry)) = governing {
                 return Some(entry);
             }
         }
@@ -815,5 +834,37 @@ mod tests {
         assert!(failed.is_err());
         let reloaded = ProjectRegistry::load(config.path()).unwrap();
         assert_eq!(reloaded.cloud_project_for(project.path()), Some("p-kept"));
+    }
+
+    #[test]
+    fn a_later_grant_governs_its_checkout_over_an_older_revoked_row() {
+        let root = tempfile::tempdir().unwrap();
+        let checkout = |name: &str| {
+            let path = root.path().join(name);
+            fs::create_dir_all(&path).unwrap();
+            path
+        };
+        let (first, second, third) = (checkout("first"), checkout("second"), checkout("third"));
+        for _ in 0..32 {
+            let mut registry = ProjectRegistry::default();
+            registry
+                .trust(&first, "github.com/acme/app", "me", "laptop")
+                .unwrap();
+            registry
+                .trust(&second, "github.com/acme/app", "me", "laptop")
+                .unwrap();
+            assert_eq!(registry.revoke(&first, "github.com/acme/app"), 2);
+            std::thread::sleep(std::time::Duration::from_millis(5));
+            registry
+                .trust(&first, "github.com/acme/app", "me", "laptop")
+                .unwrap();
+
+            let granted = registry.entry_for(&first, "github.com/acme/app").unwrap();
+            assert_eq!(granted.trust_level, "trusted");
+            let revoked = registry.entry_for(&second, "github.com/acme/app").unwrap();
+            assert_eq!(revoked.trust_level, "untrusted");
+            let unseen = registry.entry_for(&third, "github.com/acme/app").unwrap();
+            assert_eq!(unseen.trust_level, "trusted");
+        }
     }
 }
