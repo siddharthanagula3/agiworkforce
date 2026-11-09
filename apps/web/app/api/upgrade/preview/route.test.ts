@@ -258,6 +258,31 @@ describe('POST /api/upgrade/preview', () => {
     expect(subscriptionDetails).not.toHaveProperty('proration_date');
   });
 
+  it('quotes the renewal in the selected price currency with its tax treatment', async () => {
+    pricingMocks.getPriceSelectionForCurrency.mockResolvedValue({
+      priceId: 'price_max_15x_monthly_inr',
+      currency: 'inr',
+      amountMinor: 999_900,
+    });
+
+    expect(await (await POST(makeRequest())).json()).toMatchObject({
+      recurringAmountCents: 999_900,
+      recurringCurrency: 'inr',
+      recurringTaxBehavior: 'inclusive',
+    });
+
+    pricingMocks.getPriceSelectionForCurrency.mockResolvedValue({
+      priceId: 'price_max_15x_monthly',
+      currency: 'usd',
+      amountMinor: 20_000,
+    });
+    expect(await (await POST(makeRequest())).json()).toMatchObject({
+      recurringAmountCents: 20_000,
+      recurringCurrency: 'usd',
+      recurringTaxBehavior: 'exclusive',
+    });
+  });
+
   it('reads the profile row through the rls scoped handle when the subscription has no stored customer', async () => {
     dbMocks.query.mockImplementation(async (sql: string) => {
       if (sql.includes('from subscriptions')) {

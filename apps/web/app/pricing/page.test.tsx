@@ -1688,6 +1688,7 @@ describe('PricingPage', () => {
       amountDueNowCents: 4200,
       currency: 'usd',
       previewToken: 'signed-preview-token',
+      recurring: { amountCents: 22_500, currency: 'usd', taxBehavior: 'exclusive' },
     });
     stripeMocks.upgradePlanMidCycle.mockResolvedValueOnce({ activation: 'webhook_pending' });
 

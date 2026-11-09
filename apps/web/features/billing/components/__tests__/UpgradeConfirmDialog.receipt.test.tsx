@@ -28,6 +28,7 @@ describe('UpgradeConfirmDialog order details', () => {
       amountDueNowCents: 11_819,
       currency: 'usd',
       previewToken: 'tok_preview',
+      recurring: { amountCents: 10_000, currency: 'usd', taxBehavior: 'exclusive' },
       charge: {
         lineItems: [
           { description: 'Max plan - 20x', amountCents: 20_000 },
@@ -68,6 +69,7 @@ describe('UpgradeConfirmDialog order details', () => {
       amountDueNowCents: 2_135,
       currency: 'usd',
       previewToken: 'tok_preview',
+      recurring: { amountCents: 10_000, currency: 'usd', taxBehavior: 'exclusive' },
       charge: {
         lineItems: [{ description: 'Pro plan', amountCents: 2_000 }],
         subtotalCents: 2_000,
@@ -100,6 +102,7 @@ describe('UpgradeConfirmDialog order details', () => {
       amountDueNowCents: 8_596,
       currency: 'usd',
       previewToken: 'tok_preview',
+      recurring: { amountCents: 10_000, currency: 'usd', taxBehavior: 'exclusive' },
       charge: {
         lineItems: [
           { description: 'Max plan - 5x', amountCents: 10_000 },
@@ -134,6 +137,7 @@ describe('UpgradeConfirmDialog order details', () => {
     amountDueNowCents: 8_596,
     currency: 'usd',
     previewToken: 'tok_preview',
+    recurring: { amountCents: 10_000, currency: 'usd', taxBehavior: 'exclusive' },
     charge: {
       lineItems: [{ description: 'Max plan - 5x', amountCents: 10_000 }],
       subtotalCents: 8_064,

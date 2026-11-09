@@ -147,6 +147,9 @@ describe('stripe payments', () => {
         amountDueNowCents: 10_042,
         currency: 'usd',
         previewToken: 'signed-preview-token',
+        recurringAmountCents: 20_000,
+        recurringCurrency: 'usd',
+        recurringTaxBehavior: 'exclusive',
       }),
     } as Response);
 
@@ -156,6 +159,7 @@ describe('stripe payments', () => {
       amountDueNowCents: 10_042,
       currency: 'usd',
       previewToken: 'signed-preview-token',
+      recurring: { amountCents: 20_000, currency: 'usd', taxBehavior: 'exclusive' },
       charge: null,
       promotion: null,
       replacesScheduledChange: false,
@@ -170,6 +174,9 @@ describe('stripe payments', () => {
         amountDueNowCents: 1_500,
         currency: 'usd',
         previewToken: 'signed-preview-token',
+        recurringAmountCents: 2_000,
+        recurringCurrency: 'usd',
+        recurringTaxBehavior: 'exclusive',
         promotion: { code: 'SPRING', percentOff: 25, duration: 'once' },
         replacesScheduledChange: true,
       }),
@@ -199,6 +206,9 @@ describe('stripe payments', () => {
         amountDueNowCents: 11_819,
         currency: 'usd',
         previewToken: 'signed-preview-token',
+        recurringAmountCents: 20_000,
+        recurringCurrency: 'usd',
+        recurringTaxBehavior: 'exclusive',
         charge: {
           lineItems: [
             { description: 'Max plan - 20x', amountCents: 20_000 },
@@ -215,6 +225,44 @@ describe('stripe payments', () => {
     const result = await previewUpgrade({ plan: 'max_15x' });
     expect(result.charge?.totalDueTodayCents).toBe(11_819);
     expect(result.charge?.lineItems).toHaveLength(2);
+  });
+
+  it('carries the renewal price in the currency and tax treatment the server selected', async () => {
+    vi.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        amountDueNowCents: 450_000,
+        currency: 'inr',
+        previewToken: 'signed-preview-token',
+        recurringAmountCents: 999_900,
+        recurringCurrency: 'inr',
+        recurringTaxBehavior: 'inclusive',
+      }),
+    } as Response);
+
+    const result = await previewUpgrade({ plan: 'max' });
+
+    expect(result.recurring).toEqual({
+      amountCents: 999_900,
+      currency: 'inr',
+      taxBehavior: 'inclusive',
+    });
+  });
+
+  it('refuses a preview without authoritative renewal terms instead of assuming USD', async () => {
+    vi.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        amountDueNowCents: 450_000,
+        currency: 'inr',
+        previewToken: 'signed-preview-token',
+        recurringAmountCents: 999_900,
+      }),
+    } as Response);
+
+    await expect(previewUpgrade({ plan: 'max' })).rejects.toThrow(
+      'Upgrade preview returned an unexpected response.',
+    );
   });
 
   it('surfaces a typed checkout fallback when the stored subscription is stale', async () => {

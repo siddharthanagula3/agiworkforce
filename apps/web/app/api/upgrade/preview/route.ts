@@ -33,6 +33,7 @@ import {
 } from '@/lib/server/stripe-upgrade-subscription';
 import { createUpgradePreviewToken } from '@/lib/server/stripe-upgrade-preview-token';
 import { resolveTrialDaysForCheckout } from '@/lib/billing/trial-policy';
+import { priceTaxBehaviorForCurrency } from '@/lib/billing/tax-policy';
 import { referralTrialDays } from '@/lib/services/referral-service';
 import {
   assertUpgradeBillingInterval,
@@ -516,6 +517,8 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
     recurringAmountCents:
       priceSelection.amountMinor * (requestedSeats - seatBasis.premiumSeats) +
       seatBasis.premiumRecurringCents,
+    recurringCurrency: priceSelection.currency,
+    recurringTaxBehavior: priceTaxBehaviorForCurrency(priceSelection.currency),
     seats: requestedSeats,
     promotion,
     replacesScheduledChange: scheduleId !== null,

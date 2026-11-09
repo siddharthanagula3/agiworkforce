@@ -119,6 +119,7 @@ const PRORATED_PREVIEW = {
   amountDueNowCents: 8_596,
   currency: 'usd',
   previewToken: 'signed-preview-token',
+  recurring: { amountCents: 10_000, currency: 'usd', taxBehavior: 'exclusive' as const },
   charge: {
     lineItems: [
       { description: 'Unused time on Pro', amountCents: -1_404 },
@@ -321,7 +322,7 @@ describe('UpgradeOrderPanel', () => {
     renderPanel();
 
     const notice = await screen.findByText(/auto renew/i);
-    expect(notice).toHaveTextContent(/\/month \+ tax/);
+    expect(notice).toHaveTextContent(/\/month plus tax/);
     expect(notice).not.toHaveTextContent('/year');
   });
 
@@ -585,7 +586,21 @@ describe('UpgradeOrderPanel', () => {
 
     const notice = await screen.findByText(/auto renew/i);
     expect(notice).toHaveTextContent('Sep 17, 2026');
-    expect(notice).toHaveTextContent('$100/month + tax');
+    expect(notice).toHaveTextContent('$100/month plus tax');
+  });
+
+  it('states the renewal in the subscription currency and its tax treatment, not the USD catalog', async () => {
+    paymentMocks.previewUpgrade.mockResolvedValue({
+      ...PRORATED_PREVIEW,
+      currency: 'inr',
+      recurring: { amountCents: 999_900, currency: 'inr', taxBehavior: 'inclusive' },
+    });
+    renderPanel();
+
+    const notice = await screen.findByText(/auto renew/i);
+    expect(notice).toHaveTextContent(/9,999\/month including GST/);
+    expect(notice).not.toHaveTextContent('$100');
+    expect(notice).not.toHaveTextContent('plus tax');
   });
 
   // Production, 2026-08-19: every Stripe price id was a test-mode object while
