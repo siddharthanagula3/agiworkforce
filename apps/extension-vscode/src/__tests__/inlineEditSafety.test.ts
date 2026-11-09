@@ -4,6 +4,7 @@ import { runInlineCommand } from '../core/runInlineCommand';
 import { Config } from '../platform/config';
 import * as api from '../utils/api';
 import * as analytics from '../features/analytics/productAnalytics';
+import * as recovery from '../core/cloudUtilityErrorActions';
 import { t } from '../l10n';
 import { ExtensionContext } from './__mocks__/vscode';
 
@@ -321,6 +322,69 @@ describe('inline edit ownership across asynchronous work', () => {
     expect(vscode.workspace.applyEdit).not.toHaveBeenCalled();
     expect(vscode.window.showWarningMessage).toHaveBeenCalled();
     expect(vscode.workspace.openTextDocument).toHaveBeenCalledOnce();
+  });
+
+  describe('retry after a recoverable failure', () => {
+    function failThenRetry(target = editorFixture()) {
+      const completion = vi
+        .spyOn(api, 'chatCompletion')
+        .mockRejectedValueOnce(new Error('fetch failed: ECONNRESET'))
+        .mockResolvedValue('```typescript\nconst x = 1;\n```');
+      let retry: (() => void | PromiseLike<void>) | undefined;
+      vi.spyOn(recovery, 'showCloudUtilityErrorActions').mockImplementation(
+        async (_error, options) => {
+          retry = options.retry;
+        },
+      );
+      (vscode.window as { activeTextEditor: unknown }).activeTextEditor = target.editor;
+      const first = runInlineCommand(new ExtensionContext() as never, 'fix');
+      return {
+        target,
+        completion,
+        first,
+        retry: async () => {
+          await first;
+          if (retry === undefined) throw new Error('The failure must offer a retry');
+          await retry();
+        },
+      };
+    }
+
+    it('retries the file and range the failed command started on, not the active editor', async () => {
+      const run = failThenRetry();
+      const other = editorFixture('/workspace/b.ts');
+      other.change('const secret = 42;');
+      (vscode.window as { activeTextEditor: unknown }).activeTextEditor = other.editor;
+      other.editor.selection = new vscode.Selection(0, 0, 0, 18);
+
+      await run.retry();
+
+      expect(run.completion).toHaveBeenCalledTimes(2);
+      const sent = JSON.stringify(run.completion.mock.calls[1]?.[1]);
+      expect(sent).toContain('const x = 0;');
+      expect(sent).not.toContain('secret');
+      expect(other.edit).not.toHaveBeenCalled();
+      expect(other.text()).toBe('const secret = 42;');
+      expect(run.target.text()).toBe('const x = 1;');
+    });
+
+    it.each(['changed', 'closed'] as const)(
+      'refuses to retry and sends nothing when the original file was %s',
+      async (change) => {
+        const run = failThenRetry();
+        await run.first;
+        if (change === 'changed') run.target.change('const x = 7;');
+        else run.target.close();
+
+        await run.retry();
+
+        expect(run.completion).toHaveBeenCalledOnce();
+        expect(run.target.edit).not.toHaveBeenCalled();
+        expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
+          expect.stringContaining('run it again'),
+        );
+      },
+    );
   });
 
   it('records an accepted edit if cancellation arrives after the host committed it', async () => {

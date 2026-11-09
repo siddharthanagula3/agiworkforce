@@ -155,6 +155,26 @@ describe('the Use terminal setting', () => {
     expect(String(terminals[0]?.sendText.mock.calls[0]?.[0])).toContain('thread-7f3');
   });
 
+  it('invokes the CLI with the call operator under PowerShell on Windows', async () => {
+    setUseTerminal(true);
+    activeThreadId = 'thread-7f3';
+    const originalPlatform = process.platform;
+    const env = vscode.env as { shell?: string };
+    const originalShell = env.shell;
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+    env.shell = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
+    try {
+      await handlers.get('agi-workforce.chat')?.();
+    } finally {
+      Object.defineProperty(process, 'platform', { value: originalPlatform });
+      env.shell = originalShell;
+    }
+
+    expect(String(terminals[0]?.sendText.mock.calls[0]?.[0])).toMatch(
+      /^& ".+" --resume "thread-7f3"$/u,
+    );
+  });
+
   describe('without an AGI CLI on this machine', () => {
     beforeEach(() => {
       setUseTerminal(true);

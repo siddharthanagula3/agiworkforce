@@ -20,7 +20,7 @@ import { buildExplainTerminalPrompt, runEditorUtility } from '../features/editor
 import {
   getActiveWorkspaceFolderSync,
   getWorkspaceDisplayName,
-  shellQuoteForCurrentPlatform,
+  shellExecutableForCurrentPlatform,
 } from '../platform/workspaceFolders';
 import { Config } from '../platform/config';
 import { setTerminalOutputSource, type TerminalOutput } from '../data/terminalOutput';
@@ -34,7 +34,9 @@ const TERMINAL_NAME = PRODUCT_NAMES.code;
 const CLI_PATH_NEEDS_NO_QUOTES = /^[A-Za-z0-9._\-/\\:]+$/u;
 
 function quoteCliPathIfNeeded(cliPath: string): string {
-  return CLI_PATH_NEEDS_NO_QUOTES.test(cliPath) ? cliPath : shellQuoteForCurrentPlatform(cliPath);
+  return CLI_PATH_NEEDS_NO_QUOTES.test(cliPath)
+    ? cliPath
+    : shellExecutableForCurrentPlatform(cliPath);
 }
 
 export { validateSuggestedCommand };

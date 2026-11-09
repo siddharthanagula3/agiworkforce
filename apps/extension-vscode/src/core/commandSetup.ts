@@ -183,6 +183,7 @@ import { guardProviderSwitch } from '../integrations/providerSwitchGuard';
 import {
   getActiveWorkspaceFolder,
   getActiveWorkspaceFolderSync,
+  shellExecutableForCurrentPlatform,
   shellQuoteForCurrentPlatform,
 } from '../platform/workspaceFolders';
 import {
@@ -476,7 +477,7 @@ async function continueThisSessionInTheTerminal(sidebarProvider: SidebarProvider
   const terminal = vscode.window.createTerminal({ name: AGI_TERMINAL_NAME, cwd: folder.uri });
   terminal.show();
   terminal.sendText(
-    `${shellQuoteForCurrentPlatform(cli)} --resume ${shellQuoteForCurrentPlatform(threadId)}`,
+    `${shellExecutableForCurrentPlatform(cli)} --resume ${shellQuoteForCurrentPlatform(threadId)}`,
   );
 }
 
@@ -518,7 +519,7 @@ async function openAgiInTheTerminal(sidebarProvider: SidebarProvider): Promise<v
   const terminal = vscode.window.createTerminal({ name: AGI_TERMINAL_NAME, cwd: folder?.uri });
   terminal.show();
   terminal.sendText(
-    shellQuoteForCurrentPlatform(resolveCliPath(Config.cliPath(), nodeCliResolutionHost())),
+    shellExecutableForCurrentPlatform(resolveCliPath(Config.cliPath(), nodeCliResolutionHost())),
   );
 }
 

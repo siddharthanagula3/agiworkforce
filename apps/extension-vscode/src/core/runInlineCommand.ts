@@ -22,6 +22,12 @@ export function commandLabel(command: string): string {
   return labels[command] ?? command;
 }
 
+interface InlineCommandTarget {
+  readonly editor: vscode.TextEditor;
+  readonly range: vscode.Range;
+  readonly expectedDocument: Pick<vscode.TextDocument, 'uri' | 'version'>;
+}
+
 export async function runInlineCommand(
   context: vscode.ExtensionContext,
   command: InlineCommand,
@@ -41,6 +47,30 @@ export async function runInlineCommand(
     return;
   }
 
+  await runInlineCommandOnTarget(context, command, {
+    editor,
+    range: explicitRange,
+    expectedDocument: { uri: editor.document.uri, version: editor.document.version },
+  });
+}
+
+function targetStillCurrent(target: InlineCommandTarget): boolean {
+  const { document } = target.editor;
+  return (
+    !document.isClosed &&
+    document.version === target.expectedDocument.version &&
+    document.uri.toString() === target.expectedDocument.uri.toString()
+  );
+}
+
+async function runInlineCommandOnTarget(
+  context: vscode.ExtensionContext,
+  command: InlineCommand,
+  target: InlineCommandTarget,
+): Promise<void> {
+  const { editor, expectedDocument } = target;
+  const explicitRange = target.range;
+
   const refusal = describeOutboundRefusal(editor.document);
   if (refusal !== null) {
     vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: ${refusal}`);
@@ -49,7 +79,6 @@ export async function runInlineCommand(
 
   const selectedText = editor.document.getText(explicitRange);
   const targetSelection = new vscode.Selection(explicitRange.start, explicitRange.end);
-  const expectedDocument = { uri: editor.document.uri, version: editor.document.version };
 
   if (selectedText.trim() === '') {
     vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: Select some code first.`);
@@ -143,7 +172,15 @@ export async function runInlineCommand(
   if (classifyCloudUtilityFailure(failure) === 'cancelled') return;
   await showCloudUtilityErrorActions(failure, {
     title: `${PRODUCT_NAMES.code}: ${commandLabel(command)} failed`,
-    retry: () => runInlineCommand(context, command, targetRange),
+    retry: async () => {
+      if (!targetStillCurrent(target)) {
+        vscode.window.showWarningMessage(
+          `${PRODUCT_NAMES.code}: The file changed or closed since ${commandLabel(command)} started. Select the code and run it again.`,
+        );
+        return;
+      }
+      await runInlineCommandOnTarget(context, command, target);
+    },
     secrets: context.secrets,
   });
 }

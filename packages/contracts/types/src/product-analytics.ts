@@ -312,7 +312,7 @@ export function createAccountProductAnalytics(
     now,
     isAllowed: () => options.isEnabled() && knownConsent() !== false,
     send: async (events) => {
-      if (!(await consentGranted())) return;
+      if (!(await consentGranted()) || !options.isEnabled()) return;
       await options
         .request(PRODUCT_ANALYTICS_INGEST_PATH, {
           method: 'POST',
