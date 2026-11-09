@@ -134,6 +134,47 @@ describe('Library recovery copy', () => {
     expect(result.current.assets).toEqual([{ id: 'account-b-asset' }]);
   });
 
+  it('does not keep presenting the last quota after a refresh fails', async () => {
+    mockFetchLibraryPage
+      .mockResolvedValueOnce({
+        assets: [],
+        hasMore: false,
+        nextOffset: null,
+        storageUsedBytes: 10,
+        storageLimitBytes: 100,
+      })
+      .mockRejectedValueOnce(new Error('offline'));
+
+    const { result } = renderHook(() => useLibraryAssets(''));
+    await waitFor(() => expect(result.current.storageUsedBytes).toBe(10));
+    expect(result.current.storageLimitBytes).toBe(100);
+
+    act(() => result.current.refresh());
+    await waitFor(() => expect(result.current.error).not.toBeNull());
+    expect(result.current.storageUsedBytes).toBeNull();
+    expect(result.current.storageLimitBytes).toBeNull();
+  });
+
+  it('does not show the previous account quota to the next account', async () => {
+    mockFetchLibraryPage
+      .mockResolvedValueOnce({
+        assets: [],
+        hasMore: false,
+        nextOffset: null,
+        storageUsedBytes: 10,
+        storageLimitBytes: 100,
+      })
+      .mockImplementationOnce(() => new Promise(() => undefined));
+
+    const { result, rerender } = renderHook(() => useLibraryAssets(''));
+    await waitFor(() => expect(result.current.storageUsedBytes).toBe(10));
+
+    mockOwnerId = 'account-b';
+    rerender({});
+    expect(result.current.storageUsedBytes).toBeNull();
+    expect(result.current.storageLimitBytes).toBeNull();
+  });
+
   it('removes a successfully deleted file from the offline page', async () => {
     mockFetchLibraryPage.mockResolvedValue({
       assets: [{ id: 'asset-a' }],

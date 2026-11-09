@@ -61,10 +61,11 @@ export function useLibraryAssets(
     scopeKey: string;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [storage, setStorage] = useState<{ used: number | null; limit: number | null }>({
-    used: null,
-    limit: null,
-  });
+  const [storage, setStorage] = useState<{
+    ownerId: string | null;
+    used: number | null;
+    limit: number | null;
+  }>({ ownerId: null, used: null, limit: null });
   const [showingCachedPage, setShowingCachedPage] = useState(false);
   const requestRef = useRef(0);
   const assetsRef = useRef(assets);
@@ -88,6 +89,7 @@ export function useLibraryAssets(
         setHasMore(false);
         setNextOffset(null);
         setLoadedScope(null);
+        setStorage({ ownerId: null, used: null, limit: null });
         setShowingCachedPage(false);
         setError(null);
         setLoading(false);
@@ -114,6 +116,7 @@ export function useLibraryAssets(
         setError(null);
         if (!deleted) {
           setStorage({
+            ownerId,
             used: page.storageUsedBytes ?? null,
             limit: page.storageLimitBytes ?? null,
           });
@@ -127,6 +130,7 @@ export function useLibraryAssets(
             ? null
             : readLibraryPage(ownerId);
         setAssets(cached ?? []);
+        if (!deleted) setStorage({ ownerId: null, used: null, limit: null });
         setLoadedScope({ ownerId, search, sort, scopeKey });
         setHasMore(false);
         setNextOffset(null);
@@ -272,8 +276,8 @@ export function useLibraryAssets(
     error,
     showingCachedPage,
     signedOut: !ownerId,
-    storageUsedBytes: storage.used,
-    storageLimitBytes: storage.limit,
+    storageUsedBytes: storage.ownerId === ownerId ? storage.used : null,
+    storageLimitBytes: storage.ownerId === ownerId ? storage.limit : null,
     refresh,
     loadMore,
     removeAsset,

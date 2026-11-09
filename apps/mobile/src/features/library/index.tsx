@@ -139,6 +139,7 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
     reportTarget?: ReturnType<typeof libraryReportTarget>;
   } | null>(null);
   const videoLoadingRef = useRef(false);
+  const videoScopeRef = useRef<AccountScopedUiState | null>(null);
   const selectionScopeRef = useRef<AccountScopedUiState | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string> | null>(null);
   const [deletingSelected, setDeletingSelected] = useState(false);
@@ -217,6 +218,13 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
     previewImageScopeRef.current = null;
     setPreviewImage(null);
   }, [clerkUserId, previewImage]);
+
+  useLayoutEffect(() => {
+    if (!videoPlayer) return;
+    if (isAccountScopedUiStateOwned(videoScopeRef.current)) return;
+    videoScopeRef.current = null;
+    setVideoPlayer(null);
+  }, [clerkUserId, videoPlayer]);
 
   useLayoutEffect(() => {
     if (selectedIds === null || isAccountScopedUiStateOwned(selectionScopeRef.current)) return;
@@ -333,10 +341,14 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
   }, [handleCloseImage, library, previewImage]);
 
   const handleShareAsset = useCallback(async (asset: LibraryAsset) => {
+    const scope = captureAccountScopedUiState('cloud');
+    if (!scope) return;
+    const isCurrent = () => isAccountScopedUiStateOwned(scope);
     try {
       const localUri = await downloadGeneratedFile(absoluteAssetUrl(asset.uri), asset.fileName);
-      await shareFile(localUri);
+      await shareFile(localUri, { isCurrent });
     } catch {
+      if (!isCurrent()) return;
       Alert.alert('Could not open this file', 'The file could not be downloaded. Try again.');
     }
   }, []);
@@ -344,15 +356,20 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
   const handlePlayVideo = useCallback(
     async (asset: LibraryAsset) => {
       if (videoLoadingRef.current) return;
+      const scope = captureAccountScopedUiState('cloud');
+      if (!scope) return;
       videoLoadingRef.current = true;
       try {
         const player = await prepareLocalVideoPlayer(absoluteAssetUrl(asset.uri), c.black);
+        if (!isAccountScopedUiStateOwned(scope)) return;
+        videoScopeRef.current = scope;
         setVideoPlayer({
           player,
           label: asset.prompt ? `Video: ${asset.prompt}` : asset.fileName,
           reportTarget: isGeneratedMedia(asset) ? libraryReportTarget(asset) : undefined,
         });
       } catch {
+        if (!isAccountScopedUiStateOwned(scope)) return;
         Alert.alert('Could not play the video', 'Check your connection and try again.');
       } finally {
         videoLoadingRef.current = false;
@@ -361,7 +378,10 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
     [c.black],
   );
 
-  const handleCloseVideo = useCallback(() => setVideoPlayer(null), []);
+  const handleCloseVideo = useCallback(() => {
+    videoScopeRef.current = null;
+    setVideoPlayer(null);
+  }, []);
 
   const router = useRouter();
   const handleAddToChat = useCallback(

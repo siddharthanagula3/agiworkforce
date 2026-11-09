@@ -5,9 +5,11 @@ import { SafetySection } from './SafetySection';
 const mocks = vi.hoisted(() => ({
   fetchPreferences: vi.fn(),
   savePreferences: vi.fn(),
+  invalidateSnapshot: vi.fn(),
 }));
 
 vi.mock('@/app/settings/_lib/preferences-client', () => ({
+  invalidatePreferencesSnapshot: () => mocks.invalidateSnapshot(),
   fetchPreferenceNamespace: (...args: unknown[]) => mocks.fetchPreferences(...args),
   savePreferenceNamespace: (...args: unknown[]) => mocks.savePreferences(...args),
 }));
@@ -99,6 +101,41 @@ describe('Web Safety settings', () => {
     fireEvent.click(toggle);
 
     expect(await screen.findByRole('alert')).toBeInTheDocument();
+    await waitFor(() => expect(toggle).toHaveAttribute('aria-checked', 'false'));
+  });
+
+  it('shows the persisted value, not the inverse, when a save fails after the server committed it', async () => {
+    mocks.fetchPreferences
+      .mockResolvedValueOnce({ reduceSensitiveContent: false })
+      .mockResolvedValueOnce({ reduceSensitiveContent: true });
+    mocks.savePreferences.mockRejectedValue(new Error('Response lost'));
+    render(<SafetySection />);
+
+    const toggle = await screen.findByRole('switch', { name: 'Reduce sensitive content' });
+    await waitFor(() => expect(toggle).not.toBeDisabled());
+    fireEvent.click(toggle);
+
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    await waitFor(() => expect(toggle).not.toBeDisabled());
+    expect(mocks.invalidateSnapshot).toHaveBeenCalled();
+    expect(mocks.fetchPreferences).toHaveBeenCalledTimes(2);
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('says the saved setting is unconfirmed when the save and the re-read both fail', async () => {
+    mocks.fetchPreferences
+      .mockResolvedValueOnce({ reduceSensitiveContent: false })
+      .mockRejectedValueOnce(new Error('offline'));
+    mocks.savePreferences.mockRejectedValue(new Error('offline'));
+    render(<SafetySection />);
+
+    const toggle = await screen.findByRole('switch', { name: 'Reduce sensitive content' });
+    await waitFor(() => expect(toggle).not.toBeDisabled());
+    fireEvent.click(toggle);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not confirm the saved safety setting. Reload to check it.',
+    );
     await waitFor(() => expect(toggle).toHaveAttribute('aria-checked', 'false'));
   });
 });
