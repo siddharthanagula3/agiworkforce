@@ -21,6 +21,7 @@ import { toUserMessage } from '@/lib/user-error-message';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { beginActiveUpload } from '@/features/workspaces/lib/active-uploads';
 import { fetchGoogleDrivePickerConfig, pickGoogleDriveFiles } from '../lib/google-drive-picker';
+import { restoreRemovedFile } from '../lib/restore-removed-file';
 
 type SortOrder = 'newest' | 'oldest';
 
@@ -83,6 +84,13 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
   const [refreshing, setRefreshing] = useState<string | null>(null);
   const { confirm, dialog: confirmDialog } = useConfirmAction();
 
+  const filesRef = useRef(files);
+  const projectIdRef = useRef(projectId);
+  useEffect(() => {
+    filesRef.current = files;
+    projectIdRef.current = projectId;
+  }, [files, projectId]);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const citedPreviewOpened = useRef(false);
 
@@ -144,12 +152,14 @@ export function SourcesPanel({ projectId, readOnly = false }: Props) {
   }
 
   async function handleDelete(file: ProjectKnowledgeFile) {
-    const previous = files;
+    const index = filesRef.current.findIndex((f) => f.id === file.id);
     setFiles((current) => current.filter((f) => f.id !== file.id));
     try {
       await removeProjectKnowledgeFile(projectId, file.id);
     } catch {
-      setFiles(previous);
+      if (projectIdRef.current === projectId) {
+        setFiles((current) => restoreRemovedFile(current, file, index));
+      }
       toast.error(`Couldn't remove ${file.fileName}. Try again.`);
     }
   }

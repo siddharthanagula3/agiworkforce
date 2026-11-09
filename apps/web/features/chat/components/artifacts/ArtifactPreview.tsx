@@ -1345,7 +1345,33 @@ export function ArtifactPreview({
     [artifactAudience, publicationView, confirmAction],
   );
 
+  const saveBlob = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadDeckHtml = async () => {
+    const title = artifact.title || 'Presentation';
+    try {
+      const { buildDeckHtml } = await import('./presentation/deck-html');
+      const html = await buildDeckHtml(title, activeContent);
+      saveBlob(new Blob([html], { type: 'application/octet-stream' }), `${title}.html`);
+    } catch (error) {
+      toast.error(toUserMessage(error, 'The HTML could not be made'));
+    }
+  };
+
   const handleDownload = (format: 'html' | 'txt' | 'md') => {
+    if (format === 'html' && artifact.type === 'presentation') {
+      void handleDownloadDeckHtml();
+      return;
+    }
     const content = activeContent;
 
     let blob: Blob;
@@ -1374,14 +1400,7 @@ export function ArtifactPreview({
       }
     }
 
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    saveBlob(blob, filename);
   };
 
   /**

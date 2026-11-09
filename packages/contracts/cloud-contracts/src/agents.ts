@@ -16,6 +16,7 @@ export const AGENT_NAME_MAX_CHARS = 80;
 export const AGENT_DESCRIPTION_MAX_CHARS = 300;
 export const AGENT_INSTRUCTIONS_MAX_CHARS = 32_000;
 export const AGENT_OUTPUT_EXAMPLES_MAX_CHARS = 8_000;
+export const AGENT_IMPORT_METADATA_MAX_CHARS = 48_000;
 export const AGENT_STARTERS_MAX = 6;
 export const AGENT_STARTER_MAX_CHARS = 200;
 export const AGENT_DAILY_TURN_LIMIT_MAX = 10_000;
@@ -242,6 +243,10 @@ export const AgentImportRequestSchema = z.object({
   markdown: z
     .string()
     .min(1)
-    .max(AGENT_INSTRUCTIONS_MAX_CHARS + 4_000),
+    .max(
+      AGENT_INSTRUCTIONS_MAX_CHARS +
+        AGENT_OUTPUT_EXAMPLES_MAX_CHARS +
+        AGENT_IMPORT_METADATA_MAX_CHARS,
+    ),
 });
 export type AgentImportRequest = z.infer<typeof AgentImportRequestSchema>;

@@ -170,13 +170,13 @@ async function extractPdfText(
       'This PDF has more pages than project knowledge extraction reads. Split it and upload the parts.',
     );
   }
+  if (ocr && content.pageImages.length > 0 && content.scannedPagesOmitted.length > 0) {
+    throw new ProjectKnowledgeExtractionError(
+      'document_too_complex',
+      'This PDF has more scanned pages than project knowledge extraction reads. Split it and upload the parts.',
+    );
+  }
   if (content.text && ocr && content.pageImages.length > 0) {
-    if (content.scannedPagesOmitted.length > 0) {
-      throw new ProjectKnowledgeExtractionError(
-        'document_too_complex',
-        'This PDF has more scanned pages than project knowledge extraction reads. Split it and upload the parts.',
-      );
-    }
     const { recognised, withheld } = await transcribeOrWithhold(ocr, content.pageImages);
     if (withheld) return { ...boundWithPageAnchors(content.pages), scannedTextWithheld: withheld };
     if (!recognised) return boundWithPageAnchors(content.pages);

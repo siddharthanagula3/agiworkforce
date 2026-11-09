@@ -151,7 +151,16 @@ const ManagedOfficeFileInputSchema = z.discriminatedUnion('format', [
       verify_render: z.boolean().optional(),
       filename: FileNameSchema,
       title: z.string().trim().min(1).max(200),
-      sheets: z.array(SheetSchema).min(1).max(20).optional(),
+      sheets: z
+        .array(SheetSchema)
+        .min(1)
+        .max(20)
+        .refine(
+          (sheets) =>
+            new Set(sheets.map((sheet) => sheet.name.toLowerCase())).size === sheets.length,
+          { message: 'Worksheet names must be unique, ignoring case.' },
+        )
+        .optional(),
       source: z
         .object({
           filename: FileNameSchema,

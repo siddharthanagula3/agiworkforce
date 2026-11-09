@@ -549,6 +549,60 @@ describe('bounded existing Word document editing', () => {
     expect(execution.commands()).toBe(0);
   });
 
+  it.each([
+    ['an exact repeat', 'Budget', 'Budget'],
+    ['a case-only variant', 'Budget', 'BUDGET'],
+    ['a name that matches after trimming', 'Budget', ' Budget '],
+  ])('refuses two worksheets named alike: %s', async (_label, first, second) => {
+    const result = await generateManagedOfficeFile({
+      format: 'xlsx',
+      filename: 'budget.xlsx',
+      title: 'Budget',
+      sheets: [
+        { name: first, rows: [[10]] },
+        { name: second, rows: [[20]] },
+      ],
+    });
+    expect(result).toEqual({
+      ok: false,
+      code: 'invalid_office_file_request',
+      message: 'The Office file request is invalid.',
+    });
+  });
+
+  it('keeps the rows and names of distinct worksheets', async () => {
+    const result = await generateManagedOfficeFile({
+      format: 'xlsx',
+      filename: 'budget.xlsx',
+      title: 'Budget',
+      sheets: [
+        { name: 'Budget', rows: [[10]] },
+        { name: 'Forecast', rows: [[20]] },
+      ],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const zip = await JSZip.loadAsync(result.data);
+    const workbookXml = await zip.file('xl/workbook.xml')!.async('string');
+    expect(workbookXml).toContain('name="Budget"');
+    expect(workbookXml).toContain('name="Forecast"');
+    expect(await zip.file('xl/worksheets/sheet1.xml')!.async('string')).toContain('<v>10</v>');
+    expect(await zip.file('xl/worksheets/sheet2.xml')!.async('string')).toContain('<v>20</v>');
+  });
+
+  it('does not call a workbook with repeated worksheet names verified', async () => {
+    const zip = new JSZip();
+    zip.file('[Content_Types].xml', '<Types/>');
+    zip.file('_rels/.rels', '<Relationships/>');
+    zip.file(
+      'xl/workbook.xml',
+      '<workbook><sheets><sheet name="Budget"/><sheet name="budget"/></sheets></workbook>',
+    );
+    await expect(
+      verifyManagedOfficePackage(await zip.generateAsync({ type: 'nodebuffer' }), 'xlsx'),
+    ).rejects.toThrow(/Worksheet names must be unique/);
+  });
+
   it('does not call successful formula errors a verified workbook', async () => {
     const zip = new JSZip();
     zip.file('[Content_Types].xml', '<Types/>');
@@ -653,6 +707,35 @@ describe('existing workbook preservation', () => {
       expect(result.ok).toBe(false);
     },
   );
+
+  it('refuses to edit an attached workbook whose worksheet names repeat', async () => {
+    const input = await workbook();
+    const workbookXml = await input.zip.file('xl/workbook.xml')!.async('string');
+    const sheet = workbookXml.match(/<sheet\b[^>]*\/>/)![0];
+    input.zip.file('xl/workbook.xml', workbookXml.replace(sheet, sheet + sheet));
+    const data = await input.zip.generateAsync({ type: 'nodebuffer' });
+    const result = await generateManagedOfficeFile(
+      {
+        format: 'xlsx',
+        filename: 'updated.xlsx',
+        title: 'Updated',
+        source: {
+          filename: input.filename,
+          sha256: createHash('sha256').update(data).digest('hex'),
+          edits: [{ sheet: 'Budget', cell: 'B2', expected: 25, value: 30 }],
+        },
+      },
+      {
+        attachments: [
+          { filename: input.filename, mimeType: input.mimeType, base64: data.toString('base64') },
+        ],
+      },
+    );
+    expect(result).toMatchObject({
+      ok: false,
+      message: expect.stringMatching(/Worksheet names must be unique/),
+    });
+  });
 
   it.each(['xml', 'relationship'])('rejects damaged package structure: %s', async (failure) => {
     const input = await workbook();

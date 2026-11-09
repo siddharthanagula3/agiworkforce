@@ -16,6 +16,7 @@ import { uploadProjectKnowledgeFile } from '../services/project-knowledge-upload
 import { getCsrfToken } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
 import { beginActiveUpload } from '@/features/workspaces/lib/active-uploads';
+import { restoreRemovedFile } from '../lib/restore-removed-file';
 
 interface Props {
   projectId: string;
@@ -68,6 +69,12 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
   const [isDragging, setIsDragging] = useState(false);
   const [previewFile, setPreviewFile] = useState<ProjectKnowledgeFile | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const filesRef = useRef(files);
+  const projectIdRef = useRef(projectId);
+  useEffect(() => {
+    filesRef.current = files;
+    projectIdRef.current = projectId;
+  }, [files, projectId]);
 
   const indexPollsRef = useRef(0);
   const [retryingFileId, setRetryingFileId] = useState<string | null>(null);
@@ -140,7 +147,7 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
   }
 
   async function handleDelete(file: ProjectKnowledgeFile) {
-    const previous = files;
+    const index = filesRef.current.findIndex((f) => f.id === file.id);
     setFiles((current) => current.filter((f) => f.id !== file.id));
     try {
       const csrfToken = await getCsrfToken();
@@ -150,7 +157,9 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
       );
       if (!res.ok) throw new Error(`Delete failed (${res.status})`);
     } catch {
-      setFiles(previous);
+      if (projectIdRef.current === projectId) {
+        setFiles((current) => restoreRemovedFile(current, file, index));
+      }
       toast.error(`Couldn't remove ${file.fileName}. Try again.`);
     }
   }

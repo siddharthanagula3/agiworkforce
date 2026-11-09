@@ -217,6 +217,23 @@ export async function editManagedDocx(
   };
 }
 
+function assertDistinctWorksheetNames(workbookXml: string): void {
+  const names = new Set<string>();
+  const parser = new SaxesParser({ xmlns: true });
+  parser.on('opentag', (tag) => {
+    if (tag.local !== 'sheet') return;
+    const name = Object.values(tag.attributes).find((attribute) => attribute.local === 'name');
+    if (!name) return;
+    const folded = name.value.trim().toLowerCase();
+    if (names.has(folded))
+      throw new ManagedOfficeProcessingError(
+        'Worksheet names must be unique, ignoring case and surrounding spaces.',
+      );
+    names.add(folded);
+  });
+  parser.write(workbookXml).close();
+}
+
 export async function verifyManagedOfficePackage(
   data: Buffer,
   format: 'docx' | 'xlsx' | 'pptx',
@@ -229,6 +246,8 @@ export async function verifyManagedOfficePackage(
         ? 'xl/workbook.xml'
         : 'ppt/presentation.xml',
   );
+  if (format === 'xlsx')
+    assertDistinctWorksheetNames(parts.get('xl/workbook.xml')!.toString('utf8'));
   let formulas = 0;
   for (const [name, bytes] of parts) {
     if (!/^xl\/worksheets\/[^/]+\.xml$/.test(name)) continue;
@@ -683,6 +702,7 @@ export async function editManagedWorkbook(
       'The source workbook changed. Select its current digest before editing.',
     );
   const parts = await officeParts(original, 'xl/workbook.xml');
+  assertDistinctWorksheetNames(parts.get('xl/workbook.xml')!.toString('utf8'));
   const relationships = new Map<string, string>();
   const relParser = new SaxesParser({ xmlns: true });
   relParser.on('opentag', (tag) => {
