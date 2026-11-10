@@ -320,12 +320,9 @@ pub fn handle_shared_command(
         "/create-skill" => ParityCommandResult::Prompt(create_skill_prompt(arg)),
         "/save-routine" => ParityCommandResult::Prompt(save_routine_prompt(arg)),
         "/schedule" | "/routines" => {
-            if session.privacy_mode == PrivacyMode::Local {
-                ParityCommandResult::SystemMessage(
-                    crate::schedules::ScheduleError::LocalPrivacy.to_string(),
-                )
-            } else {
-                ParityCommandResult::Prompt(schedule_prompt(arg))
+            match crate::cloud::CloudClient::admit(session.privacy_mode) {
+                Ok(()) => ParityCommandResult::Prompt(schedule_prompt(arg)),
+                Err(refused) => ParityCommandResult::SystemMessage(refused.to_string()),
             }
         }
         _ => ParityCommandResult::NotHandled,
@@ -4031,14 +4028,19 @@ mod tests {
     }
 
     #[test]
-    fn schedule_in_local_mode_explains_the_prompt_would_leave_the_device() {
-        let mut session = test_session();
-        session.set_privacy_mode(PrivacyMode::Local);
-        let result = handle_shared_command("/schedule", "", &mut session);
-        let ParityCommandResult::SystemMessage(message) = result else {
-            panic!("Local mode must not hand a scheduling prompt to the model: {result:?}");
-        };
-        assert!(message.contains("Local privacy mode"), "{message}");
+    fn schedule_outside_cloud_mode_is_refused_with_the_shared_notice() {
+        for mode in [PrivacyMode::Local, PrivacyMode::Byok] {
+            let mut session = test_session();
+            session.set_privacy_mode(mode);
+            let result = handle_shared_command("/schedule", "", &mut session);
+            let ParityCommandResult::SystemMessage(message) = result else {
+                panic!("{mode:?} must not hand a scheduling prompt to the model: {result:?}");
+            };
+            assert_eq!(
+                message,
+                crate::cloud::CloudError::NotManaged(mode).to_string()
+            );
+        }
     }
 }
 

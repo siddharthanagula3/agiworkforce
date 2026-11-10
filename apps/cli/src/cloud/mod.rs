@@ -344,9 +344,14 @@ pub async fn sync_session(
     Ok(response.applied.messages.len())
 }
 
-pub async fn send_feedback(kind: feedback::FeedbackKind, message: &str) -> String {
-    let client = match CloudClient::connect_managed() {
+pub async fn send_feedback(
+    privacy: PrivacyMode,
+    kind: feedback::FeedbackKind,
+    message: &str,
+) -> String {
+    let client = match CloudClient::connect(privacy) {
         Ok(client) => client,
+        Err(error @ CloudError::NotManaged(_)) => return error.to_string(),
         Err(error) => {
             return format!(
                 "Feedback needs a signed-in AGI account ({error}). Sign in with `agi login`, then send it again."

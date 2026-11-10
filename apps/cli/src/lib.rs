@@ -4046,14 +4046,14 @@ async fn handle_memory_command(action: &MemorySubcommand) -> Result<()> {
                 MemorySubcommand::Off => Some(false),
                 _ => None,
             };
-            let text = cloud::personalization::memory_switch(enabled)
+            let text = cloud::personalization::memory_switch(privacy, enabled)
                 .await
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
             println!("{text}");
             Ok(())
         }
         MemorySubcommand::Never { add, remove } => {
-            let text = cloud::personalization::never_remember(add, remove)
+            let text = cloud::personalization::never_remember(privacy, add, remove)
                 .await
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
             println!("{text}");
@@ -4165,7 +4165,7 @@ async fn handle_schedules_command(
     action: &SchedulesSubcommand,
     output: Option<OutputFormat>,
 ) -> Result<()> {
-    let client = match schedules::SchedulesClient::connect() {
+    let client = match schedules::SchedulesClient::connect(account_privacy_mode()) {
         Ok(client) => client,
         Err(error) => {
             eprintln!("{} {}", ts::error_label(), ts::danger(error.to_string()));
@@ -4391,9 +4391,6 @@ async fn handle_schedule_triggers_command(
         }
     };
     let failed = |error: schedules::ScheduleError| anyhow::anyhow!("{error}");
-    if account_privacy_mode() == platform::runtime::session::PrivacyMode::Local {
-        return Err(failed(schedules::ScheduleError::LocalPrivacy));
-    }
 
     match action {
         ScheduleTriggersSubcommand::List {
@@ -7142,7 +7139,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
                 Ok(())
             }
             Command::ExportData { out } => {
-                let client = cloud::CloudClient::connect_managed()
+                let client = cloud::CloudClient::connect(account_privacy_mode())
                     .map_err(|error| anyhow::anyhow!("{error}"))?;
                 let archive = cloud::data_export::current(&client)
                     .await
@@ -7414,11 +7411,14 @@ async fn run_cli(cli: Cli) -> Result<()> {
 
             // --- Usage ---
             Command::Usage => {
-                println!("{}", usage_summary::account_lines().await.join("\n"));
+                let lines = usage_summary::account_lines(account_privacy_mode())
+                    .await
+                    .map_err(|error| anyhow::anyhow!("{error}"))?;
+                println!("{}", lines.join("\n"));
                 Ok(())
             }
             Command::Keys { action } => {
-                let client = cloud::CloudClient::connect_managed()
+                let client = cloud::CloudClient::connect(account_privacy_mode())
                     .map_err(|error| anyhow::anyhow!("{error}"))?;
                 match action
                     .as_ref()
@@ -7479,7 +7479,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
             }
 
             Command::Invite { json } => {
-                let invite = cloud::referrals::invite()
+                let invite = cloud::referrals::invite(account_privacy_mode())
                     .await
                     .map_err(|error| anyhow::anyhow!("{error}"))?;
                 render_structured(

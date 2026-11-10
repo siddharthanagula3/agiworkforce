@@ -1246,7 +1246,10 @@ pub(crate) fn missing_connections(skill: &Skill, connected: Option<&[String]>) -
 /// The MCP servers and account connectors a session can reach: servers in the
 /// registry and in enabled plugins, and, when a skill asks for one, the
 /// account's connected connectors.
-pub async fn connected_services(skills: &[Skill]) -> Vec<String> {
+pub async fn connected_services(
+    skills: &[Skill],
+    privacy: crate::platform::runtime::session::PrivacyMode,
+) -> Vec<String> {
     let mut connected: Vec<String> = crate::mcp::registry::McpRegistry::load()
         .map(|registry| {
             registry
@@ -1272,25 +1275,31 @@ pub async fn connected_services(skills: &[Skill]) -> Vec<String> {
         .iter()
         .any(|skill| !missing_connections(skill, Some(&connected)).is_empty());
     if needs_account {
-        if let Ok(client) = crate::cloud::CloudClient::connect_managed() {
-            if let Ok(Ok(list)) = tokio::time::timeout(
-                std::time::Duration::from_secs(5),
-                crate::cloud::connectors::list(&client),
-            )
-            .await
-            {
-                connected.extend(
-                    list.connectors
-                        .into_iter()
-                        .filter(|connection| !connection.needs_reauthorization)
-                        .flat_map(|connection| {
-                            std::iter::once(connection.connector_id).chain(connection.name)
-                        }),
-                );
-            }
+        if let Ok(account) = account_connectors(privacy).await {
+            connected.extend(account);
         }
     }
     connected
+}
+
+async fn account_connectors(
+    privacy: crate::platform::runtime::session::PrivacyMode,
+) -> std::result::Result<Vec<String>, crate::cloud::CloudError> {
+    let client = crate::cloud::CloudClient::connect(privacy)?;
+    let list = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        crate::cloud::connectors::list(&client),
+    )
+    .await
+    .map_err(|_| {
+        crate::cloud::CloudError::Transport("the connector lookup timed out".to_string())
+    })??;
+    Ok(list
+        .connectors
+        .into_iter()
+        .filter(|connection| !connection.needs_reauthorization)
+        .flat_map(|connection| std::iter::once(connection.connector_id).chain(connection.name))
+        .collect())
 }
 
 pub fn invoke_skill_tool(
@@ -1601,6 +1610,20 @@ pub fn format_skill_list(skills: &[Skill]) -> String {
 
 #[cfg(test)]
 mod tests {
+
+    #[tokio::test]
+    async fn a_local_or_byok_session_never_looks_up_account_connectors() {
+        use crate::platform::runtime::session::PrivacyMode;
+        for mode in [PrivacyMode::Local, PrivacyMode::Byok] {
+            let refused = super::account_connectors(mode)
+                .await
+                .expect_err("a non-Cloud session must be refused before any request");
+            assert!(
+                matches!(refused, crate::cloud::CloudError::NotManaged(seen) if seen == mode),
+                "{refused}"
+            );
+        }
+    }
 
     #[test]
     fn manifests_match_the_golden_fixtures_shared_with_the_skills_package() {

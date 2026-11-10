@@ -48,9 +48,8 @@ impl std::fmt::Display for CloudError {
             }
             CloudError::NotManaged(mode) => write!(
                 f,
-                "{}: this conversation stays on this device and is not saved to your account. \
-                 Switch to Managed with /model to sync history, projects and memory across your \
-                 devices.",
+                "{}: nothing is sent to your AGI cloud account in this mode. Switch to Cloud mode \
+                 with /model to use this.",
                 mode.trust_word()
             ),
             CloudError::ApiBase(base) => write!(
@@ -192,13 +191,20 @@ impl CloudClient {
     /// reach the account: Local and BYOK sessions are a different trust
     /// boundary and are refused here rather than at the call site.
     pub fn connect(privacy: PrivacyMode) -> Result<Self, CloudError> {
-        if privacy != PrivacyMode::Managed {
-            return Err(CloudError::NotManaged(privacy));
-        }
+        Self::admit(privacy)?;
         Self::connect_managed()
     }
 
-    pub fn connect_managed() -> Result<Self, CloudError> {
+    /// The same boundary for a transport that does not hold a `CloudClient`
+    /// (schedules, account usage): it must pass here before any request.
+    pub fn admit(privacy: PrivacyMode) -> Result<(), CloudError> {
+        if privacy != PrivacyMode::Managed {
+            return Err(CloudError::NotManaged(privacy));
+        }
+        Ok(())
+    }
+
+    fn connect_managed() -> Result<Self, CloudError> {
         let jwt = match tier_cache::load_jwt() {
             Some(jwt) if !jwt.trim().is_empty() => jwt,
             _ => return Err(CloudError::SignedOut),
@@ -745,7 +751,7 @@ mod tests {
             .err()
             .expect("a local session must be refused");
         assert!(matches!(error, CloudError::NotManaged(PrivacyMode::Local)));
-        assert!(error.to_string().contains("on this device"));
+        assert!(error.to_string().contains("Switch to Cloud mode"));
         assert!(error.is_boundary());
     }
 
@@ -756,6 +762,18 @@ mod tests {
             .expect("a byok session must be refused");
         assert!(matches!(error, CloudError::NotManaged(PrivacyMode::Byok)));
         assert!(error.is_boundary());
+    }
+
+    #[test]
+    fn account_commands_read_the_configured_mode_and_refuse_outside_cloud() {
+        for (configured, mode) in [("local", PrivacyMode::Local), ("byok", PrivacyMode::Byok)] {
+            let mut config = crate::config::CliConfig::default();
+            config.ui.privacy_mode = Some(configured.to_string());
+            let error = CloudClient::connect(config.account_privacy_mode())
+                .err()
+                .expect("keys, data export and invites must be refused before any request");
+            assert!(matches!(error, CloudError::NotManaged(seen) if seen == mode));
+        }
     }
 
     #[test]
@@ -771,9 +789,8 @@ mod tests {
         let byok = CloudError::NotManaged(PrivacyMode::Byok).to_string();
         assert_eq!(
             byok,
-            "Your key: this conversation stays on this device and is not saved to your \
-             account. Switch to Managed with /model to sync history, projects and memory \
-             across your devices."
+            "Your key: nothing is sent to your AGI cloud account in this mode. Switch to Cloud \
+             mode with /model to use this."
         );
         assert!(!byok.to_lowercase().contains("byok"));
 

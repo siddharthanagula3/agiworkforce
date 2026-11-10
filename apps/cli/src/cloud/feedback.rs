@@ -118,4 +118,13 @@ mod tests {
         let fits = "\u{1F600}".repeat(MESSAGE_LIMIT / 2);
         assert_eq!(admitted_message(&fits).unwrap(), fits);
     }
+
+    #[tokio::test]
+    async fn a_local_or_byok_session_never_sends_feedback() {
+        use crate::platform::runtime::session::PrivacyMode;
+        for mode in [PrivacyMode::Local, PrivacyMode::Byok] {
+            let reply = crate::cloud::send_feedback(mode, FeedbackKind::Bug, "it broke").await;
+            assert_eq!(reply, CloudError::NotManaged(mode).to_string());
+        }
+    }
 }

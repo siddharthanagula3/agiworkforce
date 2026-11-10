@@ -442,7 +442,17 @@ impl registry::Tool for SkillTool {
     fn read_only(&self) -> bool {
         true
     }
-    async fn invoke(&self, args: &HashMap<String, String>, _quiet: bool) -> Result<ToolResult> {
+    async fn invoke(&self, args: &HashMap<String, String>, quiet: bool) -> Result<ToolResult> {
+        self.invoke_for_session(args, quiet, crate::agent::PrivacyMode::Local)
+            .await
+    }
+
+    async fn invoke_for_session(
+        &self,
+        args: &HashMap<String, String>,
+        _quiet: bool,
+        privacy: crate::agent::PrivacyMode,
+    ) -> Result<ToolResult> {
         let action = args.get("action").map(String::as_str).unwrap_or("");
         let name = args.get("name").map(String::as_str);
         let available_tools: Vec<String> =
@@ -452,7 +462,7 @@ impl registry::Tool for SkillTool {
                 .map(|definition| definition.name)
                 .collect();
         let skills = crate::skills::discover_skills();
-        let connected = crate::skills::connected_services(&skills).await;
+        let connected = crate::skills::connected_services(&skills, privacy).await;
         match crate::skills::invoke_skill_tool(
             &skills,
             action,
@@ -939,7 +949,9 @@ async fn execute_tool_with_scoped_permissions(
         .get_or_init(build_read_only_registry)
         .get(canonical_name)
     {
-        return tool.invoke(&call.args, opts.quiet).await;
+        return tool
+            .invoke_for_session(&call.args, opts.quiet, opts.privacy_mode)
+            .await;
     }
 
     if let Some(reason) = domain_rule_refusal(canonical_name, &call.args) {

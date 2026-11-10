@@ -46,6 +46,18 @@ pub trait Tool: Send + Sync {
 
     /// Execute the tool. `quiet` suppresses status chrome (batch/sub-agent use).
     async fn invoke(&self, args: &HashMap<String, String>, quiet: bool) -> Result<ToolResult>;
+
+    /// Execute the tool for a session under `privacy`. A tool that can reach
+    /// the AGI account overrides this so the session's trust boundary decides;
+    /// every other tool runs exactly as `invoke`.
+    async fn invoke_for_session(
+        &self,
+        args: &HashMap<String, String>,
+        quiet: bool,
+        _privacy: crate::agent::PrivacyMode,
+    ) -> Result<ToolResult> {
+        self.invoke(args, quiet).await
+    }
 }
 
 /// Name-indexed collection of [`Tool`]s.

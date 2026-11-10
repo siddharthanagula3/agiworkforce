@@ -115,7 +115,10 @@ pub(super) async fn handle_slash_command(
             };
         }
         crate::claude_parity::ParityCommandResult::Feedback { kind, message } => {
-            eprintln!("{}", crate::cloud::send_feedback(kind, &message).await);
+            eprintln!(
+                "{}",
+                crate::cloud::send_feedback(session.privacy_mode, kind, &message).await
+            );
             return SlashResult::Handled;
         }
         crate::claude_parity::ParityCommandResult::NotHandled => {}
@@ -256,7 +259,8 @@ pub(super) async fn handle_slash_command(
             let agents = crate::agents::discover_agents();
             output::print_block(&crate::agents::format_subagents(&agents));
         }
-        "/personalize" => match crate::cloud::personalization::run(arg).await {
+        "/personalize" => match crate::cloud::personalization::run(session.privacy_mode, arg).await
+        {
             Ok(text) => output::print_block(&text),
             Err(reason) => output::print_warn(&reason),
         },
@@ -311,6 +315,7 @@ pub(super) async fn handle_slash_command(
         "/usage" => {
             output::print_block(
                 &crate::usage_summary::render_usage_report(
+                    session.privacy_mode,
                     &crate::usage_summary::SessionEstimate {
                         turns: session.cost_ledger.turns,
                         input_tokens: session.total_input_tokens,

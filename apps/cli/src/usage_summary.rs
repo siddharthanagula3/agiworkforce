@@ -502,7 +502,22 @@ async fn fetch_account_body_for(
     })
 }
 
-pub async fn account_lines() -> Vec<String> {
+pub async fn account_lines(
+    privacy: crate::platform::runtime::session::PrivacyMode,
+) -> Result<Vec<String>, crate::cloud::CloudError> {
+    crate::cloud::CloudClient::admit(privacy)?;
+    Ok(managed_account_lines().await)
+}
+
+async fn account_lines_or_notice(
+    privacy: crate::platform::runtime::session::PrivacyMode,
+) -> Vec<String> {
+    account_lines(privacy)
+        .await
+        .unwrap_or_else(|refused| unavailable_lines(&refused.to_string()))
+}
+
+async fn managed_account_lines() -> Vec<String> {
     let jwt = match usage_mode() {
         UsageMode::Managed(jwt) => jwt,
         UsageMode::LocalOnly(reason) => return unavailable_lines(reason),
@@ -522,8 +537,10 @@ pub async fn account_lines() -> Vec<String> {
 
 /// The TUI slash dispatcher is synchronous; an owned current-thread runtime
 /// keeps this off whatever reactor the caller is already on.
-pub fn account_lines_blocking() -> Vec<String> {
-    std::thread::spawn(|| {
+pub fn account_lines_blocking(
+    privacy: crate::platform::runtime::session::PrivacyMode,
+) -> Vec<String> {
+    std::thread::spawn(move || {
         let runtime = match tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
@@ -531,7 +548,7 @@ pub fn account_lines_blocking() -> Vec<String> {
             Ok(runtime) => runtime,
             Err(error) => return unavailable_lines(&error.to_string()),
         };
-        runtime.block_on(account_lines())
+        runtime.block_on(account_lines_or_notice(privacy))
     })
     .join()
     .unwrap_or_else(|_| unavailable_lines("the usage lookup thread stopped"))
@@ -879,8 +896,11 @@ pub fn render_session_estimate(estimate: &SessionEstimate) -> Vec<String> {
     lines
 }
 
-pub async fn render_usage_report(estimate: &SessionEstimate) -> String {
-    let mut lines = account_lines().await;
+pub async fn render_usage_report(
+    privacy: crate::platform::runtime::session::PrivacyMode,
+    estimate: &SessionEstimate,
+) -> String {
+    let mut lines = account_lines_or_notice(privacy).await;
     lines.push(String::new());
     lines.extend(render_session_estimate(estimate));
     lines.join("\n")
@@ -889,6 +909,27 @@ pub async fn render_usage_report(estimate: &SessionEstimate) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[tokio::test]
+    async fn a_local_or_byok_session_never_reads_account_usage() {
+        use crate::platform::runtime::session::PrivacyMode;
+        for mode in [PrivacyMode::Local, PrivacyMode::Byok] {
+            let refusal = crate::cloud::CloudError::NotManaged(mode).to_string();
+            let refused = account_lines(mode)
+                .await
+                .expect_err("`agi usage` must be refused before any request");
+            assert_eq!(refused.to_string(), refusal);
+
+            let report = render_usage_report(mode, &SessionEstimate::default()).await;
+            assert!(report.contains(&refusal), "{report}");
+
+            let screen = account_lines_blocking(mode);
+            assert!(
+                screen.iter().any(|line| line.contains(&refusal)),
+                "{screen:?}"
+            );
+        }
+    }
 
     fn contract_fixture() -> &'static str {
         r#"{

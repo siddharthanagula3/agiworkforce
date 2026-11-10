@@ -6078,7 +6078,9 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 by_model: app.session.cost_ledger.model_breakdown(),
                 turn_count: app.session.cost_ledger.turns,
                 model: crate::model_catalog::display_name(&app.session.model),
-                account_lines: crate::usage_summary::account_lines_blocking(),
+                account_lines: crate::usage_summary::account_lines_blocking(
+                    app.session.privacy_mode,
+                ),
             };
             SlashResult::SystemMessage(render_usage(&usage))
         }
@@ -7224,7 +7226,11 @@ async fn run_event_loop(
                                 });
                             }
                             SlashResult::RunPersonalize(argument) => {
-                                let text = match crate::cloud::personalization::run(&argument).await
+                                let text = match crate::cloud::personalization::run(
+                                    app.session.privacy_mode,
+                                    &argument,
+                                )
+                                .await
                                 {
                                     Ok(text) | Err(text) => text,
                                 };
@@ -7308,7 +7314,12 @@ async fn run_event_loop(
                                 });
                             }
                             SlashResult::RunFeedback(kind, message) => {
-                                let text = crate::cloud::send_feedback(kind, &message).await;
+                                let text = crate::cloud::send_feedback(
+                                    app.session.privacy_mode,
+                                    kind,
+                                    &message,
+                                )
+                                .await;
                                 app.chat_messages.push(ChatMessage {
                                     role: ChatRole::System,
                                     text,

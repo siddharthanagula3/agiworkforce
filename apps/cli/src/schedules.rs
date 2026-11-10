@@ -22,7 +22,7 @@ pub const DEFAULT_RUN_LIMIT: u32 = 20;
 pub enum ScheduleError {
     SignedOut,
     SessionExpired,
-    LocalPrivacy,
+    NotManaged(crate::platform::runtime::session::PrivacyMode),
     ApiBase(String),
     Transport(String),
     Api { status: u16, message: String },
@@ -38,10 +38,9 @@ impl std::fmt::Display for ScheduleError {
             ScheduleError::SessionExpired => {
                 f.write_str("your AGI session expired, sign in again with `agi login`")
             }
-            ScheduleError::LocalPrivacy => f.write_str(
-                "schedules are unavailable in Local privacy mode: a scheduled task runs in AGI cloud, \
-                 so its prompt must leave this device. Switch to Managed mode to use schedules.",
-            ),
+            ScheduleError::NotManaged(mode) => {
+                write!(f, "{}", crate::cloud::CloudError::NotManaged(*mode))
+            }
             ScheduleError::ApiBase(base) => write!(
                 f,
                 "AGIWORKFORCE_API_BASE must be an https agiworkforce.com host or a loopback dev server, got '{base}'"
@@ -227,7 +226,11 @@ pub struct SchedulesClient {
 }
 
 impl SchedulesClient {
-    pub fn connect() -> Result<Self, ScheduleError> {
+    pub fn connect(
+        privacy: crate::platform::runtime::session::PrivacyMode,
+    ) -> Result<Self, ScheduleError> {
+        crate::cloud::CloudClient::admit(privacy)
+            .map_err(|_| ScheduleError::NotManaged(privacy))?;
         let jwt = require_jwt(tier_cache::load_jwt())?;
         let raw_base = std::env::var("AGIWORKFORCE_API_BASE")
             .unwrap_or_else(|_| tier_cache::default_api_base().to_string());
@@ -754,10 +757,18 @@ mod tests {
     }
 
     #[test]
-    fn the_local_privacy_refusal_explains_where_the_prompt_would_go() {
-        let message = ScheduleError::LocalPrivacy.to_string();
-        assert!(message.contains("Local privacy mode"), "{message}");
-        assert!(message.contains("must leave this device"), "{message}");
+    fn a_local_or_byok_session_is_refused_before_any_schedule_request() {
+        use crate::platform::runtime::session::PrivacyMode;
+        for mode in [PrivacyMode::Local, PrivacyMode::Byok] {
+            let refused = SchedulesClient::connect(mode)
+                .err()
+                .expect("a non-Cloud session must be refused before any request");
+            assert!(matches!(refused, ScheduleError::NotManaged(seen) if seen == mode));
+            assert_eq!(
+                refused.to_string(),
+                crate::cloud::CloudError::NotManaged(mode).to_string()
+            );
+        }
     }
 
     fn sample_schedule() -> Schedule {
