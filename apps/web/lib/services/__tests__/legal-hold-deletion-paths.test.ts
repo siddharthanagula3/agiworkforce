@@ -124,8 +124,20 @@ function world(hold: 'custodian' | 'released' = 'custodian') {
       },
     ],
     notifications: [
-      { id: 'note-held', user_id: HELD, created_at: old },
-      { id: 'note-free', user_id: FREE, created_at: old },
+      {
+        id: 'note-held',
+        user_id: HELD,
+        target_kind: 'chat',
+        target_id: 'conv-held',
+        created_at: old,
+      },
+      {
+        id: 'note-free',
+        user_id: FREE,
+        target_kind: 'chat',
+        target_id: 'conv-free',
+        created_at: old,
+      },
     ],
     image_generation_jobs: [
       { id: 'image-held', conversation_id: 'conv-held', status: 'completed', created_at: old },
@@ -247,7 +259,9 @@ describe('every destructive path carries the gate inside its own statement', () 
     expect(candidateIndex).toBeGreaterThanOrEqual(0);
     expect(mocks.deleteStoredMediaObjects).toHaveBeenCalledWith(['a.bin']);
 
-    const deletion = destructive(calls)[0];
+    const confirmation = calls.find((call) => /for update of candidate/u.test(call.sql));
+    expect(confirmation?.sql).toContain(expectedPredicate('file', 'candidate', 2));
+    const deletion = calls.find((call) => /delete from public\.media_assets/u.test(call.sql));
     expect(deletion?.sql).toContain(expectedPredicate('file', 'target', 2));
   });
 

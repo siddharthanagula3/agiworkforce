@@ -145,6 +145,7 @@ async function handleGet(
                 id: custody.id,
                 previousHash: custody.previousHash,
                 entryHash: custody.entryHash,
+                completedAt: custody.completedAt,
               },
             }) + '\n',
           ),
