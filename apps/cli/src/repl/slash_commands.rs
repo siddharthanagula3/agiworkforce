@@ -641,19 +641,17 @@ pub(super) async fn handle_slash_command(
             print_help();
         }
         _ => {
-            if let Some(prompt) = crate::custom_commands::expand_custom_slash_invocation(input) {
-                return SlashResult::Prompt(prompt);
-            }
-            match crate::skills::skill_command_prompt(cmd.trim_start_matches('/'), arg) {
+            match crate::command_registry::expand_dynamic_slash_invocation(
+                input,
+                cmd.trim_start_matches('/'),
+                arg,
+            ) {
                 Some(Ok(prompt)) => return SlashResult::Prompt(prompt),
                 Some(Err(reason)) => {
                     output::print_warn(&reason);
                     return SlashResult::Handled;
                 }
                 None => {}
-            }
-            if let Some(prompt) = crate::command_registry::expand_plugin_command_invocation(input) {
-                return SlashResult::Prompt(prompt);
             }
             if input.trim_start().starts_with("/mcp:") {
                 return SlashResult::McpPrompt(input.to_string());

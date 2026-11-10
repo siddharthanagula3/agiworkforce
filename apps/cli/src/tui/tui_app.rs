@@ -4674,31 +4674,46 @@ fn handle_model_picker_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
         PickerAction::Select {
             model_id,
             provider_id,
-            effort: _effort,
+            effort,
             banner,
         } => {
             app.input.clear();
             app.cursor = 0;
-            let switched = if provider_id == crate::design_system::ProviderId::AGICloud {
-                app.session.switch_managed_model(&model_id)
-            } else {
-                app.session.switch_model(&model_id)
-            };
-            let text = match switched {
-                Ok(()) => banner,
-                Err(err) => format!(
-                    "Model switch failed: {}",
-                    crate::errors::terminal_text(&err)
-                ),
-            };
-            app.sync_stats();
-            app.chat_messages.push(ChatMessage {
-                role: ChatRole::System,
-                text,
-            });
+            finish_model_pick(app, &model_id, provider_id, effort, banner);
             InputAction::None
         }
     }
+}
+
+fn finish_model_pick(
+    app: &mut TuiApp,
+    model_id: &str,
+    provider_id: crate::design_system::ProviderId,
+    effort: Option<crate::design_system::Effort>,
+    banner: String,
+) {
+    let switched = if provider_id == crate::design_system::ProviderId::AGICloud {
+        app.session.switch_managed_model(model_id)
+    } else {
+        app.session.switch_model(model_id)
+    };
+    let text = match switched {
+        Ok(()) => {
+            if let Some(effort) = effort {
+                app.effort = effort;
+            }
+            banner
+        }
+        Err(err) => format!(
+            "Model switch failed: {}",
+            crate::errors::terminal_text(&err)
+        ),
+    };
+    app.sync_stats();
+    app.chat_messages.push(ChatMessage {
+        role: ChatRole::System,
+        text,
+    });
 }
 
 /// The model after `current` in `candidates`, wrapping, that `usable` accepts.
@@ -5132,6 +5147,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 let all = available_picker_models();
                 let current = app.model_name.clone();
                 app.model_picker.open(&all, &current);
+                app.model_picker.effort = app.effort;
                 SlashResult::SystemMessage(String::new()) // picker UI handles confirmation
             } else {
                 match app.session.switch_model_by_name(arg) {
@@ -7276,10 +7292,8 @@ async fn run_event_loop(
                                 app.chat_messages.push(ChatMessage {
                                     role: ChatRole::System,
                                     text: format!(
-                                        "Context compacted: ~{} -> ~{} tokens ({}% of limit).",
-                                        result.before.used_tokens,
-                                        result.after.used_tokens,
-                                        (result.after.used_fraction * 100.0) as u32
+                                        "{}.",
+                                        crate::compaction::compaction_receipt(&result)
                                     ),
                                 });
                             }
@@ -9254,6 +9268,55 @@ mod tests {
             "{reached:?}"
         );
         assert!(!reached.contains(&InteractionMode::FullAuto), "{reached:?}");
+    }
+
+    #[test]
+    fn a_model_picker_selection_applies_its_effort_only_when_the_switch_succeeds() {
+        use crate::design_system::{Effort, ProviderId};
+        let mut app = minimal_app();
+        let current = app.session.model.clone();
+
+        app.effort = Effort::Low;
+        finish_model_pick(
+            &mut app,
+            &current,
+            ProviderId::Anthropic,
+            Some(Effort::High),
+            "banner".to_string(),
+        );
+        assert_eq!(app.effort, Effort::High);
+
+        finish_model_pick(
+            &mut app,
+            &current,
+            ProviderId::Anthropic,
+            None,
+            "banner".to_string(),
+        );
+        assert_eq!(app.effort, Effort::High);
+
+        app.effort = Effort::Low;
+        finish_model_pick(
+            &mut app,
+            "fixture-unknown-model",
+            ProviderId::Anthropic,
+            Some(Effort::High),
+            "banner".to_string(),
+        );
+        assert_eq!(app.effort, Effort::Low);
+        assert!(app
+            .chat_messages
+            .last()
+            .is_some_and(|message| message.text.starts_with("Model switch failed")));
+    }
+
+    #[test]
+    fn opening_the_model_picker_starts_from_the_effort_in_force() {
+        let mut app = minimal_app();
+        app.effort = crate::design_system::Effort::High;
+        let _ = handle_slash("/model", &mut app);
+        assert!(app.model_picker.visible);
+        assert_eq!(app.model_picker.effort, crate::design_system::Effort::High);
     }
 
     #[test]

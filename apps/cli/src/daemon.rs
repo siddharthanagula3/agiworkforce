@@ -1314,10 +1314,7 @@ async fn execute_trigger(
     let duration = start.elapsed();
 
     // Build the log entry
-    let (status, response_text) = match &result {
-        Ok(turn) => ("success".to_string(), turn.response.clone()),
-        Err(e) => ("error".to_string(), format!("{:#}", e)),
-    };
+    let (status, response_text, incomplete) = trigger_outcome(&result);
 
     // CLI-3 (audit 2026-05-03): redact well-known secret patterns before
     // persisting prompt + response to disk. Webhook trigger payloads can
@@ -1335,6 +1332,7 @@ async fn execute_trigger(
         "context": event.context.as_ref().map(|c| redact_secrets(c)),
         "status": status,
         "response": redact_secrets(&response_text),
+        "incomplete": incomplete,
         "duration_ms": duration.as_millis() as u64,
     });
 
@@ -1374,6 +1372,24 @@ async fn execute_trigger(
         status
     );
     Ok(())
+}
+
+fn trigger_outcome(
+    result: &Result<crate::agent::TurnResult>,
+) -> (String, String, serde_json::Value) {
+    match result {
+        Ok(turn) => (
+            "success".to_string(),
+            turn.response.clone(),
+            turn.incomplete
+                .map_or(serde_json::Value::Null, |cause| cause.receipt()),
+        ),
+        Err(e) => (
+            "error".to_string(),
+            format!("{:#}", e),
+            serde_json::Value::Null,
+        ),
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1432,6 +1448,57 @@ async fn wait_for_shutdown_signal() {
 mod tests {
     use super::*;
     use crate::hooks::{TriggerConfig, TriggerType, TriggersConfig};
+
+    fn turn(
+        response: &str,
+        incomplete: Option<crate::errors::IncompleteTurnCause>,
+    ) -> crate::agent::TurnResult {
+        crate::agent::TurnResult {
+            response: response.to_string(),
+            input_tokens: 0,
+            output_tokens: 0,
+            cache_read_tokens: 0,
+            cache_creation_tokens: 0,
+            cost_usd: 0.0,
+            via_subscription: false,
+            incomplete,
+            managed_request_ids: Vec::new(),
+            sources: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn a_cut_short_answer_keeps_its_qualification_in_the_result_record() {
+        let cut = turn(
+            "partial analysis",
+            Some(crate::errors::IncompleteTurnCause::OutputLimitReached),
+        );
+        let (status, response, incomplete) = trigger_outcome(&Ok(cut));
+
+        assert_eq!(status, "success");
+        assert_eq!(response, "partial analysis");
+        assert_eq!(incomplete["kind"], "output_limit_reached");
+        assert_eq!(
+            incomplete["message"],
+            crate::errors::IncompleteTurnCause::OutputLimitReached.summary()
+        );
+        assert_eq!(
+            incomplete["hint"],
+            crate::errors::IncompleteTurnCause::OutputLimitReached.next_move()
+        );
+    }
+
+    #[test]
+    fn a_whole_answer_and_a_failure_carry_no_qualification() {
+        let (status, _, incomplete) = trigger_outcome(&Ok(turn("done", None)));
+        assert_eq!(status, "success");
+        assert!(incomplete.is_null());
+
+        let (status, response, incomplete) = trigger_outcome(&Err(anyhow::anyhow!("boom")));
+        assert_eq!(status, "error");
+        assert_eq!(response, "boom");
+        assert!(incomplete.is_null());
+    }
 
     #[tokio::test]
     async fn daemon_auto_profile_refuses_credential_blind_byok_routing() {

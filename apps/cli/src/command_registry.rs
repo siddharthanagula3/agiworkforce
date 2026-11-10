@@ -159,6 +159,31 @@ fn expand_plugin_command_from_files(
     crate::custom_commands::expand_command_file(path, args)
 }
 
+/// The prompt a non-builtin slash command resolves to, in the precedence the
+/// palette registers its entries: skill, then plugin command, then custom
+/// command. `Err` is a skill that matched but cannot load.
+pub(crate) fn expand_dynamic_slash_invocation(
+    input: &str,
+    name: &str,
+    request: &str,
+) -> Option<std::result::Result<String, String>> {
+    resolve_dynamic_slash_invocation(
+        || crate::skills::skill_command_prompt(name, request),
+        || expand_plugin_command_invocation(input),
+        || crate::custom_commands::expand_custom_slash_invocation(input),
+    )
+}
+
+fn resolve_dynamic_slash_invocation(
+    skill: impl FnOnce() -> Option<std::result::Result<String, String>>,
+    plugin: impl FnOnce() -> Option<String>,
+    custom: impl FnOnce() -> Option<String>,
+) -> Option<std::result::Result<String, String>> {
+    skill()
+        .or_else(|| plugin().map(Ok))
+        .or_else(|| custom().map(Ok))
+}
+
 fn push_plugin_command(
     path: &std::path::Path,
     reserved_names: &std::collections::HashSet<String>,
@@ -591,6 +616,42 @@ mod tests {
         assert_eq!(
             expand_plugin_command_from_files(&files, "Registry-Audit-Example", ""),
             Some("Audit  against ".to_string())
+        );
+    }
+
+    #[test]
+    fn a_colliding_name_runs_the_entry_the_palette_shows() {
+        let skill = || Some(Ok("skill body".to_string()));
+        let plugin = || Some("plugin body".to_string());
+        let custom = || Some("custom body".to_string());
+
+        assert_eq!(
+            resolve_dynamic_slash_invocation(skill, plugin, custom),
+            Some(Ok("skill body".to_string()))
+        );
+        assert_eq!(
+            resolve_dynamic_slash_invocation(|| None, plugin, custom),
+            Some(Ok("plugin body".to_string()))
+        );
+        assert_eq!(
+            resolve_dynamic_slash_invocation(|| None, || None, custom),
+            Some(Ok("custom body".to_string()))
+        );
+        assert_eq!(
+            resolve_dynamic_slash_invocation(|| None, || None, || None),
+            None
+        );
+    }
+
+    #[test]
+    fn a_skill_that_cannot_load_does_not_fall_through_to_a_custom_command() {
+        assert_eq!(
+            resolve_dynamic_slash_invocation(
+                || Some(Err("missing tools".to_string())),
+                || None,
+                || Some("custom body".to_string()),
+            ),
+            Some(Err("missing tools".to_string()))
         );
     }
 

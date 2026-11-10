@@ -101,19 +101,40 @@ pub(crate) fn expand_command_file(path: &Path, args: &str) -> Option<String> {
 }
 
 fn expand_command_body(content: &str, args: &str) -> String {
+    const ALL_ARGUMENTS: &str = "$ARGUMENTS";
     let positional = split_positional_args(args);
-    let mut out = content.to_string();
+    let mut out = String::with_capacity(content.len() + args.len());
+    let mut substituted = false;
+    let mut rest = content;
 
-    if out.contains("$ARGUMENTS") {
-        out = out.replace("$ARGUMENTS", args);
+    while let Some(offset) = rest.find('$') {
+        out.push_str(&rest[..offset]);
+        let tail = &rest[offset..];
+        if tail.starts_with(ALL_ARGUMENTS) {
+            out.push_str(args);
+            substituted = true;
+            rest = &tail[ALL_ARGUMENTS.len()..];
+            continue;
+        }
+        let digit = tail[1..]
+            .chars()
+            .next()
+            .and_then(|ch| ch.to_digit(10))
+            .filter(|digit| (1..=9).contains(digit));
+        if let Some(digit) = digit {
+            if let Some(value) = positional.get(digit as usize - 1) {
+                out.push_str(value);
+            }
+            substituted = true;
+            rest = &tail[2..];
+            continue;
+        }
+        out.push('$');
+        rest = &tail[1..];
     }
-    for index in 1..=9 {
-        let placeholder = format!("${index}");
-        let replacement = positional.get(index - 1).map(String::as_str).unwrap_or("");
-        out = out.replace(&placeholder, replacement);
-    }
+    out.push_str(rest);
 
-    if out == content && !args.trim().is_empty() {
+    if !substituted && !args.trim().is_empty() {
         out.push_str("\n\n");
         out.push_str(args.trim());
     }
@@ -373,6 +394,43 @@ mod tests {
         assert_eq!(
             expand_custom_command(&command, "main release"),
             "Review main then main release"
+        );
+    }
+
+    #[test]
+    fn argument_text_is_never_read_back_as_a_placeholder() {
+        assert_eq!(
+            expand_command_body("Explain this amount: $ARGUMENTS", "$5"),
+            "Explain this amount: $5"
+        );
+        assert_eq!(
+            expand_command_body("Compare $1 with $2", "$2 beta"),
+            "Compare $2 with beta"
+        );
+        assert_eq!(
+            expand_command_body("Echo $ARGUMENTS then $1", "$ARGUMENTS"),
+            "Echo $ARGUMENTS then $ARGUMENTS"
+        );
+    }
+
+    #[test]
+    fn missing_positional_arguments_expand_to_nothing_and_stray_dollars_stay() {
+        assert_eq!(
+            expand_command_body("Cost $1 or $9 in $USD, $0 and $", "only"),
+            "Cost only or  in $USD, $0 and $"
+        );
+        assert_eq!(expand_command_body("Review $1", ""), "Review ");
+    }
+
+    #[test]
+    fn arguments_are_appended_when_the_body_names_no_placeholder() {
+        assert_eq!(
+            expand_command_body("Review the diff", " main "),
+            "Review the diff\n\nmain"
+        );
+        assert_eq!(
+            expand_command_body("Review the diff", "  "),
+            "Review the diff"
         );
     }
 
