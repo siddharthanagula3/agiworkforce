@@ -364,30 +364,6 @@ export async function recordVerifiedMobileIapPurchase(input: {
     }
     throw error;
   }
-  if (result.status === 'already_processed' || input.verified.environment === 'sandbox') {
-    return result;
-  }
-  try {
-    await recordMobileIapStoreCommission(input.db, {
-      userId: input.userId,
-      platform: input.verified.platform,
-      product: input.verified.product,
-      storeTransactionId: input.verified.storeTransactionId,
-      originalTransactionId: input.verified.originalTransactionId,
-      purchasedAt: input.verified.purchasedAt,
-      purchaseCountry: input.verified.purchaseCountry ?? null,
-    });
-  } catch (error) {
-    logger.error(
-      {
-        event: 'store_commission_not_recorded',
-        error: error instanceof Error ? error.message : String(error),
-        platform: input.verified.platform,
-        storeTransactionId: input.verified.storeTransactionId,
-      },
-      'The store commission on a granted purchase is missing from the COGS ledger',
-    );
-  }
   return result;
 }
 
@@ -402,11 +378,130 @@ async function grantVerifiedMobileIapPurchase(input: {
   }
 
   return input.db.transaction(async (tx) => {
-    const existingReceipt = await findExistingReceipt(tx, input.verified);
-    if (existingReceipt) {
-      if (existingReceipt.user_id !== input.userId) {
-        throw createError.forbidden('This store receipt belongs to another account.');
-      }
+    const result = await grantWithinTransaction(tx, input);
+    if (input.verified.environment !== 'sandbox') {
+      await recordMobileIapStoreCommission(tx, {
+        userId: input.userId,
+        platform: input.verified.platform,
+        product: input.verified.product,
+        storeTransactionId: input.verified.storeTransactionId,
+        originalTransactionId: input.verified.originalTransactionId,
+        purchasedAt: input.verified.purchasedAt,
+        purchaseCountry: input.verified.purchaseCountry ?? null,
+      });
+    }
+    return result;
+  });
+}
+
+async function grantWithinTransaction(
+  tx: DatabaseAdapter,
+  input: {
+    userId: string;
+    purchaseToken: string;
+    verified: VerifiedMobileIapPurchase;
+  },
+): Promise<MobileIapVerifyResponse> {
+  const existingReceipt = await findExistingReceipt(tx, input.verified);
+  if (existingReceipt) {
+    if (existingReceipt.user_id !== input.userId) {
+      throw createError.forbidden('This store receipt belongs to another account.');
+    }
+    return {
+      success: true,
+      kind: input.verified.product.kind,
+      productKey: input.verified.product.key,
+      status: 'already_processed',
+      ...(input.verified.product.kind === 'subscription'
+        ? {
+            planTier: input.verified.product.planTier,
+            currentPeriodEnd: input.verified.expiresAt?.toISOString() ?? null,
+          }
+        : { unitsGranted: input.verified.product.units }),
+    };
+  }
+
+  const [subscription] = await tx.query<ExistingSubscription>(
+    `select id, plan_tier, status, stripe_subscription_id,
+              apple_original_transaction_id, google_purchase_token,
+              current_period_start, current_period_end, plan_catalog_version
+         from public.subscriptions
+        where user_id = $1
+        limit 1
+        for update`,
+    [input.userId],
+  );
+
+  if (await hasWithdrawnStoreConsent(tx, input.userId)) {
+    throw createError.conflict(STORE_PURCHASE_CONSENT_WITHDRAWN).asUserSafe();
+  }
+
+  const [deletion] = await tx.query<{ deletion_scheduled_for: string | Date | null }>(
+    'select deletion_scheduled_for from public.profiles where id = $1 limit 1',
+    [input.userId],
+  );
+  if (deletion?.deletion_scheduled_for) {
+    throw createError.conflict(PLAN_CHANGE_REFUSED_DURING_DELETION).asUserSafe();
+  }
+
+  if (
+    isUnfundedStorePurchase(input.verified) &&
+    !(await readStoreTestPurchasesAllowed(input.userId))
+  ) {
+    throw createError.forbidden(STORE_TEST_PURCHASE_REFUSED).asUserSafe();
+  }
+
+  const handoff = resolveSubscriptionOwnerHandoff(subscription, input.verified.platform);
+  if (input.verified.product.kind === 'subscription') {
+    if (handoff.blocked) {
+      throw createError.conflict(subscriptionOwnerHandoffConflictMessage(handoff));
+    }
+    if (!input.verified.expiresAt) {
+      throw createError.badRequest('Verified subscription is missing its renewal date.');
+    }
+    if (heldByAnotherStorePurchase(subscription, input)) {
+      throw createError.conflict(STORE_PLAN_HELD_BY_ANOTHER_PURCHASE).asUserSafe();
+    }
+  } else if (!mobileIapCountrySellsTopUps(input.verified.purchaseCountry)) {
+    throw createError.conflict(STORE_TOP_UP_NOT_SOLD_IN_COUNTRY).asUserSafe();
+  } else if (!ownsPaidPlanForTopUp(subscription)) {
+    throw createError.conflict('Start or restore an active paid plan before buying a top-up.');
+  }
+
+  const [receipt] = await tx.query<{ id: string }>(
+    `insert into public.mobile_iap_transactions (
+         user_id, platform, product_key, product_id, product_kind,
+         store_transaction_id, purchase_token_hash, original_transaction_id,
+         plan_tier, units_granted, intended_amount_cents, status,
+         environment, purchased_at, expires_at, processed_at
+       ) values (
+         $1, $2, $3, $4, $5,
+         $6, $7, $8,
+         $9, $10, $11, 'pending',
+         $12, $13, $14, null
+       )
+       on conflict do nothing
+       returning id`,
+    [
+      input.userId,
+      input.verified.platform,
+      input.verified.product.key,
+      input.verified.product.productId,
+      input.verified.product.kind,
+      input.verified.storeTransactionId,
+      input.verified.purchaseTokenHash,
+      input.verified.originalTransactionId,
+      input.verified.product.kind === 'subscription' ? input.verified.product.planTier : null,
+      input.verified.product.kind === 'top_up' ? input.verified.product.units : 0,
+      intendedAmountCents(input.verified.product),
+      input.verified.environment,
+      input.verified.purchasedAt.toISOString(),
+      input.verified.expiresAt?.toISOString() ?? null,
+    ],
+  );
+  if (!receipt) {
+    const racedReceipt = await findExistingReceipt(tx, input.verified);
+    if (racedReceipt?.user_id === input.userId) {
       return {
         success: true,
         kind: input.verified.product.kind,
@@ -420,180 +515,85 @@ async function grantVerifiedMobileIapPurchase(input: {
           : { unitsGranted: input.verified.product.units }),
       };
     }
+    throw createError.forbidden('This store receipt has already been used.');
+  }
 
-    const [subscription] = await tx.query<ExistingSubscription>(
-      `select id, plan_tier, status, stripe_subscription_id,
-              apple_original_transaction_id, google_purchase_token,
-              current_period_start, current_period_end, plan_catalog_version
-         from public.subscriptions
-        where user_id = $1
-        limit 1
-        for update`,
+  if (input.verified.product.kind === 'top_up') {
+    const [balance] = await tx.query<{ account_id: string }>(
+      `select account_id from public.get_credit_balance_microusd($1) limit 1`,
       [input.userId],
     );
-
-    if (await hasWithdrawnStoreConsent(tx, input.userId)) {
-      throw createError.conflict(STORE_PURCHASE_CONSENT_WITHDRAWN).asUserSafe();
+    if (!balance?.account_id) {
+      throw createError.conflict('No active credit account is available for this top-up.');
     }
-
-    const [deletion] = await tx.query<{ deletion_scheduled_for: string | Date | null }>(
-      'select deletion_scheduled_for from public.profiles where id = $1 limit 1',
-      [input.userId],
-    );
-    if (deletion?.deletion_scheduled_for) {
-      throw createError.conflict(PLAN_CHANGE_REFUSED_DURING_DELETION).asUserSafe();
-    }
-
-    if (
-      isUnfundedStorePurchase(input.verified) &&
-      !(await readStoreTestPurchasesAllowed(input.userId))
-    ) {
-      throw createError.forbidden(STORE_TEST_PURCHASE_REFUSED).asUserSafe();
-    }
-
-    const handoff = resolveSubscriptionOwnerHandoff(subscription, input.verified.platform);
-    if (input.verified.product.kind === 'subscription') {
-      if (handoff.blocked) {
-        throw createError.conflict(subscriptionOwnerHandoffConflictMessage(handoff));
-      }
-      if (!input.verified.expiresAt) {
-        throw createError.badRequest('Verified subscription is missing its renewal date.');
-      }
-      if (heldByAnotherStorePurchase(subscription, input)) {
-        throw createError.conflict(STORE_PLAN_HELD_BY_ANOTHER_PURCHASE).asUserSafe();
-      }
-    } else if (!mobileIapCountrySellsTopUps(input.verified.purchaseCountry)) {
-      throw createError.conflict(STORE_TOP_UP_NOT_SOLD_IN_COUNTRY).asUserSafe();
-    } else if (!ownsPaidPlanForTopUp(subscription)) {
-      throw createError.conflict('Start or restore an active paid plan before buying a top-up.');
-    }
-
-    const [receipt] = await tx.query<{ id: string }>(
-      `insert into public.mobile_iap_transactions (
-         user_id, platform, product_key, product_id, product_kind,
-         store_transaction_id, purchase_token_hash, original_transaction_id,
-         plan_tier, units_granted, intended_amount_cents, status,
-         environment, purchased_at, expires_at, processed_at
-       ) values (
-         $1, $2, $3, $4, $5,
-         $6, $7, $8,
-         $9, $10, $11, 'pending',
-         $12, $13, $14, null
-       )
-       on conflict do nothing
-       returning id`,
-      [
-        input.userId,
-        input.verified.platform,
-        input.verified.product.key,
-        input.verified.product.productId,
-        input.verified.product.kind,
-        input.verified.storeTransactionId,
-        input.verified.purchaseTokenHash,
-        input.verified.originalTransactionId,
-        input.verified.product.kind === 'subscription' ? input.verified.product.planTier : null,
-        input.verified.product.kind === 'top_up' ? input.verified.product.units : 0,
-        intendedAmountCents(input.verified.product),
-        input.verified.environment,
-        input.verified.purchasedAt.toISOString(),
-        input.verified.expiresAt?.toISOString() ?? null,
-      ],
-    );
-    if (!receipt) {
-      const racedReceipt = await findExistingReceipt(tx, input.verified);
-      if (racedReceipt?.user_id === input.userId) {
-        return {
-          success: true,
-          kind: input.verified.product.kind,
-          productKey: input.verified.product.key,
-          status: 'already_processed',
-          ...(input.verified.product.kind === 'subscription'
-            ? {
-                planTier: input.verified.product.planTier,
-                currentPeriodEnd: input.verified.expiresAt?.toISOString() ?? null,
-              }
-            : { unitsGranted: input.verified.product.units }),
-        };
-      }
-      throw createError.forbidden('This store receipt has already been used.');
-    }
-
-    if (input.verified.product.kind === 'top_up') {
-      const [balance] = await tx.query<{ account_id: string }>(
-        `select account_id from public.get_credit_balance_microusd($1) limit 1`,
-        [input.userId],
-      );
-      if (!balance?.account_id) {
-        throw createError.conflict('No active credit account is available for this top-up.');
-      }
-      await tx.execute('select public.add_credits_microusd($1, $2, $3, $4, $5, $6)', [
-        input.userId,
-        balance.account_id,
-        topUpBudgetCentsForCredits(input.verified.product.units) * MICROUSD_PER_LEDGER_CENT,
-        `Mobile ${input.verified.platform} top-up ${input.verified.storeTransactionId}`,
-        'purchase',
-        JSON.stringify({
-          ...purchasedCreditMetadata(input.verified.purchaseCountry, input.verified.purchasedAt),
-          charged_cents:
-            input.verified.environment === 'sandbox'
-              ? 0
-              : intendedAmountCents(input.verified.product),
-          charged_currency: 'usd',
-          store_environment: input.verified.environment,
-        }),
-      ]);
-      await tx.execute(
-        `update public.mobile_iap_transactions
+    await tx.execute('select public.add_credits_microusd($1, $2, $3, $4, $5, $6)', [
+      input.userId,
+      balance.account_id,
+      topUpBudgetCentsForCredits(input.verified.product.units) * MICROUSD_PER_LEDGER_CENT,
+      `Mobile ${input.verified.platform} top-up ${input.verified.storeTransactionId}`,
+      'purchase',
+      JSON.stringify({
+        ...purchasedCreditMetadata(input.verified.purchaseCountry, input.verified.purchasedAt),
+        charged_cents:
+          input.verified.environment === 'sandbox'
+            ? 0
+            : intendedAmountCents(input.verified.product),
+        charged_currency: 'usd',
+        store_environment: input.verified.environment,
+      }),
+    ]);
+    await tx.execute(
+      `update public.mobile_iap_transactions
             set status = 'granted', processed_at = now(), updated_at = now()
           where id = $1`,
-        [receipt.id],
-      );
-      await closeGrantedStoreChargeRequest(
-        tx,
-        input.userId,
-        input.verified.platform,
-        input.verified.storeTransactionId,
-      );
-      return {
-        success: true,
-        kind: 'top_up',
-        productKey: input.verified.product.key,
-        status: 'granted',
-        unitsGranted: input.verified.product.units,
-      };
-    }
+      [receipt.id],
+    );
+    await closeGrantedStoreChargeRequest(
+      tx,
+      input.userId,
+      input.verified.platform,
+      input.verified.storeTransactionId,
+    );
+    return {
+      success: true,
+      kind: 'top_up',
+      productKey: input.verified.product.key,
+      status: 'granted',
+      unitsGranted: input.verified.product.units,
+    };
+  }
 
-    // The store's notices can be ahead of the app: a transaction for a period this
-    // subscription has already reached changes nothing, so it cannot undo a newer
-    // plan or an auto-renew choice recorded since.
-    if (
-      subscription?.current_period_end &&
-      isEntitledSubscriptionStatus(subscription.status) &&
-      ownsStoreSubscriptionRow(subscription, input) &&
-      new Date(subscription.current_period_end).getTime() >= input.verified.expiresAt!.getTime()
-    ) {
-      await tx.execute(
-        `update public.mobile_iap_transactions
+  // The store's notices can be ahead of the app: a transaction for a period this
+  // subscription has already reached changes nothing, so it cannot undo a newer
+  // plan or an auto-renew choice recorded since.
+  if (
+    subscription?.current_period_end &&
+    isEntitledSubscriptionStatus(subscription.status) &&
+    ownsStoreSubscriptionRow(subscription, input) &&
+    new Date(subscription.current_period_end).getTime() >= input.verified.expiresAt!.getTime()
+  ) {
+    await tx.execute(
+      `update public.mobile_iap_transactions
             set status = 'already_processed', processed_at = now(), updated_at = now()
           where id = $1`,
-        [receipt.id],
-      );
-      return {
-        success: true,
-        kind: 'subscription',
-        productKey: input.verified.product.key,
-        status: 'already_processed',
-        planTier: input.verified.product.planTier,
-        currentPeriodEnd: new Date(subscription.current_period_end).toISOString(),
-      };
-    }
+      [receipt.id],
+    );
+    return {
+      success: true,
+      kind: 'subscription',
+      productKey: input.verified.product.key,
+      status: 'already_processed',
+      planTier: input.verified.product.planTier,
+      currentPeriodEnd: new Date(subscription.current_period_end).toISOString(),
+    };
+  }
 
-    const periodStart = storePeriodStart(subscription, {
-      purchasedAt: input.verified.purchasedAt,
-      expiresAt: input.verified.expiresAt!,
-    });
-    const [upserted] = await tx.query<{ id: string; plan_catalog_version: number | null }>(
-      `insert into public.subscriptions (
+  const periodStart = storePeriodStart(subscription, {
+    purchasedAt: input.verified.purchasedAt,
+    expiresAt: input.verified.expiresAt!,
+  });
+  const [upserted] = await tx.query<{ id: string; plan_catalog_version: number | null }>(
+    `insert into public.subscriptions (
          user_id, status, plan_tier,
          apple_original_transaction_id, google_purchase_token,
          current_period_start, current_period_end,
@@ -617,68 +617,67 @@ async function grantVerifiedMobileIapPurchase(input: {
          canceled_at = null,
          updated_at = now()
        returning id, plan_catalog_version`,
-      [
-        input.userId,
-        input.verified.product.planTier,
-        input.verified.platform === 'ios' ? input.verified.originalTransactionId : null,
-        input.verified.platform === 'android' ? input.purchaseToken : null,
-        periodStart.toISOString(),
-        input.verified.expiresAt!.toISOString(),
-        handoff.clearsStripe,
-        BILLING_PLAN_CATALOG_VERSION,
-        input.verified.cancelAtPeriodEnd ?? false,
-      ],
+    [
+      input.userId,
+      input.verified.product.planTier,
+      input.verified.platform === 'ios' ? input.verified.originalTransactionId : null,
+      input.verified.platform === 'android' ? input.purchaseToken : null,
+      periodStart.toISOString(),
+      input.verified.expiresAt!.toISOString(),
+      handoff.clearsStripe,
+      BILLING_PLAN_CATALOG_VERSION,
+      input.verified.cancelAtPeriodEnd ?? false,
+    ],
+  );
+  if (!upserted?.id) throw createError.internal('Failed to record the store subscription.');
+
+  const previousRank = planRank(subscription?.plan_tier);
+  const nextRank = planRank(input.verified.product.planTier);
+  if (
+    subscription?.id === upserted.id &&
+    previousRank >= 0 &&
+    nextRank > previousRank &&
+    subscription.current_period_end
+  ) {
+    await SubscriptionService.carryCreditsForUpgradePeriod(
+      input.userId,
+      upserted.id,
+      subscription.plan_tier,
+      input.verified.product.planTier,
+      periodStart,
+      input.verified.expiresAt!,
+      tx,
+      { previous: subscription.plan_catalog_version, next: upserted.plan_catalog_version },
     );
-    if (!upserted?.id) throw createError.internal('Failed to record the store subscription.');
+  } else {
+    await SubscriptionService.allocateCreditsForPeriod(
+      input.userId,
+      upserted.id,
+      input.verified.product.planTier,
+      periodStart,
+      input.verified.expiresAt!,
+      { db: tx, catalogVersion: upserted.plan_catalog_version },
+    );
+  }
 
-    const previousRank = planRank(subscription?.plan_tier);
-    const nextRank = planRank(input.verified.product.planTier);
-    if (
-      subscription?.id === upserted.id &&
-      previousRank >= 0 &&
-      nextRank > previousRank &&
-      subscription.current_period_end
-    ) {
-      await SubscriptionService.carryCreditsForUpgradePeriod(
-        input.userId,
-        upserted.id,
-        subscription.plan_tier,
-        input.verified.product.planTier,
-        periodStart,
-        input.verified.expiresAt!,
-        tx,
-        { previous: subscription.plan_catalog_version, next: upserted.plan_catalog_version },
-      );
-    } else {
-      await SubscriptionService.allocateCreditsForPeriod(
-        input.userId,
-        upserted.id,
-        input.verified.product.planTier,
-        periodStart,
-        input.verified.expiresAt!,
-        { db: tx, catalogVersion: upserted.plan_catalog_version },
-      );
-    }
-
-    await tx.execute(
-      `update public.mobile_iap_transactions
+  await tx.execute(
+    `update public.mobile_iap_transactions
           set status = 'active', processed_at = now(), updated_at = now()
         where id = $1`,
-      [receipt.id],
-    );
-    await closeGrantedStoreChargeRequest(
-      tx,
-      input.userId,
-      input.verified.platform,
-      input.verified.storeTransactionId,
-    );
-    return {
-      success: true,
-      kind: 'subscription',
-      productKey: input.verified.product.key,
-      status: 'active',
-      planTier: input.verified.product.planTier,
-      currentPeriodEnd: input.verified.expiresAt!.toISOString(),
-    };
-  });
+    [receipt.id],
+  );
+  await closeGrantedStoreChargeRequest(
+    tx,
+    input.userId,
+    input.verified.platform,
+    input.verified.storeTransactionId,
+  );
+  return {
+    success: true,
+    kind: 'subscription',
+    productKey: input.verified.product.key,
+    status: 'active',
+    planTier: input.verified.product.planTier,
+    currentPeriodEnd: input.verified.expiresAt!.toISOString(),
+  };
 }
