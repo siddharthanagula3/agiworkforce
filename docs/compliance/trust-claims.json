@@ -327,11 +327,11 @@
       "ledger": "COMPLIANCE",
       "label": "Subprocessor transparency",
       "owner": "Legal/compliance",
-      "reviewedOn": "2026-09-21",
+      "reviewedOn": "2026-11-10",
       "asOf": "2026-09-21",
-      "digest": "df2e961d101f27ba",
+      "digest": "a56ba8831a2cbc4d",
       "jurisdiction": "European Union and United Kingdom (DPA Annex III), and any contract that incorporates the DPA",
-      "scope": "Managed Cloud and the hosted web service",
+      "scope": "Cloud and the hosted web service",
       "implementation": ["apps/web/app/subprocessors/page.tsx"],
       "proof": [
         {
@@ -878,11 +878,11 @@
     {
       "page": "apps/web/app/trust/page.tsx",
       "ledger": "POSTURE",
-      "label": "Managed Cloud maturity",
+      "label": "Cloud maturity",
       "owner": "Founder",
-      "reviewedOn": "2026-09-21",
+      "reviewedOn": "2026-11-10",
       "asOf": "2026-08-05",
-      "digest": "61fed71722fd8149",
+      "digest": "c395cf1454d04c9f",
       "implementation": ["apps/web/lib/managed-compute-gate.ts", "apps/web/lib/e2b/gate.ts"],
       "proof": [
         {

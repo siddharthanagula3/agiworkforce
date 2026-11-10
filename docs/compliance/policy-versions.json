@@ -80,6 +80,11 @@
           "date": "2026-10-08",
           "digest": "44111b2fbfcf0402",
           "note": "The word cancel in the auto-renewal sentence now links to billing settings, where a subscription is cancelled. The wording of the sentence is unchanged, no right, obligation or commitment changes, and the owner decided on 2026-10-22 to keep the date and record this as a presentation revision."
+        },
+        {
+          "date": "2026-10-08",
+          "digest": "18f2e500d0cd48ff",
+          "note": "Editorial, recorded 2026-11-10. Product-name change in commit 3a0d329bb4 (2026-11-08): the hosted mode is now called Cloud, the label PRIVACY_MODE_DISPLAY.managed carries in packages/contracts/types/src/suite-contracts.ts since 330ef6c0b9. Every Managed Cloud, AGI Managed Cloud and AGI Cloud on this page now reads Cloud: the page description, the defined term and the Provider definition, the opening paragraph, section 04, the providers paragraph of section 05, and the heading and body of section 06. No other word changed. The defined term keeps its definition and no right, obligation, party, period or price changes, so the date does not move and no new terms acceptance version opens."
         }
       ]
     },
@@ -208,6 +213,11 @@
           "date": "2026-10-18",
           "digest": "e20f13cedee0907d",
           "note": "The legal-basis section is now a table with a visible header row reading Purpose and Legal basis, the two column headings the owner approved on 2026-10-22. Every purpose, data list and basis in the section is unchanged word for word, and no provider, recipient, retention period, right, limitation or commitment was added or removed, so the date stays."
+        },
+        {
+          "date": "2026-10-18",
+          "digest": "c72fbd1e34c18d91",
+          "note": "Editorial, recorded 2026-11-10. Product-name change in commit 3a0d329bb4 (2026-11-08): the hosted mode is now called Cloud, the label PRIVACY_MODE_DISPLAY.managed carries in packages/contracts/types/src/suite-contracts.ts since 330ef6c0b9. Managed Cloud, AGI managed cloud and AGI Cloud now read Cloud in the page description, the mode table, the Local and BYOK paragraphs, the hosted providers list, the retention rows for conversations, temporary chats and background jobs, the legal-basis row for running the assistant, the summary, the processing-role sentence and the staff-access paragraph. No other word changed and nothing collected, used, shared or retained changes, so the date does not move."
         }
       ]
     },
@@ -246,6 +256,11 @@
           "digest": "f901af7b2e2f1952",
           "note": "Re-issued on 2026-10-08, the public launch date, on the owner’s instruction. Same-day revision before release: section 02 gains seven rules, (g) to (m), on competing products and model training, bulk harvesting and distillation, election deception, content that promotes suicide, self-harm or eating disorders, sexually explicit content, attacks on critical infrastructure, and passing AI output off as human-made, plus a paragraph stating what the text filter checks and what it does not, written from apps/web/lib/moderation. The short version gains one row and the section 02 introduction says which rules are tied to a capability. The entry no longer says the text is unchanged. The date stays because the 2026-10-08 version has not shipped.",
           "summary": "Section 02 adds seven rules: no using the service or its output to build a competing product or train a competing model; no bulk harvesting of output to copy or distil a model; no deceiving voters or impersonating candidates and officials; no content that encourages or glorifies suicide, self-harm or eating disorders; no sexually explicit content; no attacks on critical infrastructure; and no passing AI output off as human-made to deceive someone. It also says plainly what the automatic text filter checks and what it does not, and that shared pages are not labelled as AI-generated."
+        },
+        {
+          "date": "2026-10-08",
+          "digest": "c0c6856eaebb242d",
+          "note": "Editorial, recorded 2026-11-10. Product-name change in commit 3a0d329bb4 (2026-11-08): the hosted mode is now called Cloud, the label PRIVACY_MODE_DISPLAY.managed carries in packages/contracts/types/src/suite-contracts.ts since 330ef6c0b9. Managed Cloud now reads Cloud in section 01, its alpha notice and the text filter paragraph. The same commit changed the English label of a shared artifact page to Shared conversation in apps/web/app/shared-artifact/[token]/PublishedArtifactView.tsx, and the product-labels paragraph now quotes that label where it quoted Shared from AGI; the statement that neither shared page says the content is AI-generated is unchanged. No rule, permission or enforcement changes, so the date does not move."
         }
       ]
     },
@@ -272,6 +287,11 @@
           "date": "2026-10-08",
           "digest": "ac62a055b7e84298",
           "note": "Editorial revision approved by the owner on 2026-10-16 after an external review of the public site, which found wording addressed to the page’s writers, rhetoric about the page’s own honesty and unqualified claims. The heading How that notice is delivered, honestly drops the word honestly. How notice reaches individuals and its limits are unchanged. No provider, recipient, retention period, right, limitation or commitment was added or removed, so the date stays."
+        },
+        {
+          "date": "2026-10-08",
+          "digest": "1c7d1c5af74cf999",
+          "note": "Editorial, recorded 2026-11-10. Product-name change in commit 3a0d329bb4 (2026-11-08): the hosted mode is now called Cloud, the label PRIVACY_MODE_DISPLAY.managed carries in packages/contracts/types/src/suite-contracts.ts since 330ef6c0b9. Managed Cloud and AGI Managed Cloud now read Cloud or AGI Cloud in the scope statement, the alpha notice, the Annex I processing description, which also says sandbox where it said managed sandbox, the DPDP section and the processor-role statement. The service the addendum covers, the parties, their roles and the processing are unchanged, so the date does not move."
         }
       ]
     },
@@ -329,6 +349,11 @@
           "date": "2026-10-08",
           "digest": "274a478175998253",
           "note": "The source column cites the identity provider file by its current name, lib/identity/Provider.tsx, after the file was renamed for the repository naming convention. No cookie, storage key or choice changed, and visitors are not asked to choose again. No provider, recipient, retention period, right, limitation or commitment was added or removed, so the date stays."
+        },
+        {
+          "date": "2026-10-08",
+          "digest": "9842d75c05e9e98c",
+          "note": "Editorial, recorded 2026-11-10. Product-name change in commit 3a0d329bb4 (2026-11-08): app names drop the AGI prefix, as PRODUCT_NAMES in packages/contracts/types/src/product-names.ts now does. The local storage row says a conversation is a Chat or an Work thread where it said a Chat or an AGI Work thread; the article was not adjusted with the name. Nothing stored, read or kept changes, so the date does not move."
         }
       ]
     },
@@ -503,6 +528,11 @@
           "date": "2026-10-08",
           "digest": "3ed7f4e151dc1f79",
           "note": "Editorial revision approved by the owner on 2026-10-16 after an external review of the public site, which found wording addressed to the page’s writers, rhetoric about the page’s own honesty and unqualified claims. Drops the words the honest answer and the honest statement from the Local mode and two-factor secrets passages, renames the deletion row It actually runs to When it runs, shortens the reason given for the single security mailbox, and the link to /trust reads Trust and compliance status. The uneven encryption at rest for older two-factor secrets, the deletion schedule and the reporting address are unchanged. No provider, recipient, retention period, right, limitation or commitment was added or removed, so the date stays."
+        },
+        {
+          "date": "2026-10-08",
+          "digest": "484c214e586e1bb1",
+          "note": "Editorial, recorded 2026-11-10. Product-name change in commit 3a0d329bb4 (2026-11-08): the hosted mode is now called Cloud, the label PRIVACY_MODE_DISPLAY.managed carries in packages/contracts/types/src/suite-contracts.ts since 330ef6c0b9. Managed Cloud and managed-cloud now read Cloud or cloud in the Local mode summary, the Cloud section, the per-mode rows for content, artifacts, files, memories, provider keys, identity, audit logs and code execution, the Desktop and CLI paragraphs and the alpha notice. No measure, location or vendor changes, so the date does not move."
         }
       ]
     },
@@ -534,6 +564,11 @@
           "date": "2026-10-08",
           "digest": "a00745b9edac5f57",
           "note": "Editorial revision approved by the owner on 2026-10-16 after an external review of the public site, which found wording addressed to the page’s writers, rhetoric about the page’s own honesty and unqualified claims. The no 24/7 coverage row says we do not offer 24/7 support where it said we do not claim it because a small team could not staff it honestly, the service level introduction drops the claim that a target and what is measured cannot drift apart, and the link to /trust reads Trust and compliance status. Every target, window and the absence of round-the-clock coverage are unchanged. No provider, recipient, retention period, right, limitation or commitment was added or removed, so the date stays."
+        },
+        {
+          "date": "2026-10-08",
+          "digest": "eadefdd049c65d7c",
+          "note": "Editorial, recorded 2026-11-10. Product-name change in commit 3a0d329bb4 (2026-11-08): the hosted mode is now called Cloud, the label PRIVACY_MODE_DISPLAY.managed carries in packages/contracts/types/src/suite-contracts.ts since 330ef6c0b9. AGI Managed Cloud now reads Cloud in the page description and the alpha notice. No commitment, target or credit changes, so the date does not move."
         }
       ]
     },
@@ -708,6 +743,11 @@
           "date": "2026-10-18",
           "digest": "5d7ac3ffd1d700b1",
           "note": "Editorial. The DPDP grievance row named the site footer as one place the grievance route is published; the footer no longer carries it, so the row lists where it is published: /privacy/india, /privacy/requests, the terms and the DPA. The officer, the mailbox and every other row are unchanged, so the date stays."
+        },
+        {
+          "date": "2026-10-18",
+          "digest": "2e173513976e775f",
+          "note": "Editorial, recorded 2026-11-10. Product-name change in commit 3a0d329bb4 (2026-11-08): the hosted mode is now called Cloud, the label PRIVACY_MODE_DISPLAY.managed carries in packages/contracts/types/src/suite-contracts.ts since 330ef6c0b9. Managed Cloud now reads Cloud in the alpha notice and in the Subprocessor transparency, Local mode isolation and Desktop credential storage rows, and the Managed Cloud maturity row is now Cloud maturity and says cloud compute where it said managed compute. No status, as-of date or evidence changes, so the date does not move. Each changed row's review is kept in docs/compliance/trust-claims.json."
         }
       ]
     },
@@ -743,6 +783,11 @@
           "date": null,
           "digest": "caded007dbecc9a9",
           "note": "Editorial revision approved by the owner on 2026-10-16 after an external review of the public site, which found wording addressed to the page’s writers, rhetoric about the page’s own honesty and unqualified claims. The Trust row reads claims, each with its date, where it said claims with honest dates, and the Data use row reads common questions, where it said the questions people actually ask. The index prints no date of its own. No provider, recipient, retention period, right, limitation or commitment was added or removed."
+        },
+        {
+          "date": null,
+          "digest": "a28f861c0cbee503",
+          "note": "Editorial, recorded 2026-11-10. Product-name change in commit 3a0d329bb4 (2026-11-08): app names drop the AGI prefix, as PRODUCT_NAMES in packages/contracts/types/src/product-names.ts now does. The mobile app terms entry says Mobile where it said AGI Mobile. This index prints no date and no policy changes."
         }
       ]
     },
@@ -769,6 +814,11 @@
           "date": "2026-10-08",
           "digest": "ffef9d4b401f937d",
           "note": "Editorial revision approved by the owner on 2026-10-16 after an external review of the public site, which found wording addressed to the page’s writers, rhetoric about the page’s own honesty and unqualified claims. Drops It is recorded here rather than glossed over and the reason given for not setting an appointment date. The page still says no representative is appointed, that the Article 27 obligation is live and unmet, and that no date is set. No provider, recipient, retention period, right, limitation or commitment was added or removed, so the date stays."
+        },
+        {
+          "date": "2026-10-08",
+          "digest": "b109b29de662eb1a",
+          "note": "Editorial, recorded 2026-11-10. Product-name change in commit 3a0d329bb4 (2026-11-08): the hosted mode is now called Cloud, the label PRIVACY_MODE_DISPLAY.managed carries in packages/contracts/types/src/suite-contracts.ts since 330ef6c0b9. The Article 27 paragraph says Cloud has been open to the public since 27 June 2026 where it said AGI Managed Cloud. The obligation, its unmet status and what to do in the meantime are unchanged, so the date does not move."
         }
       ]
     },
@@ -802,6 +852,11 @@
           "digest": "0f817b47335b1936",
           "note": "Re-issued on 2026-10-08, the public launch date, on the owner’s instruction, with one change. The age rule changed: the Children paragraph said the app is not intended for children and gave under 13 (US), under 16 (EU) and under 18 (India); it now states the rule of section 02 of the terms, at least 13 to create an account, permission from a parent or guardian under 18, not offered under 13, and the higher digital-consent age where the law sets one.",
           "summary": "Re-issued on the public launch date, 2026-10-08, with the new age rule: you must be at least 13 to create an account, anyone under 18 needs permission from a parent or guardian, and a higher digital-consent age applies where the law sets one."
+        },
+        {
+          "date": "2026-10-08",
+          "digest": "fc6c989d28ec4b27",
+          "note": "Editorial, recorded 2026-11-10. Product-name change in commit 3a0d329bb4 (2026-11-08): app names drop the AGI prefix, as PRODUCT_NAMES in packages/contracts/types/src/product-names.ts now does, and the hosted mode is now called Cloud, the label PRIVACY_MODE_DISPLAY.managed carries in packages/contracts/types/src/suite-contracts.ts. AGI Mobile now reads Mobile, and managed-cloud, managed cloud and AGI Cloud read cloud or Cloud, in the page description, the planned mode boundary, the data table, the analytics paragraph, the training statement, the AI Act section, the age rule and the app terms. No other word changed and nothing planned to be collected, used or shared changes, so the date does not move."
         }
       ]
     },
@@ -898,6 +953,11 @@
           "date": "2026-10-15",
           "digest": "333837760e7dfae7",
           "note": "Editorial revision approved by the owner on 2026-10-16 after an external review of the public site, which found wording addressed to the page’s writers, rhetoric about the page’s own honesty and unqualified claims. Section 07 is titled Your rights, and how each is handled, where it said what actually happens; section 09 is titled Children, where it said stated honestly; and the children section drops we are naming it rather than implying otherwise. The statement that no verifiable parental consent or age verification is performed, that this is a gap against the Act and that it is tracked as an open item is unchanged. No provider, recipient, retention period, right, limitation or commitment was added or removed, so the date stays."
+        },
+        {
+          "date": "2026-10-15",
+          "digest": "4f40d360f58d7026",
+          "note": "Editorial, recorded 2026-11-10. Product-name change in commit 3a0d329bb4 (2026-11-08): the hosted mode is now called Cloud, the label PRIVACY_MODE_DISPLAY.managed carries in packages/contracts/types/src/suite-contracts.ts since 330ef6c0b9. Managed Cloud now reads Cloud in the mode table, the data-category and purpose rows, the conversation retention row, the recipients summary, the providers paragraph and the alpha notice. The same commit renamed the apps in the install-notice consent purpose this page reads from apps/web/lib/consent-purposes.ts, which now says Mobile, the Chrome extension or the VS Code extension where it said AGI Mobile, AGI in Chrome or AGI in VS Code. Nothing collected, used, shared or retained changes and no data-principal right changes, so the date does not move."
         }
       ]
     },
@@ -961,6 +1021,11 @@
           "date": "2026-10-15",
           "digest": "c8600ec9f51b382d",
           "note": "Editorial clarification made on 2026-10-18 after the external public-site review (finding COPY-02): the answer to where data is physically held began with the United States while an earlier answer names Alibaba Cloud Model Studio's international endpoint in Singapore. It now says AGI stores data in the United States and that a chat is also processed where the model provider that answers it runs that model, naming the same Singapore endpoint the page and section 02 of the privacy policy already name. No provider, recipient, location, retention period, right, limitation or commitment was added or removed, so the date stays."
+        },
+        {
+          "date": "2026-10-15",
+          "digest": "283e6ea63ad2e651",
+          "note": "Editorial, recorded 2026-11-10. Product-name change in commit 3a0d329bb4 (2026-11-08): the hosted mode is now called Cloud, the label PRIVACY_MODE_DISPLAY.managed carries in packages/contracts/types/src/suite-contracts.ts since 330ef6c0b9. Managed Cloud now reads Cloud in the answers on training, on who at AGI can read chats, on the three modes and cloud-only surfaces, and on where data is stored. No answer changes, so the date does not move."
         }
       ]
     },
@@ -1031,6 +1096,11 @@
           "digest": "2c35ab49bd5f3f61",
           "note": "Targeted factual correction for selective connector release. Availability now follows hasReleasedConnectors() and connectorsReleased(), with plan, region and provider setup still required. The page also describes loading existing connected-tool schemas as local metadata access. Provider scopes, consent, revocation and individual tool approvals are unchanged; this is not a fresh review of the whole page.",
           "summary": "Corrects connector availability for selective release and describes the local metadata loader. Connecting still depends on plan, region and provider setup. Provider scopes, consent, revocation and per-tool approval rules are unchanged."
+        },
+        {
+          "date": "2026-11-01",
+          "digest": "c3c00ae513247cae",
+          "note": "Editorial, recorded 2026-11-10. Product-name change in commit 3a0d329bb4 (2026-11-08): the hosted mode is now called Cloud, the label PRIVACY_MODE_DISPLAY.managed carries in packages/contracts/types/src/suite-contracts.ts since 330ef6c0b9. Managed Cloud now reads Cloud in the two section labels for default authority and approval required, the screenshot and computer-use inference paragraphs and the connector credentials heading. No default, approval rule or permission changes, so the date does not move."
         }
       ]
     },
@@ -1053,6 +1123,11 @@
           "digest": "835b5fbdcc69187a",
           "note": "First published version. States the legal process required before account data is disclosed to a government, how a request is narrowed, when the account holder is told, how emergency and preservation requests are handled, where to send process, and that no transparency report has been published. Same-day revision before release: the transparency report paragraph called 2026-10-08 the day the web app launched to the public, which contradicts the EU representative, security and trust pages, where Managed Cloud has been open to signed-in users since 27 June 2026. It now calls that date the public launch date and says the first report will also count any request received before it.",
           "summary": "A new page: what legal process we require before giving account data to a government, when we tell the account holder, how emergencies are handled, and where to send a request. No transparency report has been published yet."
+        },
+        {
+          "date": "2026-10-08",
+          "digest": "f6b1fb6607eb20c5",
+          "note": "Editorial, recorded 2026-11-10. Product-name change in commit 3a0d329bb4 (2026-11-08): the hosted mode is now called Cloud, the label PRIVACY_MODE_DISPLAY.managed carries in packages/contracts/types/src/suite-contracts.ts since 330ef6c0b9. The What we hold section says the web app runs on Cloud where it said Managed Cloud. What we hold, what legal process we require and when we tell the account holder are unchanged, so the date does not move."
         }
       ]
     }
