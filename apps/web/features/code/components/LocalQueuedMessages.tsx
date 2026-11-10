@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { LOCAL_CODE_COPY, type LocalQueuedMessage } from '../local-code';
 import styles from '../CloudCodePage.module.css';
 
@@ -10,6 +10,7 @@ export interface LocalQueuedMessagesProps {
   onUpdate: (id: string, text: string) => void;
   onRemove: (id: string) => void;
   onSendNow: (id: string) => void;
+  onEditingChange: (id: string, editing: boolean) => void;
 }
 
 function QueuedRow({
@@ -17,14 +18,22 @@ function QueuedRow({
   onUpdate,
   onRemove,
   onSendNow,
+  onEditingChange,
 }: {
   item: LocalQueuedMessage;
   onUpdate: (id: string, text: string) => void;
   onRemove: (id: string) => void;
   onSendNow: (id: string) => void;
+  onEditingChange: (id: string, editing: boolean) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(item.text);
+
+  useEffect(() => {
+    if (!editing) return;
+    onEditingChange(item.id, true);
+    return () => onEditingChange(item.id, false);
+  }, [editing, item.id, onEditingChange]);
 
   return (
     <li className={styles['notice']} data-testid="local-queued-message">
@@ -91,6 +100,7 @@ export function LocalQueuedMessages({
   onUpdate,
   onRemove,
   onSendNow,
+  onEditingChange,
 }: LocalQueuedMessagesProps) {
   if (queued.length === 0) return null;
 
@@ -109,6 +119,7 @@ export function LocalQueuedMessages({
             onUpdate={onUpdate}
             onRemove={onRemove}
             onSendNow={onSendNow}
+            onEditingChange={onEditingChange}
           />
         ))}
       </ul>

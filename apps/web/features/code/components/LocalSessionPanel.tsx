@@ -1327,6 +1327,7 @@ export function LocalSessionPanel({
                 onUpdate={state.updateQueued}
                 onRemove={state.removeQueued}
                 onSendNow={(id) => void state.sendQueuedNow(id)}
+                onEditingChange={state.setQueuedEditing}
               />
 
               {handoffOpen && (

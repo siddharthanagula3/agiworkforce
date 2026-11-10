@@ -92,6 +92,8 @@ export interface LocalSessionState {
   enqueue: (message: LocalMessage) => void;
   updateQueued: (id: string, text: string) => void;
   removeQueued: (id: string) => void;
+  /** While a queued message is being edited it is held back from the automatic send after a turn. */
+  setQueuedEditing: (id: string, editing: boolean) => void;
   sendQueuedNow: (id: string) => Promise<void>;
   /**
    * Take every queued message back into the composer, oldest first, ahead of
@@ -199,6 +201,8 @@ export function useLocalSession(
   const dispatchEventRef = useRef<(event: DeveloperSessionEvent) => void>(() => undefined);
   const loadsRef = useRef(0);
   const sendingRef = useRef(false);
+  const editingQueuedRef = useRef<Set<string>>(new Set());
+  const drainDeferredRef = useRef(false);
 
   turnRef.current = turn;
   optionsRef.current = options;
@@ -442,9 +446,32 @@ export function useLocalSession(
   );
 
   const sendNextQueued = useCallback(() => {
+    const head = queue.peek();
+    if (head && editingQueuedRef.current.has(head.id)) {
+      drainDeferredRef.current = true;
+      return;
+    }
+    drainDeferredRef.current = false;
     const next = queue.dequeue();
     if (next) void sendFromQueue(queuedMessage(next));
   }, [queue, sendFromQueue]);
+
+  const sendNextQueuedRef = useRef(sendNextQueued);
+  sendNextQueuedRef.current = sendNextQueued;
+
+  const setQueuedEditing = useCallback(
+    (id: string, editing: boolean) => {
+      if (editing) {
+        editingQueuedRef.current.add(id);
+        return;
+      }
+      editingQueuedRef.current.delete(id);
+      if (drainDeferredRef.current && !memory.paused && !localTurnIsRunning(turnRef.current)) {
+        sendNextQueuedRef.current();
+      }
+    },
+    [memory],
+  );
 
   const takeOver = useCallback(async () => {
     if (!rootId || !threadId) return;
@@ -938,6 +965,7 @@ export function useLocalSession(
     enqueue,
     updateQueued,
     removeQueued,
+    setQueuedEditing,
     sendQueuedNow,
     recallQueued,
     stop,

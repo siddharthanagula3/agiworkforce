@@ -422,6 +422,39 @@ describe('one local session', () => {
     expect(result.current.queued.map((item) => item.text)).toEqual(['second']);
   });
 
+  it('holds a queued message that is being edited out of the automatic send until it is saved', async () => {
+    const { result } = renderHook(() => useLocalSession(session));
+    await waitFor(() => expect(readDeveloperSession).toHaveBeenCalled());
+    await startRunning(result);
+
+    act(() => {
+      result.current.enqueue({ text: 'first', images: [], contextFiles: [] });
+      result.current.enqueue({ text: 'second', images: [], contextFiles: [] });
+    });
+    const [first] = result.current.queued;
+    act(() => result.current.setQueuedEditing(first!.id, true));
+    startDeveloperTurn.mockClear();
+    finish('completed');
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    expect(startDeveloperTurn).not.toHaveBeenCalled();
+    expect(result.current.queued.map((item) => item.text)).toEqual(['first', 'second']);
+
+    act(() => {
+      result.current.updateQueued(first!.id, 'first, rewritten');
+      result.current.setQueuedEditing(first!.id, false);
+    });
+
+    await waitFor(() =>
+      expect(startDeveloperTurn).toHaveBeenCalledWith(
+        expect.objectContaining({ text: 'first, rewritten' }),
+      ),
+    );
+    expect(result.current.queued.map((item) => item.text)).toEqual(['second']);
+  });
+
   it('holds the queue when a turn is stopped, until the reader sends one', async () => {
     const { result } = renderHook(() => useLocalSession(session));
     await waitFor(() => expect(readDeveloperSession).toHaveBeenCalled());
