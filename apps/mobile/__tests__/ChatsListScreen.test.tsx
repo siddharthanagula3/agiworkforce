@@ -2,6 +2,7 @@
 import React from 'react';
 import { Alert, Modal, StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { PRIVACY_MODE_DISPLAY } from '@agiworkforce/types';
 
 const mockPush = jest.fn();
 const mockReplace = jest.fn();
@@ -241,6 +242,13 @@ describe('ChatsListScreen', () => {
 
     mockIsDark = false;
     expect(root(render(<ChatsListScreen />))).toBe(lightColors.surfaceBase);
+  });
+
+  it('names the Cloud mode with the contract label', () => {
+    mockAppMode = 'cloud';
+    const screen = render(<ChatsListScreen />);
+
+    expect(screen.getByText(PRIVACY_MODE_DISPLAY.managed.label)).toBeTruthy();
   });
 
   it('shows a retryable Cloud history error instead of an empty-account message', () => {

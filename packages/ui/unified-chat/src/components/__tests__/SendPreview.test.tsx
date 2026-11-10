@@ -138,7 +138,7 @@ describe('SendPreview', () => {
     });
     render(<SendPreview presentation={presentation} variant="compact" />);
 
-    expect(screen.getByText('Managed cloud')).toBeDefined();
+    expect(screen.getByText(PRIVACY_MODE_DISPLAY.managed.label)).toBeDefined();
     expect(screen.queryByText(presentation.bannerCopy)).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: /show send details/i }));

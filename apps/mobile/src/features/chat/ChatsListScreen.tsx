@@ -29,6 +29,7 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react-native';
+import { PRIVACY_MODE_DISPLAY } from '@agiworkforce/types';
 import { Text } from '@/components/ui/Text';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { FEATURES } from '@/lib/v1FeatureFlags';
@@ -505,7 +506,7 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
             maxFontSizeMultiplier={2}
             style={{ color: colors.textMuted, fontSize: typeScale.caption }}
           >
-            {appMode === 'cloud' ? 'Managed Cloud' : 'Local on this device'}
+            {appMode === 'cloud' ? PRIVACY_MODE_DISPLAY.managed.label : 'Local on this device'}
           </Text>
         </View>
         {!searchOnly && (
@@ -686,7 +687,7 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
                   {searchOnly && !isSearching
                     ? 'Find chats, projects, files, library images, and artifacts in this mode.'
                     : isSearching
-                      ? `Nothing in ${appMode === 'cloud' ? 'Managed Cloud' : 'Local Mode'} matches “${query.trim()}”.`
+                      ? `Nothing in ${appMode === 'cloud' ? PRIVACY_MODE_DISPLAY.managed.label : 'Local Mode'} matches “${query.trim()}”.`
                       : filter === 'all'
                         ? 'Start a new chat to begin your history.'
                         : `No ${FILTER_LABELS[filter].toLocaleLowerCase()} are available in this mode.`}

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { PRIVACY_MODE_DISPLAY } from '@agiworkforce/types';
 import { RELEASES } from '@/lib/changelog-entries';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
@@ -168,7 +169,10 @@ export default function AboutPage() {
                   label: 'Model catalog',
                   value: `${CATALOG_SCOPES.catalogueEntries.text} · ${CATALOG_SCOPES.providerRecords.text}, as of ${CATALOG_AS_OF}`,
                 },
-                { label: 'Trust modes', value: 'Local · BYOK · Managed cloud' },
+                {
+                  label: 'Trust modes',
+                  value: `${PRIVACY_MODE_DISPLAY.local.label} · ${PRIVACY_MODE_DISPLAY.byok.label} · ${PRIVACY_MODE_DISPLAY.managed.label}`,
+                },
                 { label: 'Data policy', value: POSITIONING.routeBoundary },
                 { label: 'Set in', value: 'Geist' },
                 {
