@@ -913,6 +913,7 @@ const turnTerminalEventSchema = z.object({
   error: z.string().nullable().optional(),
   failure: turnFailureSchema.nullable().optional().catch(null),
   managedRequestIds: z.array(z.string().min(1).max(200)).max(500).optional().catch(undefined),
+  contextTokens: z.number().int().nonnegative().optional().catch(undefined),
 });
 const turnModelEventSchema = z.object({
   threadId: z.string().min(1),

@@ -2881,6 +2881,32 @@ describe('developer session runtime', () => {
     expect(events.at(-1)?.event).not.toHaveProperty('unsentSteers');
   });
 
+  it('relays the context the CLI measured apart from the turn’s summed tokens, and none it did not', async () => {
+    const { service, children, events } = await loadService();
+
+    await service.startDeveloperTurn({ rootId: root.id, threadId: thread.id, text: 'ping' });
+    const completed = {
+      threadId: thread.id,
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 20_100,
+      outputTokens: 200,
+    };
+    children[0]?.notify('turn/completed', { ...completed, contextTokens: 10_200 });
+    expect(events.at(-1)?.event).toMatchObject({
+      type: 'turn-finished',
+      inputTokens: 20_100,
+      contextTokens: 10_200,
+    });
+
+    children[0]?.notify('turn/completed', completed);
+    expect(events.at(-1)?.event).not.toHaveProperty('contextTokens');
+
+    children[0]?.notify('turn/completed', { ...completed, contextTokens: -5 });
+    expect(events.at(-1)?.event).not.toHaveProperty('contextTokens');
+  });
+
   it('opens the session in its new worktree and reports the older ones cleanup left', async () => {
     const worktree = {
       id: 'a1b2c3d4',

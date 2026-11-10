@@ -3066,6 +3066,11 @@ export class ChatStateManager {
     });
   }
 
+  private _forgetContextUsage(threadId: string): void {
+    if (this._contextUsage?.threadId === threadId) this._contextUsage = undefined;
+    this._post({ type: 'contextUsage', payload: { usedTokens: 0 } });
+  }
+
   async compactConversation(): Promise<void> {
     const thread = this._thread;
     if (thread === undefined) {
@@ -5075,11 +5080,15 @@ export class ChatStateManager {
             : {}),
         },
       });
-      this._postContextUsage(
-        event.threadId,
-        event.inputTokens + event.outputTokens,
-        catalogContextWindow(resolvedModel),
-      );
+      if (event.contextTokens === undefined) {
+        this._forgetContextUsage(event.threadId);
+      } else {
+        this._postContextUsage(
+          event.threadId,
+          event.contextTokens,
+          catalogContextWindow(resolvedModel),
+        );
+      }
       recordCompletedTurnUsage(this._secrets, {
         model: resolvedModel,
         inputTokens: event.inputTokens,

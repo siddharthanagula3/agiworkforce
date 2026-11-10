@@ -710,8 +710,11 @@ export function useLocalSession(
         };
         setApprovals([]);
         setQuestions([]);
-        const used = event.inputTokens + event.outputTokens;
-        if (used > 0) setContextTokens(used);
+        if (event.contextTokens !== undefined) {
+          setContextTokens(event.contextTokens > 0 ? event.contextTokens : null);
+        } else if (event.outcome === 'completed') {
+          setContextTokens(null);
+        }
         setTurn((current) => ({
           ...current,
           outcome: event.outcome,

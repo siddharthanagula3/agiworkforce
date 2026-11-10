@@ -40,7 +40,7 @@ import {
 } from '../features/instructions';
 import { SYNTHETIC_LOCAL_MODEL_ID, requireCatalogModel } from './catalogModelFixtures';
 import { getTokenCounter } from '../data/tokenCounter';
-import { modelDisplayNameById } from '@agiworkforce/types';
+import { modelDisplayNameById, PRODUCT_NAMES } from '@agiworkforce/types';
 import * as api from '../utils/api';
 import { Config } from '../platform/config';
 import * as accountAccess from '../features/surfaces/accountAccess';
@@ -4488,7 +4488,7 @@ describe('ChatStateManager context usage reporting', () => {
     } as ContextPanelProvider);
   });
 
-  it('reports the runtime-measured turn tokens against the catalog context window', async () => {
+  it('reports the context the CLI measured against the catalog window, not the turn’s summed tokens', async () => {
     const harness = makeHarness();
     await harness.context.globalState.update('tierStatus.cachedTier', 'max');
     const model = MODEL_PICKER_OPTIONS.filter((option) => !isAutoPickerModelId(option.id)).find(
@@ -4507,15 +4507,52 @@ describe('ChatStateManager context usage reporting', () => {
       turnId: 'turn-1',
       status: 'completed',
       response: 'done',
-      inputTokens: 41_200,
-      outputTokens: 1_800,
+      inputTokens: 20_100,
+      outputTokens: 200,
+      contextTokens: 10_200,
     });
     await send;
 
-    expect(harness.posted).toContainEqual({
-      type: 'contextUsage',
-      payload: { usedTokens: 43_000, contextWindow: MODEL_CONTEXT_LIMITS[model!.id] },
+    const contextPosts = harness.posted.filter((message) => message.type === 'contextUsage');
+    expect(contextPosts).toEqual([
+      {
+        type: 'contextUsage',
+        payload: { usedTokens: 10_200, contextWindow: MODEL_CONTEXT_LIMITS[model!.id] },
+      },
+    ]);
+  });
+
+  it('shows no context figure when the CLI did not measure one', async () => {
+    const harness = makeHarness();
+
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Inspect this project' },
     });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 20_100,
+      outputTokens: 200,
+    });
+    await send;
+
+    const contextPosts = harness.posted.filter((message) => message.type === 'contextUsage');
+    expect(contextPosts).toEqual([{ type: 'contextUsage', payload: { usedTokens: 0 } }]);
+
+    vi.mocked(vscode.window.showQuickPick).mockResolvedValueOnce(undefined);
+    await harness.manager.showSessionStatus();
+    const rows = vi.mocked(vscode.window.showQuickPick).mock.calls.at(-1)?.[0] as Array<{
+      label: string;
+      description?: string;
+    }>;
+    expect(rows.find((entry) => entry.label.endsWith('Context'))?.description).toBe(
+      'Not measured yet in this window',
+    );
   });
 
   it('feeds the session token counter the runtime-measured counts, not a char estimate', async () => {
@@ -4560,6 +4597,7 @@ describe('ChatStateManager context usage reporting', () => {
       response: 'done',
       inputTokens: 900,
       outputTokens: 100,
+      contextTokens: 1_000,
     });
     await send;
 
@@ -4596,6 +4634,7 @@ describe('ChatStateManager session compaction', () => {
       response: 'done',
       inputTokens: 90_000,
       outputTokens: 10_000,
+      contextTokens: 100_000,
     });
     await send;
     return harness;
@@ -4789,7 +4828,7 @@ describe('ChatStateManager session compaction', () => {
     await harness.manager.compactConversation();
 
     expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-      'AGI Code: nothing in this session is old enough to summarize yet.',
+      `${PRODUCT_NAMES.code}: nothing in this session is old enough to summarize yet.`,
     );
     expect(harness.posted.filter((message) => message.type === 'sessionNotice')).toHaveLength(0);
   });
@@ -4995,7 +5034,7 @@ describe('ChatStateManager error classification', () => {
     );
 
     expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
-      'AGI Code: Trust this workspace before resuming a developer session.',
+      `${PRODUCT_NAMES.code}: Trust this workspace before resuming a developer session.`,
       'Manage Trust',
     );
   });

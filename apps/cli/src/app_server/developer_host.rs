@@ -98,6 +98,8 @@ use crate::runtime::session_handoff::{
 use crate::runtime::writer_lease::{self, LeaseClaim, WriterIdentity, WriterLease};
 use crate::tui::approval_broker::{ApprovalDecision, ApprovalRequest, ApprovalRequestKind};
 
+mod context_occupancy;
+
 const DEFAULT_THREAD_LIMIT: usize = 50;
 const MAX_THREAD_LIMIT: usize = 100;
 const APPROVAL_TIMEOUT_SECONDS: u64 = 600;
@@ -143,10 +145,13 @@ const WRITER_LABEL: &str = "AGI app-server";
 /// a user who turned memory off on the web is not remembered or read here.
 /// Only the terminal CLI refreshed this before, so a desktop session kept the
 /// last cached answer. Signed out or offline, the cached answer stands.
-async fn refresh_account_memory_setting() {
+async fn refresh_account_memory_setting(privacy: crate::agent::PrivacyMode) -> bool {
+    if crate::cloud::CloudClient::admit(privacy).is_err() {
+        return false;
+    }
     let (memory, skills) = tokio::join!(
-        crate::cloud::refresh_memory(crate::agent::PrivacyMode::Managed),
-        crate::cloud::refresh_account_skills(crate::agent::PrivacyMode::Managed, false),
+        crate::cloud::refresh_memory(privacy),
+        crate::cloud::refresh_account_skills(privacy, false),
     );
     if let Err(error) = memory {
         tracing::debug!(%error, "account memory setting not refreshed");
@@ -154,6 +159,7 @@ async fn refresh_account_memory_setting() {
     if let Err(error) = skills {
         tracing::debug!(%error, "account skills not refreshed");
     }
+    true
 }
 
 fn account_response(snapshot: account::AccountSnapshot) -> AccountStatusResponse {
@@ -1186,7 +1192,7 @@ impl CliDeveloperSessionHost {
             .require_routing_authority()
             .map_err(invalid_request)?;
         let system_context = context::gather_system_context_for(self.workspace_root.clone()).await;
-        refresh_account_memory_setting().await;
+        refresh_account_memory_setting(self.config.account_privacy_mode()).await;
         let mut agent = AgentSession::new_checked(
             model,
             &system_context,
@@ -2331,7 +2337,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             Some(_) => auto_vendor.as_deref(),
             None => plan_first.as_deref(),
         };
-        refresh_account_memory_setting().await;
+        refresh_account_memory_setting(self.config.account_privacy_mode()).await;
         let mut agent = AgentSession::new_checked(&model, &system_context, None, provider_override)
             .map_err(invalid_request)?;
         agent.install_workspace_file_authority(self.workspace_file_authority.clone());
@@ -3960,6 +3966,10 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             }
 
             leave_bypass(&mut *task_session.lock().await);
+            let context_tokens = context_occupancy::context_tokens_after_turn(
+                &*task_session.lock().await,
+                task_config.default.max_tokens as usize,
+            );
 
             let pending_ids = {
                 let pending = task_pending.lock().await;
@@ -4116,6 +4126,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                     failure: final_failure,
                     managed_request_ids,
                     unsent_steers,
+                    context_tokens: Some(context_tokens),
                 },
             ) {
                 let _ = task_notifications.send(notification);
@@ -7183,6 +7194,18 @@ mod tests {
         assert_eq!(device_surface(Some(&client("agi-desktop"))), "desktop");
         assert_eq!(device_surface(Some(&client("agi_cli"))), "cli");
         assert_eq!(device_surface(None), "cli");
+    }
+
+    #[tokio::test]
+    async fn a_local_or_byok_host_reads_no_account_memory_or_skills() {
+        for mode in ["local", "byok"] {
+            let mut config = CliConfig::default();
+            config.ui.privacy_mode = Some(mode.to_string());
+            assert!(
+                !refresh_account_memory_setting(config.account_privacy_mode()).await,
+                "a {mode} host must not reach the account for memory or skills"
+            );
+        }
     }
 
     #[test]

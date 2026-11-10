@@ -924,6 +924,7 @@ function handleNotification(server: RunningServer, method: string, rawParams: un
   const outcome = turnOutcome(method);
   if (!outcome) return;
   const unsentSteers = readNumber(params, 'unsentSteers') ?? 0;
+  const contextTokens = readCursor(params, 'contextTokens');
   emit(server.root.id, {
     type: 'turn-finished',
     threadId,
@@ -934,6 +935,7 @@ function handleNotification(server: RunningServer, method: string, rawParams: un
     inputTokens: readNumber(params, 'inputTokens') ?? 0,
     outputTokens: readNumber(params, 'outputTokens') ?? 0,
     ...(unsentSteers > 0 ? { unsentSteers } : {}),
+    ...(contextTokens === undefined ? {} : { contextTokens }),
   });
 }
 

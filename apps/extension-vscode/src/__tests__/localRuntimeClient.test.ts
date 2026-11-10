@@ -3,7 +3,11 @@ import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { PassThrough } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LocalRuntimeClient, type SpawnLocalRuntime } from '../integrations/localRuntimeClient';
-import { AGENT_EVENT_SCHEMA_VERSION, MINIMUM_SUPPORTED_RUNTIME_VERSION } from '@agiworkforce/types';
+import {
+  AGENT_EVENT_SCHEMA_VERSION,
+  MINIMUM_SUPPORTED_RUNTIME_VERSION,
+  PRODUCT_NAMES,
+} from '@agiworkforce/types';
 import {
   SYNTHETIC_LOCAL_MODEL_ID,
   SYNTHETIC_LOCAL_MODEL_ID_SECONDARY,
@@ -518,7 +522,7 @@ describe('LocalRuntimeClient', () => {
 
   it.each([
     [[7], 7, 'Update the AGI CLI or set agiWorkforce.cliPath to a current binary.'],
-    [[10, 9], 9, 'Update AGI Code.'],
+    [[10, 9], 9, `Update ${PRODUCT_NAMES.code}.`],
   ])(
     'turns a structured version refusal from a server speaking %j into the side to update',
     async (supportedProtocolVersions, minimumProtocolVersion, action) => {
@@ -551,7 +555,7 @@ describe('LocalRuntimeClient', () => {
   // is a contract change, and this suite should follow it rather than pin a
   // number that quietly becomes the wrong one.
   it.each([
-    [AGENT_EVENT_SCHEMA_VERSION + 1, 'Update AGI Code.'],
+    [AGENT_EVENT_SCHEMA_VERSION + 1, `Update ${PRODUCT_NAMES.code}.`],
     [AGENT_EVENT_SCHEMA_VERSION - 1, 'Update the AGI CLI'],
   ])('refuses a handshake declaring agent event schema %i', async (schemaVersion, action) => {
     const runtime = fakeRuntime(8, { initializeExtra: { agentEventSchemaVersion: schemaVersion } });
@@ -749,6 +753,48 @@ describe('LocalRuntimeClient', () => {
     await new Promise((resolve) => setImmediate(resolve));
 
     expect(deltas).toEqual(['ok']);
+    await client.dispose();
+  });
+
+  it('carries the measured context apart from the turn’s summed tokens, and nothing from an older CLI', async () => {
+    const runtime = fakeRuntime();
+    const client = new LocalRuntimeClient({
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      spawn: runtime.spawn,
+    });
+    const ended: Array<{ inputTokens: number; contextTokens?: number }> = [];
+    client.onEvent((event) => {
+      if (event.type === 'turn_completed') ended.push(event);
+    });
+    await client.initialize();
+
+    const turnEnd = (extra: Record<string, unknown>) =>
+      `${JSON.stringify({
+        method: 'turn/completed',
+        params: {
+          threadId: 't',
+          turnId: 'r',
+          status: 'completed',
+          response: 'done',
+          inputTokens: 20_100,
+          outputTokens: 200,
+          error: null,
+          failure: null,
+          ...extra,
+        },
+      })}\n`;
+    runtime.stdout.write(turnEnd({ contextTokens: 10_200 }));
+    runtime.stdout.write(turnEnd({}));
+    runtime.stdout.write(turnEnd({ contextTokens: -1 }));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(ended.map((event) => [event.inputTokens, event.contextTokens])).toEqual([
+      [20_100, 10_200],
+      [20_100, undefined],
+      [20_100, undefined],
+    ]);
     await client.dispose();
   });
 
