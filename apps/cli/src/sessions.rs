@@ -837,8 +837,17 @@ pub fn search_sessions(conn: &Connection, query: &str) -> Result<Vec<SessionSumm
                     }));
             (title_matches || content_matches || pr_matches).then_some(summary)
         })
-        .take(50)
         .collect())
+}
+
+pub const SEARCH_DISPLAY_LIMIT: usize = 50;
+
+pub fn search_overflow_notice(total_matches: usize) -> Option<String> {
+    (total_matches > SEARCH_DISPLAY_LIMIT).then(|| {
+        format!(
+            "Showing the {SEARCH_DISPLAY_LIMIT} most recently updated of {total_matches} matching sessions. Narrow the query, or run agi --search <query> --output-format json for every match."
+        )
+    })
 }
 
 /// Fork an existing managed session into a new managed session id.
@@ -1424,6 +1433,36 @@ mod tests {
         assert_eq!(stats.session_count, 2);
         assert_eq!(stats.message_count, 2);
         assert!(stats.total_tokens >= 11);
+    }
+
+    #[test]
+    fn search_returns_every_match_and_labels_the_display_bound() {
+        let (_tempdir, conn) = temp_connection();
+        let total = SEARCH_DISPLAY_LIMIT + 1;
+        for index in 0..total {
+            save_session(
+                &conn,
+                &format!("release-{index:03}"),
+                &format!("Release notes {index}"),
+                "fixture-session-model",
+                "/",
+                "",
+            )
+            .unwrap();
+        }
+
+        let results = search_sessions(&conn, "release").unwrap();
+        assert_eq!(results.len(), total);
+        assert!(results.iter().any(|summary| summary.id == "release-000"));
+
+        assert_eq!(search_overflow_notice(SEARCH_DISPLAY_LIMIT), None);
+        let notice = search_overflow_notice(results.len()).unwrap();
+        assert!(
+            notice.contains(&format!(
+                "{SEARCH_DISPLAY_LIMIT} most recently updated of {total}"
+            )),
+            "{notice}"
+        );
     }
 
     #[test]

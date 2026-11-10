@@ -951,10 +951,14 @@ pub(super) fn handle_sessions(arg: &str) {
                         "{}",
                         ts::accent_header(format!("Search results for '{}':", sub_arg))
                     );
+                    let shown = results.len().min(sessions::SEARCH_DISPLAY_LIMIT);
                     eprintln!(
                         "{}",
-                        sanitize_terminal_text(&sessions::format_session_list(&results))
+                        sanitize_terminal_text(&sessions::format_session_list(&results[..shown]))
                     );
+                    if let Some(notice) = sessions::search_overflow_notice(results.len()) {
+                        eprintln!("{notice}");
+                    }
                 }
                 Err(e) => output::print_error(&format!("Search failed: {:#}", e)),
             }

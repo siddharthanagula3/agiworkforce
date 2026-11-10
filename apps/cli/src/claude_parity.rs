@@ -1331,7 +1331,22 @@ pub fn handle_output_style(session: &mut AgentSession, arg: &str) -> String {
             }
         }
         name => {
-            let session_only = rest.trim() == "--session";
+            let session_only = match rest.trim() {
+                "" => false,
+                "--session" => true,
+                other => {
+                    return format!(
+                        "Unknown option `{other}`. Use /output-style {name} or /output-style {name} --session. Output style unchanged: {}.",
+                        session.output_style
+                    )
+                }
+            };
+            if !output_style_known(name) {
+                return format!(
+                    "No output style named `{name}`. Run /output-style to list them. Output style unchanged: {}.",
+                    session.output_style
+                );
+            }
             session.apply_output_style(name);
             if session_only {
                 format!(
@@ -1352,8 +1367,14 @@ pub fn output_style_arg_persists(arg: &str) -> bool {
     let mut words = arg.split_whitespace();
     matches!(
         (words.next(), words.next()),
-        (Some(name), None) if !crate::output_styles::is_command_action(name)
+        (Some(name), None) if !crate::output_styles::is_command_action(name) && output_style_known(name)
     )
+}
+
+fn output_style_known(name: &str) -> bool {
+    crate::output_styles::load_all()
+        .iter()
+        .any(|style| style.name == name)
 }
 
 fn output_style_overview(session: &AgentSession) -> String {
