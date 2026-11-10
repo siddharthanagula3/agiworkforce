@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Ban, Check, CircleSlash } from 'lucide-react';
 
 import {
@@ -9,6 +9,7 @@ import {
   type CatalogModel,
   type ModelPolicyLists,
 } from '../hooks/use-model-policy';
+import { useServerDraftSync } from '../hooks/use-server-draft-sync';
 import { toUserMessage } from '@/lib/user-error-message';
 import { useUnsavedChangesGuard } from '@agiworkforce/ui';
 
@@ -73,6 +74,30 @@ function toggle(list: string[], value: string): string[] {
     : [...list, lower];
 }
 
+function listsOf(source: ModelPolicyLists): ModelPolicyLists {
+  return {
+    allowedProviders: [...source.allowedProviders],
+    blockedProviders: [...source.blockedProviders],
+    allowedModels: [...source.allowedModels],
+    blockedModels: [...source.blockedModels],
+  };
+}
+
+function normalizedLists(lists: ModelPolicyLists): string {
+  return JSON.stringify(
+    Object.fromEntries(
+      Object.entries(listsOf(lists)).map(([key, value]) => [
+        key,
+        value.map((entry) => entry.toLowerCase()).sort(),
+      ]),
+    ),
+  );
+}
+
+function sameLists(a: ModelPolicyLists, b: ModelPolicyLists): boolean {
+  return normalizedLists(a) === normalizedLists(b);
+}
+
 export function WorkspaceModelPolicy() {
   const { data, isPending, isError, error, refetch } = useModelPolicy();
   const update = useUpdateModelPolicy();
@@ -80,34 +105,15 @@ export function WorkspaceModelPolicy() {
   const [draft, setDraft] = useState<ModelPolicyLists | null>(null);
   const [filter, setFilter] = useState('');
 
-  useEffect(() => {
-    if (!data) return;
-    setDraft({
-      allowedProviders: [...data.policy.allowedProviders],
-      blockedProviders: [...data.policy.blockedProviders],
-      allowedModels: [...data.policy.allowedModels],
-      blockedModels: [...data.policy.blockedModels],
-    });
-  }, [data]);
+  useServerDraftSync(
+    data?.policy,
+    (acknowledged) => draft === null || sameLists(draft, acknowledged),
+    (policy) => setDraft(listsOf(policy)),
+  );
 
   const dirty = useMemo(() => {
     if (!data || !draft) return false;
-    const saved: ModelPolicyLists = {
-      allowedProviders: data.policy.allowedProviders,
-      blockedProviders: data.policy.blockedProviders,
-      allowedModels: data.policy.allowedModels,
-      blockedModels: data.policy.blockedModels,
-    };
-    const norm = (l: ModelPolicyLists) =>
-      JSON.stringify(
-        Object.fromEntries(
-          Object.entries(l).map(([k, v]) => [
-            k,
-            [...(v as string[])].map((s) => s.toLowerCase()).sort(),
-          ]),
-        ),
-      );
-    return norm(saved) !== norm(draft);
+    return !sameLists(data.policy, draft);
   }, [data, draft]);
 
   const { dialog: discardDialog } = useUnsavedChangesGuard({

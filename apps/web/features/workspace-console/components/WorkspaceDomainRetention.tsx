@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   RETENTION_DAYS_MAX,
   RETENTION_DAYS_MIN,
@@ -11,6 +11,7 @@ import {
 import { Spinner, useConfirmAction, useUnsavedChangesGuard } from '@agiworkforce/ui';
 
 import { useDomainRetention, useSaveDomainRetention } from '../hooks/use-domain-retention';
+import { useServerDraftSync } from '../hooks/use-server-draft-sync';
 import { toUserMessage } from '@/lib/user-error-message';
 
 const cardStyle = {
@@ -48,10 +49,15 @@ function DomainRow({
   const [days, setDays] = useState(String(policy.retentionDays));
   const [enforced, setEnforced] = useState(policy.enforced);
 
-  useEffect(() => {
-    setDays(String(policy.retentionDays));
-    setEnforced(policy.enforced);
-  }, [policy.enforced, policy.retentionDays]);
+  useServerDraftSync(
+    policy,
+    (acknowledged) =>
+      days === String(acknowledged.retentionDays) && enforced === acknowledged.enforced,
+    (incoming) => {
+      setDays(String(incoming.retentionDays));
+      setEnforced(incoming.enforced);
+    },
+  );
 
   const parsed = Number.parseInt(days, 10);
   const valid =

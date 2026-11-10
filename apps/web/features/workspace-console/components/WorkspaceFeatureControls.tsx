@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useConfirmAction, useUnsavedChangesGuard } from '@agiworkforce/ui';
 import {
   WORKSPACE_FEATURE_LABELS,
@@ -22,6 +22,7 @@ import {
   useTeamMembers,
 } from '@/features/settings/hooks/use-settings-queries';
 import { useModelPolicy } from '../hooks/use-model-policy';
+import { useServerDraftSync } from '../hooks/use-server-draft-sync';
 import {
   useDeletePolicyOverride,
   usePolicyOverrides,
@@ -139,11 +140,17 @@ function WorkspaceDefaults({
   const [countries, setCountries] = useState(controls.allowedCountries.join(', '));
   const [countriesEdited, setCountriesEdited] = useState(false);
 
-  useEffect(() => {
-    setDraft(controls);
-    setCountries(controls.allowedCountries.join(', '));
-    setCountriesEdited(false);
-  }, [controls]);
+  useServerDraftSync(
+    controls,
+    (acknowledged) =>
+      countries === acknowledged.allowedCountries.join(', ') &&
+      JSON.stringify(draft) === JSON.stringify(acknowledged),
+    (incoming) => {
+      setDraft(incoming);
+      setCountries(incoming.allowedCountries.join(', '));
+      setCountriesEdited(false);
+    },
+  );
 
   const allowedCountries = parseCountries(countries);
   const invalidCountries = countries
