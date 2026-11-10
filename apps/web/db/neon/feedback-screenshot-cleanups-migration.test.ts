@@ -30,6 +30,7 @@ describe('0417 feedback screenshot cleanups', () => {
     expect(up).toContain('for all to app_rls');
     expect(up).toContain('using (user_id = (select public.current_app_user_id()))');
     expect(up).toContain('with check (user_id = (select public.current_app_user_id()));');
+    expect(up).toContain('revoke all on public.feedback_screenshot_cleanups from public, app_rls;');
     expect(up).toContain(
       'grant select, insert, delete on public.feedback_screenshot_cleanups to app_rls;',
     );

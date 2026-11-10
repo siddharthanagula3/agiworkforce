@@ -58,7 +58,7 @@ create trigger set_connector_permission_generations_updated_at
 alter table public.connector_permission_generations enable row level security;
 alter table public.connector_permission_generations force row level security;
 
-revoke all on public.connector_permission_generations from public;
+revoke all on public.connector_permission_generations from public, app_rls;
 grant select, insert, update on public.connector_permission_generations to app_rls;
 
 drop policy if exists connector_permission_generations_owner

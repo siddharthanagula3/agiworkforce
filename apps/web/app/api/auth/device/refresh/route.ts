@@ -121,8 +121,9 @@ async function handleDeviceRefresh(request: NextRequest): Promise<NextResponse> 
       await tx.execute(
         `UPDATE public.device_refresh_token_families
             SET revoked_at = COALESCE(revoked_at, $2)
-          WHERE family_id = $1`,
-        [current.family_id, nowIso],
+          WHERE family_id = $1
+            AND user_id = $3`,
+        [current.family_id, nowIso, current.user_id],
       );
       await tx.execute(
         `UPDATE device_refresh_tokens

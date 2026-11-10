@@ -21,8 +21,17 @@ describe('0411 device refresh token families', () => {
     expect(up).toContain('family_id uuid primary key,');
     expect(up).toContain('user_id text not null,');
     expect(up).toMatch(/revoked_at timestamptz,/);
-    expect(up).toContain('revoke all on public.device_refresh_token_families from public;');
-    expect(up).not.toMatch(/grant [^;]* on public\.device_refresh_token_families to app_rls/);
+    expect(up).toContain(
+      'revoke all on public.device_refresh_token_families from public, app_rls;',
+    );
+    expect(up).toContain(
+      'grant select, insert, update on public.device_refresh_token_families to app_rls;',
+    );
+    expect(up).not.toMatch(/grant [^;]*delete[^;]* on public\.device_refresh_token_families/);
+    expect(up).toContain('before update on public.device_refresh_token_families');
+    expect(up).toContain(
+      'if old.revoked_at is not null and new.revoked_at is distinct from old.revoked_at then',
+    );
     expect(up.trim().startsWith('--')).toBe(true);
     expect(up).toMatch(/begin;[\s\S]*commit;/);
   });
@@ -43,6 +52,9 @@ describe('0411 device refresh token families', () => {
     expect(down).toContain('WHAT THIS COSTS');
     expect(down).toContain('drop table if exists public.device_refresh_token_families;');
     expect(down).toContain('drop index if exists public.idx_device_refresh_token_families_user;');
+    expect(down).toContain(
+      'drop function if exists public.device_refresh_token_families_stay_ended();',
+    );
     expect(down).toContain("where filename = '0411_device_refresh_token_families.sql';");
     expect(down).toMatch(/begin;[\s\S]*commit;/);
   });

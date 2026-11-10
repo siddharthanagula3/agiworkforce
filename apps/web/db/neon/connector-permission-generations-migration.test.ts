@@ -24,7 +24,9 @@ describe('0410 connector permission generations', () => {
     expect(up).toContain(
       'alter table public.connector_permission_generations force row level security;',
     );
-    expect(up).toContain('revoke all on public.connector_permission_generations from public;');
+    expect(up).toContain(
+      'revoke all on public.connector_permission_generations from public, app_rls;',
+    );
     expect(up).toContain(
       'grant select, insert, update on public.connector_permission_generations to app_rls;',
     );

@@ -45,6 +45,7 @@ create index if not exists idx_feedback_screenshot_cleanups_user_id
   on public.feedback_screenshot_cleanups (user_id)
   where user_id is not null;
 
+revoke all on public.feedback_screenshot_cleanups from public, app_rls;
 grant select, insert, delete on public.feedback_screenshot_cleanups to app_rls;
 
 alter table public.feedback_screenshot_cleanups enable row level security;

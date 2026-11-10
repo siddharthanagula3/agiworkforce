@@ -13,6 +13,8 @@ drop index if exists public.idx_device_refresh_token_families_user;
 
 drop table if exists public.device_refresh_token_families;
 
+drop function if exists public.device_refresh_token_families_stay_ended();
+
 delete from public.schema_migrations
  where filename = '0411_device_refresh_token_families.sql';
 
