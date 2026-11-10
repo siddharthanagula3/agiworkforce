@@ -118,7 +118,9 @@ function renderInline(text: string): string {
       /!?\[([^\]]+)\]\(([^)\s]+)(?:\s+&quot;[^)]*&quot;)?\)/g,
       (_match, label: string, href: string) => {
         const url = href.replace(/&amp;/g, '&');
-        return SAFE_LINK.test(url) ? `<a href="${escapeHtml(url)}">${label}</a>` : label;
+        return SAFE_LINK.test(url)
+          ? `${hold(`<a href="${escapeHtml(url)}">`)}${label}${hold('</a>')}`
+          : label;
       },
     )
     .replace(/\*\*(?=\S)(.+?)(?<=\S)\*\*/g, '<strong>$1</strong>')

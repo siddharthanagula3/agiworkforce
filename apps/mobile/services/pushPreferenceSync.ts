@@ -201,6 +201,9 @@ function activatePreferenceSync(registration: PushRegistration): void {
       if (nextState === ACTIVE_APP_STATE) void flushPushPreferences(registration);
     },
   );
+  if (JSON.stringify(buildPushDeliveryPreferences()) !== registration.deliveredSignature) {
+    scheduleFlush(registration, PREFERENCE_SYNC_DEBOUNCE_MS);
+  }
 }
 
 function retireRegistration(registration: PushRegistration): void {

@@ -12,6 +12,7 @@ export interface ParsedDocument {
     columns?: number;
     language?: string;
     fileSizeBytes?: number;
+    partial?: boolean;
   };
 }
 
@@ -180,11 +181,15 @@ function unescapePdfLiteral(value: string): string {
   );
 }
 
-function readPdfStringLiteral(block: string, open: number): { value: string | null; next: number } {
+function readPdfStringLiteral(
+  block: string,
+  open: number,
+  end: number,
+): { value: string | null; next: number } {
   let depth = 1;
   let i = open + 1;
 
-  while (i < block.length) {
+  while (i < end) {
     const ch = block[i];
 
     if (ch === '\\') {
@@ -197,34 +202,54 @@ function readPdfStringLiteral(block: string, open: number): { value: string | nu
     } else if (ch === ')') {
       depth -= 1;
       if (depth === 0) {
-        const end = Math.min(i, open + 1 + PDF_MAX_TEXT_CHARS);
-        return { value: unescapePdfLiteral(block.slice(open + 1, end)), next: i + 1 };
+        const valueEnd = Math.min(i, open + 1 + PDF_MAX_TEXT_CHARS);
+        return { value: unescapePdfLiteral(block.slice(open + 1, valueEnd)), next: i + 1 };
       }
     }
 
     i += 1;
   }
 
-  // An unterminated literal has to swallow the rest of the block: resuming after the '(' would let
+  // An unterminated literal has to swallow the rest of the span: resuming after the '(' would let
   // a crafted stream re-scan the same tail once per opener and turn extraction quadratic.
-  return { value: null, next: block.length };
+  return { value: null, next: end };
 }
 
-function scanPdfTextBlock(block: string, push: (value: string) => boolean): boolean {
-  let i = 0;
+type PdfTextObjectScan =
+  | { status: 'closed'; next: number }
+  | { status: 'full' }
+  | { status: 'unterminated'; literalAt: number }
+  | { status: 'open-ended' };
+
+function isPdfNameEnd(ch: string): boolean {
+  return /[\s()<>[\]{}/%]/.test(ch);
+}
+
+function scanPdfTextObject(
+  raw: string,
+  start: number,
+  end: number,
+  push: (value: string) => boolean,
+): PdfTextObjectScan {
+  let i = start;
   let inArray = false;
   let pending: string[] = [];
 
-  while (i < block.length) {
-    const ch = block[i];
+  while (i < end) {
+    const ch = raw[i] as string;
 
     if (ch === '(') {
-      const { value, next } = readPdfStringLiteral(block, i);
-      if (value !== null) {
-        if (!inArray) pending.length = 0;
-        if (pending.length < PDF_MAX_TEXT_PARTS) pending.push(value);
-      }
+      const { value, next } = readPdfStringLiteral(raw, i, end);
+      if (value === null) return { status: 'unterminated', literalAt: i };
+      if (!inArray) pending.length = 0;
+      if (pending.length < PDF_MAX_TEXT_PARTS) pending.push(value);
       i = next;
+      continue;
+    }
+
+    if (ch === '/') {
+      i += 1;
+      while (i < end && !isPdfNameEnd(raw[i] as string)) i += 1;
       continue;
     }
 
@@ -241,14 +266,21 @@ function scanPdfTextBlock(block: string, push: (value: string) => boolean): bool
       continue;
     }
 
-    if (isPdfOperatorChar(block.charCodeAt(i))) {
-      const start = i;
+    if (isPdfOperatorChar(raw.charCodeAt(i))) {
+      const operatorStart = i;
       do {
         i += 1;
-      } while (i < block.length && isPdfOperatorChar(block.charCodeAt(i)));
-      if (i - start === 2 && ch === 'T' && (block[start + 1] === 'j' || block[start + 1] === 'J')) {
+      } while (i < end && isPdfOperatorChar(raw.charCodeAt(i)));
+      if (i - operatorStart === 2 && ch === 'E' && raw[operatorStart + 1] === 'T') {
+        return { status: 'closed', next: i };
+      }
+      if (
+        i - operatorStart === 2 &&
+        ch === 'T' &&
+        (raw[operatorStart + 1] === 'j' || raw[operatorStart + 1] === 'J')
+      ) {
         for (const part of pending) {
-          if (part && !push(part)) return false;
+          if (part && !push(part)) return { status: 'full' };
         }
       }
       pending = [];
@@ -258,10 +290,24 @@ function scanPdfTextBlock(block: string, push: (value: string) => boolean): bool
     i += 1;
   }
 
-  return true;
+  return { status: 'open-ended' };
 }
 
-function extractTextFromPdfBuffer(base64: string): { text: string; pages: number } {
+function findPdfTextObjectStart(raw: string, from: number): number {
+  let at = raw.indexOf('BT', from);
+  while (at !== -1) {
+    const previous = at > from ? raw.charCodeAt(at - 1) : 0;
+    if (!isPdfOperatorChar(previous) && previous !== 47) return at;
+    at = raw.indexOf('BT', at + 2);
+  }
+  return -1;
+}
+
+function extractTextFromPdfBuffer(base64: string): {
+  text: string;
+  pages: number;
+  complete: boolean;
+} {
   let raw: string;
   try {
     raw = atob(base64);
@@ -289,20 +335,34 @@ function extractTextFromPdfBuffer(base64: string): { text: string; pages: number
 
   let cursor = 0;
   let scanBudget = PDF_MAX_SCAN_CHARS;
-  while (cursor < raw.length && scanBudget > 0) {
-    const blockStart = raw.indexOf('BT', cursor);
+  let complete = true;
+  while (cursor < raw.length) {
+    const blockStart = findPdfTextObjectStart(raw, cursor);
     if (blockStart === -1) break;
-    const blockEnd = raw.indexOf('ET', blockStart + 2);
-    if (blockEnd === -1) break;
+    if (scanBudget <= 0) {
+      complete = false;
+      break;
+    }
     const contentStart = blockStart + 2;
-    const contentEnd = Math.min(blockEnd, contentStart + scanBudget);
-    scanBudget -= contentEnd - contentStart;
-    if (!scanPdfTextBlock(raw.slice(contentStart, contentEnd), push)) break;
-    cursor = blockEnd + 2;
+    const scanEnd = Math.min(raw.length, contentStart + scanBudget);
+    const scan = scanPdfTextObject(raw, contentStart, scanEnd, push);
+
+    if (scan.status === 'closed') {
+      scanBudget -= scan.next - contentStart;
+      cursor = scan.next;
+      continue;
+    }
+
+    complete = false;
+    scanBudget -= scanEnd - contentStart;
+    if (scan.status !== 'unterminated') break;
+    const resume = raw.indexOf('ET', scan.literalAt);
+    if (resume === -1) break;
+    cursor = resume + 2;
   }
 
   const text = textParts.join(' ').replace(/\s+/g, ' ').trim();
-  return { text, pages };
+  return { text, pages, complete };
 }
 
 export async function parseDocument(uri: string, mimeType?: string): Promise<ParsedDocument> {
@@ -361,13 +421,13 @@ export async function parseDocument(uri: string, mimeType?: string): Promise<Par
           'READ_ERROR',
         );
       }
-      const { text, pages } = extractTextFromPdfBuffer(base64);
+      const { text, pages, complete } = extractTextFromPdfBuffer(base64);
       if (!text.trim()) {
         throw new DocParseError('No readable text was found in this PDF', 'EMPTY_DOCUMENT');
       }
       return {
         text,
-        metadata: { docType, pages, fileSizeBytes },
+        metadata: { docType, pages, fileSizeBytes, ...(complete ? {} : { partial: true }) },
       };
     }
   }
