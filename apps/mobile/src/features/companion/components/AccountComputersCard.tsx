@@ -1,5 +1,5 @@
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Modal, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Monitor, RefreshCw, X } from 'lucide-react-native';
@@ -94,34 +94,67 @@ export function AccountComputersCard({ connectedName }: { connectedName: string 
   const [computers, setComputers] = useState<AccountComputer[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [sheet, setSheet] = useState<{ action: ComputerSheetKind; name: string } | null>(null);
+  const [sheet, setSheet] = useState<{
+    action: ComputerSheetKind;
+    name: string;
+    computerId: string | null;
+    pairedName: string | null;
+  } | null>(null);
+  const requestRevision = useRef(0);
   const capabilities = useConnectionStore((state) => state.desktopMetadata?.capabilities);
   const connect = useConnectionStore((state) => state.connect);
   const canStartSession =
     Array.isArray(capabilities) && capabilities.includes('code-session-start');
 
   const load = useCallback(async () => {
+    const revision = ++requestRevision.current;
     setLoading(true);
     try {
-      setComputers(await listAccountComputers());
+      const list = await listAccountComputers();
+      if (revision !== requestRevision.current) return;
+      setComputers(list);
       setFailed(false);
     } catch {
+      if (revision !== requestRevision.current) return;
       setFailed(true);
     } finally {
-      setLoading(false);
+      if (revision === requestRevision.current) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    requestRevision.current += 1;
+    setComputers(null);
+    setFailed(false);
+    setLoading(false);
+    setSheet(null);
     if (cloudUnlocked) void load();
   }, [cloudUnlocked, clerkUserId, load]);
 
-  const openSheet = (action: ComputerSheetKind, name: string) => {
+  useEffect(() => {
+    setSheet((current) =>
+      current?.action === 'start' && current.pairedName !== connectedName ? null : current,
+    );
+  }, [connectedName]);
+
+  const namesake =
+    connectedName === null || computers === null
+      ? []
+      : computers.filter((computer) => computer.name === connectedName);
+  const pairedComputer = namesake.length === 1 ? (namesake[0] ?? null) : null;
+  const pairedAmbiguous = namesake.length > 1;
+
+  const openSheet = (action: ComputerSheetKind, name: string, computerId: string | null = null) => {
     if (action === 'start') void listCodeSessions();
-    setSheet({ action, name });
+    setSheet({ action, name, computerId, pairedName: connectedName });
   };
 
   if (!cloudUnlocked) return null;
+
+  const startSheetOpen =
+    sheet?.action === 'start' &&
+    sheet.pairedName === connectedName &&
+    (sheet.computerId === null ? pairedAmbiguous : pairedComputer?.id === sheet.computerId);
 
   return (
     <View className="px-4 mb-3">
@@ -151,14 +184,47 @@ export function AccountComputersCard({ connectedName }: { connectedName: string 
             <LoadingIndicator />
           )
         ) : computers.length === 0 ? (
-          <Text className="text-sm text-white/50">
-            No computer is signed in to this account yet. Install AGI Desktop on a computer and sign
-            in there.
-          </Text>
+          failed ? (
+            <Text className="text-sm" style={{ color: colors.agentError }}>
+              Could not refresh your computers. The last load found none.
+            </Text>
+          ) : (
+            <Text className="text-sm text-white/50">
+              No computer is signed in to this account yet. Install AGI Desktop on a computer and
+              sign in there.
+            </Text>
+          )
         ) : (
           <View className="gap-1">
+            {failed ? (
+              <Text className="text-sm" style={{ color: colors.agentError }}>
+                Could not refresh. This is the list from your last successful load.
+              </Text>
+            ) : null}
+            {pairedAmbiguous && connectedName !== null ? (
+              <View>
+                <Pressable
+                  disabled={!canStartSession}
+                  onPress={canStartSession ? () => openSheet('start', connectedName) : undefined}
+                  accessibilityRole={canStartSession ? 'button' : undefined}
+                  accessibilityHint={canStartSession ? 'Starts a new session' : undefined}
+                  className="flex-row items-center gap-2"
+                  style={{ minHeight: 44 }}
+                  accessibilityLabel={`${connectedName}, connected`}
+                >
+                  <Text className="flex-1 text-sm font-medium text-white" numberOfLines={1}>
+                    {connectedName}
+                  </Text>
+                  <Badge label="Connected" color="blue" />
+                </Pressable>
+                <Text className="text-sm text-white/45">
+                  More than one computer on this account has this name, so none of the rows below is
+                  marked as connected.
+                </Text>
+              </View>
+            ) : null}
             {computers.map((computer) => {
-              const connected = connectedName !== null && computer.name === connectedName;
+              const connected = pairedComputer?.id === computer.id;
               const displayName = computer.name ?? 'Computer';
               const action: ComputerSheetKind | null = connected
                 ? canStartSession
@@ -178,7 +244,7 @@ export function AccountComputersCard({ connectedName }: { connectedName: string 
                 <Pressable
                   key={computer.id}
                   disabled={action === null}
-                  onPress={action ? () => openSheet(action, displayName) : undefined}
+                  onPress={action ? () => openSheet(action, displayName, computer.id) : undefined}
                   accessibilityRole={action ? 'button' : undefined}
                   accessibilityHint={hint}
                   className="flex-row items-center gap-2"
@@ -213,7 +279,7 @@ export function AccountComputersCard({ connectedName }: { connectedName: string 
           </Text>
         ) : null}
       </Card>
-      {sheet?.action === 'start' ? (
+      {startSheetOpen && sheet ? (
         <SessionSheet name={sheet.name} onClose={() => setSheet(null)} />
       ) : null}
       {sheet?.action === 'pair' ? (

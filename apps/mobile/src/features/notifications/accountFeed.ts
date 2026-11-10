@@ -97,82 +97,125 @@ const EMPTY_FEED = {
 };
 
 let feedGeneration = 0;
+let unreadSyncRevision = 0;
+const readRevisions = new Map<string, number>();
 
-export const useAccountNotificationFeed = create<AccountFeedState>()((set, get) => ({
-  ...EMPTY_FEED,
+function stampReads(ids: readonly string[]): Map<string, number> {
+  const stamps = new Map<string, number>();
+  for (const id of ids) {
+    const revision = (readRevisions.get(id) ?? 0) + 1;
+    readRevisions.set(id, revision);
+    stamps.set(id, revision);
+  }
+  return stamps;
+}
 
-  refresh: async () => {
-    const generation = ++feedGeneration;
-    set({ loading: true, error: null });
-    try {
-      const page = await fetchAccountNotifications();
-      if (generation !== feedGeneration) return;
-      set({
-        items: page.notifications,
-        unreadCount: page.unreadCount,
-        hasMore: page.notifications.length === PAGE_SIZE,
-        loading: false,
+export const useAccountNotificationFeed = create<AccountFeedState>()((set, get) => {
+  const restoreUnread = (
+    stamps: ReadonlyMap<string, number>,
+    syncRevision: number,
+    unloadedUnread: number,
+  ) => {
+    set((state) => {
+      let restored = 0;
+      const items = state.items.map((item) => {
+        if (!item.read || stamps.get(item.id) === undefined) return item;
+        if (readRevisions.get(item.id) !== stamps.get(item.id)) return item;
+        restored += 1;
+        return { ...item, read: false };
       });
-    } catch {
-      if (generation !== feedGeneration) return;
-      set({ loading: false, error: 'Could not load your account notifications.' });
-    }
-  },
+      if (syncRevision !== unreadSyncRevision) return { items };
+      return { items, unreadCount: state.unreadCount + restored + unloadedUnread };
+    });
+  };
 
-  loadMore: async () => {
-    const { items, hasMore, loading, loadingMore } = get();
-    const last = items.at(-1);
-    if (!hasMore || loading || loadingMore || !last) return;
-    const generation = feedGeneration;
-    set({ loadingMore: true });
-    try {
-      const page = await fetchAccountNotifications(last.createdAt);
-      if (generation !== feedGeneration) return;
-      const known = new Set(get().items.map((item) => item.id));
-      set({
-        items: [...get().items, ...page.notifications.filter((item) => !known.has(item.id))],
-        unreadCount: page.unreadCount,
-        hasMore: page.notifications.length === PAGE_SIZE,
-        loadingMore: false,
-      });
-    } catch {
-      if (generation !== feedGeneration) return;
-      set({ loadingMore: false, error: 'Could not load older notifications.' });
-    }
-  },
+  return {
+    ...EMPTY_FEED,
 
-  markRead: (id) => {
-    const target = get().items.find((item) => item.id === id);
-    if (!target || target.read) return;
-    set((state) => ({
-      items: state.items.map((item) => (item.id === id ? { ...item, read: true } : item)),
-      unreadCount: Math.max(0, state.unreadCount - 1),
-    }));
-    markAccountNotificationsRead({ ids: [id] }).catch(() => {
+    refresh: async () => {
+      const generation = ++feedGeneration;
+      set({ loading: true, error: null });
+      try {
+        const page = await fetchAccountNotifications();
+        if (generation !== feedGeneration) return;
+        unreadSyncRevision += 1;
+        set({
+          items: page.notifications,
+          unreadCount: page.unreadCount,
+          hasMore: page.notifications.length === PAGE_SIZE,
+          loading: false,
+        });
+      } catch {
+        if (generation !== feedGeneration) return;
+        set({ loading: false, error: 'Could not load your account notifications.' });
+      }
+    },
+
+    loadMore: async () => {
+      const { items, hasMore, loading, loadingMore } = get();
+      const last = items.at(-1);
+      if (!hasMore || loading || loadingMore || !last) return;
+      const generation = feedGeneration;
+      set({ loadingMore: true });
+      try {
+        const page = await fetchAccountNotifications(last.createdAt);
+        if (generation !== feedGeneration) return;
+        const known = new Set(get().items.map((item) => item.id));
+        unreadSyncRevision += 1;
+        set({
+          items: [...get().items, ...page.notifications.filter((item) => !known.has(item.id))],
+          unreadCount: page.unreadCount,
+          hasMore: page.notifications.length === PAGE_SIZE,
+          loadingMore: false,
+        });
+      } catch {
+        if (generation !== feedGeneration) return;
+        set({ loadingMore: false, error: 'Could not load older notifications.' });
+      }
+    },
+
+    markRead: (id) => {
+      const target = get().items.find((item) => item.id === id);
+      if (!target || target.read) return;
+      const generation = feedGeneration;
+      const syncRevision = unreadSyncRevision;
+      const stamps = stampReads([id]);
       set((state) => ({
-        items: state.items.map((item) => (item.id === id ? { ...item, read: false } : item)),
-        unreadCount: state.unreadCount + 1,
+        items: state.items.map((item) => (item.id === id ? { ...item, read: true } : item)),
+        unreadCount: Math.max(0, state.unreadCount - 1),
       }));
-    });
-  },
+      markAccountNotificationsRead({ ids: [id] }).catch(() => {
+        if (generation !== feedGeneration) return;
+        restoreUnread(stamps, syncRevision, 0);
+      });
+    },
 
-  markAllRead: () => {
-    const previous = get();
-    if (previous.unreadCount === 0 && previous.items.every((item) => item.read)) return;
-    set((state) => ({
-      items: state.items.map((item) => ({ ...item, read: true })),
-      unreadCount: 0,
-    }));
-    markAccountNotificationsRead({ all: true }).catch(() => {
-      set({ items: previous.items, unreadCount: previous.unreadCount });
-    });
-  },
+    markAllRead: () => {
+      const previous = get();
+      if (previous.unreadCount === 0 && previous.items.every((item) => item.read)) return;
+      const generation = feedGeneration;
+      const syncRevision = unreadSyncRevision;
+      const unreadIds = previous.items.filter((item) => !item.read).map((item) => item.id);
+      const stamps = stampReads(unreadIds);
+      const unloadedUnread = Math.max(0, previous.unreadCount - unreadIds.length);
+      set((state) => ({
+        items: state.items.map((item) => ({ ...item, read: true })),
+        unreadCount: 0,
+      }));
+      markAccountNotificationsRead({ all: true }).catch(() => {
+        if (generation !== feedGeneration) return;
+        restoreUnread(stamps, syncRevision, unloadedUnread);
+      });
+    },
 
-  reset: () => {
-    feedGeneration += 1;
-    set(EMPTY_FEED);
-  },
-}));
+    reset: () => {
+      feedGeneration += 1;
+      unreadSyncRevision += 1;
+      readRevisions.clear();
+      set(EMPTY_FEED);
+    },
+  };
+});
 
 export function useAccountNotifications(enabled: boolean): AccountFeedState {
   const feed = useAccountNotificationFeed();

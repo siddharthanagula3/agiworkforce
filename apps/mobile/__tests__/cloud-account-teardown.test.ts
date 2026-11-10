@@ -98,6 +98,10 @@ jest.mock('../services/notifications', () => ({
   notificationCenterStore: { clear: jest.fn() },
 }));
 
+jest.mock('../src/features/notifications/accountFeed', () => ({
+  useAccountNotificationFeed: { getState: jest.fn() },
+}));
+
 jest.mock('../services/backgroundFetch', () => ({
   resetBackgroundFetchAccountState: jest.fn(),
 }));
@@ -214,6 +218,9 @@ const { useUploadLifecycleStore } = require('../src/features/chat/upload/uploadL
 const { notificationCenterStore } = require('../services/notifications') as {
   notificationCenterStore: { clear: jest.Mock };
 };
+const { useAccountNotificationFeed } = require('../src/features/notifications/accountFeed') as {
+  useAccountNotificationFeed: { getState: jest.Mock };
+};
 const { resetBackgroundFetchAccountState } = require('../services/backgroundFetch') as {
   resetBackgroundFetchAccountState: jest.Mock;
 };
@@ -259,6 +266,7 @@ describe('clearLocalCloudAccountState', () => {
   const clearCloudSearch = jest.fn();
   const clearManagedCloudAccess = jest.fn();
   const resetCloudUploads = jest.fn();
+  const resetAccountNotificationFeed = jest.fn();
   let mmkvReadyCallbacks: Array<() => void>;
 
   beforeEach(() => {
@@ -297,6 +305,7 @@ describe('clearLocalCloudAccountState', () => {
     useChatViewStore.getState.mockReturnValue({ clearCloudSearchState: clearCloudSearch });
     useWaitlistStore.getState.mockReturnValue({ clear: clearManagedCloudAccess });
     useUploadLifecycleStore.getState.mockReturnValue({ reset: resetCloudUploads });
+    useAccountNotificationFeed.getState.mockReturnValue({ reset: resetAccountNotificationFeed });
   });
 
   it('clears account A Cloud data before account B while preserving Local data', () => {
@@ -332,6 +341,7 @@ describe('clearLocalCloudAccountState', () => {
     expect(invalidateConnectorPolicy).toHaveBeenCalledTimes(1);
     expect(resetCloudUploads).toHaveBeenCalledTimes(1);
     expect(notificationCenterStore.clear).toHaveBeenCalledTimes(1);
+    expect(resetAccountNotificationFeed).toHaveBeenCalledTimes(1);
     expect(resetBackgroundFetchAccountState).toHaveBeenCalledTimes(1);
     expect(clearCloudSearch).toHaveBeenCalledTimes(1);
     expect(useCloudSettingsStore.getState()).toEqual(useCloudSettingsStore.getInitialState());

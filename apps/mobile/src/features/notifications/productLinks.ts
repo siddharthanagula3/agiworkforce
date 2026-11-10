@@ -10,15 +10,15 @@ import { FEATURES, type FeatureKey } from '@/lib/v1FeatureFlags';
 
 const NATIVE_DESTINATION: Record<
   ProductLinkTarget,
-  { pathname: string; flag: FeatureKey | null; perItem: boolean }
+  { pathname: string; flag: FeatureKey | null; perItem: boolean; idParam: string | null }
 > = {
-  chat: { pathname: '/(app)/chat', flag: 'cloudChat', perItem: true },
-  work: { pathname: '/(app)/tasks', flag: 'cloudTasks', perItem: false },
-  'browser-task': { pathname: '/(app)/tasks', flag: 'cloudTasks', perItem: false },
-  research: { pathname: '/(app)/reports', flag: 'research', perItem: false },
-  schedule: { pathname: '/(app)/schedules', flag: 'schedules', perItem: false },
-  artifact: { pathname: '/(app)/artifacts', flag: null, perItem: false },
-  file: { pathname: '/(app)/library', flag: null, perItem: false },
+  chat: { pathname: '/(app)/chat', flag: 'cloudChat', perItem: true, idParam: null },
+  work: { pathname: '/(app)/tasks', flag: 'cloudTasks', perItem: false, idParam: 'runId' },
+  'browser-task': { pathname: '/(app)/tasks', flag: 'cloudTasks', perItem: false, idParam: null },
+  research: { pathname: '/(app)/reports', flag: 'research', perItem: false, idParam: null },
+  schedule: { pathname: '/(app)/schedules', flag: 'schedules', perItem: false, idParam: null },
+  artifact: { pathname: '/(app)/artifacts', flag: null, perItem: false, idParam: null },
+  file: { pathname: '/(app)/library', flag: null, perItem: false, idParam: null },
 };
 
 export interface ProductLinkHistory {
@@ -36,8 +36,9 @@ export function readProductLink(data: Record<string, unknown> | undefined): Prod
 export function nativeRouteForProductLink(link: ProductLink): string | null {
   const destination = NATIVE_DESTINATION[link.target];
   if (destination.flag !== null && !FEATURES[destination.flag]) return null;
-  return destination.perItem
-    ? `${destination.pathname}/${encodeURIComponent(link.id)}`
+  if (destination.perItem) return `${destination.pathname}/${encodeURIComponent(link.id)}`;
+  return destination.idParam
+    ? `${destination.pathname}?${destination.idParam}=${encodeURIComponent(link.id)}`
     : destination.pathname;
 }
 

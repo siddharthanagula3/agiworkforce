@@ -181,6 +181,11 @@ function clearLocalCloudAccountStateNow(): void {
     notificationCenterStore.clear();
   });
 
+  runTeardownStep('account notification feed', () => {
+    const { useAccountNotificationFeed } = require('@/src/features/notifications/accountFeed');
+    useAccountNotificationFeed.getState().reset();
+  });
+
   runTeardownStep('background approval notifications', () => {
     const { resetBackgroundFetchAccountState } = require('@/services/backgroundFetch');
     resetBackgroundFetchAccountState();
