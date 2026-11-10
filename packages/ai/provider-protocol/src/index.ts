@@ -68,6 +68,7 @@ export type {
 export {
   normalizeStrictOpenAIJsonSchema,
   normalizeOpenAIStrictToolParameters,
+  resolveOpenAIToolStrictness,
 } from './openai-tool-schema';
 
 export { normalizeToolParameterSchema } from './tool-parameter-schema';

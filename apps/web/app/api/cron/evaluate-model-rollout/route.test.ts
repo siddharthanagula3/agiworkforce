@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   pageOnCall: vi.fn(async (_severity: string, _subject: string, _text: string) => 'paged'),
   sendSupportEmail: vi.fn(async (_input: unknown) => ({ delivered: true })),
   storeSet: vi.fn(async (_key: string, _value: unknown, _options?: unknown) => true),
+  storeDelete: vi.fn(async (_key: string) => 1),
 }));
 
 vi.mock('@/lib/server/cron-auth', () => ({
@@ -25,6 +26,7 @@ vi.mock('@/lib/server/cron-auth', () => ({
 vi.mock('@/lib/server/key-value', () => ({
   getKeyValueStore: () => ({
     set: (key: string, value: unknown, options?: unknown) => mocks.storeSet(key, value, options),
+    delete: (key: string) => mocks.storeDelete(key),
   }),
 }));
 
@@ -98,6 +100,7 @@ beforeEach(() => {
   mocks.pageOnCall.mockResolvedValue('paged');
   mocks.sendSupportEmail.mockResolvedValue({ delivered: true });
   mocks.storeSet.mockResolvedValue(true);
+  mocks.storeDelete.mockResolvedValue(1);
 });
 
 describe('model rollout cron', () => {
@@ -151,6 +154,32 @@ describe('model rollout cron', () => {
     const response = await GET(request());
     expect(await response.json()).toMatchObject({ alerts: 1, paged: 'not_needed' });
     expect(mocks.pageOnCall).not.toHaveBeenCalled();
+  });
+
+  it('releases the dedup claim and answers 500 when neither channel carried the alert', async () => {
+    mocks.readCohortMetrics.mockResolvedValue([
+      cohort({}),
+      cohort({ cohort: 'canary', modelKey: 'candidate-model', failureRate: 0.4 }),
+    ]);
+    mocks.pageOnCall.mockResolvedValue('failed');
+    mocks.sendSupportEmail.mockResolvedValue({ delivered: false });
+    const response = await GET(request());
+    expect(response.status).toBe(500);
+    expect(mocks.storeDelete).toHaveBeenCalledTimes(1);
+    expect(mocks.storeDelete).toHaveBeenCalledWith(
+      'agi-rollout:alerted:coding_balanced:canary:candidate-model:quality',
+    );
+  });
+
+  it('keeps the dedup claim when only one channel failed', async () => {
+    mocks.readCohortMetrics.mockResolvedValue([
+      cohort({}),
+      cohort({ cohort: 'canary', modelKey: 'candidate-model', failureRate: 0.4 }),
+    ]);
+    mocks.pageOnCall.mockResolvedValue('failed');
+    const response = await GET(request());
+    expect(response.status).toBe(200);
+    expect(mocks.storeDelete).not.toHaveBeenCalled();
   });
 
   it('answers 500 rather than half-reporting when the cohort read fails', async () => {

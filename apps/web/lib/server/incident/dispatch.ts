@@ -130,13 +130,14 @@ export async function notifyIncident(
     postToIncidentChannel(notification.severity, notification.subject, text, targets[0]),
   ]);
 
-  const delivered = emails.some((sent) => sent.delivered);
+  const emailDelivered = emails.some((sent) => sent.delivered);
   const reason = emails.find((sent) => !sent.delivered)?.reason;
+  const delivered = emailDelivered || paged === 'paged' || channel === 'paged';
 
   // Every channel above depends on something that may be part of the outage:
   // the email vendor, or this application reaching its own webhooks. The
   // out-of-band transport is tried whenever none of them carried the alert.
-  const needsFallback = !delivered && paged !== 'paged' && channel !== 'paged';
+  const needsFallback = !delivered;
   const outOfBand = needsFallback
     ? await sendOutOfBandAlert({
         severity: notification.severity,
@@ -170,6 +171,6 @@ export async function notifyIncident(
     paged,
     channel,
     outOfBand,
-    ...(delivered ? {} : { reason }),
+    ...(emailDelivered ? {} : { reason }),
   };
 }
