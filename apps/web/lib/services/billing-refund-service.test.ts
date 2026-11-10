@@ -132,6 +132,16 @@ const DECLINE_INPUT = {
   note: DECIDED_DECLINE.decision_note,
 };
 
+function transactionalDb(rows: unknown[][]) {
+  const query = vi.fn();
+  for (const result of rows) query.mockResolvedValueOnce(result);
+  const db = {
+    query,
+    transaction: async <T>(fn: (tx: DatabaseAdapter) => Promise<T>) => fn(db),
+  } as unknown as DatabaseAdapter;
+  return { db, query };
+}
+
 describe('operator decision receipts', () => {
   it('keeps the recorded store refund and says the customer was not told when the notification insert throws', async () => {
     const query = vi.fn().mockResolvedValueOnce([REQUEST]).mockResolvedValueOnce([DECIDED_STORE]);
@@ -146,20 +156,18 @@ describe('operator decision receipts', () => {
   });
 
   it('keeps the decline and says the customer was not told when the notification insert throws', async () => {
-    const query = vi.fn().mockResolvedValueOnce([DECIDED_DECLINE]);
-    const db = { query } as unknown as DatabaseAdapter;
+    const { db, query } = transactionalDb([[REQUEST], [DECIDED_DECLINE]]);
     vi.mocked(insertNotification).mockRejectedValueOnce(new Error('insert failed'));
 
     await expect(declineRefundRequest(db, DECLINE_INPUT)).resolves.toMatchObject({
       request: { id: REQUEST.id, status: 'declined' },
       customerNotified: false,
     });
-    expect(query).toHaveBeenCalledTimes(1);
+    expect(query).toHaveBeenCalledTimes(2);
   });
 
   it('says the customer was not told when no notification was written', async () => {
-    const query = vi.fn().mockResolvedValueOnce([DECIDED_DECLINE]);
-    const db = { query } as unknown as DatabaseAdapter;
+    const { db } = transactionalDb([[REQUEST], [DECIDED_DECLINE]]);
     vi.mocked(insertNotification).mockResolvedValueOnce('invalid');
 
     await expect(declineRefundRequest(db, DECLINE_INPUT)).resolves.toMatchObject({
@@ -168,8 +176,7 @@ describe('operator decision receipts', () => {
   });
 
   it('counts a notification that already exists for this decision as told', async () => {
-    const query = vi.fn().mockResolvedValueOnce([DECIDED_DECLINE]);
-    const db = { query } as unknown as DatabaseAdapter;
+    const { db } = transactionalDb([[REQUEST], [DECIDED_DECLINE]]);
     vi.mocked(insertNotification).mockResolvedValueOnce('duplicate');
 
     await expect(declineRefundRequest(db, DECLINE_INPUT)).resolves.toMatchObject({

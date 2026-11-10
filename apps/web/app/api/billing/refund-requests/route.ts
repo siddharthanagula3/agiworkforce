@@ -105,7 +105,6 @@ async function handleCreateRefundRequest(request: NextRequest) {
       db: scoped.db,
       userId: scoped.userId,
       customerId,
-      subscriptionId: row?.stripe_subscription_id ?? null,
       chargeId: parsed.data.chargeId,
       reason: parsed.data.reason,
       details: parsed.data.details || null,

@@ -46,6 +46,7 @@ import type {
   PurchaseVerificationInput,
   TaxCalculationResult,
 } from './domain';
+import { REFUND_REQUEST_METADATA_KEY } from './domain';
 import {
   normalizeCurrency,
   normalizeEnvironment,
@@ -579,9 +580,45 @@ export async function readStripeSubscriptionPayment(
     ? await stripe.subscriptions.retrieve(subscriptionReference)
     : null;
   return {
+    subscriptionReference: subscription?.id ?? null,
     servicePeriod: latest ? normalizeProviderPeriod(latest.period.start, latest.period.end) : null,
     withdrawalConsent: withdrawalConsentOf(subscription?.metadata),
   };
+}
+
+function refundResultOf(refund: Stripe.Refund): ChargeRefundResult {
+  const amount = normalizeMoney(refund.amount, refund.currency);
+  if (!amount) throw new Error(`Stripe returned refund ${refund.id} without an amount`);
+  const normalized = { reference: refund.id, status: refund.status ?? null, amount };
+  if (refund.status === 'succeeded') return { outcome: 'refunded', refund: normalized };
+  if (refund.status === 'failed' || refund.status === 'canceled') {
+    return { outcome: 'rejected', code: `refund_${refund.status}` };
+  }
+  return { outcome: 'pending', refund: normalized };
+}
+
+export interface StripeRefundsForRequest {
+  active: ChargeRefundResult | null;
+  failedAttempts: number;
+}
+
+export async function findStripeRefundsForRequest(
+  chargeReference: string,
+  requestId: string,
+): Promise<StripeRefundsForRequest> {
+  let pending: ChargeRefundResult | null = null;
+  let failedAttempts = 0;
+  for await (const refund of getStripeClient().refunds.list({
+    charge: chargeReference,
+    limit: 100,
+  })) {
+    if (refund.metadata?.[REFUND_REQUEST_METADATA_KEY] !== requestId) continue;
+    const result = refundResultOf(refund);
+    if (result.outcome === 'refunded') return { active: result, failedAttempts };
+    if (result.outcome === 'pending') pending = result;
+    else failedAttempts += 1;
+  }
+  return { active: pending, failedAttempts };
 }
 
 export async function refundStripeCharge(input: ChargeRefundInput): Promise<ChargeRefundResult> {
@@ -602,12 +639,7 @@ export async function refundStripeCharge(input: ChargeRefundInput): Promise<Char
     }
     throw error;
   }
-  const amount = normalizeMoney(refund.amount, refund.currency);
-  if (!amount) throw new Error(`Stripe returned refund ${refund.id} without an amount`);
-  return {
-    outcome: 'refunded',
-    refund: { reference: refund.id, status: refund.status ?? null, amount },
-  };
+  return refundResultOf(refund);
 }
 
 export async function cancelStripeSubscriptionNow(subscriptionReference: string): Promise<boolean> {

@@ -27,6 +27,7 @@ const DAY_MS = 86_400_000;
 const HOUR_MS = 3_600_000;
 const MAX_CODE_ATTEMPTS = 5;
 const MAX_LISTED_FRIENDS = 100;
+const RESET_REPLAY_DAYS = 7;
 const NETWORK_REFRESH_INTERVAL = '1 day';
 
 export interface ReferralFriend {
@@ -61,6 +62,7 @@ export interface ReferralRewardSweepSummary {
   capped: number;
   blocked: number;
   failed: number;
+  resetsFailed: number;
   remaining: boolean;
 }
 
@@ -443,6 +445,60 @@ async function settleDueReferral(
   });
 }
 
+async function issueReferralResets(db: DatabaseAdapter, referralId: string): Promise<number> {
+  return db.transaction(async (tx) => {
+    const [referral] = await tx.query<{
+      referrer_id: string;
+      reward_issued_at: string | Date | null;
+    }>(
+      `select referrer_id, reward_issued_at
+         from public.referrals
+        where id = $1
+          and status = 'rewarded'
+          and clawed_back_at is null
+        for update`,
+      [referralId],
+    );
+    if (!referral) return 0;
+    return grantReferralResetsToReferrer(tx, {
+      referrerId: referral.referrer_id,
+      referralId,
+      eligibleAtMs: toTime(referral.reward_issued_at) ?? undefined,
+    });
+  });
+}
+
+async function replayPendingReferralResets(
+  db: DatabaseAdapter,
+  maxReferrals: number,
+  summary: ReferralRewardSweepSummary,
+): Promise<void> {
+  const pending = await db.query<{ id: string }>(
+    `select referral.id
+       from public.referrals referral
+      where referral.status = 'rewarded'
+        and referral.clawed_back_at is null
+        and referral.reward_issued_at >= now() - ($2::integer * interval '1 day')
+        and not exists (
+              select 1
+                from public.usage_limit_promotion_grants grant_row
+               where grant_row.user_id = referral.referrer_id
+                 and grant_row.reference_id like 'referral:' || referral.id::text || ':%'
+            )
+      order by referral.reward_issued_at desc
+      limit $1`,
+    [maxReferrals, RESET_REPLAY_DAYS],
+  );
+  for (const { id } of pending) {
+    try {
+      await issueReferralResets(db, id);
+    } catch (error) {
+      summary.resetsFailed += 1;
+      logger.error({ error, referralId: id }, 'Referral resets could not be granted');
+    }
+  }
+}
+
 export async function grantDueReferralRewards(
   db: DatabaseAdapter,
   maxReferrals: number,
@@ -463,6 +519,7 @@ export async function grantDueReferralRewards(
     capped: 0,
     blocked: 0,
     failed: 0,
+    resetsFailed: 0,
     remaining: due.length > maxReferrals,
   };
   for (const { id } of due.slice(0, maxReferrals)) {
@@ -471,26 +528,16 @@ export async function grantDueReferralRewards(
       if (outcome === 'skipped') continue;
       summary.processed += 1;
       summary[outcome] += 1;
-      if (outcome === 'rewarded') {
-        try {
-          const [rewarded] = await db.query<{ referrer_id: string }>(
-            `select referrer_id from public.referrals where id = $1 and status = 'rewarded'`,
-            [id],
-          );
-          if (rewarded) {
-            await grantReferralResetsToReferrer(db, {
-              referrerId: rewarded.referrer_id,
-              referralId: id,
-            });
-          }
-        } catch (error) {
-          logger.error({ error, referralId: id }, 'Referral resets could not be granted');
-        }
-      }
     } catch (error) {
       summary.failed += 1;
       logger.error({ error, referralId: id }, 'Referral reward could not be settled');
     }
+  }
+  try {
+    await replayPendingReferralResets(db, maxReferrals, summary);
+  } catch (error) {
+    summary.resetsFailed += 1;
+    logger.error({ error }, 'Pending referral resets could not be listed');
   }
   return summary;
 }
