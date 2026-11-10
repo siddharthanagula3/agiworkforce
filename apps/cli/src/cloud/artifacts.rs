@@ -120,6 +120,7 @@ struct PublishedPageInfo {
     next_cursor: Option<String>,
 }
 
+#[derive(Debug)]
 pub struct PublishedListing {
     pub artifacts: Vec<PublishedArtifact>,
     pub workspace_sharing: bool,
