@@ -272,6 +272,18 @@ describe('clipboard', () => {
     expect(files[0]?.type).toBe('text/plain');
   });
 
+  it('says in the attached text when the host cut the clipboard short', async () => {
+    const [file] = clipboardAttachments({ text: 'start', textTruncated: true }, 5);
+    const text = await file!.text();
+    expect(text.startsWith('start\n\n[Clipboard text cut off')).toBe(true);
+    expect(text).toContain('500,000 characters');
+  });
+
+  it('leaves text the host did not cut short exactly as copied', async () => {
+    const [file] = clipboardAttachments({ text: 'whole', textTruncated: false }, 5);
+    expect(await file!.text()).toBe('whole');
+  });
+
   it('turns an image into a png attachment', () => {
     const files = clipboardAttachments(
       { image: { base64: btoa('png'), width: 2, height: 2 }, textTruncated: false },

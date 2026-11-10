@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   BrowserWindow,
   clipboard,
@@ -9,6 +10,7 @@ import {
 } from 'electron';
 import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { focusPageComposer } from './composerFocus';
+import { showsTrustedPage } from './permissionPolicy';
 import { createNativeNotification, showNativeMessage } from './runtime/nativeSurface';
 import { pickSourceForDisplay } from './garnishCore';
 import { physicalCaptureSize } from './runtime/computerUseProtocol';
@@ -48,9 +50,49 @@ function warnIfScreenCaptureBlocked(): void {
   });
 }
 
+interface PasteDestination {
+  webContentsId: number;
+  url: string;
+}
+
+function pasteDestinationOf(win: BrowserWindow | null): PasteDestination | null {
+  if (!win || win.isDestroyed() || !showsTrustedPage(win.webContents)) return null;
+  return { webContentsId: win.webContents.id, url: win.webContents.getURL() };
+}
+
+function isPasteDestination(win: BrowserWindow, destination: PasteDestination): boolean {
+  return (
+    !win.isDestroyed() &&
+    !win.webContents.isLoading() &&
+    showsTrustedPage(win.webContents) &&
+    win.webContents.id === destination.webContentsId &&
+    win.webContents.getURL() === destination.url
+  );
+}
+
+function clipboardImageFingerprint(): string | null {
+  const image = clipboard.readImage();
+  if (image.isEmpty()) return null;
+  return createHash('sha256').update(image.toBitmap()).digest('hex');
+}
+
+export async function putCaptureOnClipboard(png: Buffer): Promise<string | null> {
+  await clipboard.write([
+    new ClipboardItem({
+      'image/png': new Blob([new Uint8Array(png)], { type: 'image/png' }),
+    }),
+  ]);
+  return clipboardImageFingerprint();
+}
+
 // Every app can read the clipboard, so the capture stays there only as long
 // as the paste needs it; an empty or image clipboard must not keep the screen.
-export function takeCaptureBackFromClipboard(priorText: string): void {
+// Anything the user copied since is theirs and is left alone.
+export function takeCaptureBackFromClipboard(
+  priorText: string,
+  captureFingerprint: string | null,
+): void {
+  if (captureFingerprint === null || clipboardImageFingerprint() !== captureFingerprint) return;
   if (priorText !== '') {
     clipboard.writeText(priorText);
     return;
@@ -60,14 +102,8 @@ export function takeCaptureBackFromClipboard(priorText: string): void {
 
 async function pasteIntoChat(
   mainWindow: BrowserWindow | null,
-  image: Electron.NativeImage,
+  destination: PasteDestination | null,
 ): Promise<boolean> {
-  await clipboard.write([
-    new ClipboardItem({
-      'image/png': new Blob([new Uint8Array(image.toPNG())], { type: 'image/png' }),
-    }),
-  ]);
-
   if (!mainWindow || mainWindow.isDestroyed()) {
     notify('Screenshot copied', 'The chat window is closed, so the image is on your clipboard.');
     return false;
@@ -81,13 +117,18 @@ async function pasteIntoChat(
   await delay(PASTE_DELAY_MS);
   if (mainWindow.isDestroyed()) return true;
 
-  if (await focusPageComposer(mainWindow)) {
+  if (
+    destination !== null &&
+    isPasteDestination(mainWindow, destination) &&
+    (await focusPageComposer(mainWindow)) &&
+    isPasteDestination(mainWindow, destination)
+  ) {
     mainWindow.webContents.paste();
     return true;
   }
   notify(
     'Screenshot copied to clipboard',
-    'The chat composer was not ready, so the image was not attached. Press paste in the composer to add it.',
+    'The chat composer was not ready or the chat changed, so the image was not attached. Press paste in the composer to add it.',
   );
   return false;
 }
@@ -100,7 +141,9 @@ export async function captureWindowToChat(
   capturing = true;
 
   const priorText = await clipboard.readText();
+  const destination = pasteDestinationOf(mainWindow);
   let captureOnClipboard = false;
+  let captureFingerprint: string | null = null;
   let leftForTheUserToPaste = false;
 
   try {
@@ -124,14 +167,15 @@ export async function captureWindowToChat(
       return;
     }
     captureOnClipboard = true;
-    leftForTheUserToPaste = !(await pasteIntoChat(mainWindow, source.thumbnail));
+    captureFingerprint = await putCaptureOnClipboard(source.thumbnail.toPNG());
+    leftForTheUserToPaste = !(await pasteIntoChat(mainWindow, destination));
   } catch (error) {
     console.error('[screenshot] window capture failed:', error);
     notify('Window capture failed', 'The window in front could not be captured.');
   } finally {
     if (captureOnClipboard && !leftForTheUserToPaste) {
       await delay(CLIPBOARD_RESTORE_MS);
-      takeCaptureBackFromClipboard(priorText);
+      takeCaptureBackFromClipboard(priorText, captureFingerprint);
     }
     capturing = false;
   }
@@ -144,7 +188,9 @@ export async function captureToChat(mainWindow: BrowserWindow | null): Promise<v
   const priorText = await clipboard.readText();
   const quickAskWasVisible = isQuickAskVisible();
   const mainWasVisible = Boolean(mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible());
+  const destination = pasteDestinationOf(mainWindow);
   let captureOnClipboard = false;
+  let captureFingerprint: string | null = null;
   let leftForTheUserToPaste = false;
 
   try {
@@ -172,7 +218,8 @@ export async function captureToChat(mainWindow: BrowserWindow | null): Promise<v
     }
 
     captureOnClipboard = true;
-    leftForTheUserToPaste = !(await pasteIntoChat(mainWindow, source.thumbnail));
+    captureFingerprint = await putCaptureOnClipboard(source.thumbnail.toPNG());
+    leftForTheUserToPaste = !(await pasteIntoChat(mainWindow, destination));
   } catch (error) {
     console.error('[screenshot] capture failed:', error);
     notify('Screenshot failed', 'The screen could not be captured.');
@@ -181,7 +228,7 @@ export async function captureToChat(mainWindow: BrowserWindow | null): Promise<v
     // one path that leaves the screen on the clipboard.
     if (captureOnClipboard && !leftForTheUserToPaste) {
       await delay(CLIPBOARD_RESTORE_MS);
-      takeCaptureBackFromClipboard(priorText);
+      takeCaptureBackFromClipboard(priorText, captureFingerprint);
     }
     if (mainWasVisible && mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
       mainWindow.show();

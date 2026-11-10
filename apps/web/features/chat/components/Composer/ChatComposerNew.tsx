@@ -2312,6 +2312,11 @@ const ChatComposerNewComponent = ({
         return;
       }
       addClipboardAttachmentsRef.current(files);
+      if (snapshot.text && snapshot.textTruncated) {
+        setLocalNotice(
+          'The clipboard text was too long, so only the first part was attached. Attach the original file to include all of it.',
+        );
+      }
     } catch (cause) {
       if (!operation.isCurrent()) return;
       setLocalNotice(

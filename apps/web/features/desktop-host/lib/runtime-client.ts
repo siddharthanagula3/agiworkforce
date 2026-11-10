@@ -10,6 +10,7 @@ import {
   DISPATCH_TASK_REPORT,
   DISPATCH_TASK_RUNNER_READY,
   DesktopRuntimeError,
+  MAX_CLIPBOARD_TEXT_LENGTH,
   assertLocalTurnCarriesNoAttachments,
   developerApprovalAllows,
   getHostBridge,
@@ -354,7 +355,8 @@ export function readHostClipboard(): Promise<ClipboardSnapshot> {
  *
  * Text becomes a `.txt` file rather than composer text: the composer already
  * turns a long paste into an attachment, and a clipboard holding a whole file
- * should not silently replace what the user has typed.
+ * should not silently replace what the user has typed. Text the host cut short
+ * ends with a line saying so, because the file is all the model will see.
  */
 export function clipboardAttachments(snapshot: ClipboardSnapshot, nowMs: number): File[] {
   const files: File[] = [];
@@ -367,8 +369,11 @@ export function clipboardAttachments(snapshot: ClipboardSnapshot, nowMs: number)
     );
   }
   if (snapshot.text) {
+    const text = snapshot.textTruncated
+      ? `${snapshot.text}\n\n[Clipboard text cut off: only the first ${MAX_CLIPBOARD_TEXT_LENGTH.toLocaleString('en-US')} characters were attached.]`
+      : snapshot.text;
     files.push(
-      new File([snapshot.text], `clipboard-${nowMs}.txt`, {
+      new File([text], `clipboard-${nowMs}.txt`, {
         type: 'text/plain',
         lastModified: nowMs,
       }),

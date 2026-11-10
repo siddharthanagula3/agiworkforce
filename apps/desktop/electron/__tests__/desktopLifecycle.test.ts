@@ -71,6 +71,8 @@ vi.mock('electron', () => {
     getBounds = () => ({ x: 0, y: 0, width: 1280, height: 800 });
     isMinimized = () => false;
     isDestroyed = () => false;
+    getTitle = () => '';
+    isFocused = () => false;
     isMaximized = () => false;
     isFullScreen = () => false;
     isVisible = () => true;

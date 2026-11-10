@@ -7,6 +7,7 @@ type ClipboardEntry = { kind: 'text'; value: string } | { kind: 'image' } | { ki
 
 const clipboardLog: ClipboardEntry[] = [];
 let clipboardText = '';
+let clipboardImage: string | null = null;
 let screenAvailable = true;
 
 const notifications: { title: string; body: string }[] = [];
@@ -15,15 +16,22 @@ const composerFocused = vi.fn(async () => true);
 vi.mock('electron', () => ({
   clipboard: {
     readText: () => clipboardText,
+    readImage: () => ({
+      isEmpty: () => clipboardImage === null,
+      toBitmap: () => Buffer.from(clipboardImage ?? ''),
+    }),
     writeText: (value: string) => {
       clipboardText = value;
+      clipboardImage = null;
       clipboardLog.push({ kind: 'text', value });
     },
     clear: () => {
       clipboardText = '';
+      clipboardImage = null;
       clipboardLog.push({ kind: 'cleared' });
     },
     write: async () => {
+      clipboardImage = 'the screenshot';
       clipboardLog.push({ kind: 'image' });
     },
   },
@@ -69,7 +77,12 @@ vi.mock('../garnishCore', async (importOriginal) => ({
 
 const { captureToChat } = await import('../screenshot');
 
-function chatWindow() {
+const CHAT_URL = 'https://agiworkforce.com/chat/conversation-a';
+
+function chatWindow(
+  page: { url: string; loading?: boolean } = { url: CHAT_URL },
+  onPaste: () => void = () => {},
+) {
   return {
     isDestroyed: () => false,
     isVisible: () => true,
@@ -78,7 +91,14 @@ function chatWindow() {
     show: vi.fn(),
     focus: vi.fn(),
     hide: vi.fn(),
-    webContents: { focus: vi.fn(), paste: vi.fn() },
+    webContents: {
+      id: 1,
+      focus: vi.fn(),
+      paste: vi.fn(onPaste),
+      isDestroyed: () => false,
+      isLoading: () => page.loading ?? false,
+      getURL: () => page.url,
+    },
   } as unknown as Parameters<typeof captureToChat>[0];
 }
 
@@ -86,6 +106,7 @@ beforeEach(() => {
   clipboardLog.length = 0;
   notifications.length = 0;
   clipboardText = '';
+  clipboardImage = null;
   screenAvailable = true;
   composerFocused.mockResolvedValue(true);
   vi.useRealTimers();
@@ -136,5 +157,68 @@ describe('what the screenshot shortcut leaves behind', () => {
 
     expect(clipboardLog.map((entry) => entry.kind)).toEqual(['image', 'cleared']);
     expect(notifications.at(-1)?.title).toBe('Screenshot failed');
+  });
+});
+
+describe('where the screenshot is pasted', () => {
+  it('pastes into the conversation that asked for it', async () => {
+    const window = chatWindow();
+
+    await captureToChat(window);
+
+    expect(window?.webContents.paste).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not paste into another conversation the window moved to while capturing', async () => {
+    const page = { url: CHAT_URL };
+    const window = chatWindow(page);
+    composerFocused.mockImplementation(async () => {
+      page.url = 'https://agiworkforce.com/chat/conversation-b';
+      return true;
+    });
+
+    await captureToChat(window);
+
+    expect(window?.webContents.paste).not.toHaveBeenCalled();
+    expect(clipboardLog.map((entry) => entry.kind)).toEqual(['image']);
+    expect(notifications.at(-1)?.title).toMatch(/copied to clipboard/i);
+  });
+
+  it('does not paste into a page that is not the product', async () => {
+    const window = chatWindow({ url: 'https://accounts.example.com/sign-in' });
+
+    await captureToChat(window);
+
+    expect(window?.webContents.paste).not.toHaveBeenCalled();
+    expect(clipboardLog.map((entry) => entry.kind)).toEqual(['image']);
+  });
+});
+
+describe("what the screenshot cleanup leaves of the user's own copy", () => {
+  it('does not overwrite text the user copied after the paste', async () => {
+    const window = chatWindow({ url: CHAT_URL }, () => {
+      setTimeout(() => {
+        clipboardText = 'copied by the user';
+        clipboardImage = null;
+      }, 100);
+    });
+
+    await captureToChat(window);
+
+    expect(clipboardText).toBe('copied by the user');
+    expect(clipboardLog.map((entry) => entry.kind)).toEqual(['image']);
+  });
+
+  it('does not clear an image the user copied after the paste', async () => {
+    const window = chatWindow({ url: CHAT_URL }, () => {
+      setTimeout(() => {
+        clipboardImage = "the user's own picture";
+      }, 100);
+    });
+
+    await captureToChat(window);
+
+    expect(clipboardImage).toBe("the user's own picture");
+    expect(clipboardLog.map((entry) => entry.kind)).toEqual(['image']);
   });
 });

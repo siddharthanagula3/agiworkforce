@@ -62,7 +62,7 @@ use async_trait::async_trait;
 use base64::Engine as _;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex as StdMutex};
 use tokio::sync::{
     broadcast, oneshot, Mutex, OwnedMutexGuard, OwnedRwLockReadGuard, OwnedRwLockWriteGuard,
@@ -581,6 +581,71 @@ pub struct CliDeveloperSessionHost {
     /// call. An interrupt of the thread or a shutdown raises it, and the
     /// summary ends with the thread as it was.
     compactions: Arc<StdMutex<HashMap<String, Arc<tokio::sync::Notify>>>>,
+    mcp_reloads: Arc<McpReloadTickets>,
+}
+
+/// Which integration reload owns each thread's MCP manager. A reload claims a
+/// ticket when it is scheduled, after the configuration change that asked for
+/// it was saved, so only the newest claim may publish its manager.
+#[derive(Default)]
+struct McpReloadTickets {
+    next: AtomicU64,
+    latest: StdMutex<HashMap<String, u64>>,
+}
+
+impl McpReloadTickets {
+    fn claim(&self, thread_id: &str) -> u64 {
+        let ticket = self.next.fetch_add(1, Ordering::AcqRel) + 1;
+        self.latest
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .insert(thread_id.to_string(), ticket);
+        ticket
+    }
+
+    fn is_current(&self, thread_id: &str, ticket: u64) -> bool {
+        self.latest
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .get(thread_id)
+            == Some(&ticket)
+    }
+
+    fn forget(&self, thread_id: &str) {
+        self.latest
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .remove(thread_id);
+    }
+}
+
+/// Replace the session's MCP manager with the one a reload built, `None`
+/// meaning the configuration now has no servers. A reload that a newer one
+/// superseded, or whose thread is gone, installs nothing and stops what it
+/// built. Returns whether the reload was still current.
+async fn publish_mcp_reload(
+    session: &Arc<Mutex<AgentSession>>,
+    tickets: &McpReloadTickets,
+    thread_id: &str,
+    ticket: u64,
+    built: Option<crate::mcp::McpManager>,
+) -> bool {
+    let (current, previous) = {
+        let mut agent = session.lock().await;
+        if tickets.is_current(thread_id, ticket) {
+            let previous = agent.take_mcp_manager();
+            if let Some(manager) = built {
+                agent.set_mcp_manager(manager);
+            }
+            (true, previous)
+        } else {
+            (false, built)
+        }
+    };
+    if let Some(mut stale) = previous {
+        stale.shutdown_all().await;
+    }
+    current
 }
 
 /// One thread's entry in the host's table of running summaries, taken out
@@ -685,6 +750,7 @@ impl CliDeveloperSessionHost {
             workspace_files: Arc::new(RwLock::new(())),
             deleted_threads: Arc::new(StdMutex::new(HashSet::new())),
             compactions: Arc::new(StdMutex::new(HashMap::new())),
+            mcp_reloads: Arc::new(McpReloadTickets::default()),
         })
     }
 
@@ -1159,6 +1225,8 @@ impl CliDeveloperSessionHost {
         let shutdown_started = self.shutdown_started.clone();
         let lifecycle = self.lifecycle.clone();
         let workspace_root = self.workspace_root.clone();
+        let reloads = self.mcp_reloads.clone();
+        let ticket = reloads.claim(&thread_id);
         tokio::spawn(async move {
             // Discovery may launch MCP subprocesses, so it participates in the
             // same admission barrier as requests. Shutdown either waits for
@@ -1181,42 +1249,42 @@ impl CliDeveloperSessionHost {
             .await;
 
             let (method, message) = match result {
-                Ok(Ok(Some(mut manager))) => {
+                Ok(Ok(built)) => {
                     if shutdown_started.load(Ordering::Acquire) {
-                        manager.shutdown_all().await;
+                        if let Some(mut manager) = built {
+                            manager.shutdown_all().await;
+                        }
                         return;
                     }
-                    let previous = {
-                        let mut agent = session.lock().await;
-                        let previous = agent.take_mcp_manager();
-                        agent.set_mcp_manager(manager);
-                        previous
-                    };
-                    if let Some(mut previous) = previous {
-                        previous.shutdown_all().await;
+                    if !publish_mcp_reload(&session, &reloads, &thread_id, ticket, built).await {
+                        return;
                     }
                     (
                         "mcp/ready",
                         crate::mcp::consent::withheld_message(&workspace_root),
                     )
                 }
-                Ok(Ok(None)) => (
-                    "mcp/ready",
-                    crate::mcp::consent::withheld_message(&workspace_root),
-                ),
                 Ok(Err(error)) => {
+                    if !reloads.is_current(&thread_id, ticket) {
+                        return;
+                    }
                     eprintln!("MCP integration discovery failed: {error:#}");
                     (
                         "mcp/unavailable",
                         Some("MCP integrations could not be loaded for this session".to_string()),
                     )
                 }
-                Err(_) => (
-                    "mcp/unavailable",
-                    Some(format!(
-                        "MCP integration discovery timed out after {MCP_LOAD_TIMEOUT_SECONDS} seconds"
-                    )),
-                ),
+                Err(_) => {
+                    if !reloads.is_current(&thread_id, ticket) {
+                        return;
+                    }
+                    (
+                        "mcp/unavailable",
+                        Some(format!(
+                            "MCP integration discovery timed out after {MCP_LOAD_TIMEOUT_SECONDS} seconds"
+                        )),
+                    )
+                }
             };
             if shutdown_started.load(Ordering::Acquire) {
                 return;
@@ -2859,6 +2927,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         .map_err(not_found_error)?;
         self.release_writer_quietly(&id_for_event).await;
         let removed = self.sessions.lock().await.remove(&id_for_event);
+        self.mcp_reloads.forget(&id_for_event);
         if let Some(session) = removed {
             let memory_consolidation_tasks = session.lock().await.take_memory_consolidation_tasks();
             abort_and_join_tasks(memory_consolidation_tasks).await;
@@ -3200,6 +3269,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         self.refuse_foreign_writer(&params.thread_id, &path, "deleted")?;
 
         let removed = self.sessions.lock().await.remove(&params.thread_id);
+        self.mcp_reloads.forget(&params.thread_id);
         if let Some(session) = removed {
             let (mcp_manager, subagent_manager, memory_consolidation_tasks) = {
                 let mut session = session.lock().await;
@@ -9972,6 +10042,77 @@ mod tests {
             .await
             .expect_err("shutdown host must reject new requests");
         assert_eq!(error.code(), -32010);
+    }
+
+    #[tokio::test]
+    async fn an_empty_mcp_reload_retires_the_manager_the_session_still_held() {
+        let tickets = McpReloadTickets::default();
+        let session = Arc::new(Mutex::new(test_agent()));
+        session
+            .lock()
+            .await
+            .set_mcp_manager(crate::mcp::McpManager::new());
+        let ticket = tickets.claim("thread-1");
+
+        assert!(publish_mcp_reload(&session, &tickets, "thread-1", ticket, None).await);
+
+        assert!(session.lock().await.mcp_manager.is_none());
+    }
+
+    #[tokio::test]
+    async fn an_older_mcp_reload_finishing_last_cannot_replace_the_newer_manager() {
+        let tickets = McpReloadTickets::default();
+        let session = Arc::new(Mutex::new(test_agent()));
+        let older = tickets.claim("thread-1");
+        let newer = tickets.claim("thread-1");
+
+        assert!(
+            publish_mcp_reload(
+                &session,
+                &tickets,
+                "thread-1",
+                newer,
+                Some(crate::mcp::McpManager::new()),
+            )
+            .await
+        );
+        assert!(
+            !publish_mcp_reload(
+                &session,
+                &tickets,
+                "thread-1",
+                older,
+                Some(crate::mcp::McpManager::new()),
+            )
+            .await
+        );
+        assert!(session.lock().await.mcp_manager.is_some());
+
+        let newest_empty = tickets.claim("thread-1");
+        assert!(!publish_mcp_reload(&session, &tickets, "thread-1", newer, None).await);
+        assert!(session.lock().await.mcp_manager.is_some());
+        assert!(publish_mcp_reload(&session, &tickets, "thread-1", newest_empty, None).await);
+        assert!(session.lock().await.mcp_manager.is_none());
+    }
+
+    #[tokio::test]
+    async fn an_mcp_reload_for_a_removed_thread_installs_nothing() {
+        let tickets = McpReloadTickets::default();
+        let session = Arc::new(Mutex::new(test_agent()));
+        let ticket = tickets.claim("thread-1");
+        tickets.forget("thread-1");
+
+        assert!(
+            !publish_mcp_reload(
+                &session,
+                &tickets,
+                "thread-1",
+                ticket,
+                Some(crate::mcp::McpManager::new()),
+            )
+            .await
+        );
+        assert!(session.lock().await.mcp_manager.is_none());
     }
 
     #[tokio::test]

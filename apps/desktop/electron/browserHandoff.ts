@@ -1,8 +1,8 @@
-import { type BrowserWindow, clipboard, ClipboardItem } from 'electron';
+import { type BrowserWindow, clipboard } from 'electron';
 import { PRODUCT_NAMES } from '@agiworkforce/types';
 import type { BrowserChatHandoff } from './browser/bridgeServer';
 import { focusPageComposer } from './composerFocus';
-import { takeCaptureBackFromClipboard } from './screenshot';
+import { putCaptureOnClipboard, takeCaptureBackFromClipboard } from './screenshot';
 
 const COMPOSER_SETTLE_MS = 250;
 const CLIPBOARD_RESTORE_MS = 1000;
@@ -21,16 +21,12 @@ function selectionDraft(text: string, url: string): string {
 
 async function pasteImage(win: BrowserWindow, png: Buffer): Promise<void> {
   const priorText = await clipboard.readText();
-  await clipboard.write([
-    new ClipboardItem({
-      'image/png': new Blob([new Uint8Array(png)], { type: 'image/png' }),
-    }),
-  ]);
+  const captureFingerprint = await putCaptureOnClipboard(png);
   try {
     win.webContents.paste();
     await delay(CLIPBOARD_RESTORE_MS);
   } finally {
-    takeCaptureBackFromClipboard(priorText);
+    takeCaptureBackFromClipboard(priorText, captureFingerprint);
   }
 }
 
