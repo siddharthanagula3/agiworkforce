@@ -75,18 +75,63 @@ function currentComments(artifactId: string): ArtifactComment[] {
   return state.status === 'ready' ? state.comments : [];
 }
 
+interface PendingRead {
+  upserted: Map<string, ArtifactComment>;
+  removed: Set<string>;
+}
+
+const pendingReads = new Map<string, PendingRead>();
+
+function recordUpsert(artifactId: string, comment: ArtifactComment): void {
+  const pending = pendingReads.get(artifactId);
+  if (!pending) return;
+  pending.removed.delete(comment.id);
+  pending.upserted.set(comment.id, comment);
+}
+
+function recordRemoval(artifactId: string, id: string): void {
+  const pending = pendingReads.get(artifactId);
+  if (!pending) return;
+  pending.upserted.delete(id);
+  pending.removed.add(id);
+}
+
+function reconcileSnapshot(
+  snapshot: readonly ArtifactComment[],
+  pending: PendingRead,
+): ArtifactComment[] {
+  const merged = snapshot
+    .filter((entry) => !pending.removed.has(entry.id))
+    .filter((entry) => !entry.parentId || !pending.removed.has(entry.parentId))
+    .map((entry) => pending.upserted.get(entry.id) ?? entry);
+  const known = new Set(merged.map((entry) => entry.id));
+  for (const [id, entry] of pending.upserted) if (!known.has(id)) merged.push(entry);
+  return merged;
+}
+
 export async function loadArtifactComments(artifactId: string): Promise<void> {
-  if (!canCommentOn(artifactId) || readState(artifactId).status === 'loading') return;
-  writeState(artifactId, { status: 'loading' });
+  if (!canCommentOn(artifactId) || pendingReads.has(artifactId)) return;
+  const pending: PendingRead = { upserted: new Map(), removed: new Set() };
+  pendingReads.set(artifactId, pending);
+  if (readState(artifactId).status !== 'ready') writeState(artifactId, { status: 'loading' });
   try {
     const response = await fetch(artifactCommentsPath(artifactId), { credentials: 'include' });
     if (!response.ok) throw await readError(response, 'Comments could not be loaded');
     const body = (await response.json()) as Partial<ArtifactCommentListResponse>;
+    if (pendingReads.get(artifactId) !== pending) return;
+    pendingReads.delete(artifactId);
     writeState(artifactId, {
       status: 'ready',
-      comments: Array.isArray(body.comments) ? body.comments : [],
+      comments: reconcileSnapshot(Array.isArray(body.comments) ? body.comments : [], pending),
     });
   } catch (error) {
+    if (pendingReads.get(artifactId) !== pending) return;
+    pendingReads.delete(artifactId);
+    if (readState(artifactId).status === 'ready') {
+      if (pending.upserted.size > 0 || pending.removed.size > 0)
+        void loadArtifactComments(artifactId);
+      return;
+    }
     writeState(artifactId, {
       status: 'failed',
       error: error instanceof Error ? error : new Error('Comments could not be loaded'),
@@ -96,6 +141,7 @@ export async function loadArtifactComments(artifactId: string): Promise<void> {
 
 export function resetArtifactCommentsCache(): void {
   states.clear();
+  pendingReads.clear();
 }
 
 async function mutate(path: string, init: RequestInit, fallback: string): Promise<Response> {
@@ -116,6 +162,7 @@ export function useArtifactComments(artifactId: string) {
   );
 
   const upsert = (comment: ArtifactComment) => {
+    recordUpsert(artifactId, comment);
     const comments = currentComments(artifactId);
     writeState(artifactId, {
       status: 'ready',
@@ -154,6 +201,7 @@ export function useArtifactComments(artifactId: string) {
       { method: 'DELETE' },
       'The comment was not deleted',
     );
+    recordRemoval(artifactId, id);
     writeState(artifactId, {
       status: 'ready',
       comments: currentComments(artifactId).filter(
