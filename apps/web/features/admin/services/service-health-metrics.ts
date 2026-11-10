@@ -74,7 +74,6 @@ export interface FileProcessingHealth {
   extracted: number;
   withoutText: number;
   extractionRate: number | null;
-  extractionP50Ms: number | null;
 }
 
 export interface ServiceHealthSummary {
@@ -275,7 +274,6 @@ export async function readQueueDepth(
 interface FileRow {
   uploaded: SqlScalar;
   extracted: SqlScalar;
-  extraction_p50_ms: SqlScalar;
 }
 
 export async function readFileProcessingHealth(
@@ -285,10 +283,7 @@ export async function readFileProcessingHealth(
   const [row] = await db.query<FileRow>(
     `select
        count(*)::bigint as uploaded,
-       count(*) filter (where extracted_at is not null)::bigint as extracted,
-       percentile_cont(0.5) within group (
-         order by extract(epoch from (extracted_at - added_at)) * 1000
-       ) filter (where extracted_at is not null) as extraction_p50_ms
+       count(*) filter (where extracted_at is not null)::bigint as extracted
      from public.project_knowledge_files
      where added_at >= $1::timestamptz
        and deleted_at is null`,
@@ -301,7 +296,6 @@ export async function readFileProcessingHealth(
     extracted,
     withoutText: uploaded - extracted,
     extractionRate: rate(extracted, uploaded),
-    extractionP50Ms: toNullableNumber(row?.extraction_p50_ms),
   };
 }
 

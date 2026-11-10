@@ -6,9 +6,85 @@ import {
   formatAnchor,
   headingAnchors,
   joinPagesWithAnchors,
+  MAX_KNOWLEDGE_ANCHORS,
   parseKnowledgeAnchors,
   rebaseAnchors,
 } from './project-knowledge-anchors';
+
+function peerSections(count: number): string {
+  return Array.from(
+    { length: count },
+    (_, index) => `# Section ${index + 1}\nbody ${index + 1}`,
+  ).join('\n');
+}
+
+describe('anchor cap coverage', () => {
+  it.each([MAX_KNOWLEDGE_ANCHORS - 1, MAX_KNOWLEDGE_ANCHORS])(
+    'keeps every heading of a %i-heading file and adds no boundary',
+    (count) => {
+      const anchors = headingAnchors(peerSections(count));
+
+      expect(anchors).toHaveLength(count);
+      expect(anchors.some((anchor) => anchor.unmapped)).toBe(false);
+    },
+  );
+
+  it('does not attribute a passage after the last retained heading to that heading', () => {
+    const text = peerSections(MAX_KNOWLEDGE_ANCHORS + 1);
+    const anchors = headingAnchors(text);
+    const lastRetained = anchors[MAX_KNOWLEDGE_ANCHORS - 1]!;
+    const overflowStart = text.indexOf(`# Section ${MAX_KNOWLEDGE_ANCHORS + 1}`);
+
+    expect(anchors).toHaveLength(MAX_KNOWLEDGE_ANCHORS + 1);
+    expect(anchors[MAX_KNOWLEDGE_ANCHORS]).toEqual({ start: overflowStart, unmapped: true });
+    expect(anchorLocationAt(anchors, lastRetained.start + 3)).toEqual({
+      headingPath: [`Section ${MAX_KNOWLEDGE_ANCHORS}`],
+    });
+    expect(anchorLocationAt(anchors, overflowStart + 12)).toBeNull();
+    expect(formatAnchor(anchorAt(anchors, overflowStart + 12))).toBeNull();
+  });
+
+  it('keeps the boundary through storage and reading back', () => {
+    const anchors = headingAnchors(peerSections(MAX_KNOWLEDGE_ANCHORS + 40));
+    const stored = parseKnowledgeAnchors(JSON.parse(JSON.stringify(anchors)));
+
+    expect(stored).toEqual(anchors);
+    expect(anchorLocationAt(stored, anchors[MAX_KNOWLEDGE_ANCHORS]!.start + 5)).toBeNull();
+  });
+
+  it('closes an over-long stored list at the first entry it cannot keep', () => {
+    const stored = Array.from({ length: MAX_KNOWLEDGE_ANCHORS + 5 }, (_, index) => ({
+      start: index * 10,
+      heading: `H${index}`,
+      level: 1,
+    }));
+
+    const parsed = parseKnowledgeAnchors(stored);
+
+    expect(parsed).toHaveLength(MAX_KNOWLEDGE_ANCHORS + 1);
+    expect(parsed[MAX_KNOWLEDGE_ANCHORS]).toEqual({
+      start: MAX_KNOWLEDGE_ANCHORS * 10,
+      unmapped: true,
+    });
+  });
+
+  it('closes a page list that outgrows the cap instead of extending the last page', () => {
+    const pages = Array.from(
+      { length: MAX_KNOWLEDGE_ANCHORS + 3 },
+      (_, index) => `page ${index + 1}`,
+    );
+    const joined = joinPagesWithAnchors(pages);
+
+    const rebased = rebaseAnchors(joined.anchors, 0, joined.text.length);
+    const overflow = joined.anchors[MAX_KNOWLEDGE_ANCHORS]!;
+
+    expect(rebased).toHaveLength(MAX_KNOWLEDGE_ANCHORS + 1);
+    expect(anchorLocationAt(rebased, joined.anchors[MAX_KNOWLEDGE_ANCHORS - 1]!.start)).toEqual({
+      page: MAX_KNOWLEDGE_ANCHORS,
+    });
+    expect(anchorLocationAt(rebased, overflow.start + 1)).toBeNull();
+  });
+});
 
 describe('joinPagesWithAnchors', () => {
   it('numbers a page by its position in the document, blanks included', () => {

@@ -105,17 +105,13 @@ export default function ServiceHealthPanel() {
               title="File processing"
               description="Project knowledge files added in the window and how many yielded text."
             >
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
                 <Metric label="Uploaded" value={formatCount(summary.files.uploaded)} />
                 <Metric label="Text extracted" value={formatCount(summary.files.extracted)} />
                 <Metric
                   label="Extraction rate"
                   value={formatRate(summary.files.extractionRate)}
                   sub={`${formatCount(summary.files.withoutText)} without text`}
-                />
-                <Metric
-                  label="Median extraction"
-                  value={formatLatencyMs(summary.files.extractionP50Ms)}
                 />
               </div>
             </Section>

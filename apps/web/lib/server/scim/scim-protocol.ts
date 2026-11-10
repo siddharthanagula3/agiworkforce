@@ -150,23 +150,19 @@ const FILTER_PATTERN =
 const MAX_FILTER_LENGTH = 512;
 const MAX_FILTER_VALUE_LENGTH = 320;
 
+const LONE_SURROGATE = /\p{Surrogate}/u;
+
 function unescapeFilterValue(raw: string): string {
-  return raw.replace(/\\(["\\/bfnrt])/gu, (_match, char: string) => {
-    switch (char) {
-      case 'b':
-        return '\b';
-      case 'f':
-        return '\f';
-      case 'n':
-        return '\n';
-      case 'r':
-        return '\r';
-      case 't':
-        return '\t';
-      default:
-        return char;
-    }
-  });
+  let decoded: unknown;
+  try {
+    decoded = JSON.parse(`"${raw}"`);
+  } catch {
+    throw new ScimError(400, 'Filter value is not a valid quoted string', 'invalidFilter');
+  }
+  if (typeof decoded !== 'string' || decoded.includes('\0') || LONE_SURROGATE.test(decoded)) {
+    throw new ScimError(400, 'Filter value is not a valid quoted string', 'invalidFilter');
+  }
+  return decoded;
 }
 
 function parseFilter<A extends string>(
