@@ -90,16 +90,23 @@ word and the code is changed.
    `signaling.agiworkforce.com`, which does not resolve today. Default kept:
    the screens stay, and pairing fails with an error until that host is
    deployed. If you want them hidden for version 1 instead, say so.
-6. **The name.** The app, both listings and the App Store Connect record say
-   "AGI Mobile". On 2026-11-08 the name registry
-   (`packages/contracts/types/src/product-names.ts`) changed the brand to
-   `AGIWORKFORCE` and the product names to plain "Chat", "Mobile", "Work".
-   Default kept: "AGI Mobile", because the store record already carries it
-   and most screens say "AGI". Two sentences in the app follow the registry
-   and now read "AGIWORKFORCE uses your nickname in chat." (Personalization)
-   and "Choose when AGIWORKFORCE asks before a plugin acts." (Plugins), next
-   to screens that say "AGI". Say which name the phone app should use and the
-   app and listings are made to match.
+6. **The name.** A build made now shows "Mobile" under its icon, while both
+   listings and the App Store Connect record say "AGI Mobile". On 2026-11-08
+   the name registry (`packages/contracts/types/src/product-names.ts`)
+   changed the brand to `AGIWORKFORCE` and the product names to plain "Chat",
+   "Mobile", "Work". On 2026-11-10 the app's own name in
+   `apps/mobile/app.config.js` was changed to "Mobile" to match, because
+   `pnpm check:product-names` fails when the two differ. Default kept for the
+   stores: "AGI Mobile", because the store record already carries it and the
+   permission prompts and most screens say "AGI Mobile" or "AGI". Apple asks
+   that an app's names be "similar to avoid creating confusion" (App Store
+   Review Guideline 2.3.8, read 2026-11-10), and "Mobile" alone under an icon
+   names no product, so settle this before the first build is submitted. Two
+   sentences in the app follow the registry and read "AGIWORKFORCE uses your
+   nickname in chat." (Personalization) and "Choose when AGIWORKFORCE asks
+   before a plugin acts." (Plugins), next to screens that say "AGI". Say
+   which name the phone app should use, and the registry, the app and the
+   listings are made to match.
 
 ## 2. Accounts and agreements
 
