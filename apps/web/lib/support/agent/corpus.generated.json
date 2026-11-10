@@ -65,7 +65,7 @@
           "ordinal": 4,
           "heading": "Password",
           "headingPath": "Passkeys, two-factor and active sessions › Password",
-          "text": "The same page changes your password. Changing it requires your current password,\nand a code from your authenticator app as well when two-factor authentication is\non. An account that signs in without a password can add one after confirming it\nis you. Every other device signed in to the account is signed out when the\npassword changes. A new password the identity provider refuses, such as one\nfound in a data breach, is refused with the reason it gives, and the current\npassword keeps working. A forgotten password is reset from the sign-in screen\nwith **Forgot password?**."
+          "text": "The same page changes your password. Changing it requires your current password,\nand a code from your authenticator app as well when two-factor authentication is\non. An account that signs in without a password can add one after confirming it\nis you. Changing your password attempts to sign out every other device; if the\nprovider's session cleanup is incomplete, AGI reports that the password changed\nand asks you to end the remaining sessions in Settings. A new password the identity provider refuses, such as one\nfound in a data breach, is refused with the reason it gives, and the current\npassword keeps working. A forgotten password is reset from the sign-in screen\nwith **Forgot password?**."
         },
         {
           "id": "account-security#5",

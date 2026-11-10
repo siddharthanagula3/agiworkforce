@@ -18,8 +18,8 @@ const { mockSaveConversationDraft, mockSession, mockToastError, mockIdentity } =
   mockToastError: vi.fn(),
 }));
 
-vi.mock('@/lib/identity/client', async (importOriginal) => ({
-  ...(await importOriginal<ImportedModule3>()),
+vi.mock('@/lib/identity/client', async () => ({
+  ...(await vi.importActual<ClientModule>('@/lib/identity/client')),
   useSession: () => mockSession,
 }));
 vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
@@ -50,6 +50,7 @@ import {
   useConversationDraftSync,
   type DraftConflictControls,
 } from './use-conversation-draft-sync';
+type ClientModule = typeof import('@/lib/identity/client');
 
 const CONVERSATION = '11111111-1111-4111-8111-111111111111';
 
@@ -680,5 +681,3 @@ describe('retained draft controls', () => {
 type ImportedModule0 = typeof import('@/lib/identity/useSessionSnapshot');
 type ImportedModule1 = typeof import('@/lib/client/csrf');
 type ImportedModule2 = typeof import('../services/conversation-draft');
-
-type ImportedModule3 = typeof import('@/lib/identity/client');

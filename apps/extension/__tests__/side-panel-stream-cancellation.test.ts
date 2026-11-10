@@ -123,7 +123,6 @@ function harness() {
     trackProductEvent: vi.fn(),
     t: (key: string) => key,
     turnPayloadByMessageId: new Map(),
-    refreshRecentProjects: vi.fn(async () => undefined),
     clearPendingPageContext: vi.fn(),
     clearStoredMessages: vi.fn(),
     updateContextButton: vi.fn(),

@@ -10,6 +10,7 @@ import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { readForeignKeys, readTableColumns } from './check-resource-metadata.mjs';
+import { expandProjectReadScope } from './lib/project-scope-sql.mjs';
 
 export const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 
@@ -654,7 +655,8 @@ export function findUnfilteredReads({ repoRoot = REPO_ROOT, files, contract, mar
     if (candidates.length === 0) continue;
 
     const seen = new Set();
-    for (const statement of sqlStatements(raw)) {
+    for (const sourceSql of sqlStatements(raw)) {
+      const statement = expandProjectReadScope(sourceSql, raw, relativePath, repoRoot);
       const lower = statement.toLowerCase();
       for (const [table, markers] of candidates) {
         if (!lower.includes(table)) continue;

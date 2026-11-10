@@ -145,6 +145,7 @@ pub enum AgentEvent {
     /// begin/end pairing concept already exists in this crate for its MCP
     /// tool-call dialect.
     ToolUseEnd(AgentEventToolUseEnd),
+    CallerToolsRequested(AgentEventCallerToolsRequested),
     /// A provider-managed ("server-side") tool invocation started.
     /// executes on the vendor's infrastructure (Anthropic
     /// web_search/web_fetch/code_execution, Google grounding/
@@ -286,6 +287,33 @@ pub struct AgentEventToolUseDelta {
 #[ts(rename_all = "camelCase")]
 pub struct AgentEventToolUseEnd {
     pub tool_use_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema, TS)]
+#[serde(tag = "type")]
+#[ts(tag = "type")]
+pub enum AgentCallerToolCall {
+    #[serde(rename = "function")]
+    #[ts(rename = "function")]
+    Function {
+        id: String,
+        function: AgentCallerToolFunction,
+    },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema, TS)]
+pub struct AgentCallerToolFunction {
+    pub name: String,
+    pub arguments: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct AgentEventCallerToolsRequested {
+    #[ts(type = "number")]
+    pub next_event_sequence: u64,
+    pub calls: Vec<AgentCallerToolCall>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema, TS)]
@@ -794,6 +822,36 @@ mod tests {
                 delta: "partial response".to_string(),
             },
         )));
+    }
+
+    #[test]
+    fn caller_tools_requested_retains_exact_call_identity_and_resume_cursor() {
+        let envelope = sample_envelope(AgentEvent::CallerToolsRequested(
+            AgentEventCallerToolsRequested {
+                next_event_sequence: 10,
+                calls: vec![AgentCallerToolCall::Function {
+                    id: "local-call".to_string(),
+                    function: AgentCallerToolFunction {
+                        name: "read_dom".to_string(),
+                        arguments: "{}".to_string(),
+                    },
+                }],
+            },
+        ));
+        assert_round_trips(&envelope);
+        let value = serde_json::to_value(&envelope).expect("serialize");
+        assert_eq!(
+            value["event"],
+            serde_json::json!({
+                "type": "caller-tools-requested",
+                "nextEventSequence": 10,
+                "calls": [{
+                    "type": "function",
+                    "id": "local-call",
+                    "function": { "name": "read_dom", "arguments": "{}" }
+                }]
+            })
+        );
     }
 
     #[test]

@@ -30,6 +30,9 @@ import { ASSISTANT_CONTENT_CHANGED_REASON } from '@/features/chat/lib/assistant-
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import {
+  AGENT_EVENT_SCHEMA_VERSION,
+  CallerToolStepBudgetSchema,
+  DEFAULT_CALLER_TOOL_MAX_STEPS,
   MANAGED_OFFICE_FILE_TOOL_NAME,
   ManagedCloudMessageMetadataSchema,
   WEB_DOMAIN_RULE_MESSAGE,
@@ -738,6 +741,8 @@ export const ChatCompletionRequestSchema = z
       })
       .optional(),
     code_execution: z.boolean().optional(),
+    caller_tool_handoff_version: z.literal(AGENT_EVENT_SCHEMA_VERSION).optional(),
+    caller_tool_max_steps: CallerToolStepBudgetSchema.optional(),
     office_creation: z.boolean().optional(),
     office_format: z.enum(CHAT_OUTPUT_FORMATS).optional(),
     /**
@@ -800,6 +805,23 @@ export const ChatCompletionRequestSchema = z
       .optional(),
   })
   .superRefine((value, ctx) => {
+    if (value.caller_tool_handoff_version !== undefined && !value.stream) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['stream'],
+        message: 'Caller-tool continuation requires stream: true.',
+      });
+    }
+    if (
+      value.caller_tool_max_steps !== undefined &&
+      value.caller_tool_handoff_version === undefined
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['caller_tool_max_steps'],
+        message: 'Caller step budgets require the caller-tool continuation protocol.',
+      });
+    }
     if (value.user_message && !value.conversation_id) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -1604,6 +1626,7 @@ export type ProcessedRequest = {
         tool_calls?: unknown[];
         tool_call_id?: string;
         __canonicalThinking?: ReasoningReplayBlock[];
+        __retainedToolResultReference?: string;
       }
     >;
     temperature?: number;
@@ -3507,6 +3530,12 @@ async function processAdmittedRequest(
   const managedRequestHash = fingerprintManagedUsageRequest(validationResult.data);
 
   const chatRequest = validationResult.data;
+  if (
+    chatRequest.caller_tool_handoff_version !== undefined &&
+    chatRequest.caller_tool_max_steps === undefined
+  ) {
+    chatRequest.caller_tool_max_steps = DEFAULT_CALLER_TOOL_MAX_STEPS;
+  }
   const pickedModel = chatRequest.model;
   if (chatRequest.personalization === false) chatRequest.memory_enabled = false;
   const callerToolFields: CallerToolFields = {

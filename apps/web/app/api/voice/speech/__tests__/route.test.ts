@@ -24,8 +24,9 @@ const mocks = vi.hoisted(() => ({
   fetch: vi.fn(),
 }));
 
-vi.mock('@/lib/api-auth', async (importOriginal) => ({
-  ...(await importOriginal<ImportedModule0>()),
+vi.mock('@/lib/api-auth', async () => ({
+  ...(await vi.importActual<ApiAuthModule>('@/lib/api-auth')),
+
   assertAccountActive: vi.fn(),
   getClerkAuthorizedParties: vi.fn(),
   getOptionalAuthUser: vi.fn(),
@@ -104,13 +105,17 @@ vi.mock('@/lib/free-chat-surface-policy', () => ({
   readSurfaceHint: vi.fn(),
   resolveCloudChatSurface: vi.fn(() => 'web'),
 }));
-vi.mock('@/lib/server/provider-endpoints', () => ({
+vi.mock('@/lib/server/provider-endpoints', async () => ({
+  ...(await vi.importActual<ProviderEndpointsModule>('@/lib/server/provider-endpoints')),
+
   googleVideoOutputHostDisposition: vi.fn(),
   isManagedProviderId: vi.fn(),
   resolveProviderApiRoot: vi.fn(),
   providerApiUrl: vi.fn(() => 'https://provider.test/v1/audio/speech'),
 }));
-vi.mock('@/lib/server/rls-db', () => ({
+vi.mock('@/lib/server/rls-db', async () => ({
+  ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
+
   ACTIVE_ORG_HEADER: vi.fn(),
   getCurrentUserRlsDb: vi.fn(),
   getVerifiedBearerUserScopedDb: vi.fn(),
@@ -146,6 +151,9 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
 import { createError } from '@/lib/errors';
 import { ManagedUsageRequestError } from '@/lib/services/managed-usage-request-service';
 import { POST } from '../route';
+type ApiAuthModule = typeof import('@/lib/api-auth');
+type ProviderEndpointsModule = typeof import('@/lib/server/provider-endpoints');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
 
 const MODEL = getModelMetadataById(getRoutingSlotModel('voice_speech'))!;
 const db = { query: vi.fn() };
@@ -366,5 +374,3 @@ describe('POST /api/voice/speech', () => {
     expect(mocks.clientDelivered).toHaveBeenCalledWith(reservation);
   });
 });
-
-type ImportedModule0 = typeof import('@/lib/api-auth');

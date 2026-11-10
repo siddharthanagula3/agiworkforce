@@ -8,6 +8,16 @@ import {
 } from '@/lib/voice/live-voice-tools';
 import { WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY } from '@shared/types/toolApprovalPolicy';
 import { NO_TRAINING_VOICE_MESSAGE } from '@/lib/server/provider-training-opt-out';
+type CsrfModule = typeof import('@/lib/csrf');
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type CorsModule = typeof import('@/lib/cors');
+type ManagedComputeGateModule = typeof import('@/lib/managed-compute-gate');
+type LoggerModule = typeof import('@/lib/logger');
+type EnvModule = typeof import('@shared/utils/env');
+type ApiAuthModule = typeof import('@/lib/api-auth');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type ManagedComputeAccessModule = typeof import('@/lib/services/managed-compute-access');
+
 type ScanModule0 = typeof import('@/lib/server/provider-training-opt-out');
 type ScanModule1 = typeof import('@/lib/services/entitlement-resolution');
 type ScanModule2 = typeof import('./lib/voice-session-budget');
@@ -45,7 +55,10 @@ vi.mock('@/lib/server/provider-training-opt-out', async (importOriginal) => {
 });
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
+vi.mock('@/lib/csrf', async () => ({
+  ...(await vi.importActual<CsrfModule>('@/lib/csrf')),
+  requireCsrfToken: vi.fn(async () => null),
+}));
 vi.mock('@/lib/feature-flags/capability-gate', () => ({
   readKillSwitchGate: vi.fn(async () => ({
     capabilityAllowed: () => true,
@@ -56,30 +69,44 @@ vi.mock('@/lib/feature-flags/capability-gate', () => ({
   })),
   assertCapabilityAvailable: vi.fn(async () => undefined),
 }));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
-vi.mock('@/lib/cors', () => ({
+vi.mock('@/lib/rate-limit', async () => ({
+  ...(await vi.importActual<RateLimitModule>('@/lib/rate-limit')),
+  withRateLimit: vi.fn(async () => null),
+}));
+vi.mock('@/lib/cors', async () => ({
+  ...(await vi.importActual<CorsModule>('@/lib/cors')),
+
   handleCorsPreflightRequest: vi.fn(() => null),
   getCorsHeaders: vi.fn(() => ({})),
   getSecurityHeaders: vi.fn(() => ({})),
 }));
-vi.mock('@/lib/managed-compute-gate', () => ({
+vi.mock('@/lib/managed-compute-gate', async () => ({
+  ...(await vi.importActual<ManagedComputeGateModule>('@/lib/managed-compute-gate')),
+
   buildManagedComputeGateResponse: vi.fn(() => null),
   buildOrganizationPolicyGateResponse: vi.fn(async () => null),
   buildModelPolicyGateResponse: vi.fn(async () => null),
   buildSpendLimitGateResponse: vi.fn(async () => null),
 }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async () => ({
+  ...(await vi.importActual<LoggerModule>('@/lib/logger')),
+
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
-vi.mock('@shared/utils/env', () => ({
+vi.mock('@shared/utils/env', async () => ({
+  ...(await vi.importActual<EnvModule>('@shared/utils/env')),
+
   requireEnv: (...args: unknown[]) => mocks.requireEnv(...args),
   getOptionalEnv: vi.fn(() => undefined),
 }));
-vi.mock('@/lib/api-auth', async (importOriginal) => ({
-  ...(await importOriginal<ImportedModule0>()),
+vi.mock('@/lib/api-auth', async () => ({
+  ...(await vi.importActual<ApiAuthModule>('@/lib/api-auth')),
+
   getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1' })),
 }));
-vi.mock('@/lib/server/rls-db', () => ({
+vi.mock('@/lib/server/rls-db', async () => ({
+  ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
+
   getUserScopedDb: (...args: unknown[]) => mocks.userScopedDb(...args),
 }));
 vi.mock('@/lib/services/entitlement-resolution', async (importOriginal) => ({
@@ -100,7 +127,9 @@ vi.mock('./lib/voice-session-settlement', async (importOriginal) => ({
   ...(await importOriginal<ScanModule4>()),
   settleAbandonedVoiceSessions: (...args: unknown[]) => mocks.sweep(...args),
 }));
-vi.mock('@/lib/services/managed-compute-access', () => ({
+vi.mock('@/lib/services/managed-compute-access', async () => ({
+  ...(await vi.importActual<ManagedComputeAccessModule>('@/lib/services/managed-compute-access')),
+
   evaluateManagedComputeSubscriptionAccess: vi.fn(async () => ({ allowed: true })),
   buildManagedComputeAccessGateResponse: vi.fn(() => null),
 }));
@@ -985,5 +1014,3 @@ describe('POST /api/voice/live/sessions', () => {
     expect(mocks.reserve).not.toHaveBeenCalled();
   });
 });
-
-type ImportedModule0 = typeof import('@/lib/api-auth');

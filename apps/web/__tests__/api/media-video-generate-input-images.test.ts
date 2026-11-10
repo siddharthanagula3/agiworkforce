@@ -60,11 +60,15 @@ vi.mock('@agiworkforce/types', async (importOriginal) => {
   };
 });
 
-vi.mock('@/lib/rate-limit', () => ({
+vi.mock('@/lib/rate-limit', async () => ({
+  ...(await vi.importActual<RateLimitModule>('@/lib/rate-limit')),
+
   withRateLimit: vi.fn().mockResolvedValue(null),
 }));
 
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async () => ({
+  ...(await vi.importActual<LoggerModule>('@/lib/logger')),
+
   logger: {
     info: vi.fn(),
     error: vi.fn(),
@@ -73,7 +77,9 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-vi.mock('@/lib/cors', () => ({
+vi.mock('@/lib/cors', async () => ({
+  ...(await vi.importActual<CorsModule>('@/lib/cors')),
+
   handleCorsPreflightRequest: vi.fn().mockReturnValue(null),
   getCorsHeaders: vi.fn().mockReturnValue({}),
   getSecurityHeaders: vi.fn().mockReturnValue({}),
@@ -95,8 +101,9 @@ vi.mock('@/lib/error-handler', async () => {
 
 const mockGetClerkAuthUser = vi.fn();
 
-vi.mock('@/lib/api-auth', async (importOriginal) => ({
-  ...(await importOriginal<ImportedModule0>()),
+vi.mock('@/lib/api-auth', async () => ({
+  ...(await vi.importActual<ApiAuthModule>('@/lib/api-auth')),
+
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
 
@@ -104,7 +111,9 @@ vi.mock('@/lib/neon-db', () => ({
   getServiceClient: vi.fn(() => ({})),
 }));
 
-vi.mock('@/lib/server/neon-db', () => ({
+vi.mock('@/lib/server/neon-db', async () => ({
+  ...(await vi.importActual<NeonDbModule>('@/lib/server/neon-db')),
+
   getNeonDb: vi.fn(() => ({
     query: vi.fn(async () => []),
     execute: vi.fn(async () => undefined),
@@ -128,7 +137,9 @@ const mockDeductCredits = vi.fn();
 const mockSettleCreditsDurably = vi.fn();
 const mockGenerateIdempotencyKey = vi.fn();
 
-vi.mock('@/lib/services/credit-service', () => ({
+vi.mock('@/lib/services/credit-service', async () => ({
+  ...(await vi.importActual<CreditServiceModule>('@/lib/services/credit-service')),
+
   MICROUSD_PER_LEDGER_CENT: 10_000,
   microusdFromLedgerCents: (cents: number) => Math.round(cents) * 10_000,
   ledgerCentsFromMicrousd: (microusd: number) => Math.floor((microusd + 5_000) / 10_000),
@@ -175,7 +186,9 @@ const durableJobMocks = vi.hoisted(() => ({
   current: undefined as Record<string, unknown> | undefined,
 }));
 
-vi.mock('@/lib/server/rls-db', () => ({
+vi.mock('@/lib/server/rls-db', async () => ({
+  ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
+
   getUserScopedDb: (...args: unknown[]) => rlsMocks.getUserScopedDb(...args),
 }));
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
@@ -186,7 +199,9 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
   markManagedUsageClientDelivered: managedUsageMocks.delivered,
 }));
 
-vi.mock('@/lib/server/media-storage', () => ({
+vi.mock('@/lib/server/media-storage', async () => ({
+  ...(await vi.importActual<MediaStorageModule>('@/lib/server/media-storage')),
+
   isVideoStorageConfigured: vi.fn(() => true),
   authenticatedMediaUrl: vi.fn(),
   deleteStoredMedia: vi.fn(),
@@ -195,11 +210,15 @@ vi.mock('@/lib/server/media-storage', () => ({
   videoStoragePathname: vi.fn(),
 }));
 
-vi.mock('@/lib/services/tier-unit-quota-service', () => ({
+vi.mock('@/lib/services/tier-unit-quota-service', async () => ({
+  ...(await vi.importActual<TierUnitQuotaServiceModule>('@/lib/services/tier-unit-quota-service')),
+
   assertTierUnitAllowance: vi.fn(async () => ({ allowed: true })),
 }));
 
-vi.mock('@/lib/server/video-generation-jobs', () => ({
+vi.mock('@/lib/server/video-generation-jobs', async () => ({
+  ...(await vi.importActual<VideoGenerationJobsModule>('@/lib/server/video-generation-jobs')),
+
   acquireVideoGenerationAdmission: (...args: unknown[]) => durableJobMocks.admit(...args),
   beginVideoProviderSubmission: (...args: unknown[]) => durableJobMocks.beginSubmission(...args),
   createVideoGenerationJob: (...args: unknown[]) => durableJobMocks.create(...args),
@@ -232,7 +251,11 @@ vi.mock('@/lib/server/video-generation-jobs', () => ({
   markVideoGenerationOutcomeUnknown: vi.fn(),
   recordVideoProviderCancellationAttempt: vi.fn(),
 }));
-vi.mock('@/lib/server/video-generation-transcript', () => ({
+vi.mock('@/lib/server/video-generation-transcript', async () => ({
+  ...(await vi.importActual<VideoGenerationTranscriptModule>(
+    '@/lib/server/video-generation-transcript',
+  )),
+
   syncVideoGenerationTranscript: (...args: unknown[]) => durableJobMocks.transcriptSync(...args),
 }));
 vi.mock('@/lib/workflows/start-video-generation-workflow', () => ({
@@ -243,13 +266,21 @@ vi.mock('@/lib/workflows/start-video-generation-workflow', () => ({
   startVideoProviderTaskAttachmentRecovery: (...args: unknown[]) =>
     durableJobMocks.attachmentWorkflowStart(...args),
 }));
-vi.mock('@/lib/services/video-incident-alert-service', () => ({
+vi.mock('@/lib/services/video-incident-alert-service', async () => ({
+  ...(await vi.importActual<VideoIncidentAlertServiceModule>(
+    '@/lib/services/video-incident-alert-service',
+  )),
+
   deliverPendingVideoIncidentAlert: (...args: unknown[]) => durableJobMocks.incidentAlert(...args),
   deliverVideoSettlementIncidentByReservation: (...args: unknown[]) =>
     durableJobMocks.orphanSettlementAlert(...args),
 }));
 
-vi.mock('@/lib/services/video-job-reconciliation-service', () => ({
+vi.mock('@/lib/services/video-job-reconciliation-service', async () => ({
+  ...(await vi.importActual<VideoJobReconciliationServiceModule>(
+    '@/lib/services/video-job-reconciliation-service',
+  )),
+
   failClaimedVideoGenerationJob: (...args: unknown[]) => durableJobMocks.failClaimed(...args),
   markClaimedVideoGenerationOutcomeUnknown: (...args: unknown[]) =>
     durableJobMocks.markUnknown(...args),
@@ -275,6 +306,20 @@ import { POST } from '@/app/api/media/video/generate/route';
 import { getModels, isExecutableVideoModel, type ModelMetadata } from '@agiworkforce/types';
 import { managedMediaVideoInputImageLimit } from '@agiworkforce/cloud-contracts';
 import { MANAGED_COMPUTE_PRIVATE_BETA_ENV } from '@/lib/managed-compute-gate';
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type LoggerModule = typeof import('@/lib/logger');
+type CorsModule = typeof import('@/lib/cors');
+type ApiAuthModule = typeof import('@/lib/api-auth');
+type NeonDbModule = typeof import('@/lib/server/neon-db');
+type CreditServiceModule = typeof import('@/lib/services/credit-service');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type MediaStorageModule = typeof import('@/lib/server/media-storage');
+type TierUnitQuotaServiceModule = typeof import('@/lib/services/tier-unit-quota-service');
+type VideoGenerationJobsModule = typeof import('@/lib/server/video-generation-jobs');
+type VideoGenerationTranscriptModule = typeof import('@/lib/server/video-generation-transcript');
+type VideoIncidentAlertServiceModule = typeof import('@/lib/services/video-incident-alert-service');
+type VideoJobReconciliationServiceModule =
+  typeof import('@/lib/services/video-job-reconciliation-service');
 
 type SideCallTrainingPolicyModule = typeof import('@/lib/server/side-call-training-policy');
 
@@ -679,5 +724,3 @@ describe('POST /api/media/video/generate input images', () => {
     expect(mockFetch).not.toHaveBeenCalled();
   });
 });
-
-type ImportedModule0 = typeof import('@/lib/api-auth');

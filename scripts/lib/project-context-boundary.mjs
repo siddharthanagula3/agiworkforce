@@ -5,6 +5,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readTableColumns } from '../check-resource-metadata.mjs';
+import { expandProjectReadScope } from './project-scope-sql.mjs';
 
 export const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url));
 
@@ -297,6 +298,7 @@ export function findUnscopedProjectReads(repoRoot = REPO_ROOT, files = productio
     }
     let authorisedAt = Number.POSITIVE_INFINITY;
     for (const statement of statements) {
+      statement.sql = expandProjectReadScope(statement.sql, source, relative, repoRoot);
       const tables = tablesRead(statement.sql, scoped);
       if (tables.length === 0) continue;
       if (authorisesProject(statement.sql, tables)) {

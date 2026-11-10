@@ -1,3 +1,5 @@
+import type { MemoryCommandKind } from '@agiworkforce/agent-core';
+export type { MemoryCommandKind } from '@agiworkforce/agent-core';
 import {
   MANAGED_MEMORY_COMMAND_STATUSES,
   MANAGED_MEMORY_MAX_CONTENT_CHARS,
@@ -27,8 +29,6 @@ export interface AccountMemoryPage {
   hasMore: boolean;
 }
 
-export type MemoryCommandKind = 'remember' | 'forget';
-
 export type MemoryCommandStatus = ManagedMemoryCommandStatus | 'failed';
 
 export interface MemoryCommandResult {
@@ -42,7 +42,6 @@ export type MemoryCommandRequest = ManagedMemoryCommandRequest;
 
 export const ACCOUNT_MEMORY_PATH = '/api/memory';
 export const ACCOUNT_MEMORY_COMMANDS_PATH = '/api/memory/commands';
-export const MEMORY_COMMAND_HINT = /\b(remember(?:ing)?|forget|memor(?:y|ies|i[sz]e))\b/i;
 export const ACCOUNT_MEMORY_CACHE_KEY = 'agi_account_memory_cache';
 export const ACCOUNT_MEMORY_PAGE_SIZE = MANAGED_MEMORY_MAX_PAGE_SIZE;
 export const ACCOUNT_MEMORY_MAX_CONTENT_CHARS = MANAGED_MEMORY_MAX_CONTENT_CHARS;

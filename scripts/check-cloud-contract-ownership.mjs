@@ -50,6 +50,7 @@ const cloudModules = [
   'cloud-agent-runs',
   'managed-cloud-agent-runs-client',
   'tool-approval-resume',
+  'caller-tool-handoff',
   'mcp-elicitation',
   'cloud-code-sessions',
   'github-repository-url',

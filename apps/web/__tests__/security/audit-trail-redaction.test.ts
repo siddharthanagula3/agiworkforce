@@ -2,14 +2,18 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async () => ({
+  ...(await vi.importActual<LoggerModule>('@/lib/logger')),
+
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
 const mockExecute = vi.fn();
 const mockQuery = vi.fn();
 
-vi.mock('@/lib/server/neon-db', () => ({
+vi.mock('@/lib/server/neon-db', async () => ({
+  ...(await vi.importActual<NeonDbModule>('@/lib/server/neon-db')),
+
   getNeonDb: vi.fn(() => ({
     execute: mockExecute,
     query: mockQuery,
@@ -19,27 +23,36 @@ vi.mock('@/lib/server/neon-db', () => ({
   })),
 }));
 
-vi.mock('@/lib/rate-limit', () => ({
+vi.mock('@/lib/rate-limit', async () => ({
+  ...(await vi.importActual<RateLimitModule>('@/lib/rate-limit')),
+
   withRateLimit: vi.fn().mockResolvedValue(null),
 }));
 
-vi.mock('@/lib/csrf', () => ({
+vi.mock('@/lib/csrf', async () => ({
+  ...(await vi.importActual<CsrfModule>('@/lib/csrf')),
+
   requireCsrfToken: vi.fn().mockResolvedValue(null),
 }));
 
 const mockGetClerkAuthUser = vi.fn();
-vi.mock('@/lib/api-auth', async (importOriginal) => ({
-  ...(await importOriginal<ImportedModule0>()),
+vi.mock('@/lib/api-auth', async () => ({
+  ...(await vi.importActual<ApiAuthModule>('@/lib/api-auth')),
+
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
 
 const mockGetUserScopedDb = vi.fn();
-vi.mock('@/lib/server/rls-db', () => ({
+vi.mock('@/lib/server/rls-db', async () => ({
+  ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
+
   getUserScopedDb: (...args: unknown[]) => mockGetUserScopedDb(...args),
 }));
 
 const mockCreateApiKey = vi.fn();
-vi.mock('@/lib/services/api-key-service', () => ({
+vi.mock('@/lib/services/api-key-service', async () => ({
+  ...(await vi.importActual<ApiKeyServiceModule>('@/lib/services/api-key-service')),
+
   ApiKeyService: {
     createApiKey: (...args: unknown[]) => mockCreateApiKey(...args),
     revokeApiKey: vi.fn(),
@@ -53,6 +66,13 @@ import { recordAuditEvent, sanitizeAuditDetail, type AuditEventDetail } from '@/
 import { STEP_UP_TOKEN_HEADER } from '@/lib/server/step-up-auth';
 import { createStepUpGrant } from '@/lib/server/step-up/grant-token';
 import { POST as createApiKey } from '@/app/api/settings/api-keys/route';
+type LoggerModule = typeof import('@/lib/logger');
+type NeonDbModule = typeof import('@/lib/server/neon-db');
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type CsrfModule = typeof import('@/lib/csrf');
+type ApiAuthModule = typeof import('@/lib/api-auth');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type ApiKeyServiceModule = typeof import('@/lib/services/api-key-service');
 
 const SECRETS = {
   agiApiKey: 'sk_live_0123456789abcdef_thisisthesecretpart',
@@ -252,5 +272,3 @@ describe('POST /api/settings/api-keys, the generated key never lands in the audi
     expect(JSON.stringify(details)).not.toContain(rawKey);
   });
 });
-
-type ImportedModule0 = typeof import('@/lib/api-auth');

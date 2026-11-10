@@ -2,43 +2,73 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(() => Promise.resolve(null)) }));
-vi.mock('@/lib/cors', () => ({ getCorsHeaders: vi.fn(() => ({})) }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/rate-limit', async () => ({
+  ...(await vi.importActual<RateLimitModule>('@/lib/rate-limit')),
+  withRateLimit: vi.fn(() => Promise.resolve(null)),
+}));
+vi.mock('@/lib/cors', async () => ({
+  ...(await vi.importActual<CorsModule>('@/lib/cors')),
+  getCorsHeaders: vi.fn(() => ({})),
+}));
+vi.mock('@/lib/logger', async () => ({
+  ...(await vi.importActual<LoggerModule>('@/lib/logger')),
+
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/server/data-region', () => ({ managedCloudDataRegion: () => 'us-east-1' }));
+vi.mock('@/lib/server/data-region', async () => ({
+  ...(await vi.importActual<DataRegionModule>('@/lib/server/data-region')),
+  managedCloudDataRegion: () => 'us-east-1',
+}));
 
 const authMocks = vi.hoisted(() => ({
   db: { query: async () => [], execute: async () => 0 },
   getClerkAuthUser: vi.fn(),
 }));
-vi.mock('@/lib/server/rls-db', () => ({
+vi.mock('@/lib/server/rls-db', async () => ({
+  ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
+
   getUserScopedDb: async (...args: unknown[]) => {
     const { userId } = (await authMocks.getClerkAuthUser(...args)) as { userId: string };
     return { db: authMocks.db, userId, organizationId: null };
   },
 }));
-vi.mock('@/lib/api-auth', async (importOriginal) => ({
-  ...(await importOriginal<ImportedModule0>()),
+vi.mock('@/lib/api-auth', async () => ({
+  ...(await vi.importActual<ApiAuthModule>('@/lib/api-auth')),
+
   isAccountUnavailableError: vi.fn(() => false),
   getClerkAuthUser: authMocks.getClerkAuthUser,
 }));
 vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: { getSubscription: vi.fn(async () => null) },
 }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({}) }));
+vi.mock('@/lib/server/neon-db', async () => ({
+  ...(await vi.importActual<NeonDbModule>('@/lib/server/neon-db')),
+  getNeonDb: () => ({}),
+}));
 vi.mock('@/lib/server/claimed-user-scope-db', () => ({ createClaimedUserScopedDb: () => ({}) }));
-vi.mock('@/lib/services/provider-adapter-service', () => ({
+vi.mock('@/lib/services/provider-adapter-service', async () => ({
+  ...(await vi.importActual<ProviderAdapterServiceModule>(
+    '@/lib/services/provider-adapter-service',
+  )),
+
   listAvailableManagedProviderIds: () => everyRoutedProvider(),
 }));
-vi.mock('@/lib/services/provider-availability-service', () => ({
+vi.mock('@/lib/services/provider-availability-service', async () => ({
+  ...(await vi.importActual<ProviderAvailabilityServiceModule>(
+    '@/lib/services/provider-availability-service',
+  )),
+
   getProviderAvailabilityMap: vi.fn(async () => ({})),
 }));
-vi.mock('@/lib/server/free-pools', () => ({ freePoolDecisions: () => [] }));
+vi.mock('@/lib/server/free-pools', async () => ({
+  ...(await vi.importActual<FreePoolsModule>('@/lib/server/free-pools')),
+  freePoolDecisions: () => [],
+}));
 
 const flags = vi.hoisted(() => ({ definitions: [] as unknown[] }));
-vi.mock('@/lib/feature-flags/flag-store', () => ({
+vi.mock('@/lib/feature-flags/flag-store', async () => ({
+  ...(await vi.importActual<FlagStoreModule>('@/lib/feature-flags/flag-store')),
+
   getActiveFlagDefinitions: async () => flags.definitions,
   getSubjectOverrides: async () => [],
 }));
@@ -46,6 +76,18 @@ vi.mock('@/lib/feature-flags/flag-store', () => ({
 import { listChatModels, listManagedRoutesForModel } from '@agiworkforce/types';
 import { killSwitchDefinition, modelKillSwitchKey } from '@/lib/feature-flags/kill-switches';
 import { GET } from './route';
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type CorsModule = typeof import('@/lib/cors');
+type LoggerModule = typeof import('@/lib/logger');
+type DataRegionModule = typeof import('@/lib/server/data-region');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type ApiAuthModule = typeof import('@/lib/api-auth');
+type NeonDbModule = typeof import('@/lib/server/neon-db');
+type ProviderAdapterServiceModule = typeof import('@/lib/services/provider-adapter-service');
+type ProviderAvailabilityServiceModule =
+  typeof import('@/lib/services/provider-availability-service');
+type FreePoolsModule = typeof import('@/lib/server/free-pools');
+type FlagStoreModule = typeof import('@/lib/feature-flags/flag-store');
 
 function everyRoutedProvider(): Set<string> {
   const providers = new Set<string>();
@@ -113,5 +155,3 @@ describe('GET /api/llm/v1/models under a kill switch', () => {
     expect(withoutFlags.length).toBeGreaterThan(0);
   });
 });
-
-type ImportedModule0 = typeof import('@/lib/api-auth');

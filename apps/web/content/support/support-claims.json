@@ -3387,7 +3387,7 @@
         {
           "kind": "copy",
           "file": "apps/extension/manifest.json",
-          "text": "\"name\": \"AGI Extension\""
+          "text": "\"name\": \"Extension\""
         },
         {
           "kind": "test",
@@ -4129,7 +4129,7 @@
         {
           "kind": "test",
           "file": "apps/web/features/settings/components/Settings/TwoFactorEnrollment.test.tsx",
-          "name": "keeps unavailable enrollment controls disabled for enabled="
+          "name": "keeps unavailable enrollment controls disabled for enabled=%s"
         },
         {
           "kind": "copy",
@@ -4263,7 +4263,7 @@
       "doc": "account-security",
       "section": "Password",
       "kind": "prose",
-      "sentence": "Every other device signed in to the account is signed out when the password changes.",
+      "sentence": "Changing your password attempts to sign out every other device; if the provider's session cleanup is incomplete, AGI reports that the password changed and asks you to end the remaining sessions in Settings.",
       "implementation": ["apps/web/app/api/settings/password/route.ts"],
       "proof": [
         {
@@ -4275,6 +4275,16 @@
           "kind": "test",
           "file": "apps/web/app/api/settings/password/__tests__/route.test.ts",
           "name": "changes the password, ends other sessions and announces it"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/settings/password/__tests__/route.test.ts",
+          "name": "does not report success when the device credentials could not be revoked"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/settings/password/__tests__/route.test.ts",
+          "name": "does not mask provider cleanup $failed/$incomplete with intent success"
         }
       ]
     },
@@ -4384,6 +4394,11 @@
           "kind": "copy",
           "file": "apps/web/features/settings/hooks/useStepUp.tsx",
           "text": ": requestStepUpGrant(challenge.action, challenge.resourceId)"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/settings/hooks/useStepUp.tsx",
+          "text": "requestStepUpGrant(challenge.action, challenge.resourceId, undefined, authority)"
         }
       ]
     },

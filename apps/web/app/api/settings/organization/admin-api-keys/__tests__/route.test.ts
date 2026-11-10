@@ -20,21 +20,36 @@ const { mockQuery, mockRecordAuditEvent, transactions } = vi.hoisted(() => ({
   }>,
 }));
 
-vi.mock('@/lib/observability/error-capture', () => ({ captureServerError: vi.fn() }));
+vi.mock('@/lib/observability/error-capture', async () => ({
+  ...(await vi.importActual<ErrorCaptureModule>('@/lib/observability/error-capture')),
+  captureServerError: vi.fn(),
+}));
 
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/rate-limit', async () => ({
+  ...(await vi.importActual<RateLimitModule>('@/lib/rate-limit')),
+  withRateLimit: vi.fn(async () => null),
+}));
+vi.mock('@/lib/csrf', async () => ({
+  ...(await vi.importActual<CsrfModule>('@/lib/csrf')),
+  requireCsrfToken: vi.fn(async () => null),
+}));
+vi.mock('@/lib/logger', async () => ({
+  ...(await vi.importActual<LoggerModule>('@/lib/logger')),
+
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/server/rls-db', () => ({
+vi.mock('@/lib/server/rls-db', async () => ({
+  ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
+
   getUserScopedDb: vi.fn(async () => ({
     db: { query: (...args: unknown[]) => mockQuery(...args) },
     userId: 'user-1',
     organizationId: capturedScope.organizationId,
   })),
 }));
-vi.mock('@/lib/server/neon-db', () => ({
+vi.mock('@/lib/server/neon-db', async () => ({
+  ...(await vi.importActual<NeonDbModule>('@/lib/server/neon-db')),
+
   getNeonDb: () => ({
     query: (...args: unknown[]) => mockQuery(...args),
     transaction: async (fn: (tx: unknown) => Promise<unknown>) => {
@@ -59,21 +74,28 @@ vi.mock('@/lib/server/neon-db', () => ({
     },
   }),
 }));
-vi.mock('@/lib/security-audit', () => ({
+vi.mock('@/lib/security-audit', async () => ({
+  ...(await vi.importActual<SecurityAuditModule>('@/lib/security-audit')),
+
   recordAuditEvent: mockRecordAuditEvent,
   BLOCK_APPEAL_PATH: '/support',
   logRateLimitExceeded: vi.fn(),
 }));
-vi.mock('@/app/api/settings/team/team-admin-access', () => ({
+vi.mock('@/app/api/settings/team/team-admin-access', async () => ({
+  ...(await vi.importActual<TeamAdminAccessModule>('@/app/api/settings/team/team-admin-access')),
+
   requireTeamAdminAccess: vi.fn(async () => ({ plan: 'enterprise', canManageTeam: true })),
 }));
 
-vi.mock('@/lib/server/request-context-cache', () => ({
+vi.mock('@/lib/server/request-context-cache', async () => ({
+  ...(await vi.importActual<RequestContextCacheModule>('@/lib/server/request-context-cache')),
+
   getCachedActiveOrganizationId: vi.fn(async () => undefined),
   setCachedActiveOrganizationId: vi.fn(async () => undefined),
 }));
-vi.mock('@/lib/services/org-entitlements', async (importOriginal) => ({
-  ...(await importOriginal<ImportedModule0>()),
+vi.mock('@/lib/services/org-entitlements', async () => ({
+  ...(await vi.importActual<OrgEntitlementsModule>('@/lib/services/org-entitlements')),
+
   getOrganizationEntitlements: vi.fn(),
   getSharedProjectLimitErrorMessage: vi.fn(),
   isOrgResourceLimitError: vi.fn(),
@@ -91,6 +113,16 @@ import { requireMemberPermission } from '@/lib/services/organization-permission-
 import { STEP_UP_TOKEN_HEADER } from '@/lib/server/step-up-auth';
 import { createStepUpGrant } from '@/lib/server/step-up/grant-token';
 import { DELETE, GET, POST } from '../route';
+type ErrorCaptureModule = typeof import('@/lib/observability/error-capture');
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type CsrfModule = typeof import('@/lib/csrf');
+type LoggerModule = typeof import('@/lib/logger');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type NeonDbModule = typeof import('@/lib/server/neon-db');
+type SecurityAuditModule = typeof import('@/lib/security-audit');
+type TeamAdminAccessModule = typeof import('@/app/api/settings/team/team-admin-access');
+type RequestContextCacheModule = typeof import('@/lib/server/request-context-cache');
+type OrgEntitlementsModule = typeof import('@/lib/services/org-entitlements');
 
 const ORG = '11111111-1111-4111-8111-111111111111';
 const OTHER_ORG = '44444444-4444-4444-8444-444444444444';
@@ -816,5 +848,3 @@ describe('captured workspace scope', () => {
     },
   );
 });
-
-type ImportedModule0 = typeof import('@/lib/services/org-entitlements');

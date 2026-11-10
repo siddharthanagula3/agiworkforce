@@ -17,23 +17,36 @@ const { mockQuery, mockExecute, mockTransaction } = vi.hoisted(() => ({
   mockTransaction: vi.fn(),
 }));
 
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/rate-limit', async () => ({
+  ...(await vi.importActual<RateLimitModule>('@/lib/rate-limit')),
+  withRateLimit: vi.fn(async () => null),
+}));
+vi.mock('@/lib/csrf', async () => ({
+  ...(await vi.importActual<CsrfModule>('@/lib/csrf')),
+  requireCsrfToken: vi.fn(async () => null),
+}));
+vi.mock('@/lib/logger', async () => ({
+  ...(await vi.importActual<LoggerModule>('@/lib/logger')),
+
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/api-auth', async (importOriginal) => ({
-  ...(await importOriginal<ImportedModule0>()),
+vi.mock('@/lib/api-auth', async () => ({
+  ...(await vi.importActual<ApiAuthModule>('@/lib/api-auth')),
+
   getClerkAuthUser: vi.fn(async () => ({ userId: 'actor-user' })),
 }));
-vi.mock('@/app/api/settings/team/team-admin-access', () => ({
+vi.mock('@/app/api/settings/team/team-admin-access', async () => ({
+  ...(await vi.importActual<TeamAdminAccessModule>('@/app/api/settings/team/team-admin-access')),
+
   requireTeamAdminAccess: vi.fn(async () => ({
     plan: 'team',
     canManageTeam: true,
     maxMembers: null,
   })),
 }));
-vi.mock('@/lib/security-audit', () => ({
+vi.mock('@/lib/security-audit', async () => ({
+  ...(await vi.importActual<SecurityAuditModule>('@/lib/security-audit')),
+
   BLOCK_APPEAL_PATH: '/support',
   logRateLimitExceeded: vi.fn(async () => undefined),
   recordAuditEvent: vi.fn(async () => undefined),
@@ -46,11 +59,15 @@ vi.mock('@/lib/services/deprovision-service', () => ({
     errors: [],
   })),
 }));
-vi.mock('@/lib/server/identity', () => ({
+vi.mock('@/lib/server/identity', async () => ({
+  ...(await vi.importActual<IdentityModule>('@/lib/server/identity')),
+
   getRequestIdentity: vi.fn(async () => null),
   getIdentityProvider: vi.fn(() => ({})),
 }));
-vi.mock('@/lib/server/request-context-cache', () => ({
+vi.mock('@/lib/server/request-context-cache', async () => ({
+  ...(await vi.importActual<RequestContextCacheModule>('@/lib/server/request-context-cache')),
+
   getCachedActiveOrganizationId: vi.fn(async () => null),
   invalidateActiveOrganizationCache: vi.fn(async () => undefined),
 }));
@@ -61,8 +78,13 @@ const adapter = {
   transaction: (...args: unknown[]) => mockTransaction(...args),
 };
 
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: vi.fn(() => adapter) }));
-vi.mock('@/lib/server/rls-db', () => ({
+vi.mock('@/lib/server/neon-db', async () => ({
+  ...(await vi.importActual<NeonDbModule>('@/lib/server/neon-db')),
+  getNeonDb: vi.fn(() => adapter),
+}));
+vi.mock('@/lib/server/rls-db', async () => ({
+  ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
+
   getUserScopedDb: vi.fn(async () => ({
     db: adapter,
     userId: 'actor-user',
@@ -71,6 +93,16 @@ vi.mock('@/lib/server/rls-db', () => ({
 }));
 
 import { DELETE, PATCH } from '../route';
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type CsrfModule = typeof import('@/lib/csrf');
+type LoggerModule = typeof import('@/lib/logger');
+type ApiAuthModule = typeof import('@/lib/api-auth');
+type TeamAdminAccessModule = typeof import('@/app/api/settings/team/team-admin-access');
+type SecurityAuditModule = typeof import('@/lib/security-audit');
+type IdentityModule = typeof import('@/lib/server/identity');
+type RequestContextCacheModule = typeof import('@/lib/server/request-context-cache');
+type NeonDbModule = typeof import('@/lib/server/neon-db');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
 
 const organizationId = '11111111-1111-4111-8111-111111111111';
 
@@ -251,5 +283,3 @@ describe('read-only admin cannot mutate through the API', () => {
     expect(mockExecute).not.toHaveBeenCalled();
   });
 });
-
-type ImportedModule0 = typeof import('@/lib/api-auth');

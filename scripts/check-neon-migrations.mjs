@@ -4,6 +4,9 @@ import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { missingRouteTableMigrations } from './lib/route-table-contract.mjs';
+import { DOLLAR_TAG, skipDelimited, topLevelStatements } from './lib/sql-statements.mjs';
+
+export { topLevelStatements };
 
 const MIGRATIONS_DIR = 'apps/web/db/neon';
 const DOWN_MIGRATIONS_DIR = `${MIGRATIONS_DIR}/down`;
@@ -438,24 +441,6 @@ export function blanketGrantErrors(filename, sql) {
   ];
 }
 
-const DOLLAR_TAG = /^\$([A-Za-z_][A-Za-z0-9_]*)?\$/;
-
-function skipDelimited(sql, start, quote) {
-  let index = start + 1;
-  while (index < sql.length) {
-    if (sql[index] !== quote) {
-      index += 1;
-      continue;
-    }
-    if (sql[index + 1] === quote) {
-      index += 2;
-      continue;
-    }
-    return index + 1;
-  }
-  return -1;
-}
-
 export function quotingErrors(displayPath, sql) {
   const errors = [];
   const lineAt = (index) => {
@@ -525,60 +510,6 @@ export function quotingErrors(displayPath, sql) {
   }
 
   return errors;
-}
-
-export function topLevelStatements(sql) {
-  const statements = [];
-  let current = '';
-  let index = 0;
-  while (index < sql.length) {
-    const character = sql[index];
-
-    if (character === '-' && sql[index + 1] === '-') {
-      const newline = sql.indexOf('\n', index);
-      index = newline === -1 ? sql.length : newline + 1;
-      current += ' ';
-      continue;
-    }
-
-    if (character === '/' && sql[index + 1] === '*') {
-      const close = sql.indexOf('*/', index + 2);
-      index = close === -1 ? sql.length : close + 2;
-      current += ' ';
-      continue;
-    }
-
-    if (character === '$') {
-      const tag = DOLLAR_TAG.exec(sql.slice(index))?.[0];
-      if (tag) {
-        const close = sql.indexOf(tag, index + tag.length);
-        index = close === -1 ? sql.length : close + tag.length;
-        current += ' $body$ ';
-        continue;
-      }
-    }
-
-    if (character === "'" || character === '"') {
-      const close = skipDelimited(sql, index, character);
-      index = close === -1 ? sql.length : close;
-      current += ` ${character}${character} `;
-      continue;
-    }
-
-    if (character === ';') {
-      statements.push(current);
-      current = '';
-      index += 1;
-      continue;
-    }
-
-    current += character;
-    index += 1;
-  }
-  statements.push(current);
-  return statements
-    .map((statement) => statement.replace(/\s+/g, ' ').trim().toLowerCase())
-    .filter((statement) => statement.length > 0);
 }
 
 const TRANSACTION_OPEN = /^(?:begin|start transaction)(?: (?:work|transaction|isolation .*))?$/;

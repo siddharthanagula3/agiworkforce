@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { managedUsageBucketLabel, normalizeUsagePercentage } from '@agiworkforce/types';
 import { mintSignInTicketFor, signInAsDevAccount, signInWithTicket } from './qa-capability-harness';
 
 const FREE_EXTERNAL_ID = 'agi-live-check:free-surface';
@@ -22,11 +23,6 @@ async function readUsage(page: Page): Promise<{ status: number; usage: UsageBody
     const usage = (await response.json()) as UsageBody;
     return { status: response.status, usage };
   });
-}
-
-async function shownPeriodPercent(page: Page): Promise<number> {
-  const meter = page.getByRole('progressbar', { name: 'This billing period usage' });
-  return Math.round(Number(await meter.getAttribute('aria-valuenow')));
 }
 
 async function askManagedCloud(page: Page, surface: string): Promise<CompletionResult> {
@@ -150,8 +146,13 @@ test.describe('a signed-in person uses one AGI Subscription', () => {
     expect(usage.status).toBe(200);
     expect(usage.usage.plan_tier).toBe('basic');
     expect(usage.usage.effective_plan_tier ?? usage.usage.plan_tier).toBe('basic');
-    const shown = Math.round(usage.usage.usage_percentage ?? -1);
-    await expect.poll(() => shownPeriodPercent(page)).toBe(shown);
+    const shown = normalizeUsagePercentage(usage.usage.usage_percentage);
+    await expect(
+      page.getByRole('progressbar', {
+        name: `${managedUsageBucketLabel('period')} usage`,
+        exact: true,
+      }),
+    ).toHaveAttribute('aria-valuenow', String(shown));
 
     const chrome = await askManagedCloud(page, 'chrome');
     expect(chrome.status).toBe(403);
@@ -171,8 +172,13 @@ test.describe('a signed-in person uses one AGI Subscription', () => {
     expect(usage.status).toBe(200);
     expect(usage.usage.plan_tier).toBe('pro');
     expect(usage.usage.effective_plan_tier ?? usage.usage.plan_tier).toBe('pro');
-    const shown = Math.round(usage.usage.usage_percentage ?? -1);
-    await expect.poll(() => shownPeriodPercent(page)).toBe(shown);
+    const shown = normalizeUsagePercentage(usage.usage.usage_percentage);
+    await expect(
+      page.getByRole('progressbar', {
+        name: `${managedUsageBucketLabel('period')} usage`,
+        exact: true,
+      }),
+    ).toHaveAttribute('aria-valuenow', String(shown));
     expect(usage.usage.usage_reset_at).toEqual(expect.any(String));
 
     const chrome = await askManagedCloud(page, 'chrome');

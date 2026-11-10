@@ -38,6 +38,28 @@ function isRecord(value: unknown): value is Schema {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function jsonValuesEqual(left: unknown, right: unknown): boolean {
+  const pending: Array<[unknown, unknown]> = [[left, right]];
+  while (pending.length > 0) {
+    const [a, b] = pending.pop()!;
+    if (a === b) continue;
+    if (Array.isArray(a) && Array.isArray(b)) {
+      if (a.length !== b.length) return false;
+      for (let index = 0; index < a.length; index += 1) pending.push([a[index], b[index]]);
+    } else if (isRecord(a) && isRecord(b)) {
+      const keys = Object.keys(a);
+      if (keys.length !== Object.keys(b).length) return false;
+      for (const key of keys) {
+        if (!Object.hasOwn(b, key)) return false;
+        pending.push([a[key], b[key]]);
+      }
+    } else {
+      return false;
+    }
+  }
+  return true;
+}
+
 export const JsonSchemaResponseFormatSchema = z.object({
   name: z
     .string()
@@ -69,9 +91,15 @@ export function requestedResponseFormat(
   };
 }
 
-function schemaProblemAt(schema: unknown, path: string, depth: number): string | null {
+function schemaProblemAt(
+  schema: unknown,
+  path: string,
+  depth: number,
+  nodes: Map<Schema, string>,
+): string | null {
   if (depth > MAX_SCHEMA_DEPTH) return `${path} nests deeper than ${MAX_SCHEMA_DEPTH} levels`;
   if (!isRecord(schema)) return `${path} is not a schema object`;
+  nodes.set(schema, path);
   for (const key of Object.keys(schema)) {
     if (!SUPPORTED_KEYWORDS.has(key)) return `${path} uses unsupported keyword "${key}"`;
   }
@@ -98,7 +126,7 @@ function schemaProblemAt(schema: unknown, path: string, depth: number): string |
     children.push([`${path}.additionalProperties`, schema['additionalProperties']]);
   }
   for (const [childPath, child] of children) {
-    const problem = schemaProblemAt(child, childPath, depth + 1);
+    const problem = schemaProblemAt(child, childPath, depth + 1, nodes);
     if (problem) return problem;
   }
   return null;
@@ -109,7 +137,10 @@ export function jsonSchemaFormatProblem(format: JsonSchemaResponseFormat): strin
     return `the schema is larger than ${MAX_SCHEMA_CHARS} characters`;
   }
   if (format.schema['type'] !== 'object') return 'the root schema must have type "object"';
-  return schemaProblemAt(format.schema, 'schema', 0);
+  const nodes = new Map<Schema, string>();
+  return (
+    schemaProblemAt(format.schema, 'schema', 0, nodes) ?? referenceProblem(format.schema, nodes)
+  );
 }
 
 function typeMatches(value: unknown, type: string): boolean {
@@ -133,17 +164,85 @@ function typeMatches(value: unknown, type: string): boolean {
   }
 }
 
-function resolveRef(schema: Schema, root: Schema): Schema | null {
-  const ref = schema['$ref'];
-  if (typeof ref !== 'string') return schema;
-  const defs = root['$defs'];
-  const target = isRecord(defs) ? defs[ref.slice('#/$defs/'.length)] : undefined;
+function resolveRef(ref: string, root: Schema): Schema | null {
+  let pointer: string;
+  try {
+    pointer = decodeURIComponent(ref.slice(1));
+  } catch {
+    return null;
+  }
+  if (!pointer.startsWith('/$defs/')) return null;
+  let target: unknown = root;
+  for (const encoded of pointer.slice(1).split('/')) {
+    if (/~(?:[^01]|$)/.test(encoded)) return null;
+    const token = encoded.replace(/~1/g, '/').replace(/~0/g, '~');
+    if (Array.isArray(target)) {
+      if (!/^(0|[1-9][0-9]*)$/.test(token)) return null;
+      const index = Number(token);
+      if (index >= target.length) return null;
+      target = target[index];
+    } else if (isRecord(target) && Object.hasOwn(target, token)) {
+      target = target[token];
+    } else {
+      return null;
+    }
+  }
   return isRecord(target) ? target : null;
 }
 
-function valueProblem(value: unknown, raw: Schema, root: Schema, path: string): string | null {
-  const schema = resolveRef(raw, root);
-  if (!schema) return `${path} refers to a missing definition`;
+function referenceProblem(root: Schema, nodes: ReadonlyMap<Schema, string>): string | null {
+  const depths = new Map<Schema, number>();
+  const active = new Set<Schema>();
+  function evaluationDepth(schema: Schema): number | string {
+    const cached = depths.get(schema);
+    if (cached !== undefined) return cached;
+    const path = nodes.get(schema) ?? 'schema';
+    if (active.has(schema)) return `${path} has a reference cycle without a child value`;
+    if (active.size > MAX_SCHEMA_DEPTH)
+      return `${path} references deeper than ${MAX_SCHEMA_DEPTH} levels`;
+    active.add(schema);
+    try {
+      const children: Schema[] = [];
+      const ref = schema['$ref'];
+      if (typeof ref === 'string') {
+        const target = resolveRef(ref, root);
+        if (!target || !nodes.has(target)) return `${path}.$ref must point to an admitted schema`;
+        children.push(target);
+      }
+      if (Array.isArray(schema['anyOf'])) {
+        for (const option of schema['anyOf']) {
+          if (isRecord(option)) children.push(option);
+        }
+      }
+      let depth = 0;
+      for (const child of children) {
+        const childDepth = evaluationDepth(child);
+        if (typeof childDepth === 'string') return childDepth;
+        depth = Math.max(depth, childDepth + 1);
+      }
+      if (depth > MAX_SCHEMA_DEPTH)
+        return `${path} references deeper than ${MAX_SCHEMA_DEPTH} levels`;
+      depths.set(schema, depth);
+      return depth;
+    } finally {
+      active.delete(schema);
+    }
+  }
+  for (const schema of nodes.keys()) {
+    const depth = evaluationDepth(schema);
+    if (typeof depth === 'string') return depth;
+  }
+  return null;
+}
+
+function valueProblem(value: unknown, schema: Schema, root: Schema, path: string): string | null {
+  const ref = schema['$ref'];
+  if (typeof ref === 'string') {
+    const referenced = resolveRef(ref, root);
+    if (!referenced) return `${path} refers to a missing definition`;
+    const problem = valueProblem(value, referenced, root, path);
+    if (problem) return problem;
+  }
 
   if (Array.isArray(schema['anyOf'])) {
     const matched = schema['anyOf'].some(
@@ -160,10 +259,14 @@ function valueProblem(value: unknown, raw: Schema, root: Schema, path: string): 
   ) {
     return `${path} must be ${types.join(' or ')}`;
   }
-  if (Array.isArray(schema['enum']) && !schema['enum'].some((entry) => entry === value)) {
+  if (
+    Array.isArray(schema['enum']) &&
+    !schema['enum'].some((entry) => jsonValuesEqual(entry, value))
+  ) {
     return `${path} must be one of the allowed values`;
   }
-  if ('const' in schema && schema['const'] !== value) return `${path} must be the fixed value`;
+  if (Object.hasOwn(schema, 'const') && !jsonValuesEqual(schema['const'], value))
+    return `${path} must be the fixed value`;
 
   if (typeof value === 'string') {
     const minLength = schema['minLength'];
@@ -203,11 +306,12 @@ function valueProblem(value: unknown, raw: Schema, root: Schema, path: string): 
     const properties = isRecord(schema['properties']) ? schema['properties'] : {};
     const required = Array.isArray(schema['required']) ? schema['required'] : [];
     for (const name of required) {
-      if (typeof name === 'string' && !(name in value)) return `${path}.${name} is missing`;
+      if (typeof name === 'string' && !Object.hasOwn(value, name))
+        return `${path}.${name} is missing`;
     }
     const additional = schema['additionalProperties'];
     for (const [name, child] of Object.entries(value)) {
-      const property = properties[name];
+      const property = Object.hasOwn(properties, name) ? properties[name] : undefined;
       if (isRecord(property)) {
         const problem = valueProblem(child, property, root, `${path}.${name}`);
         if (problem) return problem;
@@ -276,12 +380,9 @@ export function settleJsonSchemaCompletion(
           message: `${extraction.reason} Retry the request.`,
         };
   }
-  const problem = valueProblem(
-    JSON.parse(extraction.content) as unknown,
-    format.schema,
-    format.schema,
-    '$',
-  );
+  const problem =
+    jsonSchemaFormatProblem(format) ??
+    valueProblem(JSON.parse(extraction.content) as unknown, format.schema, format.schema, '$');
   if (problem) {
     return {
       ok: false,

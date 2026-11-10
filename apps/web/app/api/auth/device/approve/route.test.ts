@@ -16,38 +16,57 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async () => ({
+  ...(await vi.importActual<ApiAuthModule>('@/lib/api-auth')),
+
   getClerkAuthUser: vi.fn(async () => ({
     userId: 'user_approved',
     email: 'approved@example.com',
   })),
 }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
+vi.mock('@/lib/csrf', async () => ({
+  ...(await vi.importActual<CsrfModule>('@/lib/csrf')),
+  requireCsrfToken: vi.fn(async () => null),
+}));
+vi.mock('@/lib/rate-limit', async () => ({
+  ...(await vi.importActual<RateLimitModule>('@/lib/rate-limit')),
+  withRateLimit: vi.fn(async () => null),
+}));
 vi.mock('@/lib/server/device-signin-policy', async (importOriginal) => {
   const actual = await importOriginal<ImportedModule0>();
   return { ...actual, readDeviceCodeSignInPolicy: vi.fn(actual.readDeviceCodeSignInPolicy) };
 });
-vi.mock('@/lib/security-audit', async (importOriginal) => ({
-  ...(await importOriginal<ImportedModule1>()),
+vi.mock('@/lib/security-audit', async () => ({
+  ...(await vi.importActual<SecurityAuditModule>('@/lib/security-audit')),
+
   recordAuditEvent: (...args: unknown[]) => mocks.audit(...args),
 }));
-vi.mock('@/lib/services/account-activity-notifications', () => ({
+vi.mock('@/lib/services/account-activity-notifications', async () => ({
+  ...(await vi.importActual<AccountActivityNotificationsModule>(
+    '@/lib/services/account-activity-notifications',
+  )),
+
   notifyDeviceSignInApproved: (...args: unknown[]) => mocks.notifySignIn(...args),
   notifyDeviceDisconnected: vi.fn(),
 }));
-vi.mock('@/lib/server/terms', () => ({
+vi.mock('@/lib/server/terms', async () => ({
+  ...(await vi.importActual<TermsModule>('@/lib/server/terms')),
+
   hasAcceptedCurrentTerms: (...args: unknown[]) => mocks.hasAcceptedCurrentTerms(...args),
   mustAcceptTerms: async (userId: string) => !(await mocks.hasAcceptedCurrentTerms(userId)),
 }));
-vi.mock('@/lib/server/neon-db', () => ({
+vi.mock('@/lib/server/neon-db', async () => ({
+  ...(await vi.importActual<NeonDbModule>('@/lib/server/neon-db')),
+
   getNeonDb: vi.fn(() => ({
     query: (...args: unknown[]) => mocks.query(...args),
     execute: (...args: unknown[]) => mocks.execute(...args),
     transaction: (...args: unknown[]) => mocks.transaction(...args),
   })),
 }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async () => ({
+  ...(await vi.importActual<LoggerModule>('@/lib/logger')),
+
   logger: {
     info: (...args: unknown[]) => mocks.loggerInfo(...args),
     error: vi.fn(),
@@ -59,6 +78,15 @@ vi.mock('@/lib/logger', () => ({
 import { POST } from './route';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { readDeviceCodeSignInPolicy } from '@/lib/server/device-signin-policy';
+type ApiAuthModule = typeof import('@/lib/api-auth');
+type CsrfModule = typeof import('@/lib/csrf');
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type SecurityAuditModule = typeof import('@/lib/security-audit');
+type AccountActivityNotificationsModule =
+  typeof import('@/lib/services/account-activity-notifications');
+type TermsModule = typeof import('@/lib/server/terms');
+type NeonDbModule = typeof import('@/lib/server/neon-db');
+type LoggerModule = typeof import('@/lib/logger');
 
 describe('POST /api/auth/device/approve', () => {
   beforeEach(() => {
@@ -292,5 +320,3 @@ describe('POST /api/auth/device/approve', () => {
 });
 
 type ImportedModule0 = typeof import('@/lib/server/device-signin-policy');
-
-type ImportedModule1 = typeof import('@/lib/security-audit');

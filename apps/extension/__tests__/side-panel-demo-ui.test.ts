@@ -44,8 +44,14 @@ describe('Chrome side-panel demo surface', () => {
     const loadBody = source.slice(start, end);
 
     expect(loadBody).toMatch(
-      /persistConversationSeed\(\s*ownerAtStart,\s*conversationOwner\.conversationId,\s*active,?\s*\)/,
+      /forkConversationForHistory\(\s*ownerAtStart,\s*active,\s*conversationOwner\.conversationId,/,
     );
+    const forkBody = source.slice(
+      source.indexOf('async function forkConversationForHistory'),
+      start,
+    );
+    expect(forkBody).toContain('persistConversationSeed(owner, conversationId, entry)');
+    expect(forkBody).toContain('forkManagedCloudConversationHistory(');
     expect(loadBody).toContain('_ctx.conversationGeneration !== expectedGeneration');
   });
 

@@ -74,8 +74,7 @@ export const CreateMessageSchema = ManagedCloudCreateMessageRequestSchema.extend
     .refine(isSupportedMessageModel, {
       message: 'Invalid model specified',
     })
-    .optional()
-    .default('auto'),
+    .optional(),
 });
 
 export type CreateMessageInput = z.infer<typeof CreateMessageSchema>;

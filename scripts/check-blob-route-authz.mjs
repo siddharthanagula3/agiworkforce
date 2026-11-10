@@ -61,6 +61,7 @@ const AUTHORIZATION_CALLS = [
   'assertAccountActive',
   'createClaimedUserScopedDb',
   'runAuthGate',
+  'requirePlatformAdmin',
 ];
 
 const CRON_AUTHORIZATION_CALLS = ['verifyCronRequest'];

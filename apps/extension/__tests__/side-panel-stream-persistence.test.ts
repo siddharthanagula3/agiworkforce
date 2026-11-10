@@ -11,6 +11,7 @@ import {
 } from '@agiworkforce/types';
 import {
   normalizeManagedCloudOwner,
+  sameManagedCloudOwner,
   isManagedCloudBroadcastOwnedBy,
 } from '../src/features/cloud-bridge/managedCloudAuthority';
 import {
@@ -46,6 +47,7 @@ const names = new Set([
   'stampResolvedRoute',
   'saveStreamCheckpoint',
   'activityRequiresRender',
+  'finishVisibleChatTurn',
 ]);
 const functions = program.statements
   .filter((node) => ts.isFunctionDeclaration(node) && names.has(node.name?.text ?? ''))
@@ -103,10 +105,13 @@ function harness() {
   const dependencies = {
     _ctx: context,
     normalizeManagedCloudOwner,
+    sameManagedCloudOwner,
     isManagedCloudBroadcastOwnedBy,
     OPEN_BROWSER_CONVERSATION_MESSAGE: 'OPEN_BROWSER_CONVERSATION',
     SIDE_PANEL_CLIENT_INSTANCE_ID: 'qa-panel',
     ownerByStreamId: new Map([[streamId, owner]]),
+    pendingManagedAdmissions: new Map(),
+    refreshCloudAccountUI: vi.fn(),
     quickModeByStreamId: new Map(),
     cloudRunsByStreamId: new Map(),
     resolvedRouteByStreamId: new Map(),

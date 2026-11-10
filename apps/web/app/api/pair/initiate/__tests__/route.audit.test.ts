@@ -17,21 +17,34 @@ vi.mock('@/lib/device-steps/requesting-device', () => ({
   readRequestingDeviceId: mocks.requestingDevice,
 }));
 
-vi.mock('@/lib/managed-compute-gate', () => ({
+vi.mock('@/lib/managed-compute-gate', async () => ({
+  ...(await vi.importActual<ManagedComputeGateModule>('@/lib/managed-compute-gate')),
+
   buildWorkspaceFeatureGateResponse: mocks.featureGate,
 }));
 
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
-vi.mock('@/lib/api-auth', async (importOriginal) => ({
-  ...(await importOriginal<ImportedModule0>()),
+vi.mock('@/lib/csrf', async () => ({
+  ...(await vi.importActual<CsrfModule>('@/lib/csrf')),
+  requireCsrfToken: vi.fn(async () => null),
+}));
+vi.mock('@/lib/rate-limit', async () => ({
+  ...(await vi.importActual<RateLimitModule>('@/lib/rate-limit')),
+  withRateLimit: vi.fn(async () => null),
+}));
+vi.mock('@/lib/api-auth', async () => ({
+  ...(await vi.importActual<ApiAuthModule>('@/lib/api-auth')),
+
   isAccountUnavailableError: vi.fn(() => false),
   getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1' })),
 }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async () => ({
+  ...(await vi.importActual<LoggerModule>('@/lib/logger')),
+
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/server/rls-db', () => ({
+vi.mock('@/lib/server/rls-db', async () => ({
+  ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
+
   getUserScopedDb: vi.fn(async () => ({
     db: { query: vi.fn(), execute: mocks.execute },
     userId: 'user-1',
@@ -55,6 +68,12 @@ vi.mock('@/lib/feature-flags/flag-store', async (importOriginal) => ({
 }));
 
 import { POST } from '../route';
+type ManagedComputeGateModule = typeof import('@/lib/managed-compute-gate');
+type CsrfModule = typeof import('@/lib/csrf');
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type ApiAuthModule = typeof import('@/lib/api-auth');
+type LoggerModule = typeof import('@/lib/logger');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
 
 const DESKTOP_ID = '44444444-4444-4444-8444-444444444444';
 
@@ -286,5 +305,3 @@ describe('POST /api/pair/initiate audit trail', () => {
     },
   );
 });
-
-type ImportedModule0 = typeof import('@/lib/api-auth');

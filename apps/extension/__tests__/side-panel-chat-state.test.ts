@@ -451,6 +451,43 @@ describe('side-panel chat state', () => {
     expect(assistant?.agentEvents).toHaveLength(1);
   });
 
+  it('keeps caller control arguments out of the visible activity log', () => {
+    const messages = [message(1)];
+    const base = {
+      schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+      sessionId: 'conversation-1',
+      turnId: 'turn-1',
+      emittedAtMs: 1_000,
+    } as const;
+    applyCanonicalAgentEvent(messages, 'stream-1', {
+      ...base,
+      sequence: 0,
+      event: { type: 'progress-update', progressId: 'task', summary: 'Working', status: 'running' },
+    });
+    const assistant = applyCanonicalAgentEvent(messages, 'stream-1', {
+      ...base,
+      sequence: 1,
+      event: {
+        type: 'caller-tools-requested',
+        nextEventSequence: 4,
+        calls: [
+          {
+            id: 'local-call',
+            type: 'function',
+            function: {
+              name: 'type_into',
+              arguments: '{"index":1,"text":"do-not-log-control-argument"}',
+            },
+          },
+        ],
+      },
+    });
+    expect(assistant.agentEvents).toHaveLength(1);
+    expect(JSON.stringify(assistant.agentEvents)).not.toContain('do-not-log-control-argument');
+    expect(JSON.stringify(assistant.agentActivity)).not.toContain('do-not-log-control-argument');
+    expect(assistant.content).toBe('');
+  });
+
   it('deduplicates replayed tool events by their canonical sequence', () => {
     const messages: SidePanelChatMessage[] = [
       { ...message(1, 'assistant'), id: 'stream-1', content: '' },

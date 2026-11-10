@@ -1,63 +1,142 @@
 import { messageKindForAgentEvent } from '@agiworkforce/types';
+import {
+  AgentEventEnvelopeSchema,
+  CALLER_TOOL_BOUNDARY_EVENT_COUNT,
+  CallerToolResumeRequestSchema,
+  readCallerToolHandoff,
+  readCompleteCallerToolCalls,
+  type CallerToolCall,
+  type CallerToolResumeRequest,
+} from '@agiworkforce/cloud-contracts';
+import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import type { ToolDefinition } from './browserToolDefinitions';
 
-export interface ToolCall {
-  id: string;
-  type: 'function';
-  function: { name: string; arguments: string };
+export type ToolCall = CallerToolCall;
+export type ToolOfferingReference = Readonly<{
+  function: Readonly<Pick<ToolDefinition['function'], 'name'>>;
+}>;
+
+export interface CallerToolContinuation extends Omit<
+  CallerToolResumeRequest,
+  'tool_results' | 'observations'
+> {
+  calls: ToolCall[];
+}
+
+export class CallerToolContinuationError extends Error {
+  constructor() {
+    super('The cloud returned an incomplete or conflicting caller-action checkpoint.');
+    this.name = 'CallerToolContinuationError';
+  }
+}
+
+export function createCallerToolContinuationReader(tools: readonly ToolOfferingReference[]) {
+  let boundary: AgentEventEnvelope[] | null = null;
+  let calls: ToolCall[] | null = null;
+  let lastEnvelope: AgentEventEnvelope | null = null;
+  let observedSequence = -1;
+  return {
+    observe(input: AgentEventEnvelope): void {
+      const parsed = AgentEventEnvelopeSchema.safeParse(input);
+      if (!parsed.success) throw new CallerToolContinuationError();
+      const envelope = parsed.data;
+      if (!boundary && !lastEnvelope && envelope.event.type !== 'caller-tools-requested') {
+        observedSequence = Math.max(observedSequence, envelope.sequence);
+        return;
+      }
+      const duplicate = boundary?.find((entry) => entry.sequence === envelope.sequence);
+      if (duplicate) {
+        if (JSON.stringify(duplicate) !== JSON.stringify(envelope))
+          throw new CallerToolContinuationError();
+        return;
+      }
+      if (envelope.sequence < observedSequence) return;
+      if (lastEnvelope && envelope.sequence === lastEnvelope.sequence) {
+        if (JSON.stringify(lastEnvelope) !== JSON.stringify(envelope))
+          throw new CallerToolContinuationError();
+        return;
+      }
+      lastEnvelope = envelope;
+      observedSequence = Math.max(observedSequence, envelope.sequence);
+      if (envelope.event.type === 'caller-tools-requested') {
+        if (
+          envelope.event.nextEventSequence !==
+          envelope.sequence + CALLER_TOOL_BOUNDARY_EVENT_COUNT
+        )
+          throw new CallerToolContinuationError();
+        calls = readCompleteToolCalls(
+          envelope.event.calls.map((call, index) => ({ ...call, index })),
+          envelope.event.calls.map((call) => call.id),
+          tools,
+        );
+        if (!calls) throw new CallerToolContinuationError();
+        boundary = [envelope];
+        return;
+      }
+      if (!boundary) return;
+      const first = boundary[0]!;
+      if (envelope.sequence < first.sequence) return;
+      if (
+        boundary.length === CALLER_TOOL_BOUNDARY_EVENT_COUNT &&
+        envelope.sequence >= first.sequence + CALLER_TOOL_BOUNDARY_EVENT_COUNT
+      ) {
+        boundary = null;
+        calls = null;
+        return;
+      }
+      const validState =
+        boundary.length === 1 &&
+        envelope.event.type === 'task-state-changed' &&
+        envelope.event.state === 'awaiting_input' &&
+        envelope.event.taskId === envelope.turnId;
+      const validPause =
+        boundary.length === 2 &&
+        envelope.event.type === 'lifecycle' &&
+        envelope.event.phase === 'paused';
+      if (
+        envelope.sessionId !== first.sessionId ||
+        envelope.turnId !== first.turnId ||
+        envelope.sequence !== first.sequence + boundary.length ||
+        (!validState && !validPause)
+      )
+        throw new CallerToolContinuationError();
+      boundary.push(envelope);
+    },
+    incomplete(): boolean {
+      return boundary !== null && boundary.length < CALLER_TOOL_BOUNDARY_EVENT_COUNT;
+    },
+    read(runId: string | undefined): CallerToolContinuation | null {
+      if (!boundary || boundary.length !== CALLER_TOOL_BOUNDARY_EVENT_COUNT || !calls) return null;
+      const first = boundary[0]!;
+      const fields = CallerToolResumeRequestSchema.safeParse({
+        schema_version: first.schemaVersion,
+        run_id: runId,
+        turn_id: first.turnId,
+        next_event_sequence: first.sequence + CALLER_TOOL_BOUNDARY_EVENT_COUNT,
+        tool_results: calls.map((call) => ({ tool_call_id: call.id, content: '' })),
+      });
+      if (!fields.success) throw new CallerToolContinuationError();
+      const { tool_results: _results, ...cursor } = fields.data;
+      return { ...cursor, calls: structuredClone(calls) };
+    },
+  };
 }
 
 export function readCompleteToolCalls(
   calls: unknown,
   ids: unknown,
-  tools: readonly ToolDefinition[],
+  tools: readonly ToolOfferingReference[],
 ): ToolCall[] | null {
-  if (
-    !Array.isArray(ids) ||
-    ids.length === 0 ||
-    ids.some((id) => typeof id !== 'string' || !id.trim()) ||
-    new Set(ids).size !== ids.length ||
-    !Array.isArray(calls) ||
-    calls.length !== ids.length
-  )
-    return null;
-  const parsed: ToolCall[] = [];
-  for (const [index, raw] of calls.entries()) {
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
-    const call = raw as Record<string, unknown>;
-    const fn = call['function'];
-    if (
-      call['index'] !== index ||
-      call['type'] !== 'function' ||
-      call['id'] !== ids[index] ||
-      !fn ||
-      typeof fn !== 'object' ||
-      Array.isArray(fn)
-    )
-      return null;
-    const { name, arguments: args } = fn as Record<string, unknown>;
-    if (
-      typeof name !== 'string' ||
-      typeof args !== 'string' ||
-      !tools.some((tool) => tool.function.name === name)
-    )
-      return null;
-    // A tool that takes no input streams empty arguments; that is an empty object.
-    const argumentsText = args.trim() === '' ? '{}' : args;
-    let parsedArgs: unknown;
-    try {
-      parsedArgs = JSON.parse(argumentsText);
-    } catch {
-      return null;
-    }
-    if (!parsedArgs || typeof parsedArgs !== 'object' || Array.isArray(parsedArgs)) return null;
-    parsed.push({
-      id: ids[index] as string,
-      type: 'function',
-      function: { name, arguments: argumentsText },
-    });
-  }
-  return parsed;
+  return locallyOfferedCalls(readCompleteCallerToolCalls(calls, ids), tools);
+}
+
+function locallyOfferedCalls(
+  calls: ToolCall[] | null,
+  tools: readonly ToolOfferingReference[],
+): ToolCall[] | null {
+  return calls?.every((call) => tools.some((tool) => tool.function.name === call.function.name))
+    ? calls
+    : null;
 }
 
 /**
@@ -69,17 +148,9 @@ export function readToolHandoff(
   marker: unknown,
   calls: unknown,
   finishReason: unknown,
-  tools: readonly ToolDefinition[],
+  tools: readonly ToolOfferingReference[],
 ): ToolCall[] | null {
-  if (
-    !marker ||
-    typeof marker !== 'object' ||
-    Array.isArray(marker) ||
-    finishReason !== 'tool_calls'
-  ) {
-    return null;
-  }
-  return readCompleteToolCalls(calls, (marker as Record<string, unknown>)['tool_call_ids'], tools);
+  return locallyOfferedCalls(readCallerToolHandoff(marker, calls, finishReason), tools);
 }
 
 /**
@@ -88,7 +159,7 @@ export function readToolHandoff(
  * stop with reason tool-use, so a reader that reattaches rebuilds the same
  * snapshot the live stream carried. Calls this turn did not offer are ignored.
  */
-export function createToolUseJournal(tools: readonly ToolDefinition[]) {
+export function createToolUseJournal(tools: readonly ToolOfferingReference[]) {
   const pending = new Map<string, { name: string; args: string; ended: boolean }>();
   return {
     observe(event: { type: string }): ToolCall[] | null {

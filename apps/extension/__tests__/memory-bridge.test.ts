@@ -32,7 +32,8 @@ const authMock = vi.hoisted(() => ({
 
 const GATEWAY = authMock.gateway;
 
-vi.mock('../src/features/cloud-bridge/freeTrialClient', () => ({
+vi.mock('../src/features/cloud-bridge/freeTrialClient', async (importOriginal) => ({
+  ...(await importOriginal<FreeTrialClientModule>()),
   FREE_TRIAL_GATEWAY: authMock.gateway,
   getManagedCloudAuthContext: authMock.getManagedCloudAuthContext,
 }));
@@ -50,6 +51,7 @@ import {
   parseAccountMemory,
   parseAccountMemoryList,
 } from '../src/features/cloud-bridge/memoryClient.ts';
+type FreeTrialClientModule = typeof import('../src/features/cloud-bridge/freeTrialClient');
 
 const OWNER = { accountId: 'user_1', authIncarnation: 'session_1' };
 

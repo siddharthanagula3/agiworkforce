@@ -61,7 +61,7 @@ export function classifyToolLoopInputs(
   mcpTools: WebMcpToolDef[],
   requestTools: unknown[] | undefined,
   toolApprovalPolicy: ToolApprovalPolicy = DEFAULT_TOOL_APPROVAL_POLICY,
-  options: { requiredNativeSearch?: boolean } = {},
+  options: { requiredNativeSearch?: boolean; callerContinuation?: boolean } = {},
 ): ToolLoopInputClassification {
   const names = (requestTools ?? []).map(functionToolName).filter(Boolean);
   const hasMcpTools = mcpTools.length > 0;
@@ -94,6 +94,7 @@ export function classifyToolLoopInputs(
     hasImageTools,
     hasDeviceStepTools,
     shouldRun:
+      options.callerContinuation === true ||
       hasMcpTools ||
       hasExecutionTools ||
       hasUrlFetchTools ||

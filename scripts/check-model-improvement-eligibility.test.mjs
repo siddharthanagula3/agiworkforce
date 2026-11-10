@@ -55,6 +55,18 @@ test('passes while nothing makes customer content eligible', () => {
   assert.match(result.output, /3 eligibility surfaces absent, 2 claims kept/);
 });
 
+test('keeps the privacy promise valid across a JSX line wrap', () => {
+  const result = run(
+    fixture({
+      'apps/web/features/settings/sections/PrivacySection.tsx': PRIVACY_SECTION.replace(
+        'no training',
+        'no\ntraining',
+      ),
+    }),
+  );
+  assert.equal(result.code, 0, result.output);
+});
+
 test('fails when a training preference reappears as a real control', () => {
   const result = run(
     fixture({

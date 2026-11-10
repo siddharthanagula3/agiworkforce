@@ -1,6 +1,7 @@
 import {
   ARTIFACT_RUNTIME_BODY_CEILING_BYTES,
   RESUMABLE_UPLOAD_PART_BYTES,
+  MAX_CHAT_COMPLETION_REQUEST_BYTES,
 } from '@agiworkforce/cloud-contracts';
 import { MAX_PLAN_ATTACHMENT_BYTES } from '@agiworkforce/types';
 
@@ -15,7 +16,7 @@ export const DEFAULT_API_PAYLOAD_CEILING_BYTES = 4 * 1024 * 1024;
  */
 const PAYLOAD_CEILINGS: ReadonlyArray<readonly [string, number]> = [
   ['/api/scim/', 256 * 1024],
-  ['/api/llm/v1/chat/completions', 2_000_000],
+  ['/api/llm/v1/chat/completions', MAX_CHAT_COMPLETION_REQUEST_BYTES],
   ['/api/uploads/', MAX_PLAN_ATTACHMENT_BYTES],
   ['/api/files/uploads/', RESUMABLE_UPLOAD_PART_BYTES],
   ['/api/chat/conversations/', 24 * 1024 * 1024],

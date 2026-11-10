@@ -2,6 +2,7 @@
 import type { AgentEventApprovalRequested } from './AgentEventApprovalRequested';
 import type { AgentEventApprovalResolved } from './AgentEventApprovalResolved';
 import type { AgentEventArtifactProduced } from './AgentEventArtifactProduced';
+import type { AgentEventCallerToolsRequested } from './AgentEventCallerToolsRequested';
 import type { AgentEventCommandStarted } from './AgentEventCommandStarted';
 import type { AgentEventContextCompacted } from './AgentEventContextCompacted';
 import type { AgentEventDeviceStepRequested } from './AgentEventDeviceStepRequested';
@@ -39,6 +40,7 @@ export type AgentEvent =
   | ({ type: 'tool-use-start' } & AgentEventToolUseStart)
   | ({ type: 'tool-use-delta' } & AgentEventToolUseDelta)
   | ({ type: 'tool-use-end' } & AgentEventToolUseEnd)
+  | ({ type: 'caller-tools-requested' } & AgentEventCallerToolsRequested)
   | ({ type: 'server-tool-use' } & AgentEventServerToolUse)
   | ({ type: 'server-tool-result' } & AgentEventServerToolResult)
   | ({ type: 'usage' } & AgentEventUsage)

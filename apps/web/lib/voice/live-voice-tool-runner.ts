@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { invalidToolArgumentsMessage } from '@agiworkforce/provider-protocol';
 import {
   LIVE_VOICE_TOOL_INPUT_PREVIEW_MAX_CHARS,
   LIVE_VOICE_WORK_TASK_TOOL,
@@ -40,7 +41,12 @@ import {
   readsGoogleUserData,
 } from '@/lib/connectors/google-user-data';
 import { bindMcpTask } from '@/lib/connectors/mcp-state-store';
-import { capOutput, EXECUTE_CODE_TOOL, isExecutionTool } from '@/lib/e2b/execution-tools';
+import {
+  capOutput,
+  EXECUTE_CODE_TOOL,
+  isExecutionTool,
+  executionToolArgumentProblem,
+} from '@/lib/e2b/execution-tools';
 import { logger } from '@/lib/logger';
 import { executeWebMcpTool, parseQualifiedToolName } from '@/lib/mcp-tool-executor';
 import { persistGeneratedFileBytes } from '@/lib/server/generated-file-persist';
@@ -405,6 +411,21 @@ export async function handleLiveVoiceToolCall(
     await auditCall(input, 'blocked');
     return { status: 'blocked', output: MESSAGE.blocked };
   }
+  if (call.decision === 'rejected') {
+    await auditCall(input, 'blocked');
+    return { status: 'declined', output: MESSAGE.declined };
+  }
+  const argumentProblem = isExecutionTool(call.name)
+    ? executionToolArgumentProblem(call.name, { args })
+    : null;
+  if (argumentProblem) {
+    await auditCall(input, 'failed');
+    return {
+      status: 'completed',
+      output: invalidToolArgumentsMessage(call.name, argumentProblem),
+      isError: true,
+    };
+  }
   if (gate.verdict === 'ask' && !call.decision) {
     return {
       status: 'approval_required',
@@ -421,11 +442,6 @@ export async function handleLiveVoiceToolCall(
       },
     };
   }
-  if (call.decision === 'rejected') {
-    await auditCall(input, 'blocked');
-    return { status: 'declined', output: MESSAGE.declined };
-  }
-
   if (isExecutionTool(call.name)) {
     const result = await runSandboxTool(input, args);
     return {

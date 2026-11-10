@@ -246,6 +246,7 @@ async function approvalRequest(
   connectorPermissions?: ConnectorToolPermissions,
   sessionGrantRefusal?: ToolLoopOptions['sessionGrantRefusal'],
   runOptions: Partial<ToolLoopOptions> = {},
+  args: Record<string, unknown> = {},
 ): Promise<{
   request: Record<string, unknown> | undefined;
   executions: number;
@@ -253,7 +254,7 @@ async function approvalRequest(
   checkpoint: ToolLoopApprovalCheckpoint | undefined;
 }> {
   provider.stream.mockReset();
-  provider.stream.mockResolvedValueOnce(toolCallStream(name, {}));
+  provider.stream.mockResolvedValueOnce(toolCallStream(name, args));
   provider.stream.mockResolvedValueOnce(
     stream([{ choices: [{ delta: {}, finish_reason: 'stop', index: 0 }], model: 'fixture-model' }]),
   );
@@ -485,7 +486,18 @@ describe('runToolLoop, approval review on x_tool_approval_request', () => {
   });
 
   it('offers only this call for a platform tool, which has no connector verdict to remember', async () => {
-    expect((await approvalRequest('write_file', [])).request).toMatchObject({
+    expect(
+      (
+        await approvalRequest(
+          'write_file',
+          [],
+          undefined,
+          undefined,
+          {},
+          { path: 'notes/plan.md', content: 'x' },
+        )
+      ).request,
+    ).toMatchObject({
       approval_scopes: ['once'],
     });
   });

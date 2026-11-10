@@ -55,6 +55,7 @@ const harness = vi.hoisted(() => {
   };
 
   const area = (store: Record<string, unknown>) => ({
+    QUOTA_BYTES: 10 * 1024 * 1024,
     get: vi.fn(async (keys?: unknown, callback?: (value: Record<string, unknown>) => void) => {
       const value = store === localStore ? await readStore(keys) : {};
       callback?.(value);
@@ -137,6 +138,7 @@ const harness = vi.hoisted(() => {
     },
     windows: { get: vi.fn(() => Promise.resolve({ id: RUN_WINDOW_ID })), onFocusChanged: event() },
     alarms: {
+      get: vi.fn(async () => undefined),
       create: vi.fn((_name: string, _info: unknown, callback?: () => void) => callback?.()),
       clear: vi.fn(() => Promise.resolve(true)),
       getAll: vi.fn(() => Promise.resolve([])),

@@ -32,8 +32,9 @@ vi.mock('@/lib/logger', () => ({
   shouldUsePrettyLogTransport: vi.fn(),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/api-auth', async (importOriginal) => ({
-  ...(await importOriginal<ImportedModule0>()),
+vi.mock('@/lib/api-auth', async () => ({
+  ...(await vi.importActual<ApiAuthModule>('@/lib/api-auth')),
+
   getClerkAuthUser: vi.fn(),
   getClerkAuthorizedParties: vi.fn(),
   getOptionalAuthUser: vi.fn(),
@@ -41,13 +42,17 @@ vi.mock('@/lib/api-auth', async (importOriginal) => ({
   isAccountUnavailableError: vi.fn(),
   assertAccountActive: mocks.assertAccountActive,
 }));
-vi.mock('@/lib/server/rls-db', () => ({
+vi.mock('@/lib/server/rls-db', async () => ({
+  ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
+
   ACTIVE_ORG_HEADER: vi.fn(),
   getCurrentUserRlsDb: vi.fn(),
   getVerifiedBearerUserScopedDb: vi.fn(),
   getUserScopedDb: mocks.getUserScopedDb,
 }));
-vi.mock('@/lib/connectors/bank-accounts', () => ({
+vi.mock('@/lib/connectors/bank-accounts', async () => ({
+  ...(await vi.importActual<BankAccountsModule>('@/lib/connectors/bank-accounts')),
+
   bankAccountsToolDefs: vi.fn(),
   connectBankAccounts: vi.fn(),
   createBankAccountsLinkToken: vi.fn(),
@@ -65,6 +70,9 @@ vi.mock('@/lib/services/finance-overview-service', () => ({
 
 import { createError } from '@/lib/errors';
 import { GET } from '../route';
+type ApiAuthModule = typeof import('@/lib/api-auth');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type BankAccountsModule = typeof import('@/lib/connectors/bank-accounts');
 
 function request(search = ''): NextRequest {
   return new NextRequest(`http://localhost:3000/api/finance/overview${search}`);
@@ -137,5 +145,3 @@ describe('/api/finance/overview', () => {
     expect(mocks.readFinanceOverview).toHaveBeenCalledWith('user-1', '30d');
   });
 });
-
-type ImportedModule0 = typeof import('@/lib/api-auth');

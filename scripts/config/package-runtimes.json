@@ -86,7 +86,8 @@
       "./queue": "universal",
       "./offline-queue": "universal",
       "./offline-sync": "universal",
-      "./plugins": "universal"
+      "./plugins": "universal",
+      "./observation-history": "universal"
     },
     "packages/client/desktop-command-client": {
       ".": "universal"

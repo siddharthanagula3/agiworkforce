@@ -73,12 +73,19 @@ vi.mock('@/lib/auth/email-confirmation', async (importOriginal) => ({
   ...(await importOriginal()),
   readPrimaryEmailState: vi.fn(async () => ({ confirmed: true, email: 'person@example.com' })),
 }));
-vi.mock('@/lib/api-auth', async (importOriginal) => ({
-  ...(await importOriginal<ImportedModule1>()),
+vi.mock('@/lib/api-auth', async () => ({
+  ...(await vi.importActual<ApiAuthModule>('@/lib/api-auth')),
+
   getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1' })),
 }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
+vi.mock('@/lib/csrf', async () => ({
+  ...(await vi.importActual<CsrfModule>('@/lib/csrf')),
+  requireCsrfToken: vi.fn(async () => null),
+}));
+vi.mock('@/lib/rate-limit', async () => ({
+  ...(await vi.importActual<RateLimitModule>('@/lib/rate-limit')),
+  withRateLimit: vi.fn(async () => null),
+}));
 vi.mock('@/lib/services/connector-policy-gate', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),
   evaluateConnectorPolicyForUser: (...args: unknown[]) => mocks.connectorPolicy(...args),
@@ -99,13 +106,17 @@ vi.mock('@/lib/services/entitlement-resolution', async (importOriginal) => ({
   ...(await importOriginal<ScanModule4>()),
   resolveEntitledPlanTier: vi.fn(async () => 'pro'),
 }));
-vi.mock('@/lib/server/neon-db', () => ({
+vi.mock('@/lib/server/neon-db', async () => ({
+  ...(await vi.importActual<NeonDbModule>('@/lib/server/neon-db')),
+
   getNeonDb: vi.fn(() => ({
     query: (...args: unknown[]) => mocks.query(...args),
     execute: (...args: unknown[]) => mocks.execute(...args),
   })),
 }));
-vi.mock('@/lib/server/rls-db', () => ({
+vi.mock('@/lib/server/rls-db', async () => ({
+  ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
+
   getUserScopedDb: vi.fn(async () => ({
     db: {
       query: (...args: unknown[]) => mocks.query(...args),
@@ -115,7 +126,9 @@ vi.mock('@/lib/server/rls-db', () => ({
     organizationId: null,
   })),
 }));
-vi.mock('@/lib/user-connector-tools', () => ({
+vi.mock('@/lib/user-connector-tools', async () => ({
+  ...(await vi.importActual<UserConnectorToolsModule>('@/lib/user-connector-tools')),
+
   getOperatorMappedConnectorIds: vi.fn(() => mocks.operatorIds),
   getUserGithubInstallations: (...args: unknown[]) => mocks.githubInstallations(...args),
   getUserCustomConnectorSummaries: (...args: unknown[]) => mocks.customConnectors(...args),
@@ -123,7 +136,9 @@ vi.mock('@/lib/user-connector-tools', () => ({
   evictConnectorOAuthCaches: (...args: unknown[]) => mocks.evictOauthCaches(...args),
   evictCustomConnectorCaches: (...args: unknown[]) => mocks.evictCustomCaches(...args),
 }));
-vi.mock('@/lib/connectors/oauth-setup', () => ({
+vi.mock('@/lib/connectors/oauth-setup', async () => ({
+  ...(await vi.importActual<OauthSetupModule>('@/lib/connectors/oauth-setup')),
+
   regionRequirement: vi.fn(() => null),
   describeConnectorSetup: (...args: unknown[]) => mocks.describeSetup(...args),
 }));
@@ -152,7 +167,9 @@ vi.mock('@/lib/connectors/directory/tool-names-cache', () => ({
 vi.mock('@/lib/mcp-url-validation', () => ({
   validateHttpsMcpUrl: vi.fn(async (raw: unknown) => new URL(String(raw))),
 }));
-vi.mock('@/lib/connectors/oauth-registry', () => ({
+vi.mock('@/lib/connectors/oauth-registry', async () => ({
+  ...(await vi.importActual<OauthRegistryModule>('@/lib/connectors/oauth-registry')),
+
   CONNECTOR_OAUTH_PROVIDERS_ENV: 'CONNECTOR_OAUTH_PROVIDERS_JSON',
   CONNECTOR_OAUTH_REDIRECT_BASE_ENV: 'CONNECTOR_OAUTH_REDIRECT_BASE_URL',
   connectorOAuthCredentialEnvNames: (id: string) => ({
@@ -186,8 +203,9 @@ vi.mock('@/lib/connectors/oauth-access', async (importOriginal) => ({
   disconnectConnectorOAuthGrant: (...args: unknown[]) => mocks.disconnectOauth(...args),
   resolveConnectorAccessToken: vi.fn(),
 }));
-vi.mock('@/lib/github-app', async (importOriginal) => ({
-  ...(await importOriginal<ImportedModule0>()),
+vi.mock('@/lib/github-app', async () => ({
+  ...(await vi.importActual<GithubAppModule>('@/lib/github-app')),
+
   GitHubWriteOutcomeUnknownError: class GitHubWriteOutcomeUnknownError extends Error {},
   issueCommentPostedSince: vi.fn(() => false),
   pullRequestReviewPostedSince: vi.fn(() => false),
@@ -201,11 +219,15 @@ vi.mock('@/lib/github-app', async (importOriginal) => ({
   postIssueComment: vi.fn(),
   postPrReview: vi.fn(),
 }));
-vi.mock('@/lib/cors', () => ({
+vi.mock('@/lib/cors', async () => ({
+  ...(await vi.importActual<CorsModule>('@/lib/cors')),
+
   withCorsRoute: <T>(handler: T) => handler,
   handleCorsPreflightRequest: vi.fn(() => null),
 }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async () => ({
+  ...(await vi.importActual<LoggerModule>('@/lib/logger')),
+
   logger: {
     debug: vi.fn(),
     error: vi.fn(),
@@ -234,6 +256,17 @@ function postRequest(connectorId: string): NextRequest {
 }
 
 import { getUserScopedDb } from '@/lib/server/rls-db';
+type ApiAuthModule = typeof import('@/lib/api-auth');
+type CsrfModule = typeof import('@/lib/csrf');
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type NeonDbModule = typeof import('@/lib/server/neon-db');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type UserConnectorToolsModule = typeof import('@/lib/user-connector-tools');
+type OauthSetupModule = typeof import('@/lib/connectors/oauth-setup');
+type OauthRegistryModule = typeof import('@/lib/connectors/oauth-registry');
+type GithubAppModule = typeof import('@/lib/github-app');
+type CorsModule = typeof import('@/lib/cors');
+type LoggerModule = typeof import('@/lib/logger');
 
 type McpDirectoryTargetsModule = typeof import('@/lib/connectors/mcp-directory-targets');
 type OauthStoreModule = typeof import('@/lib/connectors/oauth-store');
@@ -1291,6 +1324,3 @@ describe('selective connector offerings', () => {
     expect(mocks.probe).not.toHaveBeenCalled();
   });
 });
-
-type ImportedModule1 = typeof import('@/lib/api-auth');
-type ImportedModule0 = typeof import('@/lib/github-app');

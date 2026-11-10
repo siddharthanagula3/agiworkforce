@@ -506,6 +506,40 @@ function readUtf8Text(filePath) {
   }
 }
 
+function maskIndexedMeasurementPaths(repoRoot, relativePath, text) {
+  if (relativePath !== 'docs/agent-context/generated/knowledge-graph/files/tools.jsonl')
+    return text;
+  return text
+    .split('\n')
+    .map((line) => {
+      let record;
+      try {
+        record = JSON.parse(line);
+      } catch {
+        return line;
+      }
+      if (
+        !record ||
+        typeof record.path !== 'string' ||
+        record.unit !== 'tools/evals' ||
+        record.role !== 'config' ||
+        record.unparsed !== 'notCode' ||
+        Object.keys(record).some((key) => !['path', 'unit', 'role', 'unparsed'].includes(key)) ||
+        !record.path.startsWith('tools/evals/measurements/') ||
+        !isModelIdOwnerPath(repoRoot, path.join(repoRoot, record.path))
+      )
+        return line;
+      try {
+        if (!lstatSync(path.join(repoRoot, record.path)).isFile()) return line;
+      } catch {
+        return line;
+      }
+      const encoded = JSON.stringify(record.path);
+      return line.replace(encoded, ' '.repeat(encoded.length));
+    })
+    .join('\n');
+}
+
 export function scanModelIdFiles({ repoRoot = REPO_ROOT, filePaths, tokens }) {
   const violations = [];
   const skippedFiles = [];
@@ -525,6 +559,7 @@ export function scanModelIdFiles({ repoRoot = REPO_ROOT, filePaths, tokens }) {
     }
 
     const relativePath = toPosixPath(path.relative(repoRoot, filePath));
+    text = maskIndexedMeasurementPaths(repoRoot, relativePath, text);
     const concreteOccurrences = findModelIdOccurrences(text, tokens);
     const occupiedLocations = new Set();
     for (const occurrence of concreteOccurrences) {

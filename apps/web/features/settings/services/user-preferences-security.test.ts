@@ -8,9 +8,10 @@ import {
 } from './two-factor-client';
 import { generateOTPAuthURL, TOTP_CONFIG } from './user-preferences';
 import { getCsrfToken } from '@/lib/client/csrf';
+type CsrfModule = typeof import('@/lib/client/csrf');
 
-vi.mock('@/lib/client/csrf', async (importOriginal) => ({
-  ...(await importOriginal<ImportedModule0>()),
+vi.mock('@/lib/client/csrf', async () => ({
+  ...(await vi.importActual<CsrfModule>('@/lib/client/csrf')),
   getCsrfToken: vi.fn(async () => 'csrf-token'),
 }));
 const fetchMock = vi.fn<typeof fetch>();
@@ -212,5 +213,3 @@ describe('owned two-factor transport (source-authored, unrun fixtures)', () => {
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 });
-
-type ImportedModule0 = typeof import('@/lib/client/csrf');

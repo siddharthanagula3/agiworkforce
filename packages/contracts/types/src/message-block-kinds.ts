@@ -9,6 +9,7 @@ export const AGENT_EVENT_MESSAGE_KINDS = Object.freeze({
   'tool-use-start': 'tool_call',
   'tool-use-delta': 'tool_call',
   'tool-use-end': 'tool_call',
+  'caller-tools-requested': null,
   'server-tool-use': 'tool_call',
   'server-tool-result': 'tool_result',
   usage: null,

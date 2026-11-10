@@ -1656,17 +1656,21 @@ export async function importManagedCloudConversationHistory(
   assertManagedCloudOwner(owner);
   return mutateStore(async (store) => {
     if (!(await ownerIsCurrent()) || !cloudMirroringEnabledSnapshot()) return 0;
+    const unsettledEntries = new Set(
+      store.conversations.filter(
+        (entry) =>
+          pendingCloudMessages(entry).length > 0 ||
+          entry.cloudSync?.blockedReason === 'non-cloud-runtime' ||
+          entry.messages.some(
+            (message) =>
+              message.runtime !== 'managed-cloud' ||
+              message.streaming === true ||
+              message.streamCancellation !== undefined,
+          ),
+      ),
+    );
     const protectedEntries = store.conversations.filter(
-      (entry) =>
-        protectsConversation(entry.id) ||
-        pendingCloudMessages(entry).length > 0 ||
-        entry.cloudSync?.blockedReason === 'non-cloud-runtime' ||
-        entry.messages.some(
-          (message) =>
-            message.runtime !== 'managed-cloud' ||
-            message.streaming === true ||
-            message.streamCancellation !== undefined,
-        ),
+      (entry) => protectsConversation(entry.id) || unsettledEntries.has(entry),
     );
     let imported = 0;
     const changedIds = new Set<string>();
@@ -1704,8 +1708,6 @@ export async function importManagedCloudConversationHistory(
         changedIds.add(reconciled.id);
         return reconciled;
       });
-      if (existing && protectedEntries.includes(existing)) continue;
-      if (protectsConversation(existing?.id ?? remote.id)) continue;
       if (
         existing?.cloudSync?.organizationId !== undefined &&
         existing.cloudSync.organizationId !== organizationId
@@ -1717,6 +1719,34 @@ export async function importManagedCloudConversationHistory(
       )
         continue;
       const sync = existing?.cloudSync;
+      if (existing && protectedEntries.includes(existing)) {
+        if (
+          !unsettledEntries.has(existing) &&
+          sync?.createAcknowledged === true &&
+          sync.state === 'idle' &&
+          sync.conversationId === remote.id &&
+          sync.syncedTitle === existing.title &&
+          existing.title !== title
+        ) {
+          const entry: ConversationEntry = {
+            ...existing,
+            title,
+            customTitle: title,
+            cloudSync: { ...sync, syncedTitle: title, remoteUpdatedAt: remote.updatedAt },
+          };
+          const updated = conversations.map((candidate) =>
+            candidate === existing ? entry : candidate,
+          );
+          const bounded = boundConversationStoreForWrite({ ...store, conversations: updated });
+          if (updated.every((candidate) => bounded.conversations.includes(candidate))) {
+            conversations = updated;
+            protectedEntries[protectedEntries.indexOf(existing)] = entry;
+            imported += 1;
+          }
+        }
+        continue;
+      }
+      if (protectsConversation(existing?.id ?? remote.id)) continue;
       const retainedTitle =
         existing && sync?.syncedTitle !== existing.title ? existing.title : title;
       const retainedProjectId =

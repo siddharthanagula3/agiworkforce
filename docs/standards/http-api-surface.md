@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Web surface maintainers
-Last updated: 2026-09-17
+Last updated: 2026-11-08
 
 The public HTTP contract: which endpoints exist, which credential each one takes,
 and what a caller is guaranteed. The marketing page for the same surface is
@@ -34,11 +34,11 @@ Keys. A key carries scopes, and a call missing the scope an endpoint requires
 answers `403` with `insufficient_scope`. The scopes are defined in
 `apps/web/lib/api-key-scopes.ts`:
 
-| Scope             | Grants                                             |
-| ----------------- | -------------------------------------------------- |
-| `models:read`     | listing the models available to the account        |
-| `inference:write` | chat completions and audio transcriptions          |
-| `usage:read`      | plan and managed-usage status                      |
+| Scope             | Grants                                      |
+| ----------------- | ------------------------------------------- |
+| `models:read`     | listing the models available to the account |
+| `inference:write` | chat completions and audio transcriptions   |
+| `usage:read`      | plan and managed-usage status               |
 
 A key created with no scopes resolves to all three. That is the historical
 default and it is deliberate, not an oversight: narrowing it would silently break
@@ -46,14 +46,14 @@ keys issued before scopes existed.
 
 ## Endpoints
 
-| Method and path                            | Session token | API key scope     |
-| ------------------------------------------ | ------------- | ----------------- |
-| `GET /api/llm/v1/models`                   | yes           | `models:read`     |
-| `POST /api/llm/v1/chat/completions`        | yes           | `inference:write` |
-| `POST /api/llm/v1/audio/transcriptions`    | yes           | `inference:write` |
-| `POST /api/llm/v1/route/preview`           | yes           | `inference:write` |
-| `GET /api/llm/v1/credits/balance`          | yes           | `usage:read`      |
-| `POST /api/llm/v1/embeddings`              | yes           | refused           |
+| Method and path                         | Session token | API key scope     |
+| --------------------------------------- | ------------- | ----------------- |
+| `GET /api/llm/v1/models`                | yes           | `models:read`     |
+| `POST /api/llm/v1/chat/completions`     | yes           | `inference:write` |
+| `POST /api/llm/v1/audio/transcriptions` | yes           | `inference:write` |
+| `POST /api/llm/v1/route/preview`        | yes           | `inference:write` |
+| `GET /api/llm/v1/credits/balance`       | yes           | `usage:read`      |
+| `POST /api/llm/v1/embeddings`           | yes           | refused           |
 
 Embeddings takes a session token only. An API key is refused there rather than
 silently accepted with a narrower result.
@@ -64,11 +64,14 @@ A chat completion that pauses for an approval, for an input, or for a step on th
 user's own device is resumed through its own endpoints rather than by resending
 the request:
 
-| Path                                                | Resumes                            |
-| ---------------------------------------------------- | ---------------------------------- |
-| `POST /api/llm/v1/chat/completions/approve`         | a turn waiting on an approval      |
-| `POST /api/llm/v1/chat/completions/resume-input`    | a turn waiting on user input       |
-| `POST /api/llm/v1/chat/completions/resume-device`   | a turn waiting on a device step    |
+| Path                                              | Resumes                         |
+| ------------------------------------------------- | ------------------------------- |
+| `POST /api/llm/v1/chat/completions/approve`       | a turn waiting on an approval   |
+| `POST /api/llm/v1/chat/completions/resume-input`  | a turn waiting on user input    |
+| `POST /api/llm/v1/chat/completions/resume-device` | a turn waiting on a device step |
+| `POST /api/llm/v1/chat/completions/resume-caller` | negotiated caller-owned actions |
+
+A streamed request may negotiate `caller_tool_handoff_version`. The server retains the full tool transcript and resolves hosted siblings through their ordinary gates. A complete `caller-tools-requested` boundary contains only pending caller actions and the next event cursor. `resume-caller` accepts their exact result ids plus bounded observations, never replacement system/assistant history or hosted approvals. Its step budget is cumulative across resumes. Caller continuations share Chrome's observation-history policy: retain the latest two DOM and screenshot observation steps, replace older payloads with stubs, and preserve action receipts, ordinary attachments, system instructions and private provider context.
 
 Durable runs are addressable in their own right under
 `/api/llm/v1/chat/completions/runs`, which lists them, and
@@ -92,6 +95,14 @@ routes added after this file was written:
   `auto`; the catalogue resolves it. `AGENTS.md` section 4 owns this rule.
 
 ## Compatibility and change
+
+An API caller owns the function definitions in its request's `tools`, including
+names such as `read_file` that a hosted tool also uses. The response returns
+those calls as assistant `tool_calls` with a `tool_calls` finish reason; the
+application executes them and replies with matching `tool_call_id` messages.
+Streaming preserves the same ownership. Hosted tools offered by capability flags
+or connected accounts remain hosted when the caller has not declared that name;
+their existing permissions and approval continuations still apply.
 
 Adding a field to a response, adding an endpoint, and accepting a new optional
 request field are compatible changes and ship without ceremony. Removing an

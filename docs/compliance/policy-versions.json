@@ -31,6 +31,12 @@
       "served": "28260a8d5e6f37da432d21e6fe8edc37eb845e26",
       "main": "78990d6147176cbdb197d258389a0567516ce437",
       "note": "On 1 November 2026 fresh public reads of /api/version and /agent-permissions both returned 200. Production served 28260a8d5e6f37da432d21e6fe8edc37eb845e26, and the approvals page printed Last updated 2026-10-08 and said no connector could be connected yet. Main was at 78990d6147176cbdb197d258389a0567516ce437; that candidate was not promoted, and the targeted correction dated 2026-11-01 was not yet published. The Oct8 archive must retain the rendered source production actually served, including its then-current imported tool table."
+    },
+    {
+      "checkedOn": "2026-11-10",
+      "served": "4eb9c07140e18e5758c28bf47013002d4843e4fb",
+      "main": "167e4b019c23961c2c8801c42a153b0e05a38218",
+      "note": "No-cache production reads on 10 November 2026 returned application commit a8e278c62ec39ae410c070a190a63ac60507c10d from /api/version and 2026-10-15 as the visible /subprocessors Last updated date, with the Model providers (Managed Cloud) row. That native-session hotfix is on a separate branch; every canonical policy page and legal-constants blob is byte-identical at 4eb9c07140e18e5758c28bf47013002d4843e4fb, retained on main, so that commit is the policy-source representative used here. 167e4b019c23961c2c8801c42a153b0e05a38218 is the held candidate that records the repository's display-name edits and moves only the subprocessor recipient-group announcement date. No deployment, email notice or production mutation is asserted."
     }
   ],
   "documents": {
@@ -363,8 +369,13 @@
         },
         {
           "date": "2026-10-08",
+          "digest": "2bbea8256bd1ab48",
+          "note": "Records the Work display name and corrects its preceding article. Stored cookie data, purposes, lifetimes, consent and withdrawal behavior are unchanged."
+        },
+        {
+          "date": "2026-10-08",
           "digest": "a081185ecc55ed1e",
-          "note": "Editorial, recorded 2026-11-10. The local storage row read a Chat or an Work thread after the product-name change. It now renders both names from PRODUCT_NAMES with the article productNameWithArticle in packages/contracts/types/src/product-names.ts derives from each name, so it reads a Chat or a Work thread and follows any later rename. Nothing stored, read or kept changes, so the date does not move."
+          "note": "Editorial, recorded 2026-11-10. After the product-name change the local storage row read a Chat or an Work thread, and the entry before this one corrected the article in a literal string. The row now renders both names from PRODUCT_NAMES with the article productNameWithArticle in packages/contracts/types/src/product-names.ts derives from each name, so it reads a Chat or a Work thread and follows any later rename. Nothing stored, read or kept changes, so the date does not move."
         }
       ]
     },
@@ -470,6 +481,54 @@
         },
         {
           "date": "2026-11-10",
+          "digest": "8e5347c1a1ef2a77",
+          "note": "Candidate revision for the recipient-group display label, held from deployment. Recheck the publication date before release; no recipient entity, provider id or processing purpose changes. The public summary on this entry covers every 2026-11-10 change to the page, including the BYOK correction recorded in the next entry.",
+          "summary": "The hosted mode is now called Cloud. The Model providers row is headed Model providers (Cloud), every row that mentions the mode says Cloud where it said Managed Cloud, and the E2B row says Sandbox runtime. No recipient was added or removed. The BYOK section also corrects which surfaces have a user-supplied-key path: the web app and Desktop chat have none, and a Desktop local coding session runs the CLI and can use a key you set up there.",
+          "subprocessorNames": [
+            "Cheaper Inference (operated by Keak)",
+            "Clerk",
+            "Cloudflare",
+            "E2B",
+            "Experiential Labs (operated by Resolute Labs AI, Inc.)",
+            "Expo",
+            "Fly.io",
+            "GitHub",
+            "Google (Places API)",
+            "Google (Play Android Publisher)",
+            "Google Analytics",
+            "Model providers (Cloud)",
+            "Neon",
+            "OpenAI (dictation and Voice Mode)",
+            "OpenRouter",
+            "OpenStreetMap Foundation (Nominatim)",
+            "Perplexity",
+            "Qwen (Alibaba) and Zhipu",
+            "Resend",
+            "Runway",
+            "Sentry",
+            "Stripe",
+            "Upstash",
+            "Vercel"
+          ],
+          "subprocessorProviders": [
+            "anthropic",
+            "cheaperinference",
+            "deepseek",
+            "experientiallabs",
+            "google",
+            "moonshot",
+            "open_router",
+            "openai",
+            "perplexity",
+            "qwen",
+            "vercel_gateway",
+            "workers_ai",
+            "xai",
+            "zhipu"
+          ]
+        },
+        {
+          "date": "2026-11-10",
           "digest": "4a7b150998550f71",
           "subprocessorNames": [
             "Cheaper Inference (operated by Keak)",
@@ -497,8 +556,7 @@
             "Upstash",
             "Vercel"
           ],
-          "note": "Two changes. The product-name change in commit 3a0d329bb4 (2026-11-08) renamed the hosted mode to Cloud, the label PRIVACY_MODE_DISPLAY.managed carries in packages/contracts/types/src/suite-contracts.ts: the row Model providers (Managed Cloud) is now Model providers (Cloud), the E2B row says Sandbox runtime where it said Managed sandbox runtime, and every Managed Cloud in the rows and correction notes reads Cloud. No recipient was added or removed and no provider id changed. A renamed row moves the date under docs/compliance/README.md rule 10. The BYOK section said the web app and the current Desktop app are cloud-only with no user-supplied-key path; a Desktop local coding session runs the CLI and can use a provider key set up there (apps/cli/src/model_reachability.rs), so the sentence now says so. That changes which surfaces can carry a request outside this list, which is substantive. The lead decided on 2026-11-10, after the owner did not answer, to move the date to 2026-11-10. The version this replaces was served by production on 2026-11-01.",
-          "summary": "The hosted mode is now called Cloud. The Model providers row is headed Model providers (Cloud), every row that mentions the mode says Cloud where it said Managed Cloud, and the E2B row says Sandbox runtime. No recipient was added or removed. The BYOK section also corrects which surfaces have a user-supplied-key path: the web app and Desktop chat have none, and a Desktop local coding session runs the CLI and can use a key you set up there."
+          "note": "Two changes. The product-name change in commit 3a0d329bb4 (2026-11-08) renamed the hosted mode to Cloud, the label PRIVACY_MODE_DISPLAY.managed carries in packages/contracts/types/src/suite-contracts.ts: the row Model providers (Managed Cloud) is now Model providers (Cloud), the E2B row says Sandbox runtime where it said Managed sandbox runtime, and every Managed Cloud in the rows and correction notes reads Cloud. No recipient was added or removed and no provider id changed. A renamed row moves the date under docs/compliance/README.md rule 10. The BYOK section said the web app and the current Desktop app are cloud-only with no user-supplied-key path; a Desktop local coding session runs the CLI and can use a provider key set up there (apps/cli/src/model_reachability.rs), so the sentence now says so. That changes which surfaces can carry a request outside this list, which is substantive. The lead decided on 2026-11-10, after the owner did not answer, to move the date to 2026-11-10. The version this replaces was served by production on 2026-11-01."
         }
       ]
     },

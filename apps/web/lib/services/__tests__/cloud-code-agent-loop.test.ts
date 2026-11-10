@@ -392,17 +392,49 @@ describe('runCloudCodeAgentTurn', () => {
     });
   });
 
+  it('refuses missing write content before requesting a Code approval', async () => {
+    const runner = runnerStub();
+    const result = await runCloudCodeAgentTurn({
+      ...baseInput,
+      runner,
+      adapter: adapterFor([
+        toolTurn('invalid-write', 'write_file', { path: 'draft.txt' }),
+        textTurn('Contents are required.'),
+      ]),
+    });
+    expect(result.stopReason).toBe('done');
+    expect(result.pendingApproval).toBeUndefined();
+    expect(JSON.stringify(result.messages)).toContain('missing required argument');
+    expect(runner.runSharedExecutionTool).not.toHaveBeenCalled();
+  });
+
+  it('still requests a Code approval for explicitly empty content', async () => {
+    const runner = runnerStub();
+    const result = await runCloudCodeAgentTurn({
+      ...baseInput,
+      runner,
+      adapter: adapterFor([
+        toolTurn('empty-write', 'write_file', { path: 'draft.txt', content: '' }),
+      ]),
+    });
+    expect(result.stopReason).toBe('awaiting_approval');
+    expect(result.pendingApproval?.args).toEqual({ path: 'draft.txt', content: '' });
+    expect(runner.runSharedExecutionTool).not.toHaveBeenCalled();
+  });
+
   it('reports a missing required argument back to the model as a tool error', async () => {
+    const runner = runnerStub();
     const result = await runCloudCodeAgentTurn({
       ...baseInput,
       adapter: adapterFor([toolTurn('t1', 'read_file', {}), textTurn('ok')]),
-      runner: runnerStub(),
+      runner,
     });
     const blocks = result.messages.flatMap((m) =>
       Array.isArray(m.content) ? m.content : [],
     ) as ToolResultBlock[];
     const err = blocks.find((b) => b.type === 'tool_result' && b.isError);
-    expect(String(err?.content)).toContain('requires a "path"');
+    expect(String(err?.content)).toContain('missing required argument "path"');
+    expect(runner.readFile).not.toHaveBeenCalled();
   });
 });
 

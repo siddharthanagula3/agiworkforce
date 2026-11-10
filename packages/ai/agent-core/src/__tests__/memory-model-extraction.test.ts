@@ -21,6 +21,25 @@ function runnerReturning(raw: string): MemoryFactExtractionRunner {
 }
 
 describe('isMemoryExtractionWorthwhile', () => {
+  it('does not spend an extraction call on an ephemeral browser reference', async () => {
+    const message = 'Remember the original application tab ID with list_tabs.';
+    expect(isMemoryExtractionWorthwhile(message)).toBe(false);
+    const runner = vi.fn(async () => '[]');
+    expect((await extractMemoryFactsWithModel(message, { runner })).facts).toEqual([]);
+    expect(runner).not.toHaveBeenCalled();
+  });
+
+  it('does not send a transient reminder alongside a durable preference to extraction', async () => {
+    const runner = vi.fn(async () => '[]');
+    await extractMemoryFactsWithModel('Remember the current tab ID. I prefer dark mode.', {
+      runner,
+    });
+    expect(runner).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'I prefer dark mode.' }),
+      expect.any(AbortSignal),
+    );
+  });
+
   it('skips turns that cannot carry a durable fact, so they never cost a call', () => {
     expect(isMemoryExtractionWorthwhile('')).toBe(false);
     expect(isMemoryExtractionWorthwhile('ok')).toBe(false);

@@ -218,6 +218,7 @@ async function bindOrganizationScope(
   userId: string,
   request?: NextRequest,
 ): Promise<AuthResult['organizationScope']> {
+  if (!request) throw createError.unauthorized();
   let organizationId: string | null;
   try {
     const resolved = await withDeadline(

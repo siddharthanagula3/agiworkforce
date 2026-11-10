@@ -3,6 +3,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { getModelMetadataById, getRoutingSlotModel } from '@agiworkforce/types';
+type CsrfModule = typeof import('@/lib/csrf');
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type CorsModule = typeof import('@/lib/cors');
+type ManagedComputeGateModule = typeof import('@/lib/managed-compute-gate');
+type LoggerModule = typeof import('@/lib/logger');
+type EnvModule = typeof import('@shared/utils/env');
+type ApiAuthModule = typeof import('@/lib/api-auth');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+
 type ScanModule0 = typeof import('@/lib/voice/free-voice-allowance');
 type ScanModule1 = typeof import('@/lib/services/cogs-ledger-service');
 type ScanModule2 = typeof import('@/app/api/voice/live/sessions/lib/voice-session-settlement');
@@ -25,31 +34,48 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
-vi.mock('@/lib/cors', () => ({
+vi.mock('@/lib/csrf', async () => ({
+  ...(await vi.importActual<CsrfModule>('@/lib/csrf')),
+  requireCsrfToken: vi.fn(async () => null),
+}));
+vi.mock('@/lib/rate-limit', async () => ({
+  ...(await vi.importActual<RateLimitModule>('@/lib/rate-limit')),
+  withRateLimit: vi.fn(async () => null),
+}));
+vi.mock('@/lib/cors', async () => ({
+  ...(await vi.importActual<CorsModule>('@/lib/cors')),
+
   handleCorsPreflightRequest: vi.fn(() => null),
   getCorsHeaders: vi.fn(() => ({})),
   getSecurityHeaders: vi.fn(() => ({})),
 }));
-vi.mock('@/lib/managed-compute-gate', () => ({
+vi.mock('@/lib/managed-compute-gate', async () => ({
+  ...(await vi.importActual<ManagedComputeGateModule>('@/lib/managed-compute-gate')),
+
   buildManagedComputeGateResponse: vi.fn(() => null),
   buildOrganizationPolicyGateResponse: vi.fn(async () => null),
   buildModelPolicyGateResponse: vi.fn(async () => null),
   buildSpendLimitGateResponse: vi.fn(async () => null),
 }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async () => ({
+  ...(await vi.importActual<LoggerModule>('@/lib/logger')),
+
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
-vi.mock('@shared/utils/env', () => ({
+vi.mock('@shared/utils/env', async () => ({
+  ...(await vi.importActual<EnvModule>('@shared/utils/env')),
+
   requireEnv: vi.fn(() => 'sk-test-openai-key'),
   getOptionalEnv: vi.fn(() => undefined),
 }));
-vi.mock('@/lib/api-auth', async (importOriginal) => ({
-  ...(await importOriginal<ImportedModule0>()),
+vi.mock('@/lib/api-auth', async () => ({
+  ...(await vi.importActual<ApiAuthModule>('@/lib/api-auth')),
+
   getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1' })),
 }));
-vi.mock('@/lib/server/rls-db', () => ({
+vi.mock('@/lib/server/rls-db', async () => ({
+  ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
+
   getUserScopedDb: (...args: unknown[]) => mocks.userScopedDb(...args),
 }));
 vi.mock('@/lib/services/subscription-service', () => ({
@@ -652,5 +678,3 @@ describe('POST /api/llm/v1/audio/transcriptions, outside the proxy', () => {
     expect(served.status).toBe(200);
   });
 });
-
-type ImportedModule0 = typeof import('@/lib/api-auth');

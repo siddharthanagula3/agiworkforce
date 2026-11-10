@@ -173,7 +173,7 @@ export const ManagedCloudCreateMessageRequestSchema = z.object({
     .min(1)
     .max(MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH)
     .refine((value) => value.trim().length > 0, 'Message content cannot be only whitespace'),
-  model: z.string().min(1).optional().default(MANAGED_CLOUD_DEFAULT_MODEL_SELECTION),
+  model: z.string().min(1).optional(),
   role: ManagedCloudMessageRoleSchema.optional().default('user'),
   metadata: ManagedCloudMessageMetadataSchema.optional().default({}),
   skipLlm: z.boolean().optional().default(false),

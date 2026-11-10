@@ -60,8 +60,10 @@ async function findIdempotentBranch(
 ): Promise<ManagedCloudConversationWire | null> {
   const [conversation] = await db.query<ManagedCloudConversationWire>(
     `select target.id,
+            target.organization_id,
             target.title,
             target.model,
+            target.selected_route_id,
             target.project_id,
             target.pinned,
             target.starred,
@@ -224,8 +226,10 @@ export async function forkConversation(
       ManagedCloudConversationWire & { google_user_data_at: string | Date | null }
     >(
       `select id,
+              organization_id,
               title,
               model,
+              selected_route_id,
               project_id,
               pinned,
               starred,
@@ -283,12 +287,14 @@ export async function forkConversation(
     // route like a chat that never held any.
     const [target] = await tx.query<ManagedCloudConversationWire>(
       `insert into public.web_conversations
-         (id, user_id, title, model, project_id, is_temporary, google_user_data_at, activated_at)
-       values ($1, $2, $3, $4, $5, $6, $7::timestamptz, now())
+         (id, user_id, title, model, project_id, is_temporary, google_user_data_at, selected_route_id, activated_at)
+       values ($1, $2, $3, $4, $5, $6, $7::timestamptz, $8, now())
        on conflict (id) do nothing
        returning id,
+                 organization_id,
                  title,
                  model,
+                 selected_route_id,
                  project_id,
                  pinned,
                  starred,
@@ -304,6 +310,7 @@ export async function forkConversation(
         source.is_temporary ? null : source.project_id,
         source.is_temporary,
         source.google_user_data_at ?? null,
+        source.selected_route_id ?? null,
       ],
     );
 

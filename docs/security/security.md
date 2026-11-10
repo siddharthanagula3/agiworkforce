@@ -267,10 +267,10 @@ origin, and a connector with no remote server reports `unavailable`
 (`describeConnectorSetup` in `lib/connectors/oauth-setup.ts`, mapped to the
 directory state by `lib/connectors/directory/connectable.ts`).
 
-Disconnecting, and erasing an account, destroys the stored tokens in every case
-and asks the provider to revoke only where the connector's descriptor carries a
-`revocationUrl`, so a self-registered or directory-discovered grant is destroyed
-here without an upstream revocation call (`disconnectConnectorOAuthGrant` and
+Disconnecting never contacts the provider before local grants have been captured
+and removed; configured providers use their descriptor's `revocationUrl`,
+directory and custom MCP grants use issuer discovery, and account erasure also
+attempts upstream revocation (`disconnectConnectorOAuthGrant` and
 `revokeAllConnectorTokensAtProviders` in `lib/connectors/oauth-access.ts`).
 
 `user_connectors` holds only `connector_id + auth_type + is_active`. **No tokens,

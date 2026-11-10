@@ -16,19 +16,33 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mocks.requireCsrfToken }));
-vi.mock('@/lib/api-auth', async (importOriginal) => ({
-  ...(await importOriginal<ImportedModule2>()),
+vi.mock('@/lib/rate-limit', async () => ({
+  ...(await vi.importActual<RateLimitModule>('@/lib/rate-limit')),
+  withRateLimit: mocks.withRateLimit,
+}));
+vi.mock('@/lib/csrf', async () => ({
+  ...(await vi.importActual<CsrfModule>('@/lib/csrf')),
+  requireCsrfToken: mocks.requireCsrfToken,
+}));
+vi.mock('@/lib/api-auth', async () => ({
+  ...(await vi.importActual<ApiAuthModule>('@/lib/api-auth')),
   getClerkAuthUser: mocks.getClerkAuthUser,
 }));
 vi.mock('@/lib/workspace-audit', () => ({
   recordWorkspaceAuditEvent: mocks.recordWorkspaceAuditEvent,
 }));
-vi.mock('@/lib/services/plugin-installation-service', () => ({
+vi.mock('@/lib/services/plugin-installation-service', async () => ({
+  ...(await vi.importActual<PluginInstallationServiceModule>(
+    '@/lib/services/plugin-installation-service',
+  )),
+
   listEnabledPluginIds: mocks.listEnabledPluginIds,
 }));
-vi.mock('@/features/plugins/server/directory/installed-skills', () => ({
+vi.mock('@/features/plugins/server/directory/installed-skills', async () => ({
+  ...(await vi.importActual<InstalledSkillsModule>(
+    '@/features/plugins/server/directory/installed-skills',
+  )),
+
   findInstalledDirectorySkillWithFiles: vi.fn(async () => null),
   listInstalledDirectorySkills: vi.fn(async () => []),
 }));
@@ -102,8 +116,13 @@ function fakeDb(initialSettings: Record<string, unknown> | null = null, commitEr
 
 const sharedDb = fakeDb();
 
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => sharedDb }));
-vi.mock('@/lib/server/rls-db', () => ({
+vi.mock('@/lib/server/neon-db', async () => ({
+  ...(await vi.importActual<NeonDbModule>('@/lib/server/neon-db')),
+  getNeonDb: () => sharedDb,
+}));
+vi.mock('@/lib/server/rls-db', async () => ({
+  ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
+
   getUserScopedDb: async () => ({ db: sharedDb, userId: 'user-1' }),
 }));
 
@@ -111,6 +130,13 @@ import { GET as listInstalls, POST as installSkill } from '../route';
 import { DELETE as uninstallSkill } from '../[name]/route';
 import { GET as listSkills } from '@/app/api/skills/route';
 import { resetManagedSkillCatalogCacheForTests } from '@/lib/services/skill-catalog-service';
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type CsrfModule = typeof import('@/lib/csrf');
+type ApiAuthModule = typeof import('@/lib/api-auth');
+type PluginInstallationServiceModule = typeof import('@/lib/services/plugin-installation-service');
+type InstalledSkillsModule = typeof import('@/features/plugins/server/directory/installed-skills');
+type NeonDbModule = typeof import('@/lib/server/neon-db');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
 
 function getRequest(): NextRequest {
   return new NextRequest('http://localhost/api/skills/installs');
@@ -348,5 +374,3 @@ describe('/api/skills/installs', () => {
 
 type ImportedModule0 = typeof import('@/lib/managed-compute-gate');
 type ImportedModule1 = typeof import('@/lib/services/workspace-plugin-access');
-
-type ImportedModule2 = typeof import('@/lib/api-auth');

@@ -72,6 +72,34 @@ afterEach(() => {
 });
 
 describe('key stability', () => {
+  it.each([
+    { maxOutputTokens: 48, effort: 'low' as const },
+    { maxOutputTokens: 24, effort: 'none' as const },
+  ])('misses when generation parameters change to %j', async (generationParameters) => {
+    await storeExactResponseCache(
+      fields({ generationParameters: { maxOutputTokens: 24, effort: 'low' } }),
+      ENTRY,
+      { bypass: false },
+    );
+    expect(
+      await lookupExactResponseCache(fields({ generationParameters }), { bypass: false }),
+    ).toEqual({ outcome: 'miss' });
+  });
+
+  it('normalizes generation parameter property order', async () => {
+    await storeExactResponseCache(
+      fields({ generationParameters: { maxOutputTokens: 24, effort: 'none' } }),
+      ENTRY,
+      { bypass: false },
+    );
+    expect(
+      await lookupExactResponseCache(
+        fields({ generationParameters: { effort: 'none', maxOutputTokens: 24 } }),
+        { bypass: false },
+      ),
+    ).toEqual({ outcome: 'hit', entry: ENTRY });
+  });
+
   it('hits on a second identical lookup after a store', async () => {
     await storeExactResponseCache(fields(), ENTRY, { bypass: false });
     const result = await lookupExactResponseCache(fields(), { bypass: false });

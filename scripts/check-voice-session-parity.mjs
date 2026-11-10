@@ -75,22 +75,25 @@ export function repliesPendingMute(source) {
 }
 
 /**
- * Whether a body calls dispose() itself or hands off to a sibling method that does.
- * Another ending method or the message handler is not a hand-off: each guards its own
- * early return, so naming one proves nothing about the session being disposed.
+ * Whether a body calls dispose() itself or hands off, through any chain of sibling
+ * methods, to one that does. Another ending method or the message handler is not a
+ * hand-off: each guards its own early return, so naming one proves nothing about the
+ * session being disposed.
  */
-function reachesDispose(source, body) {
+function reachesDispose(source, body, seen = new Set()) {
   if (/this\.dispose\(\)/.test(body)) return true;
-  const delegates = new Set(
-    [...body.matchAll(/this\.(\w+)\(/g)]
-      .map((call) => call[1])
-      .filter(
-        (name) => name !== 'dispose' && name !== 'handleMessage' && !ENDING_METHODS.includes(name),
-      ),
-  );
-  for (const name of delegates) {
+  for (const call of body.matchAll(/\bthis\.(\w+)\s*\(/g)) {
+    const name = call[1];
+    if (
+      name === 'dispose' ||
+      name === 'handleMessage' ||
+      ENDING_METHODS.includes(name) ||
+      seen.has(name)
+    )
+      continue;
+    seen.add(name);
     const delegate = methodBody(source, name);
-    if (delegate !== null && /this\.dispose\(\)/.test(delegate)) return true;
+    if (delegate !== null && reachesDispose(source, delegate, seen)) return true;
   }
   return false;
 }

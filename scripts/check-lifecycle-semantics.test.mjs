@@ -100,6 +100,30 @@ test('a clean fixture passes', () => {
   assert.deepEqual(unrecorded, []);
 });
 
+test('the shared project scope must still filter deleted rows at its canonical owner', () => {
+  const reader = 'apps/web/lib/read-project.ts';
+  const owner = 'apps/web/lib/server/project-read-access.ts';
+  const root = fixture(
+    {},
+    {
+      [reader]:
+        "import { READABLE_PROJECT_SCOPE_SQL } from '@/lib/server/project-read-access';\nexport const sql = `select p.id from public.user_projects p where ${READABLE_PROJECT_SCOPE_SQL}`;",
+      [owner]:
+        'export const READABLE_PROJECT_SCOPE_SQL = `p.id = $1 and p.user_id = $2 and p.deleted_at is null`;',
+    },
+  );
+  const inspect = () =>
+    findUnfilteredReads({
+      repoRoot: root,
+      files: [reader],
+      contract: { predicateHelpers: [] },
+      marked: new Map([['user_projects', { softDeleted: 'deleted_at' }]]),
+    });
+  assert.deepEqual(inspect(), []);
+  write(root, owner, 'export const READABLE_PROJECT_SCOPE_SQL = `p.id = $1 and p.user_id = $2`;');
+  assert.equal(inspect().length, 1);
+});
+
 test('repository content reads preserve withdrawal and provenance reads declare their purpose', () => {
   const { errors, unrecorded } = checkLifecycleSemantics(REPO_ROOT);
   assert.deepEqual(errors, []);

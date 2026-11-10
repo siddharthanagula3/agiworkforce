@@ -1,6 +1,13 @@
 import { getBrowserToolDefinitions } from './browserToolDefinitions';
 import type { ToolDefinition } from './browserToolDefinitions';
-import { readCompleteToolCalls, readToolHandoff, type ToolCall } from './toolHandoff';
+import {
+  CallerToolContinuationError,
+  createCallerToolContinuationReader,
+  readCompleteToolCalls,
+  readToolHandoff,
+  type ToolCall,
+  type CallerToolContinuation,
+} from './toolHandoff';
 export type { ToolCall } from './toolHandoff';
 export { BROWSER_TOOL_DEFINITIONS, type ToolDefinition } from './browserToolDefinitions';
 import { ServerSentEventDecoder } from '@agiworkforce/client-runtime';
@@ -127,6 +134,7 @@ export interface CloudAgentResponse {
   message: AssistantMessage;
   isDone: boolean;
   tokensUsed: number;
+  continuation?: CallerToolContinuation;
 }
 
 export class CloudAgentGatewayError extends Error {
@@ -260,6 +268,8 @@ export async function callCloud(
   } catch (error) {
     if (controller.signal.aborted && controller.signal.reason instanceof Error)
       throw controller.signal.reason;
+    if (error instanceof CallerToolContinuationError)
+      throw new CloudAgentGatewayError(error.message, 0, 'protocol_error');
     throw error;
   } finally {
     clearTimeout(timeout);
@@ -348,7 +358,9 @@ async function callCloudRequest(
     );
   }
 
-  const durableRun = readManagedCloudAgentRunHandle(response) !== null;
+  const runHandle = readManagedCloudAgentRunHandle(response);
+  const durableRun = runHandle !== null;
+  const callerReader = createCallerToolContinuationReader(tools);
   const reader = response.body?.getReader();
   if (!reader) throw new Error('callCloud: response body is not readable');
 
@@ -432,7 +444,10 @@ async function callCloudRequest(
     if (delta?.x_stream_error !== undefined && delta.x_stream_error !== null) {
       throw streamingGatewayFailure(delta.x_stream_error, response.status);
     }
-    const agentEvent = parseAgentEventDelta(delta?.x_agent_event)?.event;
+    const agentEnvelope = parseAgentEventDelta(delta?.x_agent_event);
+    if (delta?.x_agent_event != null && !agentEnvelope) invalidBrowserAction(response.status);
+    if (agentEnvelope) callerReader.observe(agentEnvelope);
+    const agentEvent = agentEnvelope?.event;
     if (agentEvent?.type === 'error') {
       throw streamingGatewayFailure(agentEvent, response.status);
     }
@@ -560,7 +575,12 @@ async function callCloudRequest(
     role: 'assistant',
     content: textContent || null,
   };
-  if (toolCallsAcc.size > 0) {
+  if (callerReader.incomplete()) throw new CallerToolContinuationError();
+  const continuation = callerReader.read(runHandle?.runId);
+  if (continuation && toolHandoff) throw new CallerToolContinuationError();
+  if (continuation) {
+    message.tool_calls = continuation.calls;
+  } else if (toolCallsAcc.size > 0) {
     const calls = Array.from(toolCallsAcc.entries())
       .sort(([first], [second]) => first - second)
       .map(([, call], index) => ({ index, ...call }));
@@ -572,7 +592,7 @@ async function callCloudRequest(
     );
   }
 
-  return { message, isDone, tokensUsed };
+  return { message, isDone, tokensUsed, ...(continuation ? { continuation } : {}) };
 }
 
 export async function resolveGatewayBase(): Promise<string> {

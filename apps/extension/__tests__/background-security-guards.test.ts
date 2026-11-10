@@ -455,7 +455,96 @@ describe('background service worker security guards', () => {
     ).toMatchObject({ success: false, error: 'This action requires the extension UI.' });
   });
 
+  it('reports a rejected native task and releases the run without detached rejections', async () => {
+    const runId = 'cu_run_cleanup_failure';
+    harness.runAgentLoop.mockRejectedValueOnce(new Error('Native task fixture failure'));
+    const result = await dispatch({
+      type: 'AGI_START_COMPUTER_USE',
+      runId,
+      tabId: RUN_TAB_ID,
+      goal: 'Read the current page',
+      modelSelection: getRoutingSlotModel('browser_dom'),
+    });
+    expect(result).toMatchObject({ success: true, runId });
+    await vi.waitFor(() =>
+      expect(
+        harness.chromeMock.runtime.sendMessage.mock.calls.some(
+          ([message]) =>
+            message?.type === 'AGI_CU_STATE' &&
+            message?.runId === runId &&
+            message?.status === 'error',
+        ),
+      ).toBe(true),
+    );
+    expect(await dispatch({ type: 'GET_COMPUTER_USE_STATE' })).toMatchObject({
+      success: true,
+      running: false,
+    });
+  });
+
   describe('application batch authorization', () => {
+    beforeEach(() => {
+      harness.chromeMock.scripting.executeScript.mockResolvedValue([
+        { documentId: 'document-1', result: harness.tab.url },
+      ]);
+    });
+
+    it('pins a profile batch to the native document before forwarding data', async () => {
+      const auth = await dispatch({ type: 'GET_CLOUD_AUTH_TOKEN', refresh: false });
+      harness.chromeMock.tabs.sendMessage.mockClear();
+      await dispatch({
+        type: 'FILL_APPLICATION_CONTACT',
+        tabId: RUN_TAB_ID,
+        pageUrl: harness.tab.url,
+        documentId: 'document-1',
+        profile: { fullName: 'Test Applicant' },
+        owner: auth['owner'],
+      });
+      expect(harness.chromeMock.tabs.sendMessage).toHaveBeenCalledExactlyOnceWith(
+        RUN_TAB_ID,
+        expect.objectContaining({ profile: { fullName: 'Test Applicant' } }),
+        { documentId: 'document-1' },
+      );
+    });
+
+    it('refuses a profile batch after a same-URL document replacement', async () => {
+      const auth = await dispatch({ type: 'GET_CLOUD_AUTH_TOKEN', refresh: false });
+      harness.chromeMock.tabs.sendMessage.mockClear();
+      harness.chromeMock.scripting.executeScript.mockResolvedValueOnce([
+        { documentId: 'replacement-document', result: harness.tab.url },
+      ]);
+      const result = await dispatch({
+        type: 'FILL_APPLICATION_CONTACT',
+        tabId: RUN_TAB_ID,
+        pageUrl: harness.tab.url,
+        documentId: 'document-1',
+        profile: { fullName: 'Test Applicant' },
+        owner: auth['owner'],
+      });
+      expect(result).toMatchObject({ success: false });
+      expect(harness.chromeMock.tabs.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it.each(['', null, 3, 'document with spaces'])(
+      'refuses invalid profile document identity %j',
+      async (documentId) => {
+        const auth = await dispatch({ type: 'GET_CLOUD_AUTH_TOKEN', refresh: false });
+        harness.chromeMock.tabs.sendMessage.mockClear();
+        harness.chromeMock.scripting.executeScript.mockClear();
+        const result = await dispatch({
+          type: 'FILL_APPLICATION_CONTACT',
+          tabId: RUN_TAB_ID,
+          pageUrl: harness.tab.url,
+          documentId,
+          profile: { fullName: 'Test Applicant' },
+          owner: auth['owner'],
+        });
+        expect(result).toMatchObject({ success: false });
+        expect(harness.chromeMock.tabs.sendMessage).not.toHaveBeenCalled();
+        expect(harness.chromeMock.scripting.executeScript).not.toHaveBeenCalled();
+      },
+    );
+
     it('addresses a generic plan to the exact observed Chrome document', async () => {
       const auth = await dispatch({ type: 'GET_CLOUD_AUTH_TOKEN', refresh: false });
       harness.chromeMock.tabs.sendMessage.mockClear();
@@ -518,6 +607,21 @@ describe('background service worker security guards', () => {
       ).toMatchObject({ success: false, error: 'This action requires the extension UI.' });
     });
 
+    it('requires the document identity on an observed form plan', async () => {
+      const auth = await dispatch({ type: 'GET_CLOUD_AUTH_TOKEN', refresh: false });
+      harness.chromeMock.tabs.sendMessage.mockClear();
+      const result = await dispatch({
+        type: 'FILL_OBSERVED_FORM',
+        tabId: RUN_TAB_ID,
+        pageUrl: harness.tab.url,
+        formSnapshotId: '77777777-7777-4777-8777-777777777777',
+        plan: { fields: { '#name': 'Test' } },
+        owner: auth['owner'],
+      });
+      expect(result).toMatchObject({ success: false });
+      expect(harness.chromeMock.tabs.sendMessage).not.toHaveBeenCalled();
+    });
+
     it('forwards one validated profile to the authorized live document', async () => {
       const auth = await dispatch({ type: 'GET_CLOUD_AUTH_TOKEN', refresh: false });
       expect(auth['owner']).toBeTruthy();
@@ -532,13 +636,17 @@ describe('background service worker security guards', () => {
         owner: auth['owner'],
       });
       expect(result).toMatchObject({ success: true, filledCount: 1 });
-      expect(harness.chromeMock.tabs.sendMessage).toHaveBeenCalledExactlyOnceWith(RUN_TAB_ID, {
-        type: 'FILL_APPLICATION_CONTACT',
-        tabId: RUN_TAB_ID,
-        pageUrl: harness.tab.url,
-        profile,
-        owner: auth['owner'],
-      });
+      expect(harness.chromeMock.tabs.sendMessage).toHaveBeenCalledExactlyOnceWith(
+        RUN_TAB_ID,
+        {
+          type: 'FILL_APPLICATION_CONTACT',
+          tabId: RUN_TAB_ID,
+          pageUrl: harness.tab.url,
+          profile,
+          owner: auth['owner'],
+        },
+        { documentId: 'document-1' },
+      );
     });
 
     it.each([true, false])(
@@ -554,14 +662,18 @@ describe('background service worker security guards', () => {
           replaceExisting,
           owner: auth['owner'],
         });
-        expect(harness.chromeMock.tabs.sendMessage).toHaveBeenCalledExactlyOnceWith(RUN_TAB_ID, {
-          type: 'FILL_APPLICATION_CONTACT',
-          tabId: RUN_TAB_ID,
-          pageUrl: harness.tab.url,
-          profile: { email: 'replace@example.test' },
-          replaceExisting,
-          owner: auth['owner'],
-        });
+        expect(harness.chromeMock.tabs.sendMessage).toHaveBeenCalledExactlyOnceWith(
+          RUN_TAB_ID,
+          {
+            type: 'FILL_APPLICATION_CONTACT',
+            tabId: RUN_TAB_ID,
+            pageUrl: harness.tab.url,
+            profile: { email: 'replace@example.test' },
+            replaceExisting,
+            owner: auth['owner'],
+          },
+          { documentId: 'document-1' },
+        );
       },
     );
 

@@ -1014,6 +1014,7 @@ function applyAgentEvent(
     case 'tool-use-start':
     case 'tool-use-delta':
     case 'tool-use-end':
+    case 'caller-tools-requested':
     case 'server-tool-use':
     case 'server-tool-result':
     case 'usage':

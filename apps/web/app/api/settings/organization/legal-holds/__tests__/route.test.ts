@@ -31,38 +31,77 @@ const {
   mockRecordAuditEvent: vi.fn(async () => undefined),
 }));
 
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mockCsrf }));
-vi.mock('@/lib/services/active-workspace-service', () => ({
+vi.mock('@/lib/rate-limit', async () => ({
+  ...(await vi.importActual<RateLimitModule>('@/lib/rate-limit')),
+  withRateLimit: vi.fn(async () => null),
+}));
+vi.mock('@/lib/csrf', async () => ({
+  ...(await vi.importActual<CsrfModule>('@/lib/csrf')),
+  requireCsrfToken: mockCsrf,
+}));
+vi.mock('@/lib/services/active-workspace-service', async () => ({
+  ...(await vi.importActual<ActiveWorkspaceServiceModule>(
+    '@/lib/services/active-workspace-service',
+  )),
+
   resolveActiveOrganizationId: mockSavedSelection,
 }));
-vi.mock('@/lib/services/org-entitlements', async (importOriginal) => ({
-  ...(await importOriginal<ImportedModule0>()),
+vi.mock('@/lib/services/org-entitlements', async () => ({
+  ...(await vi.importActual<OrgEntitlementsModule>('@/lib/services/org-entitlements')),
+
   getOrganizationEntitlements: vi.fn(),
   getSharedProjectLimitErrorMessage: vi.fn(),
   isOrgResourceLimitError: vi.fn(),
   resolveOrganizationEntitlementPlan: vi.fn(async () => 'enterprise'),
 }));
-vi.mock('@/lib/observability/error-capture', () => ({ captureServerError: vi.fn() }));
-vi.mock('@/lib/server/support-access-service', () => ({ recordSupportDataAccess: vi.fn() }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/observability/error-capture', async () => ({
+  ...(await vi.importActual<ErrorCaptureModule>('@/lib/observability/error-capture')),
+  captureServerError: vi.fn(),
+}));
+vi.mock('@/lib/server/support-access-service', async () => ({
+  ...(await vi.importActual<SupportAccessServiceModule>('@/lib/server/support-access-service')),
+  recordSupportDataAccess: vi.fn(),
+}));
+vi.mock('@/lib/logger', async () => ({
+  ...(await vi.importActual<LoggerModule>('@/lib/logger')),
+
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mockGetUserScopedDb }));
-vi.mock('@/lib/server/neon-db', () => ({
+vi.mock('@/lib/server/rls-db', async () => ({
+  ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
+  getUserScopedDb: mockGetUserScopedDb,
+}));
+vi.mock('@/lib/server/neon-db', async () => ({
+  ...(await vi.importActual<NeonDbModule>('@/lib/server/neon-db')),
+
   getNeonDb: mockGetNeonDb,
 }));
-vi.mock('@/lib/security-audit', () => ({
+vi.mock('@/lib/security-audit', async () => ({
+  ...(await vi.importActual<SecurityAuditModule>('@/lib/security-audit')),
+
   recordAuditEvent: mockRecordAuditEvent,
   BLOCK_APPEAL_PATH: '/support',
   logRateLimitExceeded: vi.fn(),
 }));
-vi.mock('@/app/api/settings/team/team-admin-access', () => ({
+vi.mock('@/app/api/settings/team/team-admin-access', async () => ({
+  ...(await vi.importActual<TeamAdminAccessModule>('@/app/api/settings/team/team-admin-access')),
+
   requireTeamAdminAccess: mockRequireTeamAdminAccess,
 }));
 
 import { GET, POST, DELETE } from '../route';
 import { requireMemberPermission } from '@/lib/services/organization-permission-service';
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type CsrfModule = typeof import('@/lib/csrf');
+type ActiveWorkspaceServiceModule = typeof import('@/lib/services/active-workspace-service');
+type OrgEntitlementsModule = typeof import('@/lib/services/org-entitlements');
+type ErrorCaptureModule = typeof import('@/lib/observability/error-capture');
+type SupportAccessServiceModule = typeof import('@/lib/server/support-access-service');
+type LoggerModule = typeof import('@/lib/logger');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type NeonDbModule = typeof import('@/lib/server/neon-db');
+type SecurityAuditModule = typeof import('@/lib/security-audit');
+type TeamAdminAccessModule = typeof import('@/app/api/settings/team/team-admin-access');
 
 const ORG = '11111111-1111-4111-8111-111111111111';
 const OTHER_ORG = '22222222-2222-4222-8222-222222222222';
@@ -505,5 +544,3 @@ describe('legal holds captured workspace binding', () => {
     expectNoResources();
   });
 });
-
-type ImportedModule0 = typeof import('@/lib/services/org-entitlements');

@@ -169,6 +169,10 @@ describe('agentLoop, aborts on post-navigate off-allowlist tab URL', () => {
 });
 
 describe('escalationEngine, detectStructuralTriggers', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '<input id="fn"><input type="file" id="resume" required>';
+  });
+  afterEach(() => document.body.replaceChildren());
   it('is importable without error', async () => {
     const mod = await import('../src/features/computer-use/escalationEngine');
     expect(typeof mod.detectStructuralTriggers).toBe('function');

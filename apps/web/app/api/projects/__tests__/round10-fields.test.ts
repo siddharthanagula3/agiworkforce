@@ -47,26 +47,35 @@ const {
   };
 });
 
-vi.mock('@/lib/rate-limit', () => ({
+vi.mock('@/lib/rate-limit', async () => ({
+  ...(await vi.importActual<RateLimitModule>('@/lib/rate-limit')),
+
   withRateLimit: vi.fn().mockResolvedValue(null),
 }));
 
-vi.mock('@/lib/csrf', () => ({
+vi.mock('@/lib/csrf', async () => ({
+  ...(await vi.importActual<CsrfModule>('@/lib/csrf')),
+
   requireCsrfToken: vi.fn().mockResolvedValue(null),
 }));
 
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async () => ({
+  ...(await vi.importActual<LoggerModule>('@/lib/logger')),
+
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock('@/lib/api-auth', async (importOriginal) => ({
-  ...(await importOriginal<ImportedModule0>()),
+vi.mock('@/lib/api-auth', async () => ({
+  ...(await vi.importActual<ApiAuthModule>('@/lib/api-auth')),
+
   getClerkAuthUser: mockGetClerkAuthUser,
   getAuthenticatedUserWithClient: vi.fn(),
   getAuthenticatedUser: vi.fn(),
 }));
 
-vi.mock('@/lib/server/neon-db', () => ({
+vi.mock('@/lib/server/neon-db', async () => ({
+  ...(await vi.importActual<NeonDbModule>('@/lib/server/neon-db')),
+
   getNeonDb: vi.fn(() => {
     const adapter = {
       query: (...args: unknown[]) =>
@@ -83,7 +92,9 @@ vi.mock('@/lib/server/neon-db', () => ({
   }),
 }));
 
-vi.mock('@/lib/server/rls-db', () => ({
+vi.mock('@/lib/server/rls-db', async () => ({
+  ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
+
   getUserScopedDb: vi.fn(async () => {
     const { userId } = await mockGetClerkAuthUser();
     const organizationId = await mockResolveActiveOrganizationId();
@@ -99,23 +110,43 @@ vi.mock('@/lib/server/rls-db', () => ({
   }),
 }));
 
-vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
+vi.mock('@/lib/server/project-knowledge-object-storage', async () => ({
+  ...(await vi.importActual<ProjectKnowledgeObjectStorageModule>(
+    '@/lib/server/project-knowledge-object-storage',
+  )),
+
   deleteProjectKnowledgeObject: vi.fn(async () => undefined),
 }));
 
 vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: { getSubscription: mockGetSubscription },
 }));
-vi.mock('@/lib/services/active-workspace-service', () => ({
+vi.mock('@/lib/services/active-workspace-service', async () => ({
+  ...(await vi.importActual<ActiveWorkspaceServiceModule>(
+    '@/lib/services/active-workspace-service',
+  )),
+
   resolveActiveOrganizationId: mockResolveActiveOrganizationId,
   resolveOrganizationMembershipId: vi.fn(),
 }));
-vi.mock('@/lib/managed-compute-gate', () => ({
+vi.mock('@/lib/managed-compute-gate', async () => ({
+  ...(await vi.importActual<ManagedComputeGateModule>('@/lib/managed-compute-gate')),
+
   buildWorkspaceFeatureGateResponse: mockWorkspaceFeatureGate,
 }));
 
 import { DELETE, GET, PUT } from '@/app/api/projects/[id]/route';
 import { GET as GET_PROJECTS, POST } from '@/app/api/projects/route';
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type CsrfModule = typeof import('@/lib/csrf');
+type LoggerModule = typeof import('@/lib/logger');
+type ApiAuthModule = typeof import('@/lib/api-auth');
+type NeonDbModule = typeof import('@/lib/server/neon-db');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type ProjectKnowledgeObjectStorageModule =
+  typeof import('@/lib/server/project-knowledge-object-storage');
+type ActiveWorkspaceServiceModule = typeof import('@/lib/services/active-workspace-service');
+type ManagedComputeGateModule = typeof import('@/lib/managed-compute-gate');
 
 const BASE_DB_ROW = {
   id: 'proj-1',
@@ -690,5 +721,3 @@ describe('POST /api/projects · round-10 fields', () => {
     expect(mockNeonQuery).not.toHaveBeenCalled();
   });
 });
-
-type ImportedModule0 = typeof import('@/lib/api-auth');

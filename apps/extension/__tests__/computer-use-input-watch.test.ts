@@ -125,7 +125,9 @@ describe('physical-input observation follows the run-owned tab', () => {
     expect(backgroundSource).toMatch(
       /commitTabTransition\(lease, transition, url\);\s*inputWatch\.retarget\(previousTabId\);/,
     );
-    expect(backgroundSource).toContain('void completion.finally(() => inputWatch.stop(cuTabId));');
+    expect(backgroundSource).toMatch(
+      /const cleanupActions: Array<\(\) => unknown> = \[\s*\(\) => inputWatch\.stop\(cuTabId\),/,
+    );
     expect(backgroundSource).not.toContain('watchComputerUseUserInput(cuTabId, false)');
   });
 });

@@ -15,20 +15,27 @@ const TRANSCRIPTION_MODEL = (() => {
 
 vi.mock('server-only', () => ({}));
 
-vi.mock('@/lib/api-auth', async (importOriginal) => ({
-  ...(await importOriginal<ImportedModule0>()),
+vi.mock('@/lib/api-auth', async () => ({
+  ...(await vi.importActual<ApiAuthModule>('@/lib/api-auth')),
+
   getClerkAuthUser: vi.fn(),
 }));
 
-vi.mock('@/lib/rate-limit', () => ({
+vi.mock('@/lib/rate-limit', async () => ({
+  ...(await vi.importActual<RateLimitModule>('@/lib/rate-limit')),
+
   withRateLimit: vi.fn(),
 }));
-vi.mock('@/lib/cors', () => ({
+vi.mock('@/lib/cors', async () => ({
+  ...(await vi.importActual<CorsModule>('@/lib/cors')),
+
   handleCorsPreflightRequest: vi.fn(),
   getCorsHeaders: vi.fn(),
   getSecurityHeaders: vi.fn(),
 }));
-vi.mock('@/lib/error-handler', () => ({
+vi.mock('@/lib/error-handler', async () => ({
+  ...(await vi.importActual<ErrorHandlerModule>('@/lib/error-handler')),
+
   withErrorHandler: <T extends (...a: unknown[]) => unknown>(handler: T) => handler,
 }));
 vi.mock('@/lib/server/neon-db', async (importOriginal) => {
@@ -38,7 +45,9 @@ vi.mock('@/lib/server/neon-db', async (importOriginal) => {
     getNeonDb: () => createDatabaseAdapterFake(),
   };
 });
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async () => ({
+  ...(await vi.importActual<LoggerModule>('@/lib/logger')),
+
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
@@ -52,6 +61,11 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { providerApiUrl } from '@/lib/server/provider-endpoints';
 import { POST } from '@/app/api/llm/v1/audio/transcriptions/route';
+type ApiAuthModule = typeof import('@/lib/api-auth');
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type CorsModule = typeof import('@/lib/cors');
+type ErrorHandlerModule = typeof import('@/lib/error-handler');
+type LoggerModule = typeof import('@/lib/logger');
 
 const TRANSCRIPTION_ENDPOINT = providerApiUrl('openai', 'audio/transcriptions');
 
@@ -130,5 +144,3 @@ describe('B4: audio MIME + magic-bytes validation', () => {
     expect(providerCalls()).toEqual([]);
   });
 });
-
-type ImportedModule0 = typeof import('@/lib/api-auth');

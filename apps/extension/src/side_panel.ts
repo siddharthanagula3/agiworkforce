@@ -1,3 +1,11 @@
+import { parseExplicitMemoryCommand } from '@agiworkforce/agent-core';
+import {
+  captureCallerBrowserContext,
+  parseCallerBrowserContext,
+  readCallerBrowserContext,
+  type CallerBrowserContext,
+} from './features/cloud-bridge/callerBrowserContext';
+import { prepareChatToolResults } from './features/computer-use/chatToolResults';
 import { loadContactAutofillProfile } from './features/content/autofill/profile-storage';
 import {
   createMessageQueue,
@@ -52,7 +60,10 @@ import {
   parseEditableSelectionTarget,
   type EditableSelectionTarget,
 } from './features/browser-tools/editableTarget';
-import { readPageDocument } from './features/browser-tools/documentBridge';
+import {
+  readPageDocument,
+  parseFormObservationReference,
+} from './features/browser-tools/documentBridge';
 import type { AdoptChatTurnResponse, BrowserContextTabReference } from './types';
 import { followThemePreference } from './features/appearance/themePreference';
 import { t, tPlural } from './i18n';
@@ -142,10 +153,12 @@ import { scheduleDraftFromChat, stageScheduleDraft } from './features/side-panel
 import {
   refreshManagedCloudRecentHistory,
   refreshManagedCloudConversationHistory,
+  forkManagedCloudConversationHistory,
   CloudHistoryTrustBoundaryError,
   CloudHistoryWorkspaceChangedError,
   CloudHistoryCacheWindowError,
   CloudHistoryUnavailableError,
+  type CloudHistoryPullOptions,
 } from './features/cloud-bridge/conversationHistoryPull';
 
 import { createChromeShareLink } from './features/cloud-bridge/shareClient';
@@ -235,7 +248,10 @@ import {
   clarifyAnswerMessage,
   clarifyAnswersFromResponse,
 } from './features/side-panel/interactiveCards';
-import type { AnswerFileAccess } from './features/side-panel/generatedFiles';
+import {
+  clearAnswerFilePreviews,
+  type AnswerFileAccess,
+} from './features/side-panel/generatedFiles';
 import {
   answerSourceLists,
   applyBrowserActivityEvent,
@@ -304,7 +320,6 @@ import {
 import {
   FilePen,
   Loader2,
-  Folder,
   ArrowUp,
   ExternalLink,
   Clock,
@@ -366,13 +381,15 @@ import {
 } from './features/side-panel/agiWorkPlanReview';
 import { buildHelpArticleLink, HELP_LINK_CSS } from './features/side-panel/helpLinks';
 import {
-  MEMORY_COMMAND_HINT,
   runAccountMemoryCommand,
   type MemoryCommandKind,
   type MemoryCommandRequest,
   type MemoryCommandResult,
 } from './features/cloud-bridge/memoryClient';
-import { createExtensionCloudChatClient } from './features/cloud-bridge/conversationSyncClient';
+import {
+  createExtensionCloudChatClient,
+  ManagedCloudOwnerChangedError,
+} from './features/cloud-bridge/conversationSyncClient';
 import { managedModelImageLimit } from './features/cloud-bridge/managedModelLimits';
 import {
   capabilityAllowed,
@@ -481,7 +498,11 @@ let refreshEffortUI: () => void = () => {
   /* no-op until buildUI() initialises the real implementation */
 };
 
-let openStoredConversation: (conversationId: string) => Promise<boolean> = async () => false;
+type HistoryOpenReason = 'navigation' | 'refresh';
+let openStoredConversation: (
+  conversationId: string,
+  reason?: HistoryOpenReason,
+) => Promise<boolean> = async () => false;
 
 const ACTIVE_PROJECT_KEY = 'agi_active_project';
 const PROJECT_NAME_CACHE_KEY = 'agi_project_names';
@@ -511,6 +532,7 @@ function hydrateProjectNameCache(value: unknown): void {
 
 let projectSelectionGeneration = 0;
 let historyRestoreInProgress = false;
+let openChatRefreshAbort: AbortController | null = null;
 let historyRestoreToken = 0;
 let invalidateConversationHistoryUI: () => void = () => {};
 let renderConversationTitle: () => void = () => {};
@@ -727,9 +749,7 @@ function setManagedCloudChatState(
       state === 'signed_out' ? t('spComposerPlaceholderSignedOut') : t('spComposerPlaceholder');
   }
   updateSendButton();
-  updateEmptyStateActions();
   if (becameReady) {
-    void refreshRecentProjects();
     checkPendingChat();
   }
 }
@@ -1086,6 +1106,7 @@ interface ComposerFile {
 }
 
 interface TurnPayload {
+  browserSource?: PageContextSource | null;
   prompt: string;
   pageText: string | null;
   capturePage: boolean;
@@ -1315,6 +1336,39 @@ function requestCloudConversationSync(conversationId = _ctx.conversationId): voi
   }
 }
 
+async function forkConversationForHistory(
+  owner: ManagedCloudOwner,
+  entry: ConversationEntry,
+  conversationId: string,
+  options: CloudHistoryPullOptions,
+  forkPointMessageId?: string,
+): Promise<ConversationEntry> {
+  if (!sameManagedCloudOwner(entry.owner, owner) || !options.isCurrent())
+    throw new ManagedCloudOwnerChangedError();
+  if (
+    entry.cloudSync?.conversationId ||
+    entry.messages.some(
+      (message) =>
+        message.runtime === 'managed-cloud' ||
+        message.cloudMessageId !== undefined ||
+        message.cloudAgentRun !== undefined,
+    )
+  ) {
+    if (!forkPointMessageId)
+      throw new Error('The saved fork point is unavailable. Refresh recent chats before retrying.');
+    return forkManagedCloudConversationHistory(
+      owner,
+      entry,
+      conversationId,
+      options,
+      forkPointMessageId,
+    );
+  }
+  const seeded = await persistConversationSeed(owner, conversationId, entry);
+  if (!seeded || !options.isCurrent()) throw new ManagedCloudOwnerChangedError();
+  return seeded;
+}
+
 async function loadMessages(): Promise<void> {
   const ownerAtStart = _ctx.managedCloudOwner;
   if (!ownerAtStart) return;
@@ -1416,7 +1470,12 @@ async function loadMessages(): Promise<void> {
     !sameManagedCloudOwner(_ctx.managedCloudOwner, ownerAtStart)
   )
     return;
-  let conversationOwner = await claimConversationOwner(scope, ownerAtStart, lastActive?.id);
+  let conversationOwner = await claimConversationOwner(
+    scope,
+    ownerAtStart,
+    lastActive?.id,
+    lastActive?.messages[lastActive.messages.length - 1]?.cloudMessageId,
+  );
   if (
     _ctx.conversationGeneration !== expectedGeneration ||
     !sameManagedCloudOwner(_ctx.managedCloudOwner, ownerAtStart)
@@ -1438,30 +1497,84 @@ async function loadMessages(): Promise<void> {
     if (!importIsCurrent()) return;
     ownedConversation = undefined;
   }
-  let active =
-    ownedConversation ??
-    (conversationOwner.seedConversationId && conversationOwner.seedConversationId === lastActive?.id
-      ? lastActive
-      : undefined);
-  _ctx.conversationId = conversationOwner.conversationId;
-  if (!active) return;
+  if (
+    conversationOwner.seedConversationId &&
+    ownedConversation?.cloudSync?.messagesLoaded === false
+  ) {
+    try {
+      ownedConversation = await refreshManagedCloudConversationHistory(
+        ownerAtStart,
+        ownedConversation,
+        {
+          isCurrent: importIsCurrent,
+          protectsConversation: (id) => id === _ctx.conversationId && _ctx.messages.length > 0,
+          signal: cloudHistoryOwnerAbort.signal,
+        },
+      );
+    } catch (error) {
+      if (importIsCurrent()) {
+        composerContextNotice =
+          error instanceof Error ? error.message : t('spHistoryRefreshFailed');
+        updateAttachmentPreview();
+      }
+      return;
+    }
+    if (!importIsCurrent()) return;
+  }
+  const forkSource =
+    conversationOwner.seedConversationId && !ownedConversation
+      ? await getConversation(ownerAtStart, conversationOwner.seedConversationId)
+      : undefined;
+  if (!importIsCurrent()) return;
+  let active = ownedConversation ?? forkSource;
+  if (!active) {
+    _ctx.conversationId = conversationOwner.conversationId;
+    return;
+  }
   if (
     !ownedConversation &&
     conversationOwner.seedConversationId &&
     active.id === conversationOwner.seedConversationId
   ) {
-    const persistedSeed = await persistConversationSeed(
-      ownerAtStart,
-      conversationOwner.conversationId,
-      active,
-    );
+    let persistedSeed: ConversationEntry;
+    try {
+      persistedSeed = await forkConversationForHistory(
+        ownerAtStart,
+        active,
+        conversationOwner.conversationId,
+        {
+          isCurrent: importIsCurrent,
+          protectsConversation: (id) => id === _ctx.conversationId,
+          signal: cloudHistoryOwnerAbort.signal,
+        },
+        conversationOwner.forkPointMessageId,
+      );
+    } catch (error) {
+      await restoreConversationOwnerIfCurrent(
+        scope,
+        ownerAtStart,
+        conversationOwner.conversationId,
+        _ctx.conversationId,
+      );
+      if (importIsCurrent()) {
+        composerContextNotice =
+          error instanceof Error ? error.message : t('spHistoryRefreshFailed');
+        updateAttachmentPreview();
+      }
+      return;
+    }
     if (
       _ctx.conversationGeneration !== expectedGeneration ||
       !sameManagedCloudOwner(_ctx.managedCloudOwner, ownerAtStart)
     )
       return;
-    if (persistedSeed) active = persistedSeed;
+    active = persistedSeed;
   }
+  if (conversationOwner.seedConversationId) {
+    await assignConversationOwner(scope, ownerAtStart, conversationOwner.conversationId);
+    if (!importIsCurrent()) return;
+  }
+  _ctx.conversationId = conversationOwner.conversationId;
   activePersistenceEntry = active;
   adoptChatProject(active.projectId);
   _ctx.selectedModel = normalizeModelId(active.routing.selectedModel) ?? 'auto';
@@ -1619,6 +1732,8 @@ function advanceConversationGeneration(): void {
 function clearStoredMessages(): void {
   historyRestoreToken += 1;
   historyRestoreInProgress = false;
+  openChatRefreshAbort?.abort();
+  openChatRefreshAbort = null;
   advanceConversationGeneration();
   _ctx.conversationId = createBrowserConversationId();
   leaveTemporaryChat();
@@ -1657,7 +1772,6 @@ function resetConversationView(): void {
   returnFollowUpsToComposer();
   _ctx.messages.length = 0;
   turnPayloadByMessageId.clear();
-  void refreshRecentProjects();
   _ctx.lastRenderedCount = 0;
   _ctx.needsMessageRebuild = true;
   clearPendingPageContext();
@@ -1686,8 +1800,11 @@ async function transitionManagedCloudOwner(nextOwner: ManagedCloudOwner | null):
   accountTasksSheet?.reset();
   accountCommandPalette?.close();
   resetAccountSkillMenu();
+  clearAnswerFilePreviews();
   historyRestoreToken += 1;
   historyRestoreInProgress = false;
+  openChatRefreshAbort?.abort();
+  openChatRefreshAbort = null;
   clearActivePersistenceState();
   advanceConversationGeneration();
   const browserRunAtOwnerTransition = composerBrowserRun;
@@ -1734,9 +1851,6 @@ async function transitionManagedCloudOwner(nextOwner: ManagedCloudOwner | null):
   projectSelectionGeneration += 1;
   delete _ctx.pendingProjectBinding;
   refreshProjectChip();
-  recentProjects = [];
-  recentProjectsGeneration += 1;
-  renderRecentProjects();
   if (previousOwner) {
     _ctx.selectedModel = 'auto';
     newChatModelSelection = 'auto';
@@ -2040,48 +2154,6 @@ function injectStyles(): void {
       text-align: center;
     }
     #sp-empty.hidden { display: none; }
-    .sp-empty-actions {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      width: min(100%, 360px);
-      margin-top: 6px;
-      text-align: left;
-    }
-    .sp-empty-actions[hidden] { display: none; }
-    .sp-empty-actions-title {
-      margin: 8px 0 0;
-      color: var(--agi-ext-text-muted);
-      font-size: var(--type-caption-size);
-      line-height: var(--type-caption-height);
-      font-weight: 500;
-    }
-    .sp-empty-actions-list { display: flex; flex-direction: column; gap: 6px; }
-    .sp-empty-action {
-      display: flex;
-      width: 100%;
-      min-height: 40px;
-      align-items: center;
-      gap: 10px;
-      padding: 8px 12px;
-      border: 1px solid var(--agi-ext-border);
-      border-radius: var(--corner-menu);
-      background: var(--agi-ext-surface);
-      color: var(--agi-ext-text);
-      font: inherit;
-      font-size: var(--type-label-size);
-      line-height: var(--type-label-height);
-      text-align: left;
-      cursor: pointer;
-    }
-    .sp-empty-action:hover { background: var(--agi-ext-hover); }
-    .sp-empty-action:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
-    .sp-empty-action > .agi-icon { color: var(--agi-ext-text-muted); }
-    .sp-empty-action[aria-pressed='true'] { border-color: var(--agi-ext-focus); }
-    .sp-empty-action-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    @media (pointer: coarse) {
-      .sp-empty-action { min-height: 44px; }
-    }
     #sp-empty-icon {
       display: none;
       align-items: center;
@@ -5449,6 +5521,8 @@ function resolveManagedToolApproval(
   chrome.runtime.sendMessage(
     {
       type: 'RESOLVE_CHAT_APPROVAL',
+      alreadyVisibleText: assistant.content,
+      historyConversationId: _ctx.conversationId,
       owner,
       clientInstanceId: SIDE_PANEL_CLIENT_INSTANCE_ID,
       id: assistant.id,
@@ -5548,6 +5622,8 @@ function resolveManagedToolInput(
   chrome.runtime.sendMessage(
     {
       type: 'RESOLVE_CHAT_INPUT',
+      alreadyVisibleText: assistant.content,
+      historyConversationId: _ctx.conversationId,
       owner,
       clientInstanceId: SIDE_PANEL_CLIENT_INSTANCE_ID,
       id: assistant.id,
@@ -5646,9 +5722,6 @@ function loadPromptShortcuts(): void {
   });
 }
 
-const RECENT_PROJECT_LIMIT = 3;
-let recentProjects: ActiveProjectSelection[] = [];
-let recentProjectsGeneration = 0;
 let chooseChatProject: (project: ActiveProjectSelection | null) => void = () => {};
 
 function renderEmptyGreeting(): void {
@@ -5663,60 +5736,6 @@ function renderEmptyGreeting(): void {
   icon?.classList.toggle('sp-empty-icon-hidden', signedIn);
 }
 
-function updateEmptyStateActions(): void {
-  const ready = managedCloudChatState === 'ready' && _ctx.managedCloudOwner !== null;
-  const projects = document.getElementById('sp-empty-projects');
-  if (projects) projects.hidden = !ready || recentProjects.length === 0;
-}
-
-function renderRecentProjects(): void {
-  const list = document.getElementById('sp-empty-projects-list');
-  if (!list) return;
-  clearChildren(list);
-  for (const project of recentProjects) {
-    const button = el('button', {
-      class: 'sp-empty-action',
-      type: 'button',
-      'aria-pressed': String(_ctx.activeProject?.id === project.id),
-    });
-    button.appendChild(renderIcon(Folder, 15));
-    button.appendChild(el('span', { class: 'sp-empty-action-label' }, project.name));
-    button.addEventListener('click', () => {
-      chooseChatProject(_ctx.activeProject?.id === project.id ? null : project);
-      document.getElementById('sp-input')?.focus();
-    });
-    list.appendChild(button);
-  }
-  updateEmptyStateActions();
-}
-
-async function refreshRecentProjects(): Promise<void> {
-  const owner = _ctx.managedCloudOwner;
-  const generation = ++recentProjectsGeneration;
-  if (!owner || managedCloudChatState !== 'ready') {
-    recentProjects = [];
-    renderRecentProjects();
-    return;
-  }
-  const result = await listChromeProjects();
-  if (
-    generation !== recentProjectsGeneration ||
-    !sameManagedCloudOwner(owner, _ctx.managedCloudOwner)
-  ) {
-    return;
-  }
-  recentProjects =
-    result.status === 'success'
-      ? [...result.projects]
-          .sort((left, right) =>
-            (right.lastUsedAt ?? right.updatedAt).localeCompare(left.lastUsedAt ?? left.updatedAt),
-          )
-          .slice(0, RECENT_PROJECT_LIMIT)
-          .map((project) => ({ id: project.id, name: project.name }))
-      : [];
-  renderRecentProjects();
-}
-
 function renderMessages(): void {
   renderConversationTitle();
   const container = document.getElementById('sp-messages')!;
@@ -5724,7 +5743,6 @@ function renderMessages(): void {
 
   if (_ctx.messages.length === 0) {
     if (emptyEl) emptyEl.classList.remove('hidden');
-    updateEmptyStateActions();
     container.querySelectorAll('.sp-msg, .sp-thinking-wrap').forEach((n) => n.remove());
     _ctx.lastRenderedCount = 0;
     _ctx.needsMessageRebuild = false;
@@ -6245,6 +6263,8 @@ async function capturePageContext(
       return { ok: false, reason: PAGE_CONTEXT_CHANGED_REASON };
     const capture = await readTabText(tab, selected !== undefined);
     if (!capture.ok) return capture;
+    if (selected?.documentId && capture.documentId !== selected.documentId)
+      return { ok: false, reason: PAGE_CONTEXT_CHANGED_REASON };
     const current = await chrome.tabs.get(tab.id);
     if (
       current.url !== tab.url ||
@@ -6673,6 +6693,7 @@ function resumeManagedCloudRun(
   chrome.runtime.sendMessage(
     {
       type: 'RESUME_CHAT_RUN',
+      historyConversationId: _ctx.conversationId,
       owner,
       clientInstanceId: SIDE_PANEL_CLIENT_INSTANCE_ID,
       id: streamId,
@@ -6705,6 +6726,7 @@ let stoppingStreamId: string | null = null;
 interface BrowserTaskOutcome {
   status: 'completed' | 'stopped' | 'error';
   message: string;
+  browserContext?: CallerBrowserContext;
 }
 
 interface ComposerBrowserRun {
@@ -6721,6 +6743,7 @@ interface ComposerBrowserRun {
   activityTimer: ReturnType<typeof setTimeout> | null;
   runGeneration: number | null;
   tabId: number | null;
+  windowId: number | null;
   translator: BrowserRunActivityTranslator;
   controls: BrowserTurnControls;
   pendingApprovals: Set<() => void>;
@@ -6801,6 +6824,7 @@ function finishComposerBrowserTask(
   content: string,
   failed = false,
   status: BrowserTaskOutcome['status'] = failed ? 'error' : 'completed',
+  browserContext?: CallerBrowserContext,
 ): void {
   if (composerBrowserRun !== run) return;
   if (run.activityTimer) clearTimeout(run.activityTimer);
@@ -6830,7 +6854,11 @@ function finishComposerBrowserTask(
     saveMessages();
     renderMessages();
   }
-  run.settle({ status, message: content });
+  run.settle({
+    status,
+    message: content,
+    ...(ownsConversation && status === 'completed' && browserContext ? { browserContext } : {}),
+  });
 }
 
 function noteComposerBrowserActivity(run: ComposerBrowserRun): void {
@@ -6895,7 +6923,10 @@ function cancelComposerBrowserTask(reason: 'user_stopped' | 'user_cleared' = 'us
 
 function startComposerBrowserTask(
   goal: string,
-  nested?: { messageId: string },
+  nested?: {
+    messageId: string;
+    callerHandoff?: import('./types').StartComputerUseMessage['callerHandoff'];
+  },
 ): Promise<BrowserTaskOutcome> {
   const owner = _ctx.managedCloudOwner;
   if (!owner || composerBrowserRun) {
@@ -6906,7 +6937,9 @@ function startComposerBrowserTask(
   }
   const selectedTabs = nested ? [] : pendingBrowserContextTabs.map((tab) => ({ ...tab }));
   const pageContext = nested ? null : _ctx.pendingPageContext;
-  const pageAtAdmission = nested ? null : activePageSource;
+  const pageAtAdmission = nested
+    ? (browserTurnMessage(nested.messageId)?.browserSource ?? null)
+    : activePageSource;
   const runId = `cu_run_${crypto.randomUUID()}`;
   const messageId = nested?.messageId ?? runId;
   let settle!: (outcome: BrowserTaskOutcome) => void;
@@ -6927,6 +6960,7 @@ function startComposerBrowserTask(
     activityTimer: null,
     runGeneration: null,
     tabId: null,
+    windowId: null,
     translator: new BrowserRunActivityTranslator(runId),
     controls: browserTurnControlsFor(messageId),
     pendingApprovals: new Set(),
@@ -6970,11 +7004,16 @@ function startComposerBrowserTask(
       if (typeof tab?.id !== 'number') {
         throw new Error('Could not determine the active tab. Please try again.');
       }
-      if (pageAtAdmission && !pageContextStillDescribes(pageAtAdmission, tab.id, tab.url ?? '')) {
+      if (
+        pageAtAdmission &&
+        (!pageContextStillDescribes(pageAtAdmission, tab.id, tab.url ?? '') ||
+          (pageAtAdmission.windowId !== undefined && pageAtAdmission.windowId !== tab.windowId))
+      ) {
         throw new Error(PAGE_CONTEXT_CHANGED_REASON);
       }
       run.startSent = true;
       run.tabId = tab.id;
+      run.windowId = typeof tab.windowId === 'number' ? tab.windowId : null;
       updateAgentPageIndicator();
       noteComposerBrowserActivity(run);
       const response = (await chrome.runtime.sendMessage({
@@ -6983,6 +7022,7 @@ function startComposerBrowserTask(
         goal,
         tabId: tab.id,
         modelSelection: run.modelSelection,
+        ...(nested?.callerHandoff ? { callerHandoff: nested.callerHandoff } : {}),
         ...(selectedTabs.length ? { selectedTabs, pageContext: pageContext ?? undefined } : {}),
         ...(_ctx.temporaryChat ? {} : { historyConversationId: run.conversationId }),
       })) as ComputerUseCommandResponse | undefined;
@@ -7159,6 +7199,28 @@ function applyComposerBrowserMessage(message: Record<string, unknown>): void {
     return;
   }
   if (status === 'completed' || status === 'stopped' || status === 'error') {
+    let browserContext: CallerBrowserContext | undefined;
+    if (status === 'completed' && message['browserContext'] !== undefined) {
+      if (!owns || run.cancelling || message['runGeneration'] !== run.runGeneration) return;
+      try {
+        browserContext = parseCallerBrowserContext(message['browserContext']);
+        if (
+          !browserContext.documentId ||
+          browserContext.tabId !== message['tabId'] ||
+          browserContext.windowId !== run.windowId
+        )
+          throw new Error('The completed browser task page could not be verified.');
+      } catch (error) {
+        finishComposerBrowserTask(
+          run,
+          error instanceof Error
+            ? error.message
+            : 'The completed browser task page could not be verified.',
+          true,
+        );
+        return;
+      }
+    }
     const reason = typeof message['reason'] === 'string' ? message['reason'] : null;
     const content =
       status === 'completed'
@@ -7169,6 +7231,7 @@ function applyComposerBrowserMessage(message: Record<string, unknown>): void {
       content,
       status === 'error',
       status === 'completed' ? 'completed' : status === 'stopped' ? 'stopped' : 'error',
+      browserContext,
     );
   }
 }
@@ -7364,6 +7427,16 @@ function hostLabel(origin: string): string {
   }
 }
 
+function browserTurnPageMatches(streamId: string, tab: chrome.tabs.Tab | undefined): boolean {
+  const source = browserTurnMessage(streamId)?.browserSource;
+  return (
+    !source ||
+    (source.tabId === tab?.id &&
+      source.url === tab?.url &&
+      (source.windowId === undefined || source.windowId === tab?.windowId))
+  );
+}
+
 async function requestBrowserSiteAccess(
   streamId: string,
   scope: SiteGrantScope,
@@ -7383,6 +7456,8 @@ async function requestBrowserSiteAccess(
   } catch {
     tab = undefined;
   }
+  if (!browserTurnPageMatches(streamId, tab))
+    return { status: 'unavailable', reason: PAGE_CONTEXT_CHANGED_REASON };
   const origin = webTabOrigin(tab);
   if (!origin || typeof tab?.id !== 'number') {
     return { status: 'unavailable', reason: PAGE_CONTEXT_BLOCKED_REASON };
@@ -7597,17 +7672,45 @@ function siteAccessRefusal(access: BrowserSiteAccess): string {
     : `${access.reason ?? 'This page cannot be used.'} Answer without it.`;
 }
 
+async function captureBrowserToolPage(
+  streamId: string,
+  tab: chrome.tabs.Tab | undefined,
+): Promise<PageContextCapture> {
+  if (
+    !browserTurnPageMatches(streamId, tab) ||
+    typeof tab?.id !== 'number' ||
+    typeof tab.windowId !== 'number' ||
+    !tab.url
+  )
+    return { ok: false, reason: PAGE_CONTEXT_CHANGED_REASON };
+  const assistant = browserTurnMessage(streamId);
+  const observation = assistant?.browserObservation ?? assistant?.browserContext;
+  const capture = await capturePageContext({
+    tabId: tab.id,
+    windowId: tab.windowId,
+    url: tab.url,
+    title: tab.title ?? '',
+    ...(observation?.tabId === tab.id && observation.url === tab.url
+      ? { documentId: observation.documentId }
+      : {}),
+  });
+  if (
+    capture.ok &&
+    (capture.source.tabId !== tab.id ||
+      capture.source.url !== tab.url ||
+      (observation?.tabId === tab.id &&
+        observation.url === tab.url &&
+        capture.documentId !== observation.documentId))
+  )
+    return { ok: false, reason: PAGE_CONTEXT_CHANGED_REASON };
+  return capture;
+}
+
 async function runReadPageTool(streamId: string, toolCallId: string): Promise<string> {
+  const startedAt = performance.now();
   let [tab] = await chrome.tabs.query(await activePageQuery()).catch((): chrome.tabs.Tab[] => []);
-  let access: BrowserSiteAccess = { status: 'granted' };
-  let capture = await capturePageContext();
-  if (!capture.ok && capture.reason === PAGE_CONTEXT_DENIED_REASON) {
-    access = await requestBrowserSiteAccess(streamId, 'read');
-    if (access.status !== 'granted') return siteAccessRefusal(access);
-    [tab] = await chrome.tabs.query(await activePageQuery()).catch((): chrome.tabs.Tab[] => []);
-    capture = await capturePageContext();
-  }
-  const host = hostLabel(webTabOrigin(tab) ?? (capture.ok ? capture.source.url : ''));
+  if (!browserTurnPageMatches(streamId, tab)) return PAGE_CONTEXT_CHANGED_REASON;
+  const host = hostLabel(webTabOrigin(tab) ?? '');
   recordBrowserActivity(streamId, [
     {
       type: 'tool-execution-start',
@@ -7618,9 +7721,37 @@ async function runReadPageTool(streamId: string, toolCallId: string): Promise<st
       input: null,
     },
   ]);
+  let ended = false;
+  const finish = (output: string, isError: boolean) => {
+    if (ended) return;
+    ended = true;
+    recordBrowserActivity(streamId, [
+      {
+        type: 'tool-execution-end',
+        toolCallId,
+        name: CHAT_READ_PAGE_TOOL,
+        output,
+        isError,
+        elapsedMs: Math.max(0, Math.round(performance.now() - startedAt)),
+      },
+    ]);
+  };
+  let access: BrowserSiteAccess = { status: 'granted' };
   try {
+    let capture = await captureBrowserToolPage(streamId, tab);
+    if (!capture.ok && capture.reason === PAGE_CONTEXT_DENIED_REASON) {
+      access = await requestBrowserSiteAccess(streamId, 'read');
+      if (access.status !== 'granted') {
+        const refusal = siteAccessRefusal(access);
+        finish(refusal, access.status !== 'declined');
+        return refusal;
+      }
+      [tab] = await chrome.tabs.query(await activePageQuery()).catch((): chrome.tabs.Tab[] => []);
+      capture = await captureBrowserToolPage(streamId, tab);
+    }
+    const verified = capture.ok && capture.source.tabId === tab?.id;
     const result =
-      capture.ok && capture.source.tabId === tab?.id
+      capture.ok && verified
         ? fencedToolResult(
             'page',
             `Title: ${capture.source.title ?? ''}\nAddress: ${capture.source.url}\n${capture.truncated ? '(The page text was shortened.)\n' : ''}\n${capture.text}`,
@@ -7628,16 +7759,8 @@ async function runReadPageTool(streamId: string, toolCallId: string): Promise<st
         : capture.ok
           ? PAGE_CONTEXT_CHANGED_REASON
           : capture.reason;
-    recordBrowserActivity(streamId, [
-      {
-        type: 'tool-execution-end',
-        toolCallId,
-        name: CHAT_READ_PAGE_TOOL,
-        output: capture.ok ? t('spBrowserStepDone') : result,
-        isError: !capture.ok,
-      },
-    ]);
-    if (capture.ok) {
+    finish(verified ? t('spBrowserStepDone') : result, !verified);
+    if (capture.ok && verified) {
       const assistant = browserTurnMessage(streamId);
       if (assistant) {
         assistant.browserObservation = formObservationReference(capture);
@@ -7648,6 +7771,9 @@ async function runReadPageTool(streamId: string, toolCallId: string): Promise<st
       }
     }
     return result;
+  } catch (error) {
+    finish('The page could not be read.', true);
+    throw error;
   } finally {
     await access.release?.();
   }
@@ -7750,7 +7876,23 @@ async function runHistorySearchTool(
   }
 }
 
-async function runBrowserTaskTool(streamId: string, goal: string): Promise<string> {
+async function runBrowserTaskTool(
+  streamId: string,
+  goal: string,
+  callerHandoff?: import('./types').StartComputerUseMessage['callerHandoff'],
+): Promise<string> {
+  const owner = _ctx.managedCloudOwner;
+  const generation = _ctx.conversationGeneration;
+  const assertCurrent = () => {
+    if (
+      !owner ||
+      _ctx.currentStreamId !== streamId ||
+      _ctx.conversationGeneration !== generation ||
+      !sameManagedCloudOwner(owner, _ctx.managedCloudOwner)
+    )
+      throw new Error('The browser task stopped or changed accounts.');
+  };
+  assertCurrent();
   const userRequest = _ctx.messages
     .slice()
     .reverse()
@@ -7761,7 +7903,26 @@ async function runBrowserTaskTool(streamId: string, goal: string): Promise<strin
   const access = await requestBrowserSiteAccess(streamId, 'act');
   if (access.status !== 'granted') return siteAccessRefusal(access);
   try {
-    const outcome = await startComposerBrowserTask(taskGoal, { messageId: streamId });
+    const outcome = await startComposerBrowserTask(taskGoal, {
+      messageId: streamId,
+      ...(callerHandoff ? { callerHandoff } : {}),
+    });
+    assertCurrent();
+    if (outcome.status === 'completed' && outcome.browserContext) {
+      const context = await readCallerBrowserContext(outcome.browserContext, assertCurrent);
+      assertCurrent();
+      if (!context.documentId)
+        throw new Error('The completed browser task has no document identity.');
+      const assistant = browserTurnMessage(streamId);
+      if (!assistant) throw new Error('The browser task conversation changed.');
+      assistant.browserContext = context;
+      assistant.browserSource = {
+        tabId: context.tabId,
+        windowId: context.windowId,
+        url: context.url,
+      };
+      delete assistant.browserObservation;
+    }
     const summary =
       outcome.status === 'completed'
         ? 'The browser task finished. Its report, written from untrusted page content:'
@@ -7780,7 +7941,7 @@ async function runFormFillTool(
   profile: import('./features/content/autofill/contactProfile').ContactAutofillProfile,
   fieldPlan?: import('./features/content/formFillPlan').FormFillPlan,
   replaceExisting?: boolean,
-  onVerified?: () => void,
+  onVerified?: (filledCount: number) => void,
 ): Promise<string> {
   const owner = _ctx.managedCloudOwner;
   const generation = _ctx.conversationGeneration;
@@ -7819,11 +7980,24 @@ async function runFormFillTool(
   try {
     assertCurrent();
     const tab = await chrome.tabs.get(access.tabId);
+    if (!browserTurnPageMatches(streamId, tab)) throw new Error(PAGE_CONTEXT_CHANGED_REASON);
     if (!tab.url || new URL(tab.url).origin !== access.origin)
       throw new Error('The application page changed before autofill.');
     assertCurrent();
     if (fieldPlan && (observation!.tabId !== access.tabId || observation!.url !== tab.url))
       throw new Error('The form source changed. Read the current page again.');
+    const context = browserTurnMessage(streamId)?.browserContext;
+    if (
+      context &&
+      (context.tabId !== access.tabId ||
+        context.windowId !== tab.windowId ||
+        context.url !== tab.url)
+    )
+      throw new Error('The form source changed. Read the current page again.');
+    const documentId =
+      observation?.tabId === access.tabId && observation.url === tab.url
+        ? observation.documentId
+        : context?.documentId;
     const request = fieldPlan
       ? {
           type: 'FILL_OBSERVED_FORM' as const,
@@ -7838,6 +8012,7 @@ async function runFormFillTool(
           type: 'FILL_APPLICATION_CONTACT',
           tabId: access.tabId,
           pageUrl: tab.url,
+          ...(documentId ? { documentId } : {}),
           profile,
           ...(replaceExisting !== undefined ? { replaceExisting } : {}),
           owner,
@@ -7857,7 +8032,7 @@ async function runFormFillTool(
       Number.isSafeInteger(response.filledCount) &&
       response.filledCount > 0
     )
-      onVerified?.();
+      onVerified?.(response.filledCount);
     const elapsedMs =
       typeof response.elapsedMs === 'number' &&
       Number.isSafeInteger(response.elapsedMs) &&
@@ -7914,13 +8089,75 @@ async function handleChatToolHandoff(message: ChatToolHandoffMessage): Promise<v
       (candidate) => candidate.id === streamId && candidate.streamCancellation !== undefined,
     ) &&
     sameManagedCloudOwner(owner, _ctx.managedCloudOwner);
+  if (message.recoveryContext) {
+    try {
+      const recovery = message.recoveryContext;
+      const assertRecovery = () => {
+        if (
+          !stillCurrent() ||
+          !message.callerCheckpoint ||
+          recovery.historyConversationId !== _ctx.conversationId ||
+          recovery.projectId !== (_ctx.activeProject?.id ?? null) ||
+          (cloudHistoryOrganizationId !== undefined &&
+            cloudHistoryOrganizationId !== recovery.organizationId)
+        )
+          throw new Error('The original browser task conversation or workspace changed.');
+      };
+      assertRecovery();
+      const context = await readCallerBrowserContext(recovery.browserContext, assertRecovery);
+      if (!context.documentId) throw new Error('The original browser document is unavailable.');
+      const observation =
+        recovery.observation === undefined
+          ? undefined
+          : parseFormObservationReference(recovery.observation);
+      if (
+        recovery.observation &&
+        (!observation ||
+          observation.tabId !== context.tabId ||
+          observation.url !== context.url ||
+          observation.documentId !== context.documentId)
+      )
+        throw new Error('The original form observation could not be recovered.');
+      const assistant = ensureStreamingAssistant(
+        streamId,
+        quickModeByStreamId.get(streamId) === true,
+      );
+      assistant.browserSource = {
+        tabId: context.tabId,
+        windowId: context.windowId,
+        url: context.url,
+      };
+      assistant.browserContext = context;
+      if (observation) assistant.browserObservation = observation;
+      else delete assistant.browserObservation;
+    } catch (error) {
+      await chrome.runtime
+        .sendMessage({
+          type: 'RESOLVE_CHAT_TOOLS',
+          owner,
+          clientInstanceId: SIDE_PANEL_CLIENT_INSTANCE_ID,
+          id: streamId,
+          handoffId: message.handoffId,
+          cancelled: true,
+        })
+        .catch(() => undefined);
+      if (stillCurrent())
+        handleStreamError(
+          streamId,
+          error instanceof Error
+            ? error.message
+            : 'The original browser task could not be recovered.',
+        );
+      return;
+    }
+  }
   if (_ctx.streamTimeoutHandle) {
     clearTimeout(_ctx.streamTimeoutHandle);
     _ctx.streamTimeoutHandle = null;
   }
   removeThinking();
   ensureStreamingAssistant(streamId, quickModeByStreamId.get(streamId) === true);
-  const results: Array<{ toolCallId: string; content: string }> = [];
+  const results: import('./features/computer-use/chatToolResults').ChatToolResult[] = [];
   const deadline = setTimeout(() => {
     dismissPendingSiteGrants();
     void taskSiteGrants.releaseTask(streamId);
@@ -7959,7 +8196,21 @@ async function handleChatToolHandoff(message: ChatToolHandoffMessage): Promise<v
                   )
                 : parsed.kind === 'search_history'
                   ? await runHistorySearchTool(streamId, parsed.toolCallId, parsed)
-                  : await runBrowserTaskTool(streamId, parsed.goal),
+                  : await runBrowserTaskTool(
+                      streamId,
+                      parsed.goal,
+                      message.callerCheckpoint
+                        ? {
+                            handoffId: message.handoffId,
+                            toolCallId: parsed.toolCallId,
+                            clientInstanceId: SIDE_PANEL_CLIENT_INSTANCE_ID,
+                            streamId,
+                          }
+                        : undefined,
+                    ),
+        ...(message.callerCheckpoint
+          ? { observation: browserTurnMessage(streamId)?.browserObservation ?? null }
+          : {}),
       });
     } catch (error) {
       results.push({
@@ -7977,16 +8228,34 @@ async function handleChatToolHandoff(message: ChatToolHandoffMessage): Promise<v
   if (!stillCurrent()) return;
   armManagedStreamInactivityWatchdog(streamId);
   showThinking();
+  let preparedResults: ResolveChatToolsMessage['results'];
+  try {
+    preparedResults = prepareChatToolResults(results, message.callerCheckpoint);
+  } catch (error) {
+    await chrome.runtime
+      .sendMessage({
+        type: 'RESOLVE_CHAT_TOOLS',
+        owner,
+        clientInstanceId: SIDE_PANEL_CLIENT_INSTANCE_ID,
+        id: streamId,
+        handoffId: message.handoffId,
+        cancelled: true,
+      })
+      .catch(() => undefined);
+    if (stillCurrent())
+      handleStreamError(
+        streamId,
+        error instanceof Error ? error.message : 'Browser result delivery failed.',
+      );
+    return;
+  }
   const response: ResolveChatToolsMessage = {
     type: 'RESOLVE_CHAT_TOOLS',
     owner,
     clientInstanceId: SIDE_PANEL_CLIENT_INSTANCE_ID,
     id: streamId,
     handoffId: message.handoffId,
-    results: results.map((result) => ({
-      toolCallId: result.toolCallId,
-      content: result.content.slice(0, MAX_CHAT_TOOL_RESULT_CHARS),
-    })),
+    results: preparedResults,
     ...(browserToolTier ? { browserToolTier } : {}),
     ...(browserHistory ? { browserHistory: true } : {}),
   };
@@ -8311,8 +8580,7 @@ function renderMemoryNotice(notice: ChatMemoryNotice | null): void {
 }
 
 function memoryCommandKindHint(message: string): MemoryCommandKind | undefined {
-  if (/\bforget\b/i.test(message)) return 'forget';
-  return /\bremember/i.test(message) ? 'remember' : undefined;
+  return parseExplicitMemoryCommand(message)?.kind;
 }
 
 async function runChatMemoryCommand(
@@ -8436,7 +8704,11 @@ async function ensureChatInAccount(owner: ManagedCloudOwner): Promise<boolean> {
 
 function dispatchTurn(userMsg: ChatMessage, payload: TurnPayload, quickMode: boolean): void {
   const owner = _ctx.managedCloudOwner!;
+  if (payload.browserSource === undefined)
+    payload.browserSource = activePageSource ? { ...activePageSource } : null;
   const streamId = beginManagedStream(quickMode);
+  if (payload.browserSource)
+    ensureStreamingAssistant(streamId, quickMode).browserSource = { ...payload.browserSource };
   const generation = _ctx.conversationGeneration;
   const isCurrent = (): boolean =>
     _ctx.currentStreamId === streamId &&
@@ -8494,7 +8766,7 @@ function continueTurnWithMemory(
   owner: ManagedCloudOwner,
   quickMode: boolean,
 ): void {
-  if (!MEMORY_COMMAND_HINT.test(payload.prompt)) {
+  if (!memoryCommandKindHint(payload.prompt)) {
     continueTurn(userMsg, payload, streamId, owner, quickMode);
     return;
   }
@@ -8517,7 +8789,18 @@ function continueTurn(
     postTurn(userMsg, payload, streamId, owner, quickMode, memoryCommand);
     return;
   }
-  const pageAtAdmission = activePageSource;
+  const pageAtAdmission = payload.browserSource ?? activePageSource;
+  if (
+    pageAtAdmission &&
+    !pageContextStillDescribes(
+      pageAtAdmission,
+      activePageSource?.tabId,
+      activePageSource?.url ?? '',
+    )
+  ) {
+    handleStreamError(streamId, PAGE_CONTEXT_CHANGED_REASON);
+    return;
+  }
   setThinkingLabel(t('spThinkingReadingPage'));
   capturePageContextWithSiteAccess(
     streamId,
@@ -8581,7 +8864,7 @@ function postTurn(
   memoryCommand?: ManagedMemoryCommandTurn,
 ): Promise<void> {
   const generation = _ctx.conversationGeneration;
-  const pageAtAdmission = activePageSource;
+  const pageAtAdmission = payload.browserSource ?? activePageSource;
   const isCurrent = (): boolean =>
     _ctx.currentStreamId === streamId &&
     _ctx.conversationGeneration === generation &&
@@ -8612,8 +8895,19 @@ function postTurn(
   ])
     .then(async ([, browserToolTier, browserHistory]) => {
       if (!isCurrent()) return;
+      if (
+        browserToolTier &&
+        pageAtAdmission &&
+        !pageContextStillDescribes(
+          pageAtAdmission,
+          activePageSource?.tabId,
+          activePageSource?.url ?? '',
+        )
+      ) {
+        handleStreamError(streamId, PAGE_CONTEXT_CHANGED_REASON);
+        return;
+      }
       let requestPayload = payload;
-      let browserConfirmationOnly = false;
       if (browserToolTier === 'act' && requestsSavedApplicationProfile(payload.prompt)) {
         const profile = await loadContactAutofillProfile();
         if (!isCurrent()) return;
@@ -8651,6 +8945,7 @@ function postTurn(
               return;
             }
             let result: string;
+            let nativeFillCount: number | undefined;
             try {
               result = await runFormFillTool(
                 streamId,
@@ -8658,8 +8953,9 @@ function postTurn(
                 profile,
                 undefined,
                 false,
-                () => {
-                  browserConfirmationOnly = true;
+                (filledCount) => {
+                  if (Number.isSafeInteger(filledCount) && filledCount > 0)
+                    nativeFillCount = filledCount;
                 },
               );
             } catch (error) {
@@ -8704,6 +9000,10 @@ function postTurn(
                 ...refreshed,
               });
             }
+            if (nativeFillCount !== undefined) {
+              completeVerifiedProfileFill(streamId, nativeFillCount);
+              return;
+            }
             contextParts.push(result);
           }
           requestPayload = {
@@ -8712,6 +9012,30 @@ function postTurn(
           };
         }
       }
+      if (browserToolTier && pageAtAdmission?.tabId !== undefined) {
+        const assistant = browserTurnMessage(streamId);
+        const observation = assistant?.browserObservation;
+        const browserContext = await captureCallerBrowserContext(
+          pageAtAdmission,
+          observation?.tabId === pageAtAdmission.tabId && observation.url === pageAtAdmission.url
+            ? observation.documentId
+            : undefined,
+          () => {
+            if (
+              !isCurrent() ||
+              !pageContextStillDescribes(
+                pageAtAdmission,
+                activePageSource?.tabId,
+                activePageSource?.url ?? '',
+              )
+            )
+              throw new Error(PAGE_CONTEXT_CHANGED_REASON);
+          },
+          await originHasHostPermission(new URL(pageAtAdmission.url).origin),
+        );
+        if (!isCurrent()) return;
+        if (assistant) assistant.browserContext = browserContext;
+      }
       sendChatTurn(
         streamId,
         owner,
@@ -8719,8 +9043,8 @@ function postTurn(
         history,
         quickMode,
         memoryCommand,
-        browserConfirmationOnly ? undefined : browserToolTier,
-        browserConfirmationOnly ? false : browserHistory,
+        browserToolTier,
+        browserHistory,
       );
     })
     .catch((error) => {
@@ -8744,6 +9068,12 @@ function sendChatTurn(
   chrome.runtime.sendMessage(
     {
       type: 'CHAT_MESSAGE',
+      ...(browserTurnMessage(streamId)?.browserObservation
+        ? { browserObservation: browserTurnMessage(streamId)!.browserObservation }
+        : {}),
+      ...(browserTurnMessage(streamId)?.browserContext
+        ? { browserContext: browserTurnMessage(streamId)!.browserContext }
+        : {}),
       owner,
       clientInstanceId: SIDE_PANEL_CLIENT_INSTANCE_ID,
       id: streamId,
@@ -8915,6 +9245,75 @@ function agiWorkPlanReviewOption(
           }),
     },
   };
+}
+
+function finishVisibleChatTurn(streamId: string): void {
+  const owner = ownerByStreamId.get(streamId);
+  if (_ctx.currentStreamId !== streamId || !sameManagedCloudOwner(owner, _ctx.managedCloudOwner))
+    return;
+  pendingManagedAdmissions.delete(streamId);
+  void taskSiteGrants.releaseTask(streamId);
+  if (quotaWarnedStreamIds.has(streamId)) {
+    quotaWarnedStreamIds.delete(streamId);
+    void refreshCloudAccountUI();
+  }
+  resolvedRouteByStreamId.delete(streamId);
+  quickModeByStreamId.delete(streamId);
+  ownerByStreamId.delete(streamId);
+  stopManagedChatKeepalive();
+  if (_ctx.streamTimeoutHandle) {
+    clearTimeout(_ctx.streamTimeoutHandle);
+    _ctx.streamTimeoutHandle = null;
+  }
+  const existing = _ctx.messages.find((m) => m.id === streamId);
+  const startedAt = streamStartedAtById.get(streamId);
+  if (existing) {
+    existing.streaming = false;
+    if (startedAt !== undefined) existing.durationMs = Math.max(0, Date.now() - startedAt);
+    const cloudRun = cloudRunsByStreamId.get(streamId);
+    if (cloudRun) existing.cloudAgentRun = { ...cloudRun };
+    reconcileManagedRunActivity(existing);
+    const assistantCloudId = assistantCloudIdByStreamId.get(streamId);
+    if (assistantCloudId && !existing.cloudMessageId) existing.cloudMessageId = assistantCloudId;
+    if (isEmptyAssistantTurn(existing)) {
+      existing.error = true;
+      existing.errorText = t('spEmptyResponse');
+    }
+  }
+  streamStartedAtById.delete(streamId);
+  assistantCloudIdByStreamId.delete(streamId);
+  cloudRunsByStreamId.delete(streamId);
+  removeThinking();
+  _ctx.isStreaming = false;
+  _ctx.currentStreamId = null;
+  updateSendButton();
+  _ctx.needsMessageRebuild = true;
+  saveMessages();
+  renderMessages();
+  approveToolsAllowedForChat(streamId);
+  sendNextFollowUp();
+}
+
+function completeVerifiedProfileFill(streamId: string, filledCount: number): void {
+  const message = browserTurnMessage(streamId);
+  if (
+    !message ||
+    _ctx.currentStreamId !== streamId ||
+    !pendingManagedAdmissions.has(streamId) ||
+    !sameManagedCloudOwner(ownerByStreamId.get(streamId), _ctx.managedCloudOwner) ||
+    !Number.isSafeInteger(filledCount) ||
+    filledCount <= 0
+  )
+    return;
+  message.content = t('spSavedProfileFillComplete', [String(filledCount)]);
+  delete message.model;
+  delete message.provider;
+  delete message.autoRouteReason;
+  delete message.movedFromModel;
+  const assistantCloudId = assistantCloudIdByStreamId.get(streamId);
+  if (assistantCloudId && !message.cloudMessageId) message.cloudMessageId = assistantCloudId;
+  recordBrowserActivity(streamId, [new BrowserRunActivityTranslator(streamId).state('completed')]);
+  finishVisibleChatTurn(streamId);
 }
 
 function handleStreamError(
@@ -9823,9 +10222,12 @@ function dropPageContextOnNavigation(tabId: number | undefined, url: string): vo
 
 let refreshComputerUseSiteHook: () => void = () => {};
 
-function updateActivePage(url: string, tabId?: number): void {
+function updateActivePage(url: string, tabId?: number, windowId?: number): void {
   dropPageContextOnNavigation(tabId, url);
-  activePageSource = typeof tabId === 'number' ? { tabId, url } : null;
+  activePageSource =
+    typeof tabId === 'number'
+      ? { tabId, url, ...(typeof windowId === 'number' ? { windowId } : {}) }
+      : null;
   currentPageHostname = pageChipLabel(url);
   setBlockedState(isRestrictedPageUrl(url));
   updateAgentPageIndicator();
@@ -9867,7 +10269,6 @@ function setBlockedState(blocked: boolean): void {
       : t('spContextBtnUnavailable');
   }
   updateSendButton();
-  updateEmptyStateActions();
 }
 
 let agentPageIndicatorRequest = 0;
@@ -9908,7 +10309,7 @@ function refreshPageHostname(): void {
         if (chrome.runtime.lastError) return;
         const tab = tabs[0];
         const url = tab?.url ?? '';
-        updateActivePage(url, tab?.id);
+        updateActivePage(url, tab?.id, tab?.windowId);
       }),
     );
   } catch {
@@ -10591,7 +10992,6 @@ function buildUI(): void {
 
   function renderProjectChip(): void {
     const project = _ctx.activeProject;
-    renderRecentProjects();
     if (!project) {
       projectChip.hidden = true;
       return;
@@ -10697,17 +11097,49 @@ function buildUI(): void {
       : remote;
   }
 
-  async function restoreHistoryEntry(conversationId: string): Promise<boolean> {
+  async function restoreHistoryEntry(
+    conversationId: string,
+    reason: HistoryOpenReason = 'navigation',
+  ): Promise<boolean> {
     const ownerAtStart = _ctx.managedCloudOwner;
-    if (!ownerAtStart || _ctx.isStreaming || historyRestoreInProgress) return false;
+    const background = reason === 'refresh';
+    if (
+      !ownerAtStart ||
+      _ctx.isStreaming ||
+      historyRestoreInProgress ||
+      (background && openChatRefreshAbort)
+    )
+      return false;
+    const requestAbort = new AbortController();
+    if (background) openChatRefreshAbort = requestAbort;
+    else {
+      openChatRefreshAbort?.abort();
+      openChatRefreshAbort = null;
+    }
+    const restoreSignal = AbortSignal.any([cloudHistoryOwnerAbort.signal, requestAbort.signal]);
     const restoreToken = ++historyRestoreToken;
     const restoreGeneration = _ctx.conversationGeneration;
+    const refreshModel = _ctx.selectedModel;
+    const refreshEffort = _ctx.reasoningEffort;
+    const refreshProjectId = _ctx.activeProject?.id;
     const restoreIsCurrent = (): boolean =>
       historyRestoreToken === restoreToken &&
       _ctx.conversationGeneration === restoreGeneration &&
       sameManagedCloudOwner(_ctx.managedCloudOwner, ownerAtStart) &&
-      !_ctx.isStreaming;
-    historyRestoreInProgress = true;
+      !_ctx.isStreaming &&
+      !restoreSignal.aborted &&
+      (!background ||
+        (_ctx.conversationId === conversationId &&
+          _ctx.selectedModel === refreshModel &&
+          _ctx.reasoningEffort === refreshEffort &&
+          _ctx.activeProject?.id === refreshProjectId &&
+          !hasUnconfirmedStreamCancellation() &&
+          !_ctx.pendingPageContext &&
+          !editableRewrites.hasActiveEdits() &&
+          document.getElementById('sp-recents')?.hidden !== false &&
+          !document.getElementById('sp-chat-panel')?.classList.contains('sp-tab-hidden') &&
+          !(document.getElementById('sp-input') as HTMLTextAreaElement | null)?.value.trim()));
+    if (!background) historyRestoreInProgress = true;
     updateSendButton();
     try {
       let entry = await getConversation(ownerAtStart, conversationId);
@@ -10725,7 +11157,7 @@ function buildUI(): void {
                 Boolean(
                   (document.getElementById('sp-input') as HTMLTextAreaElement | null)?.value.trim(),
                 )),
-            signal: cloudHistoryOwnerAbort.signal,
+            signal: restoreSignal,
           });
         } catch (error) {
           if (restoreIsCurrent())
@@ -10743,7 +11175,14 @@ function buildUI(): void {
         }
       }
       if (!entry || !restoreIsCurrent()) return false;
-      const conversationOwner = await claimSelectedConversationOwner(scope, ownerAtStart, entry.id);
+      const conversationOwner = background
+        ? { conversationId, forked: false, forkPointMessageId: undefined }
+        : await claimSelectedConversationOwner(
+            scope,
+            ownerAtStart,
+            entry.id,
+            entry.messages[entry.messages.length - 1]?.cloudMessageId,
+          );
       if (!restoreIsCurrent()) {
         await restoreConversationOwnerIfCurrent(
           scope,
@@ -10752,6 +11191,38 @@ function buildUI(): void {
           _ctx.conversationId,
         );
         return false;
+      }
+      if (conversationOwner.forked) {
+        try {
+          entry = await forkConversationForHistory(
+            ownerAtStart,
+            entry,
+            conversationOwner.conversationId,
+            {
+              isCurrent: () => restoreIsCurrent() && _ctx.conversationScope === scope,
+              protectsConversation: (id) => id === _ctx.conversationId,
+              signal: restoreSignal,
+            },
+            conversationOwner.forkPointMessageId,
+          );
+        } catch (error) {
+          await restoreConversationOwnerIfCurrent(
+            scope,
+            ownerAtStart,
+            conversationOwner.conversationId,
+            _ctx.conversationId,
+          );
+          throw error;
+        }
+        if (!restoreIsCurrent()) {
+          await restoreConversationOwnerIfCurrent(
+            scope,
+            ownerAtStart,
+            conversationOwner.conversationId,
+            _ctx.conversationId,
+          );
+          return false;
+        }
       }
       if (_ctx.streamTimeoutHandle) {
         clearTimeout(_ctx.streamTimeoutHandle);
@@ -10772,7 +11243,7 @@ function buildUI(): void {
       leaveTemporaryChat();
       adoptChatProject(entry.projectId);
       if (conversationOwner.forked) _ctx.pendingProjectBinding = entry.projectId ?? null;
-      activePersistenceEntry = conversationOwner.forked ? undefined : entry;
+      activePersistenceEntry = entry;
       _ctx.selectedModel = normalizeModelId(entry.routing.selectedModel) ?? 'auto';
       _ctx.currentModelKey = entry.routing.currentModelKey;
       _ctx.previousTaskType = entry.routing.previousTaskType;
@@ -10798,7 +11269,7 @@ function buildUI(): void {
       updateContextButton();
       updateSendButton();
       renderMessages();
-      scrollToBottom();
+      if (!background) scrollToBottom();
       const expectedGeneration = _ctx.conversationGeneration;
       if (conversationOwner.forked) {
         try {
@@ -10817,7 +11288,8 @@ function buildUI(): void {
       return true;
     } finally {
       if (historyRestoreToken === restoreToken) {
-        historyRestoreInProgress = false;
+        if (background && openChatRefreshAbort === requestAbort) openChatRefreshAbort = null;
+        if (!background) historyRestoreInProgress = false;
         updateSendButton();
       }
     }
@@ -10826,11 +11298,14 @@ function buildUI(): void {
   // Install the module-scope hook so notification clicks, the boot sequence and
   // the Workflows task rows can open a stored background result through the
   // same restore path a history entry uses.
-  openStoredConversation = async (conversationId: string): Promise<boolean> => {
+  openStoredConversation = async (
+    conversationId: string,
+    reason: HistoryOpenReason = 'navigation',
+  ): Promise<boolean> => {
     try {
-      const restored = await restoreHistoryEntry(conversationId);
+      const restored = await restoreHistoryEntry(conversationId, reason);
       if (!restored) return false;
-      switchTab('chat');
+      if (reason === 'navigation') switchTab('chat');
       return true;
     } catch (err) {
       console.warn('[SidePanel] failed to open stored conversation:', err);
@@ -11832,6 +12307,8 @@ function buildUI(): void {
     historyBtn.focus();
   }
   function openRecents(): void {
+    openChatRefreshAbort?.abort();
+    openChatRefreshAbort = null;
     const revision = ++recentsOpenRevision;
     recentsSheet.hidden = false;
     showingArchived = false;
@@ -12424,24 +12901,6 @@ function buildUI(): void {
   }
   emptyState.appendChild(emptyIcon);
   emptyState.appendChild(el('h2', { id: 'sp-empty-greeting', hidden: '' }));
-  const recentProjectsGroup = el('div', {
-    id: 'sp-empty-projects',
-    class: 'sp-empty-actions',
-    role: 'group',
-    'aria-labelledby': 'sp-empty-projects-title',
-    hidden: '',
-  });
-  recentProjectsGroup.appendChild(
-    el(
-      'h2',
-      { class: 'sp-empty-actions-title', id: 'sp-empty-projects-title' },
-      t('spRecentProjectsTitle'),
-    ),
-  );
-  recentProjectsGroup.appendChild(
-    el('div', { id: 'sp-empty-projects-list', class: 'sp-empty-actions-list' }),
-  );
-  emptyState.appendChild(recentProjectsGroup);
   chooseChatProject = (project) => selectActiveProject(project);
   msgsArea.appendChild(emptyState);
 
@@ -14194,6 +14653,9 @@ function buildUI(): void {
 
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
+    if (changes[BROWSER_STORE_KEY] && !recentsSheet.hidden && !recentsRefreshAbort) {
+      void refreshDrawerHistory().catch(() => showHistoryStatus(t('spHistoryRefreshFailed')));
+    }
     const change = changes[ASK_BEFORE_ACTING_KEY];
     if (!change) return;
     const mode = readBrowserPermissionMode(change.newValue);
@@ -14673,48 +15135,7 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
     if (!chunk.done) saveStreamCheckpoint();
   }
 
-  if (chunk.done) {
-    void taskSiteGrants.releaseTask(chunk.id);
-    if (quotaWarnedStreamIds.has(chunk.id)) {
-      quotaWarnedStreamIds.delete(chunk.id);
-      void refreshCloudAccountUI();
-    }
-    resolvedRouteByStreamId.delete(chunk.id);
-    quickModeByStreamId.delete(chunk.id);
-    ownerByStreamId.delete(chunk.id);
-    stopManagedChatKeepalive();
-    if (_ctx.streamTimeoutHandle) {
-      clearTimeout(_ctx.streamTimeoutHandle);
-      _ctx.streamTimeoutHandle = null;
-    }
-    const existing = _ctx.messages.find((m) => m.id === chunk.id);
-    const startedAt = streamStartedAtById.get(chunk.id);
-    if (existing) {
-      existing.streaming = false;
-      if (startedAt !== undefined) existing.durationMs = Math.max(0, Date.now() - startedAt);
-      const cloudRun = cloudRunsByStreamId.get(chunk.id);
-      if (cloudRun) existing.cloudAgentRun = { ...cloudRun };
-      reconcileManagedRunActivity(existing);
-      const assistantCloudId = assistantCloudIdByStreamId.get(chunk.id);
-      if (assistantCloudId && !existing.cloudMessageId) existing.cloudMessageId = assistantCloudId;
-      if (isEmptyAssistantTurn(existing)) {
-        existing.error = true;
-        existing.errorText = t('spEmptyResponse');
-      }
-    }
-    streamStartedAtById.delete(chunk.id);
-    assistantCloudIdByStreamId.delete(chunk.id);
-    cloudRunsByStreamId.delete(chunk.id);
-    removeThinking();
-    _ctx.isStreaming = false;
-    _ctx.currentStreamId = null;
-    updateSendButton();
-    _ctx.needsMessageRebuild = true;
-    saveMessages();
-    renderMessages();
-    approveToolsAllowedForChat(chunk.id);
-    sendNextFollowUp();
-  }
+  if (chunk.done) finishVisibleChatTurn(chunk.id);
 });
 
 injectStyles();
@@ -14749,6 +15170,9 @@ function refreshOpenAccountChatOnReturn(): void {
   const composer = document.getElementById('sp-input') as HTMLTextAreaElement | null;
   if (
     managedCloudChatState === 'signed_out' ||
+    historyRestoreInProgress ||
+    openChatRefreshAbort ||
+    document.getElementById('sp-recents')?.hidden === false ||
     _ctx.isStreaming ||
     tabCleanupInProgress ||
     _ctx.temporaryChat ||
@@ -14762,7 +15186,7 @@ function refreshOpenAccountChatOnReturn(): void {
   )
     return;
   lastOpenChatRefreshOnReturn = Date.now();
-  void openStoredConversation(_ctx.conversationId);
+  void openStoredConversation(_ctx.conversationId, 'refresh');
 }
 function refreshAccountOnReturn(): void {
   if (!isBrowserUserActive()) return;

@@ -12,6 +12,7 @@
  */
 
 import { describe, expect, it, vi } from 'vitest';
+type FreeTrialClientModule = typeof import('../src/features/cloud-bridge/freeTrialClient');
 
 const clerkOpenSignIn = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 const accountRefresh = vi.hoisted(() =>
@@ -86,7 +87,8 @@ const chromeHarness = vi.hoisted(() => {
   return { storageSet };
 });
 
-vi.mock('../src/features/cloud-bridge/freeTrialClient', () => ({
+vi.mock('../src/features/cloud-bridge/freeTrialClient', async (importOriginal) => ({
+  ...(await importOriginal<FreeTrialClientModule>()),
   FREE_TRIAL_GATEWAY: 'https://agiworkforce.com',
   getAuthToken: vi.fn().mockResolvedValue(null),
   signOutOfAccount: vi.fn().mockResolvedValue({ webSessionEnded: true }),

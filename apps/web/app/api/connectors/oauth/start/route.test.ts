@@ -26,22 +26,32 @@ vi.mock('@/lib/auth/email-confirmation', async (importOriginal) => ({
   ...(await importOriginal()),
   readPrimaryEmailState: vi.fn(async () => ({ confirmed: true, email: 'person@example.com' })),
 }));
-vi.mock('@/lib/api-auth', async (importOriginal) => ({
-  ...(await importOriginal<ImportedModule0>()),
+vi.mock('@/lib/api-auth', async () => ({
+  ...(await vi.importActual<ApiAuthModule>('@/lib/api-auth')),
+
   isAccountUnavailableError: vi.fn(() => false),
   getClerkAuthUser: (...a: unknown[]) => mocks.authUser(...a),
 }));
-vi.mock('@/lib/server/rls-db', () => ({
+vi.mock('@/lib/server/rls-db', async () => ({
+  ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
+
   getUserScopedDb: async (...a: unknown[]) => {
     const { userId } = (await mocks.authUser(...a)) as { userId: string };
     return { db: { query: vi.fn(), execute: vi.fn() }, userId, organizationId: null };
   },
 }));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/rate-limit', async () => ({
+  ...(await vi.importActual<RateLimitModule>('@/lib/rate-limit')),
+  withRateLimit: vi.fn(async () => null),
+}));
+vi.mock('@/lib/logger', async () => ({
+  ...(await vi.importActual<LoggerModule>('@/lib/logger')),
+
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/connectors/oauth-store', () => ({
+vi.mock('@/lib/connectors/oauth-store', async () => ({
+  ...(await vi.importActual<OauthStoreModule>('@/lib/connectors/oauth-store')),
+
   markAppReturn: (...a: unknown[]) => mocks.markAppReturn(...a),
   getUserConnectorOAuthGrantSummaries: vi.fn(async () => []),
   listConnectorAccounts: (...a: unknown[]) => mocks.listAccounts(...a),
@@ -51,6 +61,11 @@ vi.mock('@/lib/connectors/oauth-store', () => ({
 
 import { GET } from './route';
 import { __resetConnectorOAuthRegistryCacheForTests } from '@/lib/connectors/oauth-registry';
+type ApiAuthModule = typeof import('@/lib/api-auth');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type LoggerModule = typeof import('@/lib/logger');
+type OauthStoreModule = typeof import('@/lib/connectors/oauth-store');
 
 type TypesModule = typeof import('@agiworkforce/types');
 
@@ -321,5 +336,3 @@ describe('GET /api/connectors/oauth/start while connectors are coming soon', () 
     expect(mocks.createPending).not.toHaveBeenCalled();
   });
 });
-
-type ImportedModule0 = typeof import('@/lib/api-auth');

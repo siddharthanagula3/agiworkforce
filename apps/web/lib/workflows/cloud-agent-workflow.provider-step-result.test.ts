@@ -161,6 +161,7 @@ describe('parseCloudAgentToolResult', () => {
     return {
       content: 'done',
       isError: false,
+      retainedReference: '0190a000-0000-4000-8000-000000000009',
       searchOutcome: 'no_results',
       unavailable: false,
       unavailableFamily: 'execution',
@@ -187,6 +188,9 @@ describe('parseCloudAgentToolResult', () => {
 
   it('accepts the full shape ToolLoopToolResult actually returns, including generated files', () => {
     expect(() => parseCloudAgentToolResult(fullToolResult())).not.toThrow();
+    expect(parseCloudAgentToolResult(fullToolResult()).retainedReference).toBe(
+      fullToolResult().retainedReference,
+    );
   });
 
   it('refuses a negative Free tool spend carried across an invocation', () => {

@@ -165,6 +165,7 @@
     "artifact-library",
     "artifact-runtime",
     "bank-accounts",
+    "caller-tool-handoff",
     "capability-handshake",
     "chat-attachment-truncation",
     "chat-attachments",
@@ -245,6 +246,7 @@
     "sync",
     "terms-acceptance",
     "tool-approval-resume",
+    "tool-call-limits",
     "tool-events",
     "trigger-sources",
     "triggers",
@@ -253,5 +255,5 @@
     "web-search-allowance",
     "workspaces"
   ],
-  "generatedProtocolTypeCount": 480
+  "generatedProtocolTypeCount": 483
 }

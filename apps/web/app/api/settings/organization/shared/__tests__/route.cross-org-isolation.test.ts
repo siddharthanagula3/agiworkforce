@@ -11,21 +11,37 @@ const { mockQuery, mockNeonQuery, mockGetUserScopedDb } = vi.hoisted(() => ({
 }));
 
 const callerRole = vi.hoisted(() => ({ value: 'admin' as string }));
-vi.mock('@/lib/services/organization-permission-service', async (importOriginal) => ({
-  ...(await importOriginal<ImportedModule0>()),
+vi.mock('@/lib/services/organization-permission-service', async () => ({
+  ...(await vi.importActual<OrganizationPermissionServiceModule>(
+    '@/lib/services/organization-permission-service',
+  )),
+
   resolveOrganizationPermissions: vi.fn(async () =>
     callerRole.value === 'member'
       ? new Set(['content.read', 'content.share'])
       : new Set(['content.read', 'content.share', 'sharing.manage']),
   ),
 }));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/rate-limit', async () => ({
+  ...(await vi.importActual<RateLimitModule>('@/lib/rate-limit')),
+  withRateLimit: vi.fn(async () => null),
+}));
+vi.mock('@/lib/csrf', async () => ({
+  ...(await vi.importActual<CsrfModule>('@/lib/csrf')),
+  requireCsrfToken: vi.fn(async () => null),
+}));
+vi.mock('@/lib/logger', async () => ({
+  ...(await vi.importActual<LoggerModule>('@/lib/logger')),
+
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mockGetUserScopedDb }));
-vi.mock('@/lib/server/neon-db', () => ({
+vi.mock('@/lib/server/rls-db', async () => ({
+  ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
+  getUserScopedDb: mockGetUserScopedDb,
+}));
+vi.mock('@/lib/server/neon-db', async () => ({
+  ...(await vi.importActual<NeonDbModule>('@/lib/server/neon-db')),
+
   getNeonDb: vi.fn(() => ({ query: (...args: unknown[]) => mockNeonQuery(...args) })),
 }));
 
@@ -41,6 +57,13 @@ vi.mock('@/lib/services/org-entitlements', async (importOriginal) => ({
 
 import { GET } from '../route';
 import { DELETE as UNSHARE_PROJECT, PUT as SHARE_PROJECT } from '../projects/[projectId]/route';
+type OrganizationPermissionServiceModule =
+  typeof import('@/lib/services/organization-permission-service');
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type CsrfModule = typeof import('@/lib/csrf');
+type LoggerModule = typeof import('@/lib/logger');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type NeonDbModule = typeof import('@/lib/server/neon-db');
 
 const ORG_A = '11111111-1111-4111-8111-111111111111';
 const ORG_B = '22222222-2222-4222-8222-222222222222';
@@ -203,5 +226,3 @@ describe('organization shared surface · cross-org isolation', () => {
     expect(insert).toBeUndefined();
   });
 });
-
-type ImportedModule0 = typeof import('@/lib/services/organization-permission-service');

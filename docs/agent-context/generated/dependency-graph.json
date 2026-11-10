@@ -207,6 +207,10 @@
       },
       {
         "from": "@agiworkforce/extension",
+        "to": "@agiworkforce/agent-core"
+      },
+      {
+        "from": "@agiworkforce/extension",
         "to": "@agiworkforce/artifacts"
       },
       {

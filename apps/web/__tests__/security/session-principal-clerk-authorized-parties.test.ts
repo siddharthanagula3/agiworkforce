@@ -18,16 +18,21 @@ vi.mock('@clerk/backend', () => ({
   verifyToken: (...args: unknown[]) => mockVerifyToken(...args),
 }));
 
-vi.mock('@/lib/api-auth', async (importOriginal) => ({
-  ...(await importOriginal<ImportedModule0>()),
+vi.mock('@/lib/api-auth', async () => ({
+  ...(await vi.importActual<ApiAuthModule>('@/lib/api-auth')),
+
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
 
-vi.mock('@/lib/server/rls-db', () => ({
+vi.mock('@/lib/server/rls-db', async () => ({
+  ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
+
   getUserScopedDb: (...args: unknown[]) => mockGetUserScopedDb(...args),
 }));
 
 import { resolveSessionsPrincipal } from '@/app/api/settings/sessions/session-principal';
+type ApiAuthModule = typeof import('@/lib/api-auth');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
 
 const DEPLOYMENT_ORIGIN = 'https://app.agiworkforce.test';
 const BEARER = 'clerk.session.jwt';
@@ -99,5 +104,3 @@ describe('resolveSessionsPrincipal binds Clerk bearer verification to an authori
     expect(principal).toMatchObject({ userId: 'user_sessions_1', currentSessionId: null });
   });
 });
-
-type ImportedModule0 = typeof import('@/lib/api-auth');

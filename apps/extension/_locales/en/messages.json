@@ -1469,10 +1469,6 @@
     "message": "Reconnecting…",
     "description": "Status while the panel reattaches to an answer after the connection dropped"
   },
-  "spRecentProjectsTitle": {
-    "message": "Start in a project",
-    "description": "Heading above recent projects a new chat can start in"
-  },
   "spShortcutPromptPlaceholder": {
     "message": "Summarize the following in 3 bullet points:\n\n$INPUT$",
     "description": "Example prompt in the shortcut dialog; the placeholder marks where the user's own text goes",
@@ -4121,6 +4117,10 @@
   "spBrowserTaskStartAction": {
     "message": "Start task",
     "description": "Button that lets the browser task shown in the card begin."
+  },
+  "spSavedProfileFillComplete": {
+    "message": "Filled $COUNT$ fields from your saved profile without submitting.",
+    "placeholders": { "count": { "content": "$1" } }
   },
   "spBrowserTaskStartDeclined": {
     "message": "The user declined to start this browser task. Do not ask again in this answer; answer without it or say what the user can do.",

@@ -9,12 +9,16 @@ const admitManagedTurnSlot = () => ({
   active: 0,
   slot: { release: async () => {} },
 });
-vi.mock('@/lib/rate-limit', () => ({
+vi.mock('@/lib/rate-limit', async () => ({
+  ...(await vi.importActual<RateLimitModule>('@/lib/rate-limit')),
+
   withRateLimit: vi.fn().mockResolvedValue(null),
   acquireManagedTurnSlot: vi.fn(async () => admitManagedTurnSlot()),
 }));
 
-vi.mock('@/lib/csrf', () => ({
+vi.mock('@/lib/csrf', async () => ({
+  ...(await vi.importActual<CsrfModule>('@/lib/csrf')),
+
   requireCsrfToken: vi.fn().mockResolvedValue(null),
 }));
 
@@ -32,24 +36,31 @@ vi.mock('@/lib/server/neon-db', async (importOriginal) => {
     getNeonDb: () => createDatabaseAdapterFake(),
   };
 });
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async () => ({
+  ...(await vi.importActual<LoggerModule>('@/lib/logger')),
+
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock('@/lib/cors', () => ({
+vi.mock('@/lib/cors', async () => ({
+  ...(await vi.importActual<CorsModule>('@/lib/cors')),
+
   handleCorsPreflightRequest: vi.fn().mockReturnValue(null),
   getCorsHeaders: vi.fn().mockReturnValue({}),
   getSecurityHeaders: vi.fn().mockReturnValue({}),
   withCorsRoute: (handler: (...args: unknown[]) => unknown) => handler,
 }));
 
-vi.mock('@shared/utils/env', () => ({
+vi.mock('@shared/utils/env', async () => ({
+  ...(await vi.importActual<EnvModule>('@shared/utils/env')),
+
   requireEnv: vi.fn((k: string) => `mock-${k}`),
 }));
 
 const mockGetClerkAuthUser = vi.fn();
-vi.mock('@/lib/api-auth', async (importOriginal) => ({
-  ...(await importOriginal<ImportedModule0>()),
+vi.mock('@/lib/api-auth', async () => ({
+  ...(await vi.importActual<ApiAuthModule>('@/lib/api-auth')),
+
   isAccountUnavailableError: vi.fn(() => false),
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
   getAuthenticatedUser: vi.fn(),
@@ -64,7 +75,9 @@ vi.mock('@/lib/services/subscription-service', () => ({
 }));
 
 const mockCheckAvailable = vi.fn();
-vi.mock('@/lib/services/credit-service', () => ({
+vi.mock('@/lib/services/credit-service', async () => ({
+  ...(await vi.importActual<CreditServiceModule>('@/lib/services/credit-service')),
+
   MICROUSD_PER_LEDGER_CENT: 10_000,
   microusdFromLedgerCents: (cents: number) => Math.round(cents) * 10_000,
   ledgerCentsFromMicrousd: (microusd: number) => Math.floor((microusd + 5_000) / 10_000),
@@ -88,6 +101,13 @@ vi.mock('@/lib/llm-providers/factory', () => ({
 }));
 
 import { POST } from '@/app/api/llm/v1/chat/completions/route';
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type CsrfModule = typeof import('@/lib/csrf');
+type LoggerModule = typeof import('@/lib/logger');
+type CorsModule = typeof import('@/lib/cors');
+type EnvModule = typeof import('@shared/utils/env');
+type ApiAuthModule = typeof import('@/lib/api-auth');
+type CreditServiceModule = typeof import('@/lib/services/credit-service');
 
 function makeRequest(headers: Record<string, string> = {}): NextRequest {
   return new NextRequest('http://localhost/api/llm/v1/chat/completions', {
@@ -194,5 +214,3 @@ describe('POST /api/llm/v1/chat/completions · auth contract', () => {
     expect(mockSendRequest).not.toHaveBeenCalled();
   });
 });
-
-type ImportedModule0 = typeof import('@/lib/api-auth');

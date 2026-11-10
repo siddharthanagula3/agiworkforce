@@ -1,8 +1,10 @@
+import { parseTaskTabScope } from '../src/features/browser-tools/taskTabScope';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TaskTabs } from '../src/features/browser-tools/taskTabs';
 
 const tabs = vi.hoisted(() => new Map<number, chrome.tabs.Tab>());
 const updated = vi.hoisted(() => vi.fn());
+const documents = vi.hoisted(() => new Map<number, string>());
 
 vi.mock('../src/features/browser-tools/tabAuthority', () => ({
   authorizeBrowserToolUrl: vi.fn(async (url: string) => ({
@@ -29,11 +31,21 @@ function tab(id: number, url: string, active: boolean): chrome.tabs.Tab {
   };
 }
 
-function taskTabs() {
-  let current = 1;
+function taskTabs(
+  restoredTabs?: readonly {
+    tabId: number;
+    windowId: number;
+    url: string;
+    documentId: string;
+    closeable: boolean;
+  }[],
+  initialTabId = 1,
+) {
+  let current = initialTabId;
   const pending = new Map<symbol, number>();
   return new TaskTabs({
-    initialTabId: 1,
+    initialTabId,
+    restoredTabs,
     windowId: 7,
     currentTabId: () => current,
     assertCurrent: async () => undefined,
@@ -56,6 +68,8 @@ function taskTabs() {
 describe('task tabs activate only after their approved destination is verified', () => {
   beforeEach(() => {
     tabs.clear();
+    documents.clear();
+    documents.set(1, 'document-1');
     updated.mockReset();
     updated.mockImplementation(async (id: number, update: chrome.tabs.UpdateProperties) => {
       const target = tabs.get(id);
@@ -65,6 +79,11 @@ describe('task tabs activate only after their approved destination is verified',
     });
     tabs.set(1, tab(1, 'http://127.0.0.1:8765/act.html', true));
     vi.stubGlobal('chrome', {
+      scripting: {
+        executeScript: vi.fn(async ({ target }: { target: { tabId: number } }) => [
+          { documentId: documents.get(target.tabId), result: tabs.get(target.tabId)?.url },
+        ]),
+      },
       tabs: {
         get: vi.fn(async (id: number) => {
           const found = tabs.get(id);
@@ -74,6 +93,7 @@ describe('task tabs activate only after their approved destination is verified',
         create: vi.fn(async (create: chrome.tabs.CreateProperties) => {
           const created = tab(2, create.url ?? 'about:blank', false);
           tabs.set(2, created);
+          documents.set(2, 'document-2');
           return created;
         }),
         update: updated,
@@ -82,6 +102,132 @@ describe('task tabs activate only after their approved destination is verified',
         }),
       },
     });
+  });
+
+  it('restores task-created close authority without granting it to the original tab', async () => {
+    const first = taskTabs();
+    await first.execute(
+      await first.prepare('open_tab', { url: 'http://127.0.0.1:8765/opened.html' }),
+    );
+    const scope = await first.snapshot();
+    expect(scope).toEqual([
+      { tabId: 1, windowId: 7, url: tabs.get(1)!.url, documentId: 'document-1', closeable: false },
+      { tabId: 2, windowId: 7, url: tabs.get(2)!.url, documentId: 'document-2', closeable: true },
+    ]);
+    const restored = taskTabs(scope, 2);
+    await expect(restored.prepare('close_tab', { tabId: 1 })).rejects.toThrow('Only tabs created');
+    await restored.execute(await restored.prepare('close_tab', { tabId: 2, returnToTabId: 1 }));
+    expect(tabs.has(2)).toBe(false);
+    expect(tabs.get(1)?.active).toBe(true);
+  });
+
+  it('refuses a restored tab whose document reloaded without changing URL', async () => {
+    const first = taskTabs();
+    await first.execute(
+      await first.prepare('open_tab', { url: 'http://127.0.0.1:8765/opened.html' }),
+    );
+    const scope = await first.snapshot();
+    documents.set(2, 'reloaded-document');
+    const restored = taskTabs(scope, 2);
+    await expect(restored.prepare('close_tab', { tabId: 2, returnToTabId: 1 })).rejects.toThrow(
+      'page changed',
+    );
+    expect(tabs.has(2)).toBe(true);
+  });
+
+  it('does not close a document replaced after the close approval plan', async () => {
+    const tasks = taskTabs();
+    await tasks.execute(
+      await tasks.prepare('open_tab', { url: 'http://127.0.0.1:8765/opened.html' }),
+    );
+    const plan = await tasks.prepare('close_tab', { tabId: 2, returnToTabId: 1 });
+    documents.set(2, 'reloaded-after-plan');
+    await expect(tasks.execute(plan)).rejects.toThrow('document');
+    expect(tabs.has(2)).toBe(true);
+  });
+
+  it('does not open a new tab after its source document changed during approval', async () => {
+    const tasks = taskTabs();
+    const plan = await tasks.prepare('open_tab', { url: 'http://127.0.0.1:8765/opened.html' });
+    documents.set(1, 'reloaded-after-plan');
+    await expect(tasks.execute(plan)).rejects.toThrow('document');
+    expect(chrome.tabs.create).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { scope: [] },
+    {
+      scope: [
+        {
+          tabId: 1,
+          windowId: 7,
+          url: 'https://example.test',
+          documentId: 'document-1',
+          closeable: false,
+        },
+        {
+          tabId: 1,
+          windowId: 7,
+          url: 'https://example.test',
+          documentId: 'document-1',
+          closeable: true,
+        },
+      ],
+    },
+    { scope: [{ tabId: 1, windowId: 7, url: 'https://example.test', closeable: false }] },
+    {
+      scope: [
+        {
+          tabId: 1,
+          windowId: 7,
+          url: 'javascript:alert(1)',
+          documentId: 'document-1',
+          closeable: false,
+        },
+      ],
+    },
+  ])('rejects malformed task-tab snapshots %#', ({ scope }) => {
+    expect(() => parseTaskTabScope(scope)).toThrow();
+  });
+
+  it('refuses a task snapshot that omits the exact current document', () => {
+    const scope = [
+      {
+        tabId: 1,
+        windowId: 7,
+        url: 'https://example.test',
+        documentId: 'document-1',
+        closeable: false,
+      },
+    ];
+    expect(() =>
+      parseTaskTabScope(scope, { ...scope[0]!, documentId: 'reloaded-document' }),
+    ).toThrow('does not belong');
+  });
+
+  it('waits for the approved new document to finish loading before activation', async () => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    vi.mocked(chrome.tabs.create).mockImplementationOnce(async (create) => {
+      const created = { ...tab(2, create.url!, false), status: 'loading' as chrome.tabs.TabStatus };
+      tabs.set(2, created);
+      documents.set(2, 'document-2');
+      timer = setTimeout(() => {
+        created.status = 'complete';
+      }, 10);
+      return created;
+    });
+    try {
+      const tasks = taskTabs();
+      await expect(
+        tasks.execute(
+          await tasks.prepare('open_tab', { url: 'http://127.0.0.1:8765/opened.html' }),
+        ),
+      ).resolves.toMatchObject({ tabId: 2 });
+      expect(tabs.get(2)?.status).toBe('complete');
+      expect(updated).toHaveBeenCalledExactlyOnceWith(2, { active: true });
+    } finally {
+      clearTimeout(timer);
+    }
   });
 
   it('creates the new tab in the background, then switches the task to it', async () => {

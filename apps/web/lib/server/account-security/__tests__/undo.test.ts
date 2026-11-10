@@ -22,27 +22,51 @@ const mocks = vi.hoisted(() => ({
   event: vi.fn(),
 }));
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn() } }));
-vi.mock('@/lib/server/identity', () => ({ getIdentityProvider: mocks.identity }));
-vi.mock('@/lib/services/identity-events', () => ({
+vi.mock('@/lib/logger', async () => ({
+  ...(await vi.importActual<LoggerModule>('@/lib/logger')),
+  logger: { error: vi.fn() },
+}));
+vi.mock('@/lib/server/identity', async () => ({
+  ...(await vi.importActual<IdentityModule>('@/lib/server/identity')),
+  getIdentityProvider: mocks.identity,
+}));
+vi.mock('@/lib/services/identity-events', async () => ({
+  ...(await vi.importActual<IdentityEventsModule>('@/lib/services/identity-events')),
+
   emitIdentitySecurityEvent: mocks.event,
   respondToAccountCompromise: mocks.respond,
 }));
-vi.mock('../gate', () => ({ rememberEnrollment: mocks.remember }));
-vi.mock('../secrets', () => ({ hashUndoToken: mocks.hash, newUnusablePassword: mocks.password }));
-vi.mock('../store', async (importOriginal) => ({
-  ...(await importOriginal<ImportedModule0>()),
+vi.mock('../gate', async () => ({
+  ...(await vi.importActual<GateModule>('../gate')),
+  rememberEnrollment: mocks.remember,
+}));
+vi.mock('../secrets', async () => ({
+  ...(await vi.importActual<SecretsModule>('../secrets')),
+  hashUndoToken: mocks.hash,
+  newUnusablePassword: mocks.password,
+}));
+vi.mock('../store', async () => ({
+  ...(await vi.importActual<StoreModule>('../store')),
   readEnrollmentUndo: mocks.read,
   undoEnrollment: mocks.undo,
   claimUndoCleanup: mocks.claim,
   recordUndoCleanupStep: mocks.record,
   endUndoCleanup: mocks.end,
 }));
-vi.mock('@/lib/server/mobile-intent-tokens', () => ({
+vi.mock('@/lib/server/mobile-intent-tokens', async () => ({
+  ...(await vi.importActual<MobileIntentTokensModule>('@/lib/server/mobile-intent-tokens')),
+
   revokeEveryMobileIntentToken: mocks.mobile,
 }));
 
 import { turnOffFromEmailLink } from '../undo';
+type LoggerModule = typeof import('@/lib/logger');
+type IdentityModule = typeof import('@/lib/server/identity');
+type IdentityEventsModule = typeof import('@/lib/services/identity-events');
+type GateModule = typeof import('../gate');
+type SecretsModule = typeof import('../secrets');
+type StoreModule = typeof import('../store');
+type MobileIntentTokensModule = typeof import('@/lib/server/mobile-intent-tokens');
 
 const db = {} as DatabaseAdapter;
 const request = new Request(
@@ -340,5 +364,3 @@ describe('turnOffFromEmailLink with a durable cleanup record', () => {
     },
   );
 });
-
-type ImportedModule0 = typeof import('../store');

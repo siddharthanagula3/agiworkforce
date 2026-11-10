@@ -31,9 +31,17 @@ const mocks = vi.hoisted(() => ({
   assertResolvedPublicHostname: vi.fn(async (_url: string) => undefined),
 }));
 
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mocks.requireCsrfToken }));
-vi.mock('@/lib/error-handler', () => ({
+vi.mock('@/lib/rate-limit', async () => ({
+  ...(await vi.importActual<RateLimitModule>('@/lib/rate-limit')),
+  withRateLimit: mocks.withRateLimit,
+}));
+vi.mock('@/lib/csrf', async () => ({
+  ...(await vi.importActual<CsrfModule>('@/lib/csrf')),
+  requireCsrfToken: mocks.requireCsrfToken,
+}));
+vi.mock('@/lib/error-handler', async () => ({
+  ...(await vi.importActual<ErrorHandlerModule>('@/lib/error-handler')),
+
   withErrorHandler:
     (handler: (request: Request) => Promise<Response>) => async (request: Request) => {
       try {
@@ -44,11 +52,16 @@ vi.mock('@/lib/error-handler', () => ({
       }
     },
 }));
-vi.mock('@/lib/services/active-workspace-service', () => ({
+vi.mock('@/lib/services/active-workspace-service', async () => ({
+  ...(await vi.importActual<ActiveWorkspaceServiceModule>(
+    '@/lib/services/active-workspace-service',
+  )),
+
   resolveActiveOrganizationId: mocks.resolveActiveOrganizationId,
 }));
-vi.mock('@/lib/services/org-entitlements', async (importOriginal) => ({
-  ...(await importOriginal<ImportedModule4>()),
+vi.mock('@/lib/services/org-entitlements', async () => ({
+  ...(await vi.importActual<OrgEntitlementsModule>('@/lib/services/org-entitlements')),
+
   getOrganizationEntitlements: vi.fn(),
   getSharedProjectLimitErrorMessage: vi.fn(),
   isOrgResourceLimitError: vi.fn(),
@@ -57,23 +70,37 @@ vi.mock('node:crypto', async (importOriginal) => ({
   ...(await importOriginal<ImportedModule0>()),
   randomBytes: mocks.randomBytes,
 }));
-vi.mock('@/lib/services/audit-streaming-proxy', () => ({
+vi.mock('@/lib/services/audit-streaming-proxy', async () => ({
+  ...(await vi.importActual<AuditStreamingProxyModule>('@/lib/services/audit-streaming-proxy')),
+
   buildBoundedDeliveryBody: vi.fn(),
   deliverAuditBatch: vi.fn(),
 }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async () => ({
+  ...(await vi.importActual<LoggerModule>('@/lib/logger')),
+
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/server/key-value', () => ({
+vi.mock('@/lib/server/key-value', async () => ({
+  ...(await vi.importActual<KeyValueModule>('@/lib/server/key-value')),
+
   getKeyValueStore: () => ({ setAdd: mocks.setAdd, setRemove: mocks.setRemove }),
   getKeyValueRateLimiter: () => null,
 }));
-vi.mock('@/lib/server/rls-db', () => ({
+vi.mock('@/lib/server/rls-db', async () => ({
+  ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
+
   getUserScopedDb: mocks.getUserScopedDb,
 }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: mocks.getNeonDb }));
-vi.mock('@/lib/server/organization-encryption-keys', async (importOriginal) => ({
-  ...(await importOriginal<ImportedModule3>()),
+vi.mock('@/lib/server/neon-db', async () => ({
+  ...(await vi.importActual<NeonDbModule>('@/lib/server/neon-db')),
+  getNeonDb: mocks.getNeonDb,
+}));
+vi.mock('@/lib/server/organization-encryption-keys', async () => ({
+  ...(await vi.importActual<OrganizationEncryptionKeysModule>(
+    '@/lib/server/organization-encryption-keys',
+  )),
+
   organizationKeyRing: vi.fn(async () => ({ ring: {} })),
   withOrganizationKeyFence: async (
     db: unknown,
@@ -82,21 +109,27 @@ vi.mock('@/lib/server/organization-encryption-keys', async (importOriginal) => (
     run: (tx: unknown) => Promise<unknown>,
   ) => run(db),
 }));
-vi.mock('@/lib/crypto/envelope', async (importOriginal) => ({
-  ...(await importOriginal<ImportedModule2>()),
+vi.mock('@/lib/crypto/envelope', async () => ({
+  ...(await vi.importActual<EnvelopeModule>('@/lib/crypto/envelope')),
+
   sealEnvelope: vi.fn(() => 'sealed-audit-signing-secret'),
   openEnvelope: vi.fn(() => ({ plaintext: 'fixture-secret' })),
 }));
-vi.mock('@/lib/security-audit', () => ({
+vi.mock('@/lib/security-audit', async () => ({
+  ...(await vi.importActual<SecurityAuditModule>('@/lib/security-audit')),
+
   recordAuditEvent: mocks.recordAuditEvent,
   BLOCK_APPEAL_PATH: '/support',
   logRateLimitExceeded: vi.fn(),
 }));
-vi.mock('@/app/api/settings/team/team-admin-access', () => ({
+vi.mock('@/app/api/settings/team/team-admin-access', async () => ({
+  ...(await vi.importActual<TeamAdminAccessModule>('@/app/api/settings/team/team-admin-access')),
+
   requireTeamAdminAccess: mocks.requireTeamAdminAccess,
 }));
-vi.mock('@/lib/egress-policy', async (importOriginal) => ({
-  ...(await importOriginal<ImportedModule1>()),
+vi.mock('@/lib/egress-policy', async () => ({
+  ...(await vi.importActual<EgressPolicyModule>('@/lib/egress-policy')),
+
   EgressPolicyError: class EgressPolicyError extends Error {},
   assertResolvedPublicHostname: mocks.assertResolvedPublicHostname,
 }));
@@ -110,6 +143,21 @@ import { buildBoundedDeliveryBody, deliverAuditBatch } from '@/lib/services/audi
 import { EgressPolicyError } from '@/lib/egress-policy';
 import { AUDIT_STREAM_ACTIVE_ORGS_REDIS_KEY } from '@/lib/services/audit-streaming-service';
 import { DELETE, GET, PATCH, PUT } from '../route';
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type CsrfModule = typeof import('@/lib/csrf');
+type ErrorHandlerModule = typeof import('@/lib/error-handler');
+type ActiveWorkspaceServiceModule = typeof import('@/lib/services/active-workspace-service');
+type OrgEntitlementsModule = typeof import('@/lib/services/org-entitlements');
+type AuditStreamingProxyModule = typeof import('@/lib/services/audit-streaming-proxy');
+type LoggerModule = typeof import('@/lib/logger');
+type KeyValueModule = typeof import('@/lib/server/key-value');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type NeonDbModule = typeof import('@/lib/server/neon-db');
+type OrganizationEncryptionKeysModule = typeof import('@/lib/server/organization-encryption-keys');
+type EnvelopeModule = typeof import('@/lib/crypto/envelope');
+type SecurityAuditModule = typeof import('@/lib/security-audit');
+type TeamAdminAccessModule = typeof import('@/app/api/settings/team/team-admin-access');
+type EgressPolicyModule = typeof import('@/lib/egress-policy');
 
 const ORG = '11111111-1111-4111-8111-111111111111';
 const ORG_B = '22222222-2222-4222-8222-222222222222';
@@ -652,8 +700,3 @@ describe('captured audit destination organization with saved workspace A', () =>
 });
 
 type ImportedModule0 = typeof import('node:crypto');
-
-type ImportedModule4 = typeof import('@/lib/services/org-entitlements');
-type ImportedModule3 = typeof import('@/lib/server/organization-encryption-keys');
-type ImportedModule2 = typeof import('@/lib/crypto/envelope');
-type ImportedModule1 = typeof import('@/lib/egress-policy');

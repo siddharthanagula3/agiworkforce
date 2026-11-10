@@ -42,28 +42,43 @@ vi.mock('@/lib/auth/email-confirmation', async (importOriginal) => ({
   ...(await importOriginal()),
   readPrimaryEmailState: vi.fn(async () => ({ confirmed: true, email: 'person@example.com' })),
 }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async () => ({
+  ...(await vi.importActual<LoggerModule>('@/lib/logger')),
+
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
-vi.mock('@/lib/security-audit', () => ({
+vi.mock('@/lib/rate-limit', async () => ({
+  ...(await vi.importActual<RateLimitModule>('@/lib/rate-limit')),
+  withRateLimit: vi.fn(async () => null),
+}));
+vi.mock('@/lib/csrf', async () => ({
+  ...(await vi.importActual<CsrfModule>('@/lib/csrf')),
+  requireCsrfToken: vi.fn(async () => null),
+}));
+vi.mock('@/lib/security-audit', async () => ({
+  ...(await vi.importActual<SecurityAuditModule>('@/lib/security-audit')),
+
   recordAuditEvent: vi.fn(async () => undefined),
   BLOCK_APPEAL_PATH: '/support',
   logAuthFailure: vi.fn(async () => undefined),
   getClientIp: vi.fn(),
   logRateLimitExceeded: vi.fn(async () => undefined),
 }));
-vi.mock('@/lib/api-auth', async (importOriginal) => ({
-  ...(await importOriginal<ImportedModule0>()),
+vi.mock('@/lib/api-auth', async () => ({
+  ...(await vi.importActual<ApiAuthModule>('@/lib/api-auth')),
+
   isAccountUnavailableError: vi.fn(() => false),
   getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1' })),
 }));
-vi.mock('@/lib/cors', () => ({
+vi.mock('@/lib/cors', async () => ({
+  ...(await vi.importActual<CorsModule>('@/lib/cors')),
+
   withCorsRoute: <T>(handler: T) => handler,
   handleCorsPreflightRequest: vi.fn(() => null),
 }));
-vi.mock('@/lib/github-app', () => ({
+vi.mock('@/lib/github-app', async () => ({
+  ...(await vi.importActual<GithubAppModule>('@/lib/github-app')),
+
   GitHubWriteOutcomeUnknownError: class GitHubWriteOutcomeUnknownError extends Error {},
   issueCommentPostedSince: vi.fn(() => false),
   pullRequestReviewPostedSince: vi.fn(() => false),
@@ -333,6 +348,8 @@ vi.mock('@/lib/server/neon-db', () => {
 vi.mock('@/lib/server/rls-db', async () => {
   const { getNeonDb } = await import('@/lib/server/neon-db');
   return {
+    ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
+
     getUserScopedDb: vi.fn(async () => ({
       db: getNeonDb(),
       userId: 'user-1',
@@ -352,6 +369,14 @@ import {
   loadUserConnectorToolDefs,
   makeUserConnectorExecutor,
 } from '@/lib/user-connector-tools';
+type LoggerModule = typeof import('@/lib/logger');
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type CsrfModule = typeof import('@/lib/csrf');
+type SecurityAuditModule = typeof import('@/lib/security-audit');
+type ApiAuthModule = typeof import('@/lib/api-auth');
+type CorsModule = typeof import('@/lib/cors');
+type GithubAppModule = typeof import('@/lib/github-app');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
 
 type TypesModule = typeof import('@agiworkforce/types');
 
@@ -601,5 +626,3 @@ describe('CRIT-001, an available connector completes the whole lifecycle', () =>
     expect(await loadUserConnectorToolDefs('user-1')).toEqual([]);
   });
 });
-
-type ImportedModule0 = typeof import('@/lib/api-auth');

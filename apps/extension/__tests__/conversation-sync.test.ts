@@ -74,7 +74,7 @@ const authContext = {
   } as { token: string; owner: { accountId: string; authIncarnation: string } } | null,
 };
 vi.mock('../src/features/cloud-bridge/freeTrialClient', async (importOriginal) => ({
-  ...(await importOriginal<ImportedModule0>()),
+  ...(await importOriginal<FreeTrialClientModule>()),
   CODE_EXECUTION_OUTPUT_MAX_CHARS: 16_000,
   FREE_TRIAL_GATEWAY: 'https://agiworkforce.com',
   getManagedCloudAuthContext: vi.fn(async () => authContext.current),
@@ -101,6 +101,8 @@ import {
   CLOUD_MIRRORING_STORAGE_KEY,
   watchCloudMirroringEnabled,
 } from '../src/features/privacy/cloudMirroring';
+
+type FreeTrialClientModule = typeof import('../src/features/cloud-bridge/freeTrialClient');
 
 watchCloudMirroringEnabled();
 
@@ -940,5 +942,3 @@ describe('conversation cloud sync', () => {
     expect(conversationPosts()).toHaveLength(1);
   });
 });
-
-type ImportedModule0 = typeof import('../src/features/cloud-bridge/freeTrialClient');

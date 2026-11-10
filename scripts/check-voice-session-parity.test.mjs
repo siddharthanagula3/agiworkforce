@@ -11,6 +11,7 @@ import {
   checkVoiceSessionParity,
   readDelegationTerminalEvents,
   readHandledEvents,
+  readDisposingEndings,
 } from './check-voice-session-parity.mjs';
 
 const roots = [];
@@ -116,6 +117,25 @@ test.after(() => {
 
 test('two implementations that handle the same events pass', () => {
   assert.deepEqual(checkVoiceSessionParity(makeRoot()), []);
+});
+
+test('follows close delegation while refusing missing cleanup and recursive helpers', () => {
+  const source = sessionSource({ events: EVENTS, terminal: TERMINAL }).replace(
+    'this.closing = true;\n    this.dispose();',
+    'return this.closeOnce();',
+  );
+  assert.ok(
+    readDisposingEndings(
+      source.replace(/\n}\s*$/, '\n  private closeOnce() { this.dispose(); }\n}'),
+    ).includes('close'),
+  );
+  assert.equal(readDisposingEndings(source).includes('close'), false);
+  assert.equal(
+    readDisposingEndings(
+      source.replace(/\n}\s*$/, '\n  private closeOnce() { return this.close(); }\n}'),
+    ).includes('close'),
+    false,
+  );
 });
 
 test('an event only one surface handles is reported', () => {

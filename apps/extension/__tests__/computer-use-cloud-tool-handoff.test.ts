@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { OpenAIWireAssembler } from '@agiworkforce/provider-protocol';
+import { createCallerToolHandoffDelta } from '@agiworkforce/cloud-contracts';
 import {
   callCloud,
   CloudAgentGatewayError,
@@ -39,7 +40,10 @@ const compiled = ts.transpileModule(`return ${handoffProducer.getText(program)};
   compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.None },
 });
 // llm-guardrail-allow: executes repository-owned browser code inside this isolated test fixture.
-const emitHandoff = new Function('sseData', compiled.outputText)((payload: unknown) => payload) as (
+const emitHandoff = new Function('sseData', 'createCallerToolHandoffDelta', compiled.outputText)(
+  (payload: unknown) => payload,
+  createCallerToolHandoffDelta,
+) as (
   calls: readonly { id: string; qualifiedName: string; args: Record<string, unknown> }[],
   model: string,
 ) => unknown;

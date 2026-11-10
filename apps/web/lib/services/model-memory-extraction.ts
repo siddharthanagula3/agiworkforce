@@ -20,6 +20,7 @@ import {
 } from '@agiworkforce/agent-core';
 import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
 import { estimateTokens, resolveAutoRoute } from '@agiworkforce/routing';
+import { getModelEffortOptions } from '@agiworkforce/types';
 import { resolveWireMode } from '@/app/api/llm/v1/chat/completions/lib/adapter-providers';
 import { drainToLlmResponse } from '@/app/api/llm/v1/chat/completions/lib/adapter-response';
 import {
@@ -215,6 +216,7 @@ export async function extractAutoMemoryFactsWithModel(
           temperature: 0,
           stream: false,
         });
+        if (getModelEffortOptions(route.modelKey).includes('none')) chatRequest.effort = 'none';
         const adapter = buildServerProviderAdapter(dispatchProvider);
         const response = await drainToLlmResponse(
           adapter.stream(chatRequest, signal),

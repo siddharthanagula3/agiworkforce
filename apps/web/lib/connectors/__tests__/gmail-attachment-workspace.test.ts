@@ -17,20 +17,30 @@ vi.mock('@/lib/connectors/oauth-access', async (importOriginal) => ({
   ...(await importOriginal<ImportedModule0>()),
   resolveConnectorAccessToken: mocks.access,
 }));
-vi.mock('@/lib/services/active-workspace-service', () => ({
+vi.mock('@/lib/services/active-workspace-service', async () => ({
+  ...(await vi.importActual<ActiveWorkspaceServiceModule>(
+    '@/lib/services/active-workspace-service',
+  )),
+
   resolveActiveOrganizationId: mocks.activeOrganization,
   resolveOrganizationMembershipId: mocks.membership,
 }));
-vi.mock('@/lib/server/media-assets', () => ({
+vi.mock('@/lib/server/media-assets', async () => ({
+  ...(await vi.importActual<MediaAssetsModule>('@/lib/server/media-assets')),
+
   getActiveWorkspaceMediaAssetById: mocks.asset,
 }));
-vi.mock('@/lib/server/media-storage', async (importOriginal) => ({
-  ...(await importOriginal<ImportedModule2>()),
+vi.mock('@/lib/server/media-storage', async () => ({
+  ...(await vi.importActual<MediaStorageModule>('@/lib/server/media-storage')),
   readStoredMedia: mocks.read,
 }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => mocks.db }));
-vi.mock('@/lib/url-fetch/guarded-fetch', async (importOriginal) => ({
-  ...(await importOriginal<ImportedModule1>()),
+vi.mock('@/lib/server/neon-db', async () => ({
+  ...(await vi.importActual<NeonDbModule>('@/lib/server/neon-db')),
+  getNeonDb: () => mocks.db,
+}));
+vi.mock('@/lib/url-fetch/guarded-fetch', async () => ({
+  ...(await vi.importActual<GuardedFetchModule>('@/lib/url-fetch/guarded-fetch')),
+
   createDeadline: () => ({ release: vi.fn() }),
   credentialedFetch: mocks.fetch,
 }));
@@ -41,6 +51,11 @@ import {
   GMAIL_READ_ATTACHMENTS_ACTION,
   GMAIL_SEND_DRAFT_ACTION,
 } from '../gmail-actions';
+type ActiveWorkspaceServiceModule = typeof import('@/lib/services/active-workspace-service');
+type MediaAssetsModule = typeof import('@/lib/server/media-assets');
+type MediaStorageModule = typeof import('@/lib/server/media-storage');
+type NeonDbModule = typeof import('@/lib/server/neon-db');
+type GuardedFetchModule = typeof import('@/lib/url-fetch/guarded-fetch');
 
 const USER_ID = 'user-owner';
 const ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
@@ -263,6 +278,3 @@ describe('Gmail aggregate attachment read budget', () => {
 });
 
 type ImportedModule0 = typeof import('@/lib/connectors/oauth-access');
-
-type ImportedModule2 = typeof import('@/lib/server/media-storage');
-type ImportedModule1 = typeof import('@/lib/url-fetch/guarded-fetch');

@@ -11,7 +11,7 @@ import {
 } from '../../assets/icons';
 import { t } from '../../i18n';
 import { el } from './dom';
-import { buildImageViewerButton } from './mediaViewer';
+import { buildImageViewerButton, closeImageViewer } from './mediaViewer';
 
 export interface AnswerFile {
   key: string;
@@ -43,7 +43,22 @@ const INLINE_VIDEO_TYPES: ReadonlySet<string> = new Set([
   'video/quicktime',
 ]);
 const MAX_CACHED_VIDEOS = 4;
-const videoObjectUrlCache = new Map<string, Promise<string>>();
+interface VideoResource {
+  blob: Promise<Blob>;
+  users: number;
+  epoch: number;
+  objectUrl?: string;
+}
+interface VideoUrlLease {
+  url: Promise<string>;
+  current(): boolean;
+  release(): void;
+}
+const videoBlobCache = new Map<string, VideoResource>();
+const activeVideoResources = new Map<string, VideoResource>();
+const videoViews = new WeakMap<Element, { mount(): void; unmount(): void }>();
+let videoViewObserver: MutationObserver | undefined;
+let previewEpoch = 0;
 const SAVED_FILE_EXTENSION: Readonly<Record<string, string>> = {
   'image/png': 'png',
   'image/jpeg': 'jpg',
@@ -125,14 +140,18 @@ function readBlobAsDataUrl(blob: Blob): Promise<string> {
 export function loadImageDataUrl(url: string, access: AnswerFileAccess): Promise<string> {
   const cached = imageDataUrlCache.get(url);
   if (cached) return cached;
-  const pending = access
+  const epoch = previewEpoch;
+  const pending: Promise<string> = access
     .fetchFile(url)
-    .then((blob) => {
+    .then(async (blob) => {
+      if (epoch !== previewEpoch) throw new Error('Preview context changed');
       if (!INLINE_IMAGE_TYPES.has(blob.type.toLowerCase())) throw new Error('not an image');
-      return readBlobAsDataUrl(blob);
+      const dataUrl = await readBlobAsDataUrl(blob);
+      if (epoch !== previewEpoch) throw new Error('Preview context changed');
+      return dataUrl;
     })
     .catch((error: unknown) => {
-      imageDataUrlCache.delete(url);
+      if (imageDataUrlCache.get(url) === pending) imageDataUrlCache.delete(url);
       throw error;
     });
   imageDataUrlCache.set(url, pending);
@@ -169,28 +188,86 @@ export async function saveAnswerFile(
   saveBlob(savedFileName(name, blob.type), blob);
 }
 
-export function loadVideoObjectUrl(url: string, access: AnswerFileAccess): Promise<string> {
-  const cached = videoObjectUrlCache.get(url);
-  if (cached) return cached;
-  const pending = access
-    .fetchFile(url)
-    .then((blob) => {
-      if (!INLINE_VIDEO_TYPES.has(blob.type.toLowerCase())) throw new Error('not a video');
-      return URL.createObjectURL(blob);
-    })
-    .catch((error: unknown) => {
-      videoObjectUrlCache.delete(url);
-      throw error;
-    });
-  videoObjectUrlCache.set(url, pending);
-  while (videoObjectUrlCache.size > MAX_CACHED_VIDEOS) {
-    const oldest = videoObjectUrlCache.keys().next();
-    if (oldest.done) break;
-    const evicted = videoObjectUrlCache.get(oldest.value);
-    videoObjectUrlCache.delete(oldest.value);
-    void evicted?.then((objectUrl) => URL.revokeObjectURL(objectUrl)).catch(() => undefined);
+function acquireVideoObjectUrl(url: string, access: AnswerFileAccess): VideoUrlLease {
+  let resource = activeVideoResources.get(url) ?? videoBlobCache.get(url);
+  if (!resource) {
+    const epoch = previewEpoch;
+    const pending: Promise<Blob> = Promise.resolve()
+      .then(() => access.fetchFile(url))
+      .then((blob) => {
+        if (epoch !== previewEpoch) throw new Error('Preview context changed');
+        if (!INLINE_VIDEO_TYPES.has(blob.type.toLowerCase())) throw new Error('not a video');
+        return blob;
+      })
+      .catch((error: unknown) => {
+        if (videoBlobCache.get(url)?.blob === pending) videoBlobCache.delete(url);
+        if (activeVideoResources.get(url)?.blob === pending) activeVideoResources.delete(url);
+        throw error;
+      });
+    resource = { blob: pending, users: 0, epoch };
   }
-  return pending;
+  const owned = resource;
+  owned.users += 1;
+  activeVideoResources.set(url, owned);
+  videoBlobCache.delete(url);
+  videoBlobCache.set(url, owned);
+  while (videoBlobCache.size > MAX_CACHED_VIDEOS) {
+    const oldest = videoBlobCache.keys().next();
+    if (oldest.done) break;
+    videoBlobCache.delete(oldest.value);
+  }
+  let released = false;
+  const current = (): boolean => !released && owned.epoch === previewEpoch;
+  return {
+    current,
+    url: owned.blob.then((blob) => {
+      if (!current()) throw new Error('Preview was released');
+      owned.objectUrl ??= URL.createObjectURL(blob);
+      return owned.objectUrl;
+    }),
+    release() {
+      if (released) return;
+      released = true;
+      owned.users -= 1;
+      if (owned.users !== 0) return;
+      if (activeVideoResources.get(url) === owned) activeVideoResources.delete(url);
+      if (owned.objectUrl) URL.revokeObjectURL(owned.objectUrl);
+      delete owned.objectUrl;
+    },
+  };
+}
+
+function visitVideoViews(node: Node, action: 'mount' | 'unmount'): void {
+  if (!(node instanceof Element)) return;
+  if (action === 'mount' || !node.isConnected) videoViews.get(node)?.[action]();
+  for (const figure of node.querySelectorAll('.sp-answer-video')) {
+    if (action === 'mount' || !figure.isConnected) videoViews.get(figure)?.[action]();
+  }
+}
+
+function observeVideoViews(): void {
+  if (videoViewObserver) return;
+  videoViewObserver = new MutationObserver((records) => {
+    for (const record of records)
+      for (const node of record.addedNodes) visitVideoViews(node, 'mount');
+    for (const record of records)
+      for (const node of record.removedNodes) visitVideoViews(node, 'unmount');
+  });
+  videoViewObserver.observe(document.documentElement, { childList: true, subtree: true });
+}
+
+export function clearAnswerFilePreviews(): void {
+  previewEpoch += 1;
+  closeImageViewer();
+  imageDataUrlCache.clear();
+  for (const figure of document.querySelectorAll('.sp-answer-video'))
+    videoViews.get(figure)?.unmount();
+  for (const resource of activeVideoResources.values()) {
+    if (resource.objectUrl) URL.revokeObjectURL(resource.objectUrl);
+    delete resource.objectUrl;
+  }
+  activeVideoResources.clear();
+  videoBlobCache.clear();
 }
 
 function buildFileActions(
@@ -274,23 +351,56 @@ function buildVideoResult(file: AnswerFile, url: string, access: AnswerFileAcces
   caption.appendChild(status);
   caption.appendChild(buildFileActions(file, url, access, status));
   figure.appendChild(caption);
-  loadVideoObjectUrl(url, access)
-    .then((objectUrl) => {
-      frame.replaceChildren(
-        el('video', {
-          class: 'sp-answer-video__player',
-          src: objectUrl,
-          controls: '',
-          preload: 'metadata',
-          playsinline: '',
-          'aria-label': file.name,
-        }),
+  const epoch = previewEpoch;
+  let lease: VideoUrlLease | null = null;
+  videoViews.set(figure, {
+    mount() {
+      if (lease || !figure.isConnected || epoch !== previewEpoch) return;
+      const owned = acquireVideoObjectUrl(url, access);
+      lease = owned;
+      const current = (): boolean => lease === owned && figure.isConnected && owned.current();
+      frame.setAttribute('aria-busy', 'true');
+      loading.replaceChildren(
+        renderIcon(Loader2, 16, 'sp-answer-image__spinner'),
+        document.createTextNode(t('spAnswerVideoLoading')),
       );
-    })
-    .catch(() => {
-      loading.replaceChildren(document.createTextNode(t('spAnswerVideoFailed', [file.name])));
-    })
-    .finally(() => frame.removeAttribute('aria-busy'));
+      frame.replaceChildren(loading);
+      owned.url
+        .then((objectUrl) => {
+          if (!current()) return;
+          frame.replaceChildren(
+            el('video', {
+              class: 'sp-answer-video__player',
+              src: objectUrl,
+              controls: '',
+              preload: 'metadata',
+              playsinline: '',
+              'aria-label': file.name,
+            }),
+          );
+        })
+        .catch(() => {
+          if (current())
+            loading.replaceChildren(document.createTextNode(t('spAnswerVideoFailed', [file.name])));
+        })
+        .finally(() => {
+          if (current()) frame.removeAttribute('aria-busy');
+        });
+    },
+    unmount() {
+      const owned = lease;
+      lease = null;
+      if (!owned) return;
+      const video = frame.querySelector('video');
+      if (video) {
+        video.pause();
+        video.removeAttribute('src');
+        video.load();
+      }
+      owned.release();
+    },
+  });
+  observeVideoViews();
   return figure;
 }
 

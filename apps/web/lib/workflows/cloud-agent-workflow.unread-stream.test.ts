@@ -72,6 +72,7 @@ vi.mock('@/lib/services/cloud-agent-run-service', () => ({
   saveCloudAgentApprovalCheckpoint: vi.fn(),
   saveCloudAgentInputCheckpoint: vi.fn(),
   saveCloudAgentDeviceCheckpoint: vi.fn(),
+  saveCloudAgentCallerCheckpoint: vi.fn(),
   completeCloudAgentApprovalCheckpoint: vi.fn(),
   readCloudAgentRunAssistantText: vi.fn(),
   recordCloudAgentRunSettledUsage: vi.fn(),

@@ -19,26 +19,40 @@ const { mockQuery, mockRecordAuditEvent } = vi.hoisted(() => ({
   mockRecordAuditEvent: vi.fn(async (_event: unknown) => undefined),
 }));
 
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/rate-limit', async () => ({
+  ...(await vi.importActual<RateLimitModule>('@/lib/rate-limit')),
+  withRateLimit: vi.fn(async () => null),
+}));
+vi.mock('@/lib/csrf', async () => ({
+  ...(await vi.importActual<CsrfModule>('@/lib/csrf')),
+  requireCsrfToken: vi.fn(async () => null),
+}));
+vi.mock('@/lib/logger', async () => ({
+  ...(await vi.importActual<LoggerModule>('@/lib/logger')),
+
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/server/rls-db', () => ({
+vi.mock('@/lib/server/rls-db', async () => ({
+  ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
+
   getUserScopedDb: vi.fn(async () => ({
     db: { query: (...args: unknown[]) => mockQuery(...args) },
     userId: 'user-1',
     organizationId: requestScope.organizationId,
   })),
 }));
-vi.mock('@/lib/server/key-value', async (importOriginal) => ({
-  ...(await importOriginal<ImportedModule0>()),
+vi.mock('@/lib/server/key-value', async () => ({
+  ...(await vi.importActual<KeyValueModule>('@/lib/server/key-value')),
   getKeyValueStore: () => null,
 }));
-vi.mock('@/lib/server/neon-db', () => ({
+vi.mock('@/lib/server/neon-db', async () => ({
+  ...(await vi.importActual<NeonDbModule>('@/lib/server/neon-db')),
+
   getNeonDb: () => ({ query: (...args: unknown[]) => mockQuery(...args) }),
 }));
-vi.mock('@/lib/security-audit', () => ({
+vi.mock('@/lib/security-audit', async () => ({
+  ...(await vi.importActual<SecurityAuditModule>('@/lib/security-audit')),
+
   recordAuditEvent: mockRecordAuditEvent,
   getClientIp: vi.fn(() => '192.0.2.1'),
   BLOCK_APPEAL_PATH: '/support',
@@ -54,6 +68,13 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import { requireTeamAdminAccess } from '@/app/api/settings/team/team-admin-access';
 import { requireMemberPermission } from '@/lib/services/organization-permission-service';
 import { clearIpAllowListCacheForTests } from '@/lib/services/organization-ip-allow-list-cache';
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type CsrfModule = typeof import('@/lib/csrf');
+type LoggerModule = typeof import('@/lib/logger');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type KeyValueModule = typeof import('@/lib/server/key-value');
+type NeonDbModule = typeof import('@/lib/server/neon-db');
+type SecurityAuditModule = typeof import('@/lib/security-audit');
 
 const ORG = '11111111-1111-4111-8111-111111111111';
 const OTHER_ORG = '22222222-2222-4222-8222-222222222222';
@@ -381,5 +402,3 @@ describe('service principal route request scope', () => {
     },
   );
 });
-
-type ImportedModule0 = typeof import('@/lib/server/key-value');

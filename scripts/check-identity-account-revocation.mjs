@@ -132,6 +132,7 @@ function delegatesToGatedFunction(source, statement, seen) {
 
 /** Every return that hands a caller a principal, and whether the gate ran first. */
 export function ungatedReturns(source, name, seen = new Set()) {
+  if (seen.has(name)) return null;
   const found = functionBody(source, name);
   if (found === null) return null;
   seen.add(name);

@@ -12,6 +12,7 @@ import {
   extractStatements,
 } from './lib/project-context-boundary.mjs';
 import { renderers, run, uncheckedLoads } from './check-project-context-boundary.mjs';
+import { expandProjectReadScope, PROJECT_READ_SCOPE_OWNER } from './lib/project-scope-sql.mjs';
 
 const MIGRATION = `
 create table if not exists public.user_projects (
@@ -45,6 +46,46 @@ test('enumerates the project-scoped tables from the migrations', () => {
     const tables = projectScopedTables(root);
     assert.ok(tables.has('user_projects'));
     assert.ok(tables.has('project_knowledge_files'));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('resolves the shared project predicate only through its real binding and owner', () => {
+  const predicate =
+    'p.id = $1 and p.user_id = $2 and p.organization_id is not distinct from $3::uuid';
+  const declaration = `export const READABLE_PROJECT_SCOPE_SQL = \`${predicate}\`;`;
+  const source = "import { READABLE_PROJECT_SCOPE_SQL } from '@/lib/server/project-read-access';";
+  const sql =
+    'select f.* from project_knowledge_files f where f.project_id = $1 and ${READABLE_PROJECT_SCOPE_SQL}';
+  const relative = 'apps/web/lib/server/project-knowledge-files.ts';
+  const root = makeRepo({ [PROJECT_READ_SCOPE_OWNER]: declaration });
+  try {
+    assert.ok(expandProjectReadScope(sql, source, relative, root).includes(predicate));
+    assert.equal(
+      expandProjectReadScope(
+        sql,
+        source.replace('project-read-access', 'untrusted'),
+        relative,
+        root,
+      ),
+      sql,
+    );
+    assert.equal(expandProjectReadScope(sql, `// ${source}`, relative, root), sql);
+    assert.equal(
+      expandProjectReadScope(
+        sql,
+        `${source}\nconst READABLE_PROJECT_SCOPE_SQL = 'true';`,
+        relative,
+        root,
+      ),
+      sql,
+    );
+    writeFileSync(
+      path.join(root, PROJECT_READ_SCOPE_OWNER),
+      declaration.replace(predicate, '${unresolved}'),
+    );
+    assert.equal(expandProjectReadScope(sql, source, relative, root), sql);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

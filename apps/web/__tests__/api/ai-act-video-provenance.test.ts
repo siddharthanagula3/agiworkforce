@@ -5,13 +5,20 @@ type ScanModule1 = typeof import('@/lib/error-handler');
 
 vi.mock('server-only', () => ({}));
 
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
-vi.mock('@/lib/cors', () => ({
+vi.mock('@/lib/rate-limit', async () => ({
+  ...(await vi.importActual<RateLimitModule>('@/lib/rate-limit')),
+  withRateLimit: vi.fn().mockResolvedValue(null),
+}));
+vi.mock('@/lib/cors', async () => ({
+  ...(await vi.importActual<CorsModule>('@/lib/cors')),
+
   handleCorsPreflightRequest: vi.fn().mockReturnValue(null),
   getCorsHeaders: vi.fn().mockReturnValue({}),
   getSecurityHeaders: vi.fn().mockReturnValue({}),
 }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async () => ({
+  ...(await vi.importActual<LoggerModule>('@/lib/logger')),
+
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/errors', async (importOriginal) => {
@@ -28,8 +35,9 @@ vi.mock('@/lib/error-handler', async (importOriginal) => {
 });
 
 const mockGetClerkAuthUser = vi.fn();
-vi.mock('@/lib/api-auth', async (importOriginal) => ({
-  ...(await importOriginal<ImportedModule0>()),
+vi.mock('@/lib/api-auth', async () => ({
+  ...(await vi.importActual<ApiAuthModule>('@/lib/api-auth')),
+
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
 
@@ -39,10 +47,14 @@ const durableMocks = vi.hoisted(() => ({
   reconcile: vi.fn(),
   delivered: vi.fn(),
 }));
-vi.mock('@/lib/server/rls-db', () => ({
+vi.mock('@/lib/server/rls-db', async () => ({
+  ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
+
   getUserScopedDb: (...args: unknown[]) => durableMocks.scoped(...args),
 }));
-vi.mock('@/lib/server/video-generation-jobs', () => ({
+vi.mock('@/lib/server/video-generation-jobs', async () => ({
+  ...(await vi.importActual<VideoGenerationJobsModule>('@/lib/server/video-generation-jobs')),
+
   getVideoGenerationJob: (...args: unknown[]) => durableMocks.get(...args),
   beginVideoProviderCancellationAttempt: vi.fn(),
   claimVideoGenerationJob: vi.fn(),
@@ -64,7 +76,11 @@ vi.mock('@/lib/server/video-generation-jobs', () => ({
   markVideoGenerationOutcomeUnknown: vi.fn(),
   recordVideoProviderCancellationAttempt: vi.fn(),
 }));
-vi.mock('@/lib/services/video-job-reconciliation-service', () => ({
+vi.mock('@/lib/services/video-job-reconciliation-service', async () => ({
+  ...(await vi.importActual<VideoJobReconciliationServiceModule>(
+    '@/lib/services/video-job-reconciliation-service',
+  )),
+
   reconcileVideoGenerationJob: (...args: unknown[]) => durableMocks.reconcile(...args),
   publicVideoJobStatus: (job: Record<string, unknown>) => ({
     success: true,
@@ -73,7 +89,11 @@ vi.mock('@/lib/services/video-job-reconciliation-service', () => ({
     ...(job['assetId'] ? { video_url: `/api/files/${String(job['assetId'])}` } : {}),
   }),
 }));
-vi.mock('@/lib/services/managed-usage-request-service', () => ({
+vi.mock('@/lib/services/managed-usage-request-service', async () => ({
+  ...(await vi.importActual<ManagedUsageRequestServiceModule>(
+    '@/lib/services/managed-usage-request-service',
+  )),
+
   estimateMicrousdOf: (source: { estimatedCostMicrousd?: number; estimatedCostCents: number }) =>
     source.estimatedCostMicrousd ?? Math.round(source.estimatedCostCents) * 10_000,
 
@@ -89,6 +109,16 @@ import {
   AI_GENERATED_PROVENANCE_HEADER,
   hasAiGeneratedProvenance,
 } from '@/lib/compliance/ai-act';
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type CorsModule = typeof import('@/lib/cors');
+type LoggerModule = typeof import('@/lib/logger');
+type ApiAuthModule = typeof import('@/lib/api-auth');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type VideoGenerationJobsModule = typeof import('@/lib/server/video-generation-jobs');
+type VideoJobReconciliationServiceModule =
+  typeof import('@/lib/services/video-job-reconciliation-service');
+type ManagedUsageRequestServiceModule =
+  typeof import('@/lib/services/managed-usage-request-service');
 
 const BASE_URL = 'http://localhost/api/media/video/status';
 const TEST_USER = { userId: 'user-test-id', email: 'test@example.com' };
@@ -169,5 +199,3 @@ describe('Article 50(2), generated video provenance', () => {
     expect(response.headers.get(AI_GENERATED_HEADER)).toBeNull();
   });
 });
-
-type ImportedModule0 = typeof import('@/lib/api-auth');

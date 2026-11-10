@@ -11,7 +11,8 @@
     "./queue": "./src/queue/index.ts",
     "./offline-queue": "./src/offline-queue/index.ts",
     "./offline-sync": "./src/offline-sync/index.ts",
-    "./plugins": "./src/plugins/index.ts"
+    "./plugins": "./src/plugins/index.ts",
+    "./observation-history": "./src/observation-history.ts"
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",

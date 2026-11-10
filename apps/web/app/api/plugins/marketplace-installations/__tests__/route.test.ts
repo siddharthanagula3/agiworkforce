@@ -49,18 +49,32 @@ const {
 const featureGateMock = vi.hoisted(() =>
   vi.fn(async (..._args: unknown[]): Promise<Response | null> => null),
 );
-vi.mock('@/lib/managed-compute-gate', () => ({
+vi.mock('@/lib/managed-compute-gate', async () => ({
+  ...(await vi.importActual<ManagedComputeGateModule>('@/lib/managed-compute-gate')),
+
   buildWorkspaceFeatureGateResponse: (...args: unknown[]) => featureGateMock(...args),
 }));
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/api-auth', async (importOriginal) => ({
-  ...(await importOriginal<ImportedModule0>()),
+vi.mock('@/lib/api-auth', async () => ({
+  ...(await vi.importActual<ApiAuthModule>('@/lib/api-auth')),
   getClerkAuthUser: authUserMock,
 }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: csrfMock }));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: rateLimitMock }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: getNeonDbMock }));
-vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: userScopedDbMock }));
+vi.mock('@/lib/csrf', async () => ({
+  ...(await vi.importActual<CsrfModule>('@/lib/csrf')),
+  requireCsrfToken: csrfMock,
+}));
+vi.mock('@/lib/rate-limit', async () => ({
+  ...(await vi.importActual<RateLimitModule>('@/lib/rate-limit')),
+  withRateLimit: rateLimitMock,
+}));
+vi.mock('@/lib/server/neon-db', async () => ({
+  ...(await vi.importActual<NeonDbModule>('@/lib/server/neon-db')),
+  getNeonDb: getNeonDbMock,
+}));
+vi.mock('@/lib/server/rls-db', async () => ({
+  ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
+  getUserScopedDb: userScopedDbMock,
+}));
 vi.mock('@/lib/workspace-audit', () => ({
   recordWorkspaceAuditEvent: recordWorkspaceAuditEventMock,
 }));
@@ -79,7 +93,11 @@ vi.mock('@/features/plugins/server/directory/installed-dependents', async (impor
   listMarketplaceDependents: listMarketplaceDependentsMock,
   listUnmetMarketplaceDependencies: listUnmetMarketplaceDependenciesMock,
 }));
-vi.mock('@/lib/services/plugin-marketplace-service', () => ({
+vi.mock('@/lib/services/plugin-marketplace-service', async () => ({
+  ...(await vi.importActual<PluginMarketplaceServiceModule>(
+    '@/lib/services/plugin-marketplace-service',
+  )),
+
   getMarketplaceEntryForUser: marketplaceEntryMock,
   getMarketplaceSourceEntry: vi.fn(async () => null),
   assertMarketplaceEntryInstallable: vi.fn(async () => undefined),
@@ -89,12 +107,16 @@ vi.mock('@/lib/services/connector-policy-gate', () => ({
   evaluateConnectorPolicyForUser: vi.fn(),
   evaluatePluginPolicyForUser: pluginPolicyMock,
 }));
-vi.mock('@/features/plugins/server/directory/install', () => ({
+vi.mock('@/features/plugins/server/directory/install', async () => ({
+  ...(await vi.importActual<InstallModule>('@/features/plugins/server/directory/install')),
+
   installDirectoryPlugin: installDirectoryPluginMock,
   installMarketplaceEntryPlugin: installMarketplaceEntryPluginMock,
   uninstallDirectoryInstallation: uninstallDirectoryInstallationMock,
 }));
-vi.mock('@/features/plugins/server/directory/memory-cache', () => ({
+vi.mock('@/features/plugins/server/directory/memory-cache', async () => ({
+  ...(await vi.importActual<MemoryCacheModule>('@/features/plugins/server/directory/memory-cache')),
+
   findPluginDirectoryRecord: async () => null,
 }));
 vi.mock('@/lib/connectors/plugin-connectors', () => ({
@@ -107,6 +129,15 @@ import { NextRequest } from 'next/server';
 import { DELETE, PATCH } from '../[id]/route';
 import { GET as getSettings, PATCH as patchSettings } from '../[id]/settings/route';
 import { GET, POST } from '../route';
+type ManagedComputeGateModule = typeof import('@/lib/managed-compute-gate');
+type ApiAuthModule = typeof import('@/lib/api-auth');
+type CsrfModule = typeof import('@/lib/csrf');
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type NeonDbModule = typeof import('@/lib/server/neon-db');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type PluginMarketplaceServiceModule = typeof import('@/lib/services/plugin-marketplace-service');
+type InstallModule = typeof import('@/features/plugins/server/directory/install');
+type MemoryCacheModule = typeof import('@/features/plugins/server/directory/memory-cache');
 
 const INSTALLATION_ID = '22222222-2222-4222-8222-222222222222';
 const ENTRY_ID = '33333333-3333-4333-8333-333333333333';
@@ -567,8 +598,6 @@ describe('marketplace plugins that another installed plugin needs', () => {
     ]);
   });
 });
-
-type ImportedModule0 = typeof import('@/lib/api-auth');
 
 describe('turning a marketplace plugin on when the plugins it needs are not ready', () => {
   const UNMET = [{ name: 'Review Kit', problem: 'is not installed' }];

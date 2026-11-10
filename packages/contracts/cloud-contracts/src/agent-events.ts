@@ -1,6 +1,7 @@
 import type { AgentEvent, AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
 import { z } from 'zod';
+import { HostedCallerToolBatchSchema } from './caller-tool-handoff';
 
 // Re-exported, not redeclared: a second copy of this number silently accepted
 // envelopes the runtime had stopped sending, and disagreed with the Rust
@@ -52,6 +53,12 @@ const ToolUseDeltaSchema = z.object({
 const ToolUseEndSchema = z.object({
   type: z.literal('tool-use-end'),
   toolUseId: NonEmptyStringSchema,
+});
+
+const CallerToolsRequestedSchema = z.object({
+  type: z.literal('caller-tools-requested'),
+  nextEventSequence: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  calls: HostedCallerToolBatchSchema,
 });
 
 const ServerToolUseSchema = z.object({
@@ -277,6 +284,7 @@ export const AgentEventSchema: z.ZodType<AgentEvent> = z.discriminatedUnion('typ
   ToolUseStartSchema,
   ToolUseDeltaSchema,
   ToolUseEndSchema,
+  CallerToolsRequestedSchema,
   ServerToolUseSchema,
   ServerToolResultSchema,
   UsageSchema,
@@ -298,14 +306,27 @@ export const AgentEventSchema: z.ZodType<AgentEvent> = z.discriminatedUnion('typ
   TaskStateChangedSchema,
 ]);
 
-export const AgentEventEnvelopeSchema: z.ZodType<AgentEventEnvelope> = z.object({
-  schemaVersion: z.literal(AGENT_EVENT_SCHEMA_VERSION),
-  sessionId: NonEmptyStringSchema,
-  turnId: NonEmptyStringSchema,
-  sequence: z.number().int().nonnegative(),
-  emittedAtMs: z.number().int().nonnegative(),
-  event: AgentEventSchema,
-});
+export const AgentEventEnvelopeSchema: z.ZodType<AgentEventEnvelope> = z
+  .object({
+    schemaVersion: z.literal(AGENT_EVENT_SCHEMA_VERSION),
+    sessionId: NonEmptyStringSchema,
+    turnId: NonEmptyStringSchema,
+    sequence: z.number().int().nonnegative(),
+    emittedAtMs: z.number().int().nonnegative(),
+    event: AgentEventSchema,
+  })
+  .superRefine((envelope, context) => {
+    if (
+      envelope.event.type === 'caller-tools-requested' &&
+      envelope.event.nextEventSequence <= envelope.sequence
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['event', 'nextEventSequence'],
+        message: 'Caller-tool continuation must advance the event cursor',
+      });
+    }
+  });
 
 export function parseAgentEventDelta(payload: unknown): AgentEventEnvelope | null {
   const parsed = AgentEventEnvelopeSchema.safeParse(payload);

@@ -11,13 +11,22 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/api-auth', async (importOriginal) => ({
-  ...(await importOriginal<ImportedModule0>()),
+vi.mock('@/lib/api-auth', async () => ({
+  ...(await vi.importActual<ApiAuthModule>('@/lib/api-auth')),
+
   getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1', email: 'user@example.com' })),
 }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
-vi.mock('@/lib/server/neon-db', () => ({
+vi.mock('@/lib/csrf', async () => ({
+  ...(await vi.importActual<CsrfModule>('@/lib/csrf')),
+  requireCsrfToken: vi.fn(async () => null),
+}));
+vi.mock('@/lib/rate-limit', async () => ({
+  ...(await vi.importActual<RateLimitModule>('@/lib/rate-limit')),
+  withRateLimit: vi.fn(async () => null),
+}));
+vi.mock('@/lib/server/neon-db', async () => ({
+  ...(await vi.importActual<NeonDbModule>('@/lib/server/neon-db')),
+
   getNeonDb: () => ({
     execute: (...args: unknown[]) => mocks.execute(...args),
     query: (...args: unknown[]) => mocks.query(...args),
@@ -34,14 +43,24 @@ vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
 vi.mock('@/lib/feature-flags/billing-upgrade-gate', () => ({
   readBillingUpgradesOpen: (...args: unknown[]) => mocks.upgradesOpen(...args),
 }));
-vi.mock('@/lib/server/email-pseudonym', () => ({
+vi.mock('@/lib/server/email-pseudonym', async () => ({
+  ...(await vi.importActual<EmailPseudonymModule>('@/lib/server/email-pseudonym')),
+
   pseudonymizeEmail: vi.fn(() => 'email-hash'),
 }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async () => ({
+  ...(await vi.importActual<LoggerModule>('@/lib/logger')),
+
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
 import { GET, POST } from './route';
+type ApiAuthModule = typeof import('@/lib/api-auth');
+type CsrfModule = typeof import('@/lib/csrf');
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type NeonDbModule = typeof import('@/lib/server/neon-db');
+type EmailPseudonymModule = typeof import('@/lib/server/email-pseudonym');
+type LoggerModule = typeof import('@/lib/logger');
 
 function request(plan: string) {
   return new NextRequest('https://agiworkforce.com/api/waitlist', {
@@ -189,5 +208,3 @@ describe('GET /api/waitlist', () => {
     await expect((await GET(get())).json()).resolves.toMatchObject({ noticeEmail: null });
   });
 });
-
-type ImportedModule0 = typeof import('@/lib/api-auth');
