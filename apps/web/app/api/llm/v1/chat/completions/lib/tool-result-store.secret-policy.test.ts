@@ -12,12 +12,21 @@ vi.mock('@/lib/server/key-value', () => ({
   getKeyValueRateLimiter: vi.fn(),
   getKeyValueStore: () => mocks.store,
 }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: vi.fn(() => ({})) }));
-vi.mock('@/lib/security-audit', () => ({
+vi.mock('@/lib/server/neon-db', async () => ({
+  ...(await vi.importActual<typeof import('@/lib/server/neon-db')>('@/lib/server/neon-db')),
+  getNeonDb: vi.fn(() => ({})),
+}));
+vi.mock('@/lib/security-audit', async () => ({
+  ...(await vi.importActual<typeof import('@/lib/security-audit')>('@/lib/security-audit')),
+
   recordAuditEvent: mocks.audit,
   BLOCK_APPEAL_PATH: '/support',
 }));
-vi.mock('@/lib/services/organization-policy-gate', () => ({
+vi.mock('@/lib/services/organization-policy-gate', async () => ({
+  ...(await vi.importActual<typeof import('@/lib/services/organization-policy-gate')>(
+    '@/lib/services/organization-policy-gate',
+  )),
+
   evaluateActiveWorkspacePolicy: vi.fn(async () => ({ allowed: true, organizationId: null })),
   evaluateWorkspacePolicyFor: vi.fn(async () => ({ allowed: true, organizationId: null })),
   resolveEffectiveWorkspaceControls: vi.fn(async () => null),
