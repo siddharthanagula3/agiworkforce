@@ -598,6 +598,49 @@ test('workspaceMemoryPredicate still renders the organization predicate the guar
   assert.match(body[1], /organization_id is not distinct from \$\$\{paramIndex\}::uuid/);
 });
 
+function projectScopeSandbox(constantName) {
+  return runOnSandbox({
+    [`${NEON}/0001_projects.sql`]: [
+      'create table if not exists public.user_projects (',
+      '  id uuid primary key,',
+      '  user_id text not null,',
+      '  organization_id uuid',
+      ');',
+    ].join('\n'),
+    'apps/web/lib/projects.ts': [
+      "import type { DatabaseAdapter } from '@agiworkforce/data-layer';",
+      `export const ${constantName} = \`p.id = $1 and p.user_id = $2\`;`,
+      'export async function readProject(db: DatabaseAdapter, id: string, userId: string) {',
+      '  return db.query(',
+      `    \`select p.id from user_projects p where \${${constantName}} limit 1\`,`,
+      '    [id, userId],',
+      '  );',
+      '}',
+    ].join('\n'),
+  });
+}
+
+test('the readable project scope satisfies the workspace rule through its interpolation', () => {
+  const credited = projectScopeSandbox('READABLE_PROJECT_SCOPE_SQL');
+  assert.equal(credited.status, 0, `expected pass, got:\n${credited.stderr}`);
+
+  const other = projectScopeSandbox('OWNED_PROJECT_SQL');
+  assert.equal(other.status, 1, 'an uncredited interpolation must not satisfy the workspace rule');
+  assert.match(other.stderr, /workspace scope ratchet/);
+});
+
+test('READABLE_PROJECT_SCOPE_SQL still binds every branch to the admitted workspace', () => {
+  const source = readFileSync(
+    join(REPO_ROOT, 'apps/web/lib/server/project-read-access.ts'),
+    'utf8',
+  );
+  const body = /export const READABLE_PROJECT_SCOPE_SQL = `([\s\S]*?)`;/.exec(source);
+  assert.ok(body, 'READABLE_PROJECT_SCOPE_SQL is gone; drop it from WORKSPACE_PREDICATE_HELPER_RE');
+  assert.match(body[1], /p\.user_id = \$2 and p\.organization_id is not distinct from \$3::uuid/);
+  assert.match(body[1], /\$3::uuid is not null/);
+  assert.match(body[1], /s\.organization_id = \$3::uuid/);
+});
+
 test('a cron sweep is exempt from the workspace rule, a settings route is not', () => {
   const exempt = runOnSandbox({
     [`${NEON}/0001_conversations.sql`]: CONVERSATIONS_MIGRATION,

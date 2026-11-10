@@ -40,6 +40,7 @@ const SECRET_SCAN_GUARD = 'scripts/check-secrets.mjs';
 const DATA_PROTECTION_GUARDS = [
   'scripts/check-rls-boundary.mjs',
   'scripts/check-db-isolation.mjs',
+  'scripts/check-migration-table-privileges.mjs',
   'scripts/check-retention-graph.mjs',
   'scripts/check-legal-hold-coverage.mjs',
 ];
@@ -1567,7 +1568,8 @@ export const COLLECTORS = {
 
   'repo.data-protection-guards': {
     area: 'data-protection',
-    describe: 'Reruns the row-level access, tenant isolation, erasure graph and legal hold guards.',
+    describe:
+      'Reruns the row-level access, tenant isolation, new-table privilege, erasure graph and legal hold guards.',
     async run(ctx) {
       const results = [];
       for (const guard of DATA_PROTECTION_GUARDS) results.push(await runGuard(ctx, guard));

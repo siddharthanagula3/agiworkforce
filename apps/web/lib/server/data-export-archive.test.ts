@@ -484,6 +484,24 @@ describe('final volume expiry', () => {
     expect(Date.parse(String(result['readyAt']))).toBeLessThan(recordedExpiry.getTime());
   });
 
+  it('reads the queued deadline only from the expiry job of this account', async () => {
+    mocks.enqueueJob.mockResolvedValueOnce({ id: 'expiry-job', status: 'queued', created: false });
+    const context = finalVolumeContext();
+    const query = (context.db as unknown as { query: ReturnType<typeof vi.fn> }).query;
+    query.mockResolvedValueOnce([]);
+    const before = Date.now();
+
+    const result = await buildDataExportArchiveVolume(context);
+
+    const [sql, params] = query.mock.calls[0] as unknown as [string, unknown[]];
+    expect(sql).toMatch(/from public\.background_jobs/);
+    expect(sql).toMatch(/where id = \$1\s+and kind = \$2\s+and user_id is null/);
+    expect(sql).toMatch(/payload->>'ownerId' = \$3/);
+    expect(params).toEqual(['expiry-job', 'data-export.expire-archive', USER_ID]);
+    expect(Date.parse(String(result['expiresAt']))).toBeGreaterThan(before);
+    expect(result['expiresAt']).not.toBe(recordedExpiry.toISOString());
+  });
+
   it('computes the deadline from now when it queues the expiry job itself', async () => {
     mocks.enqueueJob.mockResolvedValueOnce({ id: 'expiry-job', status: 'queued', created: true });
     const before = Date.now();

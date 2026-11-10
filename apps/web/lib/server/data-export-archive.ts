@@ -43,6 +43,7 @@ import {
 } from '@/lib/services/notification-email-service';
 
 export const DATA_EXPORT_BUILD_ARCHIVE_JOB = 'data-export.build-archive';
+const DATA_EXPORT_EXPIRE_ARCHIVE_JOB = 'data-export.expire-archive';
 const ARCHIVE_PART_BYTES = 8 * 1024 * 1024;
 const VOLUME_TARGET_BYTES = 1024 ** 3;
 const VOLUME_WORK_MS = 150_000;
@@ -578,11 +579,16 @@ export async function requestDataExportArchive(input: {
 async function recordedExpiry(
   db: DatabaseAdapter,
   expiryJobId: string,
+  ownerId: string,
   fallback: Date,
 ): Promise<Date> {
   const [row] = await db.query<{ run_after: string | Date | null }>(
-    `select run_after from public.background_jobs where id = $1`,
-    [expiryJobId],
+    `select run_after from public.background_jobs
+      where id = $1
+        and kind = $2
+        and user_id is null
+        and payload->>'ownerId' = $3`,
+    [expiryJobId, DATA_EXPORT_EXPIRE_ARCHIVE_JOB, ownerId],
   );
   const recorded = row?.run_after ? new Date(row.run_after) : null;
   return recorded && Number.isFinite(recorded.getTime()) ? recorded : fallback;
@@ -685,7 +691,7 @@ export async function buildDataExportArchiveVolume(
   const lifetimeMs = DATA_EXPORT_DOWNLOAD_HOURS * HOUR_MS;
   let expiresAt = new Date(Date.now() + lifetimeMs);
   const expiry = await enqueueJob(context.db, {
-    kind: 'data-export.expire-archive',
+    kind: DATA_EXPORT_EXPIRE_ARCHIVE_JOB,
     userId: null,
     idempotencyKey: `data-export-expire:${payload.exportId}`,
     runAfter: expiresAt,
@@ -695,7 +701,9 @@ export async function buildDataExportArchiveVolume(
       keys: [exportJsonKey(userId, payload.exportId), ...volumes.map((volume) => volume.key)],
     },
   });
-  if (!expiry.created) expiresAt = await recordedExpiry(context.db, expiry.id, expiresAt);
+  if (!expiry.created) {
+    expiresAt = await recordedExpiry(context.db, expiry.id, userId, expiresAt);
+  }
   const readyAt = new Date(expiresAt.getTime() - lifetimeMs);
   await enqueueJob(context.db, {
     kind: 'email.data-export-ready',

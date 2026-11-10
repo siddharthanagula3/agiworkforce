@@ -164,6 +164,9 @@
     "desktop_sign_in_grants": {
       "updatedAt": "consumed_at"
     },
+    "device_refresh_token_families": {
+      "updatedAt": "revoked_at"
+    },
     "ediscovery_exports": {
       "createdAt": "started_at"
     },

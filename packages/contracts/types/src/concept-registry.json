@@ -1558,6 +1558,11 @@
       "table": "connector_tool_session_grants",
       "exempt": ["updatedAt", "createdBy", "version"],
       "why": "a grant is only inserted or deleted, never edited: app_rls holds select, insert and delete on it and no update, so there is no last write to date or version, and the person who allows the tool is its owner, so created_by would repeat user_id"
+    },
+    {
+      "table": "device_refresh_token_families",
+      "exempt": [],
+      "why": "the end state of one device refresh credential family, written by the server when a rotation locks it or a sign-out, unlink, compromise or deprovision ends it; revoked_at is its only field that ever changes and a trigger refuses clearing it, so revoked_at is the last write, there is no creator distinct from the account, and no client edits it under an If-Match precondition"
     }
   ],
   "tableDispositions": [
@@ -1883,6 +1888,11 @@
       "table": "account_security_challenges",
       "disposition": "identity",
       "why": "the local record of one sign-in ceremony in flight, deleted when it is used or expires"
+    },
+    {
+      "table": "device_refresh_token_families",
+      "disposition": "identity",
+      "why": "whether one device sign-in credential family is ended; it is how the account's devices prove who they are, not a product object, and its token rows belong to the device concept"
     }
   ],
   "uiStateColumns": [
