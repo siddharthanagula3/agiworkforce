@@ -82,6 +82,9 @@ Undecided calls from that round are in [`open-questions.md`](open-questions.md).
   reviewer notes and `apps/mobile/__tests__/ios-store-submission-config.test.ts` describe that build
   and the test is green again. Every remaining console, credential, device and decision step is in
   `docs/runbooks/mobile-store-first-release.md`, in order.
+- Phone sign-in to Cloud is refused by production today (`MOBILE-CLOUD-SIGNIN-AZP-2026-11-10`): the
+  server fix is engineering, the production deploy that makes it live is yours to order, and
+  neither store can review the app until it is live.
 - No store build can start before 2026-11-12: the Expo patch update the release check requires is
   held by the seven-day package-age rule until then (`MOBILE-EXPO-PATCH-LAG-2026-11-10`, runbook
   step 7 item 1).

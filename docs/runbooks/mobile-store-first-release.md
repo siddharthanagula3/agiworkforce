@@ -14,6 +14,26 @@ Signing and link files are covered in `mobile-eas-signing.md`. Selling plans
 later is covered in `mobile-store-products.md`; nothing in that runbook is
 needed for version 1.
 
+## Two things stop a submission today
+
+Neither is a console step, and both must be closed before anything below is
+worth doing.
+
+1. **Nobody can sign in to Cloud from the phone.** Sign-in itself succeeds,
+   then the app's first call to `agiworkforce.com` is refused and the app
+   shows "Session Expired". The server checks the phone's token against the
+   list of allowed web origins, and a token minted by a native app names no
+   origin. It was seen on 2026-11-10 in the iPhone simulator against
+   production, with email and code. It needs a server change and a production
+   deploy, which is yours to order. App Review and Play review both sign in,
+   so a build submitted before that is rejected. The item is
+   `MOBILE-CLOUD-SIGNIN-AZP-2026-11-10` in `audit/registers/known-flaws.md`.
+2. **No store build can start before 2026-11-12** (step 7, item 1).
+
+Fixed on 2026-11-10 and worth knowing: the Google and GitHub buttons failed
+in every build because the app never declared `expo-auth-session`. It is now
+declared, and `apps/mobile/__tests__/sso-native-dependencies.test.ts` holds it.
+
 ## What version 1 is
 
 - `apps/mobile/src/features/billing/storePurchases.json` holds `"nativePurchases": false`. With

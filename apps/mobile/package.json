@@ -86,6 +86,7 @@
     "expo-apple-authentication": "~57.0.2",
     "expo-asset": "~57.0.20",
     "expo-audio": "~57.0.5",
+    "expo-auth-session": "~57.0.16",
     "expo-background-task": "~57.0.21",
     "expo-build-properties": "~57.0.22",
     "expo-calendar": "~57.0.5",
