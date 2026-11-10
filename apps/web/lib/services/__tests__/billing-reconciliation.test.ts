@@ -9,22 +9,36 @@ const PRO_MONTHLY_PRICE = 'price_pro_monthly_test';
 const PRO_YEARLY_PRICE = 'price_pro_yearly_test';
 const MAX_MONTHLY_PRICE = 'price_max_monthly_test';
 
-const mocks = vi.hoisted(() => ({ getTierMapping: vi.fn() }));
+const TEAM_STANDARD_PRICE = 'price_team_standard_test';
+const TEAM_PREMIUM_PRICE = 'price_team_premium_test';
+
+const mocks = vi.hoisted(() => ({ getTierMapping: vi.fn(), getPricePoint: vi.fn() }));
 vi.mock('@/lib/price-tier-mapping', () => ({ getTierMapping: mocks.getTierMapping }));
+vi.mock('@/lib/pricing', () => ({ getPricePointForPriceId: mocks.getPricePoint }));
 
 import {
   compareBilledPrice,
   expectedUnitAmount,
   reconcileBilledPlans,
+  requeueSubscriptionsForReview,
 } from '../billing-reconciliation';
 
 const PRO_MONTHLY_CENTS = 20_00;
 const MAX_MONTHLY_CENTS = 100_00;
 
+const MONTHLY = { interval: 'month', interval_count: 1 };
+
+function stripeItem(
+  priceId: string,
+  unitAmount: number | null,
+  currency = 'usd',
+  recurring: { interval: string; interval_count: number } | null | undefined = MONTHLY,
+) {
+  return { price: { id: priceId, unit_amount: unitAmount, currency, recurring } };
+}
+
 function stripeSubscription(priceId: string, unitAmount: number, currency = 'usd') {
-  return {
-    items: { data: [{ price: { id: priceId, unit_amount: unitAmount, currency } }] },
-  };
+  return { items: { data: [stripeItem(priceId, unitAmount, currency)] } };
 }
 
 function subscriptionRow(overrides: Record<string, unknown> = {}) {
@@ -47,6 +61,13 @@ beforeEach(() => {
     [PRO_MONTHLY_PRICE]: { tier: 'pro', interval: 'monthly' },
     [PRO_YEARLY_PRICE]: { tier: 'pro', interval: 'yearly' },
     [MAX_MONTHLY_PRICE]: { tier: 'max', interval: 'monthly' },
+    [TEAM_STANDARD_PRICE]: { tier: 'team', interval: 'monthly' },
+    [TEAM_PREMIUM_PRICE]: { tier: 'team', interval: 'monthly' },
+  });
+  mocks.getPricePoint.mockImplementation((priceId: string) => {
+    if (priceId === TEAM_STANDARD_PRICE) return { plan: 'team' };
+    if (priceId === TEAM_PREMIUM_PRICE) return { plan: 'team_premium' };
+    return null;
   });
 });
 
@@ -74,6 +95,7 @@ describe('compareBilledPrice', () => {
         priceId: PRO_MONTHLY_PRICE,
         unitAmount: PRO_MONTHLY_CENTS,
         currency: 'usd',
+        recurring: { interval: 'month', intervalCount: 1 },
       }).fields,
     ).toEqual([]);
   });
@@ -85,6 +107,7 @@ describe('compareBilledPrice', () => {
       priceId: PRO_MONTHLY_PRICE,
       unitAmount: PRO_MONTHLY_CENTS,
       currency: 'usd',
+      recurring: { interval: 'month', intervalCount: 1 },
     });
 
     expect(result.fields).toEqual(['plan_tier']);
@@ -98,6 +121,7 @@ describe('compareBilledPrice', () => {
       priceId: PRO_MONTHLY_PRICE,
       unitAmount: PRO_MONTHLY_CENTS - 500,
       currency: 'usd',
+      recurring: { interval: 'month', intervalCount: 1 },
     });
 
     expect(result.fields).toEqual(['unit_amount']);
@@ -112,6 +136,7 @@ describe('compareBilledPrice', () => {
         priceId: PRO_YEARLY_PRICE,
         unitAmount: null,
         currency: 'usd',
+        recurring: { interval: 'month', intervalCount: 1 },
       }).fields,
     ).toEqual(['interval']);
   });
@@ -124,6 +149,7 @@ describe('compareBilledPrice', () => {
         priceId: 'price_never_registered',
         unitAmount: PRO_MONTHLY_CENTS,
         currency: 'usd',
+        recurring: { interval: 'month', intervalCount: 1 },
       }).fields,
     ).toEqual(['unregistered_price']);
   });
@@ -166,8 +192,8 @@ describe('reconcileBilledPlans', () => {
       userId: 'user-1',
       stripeSubscriptionId: 'sub_1',
       storedPlanTier: 'max',
-      stripePlanTier: 'pro',
       fields: ['plan_tier'],
+      lines: [{ priceId: PRO_MONTHLY_PRICE, stripePlanTier: 'pro', fields: ['plan_tier'] }],
     });
   });
 
@@ -272,5 +298,194 @@ describe('reconcileBilledPlans', () => {
 
     expect(report.diverged).toBe(5);
     expect(report.alert).toBe(true);
+  });
+});
+
+describe('provider cadence', () => {
+  it('flags a price that bills every three months under a monthly price id', () => {
+    const result = compareBilledPrice({
+      storedPlanTier: 'pro',
+      storedInterval: 'monthly',
+      priceId: PRO_MONTHLY_PRICE,
+      unitAmount: PRO_MONTHLY_CENTS,
+      currency: 'usd',
+      recurring: { interval: 'month', intervalCount: 3 },
+    });
+
+    expect(result.fields).toEqual(['interval']);
+  });
+
+  it('flags a yearly cadence behind a monthly price id even when the stored interval agrees', () => {
+    const result = compareBilledPrice({
+      storedPlanTier: 'pro',
+      storedInterval: 'monthly',
+      priceId: PRO_MONTHLY_PRICE,
+      unitAmount: PRO_MONTHLY_CENTS,
+      currency: 'usd',
+      recurring: { interval: 'year', intervalCount: 1 },
+    });
+
+    expect(result.fields).toEqual(['interval']);
+  });
+
+  it('records a missing cadence as not compared instead of agreement', () => {
+    const result = compareBilledPrice({
+      storedPlanTier: 'pro',
+      storedInterval: 'monthly',
+      priceId: PRO_MONTHLY_PRICE,
+      unitAmount: PRO_MONTHLY_CENTS,
+      currency: 'usd',
+      recurring: null,
+    });
+
+    expect(result.fields).toEqual([]);
+    expect(result.gaps).toEqual(['provider_cadence_unavailable']);
+  });
+});
+
+describe('comparison coverage', () => {
+  const base = {
+    storedPlanTier: 'pro',
+    storedInterval: 'monthly' as const,
+    priceId: PRO_MONTHLY_PRICE,
+    unitAmount: PRO_MONTHLY_CENTS,
+    currency: 'usd',
+    recurring: { interval: 'month', intervalCount: 1 },
+  };
+
+  it('has no gaps when every dimension was compared', () => {
+    expect(compareBilledPrice(base).gaps).toEqual([]);
+  });
+
+  it('names each dimension that could not be compared', () => {
+    expect(compareBilledPrice({ ...base, storedInterval: null }).gaps).toEqual([
+      'stored_interval_unknown',
+    ]);
+    expect(compareBilledPrice({ ...base, currency: 'eur' }).gaps).toEqual(['no_published_price']);
+    expect(compareBilledPrice({ ...base, currency: null }).gaps).toEqual(['currency_unavailable']);
+    expect(compareBilledPrice({ ...base, unitAmount: null }).gaps).toEqual([
+      'unit_amount_unavailable',
+    ]);
+  });
+
+  it('lists a subscription whose price was only compared in part', async () => {
+    const db = fakeDb([subscriptionRow({ billing_interval: null })]);
+    const stripe = {
+      subscriptions: {
+        retrieve: vi.fn(async () => ({
+          items: {
+            data: [stripeItem(PRO_MONTHLY_PRICE, PRO_MONTHLY_CENTS, 'usd', null)],
+          },
+        })),
+      },
+    };
+
+    const report = await reconcileBilledPlans({ db: db as never, stripe: stripe as never });
+
+    expect(report.examined).toBe(1);
+    expect(report.diverged).toBe(0);
+    expect(report.incomplete).toEqual([
+      {
+        stripeSubscriptionId: 'sub_1',
+        userId: 'user-1',
+        gaps: ['stored_interval_unknown', 'provider_cadence_unavailable'],
+      },
+    ]);
+  });
+});
+
+describe('mixed team seat subscriptions', () => {
+  const TEAM_STANDARD_CENTS = expectedUnitAmount('team', 'monthly', 'usd') as number;
+
+  function teamRow() {
+    return subscriptionRow({ plan_tier: 'team', billing_interval: 'monthly' });
+  }
+
+  it('compares the premium line when the standard line agrees', async () => {
+    const db = fakeDb([teamRow()]);
+    const stripe = {
+      subscriptions: {
+        retrieve: vi.fn(async () => ({
+          items: {
+            data: [
+              stripeItem(TEAM_STANDARD_PRICE, TEAM_STANDARD_CENTS),
+              stripeItem(TEAM_PREMIUM_PRICE, 1),
+            ],
+          },
+        })),
+      },
+    };
+
+    const report = await reconcileBilledPlans({ db: db as never, stripe: stripe as never });
+
+    expect(report.diverged).toBe(1);
+    expect(report.drifts[0]).toMatchObject({
+      stripeSubscriptionId: 'sub_1',
+      fields: ['unit_amount'],
+      lines: [{ priceId: TEAM_PREMIUM_PRICE, fields: ['unit_amount'], stripeUnitAmount: 1 }],
+    });
+  });
+
+  it('reports one divergence for a subscription whose two lines both drift', async () => {
+    const db = fakeDb([teamRow()]);
+    const stripe = {
+      subscriptions: {
+        retrieve: vi.fn(async () => ({
+          items: {
+            data: [stripeItem(TEAM_STANDARD_PRICE, 1), stripeItem(TEAM_PREMIUM_PRICE, 1)],
+          },
+        })),
+      },
+    };
+
+    const report = await reconcileBilledPlans({ db: db as never, stripe: stripe as never });
+
+    expect(report.diverged).toBe(1);
+    expect(report.drifts[0]?.lines.map((line) => line.priceId)).toEqual([
+      TEAM_STANDARD_PRICE,
+      TEAM_PREMIUM_PRICE,
+    ]);
+  });
+
+  it('does not compare a line that is not a team seat', async () => {
+    const db = fakeDb([teamRow()]);
+    const stripe = {
+      subscriptions: {
+        retrieve: vi.fn(async () => ({
+          items: {
+            data: [
+              stripeItem(TEAM_STANDARD_PRICE, TEAM_STANDARD_CENTS),
+              stripeItem('price_unrelated_addon', 1),
+            ],
+          },
+        })),
+      },
+    };
+
+    const report = await reconcileBilledPlans({ db: db as never, stripe: stripe as never });
+
+    expect(report.diverged).toBe(0);
+  });
+});
+
+describe('requeueSubscriptionsForReview', () => {
+  it('clears the review stamp of exactly the named subscriptions', async () => {
+    const db = fakeDb([]);
+
+    await requeueSubscriptionsForReview(db as never, ['sub_a', 'sub_b']);
+
+    const [sql, params] = db.execute.mock.calls[0] as unknown as [string, unknown[]];
+    expect(sql).toMatch(
+      /set stripe_price_reconciled_at = null\s+where stripe_subscription_id = any/iu,
+    );
+    expect(params).toEqual([['sub_a', 'sub_b']]);
+  });
+
+  it('writes nothing when there is nothing to queue', async () => {
+    const db = fakeDb([]);
+
+    await requeueSubscriptionsForReview(db as never, []);
+
+    expect(db.execute).not.toHaveBeenCalled();
   });
 });
