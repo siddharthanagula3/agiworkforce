@@ -7,6 +7,7 @@ import { MAX_PURCHASABLE_SEATS } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { getEnterpriseProductId, isEnterpriseProductId } from '@/lib/price-tier-mapping';
+import { DEFAULT_CHECKOUT_CURRENCY } from '@/lib/pricing';
 import { getSubscriptionPeriod } from '@/lib/stripe-types';
 import { normalizeStripeSubscription } from '@/lib/server/payments/stripe-provider';
 import { recordSubscriptionStateTransition } from '@/lib/server/payments/subscription-history';
@@ -833,7 +834,17 @@ type EnterpriseContractRow = OrganizationBillingContractRow & {
   commercial_agreement_id: string | null;
   commercial_agreement_version: number | string | null;
   activation_blocked_reason: ActivationBlockedReason | null;
+  overage_closeout_at?: string | Date | null;
+  overage_closeout_reason?: EnterpriseOverageWriteOff['reason'] | null;
+  overage_written_off_cents?: number | string | null;
 };
+
+export interface EnterpriseOverageWriteOff {
+  reason: 'contract_ended';
+  writtenOffCents: number;
+  currency: string;
+  recordedAt: string;
+}
 
 export interface EnterpriseContractContact {
   name: string | null;
@@ -858,6 +869,7 @@ export interface EnterpriseContractSummary {
   signedOrderSignedAt: string | null;
   commercialAgreementVersion: number | null;
   activationBlockedReason: ActivationBlockedReason | null;
+  overageWriteOff: EnterpriseOverageWriteOff | null;
 }
 
 export interface EnterpriseInvoiceSummary {
@@ -888,6 +900,20 @@ function isoOrNull(value: string | Date | null): string | null {
   return value instanceof Date ? value.toISOString() : value;
 }
 
+function overageWriteOffOf(
+  contract: EnterpriseContractRow,
+  invoiceCurrency: string | undefined,
+): EnterpriseOverageWriteOff | null {
+  const recordedAt = isoOrNull(contract.overage_closeout_at ?? null);
+  if (!recordedAt || !contract.overage_closeout_reason) return null;
+  return {
+    reason: contract.overage_closeout_reason,
+    writtenOffCents: Number(contract.overage_written_off_cents ?? 0),
+    currency: invoiceCurrency ?? DEFAULT_CHECKOUT_CURRENCY,
+    recordedAt,
+  };
+}
+
 export async function readEnterpriseContractSummary(
   db: DatabaseAdapter,
   organizationId: string,
@@ -899,7 +925,8 @@ export async function readEnterpriseContractSummary(
             billing_cadence, committed_seats, support_tier, payment_terms_days, tax_exempt_status,
             collection_stage, ended_at, billing_contact_name, billing_contact_email,
             procurement_contact_name, procurement_contact_email, signed_order_reference,
-            signed_order_signed_at, commercial_agreement_version, activation_blocked_reason
+            signed_order_signed_at, commercial_agreement_version, activation_blocked_reason,
+            overage_closeout_at, overage_closeout_reason, overage_written_off_cents
        from public.organization_billing_contracts
       where organization_id = $1::uuid
       limit 1`,
@@ -944,6 +971,7 @@ export async function readEnterpriseContractSummary(
           ? null
           : Number(contract.commercial_agreement_version),
       activationBlockedReason: contract.activation_blocked_reason ?? null,
+      overageWriteOff: overageWriteOffOf(contract, invoices[0]?.currency),
     },
     invoices: invoices.map((invoice) => ({
       invoiceNumber: invoice.invoice_number,

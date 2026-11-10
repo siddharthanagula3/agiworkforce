@@ -110,6 +110,37 @@ describe('WorkspaceEnterpriseContract', () => {
     expect(screen.getByText('As stated on each invoice')).toBeTruthy();
   });
 
+  it('shows the usage written off when the contract ended, read only', () => {
+    state({
+      contract: contract({
+        ended: true,
+        overageWriteOff: {
+          reason: 'contract_ended',
+          writtenOffCents: 4_000,
+          currency: 'usd',
+          recordedAt: '2026-06-15T05:00:00.000Z',
+        },
+      }),
+      invoices: [],
+    });
+
+    render(<WorkspaceEnterpriseContract />);
+
+    const label = screen.getByText('Usage written off at contract end');
+    const value = label.nextElementSibling?.textContent ?? '';
+    expect(value).toContain((40).toLocaleString(undefined, { style: 'currency', currency: 'USD' }));
+    expect(value).toContain('2026');
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  it('shows no write-off row for a contract without a closeout', () => {
+    state({ contract: contract({ overageWriteOff: null }), invoices: [] });
+
+    render(<WorkspaceEnterpriseContract />);
+
+    expect(screen.queryByText('Usage written off at contract end')).toBeNull();
+  });
+
   it('announces loading through the shared spinner', () => {
     state(undefined, { isPending: true });
 
@@ -212,8 +243,8 @@ describe('WorkspaceEnterpriseContract accessibility', () => {
   });
 
   it('shows the recorded calendar days of the term in a zone behind UTC', () => {
-    const previousZone = process.env.TZ;
-    process.env.TZ = 'America/Los_Angeles';
+    const previousZone = process.env['TZ'];
+    process.env['TZ'] = 'America/Los_Angeles';
     try {
       state({
         contract: contract({ termStart: '2026-01-01', termEnd: '2026-12-31' }),
@@ -225,8 +256,8 @@ describe('WorkspaceEnterpriseContract accessibility', () => {
       const term = screen.getByText(/Jan 1, 2026/);
       expect(term.textContent).toContain('Dec 31, 2026');
     } finally {
-      if (previousZone === undefined) delete process.env.TZ;
-      else process.env.TZ = previousZone;
+      if (previousZone === undefined) delete process.env['TZ'];
+      else process.env['TZ'] = previousZone;
     }
   });
 });

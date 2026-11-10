@@ -279,6 +279,15 @@ export function WorkspaceEnterpriseContract({
           <Row label="Tax status" value={TAX_STATUS_LABELS[contract.taxExemptStatus]} />
           <Row label="Purchase order" value={contract.procurementReference ?? NOT_ON_RECORD} />
           {contract.supportTier ? <Row label="Support tier" value={contract.supportTier} /> : null}
+          {contract.overageWriteOff ? (
+            <Row
+              label="Usage written off at contract end"
+              value={`${formatAmount(
+                contract.overageWriteOff.writtenOffCents,
+                contract.overageWriteOff.currency,
+              )}, ${formatDate(contract.overageWriteOff.recordedAt)}`}
+            />
+          ) : null}
         </div>
       </section>
 

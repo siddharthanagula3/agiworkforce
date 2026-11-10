@@ -82,6 +82,46 @@ describe('GET /api/cron/report-enterprise-usage', () => {
     expect(mocks.reportEnterpriseOverageUsage).toHaveBeenCalledTimes(1);
   });
 
+  it('totals the overage written off by ended-contract closeouts for operators', async () => {
+    const closeout = (writtenOffCents: number) => ({
+      reason: 'contract_ended',
+      writtenOffCents,
+      contractEndedAt: '2026-06-10T00:00:00.000Z',
+      closedOutAt: '2026-06-11T05:00:00.000Z',
+      unconfirmedIdentifier: null,
+    });
+    mocks.reportEnterpriseOverageUsage.mockResolvedValue([
+      {
+        organizationId: 'org_1',
+        status: 'reported',
+        reportedCents: 100,
+        cumulativeOverageCents: 100,
+      },
+      {
+        organizationId: 'org_2',
+        status: 'closed_out',
+        reportedCents: 0,
+        cumulativeOverageCents: 900,
+        closeout: closeout(900),
+      },
+      {
+        organizationId: 'org_3',
+        status: 'closed_out',
+        reportedCents: 0,
+        cumulativeOverageCents: 0,
+        closeout: closeout(0),
+      },
+    ]);
+
+    const response = await GET(req());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.closedOut).toBe(2);
+    expect(body.writtenOffCents).toBe(900);
+    expect(body.results[1].closeout).toEqual(closeout(900));
+  });
+
   it('reports failure when every contract failed to report', async () => {
     mocks.reportEnterpriseOverageUsage.mockResolvedValue([
       {
