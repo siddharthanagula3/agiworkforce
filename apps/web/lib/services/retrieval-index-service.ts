@@ -418,22 +418,25 @@ export type RetrievalIndexOutcome =
   | { kind: 'indexed'; chunkCount: number; semantic: boolean }
   | { kind: 'failed'; retryAfterMinutes: number | null };
 
+interface SettleFields {
+  succeeded: boolean;
+  chunkVersion?: number;
+  chunkCount?: number;
+  contentSha256?: string;
+  embeddingModel?: string | null;
+  title?: string;
+  lastError: string | null;
+  retryAfterMinutes: number;
+  resetAttempts: boolean;
+}
+
 async function settleDocument(
   db: DatabaseAdapter,
   document: Pick<RetrievalDocumentRow, 'id' | 'user_id'>,
-  fields: {
-    succeeded: boolean;
-    chunkVersion?: number;
-    chunkCount?: number;
-    contentSha256?: string;
-    embeddingModel?: string | null;
-    title?: string;
-    lastError: string | null;
-    retryAfterMinutes: number;
-    resetAttempts: boolean;
-  },
-): Promise<void> {
-  await db.execute(
+  workflowRunId: string,
+  fields: SettleFields,
+): Promise<boolean> {
+  const settled = await db.execute(
     `update retrieval_documents
         set status = case
                        when status = 'stale' then 'stale'
@@ -451,7 +454,8 @@ async function settleDocument(
             lease_expires_at = null,
             indexed_at = case when $3::int is not null then now() else indexed_at end,
             updated_at = now()
-      where id = $1 and user_id = $12`,
+      where id = $1 and user_id = $12
+        and workflow_run_id = $13 and status in ('indexing', 'stale')`,
     [
       document.id,
       fields.succeeded,
@@ -465,8 +469,10 @@ async function settleDocument(
       fields.resetAttempts,
       fields.retryAfterMinutes,
       document.user_id,
+      workflowRunId,
     ],
   );
+  return settled > 0;
 }
 
 /**
@@ -497,13 +503,13 @@ export async function indexRetrievalDocument(
     digest === document.content_sha256 &&
     (document.embedding_model !== null || chunks.length === 0)
   ) {
-    await settleDocument(db, document, {
+    const settled = await settleDocument(db, document, workflowRunId, {
       succeeded: true,
       lastError: null,
       retryAfterMinutes: 0,
       resetAttempts: true,
     });
-    return { kind: 'unchanged' };
+    return settled ? { kind: 'unchanged' } : { kind: 'skipped' };
   }
 
   const embedded =
@@ -512,17 +518,51 @@ export async function indexRetrievalDocument(
       : await embedChunks(db, document, chunks);
   const chunkVersion = document.chunk_version + 1;
 
+  const attempts = document.attempts + 1;
+  const retryAfterMinutes =
+    embedded.failure === 'no_route' || embedded.failure === 'not_entitled'
+      ? UNAVAILABLE_RETRY_HOURS * 60
+      : nextRetryMinutes(attempts);
+  const published: SettleFields = embedded.failure
+    ? {
+        succeeded: false,
+        chunkVersion,
+        chunkCount: chunks.length,
+        contentSha256: digest,
+        embeddingModel: null,
+        title: source.title,
+        lastError: RETRIEVAL_FAILURE_MESSAGES[embedded.failure],
+        retryAfterMinutes,
+        resetAttempts: false,
+      }
+    : {
+        succeeded: true,
+        chunkVersion,
+        chunkCount: chunks.length,
+        contentSha256: digest,
+        embeddingModel: embedded.model,
+        title: source.title,
+        lastError: null,
+        retryAfterMinutes: 0,
+        resetAttempts: true,
+      };
+
   try {
-    await writeChunks(db, document, source, chunks, embedded.vectors, chunkVersion);
+    const current = await db.transaction(async (tx) => {
+      if (!(await settleDocument(tx, document, workflowRunId, published))) return false;
+      await writeChunks(tx, document, source, chunks, embedded.vectors, chunkVersion);
+      return true;
+    });
+    if (!current) return { kind: 'skipped' };
   } catch (error) {
     logger.error({ err: error, documentId: document.id }, '[retrieval] chunk write failed');
-    const attempts = document.attempts + 1;
-    await settleDocument(db, document, {
+    const settled = await settleDocument(db, document, workflowRunId, {
       succeeded: false,
       lastError: INDEX_WRITE_FAILED_MESSAGE,
       retryAfterMinutes: nextRetryMinutes(attempts),
       resetAttempts: false,
     });
+    if (!settled) return { kind: 'skipped' };
     return {
       kind: 'failed',
       retryAfterMinutes: attempts < RETRIEVAL_MAX_ATTEMPTS ? nextRetryMinutes(attempts) : null,
@@ -530,39 +570,11 @@ export async function indexRetrievalDocument(
   }
 
   if (embedded.failure) {
-    const attempts = document.attempts + 1;
-    const retryAfterMinutes =
-      embedded.failure === 'no_route' || embedded.failure === 'not_entitled'
-        ? UNAVAILABLE_RETRY_HOURS * 60
-        : nextRetryMinutes(attempts);
-    await settleDocument(db, document, {
-      succeeded: false,
-      chunkVersion,
-      chunkCount: chunks.length,
-      contentSha256: digest,
-      embeddingModel: null,
-      title: source.title,
-      lastError: RETRIEVAL_FAILURE_MESSAGES[embedded.failure],
-      retryAfterMinutes,
-      resetAttempts: false,
-    });
     return {
       kind: 'failed',
       retryAfterMinutes: attempts < RETRIEVAL_MAX_ATTEMPTS ? retryAfterMinutes : null,
     };
   }
-
-  await settleDocument(db, document, {
-    succeeded: true,
-    chunkVersion,
-    chunkCount: chunks.length,
-    contentSha256: digest,
-    embeddingModel: embedded.model,
-    title: source.title,
-    lastError: null,
-    retryAfterMinutes: 0,
-    resetAttempts: true,
-  });
   return { kind: 'indexed', chunkCount: chunks.length, semantic: embedded.model !== null };
 }
 
