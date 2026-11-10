@@ -328,6 +328,11 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
   const dispatches = new Map<string, DispatchedTask>();
   const phoneStarts: number[] = [];
   const phoneThreads = new Set<string>();
+  let pairing = 0;
+
+  function isCurrent(state: ThreadState): boolean {
+    return threads.get(threadKey(state.rootId, state.threadId)) === state;
+  }
 
   function iso(): string {
     return new Date(now()).toISOString();
@@ -444,6 +449,7 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
     } finally {
       state.eventsDuringReads.delete(arrived);
     }
+    if (!isCurrent(state)) return;
     const running = activity.activeTurn;
     state.activeTurnId = running?.turnId ?? null;
     state.partialResponse = running?.partialResponse ?? '';
@@ -537,7 +543,9 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
       await reply({ error: refusal });
       return;
     }
+    const owner = pairing;
     const list = await deps.listSessions();
+    if (owner !== pairing) return;
     const root = list.groups.find((group) => group.rootId === request.rootId);
     if (!root || root.unavailable) {
       if (root?.unavailable) logger.warn('[remote-control] folder unavailable', root.unavailable);
@@ -549,6 +557,7 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
       const title =
         request.title ?? clipRemoteText(request.text, REMOTE_CODE_LIMITS.titleLength).text;
       threadId = (await deps.startSession(root.rootId, title)).threadId;
+      if (owner !== pairing) return;
       const { turnId } = await deps.startTurn({
         rootId: root.rootId,
         threadId,
@@ -627,7 +636,7 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
   }
 
   async function deliverGuidance(state: ThreadState): Promise<void> {
-    if (state.activeTurnId || state.queuedGuidance.length === 0) return;
+    if (!isCurrent(state) || state.activeTurnId || state.queuedGuidance.length === 0) return;
     const text = state.queuedGuidance.join('\n\n');
     state.queuedGuidance = [];
     const { turnId } = await deps.startTurn({
@@ -695,8 +704,10 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
       return;
     }
     let started: DispatchedTask;
+    const owner = pairing;
     try {
       const { threadId } = await deps.startSession(root.id, request.title);
+      if (owner !== pairing) return;
       const { turnId } = await deps.startTurn({
         rootId: root.id,
         threadId,
@@ -1116,6 +1127,8 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
      * turn for whoever attaches next.
      */
     forget: () => {
+      pairing += 1;
+      for (const state of threads.values()) state.queuedGuidance = [];
       threads.clear();
       dispatches.clear();
     },

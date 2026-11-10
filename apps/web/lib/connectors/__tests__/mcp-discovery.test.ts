@@ -52,6 +52,7 @@ beforeEach(() => {
   registrationMethod = 'cimd';
   resourceScopes = null;
   tokenRequests = [];
+  mocks.saveGrant.mockResolvedValue(true);
   vi.stubEnv('CONNECTOR_OAUTH_REDIRECT_BASE_URL', 'https://app.example.test');
   const clients = new Map<string, McpOAuthClientRecord>();
   mocks.getClient.mockImplementation(async (issuer: string) => clients.get(issuer) ?? null);
@@ -121,7 +122,10 @@ describe('discovered MCP OAuth with the v2 SDK', () => {
       });
       expect(start.status).toBe('redirect');
       if (start.status !== 'redirect') throw new Error(JSON.stringify(start));
-      const pending = mocks.savePending.mock.calls[0]?.[0] as PendingAuthorization;
+      const pending = {
+        ...(mocks.savePending.mock.calls[0]?.[0] as PendingAuthorization),
+        authorizationId: 'authorization-1',
+      };
       const redirect = new URL(start.authorizationUrl);
       expect(redirect.origin).toBe(ORIGINAL_ISSUER);
       expect(redirect.searchParams.get('state')).toBe(start.state);
@@ -161,9 +165,34 @@ describe('discovered MCP OAuth with the v2 SDK', () => {
           mcpUrl: MCP_URL,
         }),
         { accountLabel: null },
+        'authorization-1',
       );
     },
   );
+
+  it('stores nothing and says so when the authorization was replaced before it saved', async () => {
+    const start = await beginMcpAuthorization({
+      userId: 'user-1',
+      connectorId: 'airtable',
+      mcpUrl: MCP_URL,
+      returnPath: '/connectors',
+      scope: 'read',
+    });
+    if (start.status !== 'redirect') throw new Error(JSON.stringify(start));
+    const pending = {
+      ...(mocks.savePending.mock.calls[0]?.[0] as PendingAuthorization),
+      authorizationId: 'authorization-1',
+    };
+    mocks.saveGrant.mockResolvedValue(false);
+
+    const result = await completeMcpAuthorization({
+      pending,
+      state: start.state,
+      code: 'auth-code',
+    });
+
+    expect(result).toEqual({ status: 'superseded' });
+  });
 
   it('refreshes a token only at the issuer that originally granted it', async () => {
     const result = await refreshDiscoveredGrant({

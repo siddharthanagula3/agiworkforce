@@ -591,7 +591,8 @@ export async function loadConnectorToolPermissions(
       : Promise.resolve(null),
     workspaceToolRules(db, organizationId),
   ]);
-  const governed = withWorkspaceToolRules(grants ? withSessionGrants(base, grants) : base, rules);
+  const ruled = withWorkspaceToolRules(grants ? withSessionGrants(base, grants) : base, rules);
+  const governed = standingPermissionsReadable ? ruled : withoutStandingApprovals(ruled);
   return withDisabledConnectorIds(
     {
       ...governed,

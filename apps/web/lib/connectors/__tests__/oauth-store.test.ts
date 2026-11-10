@@ -20,6 +20,7 @@ vi.mock('@/lib/server/neon-db', () => ({
 }));
 
 import {
+  cancelPendingConnectorAuthorizations,
   captureAndRevokeConnectorOAuthGrants,
   consumePendingAuthorization,
   createPendingAuthorization,
@@ -412,6 +413,74 @@ describe('listing unfinished authorizations', () => {
     expect(sql).toContain('consumed_at is null');
     expect(sql).toContain('expires_at > now()');
     expect(mockQuery.mock.calls[0]?.[1]).toEqual(['user_1']);
+  });
+});
+
+describe('a callback that was replaced or cancelled before it saved', () => {
+  const tokens = {
+    accessToken: 'access-value',
+    refreshToken: null,
+    tokenType: 'Bearer',
+    grantedScopes: ['read'],
+    accessTokenExpiresAt: null,
+    tokenEndpoint: 'https://auth.example.com/token',
+  };
+
+  it('hands back the id of the authorization it consumed', async () => {
+    mockQuery.mockResolvedValue([
+      {
+        id: 'auth-1',
+        user_id: 'user-1',
+        connector_id: 'linear',
+        code_verifier_enc: encryptConnectorToken('verifier-value', 'oauth-code-verifier'),
+        redirect_uri: 'https://app.example.com/api/connectors/oauth/callback',
+        requested_scopes: [],
+        return_path: '/connectors',
+      },
+    ]);
+
+    const pending = await consumePendingAuthorization(STATE, 'user-1');
+
+    expect(String(mockQuery.mock.calls[0]?.[0])).toMatch(/returning id, user_id/);
+    expect(pending?.authorizationId).toBe('auth-1');
+  });
+
+  it('saves nothing once the consumed authorization row is gone', async () => {
+    mockTxQuery.mockResolvedValue([]);
+
+    await expect(upsertConnectorOAuthGrant('user-1', 'linear', tokens, {}, 'auth-1')).resolves.toBe(
+      false,
+    );
+
+    expect(mockTxQuery.mock.calls[0]?.[0]).toMatch(/consumed_at is not null\s+for update/);
+    expect(mockTxQuery.mock.calls[0]?.[1]).toEqual(['auth-1', 'user-1', 'linear']);
+    expect(mockTxExecute).not.toHaveBeenCalled();
+    expect(mockExecute).not.toHaveBeenCalled();
+  });
+
+  it('saves under the lock on its own authorization row while that row is still there', async () => {
+    mockTxQuery.mockResolvedValue([{ id: 'auth-1' }]);
+
+    await expect(upsertConnectorOAuthGrant('user-1', 'linear', tokens, {}, 'auth-1')).resolves.toBe(
+      true,
+    );
+
+    expect(String(mockTxExecute.mock.calls[0]?.[0])).toContain(
+      'insert into public.connector_oauth_grants',
+    );
+    expect(mockExecute).not.toHaveBeenCalled();
+  });
+
+  it('deletes the in-flight authorizations of a connector, or of one account', async () => {
+    await cancelPendingConnectorAuthorizations('user-1', 'gmail');
+    await cancelPendingConnectorAuthorizations('user-1', 'gmail', ' work ');
+
+    const [all, one] = mockExecute.mock.calls as Array<[string, unknown[]]>;
+    expect(all[0]).toMatch(/delete from public\.connector_oauth_authorizations/);
+    expect(all[0]).not.toContain('account_key');
+    expect(all[1]).toEqual(['user-1', 'gmail']);
+    expect(one[0]).toContain('account_key = $3');
+    expect(one[1]).toEqual(['user-1', 'gmail', 'work']);
   });
 });
 

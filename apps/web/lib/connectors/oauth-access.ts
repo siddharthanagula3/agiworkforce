@@ -12,6 +12,7 @@ import {
   ConnectorGrantLockTimeoutError,
   getConnectorOAuthGrant,
   listRevocableConnectorTokens,
+  cancelPendingConnectorAuthorizations,
   captureAndRevokeConnectorOAuthGrants,
   withLockedConnectorOAuthGrant,
   type ConnectorOAuthGrant,
@@ -446,6 +447,7 @@ export async function disconnectConnectorOAuthGrant(
   accountKey?: string | null,
 ): Promise<ConnectorDisconnectOutcome> {
   if (connectorId === BANK_ACCOUNTS_CONNECTOR_ID) await removeBankAccountsItem(userId);
+  await cancelPendingConnectorAuthorizations(userId, connectorId, accountKey);
   const captured = await captureAndRevokeConnectorOAuthGrants(userId, connectorId, accountKey);
   const { revocation } = await revokeCapturedCredentialsAtVendor(
     userId,

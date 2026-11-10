@@ -20,7 +20,14 @@ vi.mock('@/lib/services/subscription-service', () => ({
 vi.mock('@/lib/services/managed-usage-summary-service', () => ({
   getManagedUsageSummary: vi.fn(async () => null),
 }));
+vi.mock('@/lib/connectors/oauth-access', () => ({
+  disconnectConnectorOAuthGrant: vi.fn(async () => ({
+    disconnected: true,
+    vendorRevocation: { status: 'revoked' },
+  })),
+}));
 vi.mock('@/lib/user-connector-tools', () => ({
+  evictConnectorOAuthCaches: vi.fn(async () => undefined),
   getOperatorMappedConnectorIds: () => new Set(['slack']),
   getUserGithubInstallations: vi.fn(async () => []),
   getUserCustomConnectorSummaries: vi.fn(async () => []),

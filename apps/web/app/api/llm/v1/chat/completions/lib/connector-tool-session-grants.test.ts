@@ -241,6 +241,26 @@ describe('connector tool session grants', () => {
     );
   });
 
+  it('asks for every connector tool, a read included, when the saved verdicts cannot be read', async () => {
+    const { db } = permissionDatabase({ standingUnavailable: true });
+    const permissions = await loadConnectorToolPermissions(db, 'user-1', null);
+    expect(permissions.levelFor('mcp__gmail__get_message')).toBe('ask');
+    expect(permissions.levelFor('mcp__github__create_issue')).toBe('ask');
+    expect(permissions.levelForConnectorTool('gmail', 'get_message')).toBe('ask');
+    expect(permissions.canRememberApproval?.('mcp__gmail__get_message')).toBe(false);
+  });
+
+  it('keeps a workspace deny final when the member verdicts cannot be read', async () => {
+    const { db } = permissionDatabase({ standingUnavailable: true, workspaceLevel: 'deny' });
+    const permissions = await loadConnectorToolPermissions(
+      db,
+      'user-1',
+      '0190a000-0000-7000-8000-000000000010',
+    );
+    expect(permissions.levelFor('mcp__github__create_issue')).toBe('deny');
+    expect(permissions.levelFor('mcp__gmail__get_message')).toBe('ask');
+  });
+
   it('reports unavailable grant storage without advertising conversation scope', async () => {
     const { db } = permissionDatabase({ grantsUnavailable: true });
     const permissions = await loadConnectorToolPermissions(

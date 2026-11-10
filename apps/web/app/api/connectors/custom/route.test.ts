@@ -76,6 +76,7 @@ vi.mock('@/lib/connectors/mcp-discovery', () => ({
   revokeDiscoveredGrant: vi.fn(),
 }));
 vi.mock('@/lib/connectors/oauth-store', () => ({
+  cancelPendingConnectorAuthorizations: vi.fn(),
   captureAndRevokeConnectorOAuthGrants: vi.fn(),
   ConnectorGrantDecryptionError: class extends Error {},
   ConnectorGrantLockTimeoutError: class extends Error {},

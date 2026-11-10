@@ -288,7 +288,7 @@ function resetMocks(): void {
     updated_at: '2026-09-05T00:00:00.000Z',
   });
   mocks.deleteCustom.mockResolvedValue([]);
-  mocks.clearPermissions.mockResolvedValue(undefined);
+  mocks.clearPermissions.mockResolvedValue(true);
   mocks.cacheToolNames.mockResolvedValue(undefined);
   mocks.connectorPolicy.mockResolvedValue({
     allowed: true,
@@ -633,6 +633,26 @@ describe('/api/connectors managed-cloud capability boundary', () => {
     expect(
       mocks.execute.mock.calls.some(([sql]) => String(sql).includes('update user_connectors')),
     ).toBe(false);
+  });
+
+  it('tells the person when the saved verdicts of a disconnected connector could not be cleared', async () => {
+    mocks.oauthConfiguredIds.mockReturnValue(new Set(['linear']));
+    mocks.disconnectOauth.mockResolvedValue({
+      disconnected: true,
+      vendorRevocation: { status: 'revoked' },
+    });
+    mocks.clearPermissions.mockResolvedValue(false);
+
+    const response = await DELETE(
+      new NextRequest('http://localhost:3000/api/connectors?connectorId=linear', {
+        method: 'DELETE',
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { success: boolean; vendorNotice?: string };
+    expect(body.success).toBe(true);
+    expect(body.vendorNotice).toContain('saved tool permissions could not be cleared');
   });
 
   it('fails closed when the real GitHub installation signal cannot be loaded', async () => {

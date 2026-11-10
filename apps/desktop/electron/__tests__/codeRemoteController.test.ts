@@ -1075,6 +1075,61 @@ describe('remote control of a developer session', () => {
     expect(lastEvent('guidance-delivered')).toBeUndefined();
   });
 
+  it('starts nothing for a phone whose pairing was stopped while its snapshot was being read', async () => {
+    const running = { turnId: 'turn-1', partialResponse: '', pendingApprovals: [] };
+    deps.readActivity = vi.fn(async () => activity({ activeTurn: running }));
+    const controller = createCodeRemoteController(deps);
+    const attach = () =>
+      controller.handleControl(
+        'code.session.attach',
+        request('attach', { rootId: 'root-1', threadId: 'thread-1' }),
+      );
+    await attach();
+    await controller.handleControl(
+      'code.session.steer',
+      request('steer', { rootId: 'root-1', threadId: 'thread-1', text: 'delete the branch' }),
+    );
+
+    let release: () => void = () => undefined;
+    deps.readActivity = vi.fn(
+      () =>
+        new Promise<DeveloperSessionActivity>((resolve) => {
+          release = () => resolve(activity());
+        }),
+    );
+    sent = [];
+    const reopened = attach();
+    controller.forget();
+    release();
+    await reopened;
+
+    expect(deps.startTurn).not.toHaveBeenCalled();
+    expect(sent).toEqual([]);
+  });
+
+  it('starts no session for a start request whose pairing was stopped while it listed folders', async () => {
+    const controller = createCodeRemoteController(deps);
+    let release: () => void = () => undefined;
+    const listed = deps.listSessions;
+    deps.listSessions = vi.fn(
+      () =>
+        new Promise<DeveloperSessionList>((resolve) => {
+          release = () => resolve(listed());
+        }),
+    );
+    deps.startSession = vi.fn(async () => ({ threadId: 'thread-new' }));
+    const start = controller.handleControl(
+      'code.session.start',
+      request('start', { rootId: 'root-1', text: 'build it' }),
+    );
+    controller.forget();
+    release();
+    await start;
+
+    expect(deps.startSession).not.toHaveBeenCalled();
+    expect(deps.startTurn).not.toHaveBeenCalled();
+  });
+
   // A diff read from a tool's own output is what that tool wrote then. Once
   // no turn runs, the file on disk is the truth, and git reads it.
   it('shows the diff git reads now, not one a finished turn left behind', async () => {

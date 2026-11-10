@@ -300,10 +300,17 @@ export function createFakeNeonDb(seed?: {
             phase = 'done';
             return run(sql, params, stagedKeys) as Row[];
           }
+          if (/^select public\.revoke_connector_tool_session_grants\(/iu.test(normalized)) {
+            calls.push({ sql, params });
+            return [{ removed: 0 }] as unknown as Row[];
+          }
           throw new Error(`Unexpected rotation query during ${phase}: ${normalized}`);
         },
         execute: async (sql: string, params: unknown[] = []): Promise<number> => {
           const normalized = sql.replace(/\s+/gu, ' ').trim();
+          if (/^delete from public\.connector_tool_permissions/iu.test(normalized)) {
+            return run(sql, params, stagedKeys).length;
+          }
           if (
             phase !== 'revoke' ||
             normalized !==

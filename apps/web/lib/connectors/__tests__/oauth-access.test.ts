@@ -40,6 +40,7 @@ const mocks = vi.hoisted(() => {
     updateTokens: vi.fn(),
     revokeGrant: vi.fn(),
     captureGrant: vi.fn(),
+    cancelPending: vi.fn(),
     listRevocable: vi.fn(),
     refresh: vi.fn(),
     refreshDiscovered: vi.fn(),
@@ -74,6 +75,7 @@ vi.mock('@/lib/connectors/oauth-store', async (importOriginal) => ({
       revoke: () => mocks.revokeGrant(userId, connectorId, accountKey),
     }),
   captureAndRevokeConnectorOAuthGrants: (...a: unknown[]) => mocks.captureGrant(...a),
+  cancelPendingConnectorAuthorizations: (...a: unknown[]) => mocks.cancelPending(...a),
   getConnectorOAuthGrant: (...a: unknown[]) => mocks.getGrant(...a),
   updateConnectorOAuthGrantTokens: (...a: unknown[]) => mocks.updateTokens(...a),
   revokeConnectorOAuthGrant: (...a: unknown[]) => mocks.revokeGrant(...a),
@@ -152,6 +154,7 @@ beforeEach(() => {
   mocks.getProvider.mockReturnValue(PROVIDER);
   mocks.revokeGrant.mockResolvedValue(true);
   mocks.listRevocable.mockResolvedValue([]);
+  mocks.cancelPending.mockResolvedValue(undefined);
   mocks.captureGrant.mockImplementation(async (...args: unknown[]) => ({
     disconnected: true,
     tokens: await mocks.listRevocable(...args),
@@ -500,6 +503,22 @@ describe('disconnectConnectorOAuthGrant', () => {
     expect(mocks.listRevocable).toHaveBeenCalledWith('u1', 'linear', 'work');
     expect(mocks.revokeAtProvider).toHaveBeenCalledTimes(1);
     expect(mocks.captureGrant).toHaveBeenCalledWith('u1', 'linear', 'work');
+  });
+
+  it('cancels the authorizations still in flight before it removes the grants', async () => {
+    const order: string[] = [];
+    mocks.cancelPending.mockImplementation(async () => {
+      order.push('cancel');
+    });
+    mocks.captureGrant.mockImplementation(async () => {
+      order.push('capture');
+      return { disconnected: true, tokens: [], incomplete: false };
+    });
+
+    await disconnectConnectorOAuthGrant('u1', 'linear', 'work');
+
+    expect(mocks.cancelPending).toHaveBeenCalledWith('u1', 'linear', 'work');
+    expect(order).toEqual(['cancel', 'capture']);
   });
 
   it('does not call the provider when the local transaction fails', async () => {

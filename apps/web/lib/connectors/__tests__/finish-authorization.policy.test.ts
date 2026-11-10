@@ -125,7 +125,7 @@ beforeEach(() => {
     connectorId: 'linear',
     grantedScopes: ['read'],
   });
-  mocks.upsert.mockResolvedValue(undefined);
+  mocks.upsert.mockResolvedValue(true);
   mocks.audit.mockResolvedValue(undefined);
 });
 
@@ -288,6 +288,37 @@ describe('connector authorization completion host policy', () => {
     expect(mocks.upsert).toHaveBeenCalledTimes(1);
     expect(mocks.complete).not.toHaveBeenCalled();
   });
+
+  it.each(['registered', 'discovered'] as const)(
+    'reports an invalid state, and no connection, when a %s authorization was replaced before it saved',
+    async (kind) => {
+      if (kind === 'discovered') {
+        mocks.pending.mockResolvedValue({
+          authorizationId: 'authorization-1',
+          userId: USER,
+          connectorId: 'linear',
+          returnPath: '/connectors',
+          requestedScopes: ['read'],
+          redirectUri: 'https://app.example.com/api/connectors/oauth/callback',
+          codeVerifier: 'verifier',
+          mcpUrl: 'https://mcp.example.com/mcp',
+        });
+        mocks.complete.mockResolvedValue({ status: 'superseded' });
+      } else {
+        mocks.upsert.mockResolvedValue(false);
+      }
+      const result = await finishConnectorAuthorization({
+        request,
+        userId: USER,
+        state: 'state',
+        code: 'code',
+        iss: undefined,
+        providerError: null,
+      });
+      expect(result.status).toBe('invalid_state');
+      expect(mocks.audit).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe('connector authorization start host policy', () => {

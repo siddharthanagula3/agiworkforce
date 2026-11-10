@@ -49,6 +49,7 @@ vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 vi.mock('@/lib/connectors/oauth-store', () => ({
+  cancelPendingConnectorAuthorizations: vi.fn(),
   captureAndRevokeConnectorOAuthGrants: vi.fn(),
   ConnectorGrantDecryptionError: class ConnectorGrantDecryptionError extends Error {},
   ConnectorGrantLockTimeoutError: class ConnectorGrantLockTimeoutError extends Error {},
