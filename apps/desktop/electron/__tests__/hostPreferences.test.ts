@@ -17,6 +17,7 @@ const trayCalls: string[] = [];
 let registeredAccelerators: string[] = [];
 let heldByAnotherApp: string[] = [];
 let storedSettings: Record<string, unknown> = {};
+let diskRefusesWrites = false;
 
 vi.mock('electron', () => {
   class BrowserWindow {
@@ -126,6 +127,13 @@ vi.mock('../settingsStore', () => ({
     storedSettings = { ...storedSettings, ...patch };
     return storedSettings;
   }),
+  saveSettingsDurably: vi.fn((patch: Record<string, unknown>) => {
+    if (diskRefusesWrites) {
+      throw new Error('The setting could not be saved on this computer, so it was not changed.');
+    }
+    storedSettings = { ...storedSettings, ...patch };
+    return storedSettings;
+  }),
   settingsFilePath: () => '/tmp/agi-cloud-test/settings.json',
 }));
 
@@ -149,6 +157,7 @@ vi.mock('../quickAsk', () => ({
 vi.mock('../screenshot', () => ({
   captureToChat: vi.fn(),
   captureWindowToChat: vi.fn(),
+  putCaptureOnClipboard: vi.fn(),
   takeCaptureBackFromClipboard: vi.fn(),
 }));
 vi.mock('../voiceDictation', () => ({ toggleGlobalDictation: vi.fn() }));
@@ -184,6 +193,7 @@ type State = {
 
 beforeEach(() => {
   storedSettings = {};
+  diskRefusesWrites = false;
   trayCalls.length = 0;
   registeredAccelerators = [];
   heldByAnotherApp = [];
@@ -388,6 +398,38 @@ describe('the host preferences channel', () => {
 
     await invoke({ showInMenuBar: true });
     expect(trayCalls).toEqual(['destroy', 'create']);
+  });
+
+  it('refuses a menu bar change the settings file could not keep, and leaves the item as it was', async () => {
+    diskRefusesWrites = true;
+
+    await expect(invoke({ showInMenuBar: false })).rejects.toThrow(/could not be saved/u);
+
+    expect(trayCalls).toEqual([]);
+    expect(storedSettings['showInMenuBar']).toBeUndefined();
+  });
+
+  it('refuses a shortcut change the settings file could not keep, and keeps the registered chord', async () => {
+    await invoke(null);
+    const before = [...registeredAccelerators];
+    diskRefusesWrites = true;
+
+    await expect(invoke({ voiceShortcut: HOST_SHORTCUT_CHOICES.voice[1] })).rejects.toThrow(
+      /could not be saved/u,
+    );
+
+    expect(storedSettings['voiceShortcut']).toBeUndefined();
+    expect(registeredAccelerators).toEqual(before);
+  });
+
+  it('does not apply launch at login to the system when the setting could not be saved', async () => {
+    storedSettings = { launchAtLogin: true };
+    diskRefusesWrites = true;
+
+    await expect(invoke({ launchAtLogin: false })).rejects.toThrow(/could not be saved/u);
+
+    expect(loginItem).not.toHaveBeenCalled();
+    expect(storedSettings['launchAtLogin']).toBe(true);
   });
 
   it('does not touch the menu bar when the switch did not move', async () => {

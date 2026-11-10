@@ -30,9 +30,17 @@ vi.mock('electron', () => ({
 }));
 
 let stored: GarnishShortcuts = { ...DEFAULT_SHORTCUTS };
+let diskRefusesWrites = false;
 vi.mock('../settingsStore', () => ({
   getShortcuts: () => stored,
   saveSettings: (patch: Partial<GarnishShortcuts>) => {
+    stored = { ...stored, ...patch };
+    return stored;
+  },
+  saveSettingsDurably: (patch: Partial<GarnishShortcuts>) => {
+    if (diskRefusesWrites) {
+      throw new Error('The setting could not be saved on this computer, so it was not changed.');
+    }
     stored = { ...stored, ...patch };
     return stored;
   },
@@ -64,6 +72,7 @@ describe('global shortcut registration', () => {
   beforeEach(() => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     stored = { ...DEFAULT_SHORTCUTS };
+    diskRefusesWrites = false;
     registered.clear();
     rejected.clear();
     notifications.length = 0;
@@ -223,6 +232,19 @@ describe('global shortcut registration', () => {
       expect(stored.voiceShortcut).toBe(held);
       expect(statusOf('voiceShortcut')).toBe('taken');
       expect(statusOf('stopShortcut')).toBe('registered');
+    });
+
+    it('refuses a change the settings file could not keep and leaves every chord as registered', () => {
+      const spies = handlers();
+      registerGarnishShortcuts(spies);
+      diskRefusesWrites = true;
+
+      const refusal = changeGarnishShortcuts({ stopShortcut: replacement }, spies);
+
+      expect(refusal).toMatch(/could not be saved/u);
+      expect(stored.stopShortcut).toBe(DEFAULT_SHORTCUTS.stopShortcut);
+      expect(registered.has(DEFAULT_SHORTCUTS.stopShortcut)).toBe(true);
+      expect(registered.has(replacement)).toBe(false);
     });
 
     it('returns null and registers the new chord when it is free', () => {

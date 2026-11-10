@@ -697,7 +697,7 @@ function deliverDeepLink(url: string): void {
   }
 
   deepLinkQueue = enqueueDeepLink(deepLinkQueue, url, Date.now());
-  if (rendererReady()) {
+  if (deepLinkReceiverReady()) {
     focusMainWindow();
     flushDeepLinks();
     return;
@@ -796,12 +796,22 @@ function rendererReady(): boolean {
 }
 
 /**
+ * The sign-in completion page is trusted but has no receiver and is replaced
+ * by a full navigation once it finishes, so a link sent to it is lost. Only
+ * the signed-in product holds one.
+ */
+function deepLinkReceiverReady(): boolean {
+  if (!mainWindow || !rendererReady()) return false;
+  return isSignedInProductPage(mainWindow.webContents.getURL(), CLOUD_APP_ORIGIN);
+}
+
+/**
  * Hands the page every link that arrived while it could not take one, oldest
  * first. A link held across a relaunch is only replayed while it is still
  * recent: an approval link from yesterday is not something to act on now.
  */
 function flushDeepLinks(): void {
-  if (!mainWindow || !rendererReady()) return;
+  if (!mainWindow || !deepLinkReceiverReady()) return;
   const due = freshDeepLinks(deepLinkQueue, Date.now());
   deepLinkQueue = [];
   saveDeepLinkQueue(deepLinkQueuePath(), deepLinkQueue);

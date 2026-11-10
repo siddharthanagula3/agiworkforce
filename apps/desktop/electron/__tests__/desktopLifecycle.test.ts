@@ -125,6 +125,7 @@ vi.mock('electron', () => {
     dialog: { showMessageBox: vi.fn() },
     ipcMain: {
       handle: vi.fn((channel: string, handler: Listener) => ipcHandlers.set(channel, handler)),
+      on: vi.fn(),
     },
     protocol: { registerSchemesAsPrivileged: vi.fn(), handle: vi.fn() },
     screen: {
@@ -159,6 +160,7 @@ vi.mock('../settingsStore', async (importOriginal) => {
     getShortcuts: () => ({ ...core.DEFAULT_SHORTCUTS }),
     getPreferences: () => ({ ...core.DEFAULT_PREFERENCES, ...preferences }),
     saveSettings: vi.fn(),
+    saveSettingsDurably: vi.fn(),
     settingsFilePath: () => path.join(userData, 'settings.json'),
   };
 });

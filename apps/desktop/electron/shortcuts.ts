@@ -1,5 +1,5 @@
 import { Notification, globalShortcut } from 'electron';
-import { getShortcuts, saveSettings } from './settingsStore';
+import { getShortcuts, saveSettings, saveSettingsDurably } from './settingsStore';
 import { createNativeNotification } from './runtime/nativeSurface';
 import type { HostShortcutStatus } from '@agiworkforce/local-runtime-contract';
 import { PRODUCT_NAMES } from '@agiworkforce/types';
@@ -152,7 +152,11 @@ export function changeGarnishShortcuts(
   handlers: GarnishShortcutHandlers,
 ): string | null {
   const previous = getShortcuts();
-  saveSettings(patch);
+  try {
+    saveSettingsDurably(patch);
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
   unregisterGarnishShortcuts();
   registerGarnishShortcuts(handlers);
   const lost = lostAlwaysOnShortcut();
