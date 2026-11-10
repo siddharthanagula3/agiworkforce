@@ -725,7 +725,10 @@ impl PluginsManager {
         Ok(&self.plugins)
     }
     fn load_from_dir(&mut self, dir: &Path, from_project_dir: bool) -> Result<()> {
-        let disabled = load_disabled_plugins();
+        let (disabled, disabled_unknown) = match load_disabled_plugins() {
+            Ok(disabled) => (disabled, None),
+            Err(error) => (HashSet::new(), Some(error)),
+        };
         let account_refusal =
             crate::tier_cache::capability_refusal(crate::tier_cache::PLUGINS_CAPABILITY, "Plugins");
         for entry in std::fs::read_dir(dir)? {
@@ -806,7 +809,12 @@ impl PluginsManager {
                         .exists()
                         .then(|| UPDATE_PENDING.to_string())
                 })
-                .or_else(|| account_refusal.clone());
+                .or_else(|| account_refusal.clone())
+                .or_else(|| {
+                    disabled_unknown.as_ref().map(|error| {
+                        format!("which plugins you turned off could not be read: {error}")
+                    })
+                });
             if let Some(error) = &refusal {
                 eprintln!("[plugins] plugin '{}' is disabled: {}", name, error);
             }
@@ -1178,6 +1186,7 @@ impl PluginsManager {
             }
         };
         if let Err(error) = copy_outcome {
+            let _ = std::fs::remove_dir_all(&target);
             return PluginInstallOutcome::Failed { error };
         }
 
@@ -1366,13 +1375,13 @@ fn tracked_name(root: &Path, path: &Path) -> Vec<u8> {
 }
 
 #[cfg(unix)]
-fn os_bytes(text: &std::ffi::OsStr) -> Vec<u8> {
+pub(super) fn os_bytes(text: &std::ffi::OsStr) -> Vec<u8> {
     use std::os::unix::ffi::OsStrExt;
     text.as_bytes().to_vec()
 }
 
 #[cfg(not(unix))]
-fn os_bytes(text: &std::ffi::OsStr) -> Vec<u8> {
+pub(super) fn os_bytes(text: &std::ffi::OsStr) -> Vec<u8> {
     text.to_string_lossy().into_owned().into_bytes()
 }
 
@@ -1593,19 +1602,24 @@ fn manifest_path_entry(plugin: &LoadedPlugin, rel: &Path) -> Option<PluginManife
 }
 
 fn disabled_plugins_path() -> Option<PathBuf> {
-    crate::config::CliConfig::config_dir()
-        .ok()
-        .map(|dir| dir.join(DISABLED_PLUGINS_FILE))
+    crate::compaction::config_home().map(|dir| dir.join(DISABLED_PLUGINS_FILE))
 }
 
 /// Plugin directory names the user turned off. Empty when the file is absent,
-/// so the default stays "every installed plugin loads".
-pub fn load_disabled_plugins() -> HashSet<String> {
-    disabled_plugins_path()
-        .and_then(|path| std::fs::read_to_string(path).ok())
-        .and_then(|raw| serde_json::from_str::<Vec<String>>(&raw).ok())
-        .map(|names| names.into_iter().collect())
-        .unwrap_or_default()
+/// so the default stays "every installed plugin loads". A file that exists but
+/// cannot be read or parsed is an error: the choice it holds is unknown, and
+/// reading it as "nothing is off" would turn back on what the user turned off.
+pub fn load_disabled_plugins() -> Result<HashSet<String>, String> {
+    let Some(path) = disabled_plugins_path() else {
+        return Ok(HashSet::new());
+    };
+    match std::fs::read_to_string(&path) {
+        Ok(raw) => serde_json::from_str::<Vec<String>>(&raw)
+            .map(|names| names.into_iter().collect())
+            .map_err(|error| format!("{} is not a list of plugin names: {error}", path.display())),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(HashSet::new()),
+        Err(error) => Err(format!("{} could not be read: {error}", path.display())),
+    }
 }
 
 fn save_disabled_plugins(disabled: &HashSet<String>) -> std::io::Result<()> {
@@ -1618,12 +1632,14 @@ fn save_disabled_plugins(disabled: &HashSet<String>) -> std::io::Result<()> {
     let mut names: Vec<&String> = disabled.iter().collect();
     names.sort();
     let json = serde_json::to_string_pretty(&names).unwrap_or_else(|_| "[]".to_string());
-    std::fs::write(path, json)
+    let staged = path.with_extension("json.tmp");
+    std::fs::write(&staged, json)?;
+    std::fs::rename(&staged, &path)
 }
 
 /// Turn a plugin on or off for every surface that loads plugins.
 pub fn set_plugin_enabled(id: &str, enabled: bool) -> std::io::Result<()> {
-    let mut disabled = load_disabled_plugins();
+    let mut disabled = load_disabled_plugins().map_err(std::io::Error::other)?;
     let changed = if enabled {
         disabled.remove(id)
     } else {
@@ -2560,6 +2576,123 @@ mod tests {
         std::fs::remove_file(pending_update_marker(&plugins_dir, "acme")).unwrap();
         manager.load_all(None).unwrap();
         assert_eq!(manager.hook_configs().len(), 1);
+    }
+
+    fn plugins_dir_with(names: &[&str]) -> (tempfile::TempDir, PathBuf) {
+        let home = tempfile::tempdir().unwrap();
+        let plugins_dir = home.path().join("plugins");
+        for name in names {
+            write_test_manifest(
+                &plugins_dir.join(name),
+                &format!(r#"{{"name":"{name}","hooks":{{"Stop":[{{"command":"notify.sh"}}]}}}}"#),
+            );
+        }
+        (home, plugins_dir)
+    }
+
+    #[test]
+    fn a_disabled_plugin_list_that_cannot_be_read_is_an_error_not_an_empty_list() {
+        let home = tempfile::tempdir().unwrap();
+        let file = home.path().join(DISABLED_PLUGINS_FILE);
+        crate::compaction::with_config_home(home.path(), || {
+            assert_eq!(
+                load_disabled_plugins(),
+                Ok(HashSet::new()),
+                "no file means nothing was turned off"
+            );
+
+            std::fs::write(&file, r#"["acme"]"#).unwrap();
+            assert_eq!(
+                load_disabled_plugins(),
+                Ok(HashSet::from(["acme".to_string()]))
+            );
+
+            std::fs::write(&file, r#"["acme""#).unwrap();
+            let error = load_disabled_plugins().unwrap_err();
+            assert!(error.contains(DISABLED_PLUGINS_FILE), "{error}");
+
+            std::fs::write(&file, "").unwrap();
+            assert!(load_disabled_plugins().is_err());
+
+            std::fs::remove_file(&file).unwrap();
+            std::fs::create_dir(&file).unwrap();
+            assert!(load_disabled_plugins().is_err());
+        });
+    }
+
+    #[test]
+    fn plugins_load_off_while_the_list_of_disabled_plugins_is_unknown() {
+        let (home, plugins_dir) = plugins_dir_with(&["acme", "other"]);
+        let file = home.path().join(DISABLED_PLUGINS_FILE);
+        let mut manager = PluginsManager {
+            global_dir: plugins_dir,
+            plugins: Vec::new(),
+        };
+        crate::compaction::with_config_home(home.path(), || {
+            std::fs::write(&file, r#"["acme"]"#).unwrap();
+            manager.load_all(None).unwrap();
+            let enabled: Vec<&str> = manager
+                .enabled_plugins()
+                .map(|plugin| plugin.config_name.as_str())
+                .collect();
+            assert_eq!(enabled, vec!["other"]);
+
+            std::fs::write(&file, "[\"acme\"").unwrap();
+            let loaded = manager.load_all(None).unwrap();
+            assert_eq!(loaded.len(), 2);
+            for plugin in loaded {
+                assert!(!plugin.enabled, "{}", plugin.config_name);
+                assert!(plugin
+                    .error
+                    .as_deref()
+                    .unwrap()
+                    .contains("could not be read"));
+            }
+            assert!(manager.hook_configs().is_empty());
+
+            std::fs::write(&file, r#"["acme"]"#).unwrap();
+            manager.load_all(None).unwrap();
+            assert_eq!(manager.enabled_plugins().count(), 1);
+        });
+    }
+
+    #[test]
+    fn turning_a_plugin_on_or_off_never_overwrites_a_list_it_could_not_read() {
+        let home = tempfile::tempdir().unwrap();
+        let file = home.path().join(DISABLED_PLUGINS_FILE);
+        crate::compaction::with_config_home(home.path(), || {
+            set_plugin_enabled("acme", false).unwrap();
+            set_plugin_enabled("other", false).unwrap();
+            assert_eq!(
+                load_disabled_plugins().unwrap(),
+                HashSet::from(["acme".to_string(), "other".to_string()])
+            );
+            assert!(!file.with_extension("json.tmp").exists());
+
+            std::fs::write(&file, r#"["acme","oth"#).unwrap();
+            assert!(set_plugin_enabled("third", false).is_err());
+            assert!(set_plugin_enabled("acme", true).is_err());
+            assert_eq!(std::fs::read_to_string(&file).unwrap(), r#"["acme","oth"#);
+        });
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_local_install_that_fails_while_copying_leaves_nothing_to_load() {
+        let source = tempfile::tempdir().unwrap();
+        write_test_manifest(
+            source.path(),
+            r#"{"name":"safe-plugin","hooks":{"Stop":[{"command":"notify.sh"}]}}"#,
+        );
+        let _socket = std::os::unix::net::UnixListener::bind(source.path().join("s")).unwrap();
+        let (home, outcome) = local_install(
+            source.path(),
+            PluginIntegrity::UnsafeSkip,
+            PluginSignaturePolicy::default(),
+        );
+        assert!(matches!(outcome, PluginInstallOutcome::Failed { .. }));
+        let target = home.path().join("plugins").join("signed-plugin");
+        assert!(!target.exists(), "a half-copied plugin was left to load");
     }
 
     #[test]

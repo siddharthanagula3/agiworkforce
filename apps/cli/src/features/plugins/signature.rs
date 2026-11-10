@@ -144,7 +144,13 @@ fn manifest_file(root: &Path) -> Option<(String, PathBuf)> {
         .find(|(_, path)| path.is_file())
 }
 
-fn collect_signed_files(root: &Path, dir: &Path, out: &mut Vec<PathBuf>) -> std::io::Result<()> {
+const SIGNED_LINK_RECORD: &[u8] = b"\0link\0";
+
+fn collect_signed_files(
+    root: &Path,
+    dir: &Path,
+    out: &mut Vec<(PathBuf, bool)>,
+) -> std::io::Result<()> {
     for entry in std::fs::read_dir(dir)? {
         let entry = entry?;
         let path = entry.path();
@@ -154,8 +160,10 @@ fn collect_signed_files(root: &Path, dir: &Path, out: &mut Vec<PathBuf>) -> std:
                 continue;
             }
             collect_signed_files(root, &path, out)?;
-        } else if file_type.is_file() && path != root.join(SIGNATURE_FILE) {
-            out.push(path);
+        } else if (file_type.is_file() || file_type.is_symlink())
+            && path != root.join(SIGNATURE_FILE)
+        {
+            out.push((path, file_type.is_symlink()));
         }
     }
     Ok(())
@@ -164,9 +172,9 @@ fn collect_signed_files(root: &Path, dir: &Path, out: &mut Vec<PathBuf>) -> std:
 pub fn signed_content_sha256(root: &Path) -> std::io::Result<String> {
     let mut files = Vec::new();
     collect_signed_files(root, root, &mut files)?;
-    let mut relative: Vec<(String, PathBuf)> = files
+    let mut relative: Vec<(String, PathBuf, bool)> = files
         .into_iter()
-        .map(|path| {
+        .map(|(path, is_link)| {
             let rel = path
                 .strip_prefix(root)
                 .unwrap_or(&path)
@@ -174,16 +182,26 @@ pub fn signed_content_sha256(root: &Path) -> std::io::Result<String> {
                 .map(|component| component.as_os_str().to_string_lossy().into_owned())
                 .collect::<Vec<_>>()
                 .join("/");
-            (rel, path)
+            (rel, path, is_link)
         })
         .collect();
     relative.sort_by(|a, b| a.0.cmp(&b.0));
     let mut hasher = Sha256::new();
-    for (rel, path) in relative {
-        hasher.update(rel.as_bytes());
-        hasher.update([0u8]);
-        hasher.update(std::fs::read(&path)?);
-        hasher.update([0u8]);
+    for (rel, path, is_link) in relative {
+        if is_link {
+            hasher.update(SIGNED_LINK_RECORD);
+            hasher.update(rel.as_bytes());
+            hasher.update([0u8]);
+            hasher.update(super::plugins::os_bytes(
+                std::fs::read_link(&path)?.as_os_str(),
+            ));
+            hasher.update([0u8]);
+        } else {
+            hasher.update(rel.as_bytes());
+            hasher.update([0u8]);
+            hasher.update(std::fs::read(&path)?);
+            hasher.update([0u8]);
+        }
     }
     Ok(crate::hex::encode(&hasher.finalize()))
 }
@@ -392,6 +410,44 @@ mod tests {
         );
         let publishers = TrustedPublishers::from_config_toml(Some(&toml)).unwrap();
         assert!(verify_plugin_signature(dir.path(), &publishers).is_ok());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn repointing_a_signed_link_breaks_the_signature() {
+        let dir = tempfile::tempdir().unwrap();
+        plugin(dir.path());
+        std::fs::write(dir.path().join("normal.md"), "review only").unwrap();
+        std::fs::write(dir.path().join("maintenance.md"), "rewrite everything").unwrap();
+        let selected = dir.path().join("selected.md");
+        std::os::unix::fs::symlink("normal.md", &selected).unwrap();
+        sign_plugin(dir.path(), "acme", &key(7)).unwrap();
+        assert!(verify_plugin_signature(dir.path(), &trusted("acme", &key(7))).is_ok());
+
+        std::fs::remove_file(&selected).unwrap();
+        std::os::unix::fs::symlink("maintenance.md", &selected).unwrap();
+
+        assert_eq!(
+            verify_plugin_signature(dir.path(), &trusted("acme", &key(7))),
+            Err(SignatureError::Invalid("acme".to_string()))
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn adding_or_removing_a_link_breaks_the_signature() {
+        let dir = tempfile::tempdir().unwrap();
+        plugin(dir.path());
+        sign_plugin(dir.path(), "acme", &key(7)).unwrap();
+        let link = dir.path().join("late.md");
+        std::os::unix::fs::symlink("commands/hello.md", &link).unwrap();
+        assert!(matches!(
+            verify_plugin_signature(dir.path(), &trusted("acme", &key(7))),
+            Err(SignatureError::Invalid(_))
+        ));
+
+        std::fs::remove_file(&link).unwrap();
+        assert!(verify_plugin_signature(dir.path(), &trusted("acme", &key(7))).is_ok());
     }
 
     #[test]

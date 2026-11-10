@@ -51,10 +51,15 @@ The installer downloads the release archive for your platform from GitHub,
 verifies the release's signed checksum manifest with `openssl`, checks the
 archive's SHA-256 against it, and installs `agi` to `~/.agi/bin`. It refuses
 anything it cannot verify, and stops with a message when no signed release is
-published. Windows needs Git Bash, MSYS2, Cygwin or WSL to run it. `agi update` compares this build against the newest release, and
-`agi update --install` runs the same installer into the directory this `agi`
-runs from. AGI Cloud for desktop ships its own copy of `agi` for local coding
-sessions, so the desktop app needs no separate install.
+published. Windows needs Git Bash, MSYS2, Cygwin or WSL to run it. `agi update`
+compares this build against the newest release. `agi update --install` does not
+run the shell installer: it downloads the release archive for your platform,
+verifies the signed checksum manifest against the key built into this `agi`,
+checks the archive's SHA-256, and replaces the `agi` it runs from, after you
+confirm (or pass `--yes`). It does not replace a running `agi` on Windows or inside the AGI Cloud
+app; on Windows, close `agi` and run the installer above from Git Bash or WSL.
+AGI Cloud for desktop ships its own copy of `agi` for local coding sessions, so
+the desktop app needs no separate install.
 
 To build from source instead:
 

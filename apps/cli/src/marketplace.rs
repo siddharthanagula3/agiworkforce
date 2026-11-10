@@ -606,6 +606,7 @@ pub fn is_git_checkout(install_path: &Path) -> bool {
 
 pub fn update_plugin_checkout(
     install_path: &Path,
+    marker: &Path,
     signature: &crate::plugins::PluginSignaturePolicy,
 ) -> std::result::Result<PluginCheckoutUpdate, String> {
     if let Some(pinned) = pinned_at(install_path) {
@@ -613,45 +614,60 @@ pub fn update_plugin_checkout(
             "pinned to {pinned}; install it again with --ref <tag> to move it"
         ));
     }
-    let before = head_commit(install_path);
+    if marker.exists() {
+        return Err(
+            "an earlier update to it was pulled and never decided; run `agi marketplace update` to review it"
+                .to_string(),
+        );
+    }
+    let before = head_commit(install_path)
+        .ok_or_else(|| "its current commit could not be read".to_string())?;
+    std::fs::write(marker, &before)
+        .map_err(|error| format!("it could not be held off while updating: {error}"))?;
+    let release_unchanged = || {
+        if head_commit(install_path).as_deref() == Some(before.as_str()) {
+            let _ = std::fs::remove_file(marker);
+        }
+    };
     let mut pull = agiworkforce_worktree::host_git();
     pull.arg("-C").arg(install_path).args(["pull", "--ff-only"]);
-    let output = crate::platform::runtime::git::host_git_network_output(pull)
-        .map_err(|error| format!("git error: {error}"))?;
+    let output = match crate::platform::runtime::git::host_git_network_output(pull) {
+        Ok(output) => output,
+        Err(error) => {
+            release_unchanged();
+            return Err(format!("git error: {error}"));
+        }
+    };
     if !output.status.success() {
+        release_unchanged();
         return Err(format!(
             "update failed: {}",
             String::from_utf8_lossy(&output.stderr).trim()
         ));
     }
-    if before.is_some() && before == head_commit(install_path) {
+    if head_commit(install_path).as_deref() == Some(before.as_str()) {
+        let _ = std::fs::remove_file(marker);
         return Ok(PluginCheckoutUpdate::UpToDate);
     }
     match crate::plugins::evaluate_plugin_signature(install_path, signature) {
-        Ok(state) => Ok(PluginCheckoutUpdate::Updated {
-            version: read_manifest_version(install_path),
-            changed_files: changed_files_since(install_path, "ORIG_HEAD"),
-            signature: state.label(),
-        }),
-        Err(error) => {
-            let mut rollback = agiworkforce_worktree::host_git();
-            rollback
-                .arg("-C")
-                .arg(install_path)
-                .args(["reset", "--hard", "ORIG_HEAD"]);
-            let rolled_back = matches!(
-                crate::platform::runtime::git::host_git_output(rollback),
-                Ok(ref out) if out.status.success()
-            );
-            Err(format!(
-                "update refused ({error}){}",
-                if rolled_back {
-                    ", kept the previous version"
-                } else {
-                    ", rollback failed: remove the plugin"
-                }
-            ))
+        Ok(state) => {
+            std::fs::remove_file(marker).map_err(|error| {
+                format!("the update was kept but the plugin could not be turned back on: {error}")
+            })?;
+            Ok(PluginCheckoutUpdate::Updated {
+                version: read_manifest_version(install_path),
+                changed_files: changed_files_since(install_path, &before),
+                signature: state.label(),
+            })
         }
+        Err(error) => Err(format!(
+            "update refused ({error}){}",
+            if put_update_back(install_path, Some(before.as_str()), marker) {
+                ", kept the previous version"
+            } else {
+                ", and it could not be put back: the plugin stays off until it is updated or reinstalled"
+            }
+        )),
     }
 }
 
@@ -758,13 +774,7 @@ fn ask_to_keep_update(review: &PluginUpdateReview) -> bool {
 /// Put a plugin back on the commit the person last agreed to and let it
 /// load again. When that cannot be done the marker stays, and with it the
 /// plugin stays off: what is on disk is something nobody agreed to.
-fn undo_update(
-    name: &str,
-    install_path: &Path,
-    approved_commit: Option<&str>,
-    marker: &Path,
-    reason: &str,
-) {
+fn put_update_back(install_path: &Path, approved_commit: Option<&str>, marker: &Path) -> bool {
     let put_back = approved_commit.is_some_and(|commit| {
         let mut reset = agiworkforce_worktree::host_git();
         reset
@@ -776,7 +786,17 @@ fn undo_update(
             Ok(ref out) if out.status.success()
         )
     });
-    let outcome = if put_back && std::fs::remove_file(marker).is_ok() {
+    put_back && std::fs::remove_file(marker).is_ok()
+}
+
+fn undo_update(
+    name: &str,
+    install_path: &Path,
+    approved_commit: Option<&str>,
+    marker: &Path,
+    reason: &str,
+) {
+    let outcome = if put_update_back(install_path, approved_commit, marker) {
         ", kept the previous version"
     } else {
         ", and it could not be put back: the plugin stays off until it is updated or reinstalled"
@@ -1458,6 +1478,110 @@ mod tests {
         );
         assert!(is_commit_id(&"a".repeat(40)) && is_commit_id(&"0".repeat(64)));
         assert!(!is_commit_id("--hard") && !is_commit_id(&"g".repeat(40)));
+    }
+
+    #[test]
+    fn a_single_plugin_update_holds_the_plugin_off_until_it_is_kept_or_put_back() {
+        let policy = crate::plugins::PluginSignaturePolicy::default();
+        let (_origin, home, install_path) = cloned_plugin_with_pending_update();
+        let marker = crate::plugins::pending_update_marker(&home.path().join("plugins"), "tracked");
+
+        let refusing = crate::plugins::PluginSignaturePolicy {
+            require_signed: true,
+            ..Default::default()
+        };
+        let error = match update_plugin_checkout(&install_path, &marker, &refusing) {
+            Err(error) => error,
+            Ok(_) => panic!("an unsigned update must be refused when signatures are required"),
+        };
+        assert!(error.contains("kept the previous version"), "{error}");
+        assert_eq!(read_manifest_version(&install_path), "1.0.0");
+        assert!(!marker.exists(), "put back, it loads again");
+
+        match update_plugin_checkout(&install_path, &marker, &policy) {
+            Ok(PluginCheckoutUpdate::Updated {
+                version,
+                changed_files,
+                ..
+            }) => {
+                assert_eq!(version, "2.0.0");
+                assert_eq!(
+                    changed_files,
+                    vec!["M .agiworkforce-plugin/plugin.json".to_string()]
+                );
+            }
+            _ => panic!("a valid update is kept"),
+        }
+        assert!(!marker.exists(), "kept, it loads again");
+
+        assert!(matches!(
+            update_plugin_checkout(&install_path, &marker, &policy),
+            Ok(PluginCheckoutUpdate::UpToDate)
+        ));
+        assert!(!marker.exists());
+    }
+
+    #[test]
+    fn a_single_plugin_update_never_runs_over_an_update_nobody_decided() {
+        let (_origin, home, install_path) = cloned_plugin_with_pending_update();
+        let marker = crate::plugins::pending_update_marker(&home.path().join("plugins"), "tracked");
+        let approved = head_commit(&install_path).expect("a commit");
+        std::fs::write(&marker, &approved).unwrap();
+
+        let error = match update_plugin_checkout(
+            &install_path,
+            &marker,
+            &crate::plugins::PluginSignaturePolicy::default(),
+        ) {
+            Err(error) => error,
+            Ok(_) => panic!("an undecided update must be reviewed first"),
+        };
+        assert!(error.contains("agi marketplace update"), "{error}");
+        assert_eq!(read_manifest_version(&install_path), "1.0.0");
+        assert_eq!(std::fs::read_to_string(&marker).unwrap(), approved);
+    }
+
+    #[test]
+    fn a_single_plugin_update_that_pulls_nothing_leaves_the_plugin_on() {
+        let (origin, home, install_path) = cloned_plugin_with_pending_update();
+        let marker = crate::plugins::pending_update_marker(&home.path().join("plugins"), "tracked");
+        drop(origin);
+
+        let error = match update_plugin_checkout(
+            &install_path,
+            &marker,
+            &crate::plugins::PluginSignaturePolicy::default(),
+        ) {
+            Err(error) => error,
+            Ok(_) => panic!("a pull from a missing origin fails"),
+        };
+        assert!(error.contains("update failed"), "{error}");
+        assert_eq!(read_manifest_version(&install_path), "1.0.0");
+        assert!(!marker.exists());
+    }
+
+    #[test]
+    fn an_update_that_cannot_be_put_back_keeps_the_plugin_off() {
+        let (_origin, home, install_path) = cloned_plugin_with_pending_update();
+        let marker = crate::plugins::pending_update_marker(&home.path().join("plugins"), "tracked");
+        let unknown_commit = "0".repeat(40);
+        std::fs::write(&marker, &unknown_commit).unwrap();
+
+        assert!(!put_update_back(
+            &install_path,
+            Some(unknown_commit.as_str()),
+            &marker
+        ));
+        assert!(!put_update_back(&install_path, None, &marker));
+        assert!(marker.exists());
+
+        let approved = head_commit(&install_path).expect("a commit");
+        assert!(put_update_back(
+            &install_path,
+            Some(approved.as_str()),
+            &marker
+        ));
+        assert!(!marker.exists());
     }
 
     #[test]
