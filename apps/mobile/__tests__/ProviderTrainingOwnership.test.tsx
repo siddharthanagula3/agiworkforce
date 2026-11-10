@@ -9,6 +9,18 @@ const mockFetch = jest.fn();
 let mockFocus: (() => void) | undefined;
 let mockBlur: (() => void) | undefined;
 
+function handlerFor(
+  screen: ReturnType<typeof render>,
+  label: string,
+  prop: 'onValueChange' | 'onPress',
+): (value?: boolean) => void {
+  const owner = screen
+    .UNSAFE_getAllByProps({ accessibilityLabel: label })
+    .find((node) => typeof node.props[prop] === 'function');
+  if (!owner) throw new Error(`No ${prop} handler is attached to "${label}"`);
+  return owner.props[prop] as (value?: boolean) => void;
+}
+
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useFocusEffect: (callback: () => void | (() => void)) => {
@@ -132,8 +144,11 @@ describe('owned provider training choices', () => {
 
   it('takes a synchronous lease, forwards the epoch, and retires the original ready callback', async () => {
     const screen = await readyScreen();
-    const saved = screen.getByLabelText('Only use models that do not train on your chats').props
-      .onValueChange;
+    const saved = handlerFor(
+      screen,
+      'Only use models that do not train on your chats',
+      'onValueChange',
+    );
     const pending = deferred<ReturnType<typeof response>>();
     mockFetch.mockImplementationOnce(() => pending.promise);
     act(() => {
@@ -173,8 +188,11 @@ describe('owned provider training choices', () => {
     'rejects a saved callback after %s leaves and returns',
     async (kind) => {
       const screen = await readyScreen();
-      const saved = screen.getByLabelText('Only use models that do not train on your chats').props
-        .onValueChange;
+      const saved = handlerFor(
+        screen,
+        'Only use models that do not train on your chats',
+        'onValueChange',
+      );
       act(() => {
         if (kind === 'account') {
           activateCloudAccount('account-b');
@@ -208,8 +226,11 @@ describe('owned provider training choices', () => {
 
   it('does not dispatch reads or saved choices in Local mode', async () => {
     const screen = await readyScreen();
-    const saved = screen.getByLabelText('Only use models that do not train on your chats').props
-      .onValueChange;
+    const saved = handlerFor(
+      screen,
+      'Only use models that do not train on your chats',
+      'onValueChange',
+    );
     act(() => {
       useChatAppModeStore.setState({ appMode: 'local' });
       saved(true);
@@ -303,8 +324,11 @@ describe('owned provider training choices', () => {
 
   it('preserves an acknowledged opt-out when readback fails and offers a working read retry', async () => {
     const screen = await readyScreen();
-    const saved = screen.getByLabelText('Only use models that do not train on your chats').props
-      .onValueChange;
+    const saved = handlerFor(
+      screen,
+      'Only use models that do not train on your chats',
+      'onValueChange',
+    );
     mockFetch.mockResolvedValueOnce(receipt(true)).mockRejectedValueOnce(new Error('read failed'));
     act(() => saved(true));
     await waitFor(() =>
@@ -353,8 +377,11 @@ describe('owned provider training choices', () => {
 
   it('keeps an uncertain save unavailable when reconciliation fails until an explicit read succeeds', async () => {
     const screen = await readyScreen();
-    const saved = screen.getByLabelText('Only use models that do not train on your chats').props
-      .onValueChange;
+    const saved = handlerFor(
+      screen,
+      'Only use models that do not train on your chats',
+      'onValueChange',
+    );
     mockFetch
       .mockRejectedValueOnce(new Error('lost write response'))
       .mockRejectedValueOnce(new Error('read unavailable'));
@@ -384,8 +411,11 @@ describe('owned provider training choices', () => {
 
   it('requires a refreshed revision and new choice after a precondition conflict', async () => {
     const screen = await readyScreen();
-    const saved = screen.getByLabelText('Only use models that do not train on your chats').props
-      .onValueChange;
+    const saved = handlerFor(
+      screen,
+      'Only use models that do not train on your chats',
+      'onValueChange',
+    );
     mockFetch
       .mockResolvedValueOnce(response({}, 412))
       .mockResolvedValueOnce(response(choice(false, 'new-revision')));
@@ -416,7 +446,7 @@ describe('owned provider training choices', () => {
     expect(
       screen.getByLabelText('Only use models that do not train on your chats').props.disabled,
     ).toBe(true);
-    const retry = screen.getByLabelText('Retry loading model training setting').props.onPress;
+    const retry = handlerFor(screen, 'Retry loading model training setting', 'onPress');
     const pending = deferred<ReturnType<typeof response>>();
     mockFetch.mockImplementationOnce(() => pending.promise);
     act(() => {

@@ -27,6 +27,7 @@ import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthI
 import { useModelInstallStore } from '@/src/features/model-picker/installStore';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useTierStore } from '@/src/features/billing/store';
+import { NATIVE_PURCHASES_AVAILABLE } from '@/src/features/billing/nativePurchaseAvailability';
 import { useAgentControlStore, type PickerEffort } from '@/stores/agentControlStore';
 import {
   ROUTING_PROFILE_CHOICE_OPTIONS,
@@ -433,6 +434,7 @@ export function ModelPickerSheet({
   }, [onOpenCloudAccess, router, sheetRef]);
 
   const openUpgrade = useCallback(() => {
+    if (!NATIVE_PURCHASES_AVAILABLE) return;
     sheetRef.current?.close();
     requestAnimationFrame(() => {
       router.push('/(app)/settings/cloud-billing' as Parameters<typeof router.push>[0]);
@@ -463,11 +465,15 @@ export function ModelPickerSheet({
       ) {
         Alert.alert(
           'Start a new chat for this model',
-          `Switching from ${establishedModel.providerLabel} to ${chosenModel.providerLabel} mid-chat needs the Max plan.`,
-          [
-            { text: 'OK', style: 'cancel' },
-            { text: 'See plans', onPress: openUpgrade },
-          ],
+          NATIVE_PURCHASES_AVAILABLE
+            ? `Switching from ${establishedModel.providerLabel} to ${chosenModel.providerLabel} mid-chat needs the Max plan.`
+            : `Switching from ${establishedModel.providerLabel} to ${chosenModel.providerLabel} mid-chat isn't included in your plan. Start a new chat to use ${chosenModel.providerLabel}.`,
+          NATIVE_PURCHASES_AVAILABLE
+            ? [
+                { text: 'OK', style: 'cancel' },
+                { text: 'See plans', onPress: openUpgrade },
+              ]
+            : [{ text: 'OK', style: 'cancel' }],
         );
         return;
       }

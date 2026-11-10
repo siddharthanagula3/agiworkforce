@@ -7,7 +7,13 @@ jest.mock('react-native-reanimated', () => {
   const transition = { duration: () => transition, springify: () => transition };
   return {
     __esModule: true,
-    default: { View },
+    Easing: { linear: (value: number) => value },
+    cancelAnimation: jest.fn(),
+    useAnimatedProps: (factory: () => unknown) => factory(),
+    useSharedValue: <T,>(value: T) => ({ value }),
+    withRepeat: <T,>(value: T) => value,
+    withTiming: <T,>(value: T) => value,
+    default: { createAnimatedComponent: (component: unknown) => component, View },
     FadeIn: transition,
     FadeOut: transition,
     SlideInDown: transition,

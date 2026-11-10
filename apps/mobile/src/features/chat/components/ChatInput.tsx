@@ -65,6 +65,7 @@ import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useChatStore } from '@/stores/chatStore';
 import { WorkUsageCard } from './WorkUsageCard';
 import { useTierStore } from '@/src/features/billing/store';
+import { NATIVE_PURCHASES_AVAILABLE } from '@/src/features/billing/nativePurchaseAvailability';
 import { useAuthStore } from '@/src/features/auth/store';
 import {
   captureCloudAccountEpoch,
@@ -742,7 +743,12 @@ ${current}`
   const mentionQuery = appMode === 'cloud' && isClerkSignedIn ? trailingMention(text) : null;
 
   const availableCommands: ChatCommand[] = [
-    ...(FEATURES.imageGen ? (['/image'] as const) : []),
+    ...(FEATURES.imageGen &&
+    (NATIVE_PURCHASES_AVAILABLE ||
+      (grantedCapabilities.includes('canUseImages') &&
+        canUseBillingPlanCapability(subscriptionTier, 'image_generation')))
+      ? (['/image'] as const)
+      : []),
     ...(onOpenVoiceMode && voiceAllowed ? (['/voice'] as const) : []),
     ...(onOpenCompare ? (['/compare'] as const) : []),
     ...(onOpenExport ? (['/export'] as const) : []),

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo } from 'react';
 import { Alert, View } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { useRouter } from 'expo-router';
+import { NATIVE_PURCHASES_AVAILABLE } from '@/src/features/billing/nativePurchaseAvailability';
 import {
   BarChart3,
   Brain,
@@ -210,7 +211,7 @@ export default function ProfileScreen() {
                 icon={CreditCard}
                 label="Subscription"
                 onPress={handleManageSubscription}
-                value="Manage"
+                value={NATIVE_PURCHASES_AVAILABLE ? 'Manage' : 'Details'}
               />
               <ProfileRow
                 icon={Shield}

@@ -28,6 +28,12 @@ env:
   EAS_CLI_VERSION: '21.4.0'
   EXPO_PUBLIC_API_URL: ${{ vars.EXPO_PUBLIC_API_URL }}
   EXPO_PUBLIC_AGI_AUTH_PROVIDERS: ${{ vars.EXPO_PUBLIC_AGI_AUTH_PROVIDERS }}
+  # Validation only evaluates the production configuration and bundles the
+  # source; it ships nothing, and it runs outside the protected environment
+  # that holds the live key. The repository-level variable of the same name
+  # belongs to the simulator job in ci.yml and is a test key, which the
+  # production configuration and the bundle scan both refuse.
+  RELEASE_VALIDATION_CLERK_KEY: pk_live_release_metadata_check
 
 jobs:
   validate:
@@ -64,7 +70,7 @@ jobs:
           PACKAGE_VERSION=$(node -p "require('./apps/mobile/package.json').version")
           CONFIG_VERSION=$(
             APP_ENV=production \
-            EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_release_metadata_check \
+            EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY="$RELEASE_VALIDATION_CLERK_KEY" \
             node -p "require('./apps/mobile/app.config.js').expo.version"
           )
           if [ "$PACKAGE_VERSION" != "$VERSION" ] || [ "$CONFIG_VERSION" != "$VERSION" ]; then
@@ -127,7 +133,7 @@ jobs:
           APP_ENV: production
           EXPO_PUBLIC_APP_ENV: production
           EXPO_NO_DOTENV: '1'
-          EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ vars.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+          EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ env.RELEASE_VALIDATION_CLERK_KEY }}
         run: pnpm --filter @agiworkforce/mobile release:export-bundle
 
       - name: Refuse a bundle carrying a dev server, a test endpoint or a secret
@@ -138,7 +144,7 @@ jobs:
           APP_ENV: production
           EXPO_PUBLIC_APP_ENV: production
           EXPO_NO_DOTENV: '1'
-          EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ vars.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+          EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ env.RELEASE_VALIDATION_CLERK_KEY }}
         run: |
           set -euo pipefail
           pnpm --filter @agiworkforce/mobile exec expo prebuild --platform all --clean --no-install

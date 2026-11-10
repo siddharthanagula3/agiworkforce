@@ -2,6 +2,7 @@
 import React from 'react';
 import { Alert } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import type { ReactTestInstance } from 'react-test-renderer';
 
 const mockPush = jest.fn();
 const mockOpenInAppBrowser = jest.fn();
@@ -216,7 +217,15 @@ jest.mock('../src/features/settings/Common', () => {
   };
 });
 
-import AccountSecurityScreen from '../src/features/settings/account-security';
+function pressHandler(element: ReactTestInstance): () => void {
+  let current: ReactTestInstance | null = element;
+  while (current && typeof current.props.onPress !== 'function') current = current.parent;
+  if (!current) throw new Error('No press handler found on the element or its ancestors');
+  return current.props.onPress as () => void;
+}
+
+const AccountSecurityScreen = require('../src/features/settings/account-security')
+  .default as typeof import('../src/features/settings/account-security').default;
 
 describe('Mobile Account Security screen', () => {
   beforeEach(() => {
@@ -572,7 +581,7 @@ describe('Mobile Account Security screen', () => {
     });
     const screen = render(<AccountSecurityScreen />);
     fireEvent.press(await screen.findByText('Set up authenticator app'));
-    const copy = (await screen.findByLabelText('Copy setup key')).props.onPress as () => void;
+    const copy = pressHandler(await screen.findByLabelText('Copy setup key'));
     await act(async () => {
       mockEpoch += 2;
       mockEpochListeners.forEach((listener) => listener());
@@ -659,9 +668,13 @@ describe('Mobile Account Security screen', () => {
       const screen = render(<AccountSecurityScreen />);
       fireEvent.press(await screen.findByLabelText('Macintosh · Chrome 141. 3h ago'));
       const confirm = alertSpy.mock.calls.at(-1)?.[2]?.find((button) => button.text === 'Sign out');
+      if (boundary === 'unmount') {
+        await act(async () => {
+          screen.unmount();
+        });
+      }
       await act(async () => {
-        if (boundary === 'unmount') screen.unmount();
-        else if (boundary === 'epoch') {
+        if (boundary === 'epoch') {
           mockEpoch += 2;
           mockEpochListeners.forEach((listener) => listener());
         } else if (boundary === 'auth') {
@@ -740,7 +753,7 @@ describe('Mobile Account Security screen', () => {
     );
     const screen = render(<AccountSecurityScreen />);
     const row = await screen.findByLabelText('Macintosh · Chrome 141. 3h ago');
-    const press = row.props.onPress as () => void;
+    const press = pressHandler(row);
     act(() => {
       press();
       press();

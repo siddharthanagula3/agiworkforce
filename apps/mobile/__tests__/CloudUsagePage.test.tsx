@@ -1,4 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
+jest.mock('@/src/features/billing/nativePurchaseAvailability', () => ({
+  NATIVE_PURCHASES_AVAILABLE: true,
+}));
 import React from 'react';
 import { managedUsageBucketLabel } from '@agiworkforce/types';
 import { lightColors } from '../src/ui/theme/tokens';
@@ -158,7 +161,7 @@ describe('Cloud Usage screen, percentage-first (Claude-style), real endpoint', (
     await waitFor(() => {
       expect(getByText('25% used')).toBeTruthy();
     });
-    expect(getByText('Pro plan')).toBeTruthy();
+    expect(getByText('Premium plan')).toBeTruthy();
     expect(queryByText(/\$\d/)).toBeNull();
   });
 
@@ -228,13 +231,13 @@ describe('Cloud Usage screen, percentage-first (Claude-style), real endpoint', (
     expect(queryByText(/\$\d/)).toBeNull();
   });
 
-  it('labels the max_15x tier with its canonical Max 20x name instead of collapsing Max tiers', async () => {
+  it('labels the max_15x tier with its canonical Ultra name instead of collapsing Max tiers', async () => {
     mockFetchUsageSnapshot.mockResolvedValue(snap({ planTier: 'max_15x', usagePercentage: 40 }));
 
     const { getByText } = render(<CloudUsageScreen />);
 
     await waitFor(() => {
-      expect(getByText('Max 20x plan')).toBeTruthy();
+      expect(getByText('Ultra plan')).toBeTruthy();
     });
   });
 

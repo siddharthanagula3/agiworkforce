@@ -190,7 +190,6 @@ describe('ToolCallTimeline, the seven tool statuses', () => {
   const STATUS_GLYPHS = [
     'icon-Clock',
     'icon-ShieldAlert',
-    'icon-Loader2',
     'icon-CircleDashed',
     'icon-CircleSlash',
     'icon-AlertCircle',
@@ -199,7 +198,7 @@ describe('ToolCallTimeline, the seven tool statuses', () => {
   const EXPECTED: ReadonlyArray<[ToolStatus, string, string | null]> = [
     ['pending', 'Queued', 'icon-Clock'],
     ['awaiting-approval', 'Needs approval', 'icon-ShieldAlert'],
-    ['running', 'Running', 'icon-Loader2'],
+    ['running', 'Running', null],
     ['succeeded', 'Done', null],
     ['partial', 'Partial result', 'icon-CircleDashed'],
     ['canceled', 'Canceled', 'icon-CircleSlash'],
@@ -227,6 +226,8 @@ describe('ToolCallTimeline, the seven tool statuses', () => {
       else expect(view.queryByTestId(glyph)).toBeNull();
     }
     expect(view.getByLabelText(new RegExp(label, 'i'))).toBeTruthy();
+    if (status === 'running') expect(view.getAllByLabelText('loading').length).toBeGreaterThan(0);
+    else expect(view.queryByLabelText('loading')).toBeNull();
   });
 
   it('gives every status a distinct row rendering', () => {

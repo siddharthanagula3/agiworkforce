@@ -12,6 +12,17 @@ import {
   __resetCloudAccountSessionForTests,
 } from '@/src/features/auth/services/cloudAccountSession';
 
+function pressHandlerFor(
+  view: Pick<ReturnType<typeof render>, 'UNSAFE_getAllByProps'>,
+  label: string,
+): () => void {
+  const owner = view
+    .UNSAFE_getAllByProps({ accessibilityLabel: label })
+    .find((node) => typeof node.props.onPress === 'function');
+  if (!owner) throw new Error(`No press handler is attached to "${label}"`);
+  return owner.props.onPress as () => void;
+}
+
 describe('FileMentionPalette', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -66,8 +77,8 @@ describe('FileMentionPalette', () => {
     const view = render(
       <FileMentionPalette destinationKey="first" query="old" onSelect={onSelect} />,
     );
-    const row = await screen.findByLabelText('Mention old.pdf');
-    const stalePress = row.props.onPress;
+    await screen.findByLabelText('Mention old.pdf');
+    const stalePress = pressHandlerFor(screen, 'Mention old.pdf');
     view.rerender(<FileMentionPalette destinationKey="second" query="new" onSelect={onSelect} />);
     expect(screen.queryByLabelText('Mention old.pdf')).toBeNull();
     act(() => stalePress());
@@ -90,8 +101,8 @@ describe('FileMentionPalette', () => {
     });
     const onSelect = jest.fn();
     render(<FileMentionPalette destinationKey="new-chat" query="old" onSelect={onSelect} />);
-    const row = await screen.findByLabelText('Mention old.pdf');
-    const stalePress = row.props.onPress;
+    await screen.findByLabelText('Mention old.pdf');
+    const stalePress = pressHandlerFor(screen, 'Mention old.pdf');
     act(() => {
       invalidateCloudAccount();
       activateCloudAccount('picker-owner');

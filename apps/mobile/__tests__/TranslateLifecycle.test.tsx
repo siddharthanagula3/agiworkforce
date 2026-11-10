@@ -33,7 +33,10 @@ jest.mock('@agiworkforce/local-llm', () => ({
   localGenerate: jest.fn(),
 }));
 jest.mock('../src/ui/theme', () => ({ useThemeColors: () => ({}) }));
-jest.mock('../src/ui/theme/tokens', () => ({ typeScale: {} }));
+jest.mock('../src/ui/theme/tokens', () => ({
+  typeScale: {},
+  loadingMarkSizes: jest.requireActual('../src/ui/theme/tokens').loadingMarkSizes,
+}));
 jest.mock('../components/ui/Text', () => ({ Text: require('react-native').Text }));
 jest.mock('../components/ui/PressableBox', () => ({
   PressableBox: require('react-native').Pressable,
@@ -57,6 +60,14 @@ const result = (text: string): TranslateResult => ({
   pairCached: false,
 });
 const options = (index = 0): TranslateOptions => mockTranslate.mock.calls[index][3];
+function pressHandlerFor(view: ReturnType<typeof render>, label: string): () => void {
+  const owner = view
+    .UNSAFE_getAllByProps({ accessibilityLabel: label })
+    .find((node) => typeof node.props.onPress === 'function');
+  if (!owner) throw new Error(`No press handler is attached to "${label}"`);
+  return owner.props.onPress as () => void;
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   mockParams = {};
@@ -70,7 +81,7 @@ test('duplicate same-turn submit acquires one operation; edit retires old tokens
   mockTranslate.mockReturnValueOnce(old.promise).mockReturnValueOnce(next.promise);
   const view = render(<TranslateScreen />);
   fireEvent.changeText(view.getByLabelText('Source text input'), 'original');
-  const submit = view.getByLabelText('Translate').props.onPress;
+  const submit = pressHandlerFor(view, 'Translate');
   act(() => {
     void submit();
     void submit();
@@ -167,8 +178,8 @@ test('late route prefill cannot replace manual text or clear intent', () => {
 test('back synchronously rejects a captured same-turn submit before navigation cleanup', () => {
   const view = render(<TranslateScreen />);
   fireEvent.changeText(view.getByLabelText('Source text input'), 'original');
-  const submit = view.getByLabelText('Translate').props.onPress;
-  const back = view.getByLabelText('Go back').props.onPress;
+  const submit = pressHandlerFor(view, 'Translate');
+  const back = pressHandlerFor(view, 'Go back');
   act(() => {
     back();
     void submit();

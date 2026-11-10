@@ -699,12 +699,6 @@ Severity: P2 | Platform: iOS | Area: Storage | `services/modelDownload.ts:59`
 Evidence: `MODELS_DIR` is under `documentDirectory`; no `NSURLIsExcludedFromBackupKey` anywhere.
 Recommended Correction: set the exclusion after each download through the existing iOS native-module plugin, or migrate to Application Support with a one-time move.
 
-### MOBILE-045 The Android notification icon has no alpha channel
-
-Severity: P2 | Platform: Android | Area: Assets | `assets/notification-icon.png`
-Evidence: 96×96, RGB, no alpha (sharp metadata); Android tints from the alpha mask, so this renders as a white square.
-Recommended Correction: replace with a white-on-transparent silhouette.
-
 ### MOBILE-046 `expo-contacts` is a shipped dependency with no call site and no usage string
 
 Severity: P2 | Platform: Both | Area: Dependencies | `apps/mobile/package.json`
@@ -941,7 +935,7 @@ logging exclusion, physical iPhone validation, then the store disclosures
 the guard test will demand.
 
 Phase 6, offline, lifecycle, notifications, deep links: MOBILE-036,
-MOBILE-076, MOBILE-077, MOBILE-045, MOBILE-053.
+MOBILE-076, MOBILE-077, MOBILE-053.
 
 Phase 7, local AI: MOBILE-013, MOBILE-032, MOBILE-033, MOBILE-034,
 MOBILE-035, MOBILE-073, MOBILE-044, MOBILE-072.

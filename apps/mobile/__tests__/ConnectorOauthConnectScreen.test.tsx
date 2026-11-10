@@ -46,6 +46,7 @@ jest.mock('react-native-safe-area-context', () => {
 jest.mock('react-native-svg', () => {
   const { View } = require('react-native');
   return {
+    ...jest.requireActual('react-native-svg'),
     __esModule: true,
     default: ({ children }: { children: React.ReactNode }) => <View>{children}</View>,
     Path: () => null,

@@ -2,6 +2,7 @@
 
 import { Alert } from 'react-native';
 import { act, render, fireEvent } from '@testing-library/react-native';
+import { PRODUCT_BRAND } from '@agiworkforce/types';
 
 const mockBack = jest.fn();
 const mockReplace = jest.fn();
@@ -292,7 +293,7 @@ describe('Personalization page', () => {
   it('explains the nickname and links the instructions helper to the acceptable use policy', () => {
     const { getByText } = render(<PersonalizationScreen />);
 
-    expect(getByText('AGI uses your nickname in chat.')).toBeTruthy();
+    expect(getByText(`${PRODUCT_BRAND} uses your nickname in chat.`)).toBeTruthy();
     fireEvent.press(getByText('acceptable use policy'));
 
     expect(mockOpenExternalUrl).toHaveBeenCalledWith(

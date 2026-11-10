@@ -1,6 +1,7 @@
 import React from 'react';
 import { Alert } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { PRODUCT_BRAND } from '@agiworkforce/types';
 
 const mockPush = jest.fn();
 const mockConnectorsReleased = jest.fn(() => true);
@@ -192,7 +193,7 @@ describe('mobile plugins', () => {
       useSettingsStore.getState().setToolApprovalPolicy('ask_every_time');
       const { findByRole, getByText } = render(<PluginsScreen />);
       const row = await findByRole('button', { name: 'Permissions. Ask' });
-      expect(getByText('Choose when AGI asks before a plugin acts.')).toBeTruthy();
+      expect(getByText(`Choose when ${PRODUCT_BRAND} asks before a plugin acts.`)).toBeTruthy();
       fireEvent.press(row);
       expect(mockPush).toHaveBeenCalledWith('/(app)/settings/auto-approve');
     } finally {

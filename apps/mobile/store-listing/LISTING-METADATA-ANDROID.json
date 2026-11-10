@@ -3,7 +3,7 @@
     "schema": "play-console-2026",
     "package_name": "com.agiworkforce.app",
     "version": "0.0.1",
-    "last_updated": "2026-09-26",
+    "last_updated": "2026-11-10",
     "char_limits": {
       "app_name": 30,
       "short_description": 80,
@@ -12,12 +12,12 @@
     "char_counts": {
       "app_name": 10,
       "short_description": 62,
-      "full_description": 827
+      "full_description": 828
     }
   },
   "app_name": "AGI Mobile",
   "short_description": "AI chat that works offline on your phone, with optional cloud.",
-  "full_description": "AGI is an AI assistant that runs on your phone first.\n\nLOCAL MODE\n• Chat with an on-device model, even offline or in airplane mode\n• No account needed; local chats stay on this device, encrypted at rest\n• The default model downloads once and runs locally after that\n\nAGI CLOUD (optional, sign-in)\n• Cloud chat and web search on the Free plan\n• Image generation on Pro and above\n• Plans and credit top-ups are sold as in-app purchases\n\nPRIVACY\n• Cloud messages go to the AI provider that serves the request\n• Choose which models may be used in Settings > Privacy\n• Export or delete your data any time in Settings\n• India DPDP notice and open items: https://agiworkforce.com/trust\n\nBuilt by AGI Automation LLC, USA.\nSupport: support@agiworkforce.com\nPrivacy: https://agiworkforce.com/privacy\nTerms: https://agiworkforce.com/terms",
+  "full_description": "AGI is an AI assistant that runs on your phone first.\n\nLOCAL MODE\n• Chat with an on-device model, even offline or in airplane mode\n• No account needed; local chats stay on this device, encrypted at rest\n• The default model downloads once and runs locally after that\n\nAGI CLOUD (optional, sign-in)\n• Cloud chat and web search on the Free plan\n• Projects, memory and skills on the Free plan\n• The app is free and has no in-app purchases\n\nPRIVACY\n• Cloud messages go to the AI provider that serves the request\n• Choose which models may be used in Settings > Privacy\n• Export or delete your data any time in Settings\n• India DPDP notice and open items: https://agiworkforce.com/trust\n\nBuilt by AGI Automation LLC, USA.\nSupport: support@agiworkforce.com\nPrivacy: https://agiworkforce.com/privacy\nTerms: https://agiworkforce.com/terms",
   "categories": {
     "primary": "Productivity",
     "tags": ["AI Chatbot", "Productivity", "Developer Tools", "Assistant", "Local AI"]
@@ -37,7 +37,7 @@
       "user_generated_content_shared": true,
       "in_app_communication_with_unknown_users": false,
       "shares_user_location": false,
-      "in_app_purchases": true,
+      "in_app_purchases": false,
       "unrestricted_internet_access": false
     },
     "note": "Mirrors ChatGPT and Claude on Google Play (both Teen, Diverse Content: Discretion Advised, checked 2026-10-19). AI output is not fixed content, so answer the IARC questions for the most mature output the filters allow, not the median reply."
@@ -127,14 +127,14 @@
     "phone": "__FOUNDER_TO_FILL__"
   },
   "in_app_products": {
-    "has_in_app_products": true,
-    "note": "The Android binary sells four auto-renewing subscriptions (Basic, Pro, Max 5x, Max 20x, each with one monthly base plan) and four consumable credit top-ups through Google Play Billing; product IDs, base plan IDs and prices are listed in docs/runbooks/mobile-store-products.md. Whether an account can buy is decided by the server on each request: the catalog must be enabled, Play product IDs registered, and the account must hold upgrade access while paid upgrades open in stages. Provide Play Review a signed-in account with upgrade access or an access code. Billing always shows Restore purchases, and configured products remain eligible for receipt verification when new sales are switched off. This repository cannot prove current live deployment or Play Console state; test purchase, restore, renewal, refund, plan change and pending payments with Play test purchases before submission. The binary links expo-iap; the server owner is mobile-iap-catalog.ts and the deployment flag is MOBILE_IAP_ENABLED. When the deployment flag is off, the catalog reason is \"Native purchases are not enabled for this deployment.\" On iOS without registered products it is \"App Store products have not been registered for this build.\" On Android without registered products it is \"Google Play products have not been registered for this build.\" The Billing screen can show \"Loading native purchases\" and \"Workspace administration\" before or alongside its store status."
+    "has_in_app_products": false,
+    "note": "Version 1 has no in-app products. apps/mobile/src/features/billing/storePurchases.json sets \"nativePurchases\": false, and src/features/billing/nativePurchaseAvailability.ts exports it as NATIVE_PURCHASES_AVAILABLE, which every purchase path reads. With it false the app shows no purchase, upgrade, top-up, restore-purchases, compare-plans or contact-sales control and no price; useMobileIap.ts picks an inert implementation at build time, so the app never opens a Play Billing connection; mobileIapService.ts refuses catalog and verify calls, so the app never calls /api/mobile/iap/*; and app.config.js removes the permission com.android.vending.BILLING from the manifest. The purchase client library expo-iap is still linked into the binary and its config plugin is still registered in app.config.js, but nothing calls it. On the server the /api/mobile/iap/* routes (owner mobile-iap-catalog.ts) stay off unless the deployment sets MOBILE_IAP_ENABLED. Do not activate Play products for this release. Settings > Subscription opens a screen titled Plan: current plan, renewal or end date if any, a plain-text Billing line (\"Managed on the web\", \"By your organization\" or \"Managed where you subscribed\") for an account that already holds a paid plan, \"What your plan includes\", \"Usage\" and \"Help with your plan\", which opens in-app support. A feature outside the account's plan is described as not included in the plan, with no call to action. Paid plans exist for the web product; an account that already holds one gets that plan's access after signing in, and the app neither sells nor advertises them. Selling in the app needs nativePurchases set to true, a new store build and a new review."
   },
   "pricing": {
     "price": "Free",
-    "in_app_purchases": true
+    "in_app_purchases": false
   },
-  "release_notes_v0_0_1": "AGI 0.0.1, first release.\n\n• On-device AI chat works offline, no account needed\n• Catalog-selected on-device model downloads once and runs locally\n• Sign in to AGI Cloud for cloud chat and web search on the free tier; image generation on Pro and above\n• On-device voice transcription\n\nEmail support@agiworkforce.com, we read everything.",
+  "release_notes_v0_0_1": "AGI 0.0.1, first release.\n\n• On-device AI chat works offline, no account needed\n• Catalog-selected on-device model downloads once and runs locally\n• Sign in to AGI Cloud for cloud chat, web search, projects, memory and skills on the Free plan\n• No in-app purchases\n• On-device voice transcription\n\nEmail support@agiworkforce.com, we read everything.",
   "play_console_review_notes_file": "apps/mobile/store-listing/REVIEWER-NOTES-ANDROID.md",
   "feature_graphic": {
     "required": true,

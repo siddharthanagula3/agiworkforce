@@ -164,7 +164,7 @@ describe('published artifact controls', () => {
 
   it('unpublishes only after confirmation', async () => {
     pressConfirm();
-    mockApi.delete.mockResolvedValue({ success: true });
+    mockApi.delete.mockResolvedValue({ success: true, token: TOKEN });
     const onUnpublished = jest.fn();
     const { getByTestId, queryByTestId } = render(
       <PublishedArtifactControls
@@ -187,7 +187,10 @@ describe('published artifact controls', () => {
       expect.any(Array),
       expect.any(Object),
     );
-    expect(mockApi.delete).toHaveBeenCalledWith(`/api/artifacts/publish/${TOKEN}`);
+    expect(mockApi.delete).toHaveBeenCalledWith(`/api/artifacts/publish/${TOKEN}`, {
+      accountEpoch: captureCloudAccountEpoch(),
+      auth401Recovery: 'caller-owned',
+    });
     expect(onUnpublished).toHaveBeenCalledWith();
   });
 });

@@ -1,5 +1,9 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 
+jest.mock('@/src/features/billing/nativePurchaseAvailability', () => ({
+  NATIVE_PURCHASES_AVAILABLE: true,
+}));
+
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
 
@@ -111,7 +115,7 @@ describe('PaywallBottomSheet rendering', () => {
       <PaywallBottomSheet {...defaultProps} feature="opus_5" requiredTier="pro" />,
     );
 
-    expect(getByText(/Opus access requires the Pro plan/i)).toBeTruthy();
+    expect(getByText(/Opus access requires the Premium plan/i)).toBeTruthy();
     expect(queryByText(/Opus \d/i)).toBeNull();
   });
 
@@ -137,11 +141,11 @@ describe('PaywallBottomSheet rendering', () => {
     expect(getAllByText('Upgrade to Basic').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('renders the canonical Max 5x label for max-tier model access', () => {
+  it('renders the canonical Max label for max-tier model access', () => {
     const { getAllByText } = render(
       <PaywallBottomSheet {...defaultProps} requiredTier="max" feature="model_access" />,
     );
-    expect(getAllByText('Upgrade to Max 5x').length).toBeGreaterThanOrEqual(1);
+    expect(getAllByText('Upgrade to Max').length).toBeGreaterThanOrEqual(1);
   });
 
   it('shows honest unavailable copy instead of a self-routing purchase CTA', () => {

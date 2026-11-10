@@ -21,6 +21,7 @@ import { typeScale } from '@/src/ui/theme/tokens';
 import { getBillingPlanPricing, isOrganizationAdminRole } from '@agiworkforce/types';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 import { useWebBillingLinksAllowed } from '@/src/features/billing/webBillingLinks';
+import { NATIVE_PURCHASES_AVAILABLE } from '@/src/features/billing/nativePurchaseAvailability';
 import { useAuthStore } from '@/src/features/auth/store';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
@@ -535,8 +536,9 @@ export default function WorkspaceScreen() {
                   maxWidth: 300,
                 }}
               >
-                This needs a provisioned Team or Enterprise plan. Your current plan is{' '}
-                {planLabel(overview?.access.plan ?? 'free')}.
+                {NATIVE_PURCHASES_AVAILABLE
+                  ? `This needs a provisioned Team or Enterprise plan. Your current plan is ${planLabel(overview?.access.plan ?? 'free')}.`
+                  : "Workspaces aren't included in your plan."}
               </Text>
             </View>
           </Card>
@@ -550,27 +552,33 @@ export default function WorkspaceScreen() {
               >
                 No workspace yet
               </Text>
-              <Text
-                style={{
-                  fontSize: typeScale.footnote,
-                  color: c.textSecondary,
-                  textAlign: 'center',
-                  lineHeight: 18,
-                  maxWidth: 300,
-                }}
-              >
-                Create your workspace on the web, then manage its members from here.
-              </Text>
-              {webLinksAllowed ? (
-                <Pressable
-                  onPress={() => void openExternalUrl(WEB_TEAM_URL)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Create a workspace on the web"
-                >
-                  <Text style={{ color: c.teal, fontSize: typeScale.footnote, fontWeight: '600' }}>
-                    Create on web
+              {NATIVE_PURCHASES_AVAILABLE ? (
+                <>
+                  <Text
+                    style={{
+                      fontSize: typeScale.footnote,
+                      color: c.textSecondary,
+                      textAlign: 'center',
+                      lineHeight: 18,
+                      maxWidth: 300,
+                    }}
+                  >
+                    Create your workspace on the web, then manage its members from here.
                   </Text>
-                </Pressable>
+                  {webLinksAllowed ? (
+                    <Pressable
+                      onPress={() => void openExternalUrl(WEB_TEAM_URL)}
+                      accessibilityRole="button"
+                      accessibilityLabel="Create a workspace on the web"
+                    >
+                      <Text
+                        style={{ color: c.teal, fontSize: typeScale.footnote, fontWeight: '600' }}
+                      >
+                        Create on web
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                </>
               ) : null}
             </View>
           </Card>

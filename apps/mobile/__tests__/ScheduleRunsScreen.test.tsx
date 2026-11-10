@@ -43,6 +43,7 @@ jest.mock('../services/api', () => ({
 jest.mock('../src/features/auth/services/cloudAccountSession', () => ({
   captureCloudAccountEpoch: () => ({ ownerId: 'account-a', epoch: 1 }),
   isCloudAccountEpochCurrent: () => true,
+  subscribeCloudAccountEpochChange: () => () => undefined,
 }));
 
 import ScheduledRunsScreen from '../app/(app)/schedules/runs';

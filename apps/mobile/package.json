@@ -143,6 +143,7 @@
   },
   "devDependencies": {
     "@babel/core": "^7.29.7",
+    "@babel/plugin-transform-dynamic-import": "^7.27.1",
     "@napi-rs/canvas": "^1.0.11",
     "@react-native/jest-preset": "0.86.3",
     "@react-native/metro-config": "0.86.3",

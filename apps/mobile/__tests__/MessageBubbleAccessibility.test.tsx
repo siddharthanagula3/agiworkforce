@@ -31,6 +31,14 @@ function render(ui: React.ReactElement) {
   });
 }
 
+function pressHandlerFor(label: string): () => void {
+  const owner = screen
+    .UNSAFE_getAllByProps({ accessibilityLabel: label })
+    .find((node) => typeof node.props.onPress === 'function');
+  if (!owner) throw new Error(`No press handler is attached to "${label}"`);
+  return owner.props.onPress as () => void;
+}
+
 function assistant(overrides: Partial<ChatMessage> = {}): ChatMessage {
   return {
     id: 'assistant-accessibility',
@@ -143,7 +151,7 @@ describe('whole native message accessibility structure', () => {
     const rowA = assistant({ id: 'row-a', content: 'Response A.' });
     const rowB = assistant({ id: 'row-b', content: 'Response B.' });
     const view = render(<MessageBubble message={rowA} speechOwner={owner} />);
-    const retainedRowAPress = screen.getByLabelText('Read aloud').props.onPress;
+    const retainedRowAPress = pressHandlerFor('Read aloud');
     fireEvent.press(screen.getByLabelText('Read aloud'));
     expect(start).toHaveBeenCalledTimes(1);
 

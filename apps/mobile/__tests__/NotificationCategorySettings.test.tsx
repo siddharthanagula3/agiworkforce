@@ -73,13 +73,18 @@ import NotificationCategoryDetailScreen from '../src/features/settings/notificat
 import { useNotificationPrefsStore } from '../stores/notificationPrefsStore';
 import { useAuthStore } from '../src/features/auth/store';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
+import {
+  __resetCloudAccountSessionForTests,
+  activateCloudAccount,
+} from '../src/features/auth/services/cloudAccountSession';
 
 describe('notification category settings', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    __resetCloudAccountSessionForTests();
     act(() => {
       useChatAppModeStore.setState({ appMode: 'local' });
-      useAuthStore.setState({ isClerkSignedIn: false });
+      useAuthStore.setState({ isClerkSignedIn: false, isClerkLoaded: false, clerkUserId: null });
       useNotificationPrefsStore.setState({
         categoryEnabled: {
           chat_replies: true,
@@ -121,9 +126,14 @@ describe('notification category settings', () => {
   it('blocks the per-device category rows while the device denies notifications', async () => {
     const { getPushDeliveryStatus } = require('@/services/notifications');
     (getPushDeliveryStatus as jest.Mock).mockResolvedValueOnce('denied');
+    activateCloudAccount('account-a');
     act(() => {
       useChatAppModeStore.setState({ appMode: 'cloud' });
-      useAuthStore.setState({ isClerkSignedIn: true });
+      useAuthStore.setState({
+        isClerkSignedIn: true,
+        isClerkLoaded: true,
+        clerkUserId: 'account-a',
+      });
     });
     const screen = render(<NotificationPreferencesScreen />);
     await screen.findByText('Your device is blocking notifications');

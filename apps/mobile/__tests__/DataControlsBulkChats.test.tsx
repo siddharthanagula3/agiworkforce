@@ -240,6 +240,14 @@ afterEach(() => {
   jest.restoreAllMocks();
 });
 
+function pressHandlerForTestId(view: ReturnType<typeof render>, testID: string): () => void {
+  const owner = view
+    .UNSAFE_getAllByProps({ testID })
+    .find((node) => typeof node.props.onPress === 'function');
+  if (!owner) throw new Error(`No press handler is attached to "${testID}"`);
+  return owner.props.onPress as () => void;
+}
+
 describe('Data controls, Chat history bulk actions', () => {
   it('keeps Cloud export and deletion discoverable without bypassing the account flow', () => {
     const screen = render(<DataControlsScreen />);
@@ -538,10 +546,11 @@ describe.each([
     const pending = deferred<unknown>();
     mockPost.mockReturnValueOnce(pending.promise);
     const screen = render(<DataControlsScreen />);
-    const entry = screen.getByTestId(`${action}-all-chats-button`).props.onPress;
-    const otherEntry = screen.getByTestId(
+    const entry = pressHandlerForTestId(screen, `${action}-all-chats-button`);
+    const otherEntry = pressHandlerForTestId(
+      screen,
       `${action === 'archive' ? 'delete' : 'archive'}-all-chats-button`,
-    ).props.onPress;
+    );
     act(() => {
       entry();
       entry();
@@ -646,14 +655,14 @@ describe.each([
 
   it('rejects a saved rendered entry after account or focus replacement', () => {
     const screen = render(<DataControlsScreen />);
-    const entry = screen.getByTestId(`${action}-all-chats-button`).props.onPress;
+    const entry = pressHandlerForTestId(screen, `${action}-all-chats-button`);
     act(() => {
       activateCloudAccount('account-b');
       activateCloudAccount('account-a');
     });
     act(() => entry());
     expect(alertCalls).toHaveLength(0);
-    const focusedEntry = screen.getByTestId(`${action}-all-chats-button`).props.onPress;
+    const focusedEntry = pressHandlerForTestId(screen, `${action}-all-chats-button`);
     act(() => {
       blurScreen();
       focusScreen();

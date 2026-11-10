@@ -3,6 +3,17 @@
 import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
+function pressHandlerFor(
+  view: Pick<ReturnType<typeof render>, 'UNSAFE_getAllByProps'>,
+  label: string,
+): () => void {
+  const owner = view
+    .UNSAFE_getAllByProps({ accessibilityLabel: label })
+    .find((node) => typeof node.props.onPress === 'function');
+  if (!owner) throw new Error(`No press handler is attached to "${label}"`);
+  return owner.props.onPress as () => void;
+}
+
 const mockVideoSlot: { modelId: string | undefined } = { modelId: undefined };
 
 jest.mock('@agiworkforce/types', () =>
@@ -233,8 +244,8 @@ describe('AddToChatSheet', () => {
     const onAttachFromLibrary = jest.fn();
     const view = renderSheet({ destinationKey: 'first', onAttachFromLibrary });
     fireEvent(view.getByTestId('bottom-sheet'), 'change', 0);
-    const row = await view.findByLabelText('Attach old.pdf from Library');
-    const stalePress = row.props.onPress;
+    await view.findByLabelText('Attach old.pdf from Library');
+    const stalePress = pressHandlerFor(view, 'Attach old.pdf from Library');
     view.rerender(
       <AddToChatSheet
         {...defaultProps}
@@ -301,7 +312,8 @@ describe('AddToChatSheet', () => {
     const onAttachFromLibrary = jest.fn();
     const view = renderSheet({ onAttachFromLibrary });
     fireEvent(view.getByTestId('bottom-sheet'), 'change', 0);
-    const stalePress = (await view.findByLabelText('Attach old.pdf from Library')).props.onPress;
+    await view.findByLabelText('Attach old.pdf from Library');
+    const stalePress = pressHandlerFor(view, 'Attach old.pdf from Library');
     fireEvent(view.getByTestId('bottom-sheet'), 'change', -1);
     act(() => stalePress());
     expect(onAttachFromLibrary).not.toHaveBeenCalled();

@@ -559,6 +559,7 @@ describe('completions stream fallback (RN null response.body)', () => {
           ),
         })
         .mockRejectedValueOnce(new TypeError('Network request failed')),
+      cancel: jest.fn().mockResolvedValue(undefined),
       releaseLock: jest.fn(),
     };
     const now = '2026-07-17T20:00:00.000Z';
@@ -620,6 +621,7 @@ describe('completions stream fallback (RN null response.body)', () => {
       ([, init]) => (init as RequestInit | undefined)?.method === 'POST',
     );
     expect(postCalls).toHaveLength(1);
+    expect(reader.cancel).toHaveBeenCalledTimes(1);
     expect(guardedFetchMock).toHaveBeenNthCalledWith(
       2,
       `https://api.agi.test${runPath}?after=0&limit=100`,

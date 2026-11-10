@@ -159,6 +159,14 @@ beforeEach(() => {
   useCloudProjectStore.setState({ projects: [cloudProject()], activeProjectId: null });
 });
 
+function pressHandlerFor(view: ReturnType<typeof render>, label: string): () => void {
+  const owner = view
+    .UNSAFE_getAllByProps({ accessibilityLabel: label })
+    .find((node) => typeof node.props.onPress === 'function');
+  if (!owner) throw new Error(`No press handler is attached to "${label}"`);
+  return owner.props.onPress as () => void;
+}
+
 describe('adding sources to a cloud project', () => {
   it('presigns, uploads the bytes, and registers the file instead of silently dropping it', async () => {
     primeHappyPath();
@@ -675,6 +683,8 @@ describe('source picker ownership before preparation', () => {
         else if (change === 'project')
           screen.rerender(React.createElement(ProjectSourcesTab, { projectId: 'missing-project' }));
         else screen.unmount();
+      });
+      await act(async () => {
         picker.resolve({ canceled: false, assets: [PICKED_SOURCE] });
       });
       expect(getInfoAsync).not.toHaveBeenCalled();
@@ -834,7 +844,7 @@ describe('retained source action callbacks', () => {
       screen.getByPlaceholderText('Paste or type the text this project should use'),
       'original private text',
     );
-    const oldSave = screen.getByLabelText('Add').props.onPress as () => void;
+    const oldSave = pressHandlerFor(screen, 'Add');
     await act(async () => {
       activateCloudAccount('user_2');
       activateCloudAccount('user_1');
@@ -853,7 +863,7 @@ describe('retained source action callbacks', () => {
     (api.get as jest.Mock).mockResolvedValue({ files: [] });
     const screen = render(React.createElement(ProjectSourcesTab, { projectId: CLOUD_PROJECT_ID }));
     await waitFor(() => expect(screen.getByText('No sources added yet')).toBeTruthy());
-    const oldPick = screen.getByLabelText('Add sources').props.onPress as () => void;
+    const oldPick = pressHandlerFor(screen, 'Add sources');
     screen.rerender(React.createElement(ProjectSourcesTab, { projectId: otherProjectId }));
     screen.rerender(React.createElement(ProjectSourcesTab, { projectId: CLOUD_PROJECT_ID }));
     await act(async () => oldPick());
@@ -925,7 +935,7 @@ describe('text source editor revisions', () => {
     const upload = deferredSource<ReturnType<typeof registeredFile>['file']>();
     const uploadSource = jest.spyOn(cloudProjectSources, 'upload').mockReturnValue(upload.promise);
     const screen = await openDraft();
-    const reopen = screen.getByLabelText('Add text').props.onPress as () => void;
+    const reopen = pressHandlerFor(screen, 'Add text');
     try {
       fireEvent.press(screen.getByLabelText('Add'));
       await waitFor(() => expect(uploadSource).toHaveBeenCalledTimes(1));
@@ -947,7 +957,7 @@ describe('text source editor revisions', () => {
   it('rejects a retained pre-edit save callback before writing its old text', async () => {
     const screen = await openDraft();
     try {
-      const oldSave = screen.getByLabelText('Add').props.onPress as () => void;
+      const oldSave = pressHandlerFor(screen, 'Add');
       const edit = screen.getByLabelText('Text source content').props.onChangeText as (
         text: string,
       ) => void;

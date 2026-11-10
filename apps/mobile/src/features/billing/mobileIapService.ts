@@ -13,6 +13,7 @@ import {
 } from '@agiworkforce/types';
 import { api } from '@/services/api';
 import { ApiHttpError } from '@/services/apiErrors';
+import { NATIVE_PURCHASES_AVAILABLE } from './nativePurchaseAvailability';
 
 export function billingRequestMessage(error: unknown, fallback: string): string {
   if (error instanceof ApiHttpError && error.status >= 400 && error.status < 500) {
@@ -132,6 +133,7 @@ export function parseMobileIapCatalogResponse(value: unknown): MobileIapCatalogR
 }
 
 export async function readStorefront(): Promise<string | null> {
+  if (!NATIVE_PURCHASES_AVAILABLE) return null;
   try {
     return (await getStorefront()).trim() || null;
   } catch {
@@ -139,8 +141,20 @@ export async function readStorefront(): Promise<string | null> {
   }
 }
 
+export const NATIVE_PURCHASES_NOT_IN_THIS_VERSION =
+  'This version of the app does not sell plans or credits.';
+
 export async function fetchMobileIapCatalog(): Promise<MobileIapCatalogResponse> {
   const platform = currentStorePlatform();
+  if (!NATIVE_PURCHASES_AVAILABLE) {
+    return {
+      enabled: false,
+      platform,
+      appAccountToken: null,
+      products: [],
+      unavailableReason: NATIVE_PURCHASES_NOT_IN_THIS_VERSION,
+    };
+  }
   if (!platform) {
     return {
       enabled: false,
@@ -163,6 +177,7 @@ export async function verifyMobileIapPurchase(input: {
   productId: string;
   purchaseToken: string;
 }): Promise<MobileIapVerifyResponse> {
+  if (!NATIVE_PURCHASES_AVAILABLE) throw new Error(NATIVE_PURCHASES_NOT_IN_THIS_VERSION);
   const response = await api.post<unknown>('/api/mobile/iap/verify', input);
   if (
     !isRecord(response) ||

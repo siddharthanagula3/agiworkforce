@@ -56,6 +56,7 @@ import { useWebBillingLinksAllowed } from '@/src/features/billing/webBillingLink
 import { storeDisplayName } from '@/src/features/release-state';
 import { ApiHttpError } from '@/services/apiErrors';
 import { billingRequestMessage } from '@/src/features/billing/mobileIapService';
+import { NATIVE_PURCHASES_AVAILABLE } from '@/src/features/billing/nativePurchaseAvailability';
 
 const PURCHASE_HELP_URL = 'https://agiworkforce.com/help?q=purchase+billing+credits+refund';
 
@@ -305,6 +306,79 @@ export default function CloudBillingScreen() {
     return (
       <SettingsScreenShell title="Billing">
         <CloudAccountRequired isLoading={!isClerkLoaded} onSignIn={handleSignIn} />
+      </SettingsScreenShell>
+    );
+  }
+
+  if (!NATIVE_PURCHASES_AVAILABLE) {
+    return (
+      <SettingsScreenShell title="Plan">
+        <SettingsInfo
+          title="Your plan"
+          body={
+            isFreeTier
+              ? 'You are on the Free plan.'
+              : isEntitled
+                ? `You are on the ${tierLabel} plan.`
+                : `Your ${tierLabel} subscription is ${statusLabel}. Paid capabilities are unavailable.`
+          }
+          icon={CreditCard}
+        />
+        {!isCloudModeActive && (
+          <CloudSyncBlockedBanner onSwitchToCloud={() => setAppMode('cloud')} />
+        )}
+        <SettingsGroup>
+          <SettingsRow label="Current plan" value={tierLabel} icon={CreditCard} />
+          {!isFreeTier && isEntitled && periodEndLabel ? (
+            <SettingsRow
+              label={
+                billingCancelsAtPeriodEnd ? 'Access ends' : isTrialing ? 'Trial ends' : 'Renews'
+              }
+              value={periodEndLabel}
+              icon={Clock}
+            />
+          ) : null}
+          {!isFreeTier ? (
+            <SettingsRow
+              label="Billing"
+              value={
+                billingSource === 'manual'
+                  ? 'By your organization'
+                  : billingSource === 'stripe'
+                    ? 'Managed on the web'
+                    : 'Managed where you subscribed'
+              }
+              icon={CreditCard}
+            />
+          ) : null}
+          <SettingsRow
+            label="What your plan includes"
+            icon={ListChecks}
+            onPress={() =>
+              router.push('/(app)/settings/plans' as Parameters<typeof router.push>[0])
+            }
+          />
+          <SettingsRow
+            label="Usage"
+            icon={Coins}
+            value={isCloudModeActive ? undefined : 'Available in AGI Cloud'}
+            onPress={
+              isCloudModeActive
+                ? () =>
+                    router.push('/(app)/settings/cloud-usage' as Parameters<typeof router.push>[0])
+                : undefined
+            }
+            isLast
+          />
+        </SettingsGroup>
+        <SettingsGroup>
+          <SettingsRow
+            label="Help with your plan"
+            icon={CircleHelp}
+            onPress={() => router.push('/(app)/support' as Parameters<typeof router.push>[0])}
+            isLast
+          />
+        </SettingsGroup>
       </SettingsScreenShell>
     );
   }

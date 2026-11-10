@@ -1,5 +1,9 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 
+jest.mock('@/src/features/billing/nativePurchaseAvailability', () => ({
+  NATIVE_PURCHASES_AVAILABLE: true,
+}));
+
 import React from 'react';
 import { Keyboard, TextInput } from 'react-native';
 import { render, fireEvent, waitFor, act, within } from '@testing-library/react-native';

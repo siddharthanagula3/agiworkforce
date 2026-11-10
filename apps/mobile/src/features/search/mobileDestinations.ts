@@ -1,3 +1,4 @@
+import { NATIVE_PURCHASES_AVAILABLE } from '@/src/features/billing/nativePurchaseAvailability';
 import type { MobileGlobalSearchResult } from './mobileGlobalSearch';
 
 export interface MobileDestination {
@@ -171,9 +172,11 @@ export const MOBILE_DESTINATIONS: readonly MobileDestination[] = [
   },
   {
     route: '/(app)/settings/cloud-billing',
-    title: 'Billing',
+    title: NATIVE_PURCHASES_AVAILABLE ? 'Billing' : 'Plan',
     section: 'Settings',
-    keywords: ['plan', 'subscription', 'payment', 'credits'],
+    keywords: NATIVE_PURCHASES_AVAILABLE
+      ? ['plan', 'subscription', 'payment', 'credits']
+      : ['plan', 'subscription'],
   },
   {
     route: '/(app)/settings/cloud-usage',

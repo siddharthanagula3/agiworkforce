@@ -37,6 +37,7 @@ import {
 } from '@/src/features/settings/Common';
 import { useCloudUsageStore } from './store';
 import { useStoreTopUps } from './useStoreTopUps';
+import { NATIVE_PURCHASES_AVAILABLE } from '@/src/features/billing/nativePurchaseAvailability';
 import { ApiHttpError } from '@/services/apiErrors';
 import { applyLimitReset, fetchUsageAllowances, fetchUsageHistory } from '@/services/usage';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
@@ -719,6 +720,18 @@ export default function CloudUsageScreen() {
     );
   }
 
+  if (isCloudModeActive && isFreePlan && !NATIVE_PURCHASES_AVAILABLE) {
+    return (
+      <SettingsScreenShell title="Usage">
+        <SettingsInfo
+          title="Free plan"
+          body="Usage resets every 5 hours, week and month, and varies by model and task."
+          icon={BarChart3}
+        />
+      </SettingsScreenShell>
+    );
+  }
+
   if (isCloudModeActive && isFreePlan) {
     return (
       <SettingsScreenShell title="Usage">
@@ -776,7 +789,11 @@ export default function CloudUsageScreen() {
   return (
     <SettingsScreenShell
       title="Usage"
-      help={{ docId: 'usage-and-credits', label: 'How usage and credits work' }}
+      help={
+        NATIVE_PURCHASES_AVAILABLE
+          ? { docId: 'usage-and-credits', label: 'How usage and credits work' }
+          : undefined
+      }
     >
       <SettingsInfo
         title="Plan usage"

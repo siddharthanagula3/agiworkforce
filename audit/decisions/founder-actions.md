@@ -76,12 +76,17 @@ Undecided calls from that round are in [`open-questions.md`](open-questions.md).
 - Slack app configuration: set the Interactivity Request URL to
   `https://agiworkforce.com/api/webhooks/slack-interactions` so the in-Slack Approve and Deny buttons work.
 
-## [Mobile] Merge Codex's store-release branch and re-pin the submission test
+## [Mobile] First store release: the steps only you can take
 
-- `apps/mobile/__tests__/ios-store-submission-config.test.ts` was reported red on main on 2026-10-23:
-  its reviewer notes pin cloud-billing line numbers, and Codex's `codex/mobile-store-release` branch
-  rewrites the store-listing files. Agents do not edit Codex's work, so merging that branch and
-  re-pinning the notes is yours. Not re-run in this pass.
+- Version 1 ships free with no in-app purchases (`apps/mobile/src/features/billing/storePurchases.json`). The listings,
+  reviewer notes and `apps/mobile/__tests__/ios-store-submission-config.test.ts` describe that build
+  and the test is green again. Every remaining console, credential, device and decision step is in
+  `docs/runbooks/mobile-store-first-release.md`, in order.
+- No store build can start before 2026-11-12: the Expo patch update the release check requires is
+  held by the seven-day package-age rule until then (`MOBILE-EXPO-PATCH-LAG-2026-11-10`, runbook
+  step 7 item 1).
+- `codex/mobile-store-release` (2026-10-17) is not needed for this: its free-first idea was
+  reimplemented on current code. Whether to keep or delete that branch is yours.
 
 ## [Legal] Register a DMCA designated agent (decision 32)
 
@@ -146,8 +151,9 @@ Each line is one approval; engineering edits the page and its claim test after i
 
 **Why founder assistance is required**
 Every release workflow is correct but reads configuration that does not exist: environments `macos-release`,
-`vscode-marketplace`, `chrome-web-store`, `mobile-store-release`, `production-fly` are missing, the repository has
-zero variables, and repository secrets cannot be listed with the agent token. This entry is the configuration half of
+`vscode-marketplace` and `chrome-web-store` are missing (`mobile-store-release` and `production-fly` exist as of
+2026-11-10), the only repository variables are the mobile ones, and repository secrets cannot be listed with the
+agent token. This entry is the configuration half of
 "Cut signed releases", "Chrome Web Store public key", "Signed protocol-7 CLI release" and the mobile store entry.
 **Exact action**
 
@@ -157,12 +163,12 @@ zero variables, and repository secrets cannot be listed with the agent token. Th
 4. Windows signing variables `AZURE_ARTIFACT_SIGNING_ENDPOINT`, `AZURE_ARTIFACT_SIGNING_ACCOUNT`, `AZURE_ARTIFACT_SIGNING_CERTIFICATE_PROFILE` and secrets `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`.
 5. `vscode-marketplace`: `VSCODE_MARKETPLACE_AZURE_CLIENT_ID`, `VSCODE_MARKETPLACE_AZURE_TENANT_ID`; an Open VSX token.
 6. Repository variables `CLERK_PUBLISHABLE_KEY`, `CLERK_FRONTEND_API`, `CLERK_SYNC_HOST`, `CHROME_EXTENSION_PUBLIC_KEY`; `chrome-web-store`: `CWS_PUBLISHER_ID`, `CWS_EXTENSION_ID`, `GCP_WORKLOAD_IDENTITY_PROVIDER`, `CWS_SERVICE_ACCOUNT`.
-7. `mobile-store-release`: secrets `EXPO_TOKEN`, `ASC_API_KEY_ID`, `ASC_API_KEY_ISSUER_ID`, `ASC_API_PRIVATE_KEY_BASE64`, `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_BASE64`; variables `ASC_APP_ID`, `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY`, `ANDROID_APP_LINKS_SHA256_CERT_FINGERPRINTS`.
+7. `mobile-store-release`: still missing secret `EXPO_TOKEN` and variable `ANDROID_APP_LINKS_SHA256_CERT_FINGERPRINTS`; the App Store Connect and Play secrets, `ASC_APP_ID` and the live `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY` are set (checked 2026-11-10). Steps: `docs/runbooks/mobile-store-first-release.md`.
 8. `NPM_TOKEN` able to publish `@agiworkforce/cli`; make the Homebrew tap public or give the release job write access.
 
 **Where** GitHub repository settings (environments, secrets, variables); Apple, Azure, Microsoft Entra, Google Cloud, Expo, npm.
 **Needed input** Accounts and about two hours.
-**How to verify completion** Tags `v-cli-1.7.1`, `v-cloud-desktop-1.2.0`, `v-desktop-1.2.1`, `v-vscode-0.3.0`, `v-ext-1.2.0`, `v-mobile-1.2.0` each produce a green release run.
+**How to verify completion** Tags `v-cli-1.7.1`, `v-cloud-desktop-1.2.0`, `v-desktop-1.2.1`, `v-vscode-0.3.0`, `v-ext-1.2.0`, `v-mobile-0.0.1` each produce a green release run.
 **What remains after founder action** Pushing the tags and verifying each release (agent).
 **Impact** RELEASE-BLOCKING (CLI, both desktops, VS Code, Chrome, mobile)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
@@ -332,26 +338,26 @@ implemented but unverified, and every claim must describe it that way.
 **Impact** FEATURE-BLOCKING (enterprise SSO cannot be verified or claimed)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
-## [Mobile] Store submission accounts, products, listing facts
+## [Mobile] Selling plans in the app (deferred: version 1 sells nothing)
 
 **Why founder assistance is required**
-Apple and Google agreements, merchant profiles, products and contact details
-exist only in the store consoles and belong to the account owner.
+Apple and Google agreements, merchant profiles, products and tax registrations
+exist only in the store consoles and belong to the account owner. None of this
+is needed for the free version 1; its steps are in
+`docs/runbooks/mobile-store-first-release.md`.
 **Exact action**
 
 1. Sign the Apple Paid Applications agreement and apply to the Small Business Program.
 2. Create the Play Console merchant profile (permanent).
-3. Create the five subscriptions and four top-ups in both stores with the ids in `apps/mobile/store-listing/*.json`.
-4. Copy the App Store Connect Issuer ID and create the Play service-account JSON for `pnpm release:asc-probe` and `release:preflight`.
-5. Replace the three `__FOUNDER_TO_FILL__` phone fields and supply the two `__DESIGN_TO_PRODUCE__` graphics.
-6. Register India OIDAR, EU OSS and UK VAT before the first sale.
+3. Finish the products in both stores as `docs/runbooks/mobile-store-products.md` lists them (the App Store ones were created on 2026-10-21 and are unattached).
+4. Register India OIDAR, EU OSS and UK VAT before the first sale.
 
-**Where** App Store Connect, Google Play Console, `apps/mobile/store-listing/`, `apps/mobile/eas.json`.
-**Needed input** Signatures, a contact phone, tax registrations, about ninety minutes.
-**How to verify completion** `pnpm --filter @agiworkforce/mobile release:preflight` passes for the production profile; no placeholder tokens remain in the listing files.
-**What remains after founder action** Sandbox purchase verification, then `MOBILE_IAP_ENABLED=true`.
-**Impact** RELEASE-BLOCKING (mobile stores)
-**Status** BLOCKED, FOUNDER ACTION REQUIRED
+**Where** App Store Connect, Google Play Console, `apps/mobile/src/features/billing/storePurchases.json`, `apps/mobile/store-listing/`.
+**Needed input** Signatures, tax registrations, about ninety minutes.
+**How to verify completion** Sandbox purchases verify on both stores as section 8 of the products runbook describes.
+**What remains after founder action** `nativePurchases: true`, listings and reviewer notes rewritten for a selling build, a new store review, then `MOBILE_IAP_ENABLED=true`.
+**Impact** FEATURE-BLOCKING (in-app sales only; not the first release)
+**Status** DEFERRED BY THE OWNER, 2026-11-10
 
 ## [Mobile / India] RBI auto-renewal ceiling and Razorpay
 

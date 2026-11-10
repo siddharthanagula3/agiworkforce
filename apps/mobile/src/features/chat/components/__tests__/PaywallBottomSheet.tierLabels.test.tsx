@@ -1,3 +1,7 @@
+jest.mock('@/src/features/billing/nativePurchaseAvailability', () => ({
+  NATIVE_PURCHASES_AVAILABLE: true,
+}));
+
 import { fireEvent, render } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
@@ -51,14 +55,14 @@ describe('PaywallBottomSheet tier labels', () => {
   it('names the top Max tier when the server gates a feature to it', () => {
     const { getByText } = renderSheet('max_15x');
 
-    expect(getByText('Upgrade to Max 20x')).toBeTruthy();
-    expect(getByText('Video generation requires the Max 20x plan.')).toBeTruthy();
+    expect(getByText('Upgrade to Ultra')).toBeTruthy();
+    expect(getByText('Video generation requires the Ultra plan.')).toBeTruthy();
   });
 
   it('uses the plan name checkout sells for max', () => {
     const { getByText } = renderSheet('max');
 
-    expect(getByText('Upgrade to Max 5x')).toBeTruthy();
+    expect(getByText('Upgrade to Max')).toBeTruthy();
   });
 
   it('still falls back to the vague label for a tier we do not sell', () => {
@@ -81,7 +85,7 @@ describe('PaywallBottomSheet tier labels', () => {
     ).toBeTruthy();
     expect(getByText('Manage billing')).toBeTruthy();
     expect(queryByText('Upgrade to Pro')).toBeNull();
-    expect(queryByText('AI image generation requires the Pro plan.')).toBeNull();
+    expect(queryByText('AI image generation requires the Premium plan.')).toBeNull();
 
     fireEvent.press(getByText('Manage billing'));
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/cloud-billing');

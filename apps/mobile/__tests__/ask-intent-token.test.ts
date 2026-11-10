@@ -26,7 +26,7 @@ jest.mock('@/services/api', () => ({ api: { post: mockPost, delete: mockDelete }
 jest.mock('@/services/secureFetch', () => ({ secureFetch: jest.fn() }));
 jest.mock('@/src/features/chat/store/appModeStore', () => {
   let state = { appMode: 'cloud' };
-  const listeners = new Set<(next: typeof state, previous: typeof state) => void>();
+  const listeners = new Set<(...args: unknown[]) => void>();
   return {
     useChatAppModeStore: {
       getState: () => state,

@@ -247,6 +247,29 @@ const NATIVE_PURCHASE_SOURCES = Object.fromEntries(
   ]),
 );
 
+const BUILD_SELLS = JSON.parse(NATIVE_PURCHASE_SOURCES.purchaseSwitch).nativePurchases;
+
+function sourcesSelling(sells) {
+  return { ...NATIVE_PURCHASE_SOURCES, purchaseSwitch: JSON.stringify({ nativePurchases: sells }) };
+}
+
+function iosDeclaring(sells) {
+  return { ...IOS_LISTING, pricing: { ...IOS_LISTING.pricing, in_app_purchases: sells } };
+}
+
+function androidDeclaring(sells) {
+  return {
+    ...ANDROID_LISTING,
+    in_app_products: { ...ANDROID_LISTING.in_app_products, has_in_app_products: sells },
+  };
+}
+
+const SELLING_BUILD = {
+  ios: iosDeclaring(true),
+  android: androidDeclaring(true),
+  nativePurchases: { ios: true, android: true },
+};
+
 function listingInputs(patch = {}) {
   return {
     ios: IOS_LISTING,
@@ -261,13 +284,85 @@ function listingInputs(patch = {}) {
 test('the committed store listings match the shipped build', () => {
   assert.deepEqual(storeListingFailures(listingInputs()), []);
   assert.equal(appVersionFrom(APP_CONFIG), IOS_LISTING._meta.version);
+  assert.equal(typeof BUILD_SELLS, 'boolean');
   assert.deepEqual(nativePurchaseSupportFrom(NATIVE_PURCHASE_SOURCES), {
-    ios: true,
-    android: true,
+    ios: BUILD_SELLS,
+    android: BUILD_SELLS,
   });
+  assert.equal(IOS_LISTING.pricing.in_app_purchases, BUILD_SELLS);
+  assert.equal(ANDROID_LISTING.in_app_products.has_in_app_products, BUILD_SELLS);
   assert.ok(
     !Object.values(NATIVE_PURCHASE_SOURCE_PATHS).some((file) => file.endsWith('v1FeatureFlags.ts')),
   );
+});
+
+test('the purchase switch alone decides what the build sells, in both directions', () => {
+  assert.deepEqual(nativePurchaseSupportFrom(sourcesSelling(true)), { ios: true, android: true });
+  assert.deepEqual(nativePurchaseSupportFrom(sourcesSelling(false)), {
+    ios: false,
+    android: false,
+  });
+  for (const purchaseSwitch of [
+    '{}',
+    '{"nativePurchases":"false"}',
+    '{"nativePurchases":0}',
+    '[',
+  ]) {
+    assert.throws(
+      () => nativePurchaseSupportFrom({ ...NATIVE_PURCHASE_SOURCES, purchaseSwitch }),
+      /purchase switch/,
+      purchaseSwitch,
+    );
+  }
+});
+
+test('every reader of the purchase switch must take it unchanged', () => {
+  for (const [name, before, after] of [
+    ['availability', "'./storePurchases.json'", "'./otherPurchases.json'"],
+    ['availability', '= storePurchases.nativePurchases;', '= true;'],
+    ['availability', '= storePurchases.nativePurchases;', '= !storePurchases.nativePurchases;'],
+    [
+      'appConfig',
+      "require('./src/features/billing/storePurchases.json')",
+      "require('./src/features/billing/otherPurchases.json')",
+    ],
+    [
+      'appConfig',
+      "const { nativePurchases } = require('./src/features/billing/storePurchases.json');",
+      'const nativePurchases = true;',
+    ],
+    ['appConfig', "...(nativePurchases ? [] : ['com.android.vending.BILLING']),", ''],
+    ['appConfig', "'com.android.vending.BILLING'", "'android.permission.CAMERA'"],
+    [
+      'hook',
+      'NATIVE_PURCHASES_AVAILABLE ? useStoreMobileIap : useUnavailableMobileIap',
+      'useStoreMobileIap',
+    ],
+    [
+      'hook',
+      'NATIVE_PURCHASES_AVAILABLE ? useStoreMobileIap : useUnavailableMobileIap',
+      'NATIVE_PURCHASES_AVAILABLE ? useUnavailableMobileIap : useStoreMobileIap',
+    ],
+    ['hook', "from './nativePurchaseAvailability'", "from './otherAvailability'"],
+    ['service', 'if (!NATIVE_PURCHASES_AVAILABLE) return null;', ''],
+    ['service', 'if (!NATIVE_PURCHASES_AVAILABLE) throw new Error(', 'if (false) throw new Error('],
+    ['screen', 'if (!NATIVE_PURCHASES_AVAILABLE) {', 'if (false) {'],
+    [
+      'screen',
+      "from '@/src/features/billing/nativePurchaseAvailability'",
+      "from '@/src/features/billing/other'",
+    ],
+  ]) {
+    const source = NATIVE_PURCHASE_SOURCES[name].replace(before, after);
+    assert.notEqual(source, NATIVE_PURCHASE_SOURCES[name], `${name}: ${before}`);
+    for (const sells of [true, false]) {
+      assert.throws(
+        () => nativePurchaseSupportFrom({ ...sourcesSelling(sells), [name]: source }),
+        /Native purchase wiring:/,
+        `${name}: ${before}`,
+      );
+    }
+  }
 });
 
 test('a listing that outran the build fails', () => {
@@ -313,23 +408,23 @@ test('copy over a store limit fails', () => {
 });
 
 test('claiming purchases the build cannot make, or hiding ones it can, both fail', () => {
-  const iosWithoutPurchases = {
-    ...IOS_LISTING,
-    pricing: { ...IOS_LISTING.pricing, in_app_purchases: false },
-  };
-  const androidWithoutPurchases = {
-    ...ANDROID_LISTING,
-    in_app_products: { ...ANDROID_LISTING.in_app_products, has_in_app_products: false },
-  };
+  const iosWithoutPurchases = iosDeclaring(false);
+  const androidWithoutPurchases = androidDeclaring(false);
+  assert.deepEqual(storeListingFailures(listingInputs(SELLING_BUILD)), []);
   for (const [platform, label, noPurchases] of [
     ['ios', 'iOS', iosWithoutPurchases],
     ['android', 'Android', androidWithoutPurchases],
   ]) {
-    const hidden = storeListingFailures(listingInputs({ [platform]: noPurchases }));
+    const hidden = storeListingFailures(
+      listingInputs({ ...SELLING_BUILD, [platform]: noPurchases }),
+    );
     assert.equal(hidden.length, 1);
     assert.match(hidden[0], new RegExp(`${label} listing declares no purchases`));
     const unsupported = storeListingFailures(
-      listingInputs({ nativePurchases: { ios: true, android: true, [platform]: false } }),
+      listingInputs({
+        ...SELLING_BUILD,
+        nativePurchases: { ios: true, android: true, [platform]: false },
+      }),
     );
     assert.equal(unsupported.length, 1);
     assert.match(
@@ -352,24 +447,30 @@ test('claiming purchases the build cannot make, or hiding ones it can, both fail
 test('purchase declarations and verified platform support must be explicit booleans', () => {
   for (const value of [undefined, null, 'true', 1]) {
     assert.equal(
-      storeListingFailures(listingInputs({ nativePurchases: { ios: value, android: true } }))
-        .length,
-      1,
-    );
-    assert.equal(
-      storeListingFailures(listingInputs({ nativePurchases: { ios: true, android: value } }))
-        .length,
+      storeListingFailures(
+        listingInputs({ ...SELLING_BUILD, nativePurchases: { ios: value, android: true } }),
+      ).length,
       1,
     );
     assert.equal(
       storeListingFailures(
-        listingInputs({ ios: { ...IOS_LISTING, pricing: { in_app_purchases: value } } }),
+        listingInputs({ ...SELLING_BUILD, nativePurchases: { ios: true, android: value } }),
       ).length,
       1,
     );
     assert.equal(
       storeListingFailures(
         listingInputs({
+          ...SELLING_BUILD,
+          ios: { ...IOS_LISTING, pricing: { in_app_purchases: value } },
+        }),
+      ).length,
+      1,
+    );
+    assert.equal(
+      storeListingFailures(
+        listingInputs({
+          ...SELLING_BUILD,
           android: { ...ANDROID_LISTING, in_app_products: { has_in_app_products: value } },
         }),
       ).length,
@@ -415,8 +516,8 @@ test('only a direct native plugin entry or the first element of a plugin tuple r
   assert.ok(NATIVE_PURCHASE_SOURCES.appConfig.includes(entry));
   const tuple = NATIVE_PURCHASE_SOURCES.appConfig.replace(entry, "    ['expo-iap', {}],");
   assert.deepEqual(nativePurchaseSupportFrom({ ...NATIVE_PURCHASE_SOURCES, appConfig: tuple }), {
-    ios: true,
-    android: true,
+    ios: BUILD_SELLS,
+    android: BUILD_SELLS,
   });
   for (const replacement of [
     "    { unused: 'expo-iap' },",

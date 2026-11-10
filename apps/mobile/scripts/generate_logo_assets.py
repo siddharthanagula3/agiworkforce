@@ -170,6 +170,35 @@ def generate_icons():
     generate_agi_logo(1024, 1024, is_opaque=False, output_path='apps/mobile/assets/adaptive-icon.png')
 
 
+# Android draws a status-bar icon from the alpha channel alone and tints it
+# itself, so the artwork is the brand symbol's silhouette in white on full
+# transparency. An opaque image has no shape to read and is drawn as a filled
+# square. The silhouette is taken from the shipped symbol so the two cannot
+# drift. 96px is the xxxhdpi size of the 24dp slot and 88px its 22dp optical
+# square, which the symbol's longer side is scaled to fill.
+NOTIFICATION_ICON_SIZE = 96
+NOTIFICATION_ICON_CONTENT_SIZE = 88
+NOTIFICATION_ICON_SOURCE = 'apps/mobile/assets/agi-symbol.png'
+
+
+def generate_notification_icon():
+    size = NOTIFICATION_ICON_SIZE
+    alpha = Image.open(NOTIFICATION_ICON_SOURCE).convert('RGBA').getchannel('A')
+    alpha = alpha.crop(alpha.getbbox())
+    scale = NOTIFICATION_ICON_CONTENT_SIZE / max(alpha.size)
+    fitted = alpha.resize(
+        (round(alpha.width * scale), round(alpha.height * scale)),
+        Image.Resampling.LANCZOS,
+    )
+    mask = Image.new('L', (size, size), 0)
+    mask.paste(fitted, ((size - fitted.width) // 2, (size - fitted.height) // 2))
+    final_img = Image.new('RGBA', (size, size), (255, 255, 255, 0))
+    final_img.putalpha(mask)
+    output_path = 'apps/mobile/assets/notification-icon.png'
+    final_img.save(output_path, 'PNG')
+    print(f"Generated notification icon: {output_path} ({size}x{size})")
+
+
 def generate_lockups():
     # Launch screen lockups. 880px wide is 4x the 220dp `imageWidth` declared by
     # the expo-splash-screen plugin in app.config.js, so the same source is
@@ -180,12 +209,13 @@ def generate_lockups():
     generate_agi_lockup(880, INK_DARK, 'apps/mobile/assets/splash-lockup-dark.png')
 
 
-# Run from the repository root. Pass `icons` or `lockups` to regenerate one
-# family only, regenerating the icons rewrites shipped store artwork, so the
+# Run from the repository root. Pass `icons`, `lockups` or `notification` to
+# regenerate one family only, regenerating the icons rewrites shipped store artwork, so the
 # default is deliberately not "everything".
 TARGETS = {
     'icons': generate_icons,
     'lockups': generate_lockups,
+    'notification': generate_notification_icon,
 }
 
 if __name__ == '__main__':
