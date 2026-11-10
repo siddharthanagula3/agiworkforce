@@ -429,7 +429,7 @@ mod tests {
         ) -> ToolExecOptions {
             ToolExecOptions {
                 additional_workspace_roots: Vec::new(),
-                mcp_tool_definitions: None,
+                tool_search_catalog: None,
                 require_confirmation: !resolved.skip_permissions,
                 auto_approve_safe: resolved.auto_approve_safe,
                 auto_approve_edits: resolved.mode.auto_approves_edits(),

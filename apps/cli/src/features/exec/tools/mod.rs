@@ -342,10 +342,12 @@ pub struct ToolExecOptions {
     /// the app-server can host a workspace that is not the process cwd.
     pub workspace_root: Option<std::path::PathBuf>,
     pub additional_workspace_roots: Vec<std::path::PathBuf>,
-    /// The session's connected MCP tools, for `tool_search` to load a schema
-    /// the initial list deferred. Per invocation, like the two fields above:
-    /// concurrent sessions connect to different servers.
-    pub mcp_tool_definitions: Option<std::sync::Arc<Vec<crate::models::ToolDefinition>>>,
+    /// What `tool_search` searches: every tool the requesting turn can call,
+    /// connected MCP tools included, so a result never offers a schema the
+    /// turn would refuse. Per invocation, like the two fields above:
+    /// concurrent sessions connect to different servers and carry different
+    /// tool filters. `None` searches every built-in tool.
+    pub tool_search_catalog: Option<std::sync::Arc<Vec<crate::models::ToolDefinition>>>,
 }
 
 // ---------------------------------------------------------------------------
@@ -1055,12 +1057,11 @@ async fn execute_tool_with_scoped_permissions(
             .await
         }
         "tool_search" => {
-            let mcp_tools = opts
-                .mcp_tool_definitions
-                .as_deref()
-                .map(Vec::as_slice)
-                .unwrap_or(&[]);
-            execute_tool_search(&call.args, mcp_tools).await
+            execute_tool_search(
+                &call.args,
+                opts.tool_search_catalog.as_deref().map(Vec::as_slice),
+            )
+            .await
         }
         "agent" => {
             let action = call.args.get("action").map(String::as_str).unwrap_or("");
@@ -2664,7 +2665,7 @@ mod tests {
     fn byok_options(callback: ApprovalCallback, auto_approve_safe: bool) -> ToolExecOptions {
         ToolExecOptions {
             additional_workspace_roots: Vec::new(),
-            mcp_tool_definitions: None,
+            tool_search_catalog: None,
             require_confirmation: true,
             auto_approve_safe,
             auto_approve_edits: false,
@@ -2845,7 +2846,7 @@ mod tests {
     async fn local_mode_blocks_builtin_network_tools_before_dispatch() {
         let opts = ToolExecOptions {
             additional_workspace_roots: Vec::new(),
-            mcp_tool_definitions: None,
+            tool_search_catalog: None,
             require_confirmation: false,
             auto_approve_safe: true,
             auto_approve_edits: false,
@@ -2899,7 +2900,7 @@ reason = "regression test"
         };
         let opts = ToolExecOptions {
             additional_workspace_roots: Vec::new(),
-            mcp_tool_definitions: None,
+            tool_search_catalog: None,
             require_confirmation: false,
             auto_approve_safe: true,
             auto_approve_edits: false,
@@ -2952,7 +2953,7 @@ decision = "ask"
         };
         let opts = ToolExecOptions {
             additional_workspace_roots: Vec::new(),
-            mcp_tool_definitions: None,
+            tool_search_catalog: None,
             require_confirmation: false,
             auto_approve_safe: true,
             auto_approve_edits: false,
@@ -3010,7 +3011,7 @@ decision = "ask"
         };
         let opts = ToolExecOptions {
             additional_workspace_roots: Vec::new(),
-            mcp_tool_definitions: None,
+            tool_search_catalog: None,
             require_confirmation: false,
             auto_approve_safe: true,
             auto_approve_edits: false,
@@ -3049,7 +3050,7 @@ decision = "ask"
     fn accepting_edits(callback: ApprovalCallback) -> ToolExecOptions {
         ToolExecOptions {
             additional_workspace_roots: Vec::new(),
-            mcp_tool_definitions: None,
+            tool_search_catalog: None,
             require_confirmation: true,
             auto_approve_safe: true,
             auto_approve_edits: true,
@@ -3296,7 +3297,7 @@ decision = "ask"
                 user_input_callback: None,
                 privacy_mode: crate::agent::PrivacyMode::Byok,
                 workspace_root: Some(workspace.path().to_path_buf()),
-                mcp_tool_definitions: None,
+                tool_search_catalog: None,
             };
             let call = ToolCall {
                 name: "write_file".into(),
@@ -3354,7 +3355,7 @@ decision = "ask"
                 user_input_callback: None,
                 privacy_mode: crate::agent::PrivacyMode::Byok,
                 workspace_root: Some(workspace.path().to_path_buf()),
-                mcp_tool_definitions: None,
+                tool_search_catalog: None,
             };
             let args = match tool {
                 "write_file" => HashMap::from([("path".into(), path.display().to_string()), ("content".into(), "new\n".into())]),
@@ -3406,7 +3407,7 @@ decision = "ask"
                 user_input_callback: None,
                 privacy_mode: crate::agent::PrivacyMode::Byok,
                 workspace_root: Some(workspace.path().to_path_buf()),
-                mcp_tool_definitions: None,
+                tool_search_catalog: None,
             };
             let call = ToolCall {
                 name: "write_file".into(),
@@ -3480,7 +3481,7 @@ decision = "ask"
                 user_input_callback: None,
                 privacy_mode: crate::agent::PrivacyMode::Byok,
                 workspace_root: Some(workspace.path().to_path_buf()),
-                mcp_tool_definitions: None,
+                tool_search_catalog: None,
             };
             let result = execute_tool_with_opts_and_permissions(
                 &ToolCall {
@@ -3530,7 +3531,7 @@ decision = "ask"
                 user_input_callback: None,
                 privacy_mode: crate::agent::PrivacyMode::Byok,
                 workspace_root: None,
-                mcp_tool_definitions: None,
+                tool_search_catalog: None,
             };
             let mut permissions = crate::permissions::PermissionStore::default();
             permissions.deny_always("printf protected");
@@ -3612,7 +3613,7 @@ decision = "ask"
             user_input_callback: None,
             privacy_mode: crate::agent::PrivacyMode::Byok,
             workspace_root: Some(workspace.path().to_path_buf()),
-            mcp_tool_definitions: None,
+            tool_search_catalog: None,
         };
         execute_tool_with_opts(
             &ToolCall {
@@ -3728,7 +3729,7 @@ decision = "ask"
             user_input_callback: None,
             privacy_mode: crate::agent::PrivacyMode::Byok,
             workspace_root: Some(workspace.path().to_path_buf()),
-            mcp_tool_definitions: None,
+            tool_search_catalog: None,
         };
         let patch = "--- /dev/null\n+++ b/.vscode/tasks.json\n@@ -0,0 +1 @@\n+{}\n--- /dev/null\n+++ b/notes.txt\n@@ -0,0 +1 @@\n+all changes visible\n";
         execute_tool_with_opts(
@@ -3787,7 +3788,7 @@ decision = "ask"
             user_input_callback: None,
             privacy_mode: crate::agent::PrivacyMode::Byok,
             workspace_root: Some(workspace.path().to_path_buf()),
-            mcp_tool_definitions: None,
+            tool_search_catalog: None,
         };
         let result = execute_tool_with_opts(
             &ToolCall {
@@ -3879,7 +3880,7 @@ decision = "ask"
             };
             let opts = ToolExecOptions {
                 additional_workspace_roots: Vec::new(),
-                mcp_tool_definitions: None,
+                tool_search_catalog: None,
                 require_confirmation: false,
                 auto_approve_safe: true,
                 auto_approve_edits: true,
@@ -3934,7 +3935,7 @@ decision = "deny"
         };
         let opts = ToolExecOptions {
             additional_workspace_roots: Vec::new(),
-            mcp_tool_definitions: None,
+            tool_search_catalog: None,
             require_confirmation: false,
             auto_approve_safe: true,
             auto_approve_edits: false,
@@ -4050,7 +4051,7 @@ decision = "deny"
         };
         let opts = ToolExecOptions {
             additional_workspace_roots: Vec::new(),
-            mcp_tool_definitions: None,
+            tool_search_catalog: None,
             require_confirmation: false,
             auto_approve_safe: true,
             auto_approve_edits: true,
@@ -4102,7 +4103,7 @@ decision = "deny"
         };
         let opts = ToolExecOptions {
             additional_workspace_roots: Vec::new(),
-            mcp_tool_definitions: None,
+            tool_search_catalog: None,
             require_confirmation: false,
             auto_approve_safe: true,
             auto_approve_edits: false,
@@ -4196,7 +4197,7 @@ decision = "deny"
         let workspace = tempfile::tempdir().expect("workspace");
         let opts = ToolExecOptions {
             additional_workspace_roots: Vec::new(),
-            mcp_tool_definitions: None,
+            tool_search_catalog: None,
             require_confirmation: false,
             auto_approve_safe: false,
             auto_approve_edits: false,
@@ -4340,7 +4341,7 @@ decision = "deny"
         };
         let opts = ToolExecOptions {
             additional_workspace_roots: Vec::new(),
-            mcp_tool_definitions: None,
+            tool_search_catalog: None,
             require_confirmation: false,
             auto_approve_safe: true,
             auto_approve_edits: false,

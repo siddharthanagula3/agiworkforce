@@ -174,7 +174,7 @@ async fn call_cli_tool(params: Option<&Value>) -> Result<Value, RpcError> {
         user_input_callback: None,
         privacy_mode: crate::agent::PrivacyMode::Local,
         workspace_root: std::env::current_dir().ok(),
-        mcp_tool_definitions: None,
+        tool_search_catalog: None,
     };
     let (text, is_error) = match crate::tools::execute_tool_with_opts(&call, &opts).await {
         Ok(result) => (result.output, !result.success),

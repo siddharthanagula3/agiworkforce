@@ -847,7 +847,7 @@ async fn checkpoint_revision_private_namespace_refuses_actual_reader_and_writer(
             privacy_mode: crate::agent::PrivacyMode::Local,
             workspace_root: Some(fixture.workspace.clone()),
             additional_workspace_roots: Vec::new(),
-            mcp_tool_definitions: None,
+            tool_search_catalog: None,
         },
     )
     .await
@@ -873,7 +873,7 @@ async fn checkpoint_revision_private_namespace_refuses_actual_reader_and_writer(
             privacy_mode: crate::agent::PrivacyMode::Local,
             workspace_root: Some(fixture.workspace.clone()),
             additional_workspace_roots: Vec::new(),
-            mcp_tool_definitions: None,
+            tool_search_catalog: None,
         },
     )
     .await

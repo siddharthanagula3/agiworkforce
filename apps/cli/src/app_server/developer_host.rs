@@ -10342,7 +10342,7 @@ mod tests {
             },
             &crate::tools::ToolExecOptions {
                 additional_workspace_roots: Vec::new(),
-                mcp_tool_definitions: None,
+                tool_search_catalog: None,
                 require_confirmation: false,
                 auto_approve_safe: false,
                 auto_approve_edits: false,
@@ -10391,7 +10391,7 @@ mod tests {
             },
             &crate::tools::ToolExecOptions {
                 additional_workspace_roots: Vec::new(),
-                mcp_tool_definitions: None,
+                tool_search_catalog: None,
                 require_confirmation: false,
                 auto_approve_safe: false,
                 auto_approve_edits: false,
