@@ -143,9 +143,9 @@ test('CLI accepts the pnpm separator and explicit safety confirmations', () => {
 
 test('apply and baseline reach the direct endpoint, which can hold the session lock', () => {
   const pooled =
-    'postgresql://alex:Ab%40C-pooler.x@ep-cool-darkness-123456-pooler.us-east-2.aws.neon.tech/db?sslmode=require&channel_binding=require';
+    'postgresql://EXAMPLE:EXAMPLE@ep-fixture-123456-pooler.us-east-2.aws.neon.tech/db?sslmode=require&channel_binding=require';
   const direct =
-    'postgresql://alex:Ab%40C-pooler.x@ep-cool-darkness-123456.us-east-2.aws.neon.tech/db?sslmode=require&channel_binding=require';
+    'postgresql://EXAMPLE:EXAMPLE@ep-fixture-123456.us-east-2.aws.neon.tech/db?sslmode=require&channel_binding=require';
   for (const command of ['apply', 'baseline']) {
     assert.equal(migrationConnectionString({ AGI_DATABASE_URL: pooled }, command), direct);
     assert.equal(
@@ -159,7 +159,7 @@ test('apply and baseline reach the direct endpoint, which can hold the session l
   for (const command of ['status', 'verify', 'record', 'deployments']) {
     assert.equal(migrationConnectionString({ AGI_DATABASE_URL: pooled }, command), pooled);
   }
-  const local = 'postgres://postgres:postgres@localhost:5432/agiworkforce_test';
+  const local = 'postgres://postgres:EXAMPLE@localhost:5432/agiworkforce_test';
   assert.equal(
     migrationConnectionString({ AGI_DATABASE_URL: local, DATABASE_URL: pooled }, 'apply'),
     local,

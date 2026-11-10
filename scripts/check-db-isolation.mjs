@@ -168,7 +168,7 @@ function workspaceScopeExempt(relativePath) {
  */
 const WORKSPACE_SCOPE_BASELINE = new Map([
   ['apps/web/lib/services/cloud-agent-run-service.ts', 25],
-  ['apps/web/lib/services/conversation-branch-service.ts', 6],
+  ['apps/web/lib/services/conversation-branch-service.ts', 3],
   ['apps/web/lib/connectors/mcp-custom-connections.ts', 5],
   ['apps/web/lib/user-connector-tools.ts', 4],
   ['apps/web/lib/server/video-generation-transcript.ts', 3],

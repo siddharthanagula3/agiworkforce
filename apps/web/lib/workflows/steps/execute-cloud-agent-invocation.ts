@@ -791,6 +791,7 @@ export async function executeCloudAgentWorkflowInvocation(
       onCallerToolCheckpoint: async (checkpoint) => {
         const saved = await saveCloudAgentCallerCheckpoint(db, {
           userId: input.userId,
+          organizationId: input.processed.organizationId ?? null,
           runId: input.runId,
           sessionId: checkpoint.sessionId,
           turnId: checkpoint.turnId,

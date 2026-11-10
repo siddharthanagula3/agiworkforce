@@ -319,7 +319,11 @@ describe('caller-result HTTP continuation', () => {
       const response = await POST(request());
       expect(response.status).toBe(200);
       expect(await response.text()).toContain('[DONE]');
-      expect(mocks.claim).toHaveBeenCalledWith(db, { userId: 'user-1', resume: body() });
+      expect(mocks.claim).toHaveBeenCalledWith(db, {
+        userId: 'user-1',
+        organizationId: null,
+        resume: body(),
+      });
       expect(mocks.runTurn).toHaveBeenCalledWith(
         expect.objectContaining({
           db,
@@ -408,7 +412,11 @@ describe('caller-result HTTP continuation', () => {
     });
     const response = await POST(request());
     await response.text();
-    expect(mocks.claim).toHaveBeenCalledWith(db, { userId: 'user-1', resume: body() });
+    expect(mocks.claim).toHaveBeenCalledWith(db, {
+      userId: 'user-1',
+      organizationId: null,
+      resume: body(),
+    });
     expect(mocks.runTurn.mock.calls[0]![0].continuation.resume).toEqual({
       callerResults: [{ tool_call_id: 'local-1', content: 'safe result' }],
       callerObservations: [{ ...body().observations![0], text: 'safe observation' }],
@@ -456,6 +464,7 @@ describe('caller-result HTTP continuation', () => {
       expect((await POST(request())).status).toBeGreaterThanOrEqual(500);
       expect(mocks.release).toHaveBeenCalledWith(db, {
         userId: 'user-1',
+        organizationId: null,
         runId: RUN_ID,
         checkpointId: CHECKPOINT_ID,
         leaseToken: LEASE_TOKEN,

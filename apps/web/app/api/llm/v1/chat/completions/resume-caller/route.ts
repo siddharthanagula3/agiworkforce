@@ -88,7 +88,7 @@ async function handleCallerResume(request: NextRequest, authResult: AuthGateSucc
   const { db, organizationId } = await getUserScopedDb(request);
   let claim;
   try {
-    claim = await claimCloudAgentCallerCheckpoint(db, { userId, resume: fields });
+    claim = await claimCloudAgentCallerCheckpoint(db, { userId, organizationId, resume: fields });
   } catch (error) {
     const response = checkpointError(error);
     if (response) return response;
@@ -105,6 +105,7 @@ async function handleCallerResume(request: NextRequest, authResult: AuthGateSucc
     release: async () => {
       await releaseCloudAgentCallerCheckpoint(db, {
         userId,
+        organizationId,
         runId: claim.checkpoint.runId,
         checkpointId: claim.checkpoint.id,
         leaseToken: claim.leaseToken,

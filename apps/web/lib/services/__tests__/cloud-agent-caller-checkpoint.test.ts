@@ -44,6 +44,7 @@ function boundary() {
   };
   return {
     userId: 'fixture-user',
+    organizationId: null,
     runId: '11111111-1111-4111-8111-111111111111',
     sessionId: base.sessionId,
     turnId: base.turnId,
@@ -172,6 +173,7 @@ describe('caller checkpoint admission before persistence', () => {
     await expect(
       claimCloudAgentCallerCheckpoint(db, {
         userId: 'fixture-user',
+        organizationId: null,
         resume: {
           schema_version: AGENT_EVENT_SCHEMA_VERSION,
           run_id: boundary().runId,
@@ -183,4 +185,34 @@ describe('caller checkpoint admission before persistence', () => {
     ).rejects.toMatchObject({ name: 'ZodError' });
     expect(transaction).not.toHaveBeenCalled();
   });
+});
+
+describe('caller checkpoint workspace lock', () => {
+  it.each([null, '22222222-2222-4222-8222-222222222222'])(
+    'pins the run lock to workspace %s before reading the checkpoint',
+    async (organizationId) => {
+      const query = vi.fn(async () => []);
+      const scopedDb: DatabaseAdapter = {
+        ...db,
+        transaction: async (callback) => callback({ ...db, query } as DatabaseAdapter),
+      };
+      await expect(
+        claimCloudAgentCallerCheckpoint(scopedDb, {
+          userId: 'fixture-user',
+          organizationId,
+          resume: {
+            schema_version: AGENT_EVENT_SCHEMA_VERSION,
+            run_id: boundary().runId,
+            turn_id: 'turn-1',
+            next_event_sequence: 3,
+            tool_results: [{ tool_call_id: 'local-read', content: '' }],
+          },
+        }),
+      ).rejects.toMatchObject({ name: 'CloudAgentRunNotFoundError' });
+      expect(query).toHaveBeenCalledExactlyOnceWith(
+        expect.stringContaining('organization_id is not distinct from $3::uuid'),
+        [boundary().runId, 'fixture-user', organizationId],
+      );
+    },
+  );
 });

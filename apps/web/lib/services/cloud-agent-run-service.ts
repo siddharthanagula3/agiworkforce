@@ -1470,7 +1470,7 @@ export async function saveCloudAgentApprovalCheckpoint(
 
 async function lockActiveCallerRun(
   tx: DatabaseAdapter,
-  input: { userId: string; runId: string },
+  input: { userId: string; organizationId: string | null; runId: string },
 ): Promise<void> {
   const rows = await tx.query<{
     id: string;
@@ -1478,8 +1478,8 @@ async function lockActiveCallerRun(
     cancellation_requested_at: string | Date | null;
   }>(
     `select id, state, cancellation_requested_at from public.cloud_agent_runs
-      where id = $1 and user_id = $2 for update`,
-    [input.runId, input.userId],
+      where id = $1 and user_id = $2 and organization_id is not distinct from $3::uuid for update`,
+    [input.runId, input.userId, input.organizationId],
   );
   const run = rows[0];
   if (!run) throw new CloudAgentRunNotFoundError();
@@ -1573,7 +1573,7 @@ function validateCallerCheckpointBoundary(
 
 export async function saveCloudAgentCallerCheckpoint(
   db: DatabaseAdapter,
-  input: CloudAgentCheckpointWrite,
+  input: CloudAgentCheckpointWrite & { organizationId: string | null },
 ): Promise<SavedCloudAgentCallerCheckpoint> {
   const request = z.record(z.string(), z.unknown()).parse(input.request);
   if (request['caller_tool_handoff_version'] !== AGENT_EVENT_SCHEMA_VERSION) {
@@ -1703,8 +1703,8 @@ export async function saveCloudAgentCallerCheckpoint(
     }
     await tx.query(
       `update public.cloud_agent_runs set state = 'awaiting_input', completed_at = null, updated_at = now()
-        where id = $1 and user_id = $2 and ${RUN_HAS_NOT_ENDED}`,
-      [input.runId, input.userId, TERMINAL_STATE_VALUES],
+        where id = $1 and user_id = $2 and organization_id is not distinct from $4::uuid and ${RUN_HAS_NOT_ENDED}`,
+      [input.runId, input.userId, TERMINAL_STATE_VALUES, input.organizationId],
     );
     return { checkpoint, events: persistedEvents };
   });
@@ -1712,12 +1712,21 @@ export async function saveCloudAgentCallerCheckpoint(
 
 export async function claimCloudAgentCallerCheckpoint(
   db: DatabaseAdapter,
-  input: { userId: string; resume: CallerToolResumeRequest; leaseSeconds?: number },
+  input: {
+    userId: string;
+    organizationId: string | null;
+    resume: CallerToolResumeRequest;
+    leaseSeconds?: number;
+  },
 ): Promise<ClaimedCloudAgentCallerCheckpoint> {
   const resume = CallerToolResumeRequestSchema.parse(input.resume);
   const leaseSeconds = checkpointLeaseSeconds(input.leaseSeconds);
   return db.transaction(async (tx) => {
-    await lockActiveCallerRun(tx, { userId: input.userId, runId: resume.run_id });
+    await lockActiveCallerRun(tx, {
+      userId: input.userId,
+      organizationId: input.organizationId,
+      runId: resume.run_id,
+    });
     const rows = await tx.query<CloudAgentApprovalCheckpointRow>(
       `select *, created_at <= now() - make_interval(hours => $5) as expired,
         lease_expires_at <= now() as lease_expired
@@ -1785,8 +1794,8 @@ export async function claimCloudAgentCallerCheckpoint(
     );
     const runs = await tx.query<CloudAgentRunRow>(
       `update public.cloud_agent_runs set state = 'running', completed_at = null, updated_at = now()
-        where id = $1 and user_id = $2 and ${RUN_HAS_NOT_ENDED} returning *`,
-      [resume.run_id, input.userId, TERMINAL_STATE_VALUES],
+        where id = $1 and user_id = $2 and organization_id is not distinct from $4::uuid and ${RUN_HAS_NOT_ENDED} returning *`,
+      [resume.run_id, input.userId, TERMINAL_STATE_VALUES, input.organizationId],
     );
     if (!runs[0] || !claimed.leaseToken) throw new CloudAgentApprovalCheckpointConflictError();
     return { checkpoint: claimed, resume: normalizedResume, leaseToken: claimed.leaseToken };
@@ -1795,7 +1804,13 @@ export async function claimCloudAgentCallerCheckpoint(
 
 export async function releaseCloudAgentCallerCheckpoint(
   db: DatabaseAdapter,
-  input: { userId: string; runId: string; checkpointId: string; leaseToken: string },
+  input: {
+    userId: string;
+    organizationId: string | null;
+    runId: string;
+    checkpointId: string;
+    leaseToken: string;
+  },
 ): Promise<CloudAgentApprovalCheckpoint> {
   return db.transaction(async (tx) => {
     await lockActiveCallerRun(tx, input);
@@ -1812,8 +1827,8 @@ export async function releaseCloudAgentCallerCheckpoint(
     );
     await tx.query(
       `update public.cloud_agent_runs set state = 'awaiting_input', completed_at = null, updated_at = now()
-        where id = $1 and user_id = $2 and ${RUN_HAS_NOT_ENDED}`,
-      [input.runId, input.userId, TERMINAL_STATE_VALUES],
+        where id = $1 and user_id = $2 and organization_id is not distinct from $4::uuid and ${RUN_HAS_NOT_ENDED}`,
+      [input.runId, input.userId, TERMINAL_STATE_VALUES, input.organizationId],
     );
     return checkpoint;
   });
