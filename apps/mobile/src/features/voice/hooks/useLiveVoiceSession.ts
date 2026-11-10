@@ -119,6 +119,7 @@ export function useLiveVoiceSession({
   const reconnectsRef = useRef(0);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const mutedRef = useRef(false);
   const sessionRef = useRef<LiveVoiceSession | null>(null);
   const attemptRef = useRef<object | null>(null);
   const authorityRef = useRef<LiveVoiceAuthority | null>(null);
@@ -222,6 +223,7 @@ export function useLiveVoiceSession({
       setTurns([]);
       setToolOutcomes([]);
     }
+    mutedRef.current = false;
     setMuted(false);
     setInterrupted(false);
     setApprovals([]);
@@ -313,6 +315,7 @@ export function useLiveVoiceSession({
         voice: isLiveVoice(chosenVoice) ? chosenVoice : null,
         conversationId: target,
         language: activeSpeechLanguage()?.split('-')[0]?.trim().toLowerCase() || null,
+        isMuted: () => mutedRef.current,
         callbacks: {
           onStarted: () => {
             if (!current()) return;
@@ -511,11 +514,10 @@ export function useLiveVoiceSession({
   ]);
 
   const toggleMute = useCallback(() => {
-    setMuted((previous) => {
-      const next = !previous;
-      sessionRef.current?.setMuted(next);
-      return next;
-    });
+    const next = !mutedRef.current;
+    mutedRef.current = next;
+    setMuted(next);
+    sessionRef.current?.setMuted(next);
   }, []);
 
   const retry = useCallback(() => setAttempt((value) => value + 1), []);

@@ -422,6 +422,59 @@ describe('LiveVoiceSession', () => {
     expect(tracks[0]!.enabled).toBe(false);
   });
 
+  it('disables the microphone before it is added to the peer when muted while acquiring', async () => {
+    let enabledWhenAdded: boolean | null = null;
+    peer.addTrack = (track: MediaStreamTrack) => {
+      enabledWhenAdded = track.enabled;
+      return {} as RTCRtpSender;
+    };
+    await LiveVoiceSession.start({
+      authority: voiceAuthority(),
+      voice: 'marin',
+      conversationId: null,
+      isMuted: () => true,
+      callbacks: callbacks(),
+    });
+
+    expect(enabledWhenAdded).toBe(false);
+    peer.channel.receive({ type: 'session.started', event_id: 'e1' });
+    expect(peer.channel.sent).toContainEqual(
+      expect.objectContaining({ type: 'session.input_audio.mute' }),
+    );
+  });
+
+  it('applies a mute chosen while the session was being built', async () => {
+    const answers = [false, true];
+    await LiveVoiceSession.start({
+      authority: voiceAuthority(),
+      voice: 'marin',
+      conversationId: null,
+      isMuted: () => answers.shift() ?? true,
+      callbacks: callbacks(),
+    });
+
+    expect(tracks[0]!.enabled).toBe(false);
+    peer.channel.receive({ type: 'session.started', event_id: 'e1' });
+    expect(peer.channel.sent).toContainEqual(
+      expect.objectContaining({ type: 'session.input_audio.mute' }),
+    );
+  });
+
+  it('restores the microphone when the mute was lifted while the session was being built', async () => {
+    const answers = [true, false];
+    await LiveVoiceSession.start({
+      authority: voiceAuthority(),
+      voice: 'marin',
+      conversationId: null,
+      isMuted: () => answers.shift() ?? false,
+      callbacks: callbacks(),
+    });
+
+    expect(tracks[0]!.enabled).toBe(true);
+    peer.channel.receive({ type: 'session.started', event_id: 'e1' });
+    expect(peer.channel.sent.at(-1)).toMatchObject({ type: 'session.input_audio.unmute' });
+  });
+
   it('reports usage snapshots and finishes the close handshake before tearing down', async () => {
     const { session, cb } = await startSession();
     peer.channel.receive({ type: 'session.started', event_id: 'e1' });
