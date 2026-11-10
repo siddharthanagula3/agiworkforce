@@ -268,6 +268,55 @@ describe('free model promotion ledger', () => {
     expect(await reserve('heavy')).not.toBeNull();
   });
 
+  it.each([
+    ['the promotion counter', 1],
+    ['the credential counter', 2],
+  ])(
+    'gives the spend back when %s cannot be given an expiry, since the turn is routed without it',
+    async (_counter, failingExpiry) => {
+      const expire = store.expire.bind(store);
+      let calls = 0;
+      vi.spyOn(store, 'expire').mockImplementation(async (key, seconds) => {
+        calls += 1;
+        if (calls === failingExpiry) throw new Error('store unreachable');
+        return expire(key, seconds);
+      });
+
+      expect(
+        await reserveFreeModelPromotionTurn({
+          promotion: promotion(),
+          userId: 'u1',
+          nowMs: NOW,
+          ledger: ledger(store),
+        }),
+      ).toBeNull();
+      expect(await spent(store, 'spent')).toBe(0);
+      expect(await spent(store, 'credential:promotion-account:spent')).toBe(0);
+    },
+  );
+
+  it('gives the spend back when the message rate cannot be read', async () => {
+    const unreadableRate: FreeModelPromotionLedger = {
+      ...ledger(store),
+      limiter: {
+        limit: async () => {
+          throw new Error('store unreachable');
+        },
+      },
+    };
+
+    expect(
+      await reserveFreeModelPromotionTurn({
+        promotion: promotion(),
+        userId: 'u1',
+        nowMs: NOW,
+        ledger: unreadableRate,
+      }),
+    ).toBeNull();
+    expect(await spent(store, 'spent')).toBe(0);
+    expect(await spent(store, 'credential:promotion-account:spent')).toBe(0);
+  });
+
   it('settles a reservation to its measured cost on both counters', async () => {
     const reservation = await reserveFreeModelPromotionTurn({
       promotion: promotion(),

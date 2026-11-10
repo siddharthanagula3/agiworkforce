@@ -100,6 +100,34 @@ describe('free quota state shared between server instances', () => {
     ).not.toBeNull();
   });
 
+  it('gives the shared allowance back when its expiry cannot be set, since the turn is never sent', async () => {
+    const store = createMemoryKeyValueStore();
+    const instance = await freshInstance();
+    const reservation = {
+      apiKey: API_KEY,
+      observedOn: OBSERVED_ON,
+      offeringKey: 'offering-a',
+      expiresOn: '2026-11-01',
+      usable: 1_000,
+      nowMs: NOW,
+    };
+    vi.spyOn(store, 'expire').mockRejectedValueOnce(new Error('store unreachable'));
+
+    await expect(
+      instance.reserveFreeQuotaAllowance(store, { ...reservation, units: 600 }),
+    ).rejects.toThrow('store unreachable');
+
+    const state = await instance.readFreeQuotaState(store, {
+      apiKey: API_KEY,
+      observedOn: OBSERVED_ON,
+      offeringKeys: ['offering-a'],
+    });
+    expect(state.used.get('offering-a') ?? 0).toBe(0);
+    expect(
+      await instance.reserveFreeQuotaAllowance(store, { ...reservation, units: 1_000 }),
+    ).not.toBeNull();
+  });
+
   it('reads an unreadable allowance counter as spent', async () => {
     const store = createMemoryKeyValueStore();
     const instance = await freshInstance();

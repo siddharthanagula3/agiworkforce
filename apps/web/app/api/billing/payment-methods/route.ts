@@ -11,6 +11,7 @@ import { isAuthGateRefusal, unauthorizedResponseFor } from '@/lib/api-auth-respo
 import { readBillingOwnerRow, resolveBillingCustomerId } from '@/lib/server/billing-owner-row';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { getStripeClientOrNull } from '@/lib/server/stripe-client';
+import { isStripeResourceMissing } from '@/lib/server/stripe-resource-ids';
 
 const stripe = getStripeClientOrNull();
 
@@ -54,7 +55,8 @@ async function handleGetPaymentMethods(request: NextRequest) {
 
     // A subscription may carry its own default, and that is the one Stripe
     // actually charges for it. Marking the customer default here would name a
-    // card the renewal will not touch.
+    // card the renewal will not touch, so a subscription read that fails for
+    // any reason but a missing subscription fails the whole list.
     const defaultPmId =
       (sub?.stripe_subscription_id
         ? await stripe.subscriptions
@@ -64,7 +66,10 @@ async function handleGetPaymentMethods(request: NextRequest) {
                 ? subscription.default_payment_method
                 : (subscription.default_payment_method?.id ?? null),
             )
-            .catch(() => null)
+            .catch((error: unknown) => {
+              if (isStripeResourceMissing(error)) return null;
+              throw error;
+            })
         : null) ?? customerDefaultPmId;
 
     // Every type, not just cards. Checkout with Link stores a `link` method, and

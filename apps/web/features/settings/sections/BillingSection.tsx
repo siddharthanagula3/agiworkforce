@@ -76,6 +76,7 @@ interface CreditHistoryEntry {
   id: string;
   transaction_type: CreditTransactionType | string;
   amount_cents: number;
+  balance_effect_cents: number;
   description: string | null;
   label?: string | null;
   credits?: number;
@@ -91,12 +92,6 @@ const CREDIT_TRANSACTION_LABELS: Record<string, string> = {
   bonus: 'Bonus credit',
   adjustment: 'Adjustment',
 };
-
-function signedCreditCents(entry: CreditHistoryEntry): number {
-  return entry.transaction_type === 'deduction'
-    ? -Math.abs(entry.amount_cents)
-    : entry.amount_cents;
-}
 
 const CREDIT_FRACTION_DIGITS = 2;
 
@@ -1243,7 +1238,7 @@ export function BillingSection() {
               </thead>
               <tbody>
                 {creditHistory.items.map((entry, idx) => {
-                  const cents = signedCreditCents(entry);
+                  const cents = entry.balance_effect_cents;
                   return (
                     <tr
                       key={entry.id}

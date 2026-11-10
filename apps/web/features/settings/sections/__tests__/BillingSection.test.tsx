@@ -702,6 +702,44 @@ describe('BillingSection saved cards and plan comparison', () => {
   });
 });
 
+describe('BillingSection credit history', () => {
+  it('shows a released reservation as credit given back, not as a second debit', async () => {
+    const history = {
+      transactions: [
+        {
+          id: 'tx-release',
+          transaction_type: 'deduction',
+          amount_cents: -10,
+          balance_effect_cents: 10,
+          description: 'Managed usage reservation release',
+          label: null,
+          created_at: '2026-11-10T00:00:01.000Z',
+        },
+        {
+          id: 'tx-reserve',
+          transaction_type: 'deduction',
+          amount_cents: 10,
+          balance_effect_cents: -10,
+          description: 'Managed usage reservation: provider/model',
+          label: 'Usage: A model',
+          created_at: '2026-11-10T00:00:00.000Z',
+        },
+      ],
+    };
+    global.fetch = vi.fn(async (url: RequestInfo | URL) => ({
+      ok: true,
+      json: async () => (String(url).includes('credit-history') ? history : {}),
+    })) as unknown as typeof fetch;
+
+    render(<BillingSection />);
+
+    const release = (await screen.findByText('Managed usage reservation release')).closest('tr');
+    const reserve = screen.getByText('Usage: A model').closest('tr');
+    expect(release).toHaveTextContent('+20 credits');
+    expect(reserve).toHaveTextContent('-20 credits');
+  });
+});
+
 describe('past-due payment notice', () => {
   // invoice.payment_failed sets the subscription to past_due server-side, but
   // this panel rendered nothing about it, so a user whose card was declined

@@ -132,9 +132,15 @@ export async function admitAttachmentUpload(input: {
   let count: number;
   try {
     count = await store.increment(key, 1);
+  } catch (error) {
+    logger.error({ error, userId: input.userId }, '[uploads] the daily upload count failed');
+    throw refuse();
+  }
+  try {
     await store.expire(key, 2 * SECONDS_PER_DAY);
   } catch (error) {
     logger.error({ error, userId: input.userId }, '[uploads] the daily upload count failed');
+    await store.increment(key, -1).catch(() => undefined);
     throw refuse();
   }
   if (count > dailyLimit) {
