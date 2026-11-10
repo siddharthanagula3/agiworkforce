@@ -90,10 +90,38 @@ const ORGANIZATION_SCOPE_TOKEN_RE = /\b(?:organization_id|org_id|current_app_org
 // renders `organization_id is not distinct from $n::uuid`, and READABLE_PROJECT_SCOPE_SQL
 // in apps/web/lib/server/project-read-access.ts binds the project to the admitted
 // workspace $3, so a statement that interpolates either carries the predicate even
-// though the text sits behind `${}`. The test suite reads both and fails if either
-// stops rendering that predicate.
-const WORKSPACE_PREDICATE_HELPER_RE =
-  /\$\{\s*(?:workspaceMemoryPredicate\(|READABLE_PROJECT_SCOPE_SQL\s*\})/;
+// though the text sits behind `${}`. The credit goes to the symbol of that module
+// only: a file that defines a same-named local helper gets none. The test suite
+// reads both modules and fails if either stops rendering that predicate.
+const WORKSPACE_PREDICATE_HELPERS = [
+  {
+    symbol: 'workspaceMemoryPredicate',
+    interpolation: /\$\{\s*workspaceMemoryPredicate\(/,
+    module: '@/lib/services/managed-memory-context-service',
+    definedIn: 'apps/web/lib/services/managed-memory-context-service.ts',
+  },
+  {
+    symbol: 'READABLE_PROJECT_SCOPE_SQL',
+    interpolation: /\$\{\s*READABLE_PROJECT_SCOPE_SQL\s*\}/,
+    module: '@/lib/server/project-read-access',
+    definedIn: 'apps/web/lib/server/project-read-access.ts',
+  },
+];
+
+function importsSymbolFrom(source, symbol, moduleSpecifier) {
+  const escaped = moduleSpecifier.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+  return new RegExp(
+    `import\\s+(?:type\\s+)?\\{[^}]*\\b${symbol}\\b[^}]*\\}\\s*from\\s*['"]${escaped}['"]`,
+  ).test(source);
+}
+
+function carriesWorkspacePredicateHelper(sql, source, rel) {
+  return WORKSPACE_PREDICATE_HELPERS.some(
+    (helper) =>
+      helper.interpolation.test(sql) &&
+      (rel === helper.definedIn || importsSymbolFrom(source, helper.symbol, helper.module)),
+  );
+}
 
 // Each entry names statements that read a workspace-scoped table WITHOUT the
 // workspace predicate, and why reading every workspace at once is correct there.
@@ -1449,7 +1477,7 @@ for (const file of files) {
     if (
       workspaceTables.length > 0 &&
       !ORGANIZATION_SCOPE_TOKEN_RE.test(lower) &&
-      !WORKSPACE_PREDICATE_HELPER_RE.test(sql) &&
+      !carriesWorkspacePredicateHelper(sql, source, rel) &&
       !workspaceScopeExempt(rel)
     ) {
       workspaceScoped += 1;

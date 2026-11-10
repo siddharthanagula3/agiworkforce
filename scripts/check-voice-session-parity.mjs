@@ -74,13 +74,19 @@ export function repliesPendingMute(source) {
   return /this\.pendingMuted\s*=\s*muted/.test(setMuted) && /pendingMuted/.test(started);
 }
 
-/** Whether a body calls dispose() itself or hands off to a sibling method that does. */
+/**
+ * Whether a body calls dispose() itself or hands off to a sibling method that does.
+ * Another ending method or the message handler is not a hand-off: each guards its own
+ * early return, so naming one proves nothing about the session being disposed.
+ */
 function reachesDispose(source, body) {
   if (/this\.dispose\(\)/.test(body)) return true;
   const delegates = new Set(
     [...body.matchAll(/this\.(\w+)\(/g)]
       .map((call) => call[1])
-      .filter((name) => name !== 'dispose'),
+      .filter(
+        (name) => name !== 'dispose' && name !== 'handleMessage' && !ENDING_METHODS.includes(name),
+      ),
   );
   for (const name of delegates) {
     const delegate = methodBody(source, name);

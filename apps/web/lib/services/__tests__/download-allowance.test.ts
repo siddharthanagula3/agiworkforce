@@ -69,6 +69,23 @@ describe('per-plan download and storage caps', () => {
     },
   );
 
+  it('gives team_premium exactly the storage its price funds', () => {
+    const fundedGib = Math.floor(
+      (BILLING_PLAN_PRICING.team_premium.monthlyPriceUsd * STORAGE_COST_SHARE_OF_PRICE) /
+        usdPerGib('object_storage_gib_month'),
+    );
+    expect(getBillingPlanProductLimits('team_premium')?.knowledgeStorageBytes).toBe(
+      fundedGib * GIB,
+    );
+  });
+
+  it('orders the finite storage quotas by plan from pro up to max_15x', () => {
+    const quota = (plan: 'pro' | 'max' | 'max_15x') =>
+      getBillingPlanProductLimits(plan)?.knowledgeStorageBytes as number;
+    expect(quota('pro')).toBeLessThan(quota('max'));
+    expect(quota('max')).toBeLessThan(quota('max_15x'));
+  });
+
   it('leaves contract plans to their contract', () => {
     expect(getBillingPlanProductLimits('enterprise')?.monthlyDownloadBytes).toBe('custom');
   });

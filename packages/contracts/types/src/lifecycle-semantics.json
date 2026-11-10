@@ -467,7 +467,7 @@
       "file": "apps/web/lib/server/retention/deleted-project-files.ts",
       "table": "user_projects",
       "class": "purge",
-      "why": "The purge reads the workspace of the project whose deleted file it is collecting to take that workspace's hold lock; the project is deleted by the time its files are due, so filtering the withdrawal marker would skip the lock."
+      "why": "The purge reads the workspace of the project whose deleted file it is collecting to take that workspace's hold lock; a knowledge file falls due whether it was deleted alone from a live project or together with its project, so the project may be live or withdrawn; filtering the withdrawal marker would give the files of a withdrawn project no workspace and skip the lock."
     },
     {
       "file": "apps/web/lib/server/temporary-files/purge.ts",

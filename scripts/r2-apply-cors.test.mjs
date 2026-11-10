@@ -33,6 +33,18 @@ test('allows every header a direct upload must send under server-side encryption
   for (const name of declared) assert.ok(allowed.includes(name), `${name} is not allowed`);
 });
 
+test('allows no amz header that no upload client sends', () => {
+  const declared = [...readFileSync(UPLOAD_HEADERS_SOURCE, 'utf8').matchAll(/= '(x-amz-[a-z-]+)'/g)]
+    .map((match) => match[1])
+    .sort();
+  const checksumHeaders = ['x-amz-checksum-crc32', 'x-amz-sdk-checksum-algorithm'];
+  const allowedAmz = CORS_RULES[0].allowed.headers
+    .map((name) => name.toLowerCase())
+    .filter((name) => name.startsWith('x-amz-'))
+    .sort();
+  assert.deepEqual(allowedAmz, [...declared, ...checksumHeaders].sort());
+});
+
 test('accepts the policy it applied', () => {
   assert.equal(matchesExpected(readBack()), true);
 });

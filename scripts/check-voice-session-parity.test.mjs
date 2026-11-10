@@ -37,6 +37,11 @@ const DELEGATING_CLOSE_WITHOUT_DISPOSE = `  close(): Promise<void> {
     this.closing = true;
   }`;
 
+const CLOSE_HANDING_TO_FAIL = `  close(): void {
+    this.closing = true;
+    this.fail();
+  }`;
+
 function sessionSource({ events, terminal, pendingMute = true, close = DIRECT_CLOSE }) {
   return `
 const DELEGATION_TERMINAL_EVENTS = new Set([
@@ -147,6 +152,16 @@ test('a close that hands off to a method which never disposes is reported', () =
   const failures = checkVoiceSessionParity(
     makeRoot({}, { close: DELEGATING_CLOSE_WITHOUT_DISPOSE }),
   );
+  assert.ok(
+    failures.some((failure) =>
+      failure.includes('mobile: close ends the session without disposing'),
+    ),
+    failures.join('; '),
+  );
+});
+
+test('a close that only hands off to another ending method is reported', () => {
+  const failures = checkVoiceSessionParity(makeRoot({}, { close: CLOSE_HANDING_TO_FAIL }));
   assert.ok(
     failures.some((failure) =>
       failure.includes('mobile: close ends the session without disposing'),

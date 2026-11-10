@@ -298,3 +298,26 @@ async function b(subject: string) {
 `;
   assert.deepEqual(ungatedReturns(loop, 'a'), ['return b(subject);']);
 });
+
+test('a delegation with a fallback principal after the gated call is not taken as gated', () => {
+  const withFallback = DELEGATED_COOKIE.replace(
+    'return cookieSession(subject);',
+    'return cookieSession(subject) ?? { userId: header };',
+  );
+  assert.deepEqual(ungatedReturns(withFallback, 'viaCookie'), [
+    'return cookieSession(subject) ?? { userId: header };',
+  ]);
+  const orFallback = DELEGATED_COOKIE.replace(
+    'return cookieSession(subject);',
+    'return cookieSession(subject) || { userId: header };',
+  );
+  assert.equal(ungatedReturns(orFallback, 'viaCookie').length, 1);
+});
+
+test('a delegation whose call spans several lines is still taken as gated', () => {
+  const multiline = DELEGATED_COOKIE.replace(
+    'return cookieSession(subject);',
+    'return cookieSession(\n    subject,\n  );',
+  );
+  assert.deepEqual(ungatedReturns(multiline, 'viaCookie'), []);
+});

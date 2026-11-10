@@ -124,6 +124,49 @@ function quotedList(source, declaration) {
   return [...source.slice(open, close).matchAll(/'([a-z_-]+)'/g)].map((match) => match[1]);
 }
 
+const escapePattern = (text) => text.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+
+/** What a marker's declaration holds: its bracketed value, its string value, or null. */
+function declarationOfMarker(source, marker) {
+  const declaration = new RegExp(
+    `\\b(?:const|let|var)\\s+${escapePattern(marker)}\\b[^=\\n]*=\\s*`,
+  ).exec(source);
+  if (declaration === null) return null;
+  const start = declaration.index + declaration[0].length;
+  if (/['"`]/.test(source[start] ?? '')) {
+    const end = source.indexOf(source[start], start + 1);
+    return end < 0 ? null : source.slice(start, end + 1);
+  }
+  if (!'{[('.includes(source[start] ?? '')) return null;
+  let depth = 0;
+  for (let index = start; index < source.length; index += 1) {
+    if ('{[('.includes(source[index])) depth += 1;
+    else if ('}])'.includes(source[index])) {
+      depth -= 1;
+      if (depth === 0) return source.slice(start, index + 1);
+    }
+  }
+  return null;
+}
+
+/**
+ * A label is rendered when it stands as a whole string literal or as JSX text,
+ * not as a fragment of some longer sentence. Where the marker is the table that
+ * holds the labels, it must stand in that table, against this mode's own key.
+ */
+function rendersSelectorLabel(source, selector, modeId) {
+  const label = escapePattern(selector.label);
+  const literal = `(['"\`])${label}\\1`;
+  const table = selector.marker ? declarationOfMarker(source, selector.marker) : null;
+  if (table !== null) {
+    if (!new RegExp(`\\b${escapePattern(modeId)}\\s*:`).test(table)) {
+      return new RegExp(literal).test(table);
+    }
+    return new RegExp(`\\b${escapePattern(modeId)}\\s*:\\s*${literal}`).test(table);
+  }
+  return new RegExp(`${literal}|>\\s*${label}\\s*<`).test(source);
+}
+
 export function collectViolations(repoRoot = REPO_ROOT) {
   const violations = [];
   const fail = (message) => violations.push(message);
@@ -210,7 +253,7 @@ export function collectViolations(repoRoot = REPO_ROOT) {
         if (selector.marker && !selectorSource.includes(selector.marker)) {
           fail(`${where} selector ${selector.marker} is not in ${selector.file}.`);
         }
-        if (selector.label && !selectorSource.includes(selector.label)) {
+        if (selector.label && !rendersSelectorLabel(selectorSource, selector, id)) {
           fail(`${where} selector label "${selector.label}" is not rendered by ${selector.file}.`);
         }
       }

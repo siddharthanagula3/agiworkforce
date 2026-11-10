@@ -122,6 +122,42 @@ test('a selector label the file never renders is refused', () => {
   assert.ok(violations.some((entry) => entry.includes('Telepathy')));
 });
 
+function violationsWithSelectorSource({ modeId, label, source }) {
+  const root = fixture({
+    [modeId]: baseMode({ selector: { file: SELECTOR_FILE, marker: 'WORK_MODE_LABELS', label } }),
+  });
+  write(root, SELECTOR_FILE, source);
+  return collectViolations(root);
+}
+
+test('a label that only appears inside longer text is not rendered', () => {
+  const violations = violationsWithSelectorSource({
+    modeId: 'agiwork',
+    label: 'Work',
+    source:
+      "// Work in progress\nconst WORK_MODE_LABELS = { chat: 'Chat', agiwork: 'Networking' };\n",
+  });
+  assert.ok(violations.some((entry) => entry.includes('selector label "Work"')));
+});
+
+test('a label held by another mode in the label table is not this mode label', () => {
+  const violations = violationsWithSelectorSource({
+    modeId: 'agiwork',
+    label: 'Work',
+    source: "const WORK_MODE_LABELS = { chat: 'Work', agiwork: 'Tasks' };\n",
+  });
+  assert.ok(violations.some((entry) => entry.includes('selector label "Work"')));
+});
+
+test('a label that is the whole value under its own mode key is rendered', () => {
+  const violations = violationsWithSelectorSource({
+    modeId: 'agiwork',
+    label: 'Work',
+    source: "const WORK_MODE_LABELS = { chat: 'Chat', agiwork: 'Work' };\n",
+  });
+  assert.deepEqual(violations, []);
+});
+
 test('a request field the schema does not accept is refused', () => {
   const violations = collectViolations(
     fixture({

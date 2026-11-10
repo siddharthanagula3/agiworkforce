@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 export const GENERATED_BANNER =
-  'GENERATED FILE, do not edit. Run `node scripts/generate-agent-context-indexes.mjs` after tracked files change; it renders from git ls-files, so a file that is not committed is not in the graph.';
+  'GENERATED FILE, do not edit. Run `node scripts/generate-agent-context-indexes.mjs` after tracked files change; it renders from git ls-files, so a file that is not committed is not in the graph, and `pnpm check:agent-context-indexes` byte-compares this against a fresh render.';
 
 const MAX_PARSE_BYTES = 512 * 1024;
 const CODE_EXTENSIONS = new Set([

@@ -163,9 +163,22 @@ test('the published families are read off the effective route, not assumed', () 
     'feature',
   ]);
   assert.ok(servedFamilies('code: effective.code,').has('code'));
-  assert.ok(
-    servedFamilies('code: {\n  ...effective.code,\n  allowMcpServers: false,\n},').has('code'),
-  );
+  const narrowed =
+    'code: {\n  ...effective.code,\n  // note\n  allowMcpServers:\n    effective.code.allowMcpServers &&\n    !(effective.code.mcpRestrictionActive && effective.code.allowedMcpServers.length === 0),\n},';
+  assert.ok(servedFamilies(narrowed).has('code'));
+  for (const looser of [
+    'code: { ...effective.code, allowMcpServers: true },',
+    'code: { ...effective.code, allowMcpServers: false },',
+    'code: { ...effective.code, allowMcpServers: effective.code.allowMcpServers || flag },',
+    'code: { ...effective.code, allowMcpServers: effective.code.allowMcpServers ? true : flag },',
+    'code: { ...effective.code, allowMcpServers: effective.code.allowGithubConnection && true },',
+    'code: { ...effective.code, allowMcpServers },',
+    'code: { ...effective.code, ...other },',
+    'code: { ...effective.code, allowMcpServers: effective.code.allowMcpServers && ok, allowedEgressHosts: [] },',
+  ]) {
+    assert.equal(servedFamilies(looser).has('code'), false, looser);
+  }
+  assert.equal(servedFamilies('code: effective.code.allowMcpServers,').has('code'), false);
   assert.equal(
     servedFamilies('code: { allowMcpServers: effective.code.allowMcpServers },').size,
     0,

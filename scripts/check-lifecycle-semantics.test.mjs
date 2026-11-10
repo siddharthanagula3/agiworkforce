@@ -261,24 +261,55 @@ test('a filtered production read passes, and a comment does not count as one', (
   assert.deepEqual(errors, []);
 });
 
-test('a declared predicate helper stands in for the marker', () => {
-  const root = fixture(
+const HELPER_CONTRACT = {
+  predicateHelpers: [
     {
-      predicateHelpers: [
-        {
-          symbol: 'activePredicate',
-          module: 'apps/web/lib/p.ts',
-          resources: ['web_conversations'],
-        },
-      ],
+      symbol: 'activePredicate',
+      module: 'apps/web/lib/p.ts',
+      resources: ['web_conversations'],
     },
-    {
-      'apps/web/lib/services/thread.ts':
-        'export const sql = `select id from web_conversations where ${activePredicate()}`;',
-    },
-  );
+  ],
+};
+const HELPER_MODULE =
+  "export function activePredicate(alias = '') {\n  return `${alias}deleted_at is null`;\n}\n";
+const HELPER_READ =
+  'export const sql = `select id from web_conversations where ${activePredicate()}`;';
+
+test('a declared predicate helper stands in for the marker when it is imported from its module', () => {
+  const root = fixture(HELPER_CONTRACT, {
+    'apps/web/lib/p.ts': HELPER_MODULE,
+    'apps/web/lib/services/thread.ts': `import { activePredicate } from '@/lib/p';\n${HELPER_READ}`,
+    'apps/web/lib/services/relative.ts': `import { activePredicate } from '../p';\n${HELPER_READ}`,
+  });
   const { unrecorded } = checkLifecycleSemantics(root);
   assert.deepEqual(unrecorded, []);
+});
+
+test('a same-named helper defined or imported elsewhere does not stand in for the marker', () => {
+  const root = fixture(HELPER_CONTRACT, {
+    'apps/web/lib/p.ts': HELPER_MODULE,
+    'apps/web/lib/services/local.ts': `function activePredicate() {\n  return 'true';\n}\n${HELPER_READ}`,
+    'apps/web/lib/services/other.ts': `import { activePredicate } from '@/lib/other';\n${HELPER_READ}`,
+    'apps/web/lib/services/bare.ts': HELPER_READ,
+  });
+  const { unrecorded } = checkLifecycleSemantics(root);
+  assert.deepEqual(unrecorded.map((read) => read.file).sort(), [
+    'apps/web/lib/services/bare.ts',
+    'apps/web/lib/services/local.ts',
+    'apps/web/lib/services/other.ts',
+  ]);
+});
+
+test('a declared predicate helper that no longer states the marker stands in for nothing', () => {
+  const root = fixture(HELPER_CONTRACT, {
+    'apps/web/lib/p.ts': 'export function activePredicate() {\n  return `id is not null`;\n}\n',
+    'apps/web/lib/services/thread.ts': `import { activePredicate } from '@/lib/p';\n${HELPER_READ}`,
+  });
+  const { unrecorded } = checkLifecycleSemantics(root);
+  assert.deepEqual(
+    unrecorded.map((read) => read.file),
+    ['apps/web/lib/services/thread.ts'],
+  );
 });
 
 test('a recorded read needs a known class, a reason, and a fix when it is a defect', () => {
