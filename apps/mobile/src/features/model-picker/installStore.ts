@@ -11,7 +11,12 @@ import {
   tier2LoadModel,
 } from '@agiworkforce/local-llm';
 import type { OnDeviceModel } from '@agiworkforce/types';
-import { assertDownloadAllowed, cancelDownload, downloadModel } from '@/services/modelDownload';
+import {
+  assertDownloadAllowed,
+  cancelDownload,
+  downloadModel,
+  ModelDownloadError,
+} from '@/services/modelDownload';
 import type { ModelDownloadErrorKind } from '@/services/modelDownload';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import {
@@ -43,6 +48,8 @@ export function installFailureMessage(error: unknown): string {
   if (downloadFailureKind(error) && error instanceof Error) return error.message;
   return GENERIC_INSTALL_FAILURE;
 }
+
+const installAttempts = new Map<string, symbol>();
 
 export interface ModelInstallJob {
   status: ModelInstallStatus;
@@ -326,6 +333,10 @@ export const useModelInstallStore = create<ModelInstallState>()(
         }
 
         const cancellable = !preset;
+        const inFlight = get().jobs[model.id]?.status === 'downloading';
+        const attempt = (inFlight && installAttempts.get(model.id)) || Symbol(model.id);
+        installAttempts.set(model.id, attempt);
+        const ownsJob = (): boolean => installAttempts.get(model.id) === attempt;
         set((state) => ({
           jobs: {
             ...state.jobs,
@@ -334,7 +345,7 @@ export const useModelInstallStore = create<ModelInstallState>()(
         }));
 
         const reportProgress = (progress: number): void => {
-          if (get().jobs[model.id]?.status !== 'downloading') return;
+          if (!ownsJob() || get().jobs[model.id]?.status !== 'downloading') return;
           set((state) => ({
             jobs: {
               ...state.jobs,
@@ -364,11 +375,15 @@ export const useModelInstallStore = create<ModelInstallState>()(
             await installGgufModel(catalogModel!, reportProgress, wifiOnly);
           }
 
+          if (!ownsJob()) {
+            throw new ModelDownloadError('cancelled', 'Download was cancelled.');
+          }
           set((state) => ({
             installedModelIds: Array.from(new Set([...state.installedModelIds, model.id])),
             jobs: { ...state.jobs, [model.id]: { status: 'ready', progress: 1 } },
           }));
         } catch (err) {
+          if (!ownsJob()) throw err;
           console.error(`[installStore] prepareModel(${model.id}) failed:`, err);
           // A cancelled download is not an install: clear the job so the row
           // offers Download again, and still reject so no caller selects it.
@@ -397,6 +412,7 @@ export const useModelInstallStore = create<ModelInstallState>()(
         const job = get().jobs[modelId];
         if (job?.status !== 'downloading' || !job.cancellable) return;
         cancelDownload(modelId);
+        installAttempts.delete(modelId);
         set((state) => {
           const { [modelId]: _removed, ...rest } = state.jobs;
           return { jobs: rest };
