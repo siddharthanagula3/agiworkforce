@@ -7,7 +7,6 @@
     "apps/web/app/api/llm/v1/chat/completions/lib/context-window.ts": "replaces an oversized system message in place and contributes no layer of its own",
     "apps/web/app/api/llm/v1/chat/completions/lib/research-loop.ts": "adds the file sources block to a request the processor resolved before the loop started",
     "apps/web/app/api/models/experiential-free/completions/route.ts": "the experiential free chat route sends only the product system layer, the chat system prompt, ahead of the conversation, and reads no account instruction layer",
-    "apps/web/features/chat/pages/WebChatPage.tsx": "client composer; what it sends reaches the server as request messages, and the server resolves the layers",
     "apps/web/features/developers/components/RequestPlayground.tsx": "client playground; the system message is the developer's own request field, sent to the API exactly as their code would send it, and the server resolves the layers",
     "apps/web/features/developers/lib/run-completion.ts": "client prompt workbench; the system message is the developer's own prompt version, sent to the chat completions API as a request system message, and the server resolves the layers",
     "apps/web/lib/agents/agent-turn-config.ts": "puts the stored agent definition on the request as a request system message; the request processor then resolves the system, project and personalized layers ahead of it in composeManagedSystemPreamble",

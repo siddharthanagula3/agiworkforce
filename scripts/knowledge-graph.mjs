@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 export const GENERATED_BANNER =
-  'GENERATED FILE, do not edit. Run `node scripts/generate-agent-context-indexes.mjs`; `pnpm check:agent-context-indexes` byte-compares this against a fresh render.';
+  'GENERATED FILE, do not edit. Run `node scripts/generate-agent-context-indexes.mjs` after tracked files change; it renders from git ls-files, so a file that is not committed is not in the graph.';
 
 const MAX_PARSE_BYTES = 512 * 1024;
 const CODE_EXTENSIONS = new Set([
@@ -75,6 +75,7 @@ const ROUTE_FILES = new Map([
 
 const LIMITS = [
   'Every git-tracked path is a file node. Gitignored build output, dependencies, and the iOS prebuild tree are outside the graph.',
+  'A tracked path the renderer is told is opaque, such as a measurement file named after the model it measured, is folded into one record for its directory with a count, because the model registry owns every model id.',
   'Export and import names come from a scan of code tokens. A name built by concatenation is not expanded.',
   "export * and pub use glob re-exports keep an edge to the target module and do not copy that module's names.",
   'A call inside a function body is not an edge. Follow the import to the file and read it.',
@@ -1676,7 +1677,7 @@ export function buildKnowledgeGraph(repoRoot, options = {}) {
       slashCommands.push({ name: command, file: filePath });
     }
 
-    if (filePath === 'apps/web/proxy.ts' || filePath === 'apps/web/middleware.ts') {
+    if (filePath === 'apps/web/proxy.ts') {
       const methods = HTTP_METHODS.filter((method) => parsed.exports?.includes(method));
       routes.push({
         surface: 'web',
@@ -1900,10 +1901,39 @@ export function shardFor(filePath) {
   return `knowledge-graph/files/${head}.jsonl`;
 }
 
-export function renderKnowledgeGraph(graph) {
+function foldOpaquePaths(files, isOpaquePath) {
+  if (!isOpaquePath) return { records: files, folded: 0 };
+  const kept = [];
+  const groups = new Map();
+  let folded = 0;
+  for (const record of files) {
+    if (!isOpaquePath(record.path)) {
+      kept.push(record);
+      continue;
+    }
+    folded += 1;
+    const directory = path.posix.dirname(record.path);
+    const group = groups.get(directory) ?? {
+      path: `${directory}/`,
+      unit: record.unit,
+      role: record.role,
+      folded: 0,
+    };
+    if (group.role !== record.role) group.role = 'mixed';
+    group.folded += 1;
+    groups.set(directory, group);
+  }
+  return {
+    records: [...kept, ...groups.values()].sort((a, b) => a.path.localeCompare(b.path)),
+    folded,
+  };
+}
+
+export function renderKnowledgeGraph(graph, options = {}) {
   const rendered = {};
   const shards = new Map();
-  for (const record of graph.files) {
+  const { records, folded } = foldOpaquePaths(graph.files, options.isOpaquePath);
+  for (const record of records) {
     const shard = shardFor(record.path);
     if (!shards.has(shard)) shards.set(shard, []);
     shards.get(shard).push(record);
@@ -1920,6 +1950,7 @@ export function renderKnowledgeGraph(graph) {
     'knowledge-graph/manifest.json': {
       $generated: GENERATED_BANNER,
       ...graph.manifest,
+      foldedFiles: folded,
       shards: shardNames,
     },
     'knowledge-graph/units.json': { $generated: GENERATED_BANNER, units: graph.units },

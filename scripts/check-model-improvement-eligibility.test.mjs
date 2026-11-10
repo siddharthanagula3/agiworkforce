@@ -112,6 +112,20 @@ test('fails when the settings copy stops saying there is no opt-in', () => {
   assert.match(result.output, /PrivacySection\.tsx no longer states/);
 });
 
+test('keeps the promise when the formatter re-wraps the sentence across lines', () => {
+  const root = fixture();
+  fs.writeFileSync(
+    path.join(root, 'apps/web/features/settings/sections/PrivacySection.tsx'),
+    "// 'improveModelTraining' is intentionally absent.\nexport function PrivacySection() {\n  return (\n    <p>\n      There is no\n      training opt-in, because that data path does not\n      exist.\n    </p>\n  );\n}\n",
+  );
+  fs.writeFileSync(
+    path.join(root, 'apps/web/app/privacy/page.tsx'),
+    'export default function Privacy() {\n  return <p>AGI does not\n    train AGI-owned models on customer\n    prompts.</p>;\n}\n',
+  );
+  const result = run(root);
+  assert.equal(result.code, 0);
+});
+
 test('refuses to pass on an empty tree', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'model-improvement-empty-'));
   const result = run(root);

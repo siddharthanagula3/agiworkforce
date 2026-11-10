@@ -42,8 +42,9 @@ them warns that it cannot be undone.
 
 ## Letting AGI search your past chats
 
-Settings, Memory holds **Search past chats**: "Let AGI look up excerpts from
-your other conversations when answering." It is never used in temporary chats.
+Settings, Memory holds **Search past chats**: "Let the assistant look up
+excerpts from your other conversations when answering." It is never used in
+temporary chats.
 
 ## Searching the help centre
 

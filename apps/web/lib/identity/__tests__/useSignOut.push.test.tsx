@@ -11,8 +11,10 @@ vi.mock('@clerk/nextjs', async (importOriginal) => ({
   ...(await importOriginal()),
   useClerk: () => ({ signOut: mocks.signOut }),
 }));
+type LocalRuntimeContractModule = typeof import('@agiworkforce/local-runtime-contract');
+
 vi.mock('@agiworkforce/local-runtime-contract', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/local-runtime-contract')>()),
+  ...(await importOriginal<LocalRuntimeContractModule>()),
   getHostBridge: () => null,
 }));
 vi.mock('@/features/notifications/lib/web-push-client', () => ({

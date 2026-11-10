@@ -8,8 +8,10 @@ import * as api from '../utils/api';
 const hostStart = vi.hoisted(() => vi.fn());
 const hostStop = vi.hoisted(() => vi.fn());
 
+type RemoteControlModule = typeof import('@agiworkforce/utils/remote-control');
+
 vi.mock('@agiworkforce/utils/remote-control', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/utils/remote-control')>()),
+  ...(await importOriginal<RemoteControlModule>()),
   createRemoteControlHost: () => ({
     start: hostStart,
     stop: hostStop,

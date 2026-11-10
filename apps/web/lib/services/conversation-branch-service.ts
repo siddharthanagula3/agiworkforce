@@ -358,6 +358,7 @@ export async function forkConversation(
                   select 1
                     from public.web_conversations as source
                    where source.id = $1
+                     and source.deleted_at is null
                      and source.active_leaf_message_id is not null
                 ) as has_variants
        ),

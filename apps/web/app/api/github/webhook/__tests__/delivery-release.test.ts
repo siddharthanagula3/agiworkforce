@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
+type NextServerModule = typeof import('next/server');
+
 vi.mock('server-only', () => ({}));
 vi.mock('next/server', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('next/server')>()),
+  ...(await importOriginal<NextServerModule>()),
   after: (task: unknown) => {
     void task;
   },

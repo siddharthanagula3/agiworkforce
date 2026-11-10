@@ -14,8 +14,10 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('@/lib/server/identity', () => ({
   getIdentityProvider: () => ({ setUserSuspended: mocks.setUserSuspended }),
 }));
+type JobServiceModule = typeof import('@/lib/jobs/job-service');
+
 vi.mock('@/lib/jobs/job-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/jobs/job-service')>()),
+  ...(await importOriginal<JobServiceModule>()),
   enqueueJob: (...args: unknown[]) => mocks.enqueueJob(...args),
 }));
 

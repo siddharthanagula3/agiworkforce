@@ -24,6 +24,11 @@ async function readUsage(page: Page): Promise<{ status: number; usage: UsageBody
   });
 }
 
+async function shownPeriodPercent(page: Page): Promise<number> {
+  const meter = page.getByRole('progressbar', { name: 'This billing period usage' });
+  return Math.round(Number(await meter.getAttribute('aria-valuenow')));
+}
+
 async function askManagedCloud(page: Page, surface: string): Promise<CompletionResult> {
   return page.evaluate(async (requestedSurface) => {
     const clerk = (
@@ -146,9 +151,7 @@ test.describe('a signed-in person uses one AGI Subscription', () => {
     expect(usage.usage.plan_tier).toBe('basic');
     expect(usage.usage.effective_plan_tier ?? usage.usage.plan_tier).toBe('basic');
     const shown = Math.round(usage.usage.usage_percentage ?? -1);
-    await expect(page.getByText('This billing period').locator('xpath=..')).toContainText(
-      `${shown}% used`,
-    );
+    await expect.poll(() => shownPeriodPercent(page)).toBe(shown);
 
     const chrome = await askManagedCloud(page, 'chrome');
     expect(chrome.status).toBe(403);
@@ -169,9 +172,7 @@ test.describe('a signed-in person uses one AGI Subscription', () => {
     expect(usage.usage.plan_tier).toBe('pro');
     expect(usage.usage.effective_plan_tier ?? usage.usage.plan_tier).toBe('pro');
     const shown = Math.round(usage.usage.usage_percentage ?? -1);
-    await expect(page.getByText('This billing period').locator('xpath=..')).toContainText(
-      `${shown}% used`,
-    );
+    await expect.poll(() => shownPeriodPercent(page)).toBe(shown);
     expect(usage.usage.usage_reset_at).toEqual(expect.any(String));
 
     const chrome = await askManagedCloud(page, 'chrome');

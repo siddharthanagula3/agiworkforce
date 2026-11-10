@@ -46,6 +46,7 @@ export function workspaceFiles() {
   const output = execFileSync('git', ['ls-files', '-co', '--exclude-standard', '-z'], {
     cwd: REPO_ROOT,
     encoding: 'utf8',
+    maxBuffer: 256 * 1024 * 1024,
   });
   return [...new Set(output.split('\0').filter(Boolean))].filter((file) =>
     fs.existsSync(path.join(REPO_ROOT, file)),

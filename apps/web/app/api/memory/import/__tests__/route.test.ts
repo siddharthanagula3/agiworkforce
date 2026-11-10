@@ -6,10 +6,11 @@ const mocks = vi.hoisted(() => ({
   admission: { current: null as unknown },
 }));
 
+type ManagedMemoryContextModule = typeof import('@/lib/services/managed-memory-context-service');
+
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/services/managed-memory-context-service', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@/lib/services/managed-memory-context-service')>();
+  const actual = await importOriginal<ManagedMemoryContextModule>();
   return {
     ...actual,
     memoryWriteAdmission: async (...args: Parameters<typeof actual.memoryWriteAdmission>) =>

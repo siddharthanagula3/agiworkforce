@@ -72,7 +72,7 @@
           "ordinal": 5,
           "heading": "Email address",
           "headingPath": "Passkeys, two-factor and active sessions › Email address",
-          "text": "Settings, Account changes the email address on the account. The new address gets\na code to prove you own it, then you confirm it is you and it becomes the\naddress on the account. The previous address is removed unless a sign-in method\nstill uses it. Password resets and security notices go to the new address."
+          "text": "Settings, Account changes the email address on the account. The new address gets\na code to prove you own it, then you confirm it is you and it becomes the\naddress on the account. The previous address is removed from the account; if\nthe sign-in service keeps it, Settings says so and asks you to check your\nsign-in methods before removing it yourself. Password resets and security\nnotices go to the new address."
         },
         {
           "id": "account-security#6",
@@ -1805,7 +1805,7 @@
           "ordinal": 0,
           "heading": "Memory switches",
           "headingPath": "What AGI remembers, and how to change it › Memory switches",
-          "text": "Settings, Memory includes these controls, each doing a different thing:\n\n- **Persistent memory**: \"Allow AGI to remember details across conversations.\"\n  With it off, persistent remembered facts are not included in chat context.\n  Search past chats has a separate switch.\n- **Search past chats**: \"Let AGI look up excerpts from your other\n  conversations when answering.\" This reads your history at answer time rather\n  than storing facts. It is never used in temporary chats.\n- **Include sensitive topics in memory**: off by default. While it is off, AGI\n  is designed to keep your health, race or ethnicity, religious beliefs,\n  politics, sexual orientation, gender identity or union membership only when\n  you say \"Remember that\" in a chat on the web, desktop, mobile or Chrome, or\n  add them yourself in Settings, Memory. In the CLI, add one with\n  `agi memory add`. Memories saved earlier stay until you delete them.\n- **Allow memory generation from tool-assisted chats**: whether memories may be\n  created from chats that used tools, connectors, code or web search."
+          "text": "Settings, Memory includes these controls, each doing a different thing:\n\n- **Persistent memory**: \"Allow the assistant to remember details across\n  conversations.\" With it off, persistent remembered facts are not included in\n  chat context.\n  Search past chats has a separate switch.\n- **Search past chats**: \"Let the assistant look up excerpts from your other\n  conversations when answering.\" This reads your history at answer time rather\n  than storing facts. It is never used in temporary chats.\n- **Include sensitive topics in memory**: off by default. While it is off, AGI\n  is designed to keep your health, race or ethnicity, religious beliefs,\n  politics, sexual orientation, gender identity or union membership only when\n  you say \"Remember that\" in a chat on the web, desktop, mobile or Chrome, or\n  add them yourself in Settings, Memory. In the CLI, add one with\n  `agi memory add`. Memories saved earlier stay until you delete them.\n- **Allow memory generation from tool-assisted chats**: whether memories may be\n  created from chats that used tools, connectors, code or web search."
         },
         {
           "id": "memory#1",
@@ -2208,7 +2208,7 @@
           "ordinal": 3,
           "heading": "Letting AGI search your past chats",
           "headingPath": "Search: the web, your chats and the help centre › Letting AGI search your past chats",
-          "text": "Settings, Memory holds **Search past chats**: \"Let AGI look up excerpts from\nyour other conversations when answering.\" It is never used in temporary chats."
+          "text": "Settings, Memory holds **Search past chats**: \"Let the assistant look up\nexcerpts from your other conversations when answering.\" It is never used in\ntemporary chats."
         },
         {
           "id": "search#4",

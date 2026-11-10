@@ -227,6 +227,40 @@ test('graph indexes every tracked file, route, import, and migration', () => {
   fs.rmSync(root, { recursive: true, force: true });
 });
 
+test('rendering folds opaque paths into one record per directory and keeps the rest', () => {
+  const graph = {
+    manifest: { schemaVersion: 1 },
+    units: [],
+    routes: [],
+    migrations: [],
+    symbols: {},
+    edges: [],
+    skills: [],
+    guards: [],
+    slashCommands: [],
+    agentsDocs: [],
+    files: [
+      { path: 'tools/evals/runs/model-a.chat.json', unit: 'tools/evals', role: 'config' },
+      { path: 'tools/evals/runs/model-b.chat.json', unit: 'tools/evals', role: 'config' },
+      { path: 'tools/evals/src/live.ts', unit: 'tools/evals', role: 'source' },
+    ],
+  };
+  const rendered = renderKnowledgeGraph(graph, {
+    isOpaquePath: (filePath) => filePath.includes('/runs/'),
+  });
+  const records = rendered['knowledge-graph/files/tools.jsonl']
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => JSON.parse(line))
+    .filter((record) => record.path);
+  assert.deepEqual(records, [
+    { path: 'tools/evals/runs/', unit: 'tools/evals', role: 'config', folded: 2 },
+    { path: 'tools/evals/src/live.ts', unit: 'tools/evals', role: 'source' },
+  ]);
+  assert.equal(JSON.parse(rendered['knowledge-graph/manifest.json']).foldedFiles, 2);
+  assert.doesNotMatch(rendered['knowledge-graph/files/tools.jsonl'], /model-a/);
+});
+
 test('live proxy module exports the names the web app publishes', () => {
   const source = fs.readFileSync(
     path.join(path.dirname(new URL(import.meta.url).pathname), '..', 'apps/web/proxy.ts'),

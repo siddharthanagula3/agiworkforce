@@ -167,7 +167,7 @@
     },
     {
       "doc": "voice",
-      "sha256": "ac1a896d88b238077b3f6cbabec163c61ad1e0a192282f32f09f527f8035694b"
+      "indexed": true
     },
     {
       "doc": "vscode-extension",
@@ -493,12 +493,17 @@
       "doc": "memory",
       "section": "Memory switches",
       "kind": "prose",
-      "sentence": "**Persistent memory**: \"Allow AGI to remember details across conversations.\" With it off, persistent remembered facts are not included in chat context.",
+      "sentence": "**Persistent memory**: \"Allow the assistant to remember details across conversations.\" With it off, persistent remembered facts are not included in chat context.",
       "implementation": [
         "apps/web/lib/services/managed-memory-context-service.ts",
         "apps/web/lib/services/turn-context-service.ts"
       ],
       "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/settings/sections/MemorySection.tsx",
+          "text": "Allow the assistant to remember details across conversations"
+        },
         {
           "kind": "test",
           "file": "apps/web/lib/services/__tests__/memory-eligibility-gate.test.ts",
@@ -637,7 +642,7 @@
         {
           "kind": "test",
           "file": "apps/web/features/settings/sections/__tests__/MemorySection.test.tsx",
-          "name": "asks for confirmation before clearing all memories, then clears the store"
+          "name": "asks before clearing cloud memories, then refreshes the acknowledged count"
         }
       ]
     },
@@ -754,7 +759,7 @@
         {
           "kind": "test",
           "file": "apps/web/app/api/cron/purge-temporary-chats/route.test.ts",
-          "name": "retires the files a temporary chat received on the same clock as the chat"
+          "name": "hard-deletes the files a temporary chat received on the same clock as the chat"
         }
       ]
     },
@@ -1275,7 +1280,12 @@
         {
           "kind": "test",
           "file": "apps/web/features/settings/sections/__tests__/PrivacySection.persistence.test.tsx",
-          "name": "does not enable telemetry until opt-in is saved and sends only one write in StrictMode"
+          "name": "blocks changes before a strict account read and supports legitimate first use"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/settings/sections/__tests__/PrivacySection.persistence.test.tsx",
+          "name": "sends one field once in StrictMode and grants only after a stored receipt"
         }
       ]
     },
@@ -1305,7 +1315,7 @@
         {
           "kind": "test",
           "file": "apps/web/app/api/cron/purge-temporary-chats/route.test.ts",
-          "name": "retires the files a temporary chat received on the same clock as the chat"
+          "name": "hard-deletes the files a temporary chat received on the same clock as the chat"
         }
       ]
     },
@@ -1506,12 +1516,22 @@
       "section": "Deleting conversations without deleting the account",
       "kind": "prose",
       "sentence": "Both ask first and name the current-workspace scope.",
-      "implementation": ["apps/web/features/settings/sections/PrivacySection.tsx"],
+      "implementation": ["apps/web/features/settings/components/BulkConversationControls.tsx"],
       "proof": [
         {
           "kind": "copy",
-          "file": "apps/web/features/settings/sections/PrivacySection.tsx",
+          "file": "apps/web/features/settings/components/BulkConversationControls.tsx",
           "text": "Delete all chats in this workspace?"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/settings/components/BulkConversationControls.tsx",
+          "text": "Archive all chats in this workspace?"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/settings/components/BulkConversationControls.test.tsx",
+          "name": "reserves one count and exact confirmation, including repeated confirm and cancel callbacks"
         }
       ]
     },
@@ -2420,7 +2440,7 @@
         {
           "kind": "test",
           "file": "apps/web/features/billing/components/UpgradeConfirmDialog.test.tsx",
-          "name": "quotes the published catalog amount for the requested interval"
+          "name": "quotes the renewal the preview returned for the requested interval"
         }
       ]
     },
@@ -2524,7 +2544,7 @@
         {
           "kind": "test",
           "file": "apps/web/features/settings/sections/__tests__/BillingSection.test.tsx",
-          "name": "keeps a yearly Pro subscriber on what they bought and says nothing changes"
+          "name": "subscriber on what they bought and says nothing changes"
         }
       ]
     },
@@ -2565,7 +2585,7 @@
         {
           "kind": "test",
           "file": "apps/web/features/settings/sections/__tests__/BillingSection.test.tsx",
-          "name": "switches a yearly Pro subscriber to monthly billing at renewal after confirming"
+          "name": "subscriber to monthly billing at renewal after confirming"
         },
         {
           "kind": "test",
@@ -3074,6 +3094,69 @@
       ]
     },
     {
+      "id": "voice-no-microphone-names-the-cause",
+      "doc": "voice",
+      "section": "When voice will not start",
+      "kind": "prose",
+      "sentence": "\"No microphone is available in this browser.\" No input device was found.",
+      "implementation": ["apps/web/features/chat/lib/live-voice-session.ts"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/lib/live-voice-session.ts",
+          "text": "No microphone is available in this browser."
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/lib/live-voice-session.ts",
+          "text": "if (name === 'NotFoundError' || name === 'OverconstrainedError') {"
+        }
+      ]
+    },
+    {
+      "id": "voice-unsupported-browser-names-the-cause",
+      "doc": "voice",
+      "section": "When voice will not start",
+      "kind": "prose",
+      "sentence": "\"This browser cannot open a voice connection.\" The browser does not support the connection voice mode needs.",
+      "implementation": ["apps/web/features/chat/lib/live-voice-session.ts"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/lib/live-voice-session.ts",
+          "text": "This browser cannot open a voice connection."
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/lib/live-voice-session.ts",
+          "text": "if (typeof RTCPeerConnection === 'undefined' || !navigator.mediaDevices?.getUserMedia) {"
+        }
+      ]
+    },
+    {
+      "id": "voice-blocked-capture-is-unavailable-up-front",
+      "doc": "voice",
+      "section": "When voice will not start",
+      "kind": "prose",
+      "sentence": "Some embedded surfaces cannot record audio at all because the host blocks microphone access, so dictation and voice mode are unavailable there rather than failing mid-session.",
+      "implementation": [
+        "apps/web/features/chat/components/Composer/VoiceInputButton.tsx#detectVoiceInputSupport",
+        "apps/web/features/chat/lib/live-voice-session.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/components/Composer/VoiceInputButton.test.tsx",
+          "name": "explains itself instead of opening when capture is unsupported"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/web/features/chat/lib/live-voice-session.ts",
+          "text": "if (typeof RTCPeerConnection === 'undefined' || !navigator.mediaDevices?.getUserMedia) {"
+        }
+      ]
+    },
+    {
       "id": "troubleshooting-conversation-search-failure",
       "doc": "troubleshooting",
       "section": "Search did not run",
@@ -3294,7 +3377,7 @@
         {
           "kind": "copy",
           "file": "apps/web/app/chrome-extension/page.tsx",
-          "text": "AGI Extension · {SURFACE_STATUS.chrome}"
+          "text": "Extension · {SURFACE_STATUS.chrome}"
         },
         {
           "kind": "copy",
@@ -4046,12 +4129,7 @@
         {
           "kind": "test",
           "file": "apps/web/features/settings/components/Settings/TwoFactorEnrollment.test.tsx",
-          "name": "keeps setup visible but disabled, says why, and calls no setup route"
-        },
-        {
-          "kind": "test",
-          "file": "apps/web/features/settings/components/Settings/TwoFactorEnrollment.test.tsx",
-          "name": "disables new backup codes but still lets an enrolled account turn two-factor off"
+          "name": "keeps unavailable enrollment controls disabled for enabled="
         },
         {
           "kind": "copy",
@@ -4191,7 +4269,12 @@
         {
           "kind": "copy",
           "file": "apps/web/app/api/settings/password/route.ts",
-          "text": "const signOut = await revokeEveryOtherSession(identity, userId, currentSessionId);"
+          "text": "const signOut = await revokeEveryOtherSession("
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/settings/password/__tests__/route.test.ts",
+          "name": "changes the password, ends other sessions and announces it"
         }
       ]
     },
@@ -4200,7 +4283,7 @@
       "doc": "account-security",
       "section": "Email address",
       "kind": "prose",
-      "sentence": "The previous address is removed unless a sign-in method still uses it.",
+      "sentence": "The previous address is removed from the account; if the sign-in service keeps it, Settings says so and asks you to check your sign-in methods before removing it yourself.",
       "implementation": [
         "apps/web/app/api/settings/email/route.ts",
         "apps/web/features/settings/components/EmailAddressChange.tsx"
@@ -4212,9 +4295,19 @@
           "text": "await identity.removeEmailAddress(previousId);"
         },
         {
+          "kind": "test",
+          "file": "apps/web/app/api/settings/email/__tests__/route.test.ts",
+          "name": "updates native identity and product profile, %s auth"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/settings/email/__tests__/route.test.ts",
+          "name": "does not upgrade a repeat request to confirmed completion after %s"
+        },
+        {
           "kind": "copy",
           "file": "apps/web/features/settings/components/EmailAddressChange.tsx",
-          "text": "Your previous address stays on the account because a sign-in method still uses it."
+          "text": "The server reported that your previous address was kept. Check your sign-in"
         }
       ]
     },
@@ -4290,7 +4383,7 @@
         {
           "kind": "copy",
           "file": "apps/web/features/settings/hooks/useStepUp.tsx",
-          "text": "const silent = await requestStepUpGrant(challenge.action, challenge.resourceId);"
+          "text": ": requestStepUpGrant(challenge.action, challenge.resourceId)"
         }
       ]
     },
@@ -4793,13 +4886,13 @@
       "doc": "search",
       "section": "Letting AGI search your past chats",
       "kind": "prose",
-      "sentence": "Settings, Memory holds **Search past chats**: \"Let AGI look up excerpts from your other conversations when answering.\" It is never used in temporary chats.",
+      "sentence": "Settings, Memory holds **Search past chats**: \"Let the assistant look up excerpts from your other conversations when answering.\" It is never used in temporary chats.",
       "implementation": ["apps/web/features/settings/sections/MemorySection.tsx"],
       "proof": [
         {
           "kind": "copy",
           "file": "apps/web/features/settings/sections/MemorySection.tsx",
-          "text": "Let AGI look up excerpts from your other conversations when answering. Never used in temporary chats."
+          "text": "Let the assistant look up excerpts from your other conversations when answering. Never used in temporary chats."
         }
       ]
     },
@@ -5264,7 +5357,7 @@
       "implementation": [
         "apps/cli/src/secure_store.rs#pub fn uses_keychain()",
         "apps/cli/src/secure_store.rs#pub fn keyring_disabled()",
-        "apps/cli/src/auth.rs#pub fn save(&self)"
+        "apps/cli/src/auth.rs#fn save_unlocked(&self)"
       ],
       "proof": [
         {
@@ -5682,21 +5775,21 @@
       "section": "Add sources",
       "kind": "prose",
       "sentence": "You may see **Indexing for search**, **Keyword search only** or **Not indexed** beside a file.",
-      "implementation": ["apps/web/features/projects/components/KnowledgeFilesPanel.tsx"],
+      "implementation": ["apps/web/features/projects/components/KnowledgeIndexStatus.tsx"],
       "proof": [
         {
           "kind": "copy",
-          "file": "apps/web/features/projects/components/KnowledgeFilesPanel.tsx",
+          "file": "apps/web/features/projects/components/KnowledgeIndexStatus.tsx",
           "text": "Indexing for search"
         },
         {
           "kind": "copy",
-          "file": "apps/web/features/projects/components/KnowledgeFilesPanel.tsx",
+          "file": "apps/web/features/projects/components/KnowledgeIndexStatus.tsx",
           "text": "Keyword search only"
         },
         {
           "kind": "copy",
-          "file": "apps/web/features/projects/components/KnowledgeFilesPanel.tsx",
+          "file": "apps/web/features/projects/components/KnowledgeIndexStatus.tsx",
           "text": "Not indexed"
         },
         {

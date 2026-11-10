@@ -1,13 +1,14 @@
-const FINISHED_STATUSES: ReadonlySet<string> = new Set([
-  'ready_for_review',
-  'completed',
-  'failed',
-  'cancelled',
-  'rejected',
-]);
+import {
+  DISPATCH_STATUS_AGENT_TASK_STATES,
+  TERMINAL_AGENT_TASK_STATES,
+  type AgentTaskState,
+} from '@agiworkforce/types';
 
 export function isDispatchTaskFinished(status: string): boolean {
-  return FINISHED_STATUSES.has(status);
+  if (!Object.hasOwn(DISPATCH_STATUS_AGENT_TASK_STATES, status)) return false;
+  const state: AgentTaskState =
+    DISPATCH_STATUS_AGENT_TASK_STATES[status as keyof typeof DISPATCH_STATUS_AGENT_TASK_STATES];
+  return TERMINAL_AGENT_TASK_STATES.has(state);
 }
 
 export function keepUnfinishedAndRecentFinished<T extends { status: string }>(

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 type ScanModule0 = typeof import('@/app/api/llm/v1/chat/completions/lib/tool-approval-policy');
+type ConnectorPolicyServiceModule = typeof import('@/lib/services/connector-policy-service');
 
 vi.mock('server-only', () => ({}));
 
@@ -14,7 +15,7 @@ vi.mock('@/lib/connectors/connector-capability', () => ({
 }));
 
 vi.mock('@/lib/services/connector-policy-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/connector-policy-service')>()),
+  ...(await importOriginal<ConnectorPolicyServiceModule>()),
   readWorkspaceWebDomainPolicy: mocks.workspacePolicy,
 }));
 

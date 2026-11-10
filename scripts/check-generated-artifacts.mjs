@@ -9,6 +9,7 @@ function gitLines(args) {
   const result = spawnSync('git', args, {
     cwd: process.cwd(),
     encoding: 'utf8',
+    maxBuffer: 256 * 1024 * 1024,
   });
   if (result.status !== 0) {
     errors.push(`git ${args.join(' ')} failed: ${result.stderr.trim()}`);

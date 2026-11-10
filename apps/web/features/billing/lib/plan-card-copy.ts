@@ -8,6 +8,7 @@ import {
   getAllowedModelsForTier,
   getBillingPlanProductLimits,
   isEnterprisePlanTier,
+  isFreeBillingPlanTier,
   isPlanSelectableOnSurface,
   managedUsageMultiplier,
   SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
@@ -194,7 +195,7 @@ export function individualPlanFeatures(
 ): string[] {
   if (detail === 'summary') {
     const features = INDIVIDUAL_PLAN_SUMMARY_KEYS[plan].map((key) => t(key));
-    return plan === 'free'
+    return isFreeBillingPlanTier(plan)
       ? [
           ...features,
           t('freeLocalByok', {

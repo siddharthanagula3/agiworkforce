@@ -16,8 +16,10 @@ vi.mock('@/lib/feature-flags/tenant-lockdown', () => ({
 }));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: mocks.getNeonDb }));
 vi.mock('@/lib/user-connector-tools', () => ({ getUserGithubInstallations: vi.fn() }));
+type CloudCodeSessionServiceModule = typeof import('../cloud-code-session-service');
+
 vi.mock('../cloud-code-session-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../cloud-code-session-service')>()),
+  ...(await importOriginal<CloudCodeSessionServiceModule>()),
   getCloudCodeSession: mocks.getSession,
   listCloudCodeTerminalEntries: mocks.listTerminal,
   listCloudCodeAgentTurns: mocks.listTurns,

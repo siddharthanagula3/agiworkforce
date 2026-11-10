@@ -6,12 +6,15 @@ vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
+type TypesModule = typeof import('@agiworkforce/types');
+type OauthAccessModule = typeof import('@/lib/connectors/oauth-access');
+
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/types')>()),
+  ...(await importOriginal<TypesModule>()),
   connectorsReleased: () => true,
 }));
 vi.mock('@/lib/connectors/oauth-access', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/connectors/oauth-access')>()),
+  ...(await importOriginal<OauthAccessModule>()),
   resolveConnectorAccessToken: mocks.resolve,
 }));
 vi.mock('../trigger-ingest', () => ({ ingestTriggerEvent: mocks.ingest }));

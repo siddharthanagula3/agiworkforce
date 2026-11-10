@@ -9,8 +9,9 @@ vi.mock('@/features/desktop-host', () => ({
 
 const readLocalPullRequest = vi.fn();
 const openLocalPullRequest = vi.fn();
+type LocalPullRequestApiModule = typeof import('../services/local-pull-request-api');
 vi.mock('../services/local-pull-request-api', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../services/local-pull-request-api')>()),
+  ...(await importOriginal<LocalPullRequestApiModule>()),
   readLocalPullRequest: (...args: unknown[]) => readLocalPullRequest(...args),
   openLocalPullRequest: (...args: unknown[]) => openLocalPullRequest(...args),
 }));

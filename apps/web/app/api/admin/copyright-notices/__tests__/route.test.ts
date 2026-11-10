@@ -82,8 +82,10 @@ vi.mock('@/lib/server/neon-db', () => ({
   getStripeWebhookDb: vi.fn(),
   getNeonDb: () => mocks.db,
 }));
+type CopyrightNoticesModule = typeof import('@/lib/server/copyright-notices');
+
 vi.mock('@/lib/server/copyright-notices', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/server/copyright-notices')>();
+  const actual = await importOriginal<CopyrightNoticesModule>();
   return {
     CONTENT_NOTICE_TYPES: vi.fn(),
     recordCopyrightNotice: vi.fn(),
