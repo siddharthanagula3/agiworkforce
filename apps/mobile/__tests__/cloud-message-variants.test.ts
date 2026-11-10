@@ -489,3 +489,48 @@ describe('Cloud message ratings', () => {
     expect(rows()[1]?.metadata?.reaction).toBeNull();
   });
 });
+
+describe('edit acceptance', () => {
+  beforeEach(() => {
+    seedConversation({ activeLeafMessageId: A1 }, [
+      message(U1, 'user', 'first question', '2026-06-01T00:00:00.000Z', null),
+      message(A1, 'assistant', 'first answer', '2026-06-01T00:00:01.000Z', U1),
+    ]);
+  });
+
+  it('reports a started edit as accepted', async () => {
+    const accepted = useChatExecutionStore.getState().editMessage(CONV_ID, U1, 'revised question');
+    expect(accepted).toBe(true);
+    await waitFor(() => !useChatExecutionStore.getState().isEditing);
+  });
+
+  it('refuses a message that is not in the conversation', () => {
+    expect(useChatExecutionStore.getState().editMessage(CONV_ID, A1, 'not a question')).toBe(false);
+    expect(
+      useChatExecutionStore.getState().editMessage(CONV_ID, 'missing-message', 'nothing'),
+    ).toBe(false);
+    expect(rows().map((row) => row.content)).toEqual(['first question', 'first answer']);
+  });
+
+  it('refuses while the conversation is still streaming and leaves the conversation untouched', async () => {
+    let finishStream: (() => void) | undefined;
+    mockStreamChat.mockImplementationOnce(async (_body, callbacks: StreamCallbacks) => {
+      await new Promise<void>((resolve) => {
+        finishStream = resolve;
+      });
+      callbacks.onDone();
+    });
+
+    useChatExecutionStore.getState().retryMessage(CONV_ID, A1);
+    await waitFor(() => finishStream !== undefined);
+
+    const accepted = useChatExecutionStore.getState().editMessage(CONV_ID, U1, 'revised question');
+    expect(accepted).toBe(false);
+    expect(useChatExecutionStore.getState().isEditing).toBe(false);
+    expect(mockDeleteRemote).not.toHaveBeenCalled();
+    expect(rows().some((row) => row.content === 'revised question')).toBe(false);
+
+    finishStream?.();
+    await waitFor(() => settledAssistants().length === 2);
+  });
+});

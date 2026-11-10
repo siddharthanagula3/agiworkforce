@@ -160,7 +160,7 @@ export interface CombinedChatState {
     steps?: ResearchStep[],
     choices?: ResearchPlanChoices,
   ) => Promise<void>;
-  editMessage: (conversationId: string, messageId: string, newContent: string) => void;
+  editMessage: (conversationId: string, messageId: string, newContent: string) => boolean;
   resolveToolApproval: (
     conversationId: string,
     assistantMessageId: string,

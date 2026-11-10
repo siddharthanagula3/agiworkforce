@@ -487,7 +487,7 @@ interface MessageBubbleProps {
   variant?: VariantInfo;
   onSelectVariant?: (messageId: string) => void;
   onSwitchModel?: () => void;
-  onEditMessage?: (messageId: string, newContent: string) => void;
+  onEditMessage?: (messageId: string, newContent: string) => boolean;
   onReaction?: (messageId: string, reaction: ReactionType) => void;
   onResolveToolApproval?: (
     messageId: string,
@@ -948,9 +948,7 @@ export const MessageBubble = memo(function MessageBubble({
 
   const handleSubmitEdit = useCallback(() => {
     const trimmed = editText.trim();
-    if (trimmed && onEditMessage) {
-      onEditMessage(message.id, trimmed);
-    }
+    if (trimmed && onEditMessage && !onEditMessage(message.id, trimmed)) return;
     setEditModalVisible(false);
   }, [editText, message.id, onEditMessage, setEditModalVisible]);
 

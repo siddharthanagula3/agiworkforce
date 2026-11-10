@@ -797,6 +797,7 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
             !library.signedOut &&
             GENERATION_FILTERS.has(filter) ? (
               <MediaJobsSection
+                onJobsCompleted={library.refresh}
                 onOpenConversation={(conversationId) =>
                   router.push({ pathname: '/(app)/chat/[id]', params: { id: conversationId } })
                 }

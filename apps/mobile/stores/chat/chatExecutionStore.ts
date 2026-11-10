@@ -314,7 +314,7 @@ interface ExecutionState {
     steps?: ResearchStep[],
     choices?: ResearchPlanChoices,
   ) => Promise<void>;
-  editMessage: (conversationId: string, messageId: string, newContent: string) => void;
+  editMessage: (conversationId: string, messageId: string, newContent: string) => boolean;
   clearError: () => void;
   setSendError: (message: string) => void;
   clearPaywallError: () => void;
@@ -4420,10 +4420,10 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         'Please wait for the current response to finish before editing a message.',
         [{ text: 'OK' }],
       );
-      return;
+      return false;
     }
 
-    if (state.isEditing) return;
+    if (state.isEditing) return false;
 
     const msgStore = getConversationMessageStore(conversationId);
     const conversation = msgStore
@@ -4439,13 +4439,13 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     const msgs = branches
       ? ensureLocalThreadParents(conversationId)
       : msgStore.getState().messages[conversationId];
-    if (!msgs) return;
+    if (!msgs) return false;
 
     const msgIndex = msgs.findIndex((m) => m.id === messageId);
-    if (msgIndex < 0) return;
+    if (msgIndex < 0) return false;
 
     const targetMsg = msgs[msgIndex];
-    if (!targetMsg || targetMsg.role !== 'user') return;
+    if (!targetMsg || targetMsg.role !== 'user') return false;
 
     const userModel = targetMsg.model ?? DEFAULT_AUTO_MODE_ID;
     const editedParentId = targetMsg.parentId ?? null;
@@ -4455,7 +4455,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     const accountEpoch = isCloudEdit ? captureCloudAccountEpoch() : null;
     const isEditCurrent = () => !isCloudEdit || isCloudAccountEpochCurrent(accountEpoch);
 
-    if (!isEditCurrent()) return;
+    if (!isEditCurrent()) return false;
 
     set({ isEditing: true });
 
@@ -4492,5 +4492,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       .finally(() => {
         if (isEditCurrent()) set({ isEditing: false });
       });
+    return true;
   },
 }));

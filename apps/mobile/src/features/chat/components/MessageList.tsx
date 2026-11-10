@@ -97,7 +97,7 @@ interface MessageListProps {
   variantInfoByMessageId?: VariantInfoByMessageId;
   onSelectVariant?: (messageId: string) => void;
   onSwitchModel?: () => void;
-  onEditMessage?: (messageId: string, newContent: string) => void;
+  onEditMessage?: (messageId: string, newContent: string) => boolean;
   onRefresh?: () => void;
   refreshing?: boolean;
   onQuoteReply?: (message: ChatMessage) => void;

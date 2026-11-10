@@ -64,7 +64,7 @@ interface MessageBubbleProps {
    * before, so hosts without the derivation capability are unaffected.
    */
   artifactProjection?: MessageArtifactProjection | null;
-  onEdit?: (messageId: string, newContent: string) => void;
+  onEdit?: (messageId: string, newContent: string) => boolean | void;
   /** Sends a follow-up suggestion as the next turn. Absent, the suggestion stays text. */
   onFollowUp?: (text: string) => void;
   /** Optional actions the host can carry out; each stays hidden when absent. */
@@ -719,7 +719,7 @@ export function MessageBubble({
 
   function commitEdit() {
     const next = (editDraft ?? '').trim();
-    if (next.length > 0 && next !== message.content) onEdit?.(message.id, next);
+    if (next.length > 0 && next !== message.content && onEdit?.(message.id, next) === false) return;
     setEditDraft(null);
   }
 

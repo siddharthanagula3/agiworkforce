@@ -1539,9 +1539,9 @@ export default function ChatScreen() {
 
   const handleEditMessage = useCallback(
     (messageId: string, newContent: string) => {
-      if (!id) return;
+      if (!id) return false;
       stopSpeaking();
-      editMessage(id, messageId, newContent);
+      return editMessage(id, messageId, newContent);
     },
     [id, editMessage, stopSpeaking],
   );
