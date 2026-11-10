@@ -5,6 +5,7 @@ import { logger } from '@/lib/logger';
 import { verifyCronRequest } from '@/lib/server/cron-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { countHeldRows, legalHoldExclusion } from '@/lib/services/legal-hold-gate';
+import { purgeTemporaryChatFiles } from '@/lib/server/temporary-files';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -42,9 +43,6 @@ export async function GET(request: NextRequest) {
   // window and goes on the first run after the hold is released.
   const chatDue = `candidate.is_temporary = true
           and candidate.created_at < now() - make_interval(days => $1)`;
-  const attachmentDue = `candidate.temporary_chat
-           and candidate.deleted_at is null
-           and candidate.created_at < now() - make_interval(days => $1)`;
 
   try {
     const heldChats = await countHeldRows(db, 'conversation', {
@@ -53,17 +51,7 @@ export async function GET(request: NextRequest) {
       where: chatDue,
       params: [RETENTION_DAYS],
     });
-    const heldAttachments = await countHeldRows(db, 'file', {
-      table: 'media_assets',
-      alias: 'candidate',
-      where: attachmentDue,
-      params: [RETENTION_DAYS],
-    });
     const chatExclusion = legalHoldExclusion('conversation', {
-      alias: 'candidate',
-      nextParamIndex: 3,
-    });
-    const attachmentExclusion = legalHoldExclusion('file', {
       alias: 'candidate',
       nextParamIndex: 3,
     });
@@ -123,26 +111,29 @@ export async function GET(request: NextRequest) {
     );
     const jobsPurged = orphanedJobs[0]?.count ?? 0;
 
-    // A file attached to a temporary chat is retired on the same clock as the
-    // chat (0218). Marking it deleted rather than deleting it hands it to
-    // purge-deleted-media, which is the only job that removes stored bytes, so
-    // there is one place that talks to object storage instead of two.
-    const attachments = await db.query<{ count: number }>(
-      `with expired as (
-         update public.media_assets
-            set deleted_at = now()
-          where id in (
-            select candidate.id from public.media_assets candidate
-             where ${attachmentDue}
-               and ${attachmentExclusion.sql}
-             limit $2
-          )
-          returning id
-       )
-       select count(*)::int as count from expired`,
-      [RETENTION_DAYS, PURGE_BATCH, ...attachmentExclusion.params],
-    );
-    const attachmentsRetired = attachments[0]?.count ?? 0;
+    let attachmentsRetired = 0;
+    let heldAttachments = 0;
+    for (let batch = 0; batch < MAX_BATCHES; batch++) {
+      if (Date.now() - startedAtMs > PURGE_BUDGET_MS) {
+        remaining = true;
+        break;
+      }
+      const attachments = await purgeTemporaryChatFiles(db, { batchSize: PURGE_BATCH });
+      attachmentsRetired += attachments.purged;
+      heldAttachments = attachments.heldFromPurge;
+      if (attachments.objectsFailed > 0) {
+        logger.warn(
+          { objectsFailed: attachments.objectsFailed },
+          'Temporary chat attachments kept their rows because storage still holds the bytes',
+        );
+      }
+      if (!attachments.remaining) break;
+      if (attachments.purged === 0) {
+        remaining = true;
+        break;
+      }
+      if (batch === MAX_BATCHES - 1) remaining = true;
+    }
 
     if (remaining) {
       logger.warn(

@@ -135,20 +135,30 @@ describe('POST /api/uploads/chat-attachment/complete · Temporary Chat file poli
     expect(SCOPED_DB.query).not.toHaveBeenCalled();
   });
 
-  it('does not treat a missing conversation as temporary', async () => {
+  it('keeps the declared flag when the conversation row is not visible', async () => {
     SCOPED_DB.query.mockResolvedValue([]);
 
     await POST(completeRequest({ conversationId: CONVERSATION, temporary: true }));
 
+    expect(insertedTemporaryFlag()).toBe(true);
+  });
+
+  it('keeps an undeclared upload ordinary when the conversation row is not visible', async () => {
+    SCOPED_DB.query.mockResolvedValue([]);
+
+    await POST(completeRequest({ conversationId: CONVERSATION }));
+
     expect(insertedTemporaryFlag()).toBe(false);
   });
 
-  it('counts the file when the conversation lookup fails', async () => {
+  it('refuses the upload when the conversation lookup fails, instead of keeping it as a Library file', async () => {
     SCOPED_DB.query.mockRejectedValue(new Error('database unavailable'));
 
-    await POST(completeRequest({ conversationId: CONVERSATION, temporary: true }));
+    const response = await POST(completeRequest({ conversationId: CONVERSATION, temporary: true }));
 
-    expect(insertedTemporaryFlag()).toBe(false);
+    expect(response.status).toBe(503);
+    expect(mockInsertMediaAsset).not.toHaveBeenCalled();
+    expect(mockGetMediaAssetByContentHash).not.toHaveBeenCalled();
   });
 
   it('never reuses a kept file for a temporary chat, nor the other way round', async () => {
