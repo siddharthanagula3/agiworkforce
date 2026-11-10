@@ -1,9 +1,15 @@
 const mockUnregisterPushToken = jest.fn();
 
 jest.mock('@/src/features/auth/services/signOutPushTokenCleanup', () => ({
+  PushTokenCleanupCredentialRejectedError: class PushTokenCleanupCredentialRejectedError extends Error {
+    constructor(mockStatus: number) {
+      super(`rejected ${mockStatus}`);
+    }
+  },
   unregisterPushTokenForSignOut: (token: string) => mockUnregisterPushToken(token),
 }));
 
+import { PushTokenCleanupCredentialRejectedError } from '@/src/features/auth/services/signOutPushTokenCleanup';
 import {
   __resetPushTokenAccountLifecycleForTests,
   beginPushTokenAccountSession,
@@ -140,5 +146,37 @@ describe('push-token account lifecycle', () => {
     expect(mockUnregisterPushToken).toHaveBeenCalledTimes(2);
     expect(mockUnregisterPushToken).toHaveBeenLastCalledWith('jwt-a');
     expect(accountB?.ownerId).toBe('account-b');
+  });
+
+  it('settles cleanup when the server rejects the stored credential for good, so a later sign-in registers again', async () => {
+    await beginPushTokenAccountSession('account-a', async () => 'expired-jwt-a');
+    mockUnregisterPushToken.mockRejectedValueOnce(new PushTokenCleanupCredentialRejectedError(401));
+
+    await expect(clearPushTokenAccountSession()).resolves.toBeUndefined();
+
+    const again = await beginPushTokenAccountSession('account-a', async () => 'jwt-a2');
+    expect(again?.ownerId).toBe('account-a');
+    const accountB = await beginPushTokenAccountSession('account-b', async () => 'jwt-b');
+
+    expect(mockUnregisterPushToken.mock.calls).toEqual([['expired-jwt-a'], ['jwt-a2']]);
+    expect(again?.isCurrent()).toBe(false);
+    expect(accountB?.ownerId).toBe('account-b');
+    expect(accountB?.isCurrent()).toBe(true);
+  });
+
+  it('lets the next account in after a rejected credential but still retries a transient failure', async () => {
+    await beginPushTokenAccountSession('account-a', async () => 'expired-jwt-a');
+    mockUnregisterPushToken.mockRejectedValueOnce(new PushTokenCleanupCredentialRejectedError(401));
+
+    const accountB = await beginPushTokenAccountSession('account-b', async () => 'jwt-b');
+    expect(accountB?.ownerId).toBe('account-b');
+
+    mockUnregisterPushToken.mockRejectedValueOnce(new Error('HTTP 503'));
+    await expect(clearPushTokenAccountSession()).rejects.toThrow('HTTP 503');
+
+    const accountC = await beginPushTokenAccountSession('account-c', async () => 'jwt-c');
+
+    expect(mockUnregisterPushToken.mock.calls).toEqual([['expired-jwt-a'], ['jwt-b'], ['jwt-b']]);
+    expect(accountC?.ownerId).toBe('account-c');
   });
 });

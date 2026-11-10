@@ -141,10 +141,12 @@ function Notice({
   message,
   tone,
   onDismiss,
+  inline = false,
 }: {
   message: string;
   tone: 'error' | 'neutral';
   onDismiss?: () => void;
+  inline?: boolean;
 }) {
   const colors = useThemeColors();
   const error = tone === 'error';
@@ -153,7 +155,7 @@ function Notice({
     <View
       accessibilityRole={error ? 'alert' : undefined}
       style={{
-        marginHorizontal: 12,
+        marginHorizontal: inline ? 0 : 12,
         borderRadius: 14,
         borderCurve: 'continuous',
         paddingVertical: 10,
@@ -393,6 +395,10 @@ function SessionView({
             />
           }
         >
+          {view.turnsTruncated ? (
+            <Notice message={CLOUD_CODE_SESSION_COPY.earlierTurnsNotShown} tone="neutral" inline />
+          ) : null}
+
           {pullRequestLabel && pullRequestUrl ? (
             <PressableBox
               onPress={() => void openUntrustedUrlInAppBrowser(pullRequestUrl)}

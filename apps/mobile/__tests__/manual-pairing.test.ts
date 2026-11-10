@@ -190,6 +190,14 @@ describe('Manual companion pairing', () => {
     await expect(claimManualPairingToken('ABCDEFGHIJKL')).rejects.toThrow('invalid or expired');
   });
 
+  it('refuses a pairing code another phone already used', async () => {
+    mockSecureFetch.mockResolvedValueOnce({ ok: false, status: 409, json: jest.fn() });
+
+    await expect(claimManualPairingToken('ABCDEFGHIJKL')).rejects.toThrow(
+      'That pairing code is already connected to a phone.',
+    );
+  });
+
   it('refuses a code Desktop could not have shown before it reaches the relay', async () => {
     mockSecureFetch.mockClear();
 

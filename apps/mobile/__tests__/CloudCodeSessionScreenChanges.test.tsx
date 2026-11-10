@@ -46,6 +46,7 @@ jest.mock('@/src/lib/Capabilities', () => ({
   useCapability: () => false,
 }));
 
+import { CLOUD_CODE_SESSION_COPY } from '@agiworkforce/types';
 import { CloudCodeSessionScreen } from '@/src/features/cloud-code/CloudCodeSessionScreen';
 
 const session = {
@@ -152,5 +153,21 @@ describe('CloudCodeSessionScreen changes wiring', () => {
     await waitFor(() => expect(mockApi.changes).toHaveBeenCalled());
     expect(queryByTestId('cloud-code-changes-card')).toBeNull();
     expect(queryByTestId('cloud-code-changes-pill')).toBeNull();
+  });
+
+  it('says earlier turns are not shown when the read returned only the newest turns', async () => {
+    mockApi.get.mockResolvedValue({ ...detail([turn('2')]), turnsTruncated: true });
+    const { findByText } = render(<CloudCodeSessionScreen sessionId="session-1" />);
+
+    await findByText('reply 2');
+    expect(await findByText(CLOUD_CODE_SESSION_COPY.earlierTurnsNotShown)).toBeTruthy();
+  });
+
+  it('shows no truncation notice for a complete transcript', async () => {
+    mockApi.get.mockResolvedValue({ ...detail([turn('1')]), turnsTruncated: false });
+    const { findByText, queryByText } = render(<CloudCodeSessionScreen sessionId="session-1" />);
+
+    await findByText('reply 1');
+    expect(queryByText(CLOUD_CODE_SESSION_COPY.earlierTurnsNotShown)).toBeNull();
   });
 });

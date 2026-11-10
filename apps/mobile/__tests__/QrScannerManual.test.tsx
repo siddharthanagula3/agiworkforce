@@ -186,6 +186,30 @@ describe('QRScanner manual pairing', () => {
     expect(onScan).toHaveBeenCalledWith(DESKTOP_PAIRING_PAYLOAD);
   });
 
+  it.each([
+    [
+      'a browser link from the web app',
+      `https://agiworkforce.com/code/computer#${DESKTOP_PAIRING_PAYLOAD}`,
+    ],
+    ['a link from another origin', `https://pair.example.com/#${DESKTOP_PAIRING_PAYLOAD}`],
+    ['a pairing link with a truncated secret', `agiw3:WXYZ1234ABCD:${PAIRING_SECRET.slice(2)}`],
+    ['a pairing link with an extra field', `${DESKTOP_PAIRING_PAYLOAD}:${PAIRING_SECRET}`],
+  ])('refuses %s before attempting a connection', (_label, pasted) => {
+    const onScan = jest.fn();
+    const screen = render(<QRScanner onScan={onScan} onClose={jest.fn()} />);
+
+    fireEvent.press(screen.getByLabelText('Enter code manually'));
+    fireEvent.changeText(screen.getByPlaceholderText('Paste the pairing link'), pasted);
+    fireEvent.press(screen.getByLabelText('Connect'));
+
+    expect(onScan).not.toHaveBeenCalled();
+    expect(
+      screen.getByText(
+        'That is not a pairing link from Desktop. Copy it again, or scan the QR code.',
+      ),
+    ).toBeTruthy();
+  });
+
   it('rejects a legacy short code before attempting a connection', () => {
     const onScan = jest.fn();
     const screen = render(<QRScanner onScan={onScan} onClose={jest.fn()} />);

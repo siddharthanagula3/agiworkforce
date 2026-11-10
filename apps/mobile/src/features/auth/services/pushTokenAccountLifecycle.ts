@@ -1,5 +1,8 @@
 import type { PushNotificationAccountContext } from '@/services/notifications';
-import { unregisterPushTokenForSignOut } from '@/src/features/auth/services/signOutPushTokenCleanup';
+import {
+  PushTokenCleanupCredentialRejectedError,
+  unregisterPushTokenForSignOut,
+} from '@/src/features/auth/services/signOutPushTokenCleanup';
 
 export type ClerkTokenResolver = () => Promise<string | null>;
 
@@ -56,7 +59,11 @@ function enqueueCleanup(binding: PushTokenOwnerBinding | null): Promise<void> {
         const token =
           (await queuedBinding.capturedToken) ?? (await queuedBinding.inheritedCleanupToken);
         if (token) {
-          await unregisterPushTokenForSignOut(token);
+          try {
+            await unregisterPushTokenForSignOut(token);
+          } catch (error) {
+            if (!(error instanceof PushTokenCleanupCredentialRejectedError)) throw error;
+          }
         } else if (mayHaveRegistered(queuedBinding)) {
           throw new Error(
             `Cannot safely transfer the push token from Clerk account ${queuedBinding.ownerId}: its cleanup credential is unavailable`,
