@@ -1183,6 +1183,51 @@ pub fn set_trigger_filter(
 // Execution loop
 // ---------------------------------------------------------------------------
 
+#[derive(Clone)]
+struct QuietGate {
+    quiet_periods: Arc<HashMap<String, std::time::Duration>>,
+    last_started: Arc<std::sync::Mutex<HashMap<String, std::time::Instant>>>,
+}
+
+impl QuietGate {
+    fn new(quiet_periods: HashMap<String, std::time::Duration>) -> Self {
+        Self {
+            quiet_periods: Arc::new(quiet_periods),
+            last_started: Arc::default(),
+        }
+    }
+
+    fn last_started(&self) -> std::sync::MutexGuard<'_, HashMap<String, std::time::Instant>> {
+        self.last_started
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    fn is_quiet(&self, trigger_id: &str, now: std::time::Instant) -> bool {
+        let Some(quiet) = self.quiet_periods.get(trigger_id) else {
+            return false;
+        };
+        self.last_started()
+            .get(trigger_id)
+            .is_some_and(|last| now.duration_since(*last) < *quiet)
+    }
+
+    fn try_start(&self, trigger_id: &str, now: std::time::Instant) -> bool {
+        let Some(quiet) = self.quiet_periods.get(trigger_id) else {
+            return true;
+        };
+        let mut last_started = self.last_started();
+        if last_started
+            .get(trigger_id)
+            .is_some_and(|last| now.duration_since(*last) < *quiet)
+        {
+            return false;
+        }
+        last_started.insert(trigger_id.to_string(), now);
+        true
+    }
+}
+
 /// Process trigger events: spawn agent sessions for each fired trigger.
 async fn run_execution_loop(
     mut rx: mpsc::UnboundedReceiver<TriggerEvent>,
@@ -1193,7 +1238,7 @@ async fn run_execution_loop(
     semaphore: Arc<Semaphore>,
     shutdown_rx: &mut watch::Receiver<bool>,
 ) {
-    let mut last_started: HashMap<String, std::time::Instant> = HashMap::new();
+    let quiet_gate = QuietGate::new(quiet_periods);
     loop {
         tokio::select! {
             _ = wait_shutdown(shutdown_rx) => break,
@@ -1202,26 +1247,20 @@ async fn run_execution_loop(
                     Some(e) => e,
                     None => break,
                 };
-                if let Some(quiet) = quiet_periods.get(&event.trigger_id) {
-                    let now = std::time::Instant::now();
-                    if last_started
-                        .get(&event.trigger_id)
-                        .is_some_and(|last| now.duration_since(*last) < *quiet)
-                    {
-                        eprintln!(
-                            "{} Trigger '{}' repeated inside its quiet period, skipped",
-                            ts::accent("daemon:"),
-                            event.trigger_id
-                        );
-                        continue;
-                    }
-                    last_started.insert(event.trigger_id.clone(), now);
+                if quiet_gate.is_quiet(&event.trigger_id, std::time::Instant::now()) {
+                    eprintln!(
+                        "{} Trigger '{}' repeated inside its quiet period, skipped",
+                        ts::accent("daemon:"),
+                        event.trigger_id
+                    );
+                    continue;
                 }
 
                 let config = config.clone();
                 let hooks_config = hooks_config.clone();
                 let log_dir = log_dir.clone();
                 let semaphore = semaphore.clone();
+                let quiet_gate = quiet_gate.clone();
 
                 // Spawn the trigger and log any panic via the JoinHandle so that
                 // task failures are not silently swallowed (Bug 5 fix).
@@ -1232,7 +1271,16 @@ async fn run_execution_loop(
                         Err(_) => return, // semaphore closed
                     };
 
-                    if let Err(err) = execute_trigger(event, &config, &hooks_config, &log_dir).await
+                    if !quiet_gate.try_start(&event.trigger_id, std::time::Instant::now()) {
+                        eprintln!(
+                            "{} Trigger '{}' repeated inside its quiet period, skipped",
+                            ts::accent("daemon:"),
+                            event.trigger_id
+                        );
+                        return;
+                    }
+
+                    if let Err(err)= execute_trigger(event, &config, &hooks_config, &log_dir).await
                     {
                         eprintln!("{} Trigger execution failed: {:#}", ts::danger("daemon:"), err);
                     }
@@ -1260,6 +1308,7 @@ async fn execute_trigger(
 ) -> Result<()> {
     let start = std::time::Instant::now();
     let timestamp = Local::now().format("%Y%m%d_%H%M%S").to_string();
+    let run_id = uuid::Uuid::new_v4().simple().to_string();
 
     // Resolve routing profiles to a concrete provider model before any hook or
     // transport sees them. Auto is policy, never a provider model ID.
@@ -1321,6 +1370,7 @@ async fn execute_trigger(
     // legitimately contain API keys / signing secrets / PII that must
     // not survive in `~/.agiworkforce/daemon-logs/` as plaintext JSON.
     let log_entry = serde_json::json!({
+        "run_id": run_id,
         "trigger_id": event.trigger_id,
         "trigger_type": format!("{:?}", event.trigger_type).to_lowercase(),
         "timestamp": Local::now().to_rfc3339(),
@@ -1336,12 +1386,10 @@ async fn execute_trigger(
         "duration_ms": duration.as_millis() as u64,
     });
 
-    // Write log file
-    let log_filename = format!("{}_{}.json", event.trigger_id, timestamp);
-    let log_path = log_dir.join(&log_filename);
-    if let Err(e) = std::fs::write(
+    let log_path = completion_record_path(log_dir, &event.trigger_id, &timestamp, &run_id);
+    if let Err(e) = write_completion_record(
         &log_path,
-        serde_json::to_string_pretty(&log_entry).unwrap_or_default(),
+        &serde_json::to_string_pretty(&log_entry).unwrap_or_default(),
     ) {
         eprintln!(
             "{} Failed to write log file {}: {}",
@@ -1349,19 +1397,6 @@ async fn execute_trigger(
             log_path.display(),
             e
         );
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let perms = std::fs::Permissions::from_mode(0o600);
-        if let Err(e) = std::fs::set_permissions(&log_path, perms) {
-            eprintln!(
-                "{} Failed to set log file permissions {}: {}",
-                ts::danger("daemon:"),
-                log_path.display(),
-                e
-            );
-        }
     }
 
     eprintln!(
@@ -1372,6 +1407,29 @@ async fn execute_trigger(
         status
     );
     Ok(())
+}
+
+fn completion_record_path(
+    log_dir: &Path,
+    trigger_id: &str,
+    timestamp: &str,
+    run_id: &str,
+) -> PathBuf {
+    let short_run_id: String = run_id.chars().take(8).collect();
+    log_dir.join(format!("{trigger_id}_{timestamp}_{short_run_id}.json"))
+}
+
+fn write_completion_record(path: &Path, contents: &str) -> std::io::Result<()> {
+    use std::io::Write;
+
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    options.open(path)?.write_all(contents.as_bytes())
 }
 
 fn trigger_outcome(
@@ -1465,6 +1523,96 @@ mod tests {
             managed_request_ids: Vec::new(),
             sources: Vec::new(),
         }
+    }
+
+    #[test]
+    fn two_runs_of_one_trigger_in_the_same_second_keep_separate_completion_records() {
+        let dir = tempfile::tempdir().unwrap();
+        let first = completion_record_path(dir.path(), "hook", "20261109_100000", "aaaaaaaa1111");
+        let second = completion_record_path(dir.path(), "hook", "20261109_100000", "bbbbbbbb2222");
+        assert_ne!(first, second);
+
+        write_completion_record(&first, "first run").unwrap();
+        write_completion_record(&second, "second run").unwrap();
+
+        assert_eq!(std::fs::read_to_string(&first).unwrap(), "first run");
+        assert_eq!(std::fs::read_to_string(&second).unwrap(), "second run");
+    }
+
+    #[test]
+    fn a_completion_record_is_never_overwritten() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = completion_record_path(dir.path(), "hook", "20261109_100000", "aaaaaaaa1111");
+
+        write_completion_record(&path, "kept").unwrap();
+        let err = write_completion_record(&path, "replacement").unwrap_err();
+
+        assert_eq!(err.kind(), std::io::ErrorKind::AlreadyExists);
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "kept");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_completion_record_is_private_to_the_owner() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = completion_record_path(dir.path(), "hook", "20261109_100000", "aaaaaaaa1111");
+        write_completion_record(&path, "record").unwrap();
+
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o600);
+    }
+
+    fn quiet_gate(trigger_id: &str, secs: u64) -> QuietGate {
+        QuietGate::new(HashMap::from([(
+            trigger_id.to_string(),
+            std::time::Duration::from_secs(secs),
+        )]))
+    }
+
+    #[test]
+    fn the_quiet_period_counts_from_when_a_run_starts_not_from_when_it_was_queued() {
+        let gate = quiet_gate("hook", 10);
+        let queued = std::time::Instant::now();
+        let started = queued + std::time::Duration::from_secs(20);
+
+        assert!(!gate.is_quiet("hook", queued));
+        assert!(gate.try_start("hook", started));
+
+        let next_event = started + std::time::Duration::from_secs(1);
+        assert!(gate.is_quiet("hook", next_event));
+        assert!(!gate.try_start("hook", next_event));
+    }
+
+    #[test]
+    fn a_run_may_start_once_the_quiet_period_has_passed() {
+        let gate = quiet_gate("hook", 10);
+        let started = std::time::Instant::now();
+        assert!(gate.try_start("hook", started));
+
+        assert!(gate.try_start("hook", started + std::time::Duration::from_secs(10)));
+    }
+
+    #[test]
+    fn a_trigger_without_a_quiet_period_is_never_held_back() {
+        let gate = quiet_gate("hook", 10);
+        let now = std::time::Instant::now();
+
+        assert!(gate.try_start("other", now));
+        assert!(gate.try_start("other", now));
+        assert!(!gate.is_quiet("other", now));
+    }
+
+    #[test]
+    fn a_queued_event_is_dropped_when_an_earlier_run_of_its_trigger_starts_first() {
+        let gate = quiet_gate("hook", 10);
+        let now = std::time::Instant::now();
+
+        assert!(!gate.is_quiet("hook", now));
+        assert!(!gate.is_quiet("hook", now));
+        assert!(gate.try_start("hook", now));
+        assert!(!gate.try_start("hook", now));
     }
 
     #[test]

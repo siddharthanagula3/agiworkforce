@@ -586,7 +586,7 @@ pub(super) async fn handle_slash_command(
             let subcmd = a2a_parts.first().copied().unwrap_or_default();
             let subarg = a2a_parts.get(1).copied().unwrap_or_default();
             if subcmd.is_empty() {
-                output::print_warn("Usage: /a2a <discover|delegate|serve|register|card> [args]");
+                output::print_warn("Usage: /a2a <discover|delegate|serve|auth|register|card> [args]");
             } else {
                 return SlashResult::A2a(subcmd.to_string(), subarg.to_string());
             }
