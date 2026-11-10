@@ -79,6 +79,17 @@ describe('POST /api/webhooks/google-calendar', () => {
     expect(mocks.ingestTriggerEvent).not.toHaveBeenCalled();
   });
 
+  it('asks Google to redeliver a change it could not queue', async () => {
+    mocks.ingestTriggerEvent.mockResolvedValue([
+      { triggerId: CHANNEL_ID, outcome: 'failed', detail: 'The run could not be queued: down' },
+    ]);
+
+    const response = await POST(notification(signedHeaders('exists')));
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get('retry-after')).toBe('10');
+  });
+
   it('routes a change to the trigger the channel belongs to', async () => {
     const response = await POST(notification(signedHeaders('exists')));
 

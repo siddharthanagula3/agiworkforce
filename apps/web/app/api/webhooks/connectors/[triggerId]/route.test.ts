@@ -131,6 +131,18 @@ describe('POST /api/webhooks/connectors/[triggerId]', () => {
     );
   });
 
+  it('asks the sender to redeliver an event it could not queue', async () => {
+    mocks.ingestTriggerEvent.mockResolvedValue([
+      { triggerId: TRIGGER_ID, outcome: 'failed', detail: 'The run could not be queued: down' },
+    ]);
+    const body = JSON.stringify({ id: 'e2', type: 'invoice.paid', data: {} });
+
+    const response = await POST(request(body), params());
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get('retry-after')).toBe('10');
+  });
+
   it('accepts a trigger that was never rotated with its original secret', async () => {
     const body = JSON.stringify({ id: 'e2', type: 'invoice.paid' });
 

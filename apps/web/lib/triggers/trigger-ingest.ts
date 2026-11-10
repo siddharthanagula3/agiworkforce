@@ -25,6 +25,7 @@ import { eventTypeMatchCandidates, type EventTrigger, type TriggerEvent } from '
 
 const MAX_TRIGGERS_PER_EVENT = 20;
 const MAX_EVENT_DATA_BYTES = 16_384;
+const UNQUEUED_RECEIPT_LEASE_SECONDS = 300;
 const SLACK_PRIVATE_CONVERSATION_TYPES: ReadonlySet<string> = new Set(['im', 'mpim']);
 const SLACK_LINKED_MEMBER_CHANNEL_TYPES: readonly string[] = [
   'channel',
@@ -33,7 +34,7 @@ const SLACK_LINKED_MEMBER_CHANNEL_TYPES: readonly string[] = [
 
 export interface TriggerIngestOutcome {
   triggerId: string;
-  outcome: 'filtered' | 'debounced' | 'enqueued' | 'duplicate';
+  outcome: 'filtered' | 'debounced' | 'enqueued' | 'duplicate' | 'failed';
   detail: string | null;
   jobId?: string;
 }
@@ -161,7 +162,17 @@ async function recordDelivery(
     `insert into event_trigger_events (
        trigger_id, user_id, organization_id, source, event_type, delivery_id, outcome
      ) values ($1, $2, $3, $4, $5, $6, 'received')
-     on conflict (trigger_id, delivery_id) do nothing
+     on conflict (trigger_id, delivery_id) do update
+       set outcome = 'received', detail = null, updated_at = now()
+       where event_trigger_events.job_id is null
+         and event_trigger_events.run_id is null
+         and (
+           event_trigger_events.outcome = 'failed'
+           or (
+             event_trigger_events.outcome = 'received'
+             and event_trigger_events.updated_at <= now() - make_interval(secs => $7)
+           )
+         )
      returning id`,
     [
       trigger.id,
@@ -170,6 +181,7 @@ async function recordDelivery(
       event.source,
       event.type,
       event.deliveryId,
+      UNQUEUED_RECEIPT_LEASE_SECONDS,
     ],
   );
   return row?.id ?? null;
@@ -386,7 +398,7 @@ export async function ingestTriggerEvent(
       const detail = `The run could not be queued: ${error instanceof Error ? error.message : String(error)}`;
       logger.error({ error, triggerId: trigger.id }, 'Event trigger could not queue its run');
       await settleTriggerDelivery(db, eventId, 'failed', detail);
-      outcomes.push({ triggerId: trigger.id, outcome: 'filtered', detail });
+      outcomes.push({ triggerId: trigger.id, outcome: 'failed', detail });
       continue;
     }
 

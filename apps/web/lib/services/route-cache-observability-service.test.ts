@@ -145,6 +145,23 @@ describe('route cache observability · breakdown arithmetic', () => {
     expect(row.fallbackCount).toBe(7);
   });
 
+  it('counts a fallback against the canonical spelling of both the reserved and the served route', async () => {
+    const db = fakeDb([]);
+
+    await getObservabilityBreakdown(
+      'route',
+      new Date('2026-09-02T00:00:00Z'),
+      new Date('2026-09-03T00:00:00Z'),
+      db as never,
+    );
+
+    const [sql] = db.query.mock.calls[0] as unknown as [string];
+    const fallback = sql.slice(sql.indexOf('filter (where'), sql.indexOf('fallback_count'));
+    expect(fallback).toContain("(pce.metadata->>'reservedRouteId')");
+    expect(fallback).toContain("coalesce(pce.metadata->>'servedRouteId'");
+    expect(fallback.split("when 'openrouter' then 'open_router'")).toHaveLength(3);
+  });
+
   it('binds the window and join-slack parameters in order', async () => {
     const db = fakeDb([]);
     const periodStart = new Date('2026-09-02T00:00:00Z');
@@ -194,6 +211,70 @@ describe('route cache observability · per-request explain', () => {
     expect(explain?.fallbackOccurred).toBe(true);
     expect(explain?.valueMultiplier).toBeCloseTo(4);
     expect(explain?.fallbackSequence).toHaveLength(1);
+  });
+
+  it('does not flag a fallback when the reservation spells the provider differently from the served route', async () => {
+    const db = fakeDb([
+      {
+        user_id: 'user_1',
+        idempotency_key: 'turn-2',
+        requested_provider: 'openrouter',
+        requested_model: 'fixture-model',
+        delivered_provider: 'openrouter',
+        delivered_model: 'fixture-model',
+        route_id: 'open_router/fixture-model',
+        reserved_route_id: 'openrouter/fixture-model',
+        fallback_reason: 'completed',
+        fallback_sequence: [],
+        cache_read_tokens: '0',
+        cache_write_tokens: '0',
+        input_tokens: '10',
+        actual_cost_cents: '1',
+        retail_cost_cents: null,
+        latency_ms: null,
+        status: 'completed',
+        created_at: '2026-09-03T01:00:00.000Z',
+      },
+    ]);
+
+    const explain = await explainManagedUsageRequest(
+      { userId: 'user_1', idempotencyKey: 'turn-2' },
+      db as never,
+    );
+
+    expect(explain?.fallbackOccurred).toBe(false);
+  });
+
+  it('still flags a fallback to another model on the same provider spelled two ways', async () => {
+    const db = fakeDb([
+      {
+        user_id: 'user_1',
+        idempotency_key: 'turn-3',
+        requested_provider: 'openrouter',
+        requested_model: 'fixture-model',
+        delivered_provider: 'openrouter',
+        delivered_model: 'fixture-other-model',
+        route_id: 'open_router/fixture-other-model',
+        reserved_route_id: 'openrouter/fixture-model',
+        fallback_reason: null,
+        fallback_sequence: [],
+        cache_read_tokens: '0',
+        cache_write_tokens: '0',
+        input_tokens: '10',
+        actual_cost_cents: '1',
+        retail_cost_cents: null,
+        latency_ms: null,
+        status: 'completed',
+        created_at: '2026-09-03T01:00:00.000Z',
+      },
+    ]);
+
+    const explain = await explainManagedUsageRequest(
+      { userId: 'user_1', idempotencyKey: 'turn-3' },
+      db as never,
+    );
+
+    expect(explain?.fallbackOccurred).toBe(true);
   });
 
   it('reports no fallback when no reservation route was recorded', async () => {

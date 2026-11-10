@@ -127,6 +127,18 @@ describe('ingestTriggerEvent', () => {
     expect(mocks.enqueueJob).not.toHaveBeenCalled();
   });
 
+  it('lets a redelivery reclaim a receipt that never reached a job, and only that', async () => {
+    await ingestTriggerEvent(database({ triggers: [triggerRow()] }), event());
+
+    const insert = statements.find((sql) => sql.includes('insert into event_trigger_events'))!;
+    expect(insert).toContain('on conflict (trigger_id, delivery_id) do update');
+    expect(insert).toContain('event_trigger_events.job_id is null');
+    expect(insert).toContain('event_trigger_events.run_id is null');
+    expect(insert).toContain("event_trigger_events.outcome = 'failed'");
+    expect(insert).toContain("event_trigger_events.outcome = 'received'");
+    expect(insert).not.toContain('do nothing');
+  });
+
   it('filters an event the conditions reject', async () => {
     const outcomes = await ingestTriggerEvent(
       database({
@@ -290,6 +302,7 @@ describe('ingestTriggerEvent', () => {
 
     const outcomes = await ingestTriggerEvent(database({ triggers: [triggerRow()] }), event());
 
+    expect(outcomes[0]?.outcome).toBe('failed');
     expect(outcomes[0]?.detail).toContain('could not be queued');
     const settle = statements.filter((sql) => sql.includes('update event_trigger_events'));
     expect(settle.length).toBeGreaterThan(0);
