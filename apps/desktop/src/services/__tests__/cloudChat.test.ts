@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 type ScanModule0 = typeof import('../../stores/auth');
 
@@ -77,7 +78,7 @@ describe('cloudChat service', () => {
     await expect(getCloudConversations()).rejects.toMatchObject({
       code: 'managed_cloud_pagination_non_advancing',
       resource: 'conversations',
-      message: expect.stringContaining('Archive older conversations in AGI Chat'),
+      message: expect.stringContaining(`Archive older conversations in ${PRODUCT_NAMES.chat}`),
     });
     expect(listConversations).toHaveBeenCalledOnce();
   });

@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ELECTRON_IPC_CHANNELS } from '../../src/lib/tauri-electron/bridgeContract';
 
@@ -133,7 +134,7 @@ describe('global dictation press', () => {
 
     expect(openMainWindow).toHaveBeenCalledTimes(1);
     expect(notifications).toHaveLength(1);
-    expect(notifications[0]?.title).toBe('Opening AGI Desktop');
+    expect(notifications[0]?.title).toBe(`Opening ${PRODUCT_NAMES.desktop}`);
   });
 
   it('opens a new window rather than sending into a destroyed one', async () => {

@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { settings } from '@agiworkforce/desktop-command-client';
@@ -137,7 +138,7 @@ describe('PrivacyTab export and delete on this device', () => {
     expect(dialog).toHaveTextContent('every conversation, memory and project');
     expect(dialog).toHaveTextContent('your saved API keys and credentials');
     expect(dialog).toHaveTextContent(
-      'the files AGI Desktop stored in its own data folders on this device, with its log of the terminal commands it ran',
+      `the files ${PRODUCT_NAMES.desktop} stored in its own data folders on this device, with its log of the terminal commands it ran`,
     );
     expect(dialog).toHaveTextContent(
       'Not removed: installed extensions, downloaded speech models, the settings, hooks, skills and agents shared with the command-line tool, and temporary files',

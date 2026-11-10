@@ -6,6 +6,7 @@ import {
   waitFor,
   within,
 } from '@testing-library/react';
+import { BILLING_PLAN_PRICING } from '@agiworkforce/types';
 import { invoke } from '@tauri-apps/api/core';
 import type { ReactElement } from 'react';
 import { toast } from 'sonner';
@@ -448,7 +449,7 @@ describe('SettingsPanel render stability', () => {
   it('shows the backend-owned account plan in the mode summary', async () => {
     useAuthStore.setState({
       plan: 'max',
-      planDisplayName: 'Max',
+      planDisplayName: BILLING_PLAN_PRICING.max.label,
       isAuthenticated: true,
       user: { id: 'user-desktop', email: '', name: 'demo' },
       accessToken: 'device-bearer',
@@ -457,7 +458,9 @@ describe('SettingsPanel render stability', () => {
 
     render(<SettingsPanel open onOpenChange={vi.fn()} initialTab="general" />);
 
-    expect(await screen.findByText('Max 5x', { selector: 'span' })).toBeInTheDocument();
+    expect(
+      await screen.findByText(BILLING_PLAN_PRICING.max.label, { selector: 'span' }),
+    ).toBeInTheDocument();
     expect(screen.queryByText('Free', { selector: 'span' })).not.toBeInTheDocument();
   });
 

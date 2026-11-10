@@ -7,7 +7,7 @@ import type {
 } from '@agiworkforce/cloud-contracts';
 import { CloudRuntime } from '../CloudRuntime';
 import { cloudElicitationBridge, type CloudElicitationRequest } from '../cloudToolInput';
-import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
+import { AGENT_EVENT_SCHEMA_VERSION, PRODUCT_NAMES } from '@agiworkforce/types';
 type ScanModule0 = typeof import('../../stores/auth');
 
 const FIXTURE_MODEL_ID = 'fixture-model';
@@ -1414,7 +1414,7 @@ describe('CloudRuntime', () => {
       await expect(new CloudRuntime().listConversations()).rejects.toMatchObject({
         code: 'managed_cloud_pagination_non_advancing',
         resource: 'conversations',
-        message: expect.stringContaining('Archive older conversations in AGI Chat'),
+        message: expect.stringContaining(`Archive older conversations in ${PRODUCT_NAMES.chat}`),
       });
       expect(listConversations).toHaveBeenCalledOnce();
     });

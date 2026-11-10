@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 type ScanModule0 = typeof import('../../../api/cloudAccountSettings');
@@ -393,7 +393,11 @@ describe('CloudAccountControls', () => {
     await waitFor(() => expect(mocks.requestCloudAccountDeletion).toHaveBeenCalledOnce());
     expect(await screen.findByText('Deletion scheduled')).toBeTruthy();
     expect(screen.getByText(/after a grace period/)).toBeTruthy();
-    expect(screen.getByText(/Local Mode chats, files, and model keys stay/)).toBeTruthy();
+    expect(
+      within(screen.getByTestId('cloud-delete-account')).getByText(
+        /Local Mode chats, files, and model keys stay/,
+      ),
+    ).toBeTruthy();
     mocks.requestCloudAccountDeletion.mockRejectedValueOnce(
       new Error('Could not confirm account deletion scheduling.'),
     );

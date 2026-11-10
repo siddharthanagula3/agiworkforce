@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -397,7 +398,7 @@ describe('asking for a permission', () => {
     await runtime.requestPermission(null, 'filesystem.write', LEDGER, 'reason');
 
     const options = (showMessageBox.mock.calls.at(-1) as unknown[])[0] as { message: string };
-    expect(options.message).toMatch(/^Allow AGI Desktop to /u);
+    expect(options.message).toMatch(new RegExp(`^Allow ${PRODUCT_NAMES.desktop} to `, 'u'));
   });
 
   it('asks again once an open dialog has been answered and its answer withdrawn', async () => {

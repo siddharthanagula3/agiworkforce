@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -507,7 +508,12 @@ describe('closing the main window', () => {
 describe('what the app sets up when it starts', () => {
   it('names the product, its version and the company in the About panel', () => {
     expect(startupAboutCalls).toEqual([
-      [expect.objectContaining({ applicationName: 'AGI Desktop', applicationVersion: '1.2.0' })],
+      [
+        expect.objectContaining({
+          applicationName: PRODUCT_NAMES.desktop,
+          applicationVersion: '1.2.0',
+        }),
+      ],
     ]);
   });
 

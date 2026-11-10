@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createMessageQueue, LANE_CAP, QueueFullError } from '@agiworkforce/client-runtime';
+import { isImeComposingKey } from '@agiworkforce/unified-chat/ime-composition';
 import ts from 'typescript';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -210,8 +211,9 @@ describe('composer input clearing', () => {
       'autoResizeInput',
       'updateSendButton',
       'cancelCurrentManagedStream',
+      'isImeComposingKey',
       compiled,
-    )(inputEl, sendBtn, send, send, vi.fn(), vi.fn(), vi.fn());
+    )(inputEl, sendBtn, send, send, vi.fn(), vi.fn(), vi.fn(), isImeComposingKey);
     const event = { key: 'Enter', preventDefault: vi.fn() };
     listener(event);
     expect(inputEl.value).toBe('draft');

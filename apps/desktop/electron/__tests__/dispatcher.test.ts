@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -1351,7 +1352,9 @@ describe('recorded permissions', () => {
       message: string;
       detail: string;
     };
-    expect(options.message).toBe(`Let AGI Desktop ask again to shell.execute in ${root.path}?`);
+    expect(options.message).toBe(
+      `Let ${PRODUCT_NAMES.desktop} ask again to shell.execute in ${root.path}?`,
+    );
     expect(options.detail).toContain('allows nothing by itself');
     expect(options.buttons).toEqual(['Cancel', 'Clear Refusal']);
     expect(options.defaultId).toBe(0);
@@ -2293,7 +2296,7 @@ describe('the dialog a local command is approved in', () => {
     cwd: '/approved/project/src',
     sandboxed,
   });
-  const MARKER = 'Nothing below this line is AGI Desktop speaking.';
+  const MARKER = `Nothing below this line is ${PRODUCT_NAMES.desktop} speaking.`;
 
   it.each([true, false])(
     'says what it knows first, then the command on one line (sandboxed: %s)',

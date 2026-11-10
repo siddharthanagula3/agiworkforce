@@ -35,18 +35,18 @@ describe('PlanCard', () => {
     expect(bulletTexts().join('\n')).not.toMatch(/credits per|per 5 hours/i);
   });
 
-  it('states Max 20x per session and per week against Pro', () => {
+  it('states the top individual plan weekly usage against the plan it is measured from', () => {
     render(<PlanCard tier="max_15x" isCurrentPlan={false} onCtaClick={vi.fn()} />);
 
     expect(bulletTexts().slice(0, 2)).toEqual([
-      '20x more usage per session than Pro',
-      '10x more weekly usage than Pro',
+      `10x more weekly usage than ${PLAN_LABEL.pro}`,
+      'Highest individual usage limits',
     ]);
   });
 
-  it('sells the $200 plan under its catalog name, Max 20x', () => {
+  it('sells the $200 plan under its catalog name', () => {
     const onCtaClick = vi.fn();
-    expect(BILLING_PLAN_PRICING.max_15x.label).toBe('Max 20x');
+    expect(PLAN_LABEL.max_15x).toBe(BILLING_PLAN_PRICING.max_15x.label);
 
     render(<PlanCard tier="max_15x" isCurrentPlan={false} onCtaClick={onCtaClick} />);
 
