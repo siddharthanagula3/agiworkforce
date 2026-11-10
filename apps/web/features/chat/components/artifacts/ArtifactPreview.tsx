@@ -71,6 +71,7 @@ import { addCsrfHeaders } from '@/lib/client/csrf';
 import { exportDocument } from '@features/chat/services/document-export-service';
 import { extractMarkdownHeadings } from '@features/chat/components/research/ResearchReportView';
 import {
+  connectorsReleased,
   summarizeGeneratedFileBundle,
   type ArtifactManifest,
   type ComputeSession,
@@ -121,7 +122,12 @@ import {
   useArtifactComments,
   type ArtifactCommentAnchor,
 } from './comments/artifact-comments-client';
-import { scrollToAnchor, useCommentHighlights } from './comments/use-comment-highlights';
+import {
+  commentUiProps,
+  scrollToAnchor,
+  useCommentHighlights,
+} from './comments/use-comment-highlights';
+import type { OccurrenceContext } from './text-occurrence';
 import commentStyles from './comments/Comments.module.css';
 import { buildArtifactEditRequest } from './artifact-edit-request';
 import { ArtifactSelectionToolbar } from './ArtifactSelectionToolbar';
@@ -566,7 +572,9 @@ export function ArtifactPreview({
   useLayoutEffect(() => {
     audienceSnapshot.current = artifactAudience;
   }, [artifactAudience]);
-  const [mermaidSvg, setMermaidSvg] = useState<string | null>(null);
+  const [renderedMermaid, setRenderedMermaid] = useState<{ source: string; svg: string } | null>(
+    null,
+  );
 
   const versionCount = versionHistory?.length ?? 0;
   const restoreArtifactVersion = useArtifactsStore((s) => s.restoreArtifactVersion);
@@ -921,7 +929,6 @@ export function ArtifactPreview({
     // A published URL belongs to one artifact id; keeping it after a swap
     // would offer the previous artifact's public link under this title.
     setPublishedUrl(null);
-    setMermaidSvg(null);
   }, [artifact.id, versionCount]);
 
   /**
@@ -1790,6 +1797,7 @@ export function ArtifactPreview({
 
   const canPreview = ['html', 'react', 'svg'].includes(artifact.type);
   const isMermaid = artifact.type === 'mermaid';
+  const mermaidSvg = renderedMermaid?.source === activeContent ? renderedMermaid.svg : null;
 
   const isTabular = ['spreadsheet', 'table', 'csv'].includes(artifact.type);
   const isPresentation = artifact.type === 'presentation';
@@ -1889,7 +1897,14 @@ export function ArtifactPreview({
         <MermaidDiagram
           source={activeContent}
           className="mermaid-block"
-          onRenderResult={(result) => setMermaidSvg(result && 'svg' in result ? result.svg : null)}
+          onRenderResult={(result) =>
+            setRenderedMermaid((held) => {
+              if (!result || !('svg' in result)) return null;
+              return held?.source === activeContent && held.svg === result.svg
+                ? held
+                : { source: activeContent, svg: result.svg };
+            })
+          }
         />
       </div>
     </div>
@@ -2152,7 +2167,7 @@ export function ArtifactPreview({
     activeContent.trim().length > 0;
 
   const requestSelectionEdit = useCallback(
-    (selectedText: string, instruction: string, origin: Node) => {
+    (selectedText: string, instruction: string, origin: Node, rendered: OccurrenceContext) => {
       if (!onRequestEdits) return false;
       const element = origin instanceof Element ? origin : origin.parentElement;
       const slideIndex = element?.closest('[data-slide-index]')?.getAttribute('data-slide-index');
@@ -2162,7 +2177,7 @@ export function ArtifactPreview({
       const sent = onRequestEdits(
         buildArtifactSelectionRequest({
           title: artifact.title || 'Artifact',
-          selection: captureSelectionContext(current, selectedText),
+          selection: captureSelectionContext(current, selectedText, rendered),
           instruction,
           ...(slideIndex !== null && slideIndex !== undefined
             ? { scope: `slide ${Number(slideIndex) + 1}` }
@@ -2203,15 +2218,15 @@ export function ArtifactPreview({
   useCommentHighlights(contentAreaRef, canComment ? openCommentAnchors : [], highlightRevision);
 
   const startComment = useCallback(
-    (selectedText: string, origin: Node) => {
+    (selectedText: string, origin: Node, rendered: OccurrenceContext) => {
       const element = origin instanceof Element ? origin : origin.parentElement;
       const slide = element?.closest('[data-slide-index]')?.getAttribute('data-slide-index');
-      const context = captureSelectionContext(activeContent, selectedText);
+      const context = captureSelectionContext(activeContent, selectedText, rendered);
       setCommentDraft({
         kind: 'text',
         quote: context.text,
-        prefix: context.before.slice(-200),
-        suffix: context.after.slice(0, 200),
+        prefix: rendered.before.slice(-200),
+        suffix: rendered.after.slice(0, 200),
         ...(slide !== null && slide !== undefined ? { slide: Number(slide) } : {}),
       });
       setCommentsOpen(true);
@@ -2422,7 +2437,7 @@ export function ArtifactPreview({
         onSelect: () => setTemplateDialogOpen(true),
       });
     }
-    if (isTextDocument && isMarkdownDoc && variant === 'panel') {
+    if (connectorsReleased() && isTextDocument && isMarkdownDoc && variant === 'panel') {
       moreMenuItems.push({
         id: 'save-google-docs',
         label: savingToGoogleDocs ? 'Saving to Google Docs…' : 'Save to Google Docs',
@@ -2433,7 +2448,7 @@ export function ArtifactPreview({
         onSelect: () => void handleSaveToGoogleDocs(),
       });
     }
-    if (canSaveToCloud) {
+    if (connectorsReleased() && canSaveToCloud) {
       (['drive', 'onedrive'] as const).forEach((destination) => {
         const { label } = CLOUD_SAVE_DESTINATIONS[destination];
         moreMenuItems.push({
@@ -3119,23 +3134,25 @@ export function ArtifactPreview({
             </div>
           )}
           {canComment && commentsOpen && (
-            <ArtifactCommentsPanel
-              artifactId={artifact.id}
-              title={artifact.title || 'Artifact'}
-              artifactType={artifact.type}
-              draftAnchor={commentDraft}
-              onDraftDone={() => setCommentDraft(null)}
-              onClose={() => {
-                setCommentsOpen(false);
-                setCommentDraft(null);
-              }}
-              {...(onRequestEdits && isLatestVersion ? { onRequestEdits } : {})}
-              onLocate={(anchor) => {
-                if (!scrollToAnchor(contentAreaRef.current, anchor)) {
-                  toast.message('That passage is not on screen in this view.');
-                }
-              }}
-            />
+            <div className="contents" {...commentUiProps}>
+              <ArtifactCommentsPanel
+                artifactId={artifact.id}
+                title={artifact.title || 'Artifact'}
+                artifactType={artifact.type}
+                draftAnchor={commentDraft}
+                onDraftDone={() => setCommentDraft(null)}
+                onClose={() => {
+                  setCommentsOpen(false);
+                  setCommentDraft(null);
+                }}
+                {...(onRequestEdits && isLatestVersion ? { onRequestEdits } : {})}
+                onLocate={(anchor) => {
+                  if (!scrollToAnchor(contentAreaRef.current, anchor)) {
+                    toast.message('That passage is not on screen in this view.');
+                  }
+                }}
+              />
+            </div>
           )}
           {canRequestSelectionEdits && (
             <ArtifactSelectionToolbar

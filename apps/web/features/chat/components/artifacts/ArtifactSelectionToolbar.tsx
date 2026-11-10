@@ -16,6 +16,8 @@ import { useMenuKeyboard } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import { normalizeEditInstruction } from './artifact-edit-request';
 import { SELECTION_ACTIONS } from './artifact-selection-request';
+import { commentUiProps, readRangeContext } from './comments/use-comment-highlights';
+import type { OccurrenceContext } from './text-occurrence';
 
 export const SELECTION_TOOLBAR_LABEL = 'Selection actions';
 export const EDIT_SELECTION_LABEL = 'Edit with AI';
@@ -32,6 +34,7 @@ const TOOLBAR_HALF_WIDTH_PX = 160;
 interface Anchor {
   text: string;
   origin: Node;
+  range: Range;
   left: number;
   top: number;
   below: boolean;
@@ -53,6 +56,7 @@ function readAnchor(container: HTMLElement): Anchor | null {
   return {
     text,
     origin: range.commonAncestorContainer,
+    range: range.cloneRange(),
     left: rect.left - box.left + rect.width / 2,
     top: below ? rect.bottom - box.top + EDGE_GAP_PX : rect.top - box.top - EDGE_GAP_PX,
     below,
@@ -145,8 +149,13 @@ export function ArtifactSelectionToolbar({
   onComment,
 }: {
   containerRef: RefObject<HTMLElement | null>;
-  onRequest: (selectedText: string, instruction: string, origin: Node) => boolean;
-  onComment?: (selectedText: string, origin: Node) => void;
+  onRequest: (
+    selectedText: string,
+    instruction: string,
+    origin: Node,
+    rendered: OccurrenceContext,
+  ) => boolean;
+  onComment?: (selectedText: string, origin: Node, rendered: OccurrenceContext) => void;
 }) {
   const [anchor, setAnchor] = useState<Anchor | null>(null);
   const [asking, setAsking] = useState(false);
@@ -206,9 +215,15 @@ export function ArtifactSelectionToolbar({
       if (!anchor) return;
       const normalized = normalizeEditInstruction(text);
       if (!normalized) return;
-      if (onRequest(anchor.text, normalized, anchor.origin)) dismiss();
+      const container = containerRef.current;
+      if (!container) return;
+      if (
+        onRequest(anchor.text, normalized, anchor.origin, readRangeContext(container, anchor.range))
+      ) {
+        dismiss();
+      }
     },
-    [anchor, dismiss, onRequest],
+    [anchor, containerRef, dismiss, onRequest],
   );
 
   if (!anchor) return null;
@@ -238,6 +253,7 @@ export function ArtifactSelectionToolbar({
       )}
       style={{ left, top: anchor.top, ...(asking ? { width: toolbarWidth } : {}) }}
       data-testid="artifact-selection-toolbar"
+      {...commentUiProps}
     >
       {asking ? (
         <form
@@ -311,9 +327,12 @@ export function ArtifactSelectionToolbar({
               type="button"
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => {
-                const { text, origin } = anchor;
+                const container = containerRef.current;
+                if (!container) return;
+                const { text, origin, range } = anchor;
+                const rendered = readRangeContext(container, range);
                 dismiss();
-                onComment(text, origin);
+                onComment(text, origin, rendered);
               }}
               className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2.5 text-sm text-foreground transition-colors hover:bg-[var(--chat-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-8"
               data-testid="selection-comment"
