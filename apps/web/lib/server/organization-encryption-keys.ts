@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
+import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { recordAuditEvent } from '@/lib/security-audit';
 import {
@@ -11,12 +12,15 @@ import {
   CustomerKeyUnavailableError,
   createCustomerKeyRingResolver,
   createLocalCmekProvider,
+  effectiveKeyDescriptor,
   resolveOrganizationKeyRing,
+  sameCmekDescriptor,
   type CmekKeyDescriptor,
   type CmekKeyStatus,
   type CmekProvider,
   type CmekProviderId,
   type CmekProviderRegistry,
+  type CmekWrappedKey,
   type CustomerKeyRingResolver,
   type KeyRingPrincipal,
   type OrganizationKeyRecord,
@@ -88,16 +92,90 @@ function isKeyStatus(value: string): value is CmekKeyStatus {
   return value === 'active' || value === 'rotating' || value === 'revoked';
 }
 
-function parseRetired(raw: unknown): { version: string; wrapped: string }[] {
+function parseKeyDescriptor(raw: unknown): CmekKeyDescriptor {
+  if (typeof raw === 'object' && raw !== null) {
+    const { provider, keyUri, region } = raw as Record<string, unknown>;
+    if (
+      typeof provider === 'string' &&
+      isProviderId(provider) &&
+      typeof keyUri === 'string' &&
+      typeof region === 'string'
+    ) {
+      return { provider, keyUri, region };
+    }
+  }
+  throw new Error(
+    'organization_encryption_keys.retired_keys holds a key descriptor this build cannot resolve.',
+  );
+}
+
+function parseRetired(raw: unknown): CmekWrappedKey[] {
   const entries = typeof raw === 'string' ? safeParse(raw) : raw;
   if (!Array.isArray(entries)) return [];
-  const out: { version: string; wrapped: string }[] = [];
+  const out: CmekWrappedKey[] = [];
   for (const entry of entries) {
     if (typeof entry !== 'object' || entry === null) continue;
-    const { version, wrapped } = entry as Record<string, unknown>;
-    if (typeof version === 'string' && typeof wrapped === 'string') out.push({ version, wrapped });
+    const { version, wrapped, descriptor } = entry as Record<string, unknown>;
+    if (typeof version !== 'string' || typeof wrapped !== 'string') continue;
+    out.push(
+      descriptor === undefined
+        ? { version, wrapped }
+        : { version, wrapped, descriptor: parseKeyDescriptor(descriptor) },
+    );
   }
   return out;
+}
+
+/**
+ * Every wrapped key the ring keeps once the association points at `next`, each
+ * carrying the key resource that wrapped it unless that is `next` itself. An
+ * unwrap is addressed to a resource, so a version that outlives a replacement
+ * has to remember where it came from.
+ */
+function retainedWrappedKeys(
+  record: OrganizationKeyRecord,
+  next: CmekKeyDescriptor,
+): CmekWrappedKey[] {
+  return [record.active, ...record.retired].map((key) => {
+    const resource = effectiveKeyDescriptor(key, record.descriptor);
+    return sameCmekDescriptor(resource, next)
+      ? { version: key.version, wrapped: key.wrapped }
+      : { version: key.version, wrapped: key.wrapped, descriptor: resource };
+  });
+}
+
+function ringChangedError(organizationId: string) {
+  return createError
+    .conflict(
+      `Workspace ${organizationId}'s encryption key ring changed while this request was ` +
+        'running, so nothing was written. Reload the key state and try again.',
+    )
+    .asUserSafe();
+}
+
+/**
+ * Serializes everything that seals into a workspace's ring against everything
+ * that changes the ring. A writer holds a shared lock on the workspace row from
+ * before it resolves the ring until its row is committed; a lifecycle change
+ * takes the exclusive one before it counts or swaps keys. A ciphertext sealed
+ * under an outgoing key is therefore either committed before the change reads
+ * its counts, or never sealed under that key at all.
+ */
+export async function withOrganizationKeyFence<T>(
+  db: DatabaseAdapter,
+  organizationId: string,
+  mode: 'sealing' | 'changing',
+  run: (tx: DatabaseAdapter) => Promise<T>,
+): Promise<T> {
+  return db.transaction(async (tx) => {
+    await tx.query(
+      `select id from public.organizations where id = $1 ${
+        mode === 'sealing' ? 'for share' : 'for no key update'
+      }`,
+      [organizationId],
+    );
+    return run(tx);
+  });
 }
 
 function safeParse(raw: string): unknown {
@@ -197,6 +275,12 @@ async function probeCustomerKey(
   if (!client) throw new CmekProviderUnconfiguredError(record.descriptor.provider);
   try {
     await client.unwrapDataKey(record.descriptor, record.active.wrapped);
+    for (const key of record.retired) {
+      const resource = effectiveKeyDescriptor(key, record.descriptor);
+      const retiredClient = registry[resource.provider];
+      if (!retiredClient) throw new CmekProviderUnconfiguredError(resource.provider);
+      await retiredClient.unwrapDataKey(resource, key.wrapped);
+    }
   } catch (error) {
     forgetCustomerKeyMaterial(record);
     throw new CustomerKeyUnavailableError(record.organizationId, record.descriptor.provider, error);
@@ -399,33 +483,39 @@ export async function provisionOrganizationKey(
   input: ProvisionOrganizationKeyInput,
 ): Promise<{ keyVersion: string }> {
   await assertKeyRegionAdmitted(input.db, input.organizationId, input.descriptor, input.env);
-  // Enrolment switches every read onto the customer ring. Rows still sealed
-  // under the platform ring have no path across, so they are the gate.
-  const stranded = await countPlatformSealedRows(input.db, input.organizationId, input.env);
-  if (stranded.length > 0) {
-    throw new Error(
-      `Workspace ${input.organizationId} still holds ` +
-        `${stranded.map((entry) => `${entry.rows} row(s) in ${entry.store}`).join(', ')} sealed ` +
-        'under the platform key. Enrolling a key of its own moves every read onto that key and ' +
-        'those rows would never open again, so the association is refused until they are cleared.',
-    );
-  }
   const { wrapped } = await input.provider.generateDataKey(input.descriptor);
-  await input.db.execute(
-    `insert into public.organization_encryption_keys
-       (organization_id, provider, key_uri, key_region, status, key_version,
-        wrapped_data_key, retired_keys, created_by_user_id)
-     values ($1, $2, $3, $4, 'active', $5, $6, '[]'::jsonb, $7)`,
-    [
-      input.organizationId,
-      input.descriptor.provider,
-      input.descriptor.keyUri,
-      input.descriptor.region,
-      input.keyVersion,
-      wrapped,
-      input.actorUserId,
-    ],
-  );
+  await withOrganizationKeyFence(input.db, input.organizationId, 'changing', async (tx) => {
+    // Enrolment switches every read onto the customer ring. Rows still sealed
+    // under the platform ring have no path across, so they are the gate, and
+    // the fence is what keeps a save still in flight from landing after it.
+    const stranded = await countPlatformSealedRows(tx, input.organizationId, input.env);
+    if (stranded.length > 0) {
+      throw new Error(
+        `Workspace ${input.organizationId} still holds ` +
+          `${stranded.map((entry) => `${entry.rows} row(s) in ${entry.store}`).join(', ')} sealed ` +
+          'under the platform key. Enrolling a key of its own moves every read onto that key and ' +
+          'those rows would never open again, so the association is refused until they are cleared.',
+      );
+    }
+    const inserted = await tx.query<{ organization_id: string }>(
+      `insert into public.organization_encryption_keys
+         (organization_id, provider, key_uri, key_region, status, key_version,
+          wrapped_data_key, retired_keys, created_by_user_id)
+       values ($1, $2, $3, $4, 'active', $5, $6, '[]'::jsonb, $7)
+       on conflict (organization_id) do nothing
+       returning organization_id`,
+      [
+        input.organizationId,
+        input.descriptor.provider,
+        input.descriptor.keyUri,
+        input.descriptor.region,
+        input.keyVersion,
+        wrapped,
+        input.actorUserId,
+      ],
+    );
+    if (inserted.length === 0) throw ringChangedError(input.organizationId);
+  });
   await recordAuditEvent({
     eventType: 'encryption_key_provisioned',
     userId: input.actorUserId,
@@ -459,17 +549,31 @@ export async function rotateOrganizationKey(
   }
   await assertKeyRegionAdmitted(input.db, input.organizationId, input.descriptor, input.env);
   const { wrapped } = await input.provider.generateDataKey(input.descriptor);
-  const retired = [input.record.active, ...input.record.retired];
-  await input.db.execute(
-    `update public.organization_encryption_keys
-        set key_version = $2,
-            wrapped_data_key = $3,
-            retired_keys = $4::jsonb,
-            status = 'active',
-            last_rotated_at = now()
-      where organization_id = $1`,
-    [input.organizationId, input.keyVersion, wrapped, JSON.stringify(retired)],
+  const retired = retainedWrappedKeys(input.record, input.descriptor);
+  const changed = await withOrganizationKeyFence(input.db, input.organizationId, 'changing', (tx) =>
+    tx.query<{ organization_id: string }>(
+      `update public.organization_encryption_keys
+            set key_version = $2,
+                wrapped_data_key = $3,
+                retired_keys = $4::jsonb,
+                status = 'active',
+                last_rotated_at = now()
+          where organization_id = $1
+            and key_version = $5
+            and wrapped_data_key = $6
+            and status <> 'revoked'
+          returning organization_id`,
+      [
+        input.organizationId,
+        input.keyVersion,
+        wrapped,
+        JSON.stringify(retired),
+        input.record.active.version,
+        input.record.active.wrapped,
+      ],
+    ),
   );
+  if (changed.length === 0) throw ringChangedError(input.organizationId);
   await recordAuditEvent({
     eventType: 'encryption_key_rotated',
     userId: input.actorUserId,
@@ -809,12 +913,25 @@ export async function retireOrganizationKeyVersion(
   });
 
   const retained = record.retired.filter((key) => key.version !== input.keyVersion);
-  await input.db.execute(
+  const changed = await input.db.query<{ organization_id: string }>(
     `update public.organization_encryption_keys
         set retired_keys = $2::jsonb
-      where organization_id = $1`,
-    [input.organizationId, JSON.stringify(retained)],
+      where organization_id = $1
+        and key_version = $3
+        and wrapped_data_key = $4
+        and jsonb_array_length(retired_keys) = $5
+        and retired_keys @> $6::jsonb
+      returning organization_id`,
+    [
+      input.organizationId,
+      JSON.stringify(retained),
+      record.active.version,
+      record.active.wrapped,
+      record.retired.length,
+      JSON.stringify(record.retired),
+    ],
   );
+  if (changed.length === 0) throw ringChangedError(input.organizationId);
   forgetCustomerKeyMaterial(record);
 
   await recordAuditEvent({
@@ -869,28 +986,37 @@ export async function replaceOrganizationKey(
   await assertKeyRegionAdmitted(input.db, input.organizationId, input.descriptor, input.env);
 
   const { wrapped } = await input.provider.generateDataKey(input.descriptor);
-  const retained = [input.record.active, ...input.record.retired];
-  await input.db.execute(
-    `update public.organization_encryption_keys
-        set provider = $2,
-            key_uri = $3,
-            key_region = $4,
-            key_version = $5,
-            wrapped_data_key = $6,
-            retired_keys = $7::jsonb,
-            status = 'active',
-            last_rotated_at = now()
-      where organization_id = $1`,
-    [
-      input.organizationId,
-      input.descriptor.provider,
-      input.descriptor.keyUri,
-      input.descriptor.region,
-      input.keyVersion,
-      wrapped,
-      JSON.stringify(retained),
-    ],
+  const retained = retainedWrappedKeys(input.record, input.descriptor);
+  const changed = await withOrganizationKeyFence(input.db, input.organizationId, 'changing', (tx) =>
+    tx.query<{ organization_id: string }>(
+      `update public.organization_encryption_keys
+            set provider = $2,
+                key_uri = $3,
+                key_region = $4,
+                key_version = $5,
+                wrapped_data_key = $6,
+                retired_keys = $7::jsonb,
+                status = 'active',
+                last_rotated_at = now()
+          where organization_id = $1
+            and key_version = $8
+            and wrapped_data_key = $9
+            and status <> 'revoked'
+          returning organization_id`,
+      [
+        input.organizationId,
+        input.descriptor.provider,
+        input.descriptor.keyUri,
+        input.descriptor.region,
+        input.keyVersion,
+        wrapped,
+        JSON.stringify(retained),
+        input.record.active.version,
+        input.record.active.wrapped,
+      ],
+    ),
   );
+  if (changed.length === 0) throw ringChangedError(input.organizationId);
   forgetCustomerKeyMaterial(input.record);
 
   await recordAuditEvent({

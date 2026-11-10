@@ -170,6 +170,16 @@ const ENDED_SUBSCRIPTION_STATUSES: ReadonlySet<Stripe.Subscription.Status> = new
 
 const BLOCKING_INVOICE_STATUSES: readonly string[] = ['open', 'uncollectible'];
 
+function invoiceStatusRankSql(statusColumn: string): string {
+  return `(case ${statusColumn}
+            when 'paid' then 3
+            when 'void' then 3
+            when 'uncollectible' then 2
+            when 'open' then 1
+            else 0
+          end)`;
+}
+
 async function resolveOrganizationIdForSubscriptionOwner(
   db: DatabaseAdapter,
   stripeSubscriptionId: string,
@@ -708,7 +718,8 @@ export async function recordEnterpriseInvoiceEvent(
     `select organization_id, payment_terms_days
        from public.organization_billing_contracts
       where stripe_subscription_id = $1
-      limit 1`,
+      limit 1
+      for no key update`,
     [stripeSubscriptionId],
   );
   const organizationId = contract?.organization_id;
@@ -753,7 +764,14 @@ export async function recordEnterpriseInvoiceEvent(
        )
      where $18::double precision is null
         or organization_billing_invoices.last_stripe_event_at is null
-        or organization_billing_invoices.last_stripe_event_at <= to_timestamp($18::double precision)
+        or (
+          organization_billing_invoices.last_stripe_event_at <= to_timestamp($18::double precision)
+          and (
+            organization_billing_invoices.last_stripe_event_at < to_timestamp($18::double precision)
+            or ${invoiceStatusRankSql('organization_billing_invoices.status')}
+               <= ${invoiceStatusRankSql('excluded.status')}
+          )
+        )
      returning stripe_invoice_id`,
     [
       invoice.id,

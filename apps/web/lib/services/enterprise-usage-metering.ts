@@ -175,6 +175,7 @@ async function claimPendingOverageReport(
   db: DatabaseAdapter,
   organizationId: string,
   pending: PendingOverageReport,
+  baseline: StoredOverageReportState | null,
 ): Promise<boolean> {
   const claimed = await db.query<{ organization_id: string }>(
     `update public.organization_billing_contracts
@@ -185,6 +186,8 @@ async function claimPendingOverageReport(
             overage_pending_at = $6
       where organization_id = $1
         and overage_pending_identifier is null
+        and overage_reported_period is not distinct from $7::text
+        and overage_reported_cents = $8::bigint
       returning organization_id`,
     [
       organizationId,
@@ -193,6 +196,8 @@ async function claimPendingOverageReport(
       pending.cumulativeCents,
       pending.identifier,
       pending.at.toISOString(),
+      baseline?.period ?? null,
+      baseline?.cumulativeOverageReportedCents ?? 0,
     ],
   );
   return claimed.length > 0;
@@ -252,6 +257,87 @@ async function resolveMeterEventName(
   return meter.event_name;
 }
 
+function resolvePreviousPeriod(period: EnterpriseUsagePeriod): EnterpriseUsagePeriod {
+  return resolveEnterpriseUsagePeriod(new Date(Date.parse(period.start) - 1));
+}
+
+function lastInstantOf(period: EnterpriseUsagePeriod): Date {
+  return new Date(Date.parse(period.end) - 1000);
+}
+
+async function settlePeriodOverage(input: {
+  db: DatabaseAdapter;
+  stripe: Stripe;
+  contract: EnterpriseBillingContractMeteringRow;
+  stripeCustomerId: string;
+  period: EnterpriseUsagePeriod;
+  at: Date;
+  baseline: StoredOverageReportState | null;
+  meterEventName: () => Promise<string | null>;
+}): Promise<{
+  status: 'reported' | 'skipped_no_new_overage' | 'skipped_no_meter';
+  reportedCents: number;
+  cumulativeOverageCents: number;
+  baseline: StoredOverageReportState | null;
+}> {
+  const { db, contract, period, baseline } = input;
+  const organizationId = contract.organization_id;
+  const consumedCents = await getOrganizationMonthToDateSpendCents(organizationId, db, period);
+  const allowance = computeEnterpriseUsageAllowance({
+    organizationId,
+    period,
+    includedUsageCentsPerPeriod: toNumber(contract.included_usage_cents_per_period),
+    committedUsageBlockCents: toNumber(contract.committed_usage_block_cents),
+    consumedCents,
+  });
+  const deltaCents = computeNewOverageToReportCents({
+    period,
+    overageCents: allowance.overageCents,
+    previouslyReported: baseline,
+  });
+
+  if (deltaCents <= 0) {
+    return {
+      status: 'skipped_no_new_overage',
+      reportedCents: 0,
+      cumulativeOverageCents: allowance.overageCents,
+      baseline,
+    };
+  }
+
+  const eventName = await input.meterEventName();
+  if (!eventName) {
+    return {
+      status: 'skipped_no_meter',
+      reportedCents: 0,
+      cumulativeOverageCents: allowance.overageCents,
+      baseline,
+    };
+  }
+
+  const pending: PendingOverageReport = {
+    period: period.key,
+    cents: deltaCents,
+    cumulativeCents: allowance.overageCents,
+    identifier: overageMeterEventIdentifier(organizationId, period, allowance.overageCents),
+    at: input.at,
+  };
+  if (!(await claimPendingOverageReport(db, organizationId, pending, baseline))) {
+    throw new Error(
+      'another run holds an unconfirmed overage report or advanced the reported baseline for this organization',
+    );
+  }
+  await sendOverageMeterEvent(input.stripe, eventName, input.stripeCustomerId, pending);
+  await commitPendingOverageReport(db, organizationId, pending);
+
+  return {
+    status: 'reported',
+    reportedCents: deltaCents,
+    cumulativeOverageCents: allowance.overageCents,
+    baseline: { period: period.key, cumulativeOverageReportedCents: allowance.overageCents },
+  };
+}
+
 export async function reportEnterpriseOverageUsage(input: {
   db: DatabaseAdapter;
   stripe: Stripe;
@@ -298,8 +384,8 @@ export async function reportEnterpriseOverageUsage(input: {
         });
       };
 
-      let previouslyReported = readReportedOverage(contract);
-      let resentCents = 0;
+      let baseline = readReportedOverage(contract);
+      let reportedCents = 0;
       const unconfirmed = readPendingOverage(contract);
       if (unconfirmed) {
         const eventName = await meterEventName();
@@ -309,65 +395,44 @@ export async function reportEnterpriseOverageUsage(input: {
         }
         await sendOverageMeterEvent(input.stripe, eventName, stripeCustomerId, unconfirmed);
         await commitPendingOverageReport(input.db, organizationId, unconfirmed);
-        previouslyReported = {
+        baseline = {
           period: unconfirmed.period,
           cumulativeOverageReportedCents: unconfirmed.cumulativeCents,
         };
-        resentCents = unconfirmed.cents;
+        reportedCents = unconfirmed.cents;
       }
 
-      const consumedCents = await getOrganizationMonthToDateSpendCents(
-        organizationId,
-        input.db,
-        period,
-      );
-      const allowance = computeEnterpriseUsageAllowance({
-        organizationId,
-        period,
-        includedUsageCentsPerPeriod: toNumber(contract.included_usage_cents_per_period),
-        committedUsageBlockCents: toNumber(contract.committed_usage_block_cents),
-        consumedCents,
-      });
-      const deltaCents = computeNewOverageToReportCents({
-        period,
-        overageCents: allowance.overageCents,
-        previouslyReported,
-      });
-
-      if (deltaCents <= 0) {
-        results.push({
-          organizationId,
-          status: resentCents > 0 ? 'reported' : 'skipped_no_new_overage',
-          reportedCents: resentCents,
-          cumulativeOverageCents: allowance.overageCents,
+      const periodsToSettle =
+        baseline?.period === period.key ? [period] : [resolvePreviousPeriod(period), period];
+      let cumulativeOverageCents = 0;
+      let missingMeter = false;
+      for (const target of periodsToSettle) {
+        const settled = await settlePeriodOverage({
+          db: input.db,
+          stripe: input.stripe,
+          contract,
+          stripeCustomerId,
+          period: target,
+          at: target.key === period.key ? now : lastInstantOf(target),
+          baseline,
+          meterEventName,
         });
-        continue;
+        cumulativeOverageCents = settled.cumulativeOverageCents;
+        if (settled.status === 'skipped_no_meter') {
+          skipNoMeter(settled.cumulativeOverageCents);
+          missingMeter = true;
+          break;
+        }
+        baseline = settled.baseline;
+        reportedCents += settled.reportedCents;
       }
-
-      const eventName = await meterEventName();
-      if (!eventName) {
-        skipNoMeter(allowance.overageCents);
-        continue;
-      }
-
-      const pending: PendingOverageReport = {
-        period: period.key,
-        cents: deltaCents,
-        cumulativeCents: allowance.overageCents,
-        identifier: overageMeterEventIdentifier(organizationId, period, allowance.overageCents),
-        at: now,
-      };
-      if (!(await claimPendingOverageReport(input.db, organizationId, pending))) {
-        throw new Error('another run holds an unconfirmed overage report for this organization');
-      }
-      await sendOverageMeterEvent(input.stripe, eventName, stripeCustomerId, pending);
-      await commitPendingOverageReport(input.db, organizationId, pending);
+      if (missingMeter) continue;
 
       results.push({
         organizationId,
-        status: 'reported',
-        reportedCents: resentCents + deltaCents,
-        cumulativeOverageCents: allowance.overageCents,
+        status: reportedCents > 0 ? 'reported' : 'skipped_no_new_overage',
+        reportedCents,
+        cumulativeOverageCents,
       });
     } catch (error) {
       logger.error(

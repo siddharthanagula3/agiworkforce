@@ -53,6 +53,23 @@ export interface CmekKeyDescriptor {
 export interface CmekWrappedKey {
   version: string;
   wrapped: string;
+  /**
+   * The key resource this version was wrapped under, kept only when it is not
+   * the association's current one. A replacement changes the descriptor, and an
+   * older wrapped key opens only at the resource that wrapped it.
+   */
+  descriptor?: CmekKeyDescriptor;
+}
+
+export function sameCmekDescriptor(a: CmekKeyDescriptor, b: CmekKeyDescriptor): boolean {
+  return a.provider === b.provider && a.keyUri === b.keyUri && a.region === b.region;
+}
+
+export function effectiveKeyDescriptor(
+  key: CmekWrappedKey,
+  current: CmekKeyDescriptor,
+): CmekKeyDescriptor {
+  return key.descriptor ?? current;
 }
 
 /**
@@ -252,12 +269,23 @@ export function createCustomerKeyRingResolver(
 
   async function resolve(record: OrganizationKeyRecord): Promise<KeyRing> {
     if (record.status === 'revoked') throw new CustomerKeyRevokedError(record.organizationId);
-    const provider = keyProviderFor(record.descriptor);
+    const sameResource = record.retired.filter((key) =>
+      sameCmekDescriptor(effectiveKeyDescriptor(key, record.descriptor), record.descriptor),
+    );
+    const otherResource = record.retired.filter((key) => !sameResource.includes(key));
     try {
-      const ring = await provider.resolveKeyRing(CMEK_ENV_NAME, {
-        env: wrappedKeyEnv(record),
-      });
-      return { active: ring.active, retired: ring.retired };
+      const [ring, ...older] = await Promise.all([
+        keyProviderFor(record.descriptor).resolveKeyRing(CMEK_ENV_NAME, {
+          env: wrappedKeyEnv(record.active, sameResource),
+        }),
+        ...otherResource.map((key) =>
+          keyProviderFor(effectiveKeyDescriptor(key, record.descriptor)).resolveKeyRing(
+            CMEK_ENV_NAME,
+            { env: wrappedKeyEnv(key, []) },
+          ),
+        ),
+      ]);
+      return { active: ring.active, retired: [...ring.retired, ...older.map((r) => r.active)] };
     } catch (error) {
       if (error instanceof CmekProviderUnconfiguredError) throw error;
       throw new CustomerKeyUnavailableError(
@@ -269,8 +297,11 @@ export function createCustomerKeyRingResolver(
   }
 
   function invalidate(record: OrganizationKeyRecord): void {
-    const provider = providers.get(cacheKeyFor(record.descriptor));
-    provider?.invalidate?.([record.active.wrapped, ...record.retired.map((key) => key.wrapped)]);
+    for (const key of [record.active, ...record.retired]) {
+      providers
+        .get(cacheKeyFor(effectiveKeyDescriptor(key, record.descriptor)))
+        ?.invalidate?.([key.wrapped]);
+    }
   }
 
   return Object.assign(resolve, { invalidate });
@@ -285,13 +316,16 @@ function assertWrapped(value: string, label: string): string {
   return value;
 }
 
-function wrappedKeyEnv(record: OrganizationKeyRecord): Record<string, string> {
+function wrappedKeyEnv(
+  active: CmekWrappedKey,
+  retired: readonly CmekWrappedKey[],
+): Record<string, string> {
   const env: Record<string, string> = {
-    [CMEK_ENV_NAME]: assertWrapped(record.active.wrapped, 'Active wrapped data key'),
-    [`${CMEK_ENV_NAME}_ID`]: record.active.version,
+    [CMEK_ENV_NAME]: assertWrapped(active.wrapped, 'Active wrapped data key'),
+    [`${CMEK_ENV_NAME}_ID`]: active.version,
   };
-  if (record.retired.length > 0) {
-    env[`${CMEK_ENV_NAME}_RETIRED`] = record.retired
+  if (retired.length > 0) {
+    env[`${CMEK_ENV_NAME}_RETIRED`] = retired
       .map((key) => `${key.version}:${assertWrapped(key.wrapped, 'Retired wrapped data key')}`)
       .join(',');
   }

@@ -73,6 +73,12 @@ vi.mock('@/lib/server/rls-db', () => ({
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: mocks.getNeonDb }));
 vi.mock('@/lib/server/organization-encryption-keys', () => ({
   organizationKeyRing: vi.fn(async () => ({ ring: {} })),
+  withOrganizationKeyFence: async (
+    db: unknown,
+    _organizationId: string,
+    _mode: string,
+    run: (tx: unknown) => Promise<unknown>,
+  ) => run(db),
 }));
 vi.mock('@/lib/crypto/envelope', () => ({
   sealEnvelope: vi.fn(() => 'sealed-audit-signing-secret'),
