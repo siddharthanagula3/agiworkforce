@@ -1,3 +1,5 @@
+'use client';
+
 export interface SessionAuthority {
   readonly userId: string;
   readonly sessionId: string;

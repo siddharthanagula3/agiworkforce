@@ -396,7 +396,7 @@ async function deliverOwnerNotice(
 
   if (email === 'no_recipient' || inApp === 'no_recipient') {
     logger.error(
-      { organizationId, stage, email, inApp },
+      { organizationId, stage, emailOutcome: email, inAppOutcome: inApp },
       'Enterprise collection owner notice has no recipient on a channel; it stays owed until one is on file',
     );
   }

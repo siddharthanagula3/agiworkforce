@@ -257,3 +257,44 @@ test('a function body starts after its parameter list, not at a default value', 
 test('a return of null is not a principal', () => {
   assert.deepEqual(ungatedReturns('function f() {\n  return null;\n}\n', 'f'), []);
 });
+
+const DELEGATED_COOKIE = `
+async function cookieSession(subject: string) {
+  await assertAccountActive(subject);
+  return { userId: subject };
+}
+
+export async function viaCookie() {
+  const { subject } = await getRequestIdentity();
+  return cookieSession(subject);
+}
+`;
+
+test('a return handing back what a gated function of the same module returns is gated', () => {
+  assert.deepEqual(ungatedReturns(DELEGATED_COOKIE, 'viaCookie'), []);
+});
+
+test('a return handing back what an ungated function returns is not gated', () => {
+  const ungatedCallee = DELEGATED_COOKIE.replace('  await assertAccountActive(subject);\n', '');
+  assert.deepEqual(ungatedReturns(ungatedCallee, 'viaCookie'), ['return cookieSession(subject);']);
+});
+
+test('a callee that gates one return but not another does not cover the caller', () => {
+  const partial = DELEGATED_COOKIE.replace(
+    '  await assertAccountActive(subject);\n  return { userId: subject };',
+    "  if (subject === 'fast') {\n    return { userId: subject };\n  }\n  await assertAccountActive(subject);\n  return { userId: subject };",
+  );
+  assert.deepEqual(ungatedReturns(partial, 'viaCookie'), ['return cookieSession(subject);']);
+});
+
+test('a delegation that loops back on itself is not taken as gated', () => {
+  const loop = `
+async function a(subject: string) {
+  return b(subject);
+}
+async function b(subject: string) {
+  return a(subject);
+}
+`;
+  assert.deepEqual(ungatedReturns(loop, 'a'), ['return b(subject);']);
+});

@@ -10,6 +10,10 @@
       "reason": "it walks FINANCIAL_RETENTION_RULES, a constant in the repository, and each rule is one bounded statement"
     },
     {
+      "id": "evaluate-slo-burn",
+      "reason": "its only loop walks INCIDENT_SEVERITIES, a two-entry constant (critical, warning), to clear the incidents that recovered; the objectives and anomaly series it evaluates are constant catalogues in apps/web/lib/server/slo"
+    },
+    {
       "id": "evaluate-model-rollout",
       "reason": "it walks the alerts one evaluation produced, which is at most one per rollout under evaluation"
     },

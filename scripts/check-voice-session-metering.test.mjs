@@ -105,8 +105,16 @@ test.after(() => {
 
 test('the counted operations and their fields come from the quota query', () => {
   assert.deepEqual(readMeteredOperations(QUOTA_SOURCE), [
-    { operation: 'transcription', field: 'estimatedAudioSeconds' },
-    { operation: 'voice_live_session', field: 'billedSeconds' },
+    {
+      operation: 'transcription',
+      constant: 'TRANSCRIPTION_OPERATION',
+      field: 'estimatedAudioSeconds',
+    },
+    {
+      operation: 'voice_live_session',
+      constant: 'LIVE_VOICE_SESSION_OPERATION',
+      field: 'billedSeconds',
+    },
   ]);
 });
 
@@ -147,4 +155,47 @@ test('an operation the allowance counts that nothing settles is refused', () => 
 
 test('the repository itself passes', () => {
   assert.deepEqual(checkVoiceSessionMetering(REPO_ROOT), []);
+});
+
+function transcribeThroughConstant({ completedCarriesSeconds }) {
+  return `
+import { TRANSCRIPTION_OPERATION } from '@/lib/services/tier-unit-quota-service';
+export async function POST() {
+  const transcriptionUsage = {
+    operation: TRANSCRIPTION_OPERATION,
+    model,
+    ${completedCarriesSeconds ? 'estimatedAudioSeconds: estimatedSeconds,' : 'inputTokens,'}
+  };
+  await finalizeManagedUsageRequest({
+    ...reservation,
+    outcome: 'completed',
+    actualCostMicrousd,
+    usage: transcriptionUsage,
+  });
+}
+`;
+}
+
+test('a settlement naming the operation through the quota constant and a usage binding counts', () => {
+  const root = tree();
+  write(
+    root,
+    `${APP_DIR}/llm/v1/audio/transcriptions/route.ts`,
+    transcribeThroughConstant({ completedCarriesSeconds: true }),
+  );
+  assert.deepEqual(checkVoiceSessionMetering(root), []);
+});
+
+test('a usage binding that drops the summed field is still refused', () => {
+  const root = tree();
+  write(
+    root,
+    `${APP_DIR}/llm/v1/audio/transcriptions/route.ts`,
+    transcribeThroughConstant({ completedCarriesSeconds: false }),
+  );
+  const failures = checkVoiceSessionMetering(root);
+  assert.ok(
+    failures.some((failure) => failure.includes('without estimatedAudioSeconds')),
+    failures.join('\n'),
+  );
 });

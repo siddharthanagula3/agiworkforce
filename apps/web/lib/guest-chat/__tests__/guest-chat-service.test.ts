@@ -20,6 +20,8 @@ import {
   chatSystemPromptSections,
 } from '@/lib/prompts/chat-system-prompt';
 
+import { logger } from '@/lib/logger';
+
 import { readGuestChatConfig } from '../config';
 import {
   buildGuestChatRequest,
@@ -315,6 +317,26 @@ describe('guest spend caps', () => {
 
     expect(refused).toEqual({ ok: false, limit: 'device' });
     expect([...store.values.values()]).toEqual([800, 1_100, 800]);
+  });
+
+  it('logs which scope a failed release held, never the network or device it names', async () => {
+    const logged = vi.spyOn(logger, 'error').mockImplementation(() => undefined);
+    const store = memoryStore();
+    await reserve(store, 800);
+    const increment = store.increment.getMockImplementation()!;
+    store.increment.mockImplementation(async (key: string, amount = 1) => {
+      if (amount < 0 && key.includes('ip:')) throw new Error('release failed');
+      return increment(key, amount);
+    });
+
+    await reserve(store, 300);
+
+    expect(logged).toHaveBeenCalledWith(
+      { error: expect.any(Error), spendScope: 'ip', amountMicrousd: 300 },
+      expect.stringContaining('spend hold could not be released'),
+    );
+    expect(JSON.stringify(logged.mock.calls)).not.toContain('203.0.113.9');
+    logged.mockRestore();
   });
 
   it('caps a network that rotates devices', async () => {

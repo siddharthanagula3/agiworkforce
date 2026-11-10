@@ -308,6 +308,11 @@ export async function reserveGuestSpend(input: {
   return { ok: true, hold: { keys: held, reservedMicrousd: amount } };
 }
 
+function spendScopeOf(key: string): string {
+  const segments = key.slice(SPEND_KEY_PREFIX.length).split(':');
+  return segments.length > 1 ? (segments[0] ?? GLOBAL_SPEND_SCOPE) : GLOBAL_SPEND_SCOPE;
+}
+
 async function releaseGuestSpend(
   store: KeyValueStore,
   keys: readonly string[],
@@ -318,7 +323,7 @@ async function releaseGuestSpend(
       await store.increment(key, -amount);
     } catch (error) {
       logger.error(
-        { error, key },
+        { error, spendScope: spendScopeOf(key), amountMicrousd: amount },
         '[guest-chat] a refused turn’s spend hold could not be released',
       );
     }

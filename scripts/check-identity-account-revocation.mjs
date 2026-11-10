@@ -99,20 +99,38 @@ const PRINCIPAL_RETURN =
   /\breturn\s+(?!null\b|undefined\b|await\s+getClerkAuthUser\b)[A-Za-z_$({]/g;
 const EXPORTED_FUNCTION = /^export\s+(?:async\s+)?function\s+(\w+)/gm;
 
+const DELEGATED_RETURN = /^return\s+(?:await\s+)?([A-Za-z_$][\w$]*)\s*\(/;
+
+/**
+ * A return that hands the caller whatever another function of the same module
+ * returns is gated exactly when that function is: it has the gate, and every
+ * principal it returns is dominated by it.
+ */
+function delegatesToGatedFunction(source, statement, seen) {
+  const callee = DELEGATED_RETURN.exec(statement)?.[1];
+  if (!callee || seen.has(callee)) return false;
+  const found = functionBody(source, callee);
+  if (found === null || !new RegExp(`\\b${ACCOUNT_GATE}\\s*\\(`).test(found.body)) return false;
+  const ungated = ungatedReturns(source, callee, new Set(seen));
+  return ungated !== null && ungated.length === 0;
+}
+
 /** Every return that hands a caller a principal, and whether the gate ran first. */
-export function ungatedReturns(source, name) {
+export function ungatedReturns(source, name, seen = new Set()) {
   const found = functionBody(source, name);
   if (found === null) return null;
+  seen.add(name);
   const { body } = found;
   const depth = depths(body);
   const gates = [...body.matchAll(new RegExp(`\\b${ACCOUNT_GATE}\\s*\\(`, 'g'))].map(
     (match) => match.index,
   );
   const ungated = [];
-  PRINCIPAL_RETURN.lastIndex = 0;
   for (const match of body.matchAll(PRINCIPAL_RETURN)) {
     if (gates.some((gate) => dominates(body, gate, match.index, depth))) continue;
-    ungated.push(body.slice(match.index, body.indexOf('\n', match.index)).trim());
+    const statement = body.slice(match.index, body.indexOf('\n', match.index)).trim();
+    if (delegatesToGatedFunction(source, statement, seen)) continue;
+    ungated.push(statement);
   }
   return ungated;
 }

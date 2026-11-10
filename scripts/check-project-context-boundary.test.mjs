@@ -302,3 +302,43 @@ test('the repository is clean apart from the recorded baseline', () => {
   assert.deepEqual(renderers(), []);
   assert.deepEqual(uncheckedLoads(), []);
 });
+
+function spliceRepo(fragment) {
+  return makeRepo({
+    'apps/web/lib/server/project-read-access.ts': `
+      export const READABLE_PROJECT_SCOPE_SQL = \`${fragment}\`;
+    `,
+    'apps/web/lib/services/files.ts': `
+      import { READABLE_PROJECT_SCOPE_SQL } from '@/lib/server/project-read-access';
+      export async function readFiles(db, projectId, userId) {
+        return db.query(
+          \`select f.id
+             from project_knowledge_files f
+             join user_projects p on p.id = f.project_id
+            where \${READABLE_PROJECT_SCOPE_SQL} and f.deleted_at is null\`,
+          [projectId, userId],
+        );
+      }
+    `,
+  });
+}
+
+test('a statement that splices in an imported owner-binding fragment is judged with it', () => {
+  const root = spliceRepo('p.id = $1 and p.user_id = $2');
+  try {
+    assert.deepEqual(findUnscopedProjectReads(root), []);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('a spliced fragment that binds no account does not scope the statement', () => {
+  const root = spliceRepo('p.id = $1 and p.deleted_at is null');
+  try {
+    const findings = findUnscopedProjectReads(root);
+    assert.equal(findings.length, 1);
+    assert.equal(findings[0].file, 'apps/web/lib/services/files.ts');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

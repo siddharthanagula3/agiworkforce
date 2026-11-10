@@ -80,7 +80,7 @@ describe('sweepAbandonedFeedbackScreenshots', () => {
       'feedback/user-1/1_a.png',
     ]);
     expect(mocks.logger.error).toHaveBeenCalledWith(
-      expect.objectContaining({ screenshotKey: 'feedback/user-1/0_a.png' }),
+      expect.objectContaining({ objectKey: 'feedback/user-1/0_a.png' }),
       expect.stringContaining('retried on the next run'),
     );
   });

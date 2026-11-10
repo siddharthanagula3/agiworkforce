@@ -55,7 +55,7 @@ export async function sweepAbandonedFeedbackScreenshots(
     } catch (error) {
       sweep.failed += 1;
       logger.error(
-        { error, screenshotKey: storageKey },
+        { error, objectKey: storageKey },
         'Failed to sweep an abandoned feedback screenshot; it is retried on the next run',
       );
     }

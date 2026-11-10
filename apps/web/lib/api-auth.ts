@@ -201,22 +201,23 @@ async function assertAccountSecurityUnlessVerifying(
   }
 }
 
-export async function assertAccountActive(userId: string, request?: NextRequest): Promise<void> {
-  await assertAccountLifecycleActive(userId);
-  await assertWorkspaceNotLockedDown(userId, request);
-}
-
-async function assertAccountActiveForAuth(
+export async function assertAccountActive(
   userId: string,
-  request: NextRequest,
-  options: AuthOptions,
+  request?: NextRequest,
+  options: Pick<AuthOptions, 'mfaGateExemptForOwner'> = {},
 ): Promise<AuthResult['organizationScope']> {
+  await assertAccountLifecycleActive(userId);
   if (!options.mfaGateExemptForOwner) {
-    await assertAccountActive(userId, request);
+    await assertWorkspaceNotLockedDown(userId, request);
     return undefined;
   }
+  return bindOrganizationScope(userId, request);
+}
 
-  await assertAccountLifecycleActive(userId);
+async function bindOrganizationScope(
+  userId: string,
+  request?: NextRequest,
+): Promise<AuthResult['organizationScope']> {
   let organizationId: string | null;
   try {
     const resolved = await withDeadline(
@@ -426,7 +427,7 @@ export async function getClerkAuthUser(
         if (!apiKeyHasScope(result.scopes, options.apiKeyScope)) {
           throw new ApiKeyScopeError('API key does not have the required scope');
         }
-        const organizationScope = await assertAccountActiveForAuth(result.userId, request, options);
+        const organizationScope = await assertAccountActive(result.userId, request, options);
         setTenantScope({ userId: result.userId });
         await assertMfaPolicyUnlessExemptOwner(
           result.userId,
@@ -448,7 +449,7 @@ export async function getClerkAuthUser(
     if (verified) {
       const { auth, principal } = verified;
       await assertSessionWithinAbsoluteLifetime(auth.userId, auth.sessionIdentity);
-      const organizationScope = await assertAccountActiveForAuth(auth.userId, request, options);
+      const organizationScope = await assertAccountActive(auth.userId, request, options);
       await assertAccountSecurityUnlessVerifying(auth, principal, options, request);
       setTenantScope({ userId: auth.userId });
       await assertMfaPolicyUnlessExemptOwner(
@@ -486,7 +487,7 @@ export async function getCookieSessionAuthUser(
     const userId = account.accountId;
     const auth = authResultFor(account, sessionId);
     await assertSessionWithinAbsoluteLifetime(userId, auth.sessionIdentity);
-    const organizationScope = await assertAccountActiveForAuth(userId, request, options);
+    const organizationScope = await assertAccountActive(userId, request, options);
     await assertAccountSecurityUnlessVerifying(
       auth,
       { kind: 'session', sessionId },

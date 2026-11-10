@@ -27,6 +27,8 @@ vi.mock('@/lib/server/neon-db', () => ({
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
+import { logger } from '@/lib/logger';
+
 import { GET, enforceBillingCollection } from './route';
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -376,6 +378,15 @@ describe('enforceBillingCollection · owner notices', () => {
       email: 'no_recipient',
       inApp: 'delivered',
     });
+    expect(logger.error).toHaveBeenCalledWith(
+      {
+        organizationId: expect.any(String),
+        stage: 'past_due_30',
+        emailOutcome: 'no_recipient',
+        inAppOutcome: 'delivered',
+      },
+      expect.stringContaining('no recipient'),
+    );
   });
 });
 

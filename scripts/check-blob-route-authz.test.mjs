@@ -173,3 +173,59 @@ test('fails when no object-storage route is found at all', () => {
   assert.equal(result.code, 1);
   assert.match(result.output, /module list is stale/);
 });
+
+const OPERATOR_ROUTE = `
+import { getPrivateObject } from '@/lib/server/object-storage';
+import { requirePlatformAdmin } from '@/lib/auth-guards';
+export async function GET(request) {
+  await requirePlatformAdmin(request);
+  return getPrivateObject('feedback/1');
+}
+`;
+
+function withGateModule(root, source) {
+  const full = path.join(root, 'apps/web/lib/auth-guards.ts');
+  fs.mkdirSync(path.dirname(full), { recursive: true });
+  fs.writeFileSync(full, source);
+  return root;
+}
+
+test('accepts a shared gate whose own body still authenticates the caller', () => {
+  const root = withGateModule(
+    fixture({ 'files/[id]/route.ts': AUTHORIZED, 'operator/route.ts': OPERATOR_ROUTE }),
+    `
+export async function requirePlatformAdmin(request) {
+  const auth = await getClerkAuthUser(request);
+  await assertAccountActive(auth.userId);
+  return auth;
+}
+`,
+  );
+
+  const result = run(root);
+  assert.equal(result.code, 0, result.output);
+  assert.match(result.output, /2 object-storage routes/);
+});
+
+test('fails a route behind a shared gate that stopped authenticating', () => {
+  const root = withGateModule(
+    fixture({ 'files/[id]/route.ts': AUTHORIZED, 'operator/route.ts': OPERATOR_ROUTE }),
+    `
+export async function requirePlatformAdmin(request) {
+  return { userId: request.headers.get('x-user') };
+}
+`,
+  );
+
+  const result = run(root);
+  assert.equal(result.code, 1);
+  assert.match(result.output, /operator\/route\.ts: relies on requirePlatformAdmin/);
+});
+
+test('fails a route behind a shared gate whose module is gone', () => {
+  const result = run(
+    fixture({ 'files/[id]/route.ts': AUTHORIZED, 'operator/route.ts': OPERATOR_ROUTE }),
+  );
+  assert.equal(result.code, 1);
+  assert.match(result.output, /no longer defines it/);
+});

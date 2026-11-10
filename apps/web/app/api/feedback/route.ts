@@ -94,7 +94,7 @@ async function discardScreenshot(
     await deletePrivateObject(key);
   } catch (error) {
     logger.error(
-      { error, userId, screenshotKey: key },
+      { error, userId, objectKey: key },
       'Failed to discard the screenshot of a feedback report that was not stored; its cleanup record stays for the sweep',
     );
     return;
@@ -103,7 +103,7 @@ async function discardScreenshot(
     await db.execute(CLEAR_FEEDBACK_SCREENSHOT_SQL, [key]);
   } catch (error) {
     logger.warn(
-      { error, userId, screenshotKey: key },
+      { error, userId, objectKey: key },
       'The cleanup record of a discarded feedback screenshot could not be cleared; the sweep clears it',
     );
   }

@@ -130,6 +130,59 @@ export function invokedCodeActs(source) {
   return new Set([...source.matchAll(/act: '([a-z_]+)'/g)].map((m) => m[1]));
 }
 
+function exportedFunctionBodies(source) {
+  const bodies = new Map();
+  for (const match of source.matchAll(/export function (\w+)\s*\(/g)) {
+    let parameters = 1;
+    let cursor = match.index + match[0].length;
+    while (cursor < source.length && parameters > 0) {
+      if (source[cursor] === '(') parameters += 1;
+      else if (source[cursor] === ')') parameters -= 1;
+      cursor += 1;
+    }
+    const open = source.indexOf('{', cursor);
+    if (open < 0) continue;
+    const signatureTail = source.slice(cursor, open);
+    let depth = 0;
+    for (let index = open; index < source.length; index += 1) {
+      if (source[index] === '{') depth += 1;
+      else if (source[index] === '}') {
+        depth -= 1;
+        if (depth === 0) {
+          bodies.set(match[1], { returns: signatureTail, body: source.slice(open, index + 1) });
+          break;
+        }
+      }
+    }
+  }
+  return bodies;
+}
+
+// A server decision that asks a yes-or-no predicate of the contract reads the
+// controls that predicate reads, so the keys it names count as read by the
+// decision. Only predicates count: a resolver that merges every control into
+// a layer reads all of them and decides nothing.
+export function contractPredicateReads(contractSource) {
+  const bodies = exportedFunctionBodies(contractSource);
+  const reads = new Map();
+  const visit = (name, seen) => {
+    if (seen.has(name)) return new Set();
+    seen.add(name);
+    const entry = bodies.get(name);
+    if (!entry) return new Set();
+    const found = identifiersIn(entry.body);
+    for (const callee of [...found]) {
+      if (bodies.has(callee)) for (const id of visit(callee, seen)) found.add(id);
+    }
+    return found;
+  };
+  for (const [name, entry] of bodies) {
+    if (!/:\s*boolean\s*$/.test(entry.returns)) continue;
+    reads.set(name, visit(name, new Set()));
+  }
+  return reads;
+}
+
 export function identifiersIn(source) {
   return new Set([...source.matchAll(/\b([a-zA-Z_][a-zA-Z0-9_]*)\b/g)].map((m) => m[1]));
 }
@@ -167,12 +220,17 @@ export function findUnenforcedKeys(scanRoot) {
   const enforcedIdentifiers = new Set();
   const invokedActs = new Set();
   const actsByControl = codeActsByControl(fs.readFileSync(contractPath, 'utf8'));
+  const predicateReads = contractPredicateReads(fs.readFileSync(contractPath, 'utf8'));
   for (const root of SCAN_ROOTS) {
     for (const full of walk(scanRoot, root)) {
       if (!isEnforcementFile(full)) continue;
       const source = fs.readFileSync(path.join(scanRoot, full), 'utf8');
       for (const feature of featuresEnforcedIn(source)) enforcedFeatures.add(feature);
       for (const identifier of identifiersIn(source)) enforcedIdentifiers.add(identifier);
+      for (const [predicate, reads] of predicateReads) {
+        if (!new RegExp(`\\b${predicate}\\s*\\(`).test(source)) continue;
+        for (const identifier of reads) enforcedIdentifiers.add(identifier);
+      }
       for (const act of invokedCodeActs(source)) invokedActs.add(act);
     }
   }
@@ -203,7 +261,9 @@ export function servedFamilies(effectiveRouteSource) {
     families.add('feature');
     families.add('control');
   }
-  if (/code:\s*effective\.code/.test(effectiveRouteSource)) families.add('code');
+  if (/code:\s*(?:effective\.code\b|\{\s*\.\.\.effective\.code\b)/.test(effectiveRouteSource)) {
+    families.add('code');
+  }
   return families;
 }
 

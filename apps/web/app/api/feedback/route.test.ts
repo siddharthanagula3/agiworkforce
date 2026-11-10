@@ -523,7 +523,7 @@ describe('POST /api/feedback', () => {
 
       expect(response.status).toBeGreaterThanOrEqual(500);
       expect(logger.error).toHaveBeenCalledWith(
-        expect.objectContaining({ screenshotKey: expect.stringMatching(/^feedback\//u) }),
+        expect.objectContaining({ objectKey: expect.stringMatching(/^feedback\//u) }),
         expect.stringContaining('Failed to discard the screenshot'),
       );
       expect(
@@ -547,7 +547,7 @@ describe('POST /api/feedback', () => {
       expect(response.status).toBeGreaterThanOrEqual(500);
       expect(feedbackRouteMocks.deletePrivateObject).toHaveBeenCalledTimes(1);
       expect(logger.warn).toHaveBeenCalledWith(
-        expect.objectContaining({ screenshotKey: expect.stringMatching(/^feedback\//u) }),
+        expect.objectContaining({ objectKey: expect.stringMatching(/^feedback\//u) }),
         expect.stringContaining('the sweep clears it'),
       );
     });
