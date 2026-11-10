@@ -398,6 +398,8 @@ describe('deleteScimUser audit trail', () => {
       }
       return fakeDb(world).query(sql, params);
     }) as DatabaseAdapter['query'];
+    db.transaction = (async (fn: (tx: DatabaseAdapter) => Promise<unknown>) =>
+      fn(db)) as DatabaseAdapter['transaction'];
 
     await deleteScimUser(db, ctx, SCIM_USER);
 
