@@ -76,6 +76,10 @@ function contractRow(overrides: Record<string, unknown> = {}) {
     committed_seats: 500,
     stripe_subscription_id: 'sub_ent_1',
     stripe_customer_id: 'cus_ent_1',
+    owner_notice_pending_stage: null,
+    owner_notice_pending_since: null,
+    owner_notice_email_delivered_at: null,
+    owner_notice_in_app_recorded_at: null,
     ...overrides,
   };
 }
@@ -85,6 +89,8 @@ beforeEach(() => {
   vi.stubEnv('CRON_SECRET', 'cron-secret');
   vi.stubEnv('BILLING_ALERT_EMAIL', 'billing-alerts@agiworkforce.com');
   sendTransactionalEmail.mockResolvedValue({ delivered: true, providerMessageId: 'msg_1' });
+  recordNotification.mockResolvedValue({ recorded: true, failed: false });
+  recordAuditEvent.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -121,14 +127,17 @@ describe('enforceBillingCollection · per-run bound', () => {
     );
     expect(load).toBeDefined();
     expect(load?.sql).toMatch(/limit \$2/u);
-    expect(load?.sql).toMatch(/order by c\.oldest_open_invoice_due_at asc nulls last/u);
+    expect(load?.sql).toMatch(
+      /order by c\.collection_reviewed_at asc nulls first,\s+c\.oldest_open_invoice_due_at asc nulls last,\s+c\.organization_id asc/u,
+    );
+    expect(load?.sql).toContain('not (c.organization_id = any ($3::uuid[]))');
 
     const ceiling = load?.params[1];
     expect(typeof ceiling).toBe('number');
     expect(ceiling as number).toBeGreaterThan(0);
   });
 
-  it('works the most overdue contracts first so a run that stops leaves the rest for the next', async () => {
+  it('works the least recently reviewed contracts first so a run that stops leaves the rest for the next', async () => {
     const { db, calls } = makeDb([]);
     await enforceBillingCollection(db, NOW);
 
@@ -145,26 +154,44 @@ describe('enforceBillingCollection · per-run bound', () => {
     const population = Array.from({ length: total }, (_, index) =>
       contractRow({
         organization_id: `org_${String(index).padStart(4, '0')}`,
-        oldest_open_invoice_due_at: daysAgoIso(10),
+        oldest_open_invoice_due_at: daysAgoIso(10 + total - index),
         collection_stage: 'past_due_30',
       }),
     );
+    const reviewedAt = new Map<string, string>();
     const loads: unknown[][] = [];
+    const reviewStamps: string[] = [];
     const query = vi.fn(async (sql: string, params: unknown[] = []) => {
       if (!sql.includes('from public.organization_billing_contracts c')) return [];
       loads.push(params);
       const limit = params[1] as number;
-      const after = params[2] as string | null;
-      const start =
-        after === null ? 0 : population.findIndex((row) => row.organization_id === after) + 1;
-      return population.slice(start, start + limit);
+      const exclude = new Set(params[2] as string[]);
+      return population
+        .filter((row) => !exclude.has(row.organization_id))
+        .sort((left, right) => {
+          const a = reviewedAt.get(left.organization_id);
+          const b = reviewedAt.get(right.organization_id);
+          if (a !== b) {
+            if (a === undefined) return -1;
+            if (b === undefined) return 1;
+            return a < b ? -1 : 1;
+          }
+          return left.oldest_open_invoice_due_at < right.oldest_open_invoice_due_at ? -1 : 1;
+        })
+        .slice(0, limit);
     });
-    const execute = vi.fn(async () => []);
-    return { db: { query, execute } as unknown as DatabaseAdapter, loads };
+    const execute = vi.fn(async (sql: string, params: unknown[] = []) => {
+      if (sql.includes('set collection_reviewed_at')) {
+        reviewedAt.set(params[0] as string, params[1] as string);
+        reviewStamps.push(params[0] as string);
+      }
+      return 1;
+    });
+    return { db: { query, execute } as unknown as DatabaseAdapter, loads, reviewStamps };
   }
 
   it('reaches contracts beyond the first page instead of re-reading the same prefix', async () => {
-    const { db, loads } = pagedDb(201);
+    const { db, loads, reviewStamps } = pagedDb(201);
 
     const { outcomes, backlog } = await enforceBillingCollection(db, NOW);
 
@@ -172,8 +199,48 @@ describe('enforceBillingCollection · per-run bound', () => {
     expect(new Set(outcomes.map((outcome) => outcome.organizationId)).size).toBe(201);
     expect(outcomes.at(-1)!.organizationId).toBe('org_0200');
     expect(backlog).toBe(false);
-    expect(loads[0]![2]).toBeNull();
-    expect(loads[1]![2]).toBe(outcomes[(loads[0]![1] as number) - 1]!.organizationId);
+    expect(loads[0]![2]).toEqual([]);
+    expect(loads[1]![2]).toEqual(outcomes.slice(0, 200).map((outcome) => outcome.organizationId));
+    expect(reviewStamps).toHaveLength(201);
+  });
+
+  it('resumes with the contracts a budget-limited run left unreviewed instead of the same prefix', async () => {
+    const { db } = pagedDb(5);
+    const start = Date.now();
+    let reads = 0;
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => {
+      reads += 1;
+      return reads > 3 ? start + 10 * 60 * 1000 : start;
+    });
+    let first: Awaited<ReturnType<typeof enforceBillingCollection>>;
+    try {
+      first = await enforceBillingCollection(db, NOW);
+    } finally {
+      clock.mockRestore();
+    }
+    expect(first.backlog).toBe(true);
+    const firstIds = first.outcomes.map((outcome) => outcome.organizationId);
+    expect(firstIds.length).toBeGreaterThan(0);
+    expect(firstIds.length).toBeLessThan(5);
+
+    const second = await enforceBillingCollection(db, NOW + 1);
+    const secondIds = second.outcomes.map((outcome) => outcome.organizationId);
+    expect(secondIds.slice(0, 5 - firstIds.length)).toEqual(
+      ['org_0000', 'org_0001', 'org_0002', 'org_0003', 'org_0004'].filter(
+        (id) => !firstIds.includes(id),
+      ),
+    );
+    expect(secondIds.slice(5 - firstIds.length)).toEqual(firstIds);
+  });
+
+  it('records the review time even for a contract whose review failed, so it cannot hold the front of the queue', async () => {
+    const { db, calls } = makeDb([contractRow({ oldest_open_invoice_due_at: daysAgoIso(10) })]);
+    recordAuditEvent.mockRejectedValueOnce(new Error('audit store unavailable'));
+
+    await expect(enforceBillingCollection(db, NOW)).rejects.toThrow(AggregateError);
+
+    const stamp = calls.find((call) => call.sql.includes('set collection_reviewed_at'));
+    expect(stamp?.params).toEqual(['org_1', new Date(NOW).toISOString()]);
   });
 
   it('reports a backlog instead of completion when the run budget ends mid-sweep', async () => {
@@ -214,7 +281,15 @@ describe('enforceBillingCollection · stage transitions', () => {
     });
     const stageUpdate = calls.find((call) => call.sql.includes('set collection_stage'));
     expect(stageUpdate).toBeDefined();
-    expect(stageUpdate!.params).toEqual(['org_1', 'past_due_30', expect.any(String)]);
+    expect(stageUpdate!.params).toEqual([
+      'org_1',
+      'past_due_30',
+      expect.any(String),
+      'past_due_30',
+    ]);
+    expect(stageUpdate!.sql).toContain('owner_notice_pending_stage = $4::text');
+    expect(stageUpdate!.sql).toContain('owner_notice_email_delivered_at = null');
+    expect(stageUpdate!.sql).toContain('owner_notice_in_app_recorded_at = null');
     expect(recordAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         organizationId: 'org_1',
@@ -296,6 +371,199 @@ describe('enforceBillingCollection · owner notices', () => {
 
     const { outcomes } = await enforceBillingCollection(db, NOW);
     expect(outcomes).toHaveLength(1);
+    expect(outcomes[0]!.ownerNotice).toEqual({
+      stage: 'past_due_30',
+      email: 'no_recipient',
+      inApp: 'delivered',
+    });
+  });
+});
+
+describe('enforceBillingCollection · owed owner notices survive a failed delivery', () => {
+  const ENTERED_AT = new Date(NOW - 2 * MS_PER_DAY).toISOString();
+
+  function stampsOf(calls: Array<{ sql: string; params: unknown[] }>) {
+    return {
+      email: calls.filter((call) => call.sql.includes('set owner_notice_email_delivered_at')),
+      inApp: calls.filter((call) => call.sql.includes('set owner_notice_in_app_recorded_at')),
+    };
+  }
+
+  function owedRow(overrides: Record<string, unknown> = {}) {
+    return contractRow({
+      oldest_open_invoice_due_at: daysAgoIso(100),
+      collection_stage: 'read_only',
+      owner_notice_pending_stage: 'read_only',
+      owner_notice_pending_since: new Date(ENTERED_AT),
+      ...overrides,
+    });
+  }
+
+  function ownerEmails() {
+    return sendTransactionalEmail.mock.calls.filter(
+      ([input]) => (input as { to: string }).to === 'owner@example.com',
+    );
+  }
+
+  it('stamps only the channel that succeeded when the email fails on the stage change', async () => {
+    sendTransactionalEmail.mockImplementation(async (input: { to: string }) =>
+      input.to === 'owner@example.com'
+        ? { delivered: false, reason: 'network', detail: 'provider down' }
+        : { delivered: true, providerMessageId: 'msg_internal' },
+    );
+    const { db, calls } = makeDb([contractRow({ oldest_open_invoice_due_at: daysAgoIso(100) })]);
+
+    const { outcomes } = await enforceBillingCollection(db, NOW);
+
+    expect(outcomes[0]).toMatchObject({
+      ownerNotified: false,
+      ownerNotice: { stage: 'read_only', email: 'failed', inApp: 'delivered' },
+    });
+    const stamps = stampsOf(calls);
+    expect(stamps.email).toHaveLength(0);
+    expect(stamps.inApp).toHaveLength(1);
+    expect(stamps.inApp[0]!.params).toEqual([
+      'org_1',
+      'read_only',
+      new Date(NOW).toISOString(),
+      new Date(NOW).toISOString(),
+    ]);
+  });
+
+  it('retries only the undelivered email at an unchanged read_only stage', async () => {
+    const { db, calls } = makeDb([
+      owedRow({ owner_notice_in_app_recorded_at: new Date(ENTERED_AT) }),
+    ]);
+
+    const { outcomes } = await enforceBillingCollection(db, NOW);
+
+    expect(outcomes[0]).toMatchObject({
+      changed: false,
+      ownerNotified: true,
+      ownerNotice: { stage: 'read_only', email: 'delivered', inApp: 'already_delivered' },
+    });
+    expect(recordNotification).not.toHaveBeenCalled();
+    expect(ownerEmails()).toHaveLength(1);
+    expect(ownerEmails()[0]![0]).toMatchObject({
+      idempotencyKey: `billing-collection-owner:org_1:read_only:${ENTERED_AT}:${new Date(NOW).toISOString().slice(0, 10)}`,
+    });
+    const stamps = stampsOf(calls);
+    expect(stamps.email).toHaveLength(1);
+    expect(stamps.email[0]!.params.slice(0, 3)).toEqual(['org_1', 'read_only', ENTERED_AT]);
+    expect(stamps.inApp).toHaveLength(0);
+  });
+
+  it('keeps both channels owed when both fail, then delivers both once providers recover', async () => {
+    recordNotification.mockResolvedValueOnce({ recorded: false, failed: true });
+    sendTransactionalEmail.mockResolvedValueOnce({
+      delivered: false,
+      reason: 'network',
+      detail: 'provider down',
+    });
+    const failing = makeDb([owedRow()]);
+
+    const failed = await enforceBillingCollection(failing.db, NOW);
+
+    expect(failed.outcomes[0]!.ownerNotice).toEqual({
+      stage: 'read_only',
+      email: 'failed',
+      inApp: 'failed',
+    });
+    expect(stampsOf(failing.calls)).toEqual({ email: [], inApp: [] });
+
+    const recovered = makeDb([owedRow()]);
+    const retried = await enforceBillingCollection(recovered.db, NOW + MS_PER_DAY);
+
+    expect(retried.outcomes[0]!.ownerNotice).toEqual({
+      stage: 'read_only',
+      email: 'delivered',
+      inApp: 'delivered',
+    });
+    expect(recordNotification).toHaveBeenLastCalledWith(
+      recovered.db,
+      expect.objectContaining({
+        dedupeKey: `billing-collection:org_1:read_only:${ENTERED_AT.slice(0, 10)}`,
+      }),
+    );
+    const stamps = stampsOf(recovered.calls);
+    expect(stamps.email).toHaveLength(1);
+    expect(stamps.inApp).toHaveLength(1);
+  });
+
+  it('delivers a notice owed by a run that stopped right after saving the stage', async () => {
+    const { db } = makeDb([owedRow()]);
+
+    const { outcomes } = await enforceBillingCollection(db, NOW);
+
+    expect(outcomes[0]!.changed).toBe(false);
+    expect(recordNotification).toHaveBeenCalledOnce();
+    expect(ownerEmails()).toHaveLength(1);
+  });
+
+  it('sends nothing more once both channels are stamped', async () => {
+    const { db } = makeDb([
+      owedRow({
+        owner_notice_email_delivered_at: new Date(ENTERED_AT),
+        owner_notice_in_app_recorded_at: new Date(ENTERED_AT),
+      }),
+    ]);
+
+    const { outcomes } = await enforceBillingCollection(db, NOW);
+
+    expect(outcomes[0]!.ownerNotice).toBeNull();
+    expect(recordNotification).not.toHaveBeenCalled();
+    expect(ownerEmails()).toHaveLength(0);
+  });
+
+  it('does not send a notice owed for a stage the contract has already left', async () => {
+    const { db } = makeDb([
+      owedRow({
+        oldest_open_invoice_due_at: daysAgoIso(45),
+        collection_stage: 'past_due_60',
+        owner_notice_pending_stage: 'past_due_30',
+      }),
+    ]);
+
+    const { outcomes } = await enforceBillingCollection(db, NOW);
+
+    expect(outcomes[0]!.ownerNotice).toBeNull();
+    expect(recordNotification).not.toHaveBeenCalled();
+    expect(ownerEmails()).toHaveLength(0);
+  });
+
+  it('clears the owed notice when the stage moves to one that owes the owner nothing', async () => {
+    const { db, calls } = makeDb([
+      owedRow({
+        oldest_open_invoice_due_at: daysAgoIso(75),
+        collection_stage: 'past_due_60',
+        owner_notice_pending_stage: 'past_due_60',
+      }),
+    ]);
+
+    const { outcomes } = await enforceBillingCollection(db, NOW);
+
+    expect(outcomes[0]).toMatchObject({ stage: 'past_due_90', changed: true, ownerNotice: null });
+    const stageUpdate = calls.find((call) => call.sql.includes('set collection_stage'));
+    expect(stageUpdate!.params[3]).toBeNull();
+  });
+
+  it('reports owner notice receipts separately from stage changes', async () => {
+    sendTransactionalEmail.mockImplementation(async (input: { to: string }) =>
+      input.to === 'owner@example.com'
+        ? { delivered: false, reason: 'network', detail: 'provider down' }
+        : { delivered: true, providerMessageId: 'msg_internal' },
+    );
+    dbQuery.mockImplementationOnce(async (sql: string) =>
+      sql.includes('from public.organization_billing_contracts c') ? [owedRow()] : [],
+    );
+
+    const response = await GET(cronRequest('cron-secret') as never);
+
+    expect(await response.json()).toMatchObject({
+      contracts: 1,
+      changed: 0,
+      ownerNotices: { delivered: 1, owed: 1 },
+    });
   });
 });
 
