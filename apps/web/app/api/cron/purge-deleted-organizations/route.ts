@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
 import { verifyCronRequest } from '@/lib/server/cron-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
@@ -15,18 +16,24 @@ const ORGANIZATIONS_PER_PAGE = 25;
 const SWEEP_BUDGET_MS = 240_000;
 
 const DUE_ORGANIZATIONS_PAGE = `
-  select id, deletion_scheduled_for::text as scheduled_for
+  select id
     from public.organizations
    where deletion_scheduled_for is not null
      and deletion_scheduled_for <= now()
-     and ($1::timestamptz is null or (deletion_scheduled_for, id) > ($1::timestamptz, $2::uuid))
-   order by deletion_scheduled_for asc, id asc
+     and not (id = any($1::uuid[]))
+   order by deletion_last_attempt_at asc nulls first, deletion_scheduled_for asc, id asc
    limit ${ORGANIZATIONS_PER_PAGE}
+`;
+
+const STAMP_ATTEMPT = `
+  update public.organizations
+     set deletion_last_attempt_at = now()
+   where id = $1::uuid
+     and deletion_scheduled_for is not null
 `;
 
 interface DueOrganization {
   id: string;
-  scheduled_for: string;
 }
 
 type PurgeOutcome = 'purged' | 'held' | 'failed';
@@ -96,6 +103,17 @@ async function purgeOrganization(organizationId: string): Promise<PurgeOutcome> 
   }
 }
 
+async function stampAttempt(db: DatabaseAdapter, organizationId: string): Promise<void> {
+  try {
+    await db.query(STAMP_ATTEMPT, [organizationId]);
+  } catch (error) {
+    logger.error(
+      { organizationId, error: error instanceof Error ? error.message : String(error) },
+      'Workspace purge could not record its attempt',
+    );
+  }
+}
+
 export async function GET(request: NextRequest) {
   if (!verifyCronRequest(request)) {
     logger.warn('Unauthorized cron request');
@@ -110,16 +128,13 @@ export async function GET(request: NextRequest) {
   let held = 0;
   let failed = 0;
   let deferred = 0;
-  let cursor: DueOrganization | null = null;
+  const attempted: string[] = [];
   let budgetSpent = false;
 
   while (!budgetSpent) {
     let page: DueOrganization[];
     try {
-      page = await db.query<DueOrganization>(DUE_ORGANIZATIONS_PAGE, [
-        cursor?.scheduled_for ?? null,
-        cursor?.id ?? null,
-      ]);
+      page = await db.query<DueOrganization>(DUE_ORGANIZATIONS_PAGE, [[...attempted]]);
     } catch (error) {
       logger.error(
         { error: error instanceof Error ? error.message : String(error) },
@@ -138,6 +153,8 @@ export async function GET(request: NextRequest) {
         deferred++;
         continue;
       }
+      attempted.push(organizationId);
+      await stampAttempt(db, organizationId);
       const outcome = await purgeOrganization(organizationId);
       if (outcome === 'purged') purged++;
       else if (outcome === 'held') held++;
@@ -145,7 +162,6 @@ export async function GET(request: NextRequest) {
     }
 
     if (page.length < ORGANIZATIONS_PER_PAGE) break;
-    cursor = page[page.length - 1] ?? null;
   }
 
   return NextResponse.json({
