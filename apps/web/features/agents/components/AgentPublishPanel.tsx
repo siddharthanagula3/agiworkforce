@@ -90,10 +90,16 @@ export function AgentPublishPanel({
       const next = await api.publish(agent.id, note.trim() || undefined);
       onAgentChange(next);
       setNote('');
-      setVersions(await api.versions(agent.id));
       toast.success(`Published version ${next.publishedVersion ?? ''}.`);
     } catch (reason) {
       toast.error(toUserMessage(reason, 'The agent could not be published.'));
+      setPublishing(false);
+      return;
+    }
+    try {
+      setVersions(await api.versions(agent.id));
+    } catch (reason) {
+      toast.error(toUserMessage(reason, 'Version history could not be refreshed.'));
     } finally {
       setPublishing(false);
     }
