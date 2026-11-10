@@ -283,8 +283,8 @@ export async function forkConversation(
     // route like a chat that never held any.
     const [target] = await tx.query<ManagedCloudConversationWire>(
       `insert into public.web_conversations
-         (id, user_id, title, model, project_id, is_temporary, google_user_data_at)
-       values ($1, $2, $3, $4, $5, $6, $7::timestamptz)
+         (id, user_id, title, model, project_id, is_temporary, google_user_data_at, activated_at)
+       values ($1, $2, $3, $4, $5, $6, $7::timestamptz, now())
        on conflict (id) do nothing
        returning id,
                  title,
@@ -334,7 +334,34 @@ export async function forkConversation(
     // data-modifying CTE only runs if the primary query's FROM/JOIN chain
     // actually reaches it.
     const copied = await tx.query<CopiedMessage>(
-      `with ordered_messages as (
+      `with recursive lineage as (
+         select message.id, message.parent_id
+           from public.web_messages as message
+          where message.conversation_id = $1
+            and message.id = $2
+            and message.deleted_at is null
+         union
+         select ancestor.id, ancestor.parent_id
+           from public.web_messages as ancestor
+           join lineage on ancestor.id = lineage.parent_id
+          where ancestor.conversation_id = $1
+            and ancestor.deleted_at is null
+       ),
+       thread_state as (
+         select exists (
+                  select 1
+                    from public.web_messages as threaded
+                   where threaded.conversation_id = $1
+                     and threaded.deleted_at is null
+                     and threaded.parent_id is not null
+                ) or exists (
+                  select 1
+                    from public.web_conversations as source
+                   where source.id = $1
+                     and source.active_leaf_message_id is not null
+                ) as has_variants
+       ),
+       ordered_messages as (
          select message.*,
                 row_number() over (
                   order by message.created_at, message.id
@@ -353,7 +380,12 @@ export async function forkConversation(
                 gen_random_uuid() as target_message_id
            from ordered_messages as source_message
            cross join fork_position
+           cross join thread_state
           where source_message.message_position <= fork_position.message_position
+            and (
+              not thread_state.has_variants
+              or source_message.id in (select id from lineage)
+            )
        ),
        inserted_messages as (
          insert into public.web_messages

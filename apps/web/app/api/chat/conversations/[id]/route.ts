@@ -379,6 +379,7 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
         and organization_id is not distinct from $15
         and deleted_at is null
         and ($19::bigint is null or server_version = $19::bigint)
+        and ($22::text is null or title = $22::text)
         and not (
           (
             $13::boolean and $14::boolean
@@ -417,10 +418,33 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
       expectedVersion,
       hasRouteSelectionUpdate,
       body.selectedRouteId ?? null,
+      body.expectedTitle ?? null,
     ],
   );
 
   if (!updated) {
+    if (body.expectedTitle !== undefined) {
+      const [unchanged] = await db.query<VersionedConversationRow>(
+        `
+          select id, organization_id, title, model, selected_route_id, project_id, pinned, starred, archived, is_temporary, active_leaf_message_id, instructions, created_at, updated_at,
+            server_version::text as server_version
+          from web_conversations
+          where id = $1
+            and user_id = $2
+            and organization_id is not distinct from $3
+            and deleted_at is null
+            and title <> $4
+          limit 1
+        `,
+        [id, userId, organizationId, body.expectedTitle],
+      );
+      if (unchanged) {
+        const kept = withoutVersion(unchanged);
+        const response = NextResponse.json({ conversation: kept.conversation });
+        if (kept.version) response.headers.set('etag', versionEtag(kept.version));
+        return response;
+      }
+    }
     if (movesIntoProject || turnsTemporaryOn) {
       const [current] = await db.query<{ is_temporary: boolean | null; project_id: string | null }>(
         `select is_temporary, project_id

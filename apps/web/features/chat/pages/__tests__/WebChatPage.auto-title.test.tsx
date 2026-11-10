@@ -12,6 +12,7 @@ type ScanModule5 = typeof import('../../components/ConversationTitleMenu');
 const mocks = vi.hoisted(() => ({
   temporaryConversation: false,
   updateConversation: vi.fn(async () => true),
+  renameFromMenu: null as null | ((title: string) => unknown),
 }));
 
 const CONVERSATION_ID = '00000000-0000-4000-8000-000000000801';
@@ -243,7 +244,10 @@ vi.mock('@/features/time-focus/TimeFocusReminder', async (importOriginal) => ({
 }));
 vi.mock('../../components/ConversationTitleMenu', async (importOriginal) => ({
   ...(await importOriginal<ScanModule5>()),
-  ConversationTitleMenu: () => null,
+  ConversationTitleMenu: (props: { onRename: (title: string) => unknown }) => {
+    mocks.renameFromMenu = props.onRename;
+    return null;
+  },
 }));
 vi.mock('../../components/approvals/ApprovalInbox', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -331,6 +335,7 @@ describe('WebChatPage auto-title (WEB-85)', () => {
   beforeEach(() => {
     mocks.temporaryConversation = false;
     mocks.updateConversation.mockClear();
+    mocks.renameFromMenu = null;
   });
 
   afterEach(() => {
@@ -377,6 +382,88 @@ describe('WebChatPage auto-title (WEB-85)', () => {
       expect.objectContaining({ title: expect.anything() }),
     );
   }, 15000);
+
+  it('keeps an accepted rename when an older title read settles afterwards', async () => {
+    seedFirstTurn({ title: 'Image generation' });
+    const MANUAL_TITLE = 'Quarterly launch plan';
+    let releaseSecondRead: (response: Response) => void = () => undefined;
+    let reads = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      if (!String(input).includes(`/api/chat/conversations/${CONVERSATION_ID}`)) {
+        return jsonResponse({});
+      }
+      reads += 1;
+      if (reads === 1) {
+        return jsonResponse({ conversation: { id: CONVERSATION_ID, title: STAGE_ONE_TITLE } });
+      }
+      return new Promise<Response>((resolve) => {
+        releaseSecondRead = resolve;
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
+
+    await waitFor(() => expect(storeTitle()).toBe(STAGE_ONE_TITLE));
+    await waitFor(() => expect(reads).toBe(2), { timeout: 6000 });
+    await waitFor(() => expect(mocks.renameFromMenu).not.toBeNull());
+    await mocks.renameFromMenu?.(MANUAL_TITLE);
+    useChatStore.getState().updateConversation(CONVERSATION_ID, { title: MANUAL_TITLE });
+    releaseSecondRead(
+      jsonResponse({ conversation: { id: CONVERSATION_ID, title: GENERATED_TITLE } }),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(storeTitle()).toBe(MANUAL_TITLE);
+  }, 15000);
+
+  it('sends its fallback title only over the placeholder it started from', async () => {
+    seedFirstTurn({ title: 'Image generation' });
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) =>
+      String(input).includes(`/api/chat/conversations/${CONVERSATION_ID}`)
+        ? new Response('{}', { status: 503 })
+        : jsonResponse({}),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
+
+    await waitFor(() => expect(mocks.updateConversation).toHaveBeenCalledTimes(1), {
+      timeout: 8000,
+    });
+    expect(mocks.updateConversation).toHaveBeenCalledWith(CONVERSATION_ID, {
+      title: CLIENT_TRUNCATION,
+      expectedTitle: 'Image generation',
+    });
+  }, 20000);
+
+  it('does not send its fallback title over a rename made while every read failed', async () => {
+    seedFirstTurn({ title: 'Image generation' });
+    const MANUAL_TITLE = 'Quarterly launch plan';
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) =>
+      String(input).includes(`/api/chat/conversations/${CONVERSATION_ID}`)
+        ? new Response('{}', { status: 503 })
+        : jsonResponse({}),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<WebChatPage />, { wrapper: workspaceFixture.wrapper });
+
+    await waitFor(() => expect(conversationTitleReads(fetchMock)).toHaveLength(1), {
+      timeout: 6000,
+    });
+    await waitFor(() => expect(mocks.renameFromMenu).not.toBeNull());
+    await mocks.renameFromMenu?.(MANUAL_TITLE);
+    await waitFor(() => expect(conversationTitleReads(fetchMock)).toHaveLength(3), {
+      timeout: 8000,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(mocks.updateConversation).toHaveBeenCalledTimes(1);
+    expect(mocks.updateConversation).toHaveBeenCalledWith(CONVERSATION_ID, {
+      title: MANUAL_TITLE,
+    });
+  }, 20000);
 
   it('keeps a temporary chat title on this device and never writes it to the server', async () => {
     seedFirstTurn({ title: 'New Chat', isTemporary: true });

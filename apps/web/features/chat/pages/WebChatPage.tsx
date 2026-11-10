@@ -373,6 +373,7 @@ import {
   type WebLocalToByokPreview,
 } from '../lib/localByokHandoff';
 import { getRegenerateReplayDecision, replayToSendOptions } from '../lib/regenerateReplay';
+import { replayMcpContext } from '../lib/mcp-context-summary';
 import {
   approvedResearchSteps,
   completedResearchSteps,
@@ -5300,9 +5301,15 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         setChatError(replayDecision.message, conversationId);
         return;
       }
+      const mcpReplay = replayMcpContext(planned.message.metadata?.mcpContext);
+      if (!mcpReplay.ok) {
+        setChatError(mcpReplay.message, conversationId);
+        return;
+      }
       const replayOptions = {
         ...replayToSendOptions(replayDecision.replay),
         ...freeModelHandoffReplay(planned.message.metadata),
+        ...(mcpReplay.mcpContext ? { mcpContext: mcpReplay.mcpContext } : {}),
       };
 
       if (variantsEnabled) {
@@ -5495,9 +5502,15 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         return;
       }
 
+      const mcpReplay = replayMcpContext(userMsg.metadata?.mcpContext);
+      if (!mcpReplay.ok) {
+        setChatError(mcpReplay.message, displayedConversationId);
+        return;
+      }
       const replayOptions = {
         ...replayToSendOptions(replayDecision.replay),
         ...freeModelHandoffReplay(userMsg.metadata),
+        ...(mcpReplay.mcpContext ? { mcpContext: mcpReplay.mcpContext } : {}),
       };
 
       if (userRetryIndex >= 0 && !conversations.some((c) => c.id === displayedConversationId)) {

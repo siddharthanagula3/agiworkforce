@@ -14,6 +14,7 @@ import {
   type PreparedCloudCodeAgentTurn,
   type StartCloudCodeAgentTurnInput,
 } from './cloud-code-agent-service';
+import { findPendingCloudCodeApprovalRequest } from './cloud-code-agent-approval-service';
 import { openCloudCodeDurableRun } from './cloud-code-durable-run';
 import { listCloudCodeAgentTurns, type CloudCodeOwner } from './cloud-code-session-service';
 
@@ -100,17 +101,24 @@ async function awaitDurableTurn(
   while (Date.now() < deadlineAtMs && !signal.aborted) {
     const turns = await listCloudCodeAgentTurns(db, owner, sessionId);
     const turn = turns.find((candidate) => candidate.turnId === turnId);
-    if (turn?.stopReason && turn.stopReason !== 'awaiting_approval') {
-      return {
-        turnId,
-        stopReason: turn.stopReason,
-        stepsUsed: turn.stepsUsed,
-        inputTokens: turn.inputTokens,
-        outputTokens: turn.outputTokens,
-        finalMessage: turn.finalMessage,
-        steps: turn.steps,
-        ...(turn.errorMessage ? { errorMessage: turn.errorMessage } : {}),
-      };
+    if (turn?.stopReason) {
+      const pendingApproval =
+        turn.stopReason === 'awaiting_approval'
+          ? await findPendingCloudCodeApprovalRequest(db, owner, sessionId, turnId)
+          : null;
+      if (turn.stopReason !== 'awaiting_approval' || pendingApproval) {
+        return {
+          turnId,
+          stopReason: turn.stopReason,
+          stepsUsed: turn.stepsUsed,
+          inputTokens: turn.inputTokens,
+          outputTokens: turn.outputTokens,
+          finalMessage: turn.finalMessage,
+          steps: turn.steps,
+          ...(pendingApproval ? { pendingApproval } : {}),
+          ...(turn.errorMessage ? { errorMessage: turn.errorMessage } : {}),
+        };
+      }
     }
     await new Promise((resolve) => setTimeout(resolve, DURABLE_TURN_POLL_INTERVAL_MS));
   }

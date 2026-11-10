@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 type ScanModule0 = typeof import('@/lib/services/cloud-code-session-service');
 type ScanModule1 = typeof import('@/lib/workflows/start-cloud-code-turn-workflow');
+type ScanModule2 = typeof import('@/lib/services/cloud-code-agent-approval-service');
 
 const {
   mockGetSession,
@@ -8,12 +9,14 @@ const {
   mockStartWorkflow,
   mockListTurns,
   mockResolveProvider,
+  mockFindPendingApproval,
 } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
   mockOpenDurableRun: vi.fn(),
   mockStartWorkflow: vi.fn(),
   mockListTurns: vi.fn(),
   mockResolveProvider: vi.fn(),
+  mockFindPendingApproval: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -42,6 +45,10 @@ vi.mock('@/lib/services/provider-adapter-service', () => ({
 vi.mock('@/lib/services/cloud-code-session-service', async (importOriginal) => {
   const actual = await importOriginal<ScanModule0>();
   return { ...actual, getCloudCodeSession: mockGetSession, listCloudCodeAgentTurns: mockListTurns };
+});
+vi.mock('@/lib/services/cloud-code-agent-approval-service', async (importOriginal) => {
+  const actual = await importOriginal<ScanModule2>();
+  return { ...actual, findPendingCloudCodeApprovalRequest: mockFindPendingApproval };
 });
 vi.mock('@/lib/services/cloud-code-durable-run', () => ({
   openCloudCodeDurableRun: mockOpenDurableRun,
@@ -169,6 +176,47 @@ describe('handing a Code turn to the durable runner', () => {
 
     await expect(startTurn(db())).resolves.toMatchObject({ stopReason: 'done' });
     expect(mockListTurns).toHaveBeenCalledTimes(2);
+  });
+
+  it('hands the initiating request the approval a durable turn paused on', async () => {
+    const pendingApproval = {
+      stepIndex: 2,
+      toolUseId: 'step-2',
+      toolName: 'run_command',
+      args: { command: 'rm -rf build' },
+      command: 'rm -rf build',
+      reason: 'Deletes files',
+    };
+    mockListTurns.mockResolvedValue([finishedTurn({ stopReason: 'awaiting_approval' })]);
+    mockFindPendingApproval.mockResolvedValue(pendingApproval);
+
+    await expect(startTurn(db())).resolves.toMatchObject({
+      turnId: TURN_ID,
+      stopReason: 'awaiting_approval',
+      pendingApproval,
+    });
+    expect(mockFindPendingApproval).toHaveBeenCalledWith(
+      expect.anything(),
+      OWNER,
+      SESSION_ID,
+      TURN_ID,
+    );
+  });
+
+  it('keeps waiting when the pause is recorded before its approval request is visible', async () => {
+    const pendingApproval = {
+      stepIndex: 0,
+      toolUseId: 'step-0',
+      toolName: 'run_command',
+      args: {},
+      command: 'npm test',
+      reason: 'Runs a command',
+    };
+    mockListTurns.mockResolvedValue([finishedTurn({ stopReason: 'awaiting_approval' })]);
+    mockFindPendingApproval.mockResolvedValueOnce(null).mockResolvedValueOnce(pendingApproval);
+
+    await expect(startTurn(db())).resolves.toMatchObject({ pendingApproval });
+    expect(mockFindPendingApproval).toHaveBeenCalledTimes(2);
   });
 
   it('says the turn is still running rather than reporting a turn that timed out', async () => {

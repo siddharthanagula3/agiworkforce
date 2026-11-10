@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { getBillingPlanPricing } from '@agiworkforce/types';
 
 const billingMocks = vi.hoisted(() => ({
   openBillingPortal: vi.fn(),
@@ -339,6 +340,40 @@ describe('BillingSection', () => {
       ([url, init]) => String(url).includes('downgrade-preview') && init?.method === 'POST',
     );
     expect(JSON.parse(String(post?.[1]?.body))).toEqual({ plan: 'pro' });
+  });
+
+  it('keeps a successful resume when an older plan read settles afterwards', async () => {
+    const proLabel = getBillingPlanPricing('pro').label;
+    mockSubscription.cancel_at_period_end = true;
+    let settleRead: (state: unknown) => void = () => undefined;
+    const pendingRead = new Promise<unknown>((resolve) => {
+      settleRead = resolve;
+    });
+    global.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (!String(input).includes('/api/billing')) {
+        return { ok: true, json: async () => ({}) } as Response;
+      }
+      if (String(input).includes('resume-cancellation')) {
+        return { ok: true, json: async () => YEARLY_PRO_STATE } as Response;
+      }
+      if (String(input).includes('downgrade-preview') && init?.method !== 'POST') {
+        return { ok: true, json: async () => pendingRead } as Response;
+      }
+      return { ok: true, json: async () => ({}) } as Response;
+    });
+
+    render(<BillingSection />);
+
+    fireEvent.click(await screen.findByRole('button', { name: `Resume ${proLabel}` }));
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: `Resume ${proLabel}` })).toBeNull(),
+    );
+
+    settleRead({ ...YEARLY_PRO_STATE, cancelAt: '2027-01-15T00:00:00.000Z' });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(screen.queryByRole('button', { name: `Resume ${proLabel}` })).toBeNull();
+    expect(screen.queryByText(new RegExp(`Your ${proLabel} plan ends on`))).toBeNull();
   });
 
   it('labels an operator-provisioned plan without inventing Stripe controls', () => {
