@@ -6,6 +6,7 @@ import type { FreeLimit } from '@agiworkforce/cloud-contracts';
 import { readFreeLimit } from '@/features/chat/lib/freeLimitRecovery';
 import { trackMessageSave } from '@/features/chat/lib/pending-message-saves';
 import type { ChatOutputFormat } from '@/lib/chat-output-format';
+import { EMPTY_KEPT_ASSISTANT_CONTENT } from '@/lib/chat-kept-messages';
 import {
   chatCompletionEndpoint,
   freeQuotaSelection,
@@ -673,8 +674,6 @@ function buildAssistantErrorContent(message: string, code?: string): string {
   return `Error: ${message}\n\nTry again, or start a new chat if this response is stuck.`;
 }
 
-const EMPTY_ASSISTANT_CONTENT_PLACEHOLDER = String.fromCharCode(0x200b);
-
 const STOPPED_FINISH_REASON = 'stopped';
 const RATE_LIMITED_SAVE_STATUS = 429;
 
@@ -799,7 +798,7 @@ function notifyPersistenceFailure(kind: 'user' | 'assistant', error: unknown): v
   console.error(`[useChatStream] Failed to save ${kind} message:`, error);
 }
 
-export { saveMessageToDb, notifyPersistenceFailure, EMPTY_ASSISTANT_CONTENT_PLACEHOLDER };
+export { saveMessageToDb, notifyPersistenceFailure };
 
 /**
  * The server treats an absent field as "on", so every request that produces a
@@ -2718,7 +2717,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           {
             id: assistantMessageId,
             role: 'assistant',
-            content: fullContent || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
+            content: fullContent || EMPTY_KEPT_ASSISTANT_CONTENT,
             model,
             metadata,
             ...(ctx.assistantParentId ? { parentId: ctx.assistantParentId } : {}),
@@ -5152,7 +5151,7 @@ export function useChatStream(
                 {
                   id: assistantMessageId,
                   role: 'assistant',
-                  content: message.content || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
+                  content: message.content || EMPTY_KEPT_ASSISTANT_CONTENT,
                   model: message.model,
                   metadata: nextMetadata,
                 },
@@ -5360,7 +5359,7 @@ export function useResolveToolApproval(
             {
               id: assistantMessageId,
               role: selectedMessage.role,
-              content: selectedMessage.content || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
+              content: selectedMessage.content || EMPTY_KEPT_ASSISTANT_CONTENT,
               model: selectedMessage.model ?? turn.model,
               metadata: selectedMetadata,
             },
@@ -5426,7 +5425,7 @@ export function useResolveToolApproval(
               {
                 id: assistantMessageId,
                 role: message.role,
-                content: message.content || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
+                content: message.content || EMPTY_KEPT_ASSISTANT_CONTENT,
                 model: message.model ?? turn.model,
                 metadata,
               },
@@ -5457,7 +5456,7 @@ export function useResolveToolApproval(
             {
               id: assistantMessageId,
               role: message.role,
-              content: message.content || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
+              content: message.content || EMPTY_KEPT_ASSISTANT_CONTENT,
               model: message.model ?? turn.model,
               metadata,
             },
@@ -5714,7 +5713,7 @@ function useResolveToolInput(
             {
               id: assistantMessageId,
               role: message.role,
-              content: message.content || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
+              content: message.content || EMPTY_KEPT_ASSISTANT_CONTENT,
               model: message.model ?? turn.model,
               ...(message.metadata ? { metadata: message.metadata } : {}),
             },
@@ -5951,7 +5950,7 @@ async function handleStreamError(error: unknown, ctx: StreamErrorContext): Promi
         {
           id: assistantMessageId,
           role: 'assistant',
-          content: currentMessage.content || EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
+          content: currentMessage.content || EMPTY_KEPT_ASSISTANT_CONTENT,
           model: currentMessage.model ?? model,
           metadata: cancelledMetadata,
           ...(currentMessage.parentId ? { parentId: currentMessage.parentId } : {}),

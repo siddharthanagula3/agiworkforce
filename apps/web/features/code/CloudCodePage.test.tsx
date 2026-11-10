@@ -1146,6 +1146,40 @@ describe('CloudCodePage', () => {
     expect(screen.getByText('all green')).toBeInTheDocument();
   });
 
+  it('says earlier turns are missing only when the server returned the newest window', async () => {
+    const user = userEvent.setup();
+    const api = createApi({
+      list: vi.fn(async () => ({ availability, sessions: [session], runtimes: [] })),
+      get: vi.fn(async () => ({
+        session,
+        terminalEntries: [],
+        turns: [],
+        turnsTruncated: true,
+      })),
+    });
+    render(<CloudCodePage api={api} />);
+
+    await openSession(user, session.title);
+
+    expect(
+      await screen.findByText('Earlier turns of this session are not shown here.'),
+    ).toBeTruthy();
+  });
+
+  it('shows no earlier-turns notice for a complete transcript', async () => {
+    const user = userEvent.setup();
+    const api = createApi({
+      list: vi.fn(async () => ({ availability, sessions: [session], runtimes: [] })),
+      get: vi.fn(async () => ({ session, terminalEntries: [], turns: [], turnsTruncated: false })),
+    });
+    render(<CloudCodePage api={api} />);
+
+    await openSession(user, session.title);
+
+    await waitFor(() => expect(api.get).toHaveBeenCalled());
+    expect(screen.queryByText('Earlier turns of this session are not shown here.')).toBeNull();
+  });
+
   it('groups consecutive commands into one row', async () => {
     const user = userEvent.setup();
     const entries = ['pnpm install', 'pnpm test', 'pnpm lint'].map((command, index) => ({

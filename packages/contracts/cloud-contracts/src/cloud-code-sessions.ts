@@ -218,6 +218,7 @@ export const CloudCodeSharedSessionSchema = z.object({
   updatedAt: z.string().datetime(),
   terminalEntries: z.array(CloudCodeTerminalEntrySchema),
   turns: z.array(CloudCodeAgentTurnRecordSchema),
+  turnsTruncated: z.boolean().default(false),
 });
 export const CloudCodeSessionDeletedSchema = z.object({ deleted: z.literal(true) });
 

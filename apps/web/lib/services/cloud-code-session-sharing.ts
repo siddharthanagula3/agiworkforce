@@ -18,9 +18,9 @@ import {
   CloudCodeNotFoundError,
   CloudCodeValidationError,
   getCloudCodeSession,
-  listCloudCodeAgentTurns,
   listCloudCodeTerminalEntries,
   mapCloudCodeSession,
+  readCloudCodeAgentTurnWindow,
   validateCloudCodeSessionId,
   type CloudCodeOwner,
 } from './cloud-code-session-service';
@@ -150,9 +150,9 @@ export async function openSharedCloudCodeSession(
   ) {
     throw new CloudCodeSharedRepositoryError(cloudCodeRepositoryLabel(session.repositoryUrl));
   }
-  const [terminalEntries, turns, ownerName] = await Promise.all([
+  const [terminalEntries, { turns, truncated }, ownerName] = await Promise.all([
     listCloudCodeTerminalEntries(ownerDb, owner, grant.session_id),
-    listCloudCodeAgentTurns(ownerDb, owner, grant.session_id),
+    readCloudCodeAgentTurnWindow(ownerDb, owner, grant.session_id),
     readOwnerName(ownerDb, grant.owner_user_id),
   ]);
   return {
@@ -168,5 +168,6 @@ export async function openSharedCloudCodeSession(
     updatedAt: session.updatedAt,
     terminalEntries,
     turns,
+    turnsTruncated: truncated,
   };
 }

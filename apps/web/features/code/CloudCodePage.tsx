@@ -215,6 +215,7 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
   const [selectedId, publishSelectedId] = useState<string | null>(sessionId ?? null);
   const [entries, setEntries] = useState<CloudCodeTerminalEntry[]>([]);
   const [turns, setTurns] = useState<CodeTurnRecord[]>([]);
+  const [truncatedSessionId, setTruncatedSessionId] = useState<string | null>(null);
   const [approvals, setApprovals] = useState<CodeApprovalPrompt[]>([]);
   const [pageLoading, setPageLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -581,6 +582,7 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
         if (!current()) return;
         replaceSession(body.session, owner);
         setEntries(body.terminalEntries);
+        setTruncatedSessionId(body.turnsTruncated === true ? body.session.id : null);
         // Merge rather than replace: this read races the turn running in this
         // tab, and a response computed before that turn's row existed would
         // wipe it out of the transcript.
@@ -1876,6 +1878,12 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
                           <div className={styles['notice']} role="status">
                             <Spinner size="sm" aria-label={CODE_COPY.openingSession} />
                             <span>{CODE_COPY.openingSession}</span>
+                          </div>
+                        )}
+
+                        {!detailLoading && truncatedSessionId === selectedSession.id && (
+                          <div className={styles['notice']} role="status">
+                            <span>{CODE_COPY.earlierTurnsNotShown}</span>
                           </div>
                         )}
 

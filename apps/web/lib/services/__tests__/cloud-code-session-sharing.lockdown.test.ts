@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   getNeonDb: vi.fn(),
   getSession: vi.fn(),
   listTerminal: vi.fn(),
-  listTurns: vi.fn(),
+  readTurnWindow: vi.fn(),
 }));
 
 vi.mock('@/lib/feature-flags/tenant-lockdown', () => ({
@@ -22,7 +22,7 @@ vi.mock('../cloud-code-session-service', async (importOriginal) => ({
   ...(await importOriginal<CloudCodeSessionServiceModule>()),
   getCloudCodeSession: mocks.getSession,
   listCloudCodeTerminalEntries: mocks.listTerminal,
-  listCloudCodeAgentTurns: mocks.listTurns,
+  readCloudCodeAgentTurnWindow: mocks.readTurnWindow,
 }));
 
 import { openSharedCloudCodeSession } from '../cloud-code-session-sharing';
@@ -49,7 +49,7 @@ beforeEach(() => {
     updatedAt: '2026-11-01T00:00:00.000Z',
   });
   mocks.listTerminal.mockResolvedValue([]);
-  mocks.listTurns.mockResolvedValue([]);
+  mocks.readTurnWindow.mockResolvedValue({ turns: [], truncated: false });
 });
 
 describe('opening a shared Code session from a locked workspace', () => {
@@ -70,7 +70,7 @@ describe('opening a shared Code session from a locked workspace', () => {
     expect(mocks.lockdown).toHaveBeenCalledWith(ORG);
     expect(mocks.getSession).not.toHaveBeenCalled();
     expect(mocks.listTerminal).not.toHaveBeenCalled();
-    expect(mocks.listTurns).not.toHaveBeenCalled();
+    expect(mocks.readTurnWindow).not.toHaveBeenCalled();
   });
 
   it('still opens the transcript when the granting workspace is not locked', async () => {
@@ -78,6 +78,15 @@ describe('opening a shared Code session from a locked workspace', () => {
 
     expect(mocks.lockdown).toHaveBeenCalledWith(ORG);
     expect(shared?.title).toBe('Fix build');
+    expect(shared?.turnsTruncated).toBe(false);
+  });
+
+  it('tells the viewer when the transcript holds only the newest turns', async () => {
+    mocks.readTurnWindow.mockResolvedValue({ turns: [], truncated: true });
+
+    const shared = await openSharedCloudCodeSession(viewerDbFor(grant), 'viewer', TOKEN);
+
+    expect(shared?.turnsTruncated).toBe(true);
   });
 
   it('asks the lockdown check with no workspace for a personal public share', async () => {

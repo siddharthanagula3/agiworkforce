@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   EMPTY_KEPT_ASSISTANT_CONTENT,
@@ -78,5 +80,23 @@ describe('keptMessageContent', () => {
     expect(keptMessageContent({ role: 'assistant', content: '', metadata: IMAGE })).toBe(
       EMPTY_KEPT_ASSISTANT_CONTENT,
     );
+  });
+});
+
+describe('EMPTY_KEPT_ASSISTANT_CONTENT', () => {
+  it('is a single zero-width space', () => {
+    expect(EMPTY_KEPT_ASSISTANT_CONTENT).toBe('\u200b');
+  });
+
+  it('is the only definition used by the stream hook and the media persistence module', () => {
+    const webRoot = join(__dirname, '..');
+    const sources = [
+      join(webRoot, 'lib/hooks/useChatStream.ts'),
+      join(webRoot, 'features/chat/lib/imageGenerationPersistence.ts'),
+    ].map((path) => readFileSync(path, 'utf8'));
+    for (const source of sources) {
+      expect(source).not.toMatch(/0x200b/i);
+      expect(source).toContain('EMPTY_KEPT_ASSISTANT_CONTENT');
+    }
   });
 });

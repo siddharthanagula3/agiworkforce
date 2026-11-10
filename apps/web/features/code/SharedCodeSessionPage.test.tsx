@@ -120,3 +120,26 @@ describe('shared Code session ownership', () => {
     expect(screen.getByRole('heading', { name: 'New session share' })).toBeTruthy();
   });
 });
+
+describe('shared Code session history window', () => {
+  const NOTICE = 'Earlier turns of this session are not shown here.';
+
+  it('says earlier turns are missing when the server returned only the newest ones', async () => {
+    const api = {
+      openShared: vi.fn().mockResolvedValue({ ...shared('Long share'), turnsTruncated: true }),
+    } as unknown as CloudCodeApi;
+    render(<SharedCodeSessionPage token="long" api={api} />);
+    await act(async () => {});
+    expect(screen.getByText(NOTICE)).toBeTruthy();
+  });
+
+  it('shows no notice for a complete transcript', async () => {
+    const api = {
+      openShared: vi.fn().mockResolvedValue(shared('Short share')),
+    } as unknown as CloudCodeApi;
+    render(<SharedCodeSessionPage token="short" api={api} />);
+    await act(async () => {});
+    expect(screen.getByRole('heading', { name: 'Short share' })).toBeTruthy();
+    expect(screen.queryByText(NOTICE)).toBeNull();
+  });
+});

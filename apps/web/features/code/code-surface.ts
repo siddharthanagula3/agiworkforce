@@ -198,6 +198,7 @@ export const CODE_COPY = {
   approve: CLOUD_CODE_SESSION_COPY.approve,
   reject: CLOUD_CODE_SESSION_COPY.reject,
   agentWorking: CLOUD_CODE_SESSION_COPY.agentWorking,
+  earlierTurnsNotShown: CLOUD_CODE_SESSION_COPY.earlierTurnsNotShown,
   deploymentDisabled:
     'Managed environments are not enabled on this deployment. Existing sessions stay readable.',
   planNotEntitled: 'Your plan does not include managed environments.',
