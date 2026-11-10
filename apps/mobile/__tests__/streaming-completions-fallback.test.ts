@@ -635,6 +635,7 @@ describe('completions stream fallback (RN null response.body)', () => {
           ),
         })
         .mockRejectedValueOnce(new TypeError('Network request failed')),
+      cancel: jest.fn().mockResolvedValue(undefined),
       releaseLock: jest.fn(),
     };
     const now = '2026-07-17T20:00:00.000Z';

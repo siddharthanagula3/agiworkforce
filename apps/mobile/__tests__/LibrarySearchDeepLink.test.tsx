@@ -227,7 +227,10 @@ describe('Library reads the account library, not the local transcript', () => {
     fireEvent.press(screen.getByLabelText('Open launch-plan.pdf'));
     await waitFor(() => {
       expect(downloadGeneratedFile).toHaveBeenCalled();
-      expect(shareFile).toHaveBeenCalledWith('file:///exports/launch-plan.pdf');
+      expect(shareFile).toHaveBeenCalledWith(
+        'file:///exports/launch-plan.pdf',
+        expect.objectContaining({ isCurrent: expect.any(Function) }),
+      );
     });
   });
 });

@@ -37,6 +37,10 @@ jest.mock('../lib/egressGuard', () => ({
   guardedFetch: (input: RequestInfo | URL, init?: RequestInit) => globalThis.fetch(input, init),
 }));
 
+jest.mock('../lib/mmkv', () => ({
+  storage: { getString: () => undefined, set: jest.fn(), delete: jest.fn() },
+}));
+
 const mockInvalidateCloudAccount = jest.fn();
 jest.mock('../src/features/auth/services/cloudAccountSession', () => ({
   ...jest.requireActual('../src/features/auth/services/cloudAccountSession'),

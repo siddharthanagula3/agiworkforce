@@ -1,14 +1,30 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Modal, StyleSheet, TextInput, View } from 'react-native';
-import { Check, Copy, MailPlus, ShieldCheck, TriangleAlert, Users } from 'lucide-react-native';
+import {
+  Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Share,
+  StyleSheet,
+  TextInput,
+  View,
+} from 'react-native';
+import {
+  Check,
+  Copy,
+  MailPlus,
+  Share2,
+  ShieldCheck,
+  TriangleAlert,
+  Users,
+} from 'lucide-react-native';
 import { Button } from '@/components/ui/Button';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
-import { copyToClipboard } from '@/lib/clipboard';
 import { openInAppBrowser } from '@/lib/safeOpenURL';
 import { API_URL } from '@/lib/constants';
 import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
 import { SettingsGroup, SettingsInfo, SettingsRow } from '@/src/features/settings/Common';
+import { copyControlLabel, useCopyAction } from '@/src/shared/hooks/useCopyAction';
 import { useThemeColors } from '@/src/ui/theme';
 import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
 import {
@@ -51,7 +67,7 @@ function UndeliveredInvitation({
   receipt: InvitationReceipt;
   onDismiss: () => void;
 }) {
-  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const { status: copyStatus, copy } = useCopyAction();
   const title = receipt.replacedPreviousLink
     ? 'Invitation renewed, email not sent'
     : 'Invitation created, email not sent';
@@ -69,14 +85,21 @@ function UndeliveredInvitation({
           <SettingsRow
             label={`Copy link for ${receipt.email}`}
             icon={Copy}
-            value={
-              copyState === 'copied' ? 'Copied' : copyState === 'failed' ? 'Copy failed' : 'Copy'
-            }
+            value={copyControlLabel(copyStatus, 'Copy')}
             onPress={() => {
-              void (async () => {
-                const copied = await copyToClipboard(receipt.link ?? '');
-                setCopyState(copied ? 'copied' : 'failed');
-              })();
+              void copy(receipt.link ?? '');
+            }}
+          />
+        ) : null}
+        {receipt.link ? (
+          <SettingsRow
+            label={`Share link for ${receipt.email}`}
+            icon={Share2}
+            value="Share"
+            onPress={() => {
+              Share.share({ message: receipt.link ?? '' }).catch(() => {
+                Alert.alert('Could not share the link', 'Copy the link instead.');
+              });
             }}
           />
         ) : null}

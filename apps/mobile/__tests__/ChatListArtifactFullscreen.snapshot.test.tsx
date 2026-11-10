@@ -128,6 +128,7 @@ jest.mock('react-native-safe-area-context', () => {
 });
 
 jest.mock('@agiworkforce/types', () => ({
+  ...jest.requireActual('@agiworkforce/types'),
   summarizeGeneratedFileBundle: () => ({
     title: 'test.py',
     fileName: 'test.py',

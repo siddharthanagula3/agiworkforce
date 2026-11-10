@@ -200,6 +200,7 @@ import { router } from 'expo-router';
 import CloudAccountScreen from '../src/features/settings/cloud-account';
 import { useCloudProfileStore } from '../src/features/settings/cloud-account/cloudProfileStore';
 import { ApiHttpError, httpErrorFrom } from '../services/apiErrors';
+import { ownerHandler } from '../test-utils/ownerProps';
 import {
   __resetCloudAccountSessionForTests,
   activateCloudAccount,
@@ -862,7 +863,7 @@ describe('Cloud Account destructive action ownership', () => {
   it('retires a retained cancellation confirmation when a refresh returns an invalid date', async () => {
     mockGetDeletionStatus.mockResolvedValueOnce(pendingDeletionStatus);
     render(<CloudAccountScreen />);
-    const refresh = screen.getByLabelText('Check deletion status').props.onPress as () => void;
+    const refresh = ownerHandler(screen.getByLabelText('Check deletion status'), 'onPress');
     await waitFor(() => expect(screen.getByLabelText('Cancel Account Deletion')).toBeTruthy());
     fireEvent.press(screen.getByLabelText('Cancel Account Deletion'));
     const old = deletionAlert('Cancel account deletion?');
@@ -1137,7 +1138,7 @@ describe('Cloud Account destructive action ownership', () => {
     mockDeleteAccount.mockReturnValueOnce(pending.promise);
     render(<CloudAccountScreen />);
     await waitFor(() => expect(screen.getByLabelText('Delete Account')).toBeTruthy());
-    const open = screen.getByLabelText('Delete Account').props.onPress as () => void;
+    const open = ownerHandler(screen.getByLabelText('Delete Account'), 'onPress');
     act(() => {
       open();
       open();
@@ -1273,7 +1274,7 @@ describe('Cloud Account destructive action ownership', () => {
   it('invalidates a cancellation confirmation when its ready schedule is refreshed', async () => {
     mockGetDeletionStatus.mockResolvedValueOnce(pendingDeletionStatus);
     render(<CloudAccountScreen />);
-    const refresh = screen.getByLabelText('Check deletion status').props.onPress as () => void;
+    const refresh = ownerHandler(screen.getByLabelText('Check deletion status'), 'onPress');
     await waitFor(() => expect(screen.getByLabelText('Cancel Account Deletion')).toBeTruthy());
     fireEvent.press(screen.getByLabelText('Cancel Account Deletion'));
     const old = deletionAlert('Cancel account deletion?');
@@ -1340,7 +1341,7 @@ describe('Cloud Account destructive action ownership', () => {
     const pending = deferred<unknown>();
     mockDeleteAccount.mockReturnValueOnce(pending.promise);
     render(<CloudAccountScreen />);
-    const refresh = screen.getByLabelText('Check deletion status').props.onPress as () => void;
+    const refresh = ownerHandler(screen.getByLabelText('Check deletion status'), 'onPress');
     await waitFor(() => expect(screen.getByLabelText('Delete Account')).toBeTruthy());
     fireEvent.press(screen.getByLabelText('Delete Account'));
     act(() => {
@@ -1516,9 +1517,9 @@ describe('Cloud Account destructive action ownership', () => {
 
   it('does not let a saved row adopt a replaced ready status snapshot', async () => {
     render(<CloudAccountScreen />);
-    const refresh = screen.getByLabelText('Check deletion status').props.onPress as () => void;
+    const refresh = ownerHandler(screen.getByLabelText('Check deletion status'), 'onPress');
     await waitFor(() => expect(screen.getByLabelText('Delete Account')).toBeTruthy());
-    const oldOpen = screen.getByLabelText('Delete Account').props.onPress as () => void;
+    const oldOpen = ownerHandler(screen.getByLabelText('Delete Account'), 'onPress');
     act(() => {
       oldOpen();
       deletionAlert().cancel();
@@ -1539,9 +1540,9 @@ describe('Cloud Account destructive action ownership', () => {
 
   it('does not let an old focus refresh or row release or adopt a new confirmation', async () => {
     render(<CloudAccountScreen />);
-    const oldRefresh = screen.getByLabelText('Check deletion status').props.onPress as () => void;
+    const oldRefresh = ownerHandler(screen.getByLabelText('Check deletion status'), 'onPress');
     await waitFor(() => expect(screen.getByLabelText('Delete Account')).toBeTruthy());
-    const oldOpen = screen.getByLabelText('Delete Account').props.onPress as () => void;
+    const oldOpen = ownerHandler(screen.getByLabelText('Delete Account'), 'onPress');
     act(() => {
       mockBlur?.();
       mockFocus?.();

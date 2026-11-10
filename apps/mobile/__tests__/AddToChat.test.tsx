@@ -144,6 +144,7 @@ import { useChatViewStore } from '../stores/chat/chatViewStore';
 import * as Clipboard from 'expo-clipboard';
 import { listMediaModels } from '../src/features/chat/actions/mediaMode';
 import { getModelMetadataById, isModelLive, modelsCatalog } from '@agiworkforce/types';
+import { ownerHandler } from '../test-utils/ownerProps';
 import {
   SYNTHETIC_RETIRED_VIDEO_MODEL_ID,
   requireLiveVideoModelId,
@@ -234,7 +235,7 @@ describe('AddToChatSheet', () => {
     const view = renderSheet({ destinationKey: 'first', onAttachFromLibrary });
     fireEvent(view.getByTestId('bottom-sheet'), 'change', 0);
     const row = await view.findByLabelText('Attach old.pdf from Library');
-    const stalePress = row.props.onPress;
+    const stalePress = ownerHandler(row, 'onPress');
     view.rerender(
       <AddToChatSheet
         {...defaultProps}
@@ -301,7 +302,10 @@ describe('AddToChatSheet', () => {
     const onAttachFromLibrary = jest.fn();
     const view = renderSheet({ onAttachFromLibrary });
     fireEvent(view.getByTestId('bottom-sheet'), 'change', 0);
-    const stalePress = (await view.findByLabelText('Attach old.pdf from Library')).props.onPress;
+    const stalePress = ownerHandler(
+      await view.findByLabelText('Attach old.pdf from Library'),
+      'onPress',
+    );
     fireEvent(view.getByTestId('bottom-sheet'), 'change', -1);
     act(() => stalePress());
     expect(onAttachFromLibrary).not.toHaveBeenCalled();

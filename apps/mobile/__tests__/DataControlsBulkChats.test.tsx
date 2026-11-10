@@ -169,6 +169,7 @@ jest.mock('@/src/ui/theme', () => ({
 
 import { useAuthStore } from '@/src/features/auth/store';
 import DataControlsScreen from '@/src/features/settings/data-controls';
+import { ownerHandler } from '@/test-utils/ownerProps';
 import { syncLocalConversationsToCloud } from '@/src/features/settings/data-controls/localCloudSyncService';
 import {
   activateCloudAccount,
@@ -538,10 +539,11 @@ describe.each([
     const pending = deferred<unknown>();
     mockPost.mockReturnValueOnce(pending.promise);
     const screen = render(<DataControlsScreen />);
-    const entry = screen.getByTestId(`${action}-all-chats-button`).props.onPress;
-    const otherEntry = screen.getByTestId(
-      `${action === 'archive' ? 'delete' : 'archive'}-all-chats-button`,
-    ).props.onPress;
+    const entry = ownerHandler(screen.getByTestId(`${action}-all-chats-button`), 'onPress');
+    const otherEntry = ownerHandler(
+      screen.getByTestId(`${action === 'archive' ? 'delete' : 'archive'}-all-chats-button`),
+      'onPress',
+    );
     act(() => {
       entry();
       entry();
@@ -646,14 +648,14 @@ describe.each([
 
   it('rejects a saved rendered entry after account or focus replacement', () => {
     const screen = render(<DataControlsScreen />);
-    const entry = screen.getByTestId(`${action}-all-chats-button`).props.onPress;
+    const entry = ownerHandler(screen.getByTestId(`${action}-all-chats-button`), 'onPress');
     act(() => {
       activateCloudAccount('account-b');
       activateCloudAccount('account-a');
     });
     act(() => entry());
     expect(alertCalls).toHaveLength(0);
-    const focusedEntry = screen.getByTestId(`${action}-all-chats-button`).props.onPress;
+    const focusedEntry = ownerHandler(screen.getByTestId(`${action}-all-chats-button`), 'onPress');
     act(() => {
       blurScreen();
       focusScreen();

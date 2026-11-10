@@ -5,6 +5,7 @@ import * as Clipboard from 'expo-clipboard';
 import type { ReactTestInstance } from 'react-test-renderer';
 import { MessageBubble } from '@/src/features/chat/components/MessageBubble';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { ownerHandler } from '@/test-utils/ownerProps';
 import { useArtifactStore } from '@/src/features/artifacts/store';
 import type { ChatMessage } from '@/types/chat';
 import type {
@@ -143,7 +144,7 @@ describe('whole native message accessibility structure', () => {
     const rowA = assistant({ id: 'row-a', content: 'Response A.' });
     const rowB = assistant({ id: 'row-b', content: 'Response B.' });
     const view = render(<MessageBubble message={rowA} speechOwner={owner} />);
-    const retainedRowAPress = screen.getByLabelText('Read aloud').props.onPress;
+    const retainedRowAPress = ownerHandler(screen.getByLabelText('Read aloud'), 'onPress');
     fireEvent.press(screen.getByLabelText('Read aloud'));
     expect(start).toHaveBeenCalledTimes(1);
 

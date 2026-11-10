@@ -34,6 +34,8 @@ jest.mock('@/src/navigation/openNearestDrawer', () => ({
   openNearestDrawer: jest.fn(),
 }));
 
+jest.mock('@clerk/expo', () => ({ useSession: () => ({ session: null }) }));
+
 jest.mock('@/src/features/chat/components/Composer/Composer', () => {
   const { View } = require('react-native');
   return { Composer: () => <View testID="composer" /> };

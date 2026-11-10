@@ -111,7 +111,7 @@ describe('ChatInput payload disclosure', () => {
     });
 
     await waitFor(() => expect(getByTestId('send-preview-panel')).toBeTruthy());
-    expect(getByText('Sent through AGI Managed gateway')).toBeTruthy();
+    expect(getByText('Sent through Cloud gateway')).toBeTruthy();
     expect(getByText(fixtureCloudModelLabel)).toBeTruthy();
     expect(getByTestId('send-preview-details')).toBeTruthy();
     expect(getByText('11 chars')).toBeTruthy();

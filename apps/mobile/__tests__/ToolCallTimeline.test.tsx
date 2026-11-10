@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
+import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
 
 jest.mock('lucide-react-native', () => {
   const React = require('react');
@@ -199,7 +200,7 @@ describe('ToolCallTimeline, the seven tool statuses', () => {
   const EXPECTED: ReadonlyArray<[ToolStatus, string, string | null]> = [
     ['pending', 'Queued', 'icon-Clock'],
     ['awaiting-approval', 'Needs approval', 'icon-ShieldAlert'],
-    ['running', 'Running', 'icon-Loader2'],
+    ['running', 'Running', null],
     ['succeeded', 'Done', null],
     ['partial', 'Partial result', 'icon-CircleDashed'],
     ['canceled', 'Canceled', 'icon-CircleSlash'],
@@ -227,6 +228,7 @@ describe('ToolCallTimeline, the seven tool statuses', () => {
       else expect(view.queryByTestId(glyph)).toBeNull();
     }
     expect(view.getByLabelText(new RegExp(label, 'i'))).toBeTruthy();
+    expect(view.UNSAFE_queryAllByType(LoadingIndicator).length > 0).toBe(status === 'running');
   });
 
   it('gives every status a distinct row rendering', () => {

@@ -52,8 +52,10 @@ jest.mock('@/src/features/chat/draftStore', () => ({
 }));
 
 jest.mock('@/src/features/chat/store/appModeStore', () => ({
-  useChatAppModeStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({ appMode: 'cloud' }),
+  useChatAppModeStore: Object.assign(
+    (selector: (s: Record<string, unknown>) => unknown) => selector({ appMode: 'cloud' }),
+    { getState: () => ({ appMode: 'cloud' }), subscribe: () => () => undefined },
+  ),
 }));
 
 jest.mock('@/src/features/model-picker/store', () => ({

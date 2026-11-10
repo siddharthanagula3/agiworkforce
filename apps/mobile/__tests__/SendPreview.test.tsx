@@ -74,8 +74,8 @@ describe('Mobile SendPreview', () => {
     const { getByText, queryAllByText, queryByTestId } = render(
       <SendPreview presentation={presentation} />,
     );
-    expect(getByText('Sent through AGI Managed gateway')).toBeTruthy();
-    expect(queryAllByText('Managed').length).toBeGreaterThanOrEqual(1);
+    expect(getByText('Sent through Cloud gateway')).toBeTruthy();
+    expect(queryAllByText('Cloud').length).toBeGreaterThanOrEqual(1);
     expect(queryByTestId('icon-cloud')).toBeTruthy();
   });
 

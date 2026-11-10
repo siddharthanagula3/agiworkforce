@@ -1,6 +1,6 @@
 import React from 'react';
 import { Alert } from 'react-native';
-import { act, fireEvent, render } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockApi = { get: jest.fn(), patch: jest.fn(), delete: jest.fn(), post: jest.fn() };
 jest.mock('@/services/api', () => ({
@@ -164,7 +164,7 @@ describe('published artifact controls', () => {
 
   it('unpublishes only after confirmation', async () => {
     pressConfirm();
-    mockApi.delete.mockResolvedValue({ success: true });
+    mockApi.delete.mockResolvedValue({ success: true, token: TOKEN });
     const onUnpublished = jest.fn();
     const { getByTestId, queryByTestId } = render(
       <PublishedArtifactControls
@@ -187,7 +187,13 @@ describe('published artifact controls', () => {
       expect.any(Array),
       expect.any(Object),
     );
-    expect(mockApi.delete).toHaveBeenCalledWith(`/api/artifacts/publish/${TOKEN}`);
-    expect(onUnpublished).toHaveBeenCalledWith();
+    expect(mockApi.delete).toHaveBeenCalledWith(
+      `/api/artifacts/publish/${TOKEN}`,
+      expect.objectContaining({
+        accountEpoch: expect.objectContaining({ ownerId: 'publication-controls-owner' }),
+        auth401Recovery: 'caller-owned',
+      }),
+    );
+    await waitFor(() => expect(onUnpublished).toHaveBeenCalledWith());
   });
 });

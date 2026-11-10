@@ -216,7 +216,10 @@ jest.mock('../src/features/settings/Common', () => {
   };
 });
 
+jest.mock('@/src/features/siri', () => ({ AskFromSiriSetting: () => null }));
+
 import AccountSecurityScreen from '../src/features/settings/account-security';
+import { ownerHandler } from '../test-utils/ownerProps';
 
 describe('Mobile Account Security screen', () => {
   beforeEach(() => {
@@ -572,7 +575,7 @@ describe('Mobile Account Security screen', () => {
     });
     const screen = render(<AccountSecurityScreen />);
     fireEvent.press(await screen.findByText('Set up authenticator app'));
-    const copy = (await screen.findByLabelText('Copy setup key')).props.onPress as () => void;
+    const copy = ownerHandler(await screen.findByLabelText('Copy setup key'), 'onPress');
     await act(async () => {
       mockEpoch += 2;
       mockEpochListeners.forEach((listener) => listener());
@@ -659,9 +662,17 @@ describe('Mobile Account Security screen', () => {
       const screen = render(<AccountSecurityScreen />);
       fireEvent.press(await screen.findByLabelText('Macintosh · Chrome 141. 3h ago'));
       const confirm = alertSpy.mock.calls.at(-1)?.[2]?.find((button) => button.text === 'Sign out');
+      if (boundary === 'unmount') {
+        await act(async () => {
+          screen.unmount();
+        });
+      }
       await act(async () => {
-        if (boundary === 'unmount') screen.unmount();
-        else if (boundary === 'epoch') {
+        if (boundary === 'unmount') {
+          confirm?.onPress?.();
+          return;
+        }
+        if (boundary === 'epoch') {
           mockEpoch += 2;
           mockEpochListeners.forEach((listener) => listener());
         } else if (boundary === 'auth') {
@@ -740,7 +751,7 @@ describe('Mobile Account Security screen', () => {
     );
     const screen = render(<AccountSecurityScreen />);
     const row = await screen.findByLabelText('Macintosh · Chrome 141. 3h ago');
-    const press = row.props.onPress as () => void;
+    const press = ownerHandler(row, 'onPress');
     act(() => {
       press();
       press();
