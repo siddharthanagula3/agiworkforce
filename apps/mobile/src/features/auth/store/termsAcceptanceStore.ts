@@ -20,6 +20,13 @@ interface TermsAcceptanceState {
   reset: () => void;
 }
 
+export function isTermsAnswerPending(
+  terms: Pick<TermsAcceptanceState, 'userId' | 'status'>,
+  userId: string,
+): boolean {
+  return terms.userId !== userId || terms.status === 'idle' || terms.status === 'checking';
+}
+
 let requestGeneration = 0;
 
 export const useTermsAcceptanceStore = create<TermsAcceptanceState>()((set, get) => ({

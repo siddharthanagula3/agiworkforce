@@ -24,7 +24,10 @@ import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { useFonts } from 'expo-font';
 import { Newsreader_500Medium, Newsreader_600SemiBold } from '@expo-google-fonts/newsreader';
 import { useAuthStore } from '@/src/features/auth/store';
-import { useTermsAcceptanceStore } from '@/src/features/auth/store/termsAcceptanceStore';
+import {
+  isTermsAnswerPending,
+  useTermsAcceptanceStore,
+} from '@/src/features/auth/store/termsAcceptanceStore';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useTierStore } from '@/src/features/billing/store';
 import { clearLocalCloudAccountState } from '@/src/features/auth/services/cloudAccountTeardown';
@@ -46,8 +49,10 @@ import { ThemeVars, useTheme } from '@/src/ui/theme';
 import { ClerkProvider, useAuth } from '@clerk/expo';
 import { tokenCache } from '@clerk/expo/token-cache';
 import {
+  CLERK_LOAD_SETTLE_MS,
   CLERK_NATIVE_AUTH_OPTIONS,
   CLERK_PUBLISHABLE_KEY,
+  holdTokensUntilClerkAnswers,
   setClerkTokenMinter,
 } from '@/src/integrations/clerk';
 import { FEATURES } from '@/lib/v1FeatureFlags';
@@ -114,9 +119,8 @@ function queueBackgroundFetchLifecycle(operation: () => Promise<void>): Promise<
 // launch, a disabled instance). Everything keyed off it then reads "Checking…"
 // for the life of the process and the rows it gates do nothing when tapped.
 // Signed-out is the fail-closed answer for Cloud and it is the truthful one for
-// a Local-only session, so settle on it rather than waiting forever.
-const CLERK_LOAD_SETTLE_MS = 8_000;
-
+// a Local-only session, so settle on it after CLERK_LOAD_SETTLE_MS rather than
+// waiting forever.
 function ClerkTokenBridge() {
   const { getToken, userId, isSignedIn, isLoaded } = useAuth(CLERK_NATIVE_AUTH_OPTIONS);
   const setClerkSignedIn = useAuthStore((s) => s.setClerkSignedIn);
@@ -128,8 +132,10 @@ function ClerkTokenBridge() {
 
   useEffect(() => {
     if (isLoaded) return;
+    holdTokensUntilClerkAnswers();
     const settle = setTimeout(() => {
       console.warn('[RootLayout] Clerk did not load, settling on signed out');
+      setClerkTokenMinter(null, null);
       setClerkUserId(null);
       setClerkSignedIn(false);
       setCloudAccess(false);
@@ -156,7 +162,9 @@ function ClerkTokenBridge() {
         }
         setCloudAccess(false);
         setClerkSignedIn(false);
-        setClerkLoaded(true);
+        if (!isTermsAnswerPending({ userId: termsUserId, status: termsStatus }, userId)) {
+          setClerkLoaded(true);
+        }
         return;
       }
       const owner = activateCloudAccount(userId);
@@ -201,6 +209,21 @@ function ClerkTokenBridge() {
     termsUserId,
     termsStatus,
   ]);
+
+  // Loaded with signed-in false reads as signed out, and the chat tab answers
+  // that by persisting Local Mode. A session whose Terms answer is still in
+  // flight is neither, so it stays unloaded, bounded by the same settle window.
+  const termsAnswerPending =
+    isLoaded &&
+    isSignedIn === true &&
+    typeof userId === 'string' &&
+    isTermsAnswerPending({ userId: termsUserId, status: termsStatus }, userId);
+
+  useEffect(() => {
+    if (!termsAnswerPending) return;
+    const settle = setTimeout(() => setClerkLoaded(true), CLERK_LOAD_SETTLE_MS);
+    return () => clearTimeout(settle);
+  }, [termsAnswerPending, setClerkLoaded]);
 
   useEffect(() => {
     return () => {
