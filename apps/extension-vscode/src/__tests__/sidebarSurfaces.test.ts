@@ -126,6 +126,39 @@ describe('surface rows', () => {
     expect(rows[0]?.kind).toBe(vscode.QuickPickItemKind.Separator);
     expect(surfaceSectionItem('Schedules').contextValue).toBe('surfaceSection');
   });
+
+  it('expands a group through the provider that produced it', async () => {
+    const run = new vscode.TreeItem('Run R');
+    run.contextValue = 'cloudRun';
+    const group = new vscode.TreeItem('Working', vscode.TreeItemCollapsibleState.Expanded);
+    group.contextValue = 'cloudTasksGroup';
+    const schedule = new vscode.TreeItem('Schedule S');
+    schedule.contextValue = 'scheduleActive';
+    const cloudGetChildren = vi.fn(async (element?: vscode.TreeItem) =>
+      element === group ? [run] : [group],
+    );
+    const scheduleGetChildren = vi.fn(async () => [schedule]);
+    const composed = composeSurfaceSections([
+      { label: 'Cloud tasks', provider: { getChildren: cloudGetChildren } },
+      { label: 'Schedules', provider: { getChildren: scheduleGetChildren } },
+    ]);
+
+    const roots = await composed.getChildren();
+    const rootGroup = roots.find((item) => item === group);
+    const expanded = await composed.getChildren(rootGroup);
+
+    expect(expanded).toEqual([run]);
+    expect(cloudGetChildren).toHaveBeenLastCalledWith(group);
+    expect(scheduleGetChildren).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns nothing for an element the composition did not produce', async () => {
+    const composed = composeSurfaceSections([
+      { label: 'Cloud tasks', provider: { getChildren: async () => [] } },
+    ]);
+
+    expect(await composed.getChildren(new vscode.TreeItem('Stranger'))).toEqual([]);
+  });
 });
 
 describe('the sessions sheet', () => {

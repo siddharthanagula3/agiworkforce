@@ -959,7 +959,11 @@ enum Command {
         provider: Option<String>,
     },
     /// Logout from AGI cloud.
-    Logout,
+    Logout {
+        /// Sign out of your AGI account only; provider API keys you saved stay.
+        #[arg(long)]
+        account_only: bool,
+    },
     /// Show authentication status for all configured providers.
     AuthStatus,
     /// Browse your Library: generated images and videos, uploaded and generated files.
@@ -3646,11 +3650,7 @@ async fn handle_projects_command(
             if *json {
                 println!("{}", serde_json::to_string_pretty(&file)?);
             } else {
-                println!(
-                    "Added {} to '{}'. Chats in the project, and managed turns in a directory linked to it, can search it.",
-                    terminal_text::sanitize_terminal_text(&file.file_name),
-                    found.name
-                );
+                println!("{}", file.receipt(&found.name));
             }
             Ok(())
         }
@@ -3831,15 +3831,9 @@ async fn handle_artifacts_command(
             let block = artifacts::content(&client, &entry)
                 .await
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
-            let mut published = artifacts::publish(&client, &entry, &block)
+            let published = artifacts::publish_for_audience(&client, &entry, &block, visibility)
                 .await
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
-            if published.visibility != visibility {
-                artifacts::set_audience(&client, &published.token, visibility)
-                    .await
-                    .map_err(|error| anyhow::anyhow!("{error}"))?;
-                published.visibility = visibility.to_string();
-            }
             render_structured(
                 serde_json::to_value(&published)?,
                 format!(
@@ -7022,8 +7016,12 @@ async fn run_cli(cli: Cli) -> Result<()> {
             }
 
             // --- Logout ---
-            Command::Logout => {
-                let signed_out = crate::app_server::account::sign_out_of_every_provider().await?;
+            Command::Logout { account_only } => {
+                let signed_out = if *account_only {
+                    crate::app_server::account::sign_out_of_account().await?
+                } else {
+                    crate::app_server::account::sign_out_of_every_provider().await?
+                };
                 println!("{}", signed_out.message());
                 Ok(())
             }
@@ -9112,6 +9110,26 @@ mod tests {
     fn the_yes_flag_is_how_a_script_answers_the_prompt() {
         assert!(confirm_destructive_when("Delete it?", true, false));
         assert!(confirm_destructive_when("Delete it?", true, true));
+    }
+
+    /// Desktop signs the machine out of its own account with `--account-only`;
+    /// a bare `logout` keeps forgetting every provider.
+    #[test]
+    fn logout_account_only_is_opt_in() {
+        let scoped = Cli::try_parse_from(["agi", "logout", "--account-only"])
+            .expect("logout --account-only parses");
+        assert!(matches!(
+            scoped.command,
+            Some(Command::Logout { account_only: true })
+        ));
+
+        let bare = Cli::try_parse_from(["agi", "logout"]).expect("logout parses");
+        assert!(matches!(
+            bare.command,
+            Some(Command::Logout {
+                account_only: false
+            })
+        ));
     }
 
     /// `--repo`/`-C` moves the session; `--add-dir` only adds a second root.

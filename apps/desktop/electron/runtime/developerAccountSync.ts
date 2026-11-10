@@ -42,12 +42,15 @@ function sameAccount(host: string | null, shell: string | null): boolean {
 /**
  * `shellOwnsCli` says whether this app is what signed the machine's CLI in. A
  * credential the user set up themselves is theirs: signing out of the app does
- * not sign the terminal out with it.
+ * not sign the terminal out with it. `recordOwnership` is told the moment the
+ * credential changes hands, before the model refresh that follows, so a refresh
+ * that fails cannot leave the ownership record behind the credential.
  */
 export async function reconcileDeveloperAccount(
   call: DeveloperAccountCall,
   bridge: DeveloperAccountBridge,
   shellOwnsCli = true,
+  recordOwnership: (shellOwnsCli: boolean) => void = () => undefined,
 ): Promise<DeveloperAccountOutcome> {
   const identity = await bridge.readShellIdentity();
   if (identity === null) return 'unknown';
@@ -58,6 +61,7 @@ export async function reconcileDeveloperAccount(
   if (!identity.signedIn) {
     if (!hostSignedIn || !shellOwnsCli) return 'unchanged';
     await call('account/logout', {});
+    recordOwnership(false);
     await call('model/list', { refresh: true });
     return 'signed-out';
   }
@@ -65,6 +69,7 @@ export async function reconcileDeveloperAccount(
   if (hostSignedIn) {
     if (sameAccount(readString(status, 'email'), identity.email)) return 'unchanged';
     await call('account/logout', {});
+    recordOwnership(false);
   }
 
   const login = await call('account/login', {});
@@ -83,6 +88,7 @@ export async function reconcileDeveloperAccount(
     );
   }
 
+  recordOwnership(true);
   await call('model/list', { refresh: true });
   return 'signed-in';
 }

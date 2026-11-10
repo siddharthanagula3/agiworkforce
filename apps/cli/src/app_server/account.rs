@@ -597,22 +597,37 @@ async fn revoke_snapshot(
 }
 
 pub async fn sign_out() -> Result<bool> {
-    let (base, entries) = AuthStore::transaction_with_commit(
-        |store| {
-            let base = device_auth_base();
-            let entries = store.entries.clone();
-            forget_managed(store);
-            Ok((base, entries))
-        },
-        |_| forget_account_caches(),
-    )?;
-    Ok(revoke_snapshot(&base, &entries).await)
+    Ok(sign_out_of_account().await?.revoked)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CliSignOut {
     pub providers: usize,
     pub revoked: bool,
+}
+
+fn holds_managed_grant(store: &AuthStore) -> bool {
+    MANAGED_AUTH_KEYS
+        .iter()
+        .any(|key| store.entries.contains_key(*key))
+}
+
+pub async fn sign_out_of_account() -> Result<CliSignOut> {
+    let (base, entries, held) = AuthStore::transaction_with_commit(
+        |store| {
+            let base = device_auth_base();
+            let entries = store.entries.clone();
+            let held = holds_managed_grant(store);
+            forget_managed(store);
+            Ok((base, entries, held))
+        },
+        |_| forget_account_caches(),
+    )?;
+    let revoked = revoke_snapshot(&base, &entries).await;
+    Ok(CliSignOut {
+        providers: usize::from(held),
+        revoked,
+    })
 }
 
 impl CliSignOut {
@@ -941,5 +956,26 @@ mod tests {
             store.entries.is_empty(),
             "a device grant survives sign-out: save_device_grant writes a key MANAGED_AUTH_KEYS does not name"
         );
+    }
+
+    #[test]
+    fn signing_out_of_the_account_counts_only_the_managed_grant() {
+        let mut store = AuthStore::default();
+        store.entries.insert(
+            "anthropic".to_string(),
+            AuthEntry::ApiKey {
+                key: "the user's own key".to_string(),
+            },
+        );
+        assert!(!holds_managed_grant(&store));
+
+        store
+            .entries
+            .insert("agiworkforce".to_string(), grant("granted", "refresh"));
+        assert!(holds_managed_grant(&store));
+
+        forget_managed(&mut store);
+        assert!(!holds_managed_grant(&store));
+        assert!(store.entries.contains_key("anthropic"));
     }
 }

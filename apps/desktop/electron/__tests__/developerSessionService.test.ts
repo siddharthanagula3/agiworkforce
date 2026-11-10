@@ -525,6 +525,7 @@ describe('developer session runtime', () => {
     expect(approveDeviceCode).toHaveBeenCalledExactlyOnceWith('QRST-9876');
     expect(asked).toContain('account/login/wait');
     expect(asked.filter((method) => method === 'model/list')).toHaveLength(1);
+    expect(rememberShellSignedCliIn).toHaveBeenCalledWith(true);
     expect((await service.readDeveloperRuntimeStatus()).accountSyncError).toBeNull();
   });
 
@@ -3076,14 +3077,18 @@ describe('a sign-out with no app-server running', () => {
 
     const pending = service.syncDeveloperAccounts();
     await vi.waitFor(() =>
-      expect(spawn).toHaveBeenCalledWith('/Users/qa/.cargo/bin/agi', ['logout'], expect.anything()),
+      expect(spawn).toHaveBeenCalledWith(
+        '/Users/qa/.cargo/bin/agi',
+        ['logout', '--account-only'],
+        expect.anything(),
+      ),
     );
     children.at(-1)?.emit('exit', 0, null);
     await pending;
 
     expect(spawn).toHaveBeenCalledExactlyOnceWith(
       '/Users/qa/.cargo/bin/agi',
-      ['logout'],
+      ['logout', '--account-only'],
       expect.objectContaining({
         env: expect.objectContaining({ AGIWORKFORCE_API_BASE: 'http://localhost:3100' }),
       }),
@@ -3126,7 +3131,11 @@ describe('a sign-out with no app-server running', () => {
 
     const pending = service.syncDeveloperAccounts();
     await vi.waitFor(() =>
-      expect(spawn).toHaveBeenCalledWith('/Users/qa/.cargo/bin/agi', ['logout'], expect.anything()),
+      expect(spawn).toHaveBeenCalledWith(
+        '/Users/qa/.cargo/bin/agi',
+        ['logout', '--account-only'],
+        expect.anything(),
+      ),
     );
     children.at(-1)?.emit('exit', 3, null);
     await pending;
