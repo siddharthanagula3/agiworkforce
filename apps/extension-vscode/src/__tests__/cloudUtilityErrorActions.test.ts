@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import {
+  BILLING_PLAN_PRICING,
   classifyManagedQuotaErrorCode,
+  PRODUCT_NAMES,
   formatUsageResetIn,
   getPickerModelTier,
   type ManagedQuotaBlockPresentation,
@@ -137,7 +139,7 @@ describe('cloud utility recovery actions', () => {
     await showCloudUtilityErrorActions(error, { title: 'AGI Code: Request failed' });
 
     expect(vi.mocked(vscode.window.showWarningMessage).mock.calls[0]?.[0]).toBe(
-      'AGI Code: Request failed, Upgrade to Max 20x to continue.',
+      `AGI Code: Request failed, Upgrade to ${BILLING_PLAN_PRICING.max_15x.label} to continue.`,
     );
   });
 
@@ -289,7 +291,7 @@ describe('plan usage limit recovery', () => {
     );
 
     expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-      `AGI Code model set to ${modelDisplayLabel(alternative)}. Run the command again to use it.`,
+      `${PRODUCT_NAMES.code} model set to ${modelDisplayLabel(alternative)}. Run the command again to use it.`,
     );
   });
 

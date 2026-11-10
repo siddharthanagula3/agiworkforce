@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import {
   BILLING_PLAN_CAPABILITY_LABELS,
+  BILLING_PLAN_PRICING,
   creditsFromCents,
   formatCredits,
   usageWorkloadLabel,
@@ -229,12 +230,16 @@ describe('compare plans command', () => {
     await handlers.get('agi-workforce.comparePlans')?.();
 
     const items = lastQuickPickItems();
-    const current = items.find((item) => item.label === '$(check) Max 20x');
+    const current = items.find(
+      (item) => item.label === `$(check) ${BILLING_PLAN_PRICING.max_15x.label}`,
+    );
     expect(current?.description).toMatch(/^Your plan · /u);
     expect(items.find((item) => item.label === 'Enterprise')?.detail).toBe(
-      `Adds over Max 20x: ${BILLING_PLAN_CAPABILITY_LABELS.team_admin}, ${BILLING_PLAN_CAPABILITY_LABELS.enterprise_controls}`,
+      `Adds over ${BILLING_PLAN_PRICING.max_15x.label}: ${BILLING_PLAN_CAPABILITY_LABELS.team_admin}, ${BILLING_PLAN_CAPABILITY_LABELS.enterprise_controls}`,
     );
-    expect(items.find((item) => item.label === 'Pro')?.detail).toBe('No features beyond Max 20x');
+    expect(items.find((item) => item.label === BILLING_PLAN_PRICING.pro.label)?.detail).toBe(
+      `No features beyond ${BILLING_PLAN_PRICING.max_15x.label}`,
+    );
   });
 
   it('falls back to the cached plan when the account cannot be read', async () => {
@@ -245,7 +250,11 @@ describe('compare plans command', () => {
 
     await handlers.get('agi-workforce.comparePlans')?.();
 
-    expect(lastQuickPickItems().some((item) => item.label === '$(check) Pro')).toBe(true);
+    expect(
+      lastQuickPickItems().some(
+        (item) => item.label === `$(check) ${BILLING_PLAN_PRICING.pro.label}`,
+      ),
+    ).toBe(true);
   });
 
   it('opens web pricing for prices and checkout', async () => {

@@ -8,6 +8,7 @@ import {
   type AccountMemoryState,
   type AccountMemoryStore,
 } from '../memory/accountMemoryStore';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 type Handler = (...args: unknown[]) => unknown;
 
@@ -234,7 +235,7 @@ describe('memory enable/disable controls', () => {
     surface?.hide();
     await pending;
 
-    expect(surface?.title).toBe('AGI Code, Memory');
+    expect(surface?.title).toBe(`${PRODUCT_NAMES.code}, Memory`);
     expect(surface?.items).toEqual([expect.objectContaining({ label: 'Prefer Rust' })]);
   });
 

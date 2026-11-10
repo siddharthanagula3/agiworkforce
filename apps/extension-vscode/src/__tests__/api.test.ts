@@ -951,8 +951,9 @@ describe('AgiWorkforcePaywallError', () => {
 
   it('labels the $200 plan from the catalog rather than its tier key', () => {
     const err = new AgiWorkforcePaywallError('video', 'max_15x', 'Video generation needs more');
-    expect(BILLING_PLAN_PRICING.max_15x.label).toBe('Max 20x');
-    expect(err.message).toBe('Upgrade to Max 20x required for video: Video generation needs more');
+    expect(err.message).toBe(
+      `Upgrade to ${BILLING_PLAN_PRICING.max_15x.label} required for video: Video generation needs more`,
+    );
     expect(err.message).not.toContain('max_15x');
   });
 

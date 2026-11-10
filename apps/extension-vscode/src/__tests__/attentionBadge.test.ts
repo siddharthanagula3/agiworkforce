@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AttentionState } from '../features/sidebar-webview/attentionBadge';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 function after(...events: Parameters<AttentionState['record']>[0][]) {
   const state = new AttentionState();
@@ -15,14 +16,14 @@ describe('what the hidden chat panel says on the Activity Bar', () => {
   it('marks a turn that is blocked on an approval', () => {
     expect(after('approval-requested')).toEqual({
       value: 1,
-      tooltip: 'AGI Code is waiting for your approval',
+      tooltip: `${PRODUCT_NAMES.code} is waiting for your approval`,
     });
   });
 
   it('counts concurrent approvals rather than showing the first one twice', () => {
     expect(after('approval-requested', 'approval-requested')).toEqual({
       value: 2,
-      tooltip: 'AGI Code is waiting on 2 approvals',
+      tooltip: `${PRODUCT_NAMES.code} is waiting on 2 approvals`,
     });
   });
 
@@ -41,7 +42,7 @@ describe('what the hidden chat panel says on the Activity Bar', () => {
   it('marks a reply that finished while the panel was hidden', () => {
     expect(after('turn-finished')).toEqual({
       value: 1,
-      tooltip: 'AGI Code finished a reply',
+      tooltip: `${PRODUCT_NAMES.code} finished a reply`,
     });
   });
 

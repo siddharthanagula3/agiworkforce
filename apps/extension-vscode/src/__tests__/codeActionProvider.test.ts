@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as vscode from 'vscode';
 import { AgiCodeActionProvider, CODE_ACTION_KINDS } from '../providers/codeActionProvider';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 const token = { isCancellationRequested: false } as vscode.CancellationToken;
 
@@ -43,7 +44,7 @@ describe('AgiCodeActionProvider', () => {
     const actions = actionsFor(CARET, [diagnostic('error TS2304')]);
 
     expect(actions).toHaveLength(1);
-    expect(actions[0]!.title).toBe('Fix with AGI Code');
+    expect(actions[0]!.title).toBe(`Fix with ${PRODUCT_NAMES.code}`);
     expect(actions[0]!.command?.command).toBe('agi-workforce.fix');
     expect(actions[0]!.kind).toBe(vscode.CodeActionKind.QuickFix);
   });
@@ -82,9 +83,9 @@ describe('AgiCodeActionProvider', () => {
     const actions = actionsFor(MULTILINE);
 
     expect(actions.map((action) => action.title)).toEqual([
-      'Refactor with AGI Code',
-      'Explain with AGI Code',
-      'Generate Tests with AGI Code',
+      `Refactor with ${PRODUCT_NAMES.code}`,
+      `Explain with ${PRODUCT_NAMES.code}`,
+      `Generate Tests with ${PRODUCT_NAMES.code}`,
     ]);
     expect(actions.map((action) => action.command?.command)).toEqual([
       'agi-workforce.refactor',
@@ -105,10 +106,10 @@ describe('AgiCodeActionProvider', () => {
     const actions = actionsFor(MULTILINE, [diagnostic('unused variable')]);
 
     expect(actions.map((action) => action.title)).toEqual([
-      'Fix with AGI Code',
-      'Refactor with AGI Code',
-      'Explain with AGI Code',
-      'Generate Tests with AGI Code',
+      `Fix with ${PRODUCT_NAMES.code}`,
+      `Refactor with ${PRODUCT_NAMES.code}`,
+      `Explain with ${PRODUCT_NAMES.code}`,
+      `Generate Tests with ${PRODUCT_NAMES.code}`,
     ]);
   });
 

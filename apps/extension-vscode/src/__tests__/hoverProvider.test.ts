@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { AgiHoverProvider } from '../features/hover/hoverProvider';
 
 const token = { isCancellationRequested: false } as vscode.CancellationToken;
@@ -85,7 +86,7 @@ describe('AgiHoverProvider', () => {
   it('labels the actions under the product name', () => {
     const markdown = hoverOver(WORD_RANGE)?.contents as vscode.MarkdownString;
 
-    expect(markdown.value).toContain('AGI Code');
+    expect(markdown.value).toContain(`**${PRODUCT_NAMES.code}**`);
     expect(markdown.value).toContain('Explain');
     expect(markdown.value).toContain('Fix');
     expect(markdown.value).toContain('Tests');

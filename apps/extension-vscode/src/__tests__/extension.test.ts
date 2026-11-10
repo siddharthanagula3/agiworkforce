@@ -11,6 +11,7 @@ import {
 import { buildExtensionStatusBarText } from '../core/statusBar';
 import { commandLabel } from '../core/runInlineCommand';
 import { activate } from '../extension';
+import { t } from '../l10n';
 import { __resetSubsystemHealthForTests } from '../core/subsystemHealth';
 
 describe('commandLabel', () => {
@@ -242,8 +243,8 @@ describe('inline completions first-run privacy notice', () => {
     activate(activationContext(true));
     await vi.waitFor(() =>
       expect(vi.mocked(vscode.window.showInformationMessage)).toHaveBeenCalledWith(
-        expect.stringContaining('need AGI Cloud sign-in or an AGI API key'),
-        expect.anything(),
+        t('advancedFeatures.inlineNeedsCredential'),
+        t('advancedFeatures.openAccount'),
       ),
     );
   });

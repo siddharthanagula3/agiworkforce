@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 
 import { catalogFor, DEFAULT_LOCALE, resolveLocale, SUPPORTED_LOCALES, t } from '../l10n';
 import { applyLlmEdit } from '../platform/applyEdit';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 const mockEnv = vscode.env as unknown as { language: string };
 
@@ -137,7 +138,7 @@ describe('applyLlmEdit in a translated editor', () => {
     );
 
     expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-      'AGI Code: Refactor の結果を適用しますか？',
+      `${PRODUCT_NAMES.code}: Refactor の結果を適用しますか？`,
       { modal: false },
       'その場に適用',
       '新しいタブで表示',
@@ -169,7 +170,7 @@ describe('applyLlmEdit in a translated editor', () => {
     );
 
     expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
-      'AGI Code: 編集を適用できませんでした, ドキュメントが変更された可能性があります。',
+      `${PRODUCT_NAMES.code}: 編集を適用できませんでした, ドキュメントが変更された可能性があります。`,
     );
   });
 });

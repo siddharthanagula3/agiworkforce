@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
-import { classifyManagedQuotaErrorCode } from '@agiworkforce/types';
+import { classifyManagedQuotaErrorCode, PRODUCT_NAMES } from '@agiworkforce/types';
 import {
   AgiWorkforcePaywallError,
   AgiWorkforceUsageLimitError,
@@ -363,7 +363,7 @@ describe('inline completions, real paywall suppression', () => {
     expect(chatCompletion).toHaveBeenCalledTimes(1);
     expect(vi.mocked(showCloudUtilityErrorActions)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(showCloudUtilityErrorActions).mock.calls[0]?.[1]).toEqual({
-      title: 'AGI Code: Inline completions paused',
+      title: `${PRODUCT_NAMES.code}: Inline completions paused`,
       secrets: SECRETS,
     });
 
@@ -452,7 +452,7 @@ describe('inline completions, plan usage limits', () => {
     expect(await ask(instance)).toEqual([]);
     expect(vi.mocked(showCloudUtilityErrorActions)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(showCloudUtilityErrorActions).mock.calls[0]?.[1]).toEqual({
-      title: 'AGI Code: Inline completions paused',
+      title: `${PRODUCT_NAMES.code}: Inline completions paused`,
       secrets: SECRETS,
     });
 

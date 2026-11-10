@@ -5,6 +5,7 @@ import {
   AGENT_EVENT_SCHEMA_VERSION,
   DEVELOPER_SESSION_PROTOCOL_VERSION,
   MINIMUM_SUPPORTED_RUNTIME_VERSION,
+  PRODUCT_NAMES,
 } from '@agiworkforce/types';
 import { CLI_INSTALL_COMMAND } from '../integrations/cliInstaller';
 import { cliAcquisitionHint } from '../integrations/localRuntimeClient';
@@ -149,7 +150,7 @@ describe('missing-CLI copy names only the distribution that exists', () => {
   it('points at the install command instead of a package manager', () => {
     const hint = cliAcquisitionHint();
 
-    expect(hint).toContain('AGI Code: Install AGI CLI');
+    expect(hint).toContain(`${PRODUCT_NAMES.code}: Install AGI CLI`);
     expect(hint).not.toMatch(/npm (install|i) -g/u);
     expect(hint).not.toContain('@agiworkforce/cli');
     expect(hint).not.toMatch(/brew install/u);
