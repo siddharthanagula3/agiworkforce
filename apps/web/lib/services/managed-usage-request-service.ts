@@ -614,6 +614,28 @@ async function attributeToScheduleRun(
   );
 }
 
+async function recordReservedMeteredUsage(
+  db: DatabaseAdapter,
+  userId: string,
+  idempotencyKey: string,
+  usage: Record<string, unknown>,
+): Promise<void> {
+  if (Object.keys(usage).length === 0) return;
+  try {
+    await db.execute(
+      `update public.managed_usage_requests
+          set usage = usage || $3::jsonb
+        where user_id = $1 and idempotency_key = $2 and status = 'reserved'`,
+      [userId, idempotencyKey, JSON.stringify(usage)],
+    );
+  } catch (error) {
+    logger.error(
+      { event: 'managed_usage_metered_unit_unrecorded', error, userId, idempotencyKey },
+      'The metered unit of an outstanding managed request could not be recorded; the allowance counts it once it settles',
+    );
+  }
+}
+
 async function attributeToConversation(
   db: DatabaseAdapter,
   userId: string,
@@ -715,6 +737,8 @@ export async function reserveManagedUsageRequest(
     planTier: string;
     isFlagship: boolean;
     quotaFeature?: string;
+    /** Metered-unit fields the monthly allowance reads, written while the request is still outstanding. */
+    reservedUsage?: Record<string, unknown>;
     attribution?: UsageAttribution;
     apiKeyId?: string;
     conversationId?: string;
@@ -844,6 +868,10 @@ export async function reserveManagedUsageRequest(
   await attributeToScheduleRun(input.db, input.userId, idempotencyKey);
   await attributeToApiKey(input.db, input.userId, idempotencyKey, input.apiKeyId);
   await attributeToConversation(input.db, input.userId, idempotencyKey, input.conversationId);
+  await recordReservedMeteredUsage(input.db, input.userId, idempotencyKey, {
+    ...input.reservedUsage,
+    ...(input.quotaFeature ? { quotaFeature: input.quotaFeature } : {}),
+  });
   const reservedMicrousd = ledgerAmount(row['estimated_cost_microusd']);
   if (
     row['request_status'] !== 'reserved' ||

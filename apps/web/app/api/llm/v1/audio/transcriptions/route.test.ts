@@ -184,6 +184,18 @@ describe('POST /api/llm/v1/audio/transcriptions, managed usage accounting', () =
     ).toBeGreaterThan(0);
   });
 
+  it('records the estimated audio seconds on the outstanding reservation for the monthly allowance', async () => {
+    providerReturns({ text: 'hello' });
+
+    await POST(transcriptionRequest());
+
+    const { reservedUsage } = mocks.reserve.mock.calls[0]![0] as {
+      reservedUsage: { operation: string; estimatedAudioSeconds: number };
+    };
+    expect(reservedUsage.operation).toBe('transcription');
+    expect(reservedUsage.estimatedAudioSeconds).toBeGreaterThan(0);
+  });
+
   it('settles the reservation from the provider-reported token usage', async () => {
     providerReturns({
       text: 'hello',

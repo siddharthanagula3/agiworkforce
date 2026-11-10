@@ -569,6 +569,10 @@ export class FakePostgres {
 
   query = async <T>(sql: string, params: readonly Value[] = []): Promise<T[]> => {
     this.statements.push(sql);
+    if (/^\s*select\s+pg_advisory_xact_lock(?:_shared)?\s*\(/i.test(sql)) return [];
+    if (/\sfor\s+update\s+of\s+[a-z_]+\s*$/i.test(sql)) {
+      return this.query<T>(sql.replace(/\sfor\s+update\s+of\s+[a-z_]+\s*$/i, ''), params);
+    }
     const purge =
       /^\s*with\s+([a-z_]+)\s+as\s*\(([\s\S]*?)\)\s*delete\s+from\s+(?:public\s*\.\s*)?([a-z_]+)(?:\s+as)?\s+([a-z_]+)\s+using\s+\1\s+where\s+\4\.([a-z_]+)\s*=[\s\S]*$/i.exec(
         sql,

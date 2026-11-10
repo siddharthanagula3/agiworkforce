@@ -17,6 +17,7 @@ import {
   type LegalHoldResourceType,
   type LegalHoldScope,
 } from './legal-hold-gate';
+import { serializeHoldPlacement } from './legal-hold-placement';
 
 export {
   HOLD_COLUMNS,
@@ -107,6 +108,7 @@ export async function createLegalHold(
     : null;
 
   return db.transaction(async (tx) => {
+    await serializeHoldPlacement(tx, input.organizationId);
     const [row] = await tx.query<{ id: string }>(
       `insert into public.legal_holds
          (organization_id, name, reason, scope, subject_user_id, resource_types, created_by_user_id)
@@ -319,7 +321,7 @@ export async function sweepOrganizationRetention(
                where candidate.organization_id = $1
                  and candidate.updated_at < $2
                  and ${exclusion.sql}
-               limit $4
+               limit $${3 + exclusion.params.length}
             )
             returning id
          ), revoked_shares as (

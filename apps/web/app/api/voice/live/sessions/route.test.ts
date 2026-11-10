@@ -201,6 +201,7 @@ describe('POST /api/voice/live/sessions', () => {
     mocks.grantFree.mockResolvedValue({ granted: true, grantedSeconds: 60, fresh: true });
     mocks.settleFree.mockResolvedValue(0);
     mocks.sweep.mockResolvedValue(0);
+    mocks.assertTierUnitAllowance.mockResolvedValue({});
   });
 
   it('creates the session server-side with the live model, webrtc transport and delegation', async () => {
@@ -481,6 +482,44 @@ describe('POST /api/voice/live/sessions', () => {
       expect(await errorCode(response)).toBe('billing_unavailable');
       expect(mocks.fetch).not.toHaveBeenCalled();
     });
+  });
+
+  it('records the reserved minute for the monthly allowance and checks it first', async () => {
+    mocks.fetch.mockResolvedValue(
+      new Response(
+        JSON.stringify({ session: { id: 'live_1' }, transport: { type: 'webrtc', sdp: 'answer' } }),
+        { status: 201 },
+      ),
+    );
+
+    await POST(request({ sdp: OFFER, conversationId: CONVERSATION_ID }));
+
+    expect(mocks.assertTierUnitAllowance).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'user-1', planTier: 'pro', unit: 'voice_minutes' }),
+    );
+    expect(mocks.assertTierUnitAllowance.mock.invocationCallOrder[0]!).toBeLessThan(
+      mocks.reserve.mock.invocationCallOrder[0]!,
+    );
+    expect(reservedCalls()[0]).toMatchObject({
+      reservedUsage: { operation: 'voice_live_session', billedSeconds: LIVE_VOICE_BLOCK_SECONDS },
+    });
+  });
+
+  it('refuses a Pro session once the monthly voice minutes are used and reserves nothing', async () => {
+    mocks.assertTierUnitAllowance.mockRejectedValue(
+      new ManagedUsageRequestError(
+        'Your plan’s monthly voice allowance is used up.',
+        429,
+        'voice_minutes_monthly_limit_reached',
+      ),
+    );
+
+    const response = await POST(request({ sdp: OFFER, conversationId: CONVERSATION_ID }));
+
+    expect(response.status).toBe(429);
+    expect(await errorCode(response)).toBe('voice_minutes_monthly_limit_reached');
+    expect(mocks.reserve).not.toHaveBeenCalled();
+    expect(mocks.fetch).not.toHaveBeenCalled();
   });
 
   it('refuses a plan whose budget cannot fund a single block in plain words', async () => {

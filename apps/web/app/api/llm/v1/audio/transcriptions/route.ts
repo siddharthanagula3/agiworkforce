@@ -51,7 +51,10 @@ import {
   reserveManagedUsageRequest,
   type ManagedUsageRequestReservation,
 } from '@/lib/services/managed-usage-request-service';
-import { assertTierUnitAllowance } from '@/lib/services/tier-unit-quota-service';
+import {
+  TRANSCRIPTION_OPERATION,
+  assertTierUnitAllowance,
+} from '@/lib/services/tier-unit-quota-service';
 import { recordSettledProviderCost } from '@/lib/services/cogs-ledger-service';
 import { settleAbandonedVoiceSessions } from '@/app/api/voice/live/sessions/lib/voice-session-settlement';
 import { ledgerCentsFromMicrousd } from '@/lib/services/credit-service';
@@ -603,6 +606,10 @@ async function handleTranscriptions(request: NextRequest, admit?: TranscriptionA
         estimatedCostMicrousd,
         planTier: entitlement.plan,
         isFlagship: false,
+        reservedUsage: {
+          operation: TRANSCRIPTION_OPERATION,
+          estimatedAudioSeconds: estimatedSeconds,
+        },
         ...(apiKeyId ? { apiKeyId } : {}),
       });
     } else {
@@ -680,7 +687,7 @@ async function handleTranscriptions(request: NextRequest, admit?: TranscriptionA
         outcome: 'failed',
         actualCostMicrousd: 0,
         usage: {
-          operation: 'transcription',
+          operation: TRANSCRIPTION_OPERATION,
           provider: selectedModel.provider,
           model: selectedModel.id,
           reason,
@@ -752,7 +759,7 @@ async function handleTranscriptions(request: NextRequest, admit?: TranscriptionA
     settled.outputTokens,
   );
   const transcriptionUsage = {
-    operation: 'transcription',
+    operation: TRANSCRIPTION_OPERATION,
     provider: selectedModel.provider,
     model: selectedModel.id,
     estimatedAudioSeconds: estimatedSeconds,

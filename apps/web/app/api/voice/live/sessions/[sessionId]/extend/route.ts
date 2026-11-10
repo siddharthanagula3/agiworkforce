@@ -27,7 +27,9 @@ import {
   type ManagedUsageRequestReservation,
   reserveManagedUsageProviderStep,
 } from '@/lib/services/managed-usage-request-service';
+import { assertTierUnitAllowance } from '@/lib/services/tier-unit-quota-service';
 import {
+  LIVE_VOICE_BLOCK_MINUTES,
   LIVE_VOICE_BLOCK_SECONDS,
   LIVE_VOICE_FEATURE,
   liveVoiceBlockChargeMicrousd,
@@ -262,6 +264,13 @@ async function handleExtendLiveSession(
     }
     if (state.extensionStatus === 'extended') return covered();
 
+    await assertTierUnitAllowance({
+      db: scoped.db,
+      userId,
+      planTier,
+      unit: 'voice_minutes',
+      requestedUnits: (body.block - VOICE_INITIAL_BLOCK) * LIVE_VOICE_BLOCK_MINUTES,
+    });
     await reserveManagedUsageProviderStep({
       reservation,
       operationKey: voiceBlockOperationKey(VOICE_INITIAL_BLOCK),

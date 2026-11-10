@@ -237,7 +237,9 @@ describe('every destructive path carries the gate inside its own statement', () 
     expect(candidates?.sql).toContain(expectedPredicate('file', 'candidate', 3));
     expect(candidates?.params).toContain('file');
 
-    const deletion = destructive(calls)[0];
+    const confirmation = calls.find((call) => /for update of candidate/u.test(call.sql));
+    expect(confirmation?.sql).toContain(expectedPredicate('file', 'candidate', 3));
+    const deletion = calls.find((call) => /delete from public\.media_assets/u.test(call.sql));
     expect(deletion?.sql).toContain(expectedPredicate('file', 'target', 2));
     expect(deletion?.params).toContain('file');
   });
@@ -422,7 +424,10 @@ describe('a held row survives every path and its unheld sibling does not', () =>
     expect(ids(db, 'web_conversations')).toEqual(['conv-held']);
     expect(ids(db, 'image_generation_jobs')).toEqual(['image-held']);
     expect(ids(db, 'video_generation_jobs')).toEqual(['video-held']);
+    expect(ids(db, 'media_assets')).toEqual(['file-held']);
+    expect(mocks.deleteStoredMediaObjects).toHaveBeenCalledWith(['free.bin']);
     expect(body.heldChats).toBe(1);
+    expect(body.heldAttachments).toBe(1);
   });
 
   it('the temporary chat cron, once the hold is released', async () => {
@@ -435,6 +440,7 @@ describe('a held row survives every path and its unheld sibling does not', () =>
     expect(ids(db, 'web_conversations')).toEqual([]);
     expect(ids(db, 'image_generation_jobs')).toEqual([]);
     expect(ids(db, 'video_generation_jobs')).toEqual([]);
+    expect(ids(db, 'media_assets')).toEqual([]);
   });
 
   it('the workspace domain sweep', async () => {

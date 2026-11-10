@@ -388,7 +388,23 @@ describe('sweepOrganizationRetention', () => {
     const deleteParams = h.query.mock.calls.find((call) =>
       /delete from public\.web_conversations/i.test(String(call[0])),
     )?.[1] as unknown[];
-    expect(deleteParams?.[3]).toBe(RETENTION_SWEEP_BATCH);
+    const limitPlaceholder = /limit \$(\d+)/.exec(h.deletes[0] ?? '')?.[1];
+    expect(deleteParams?.[Number(limitPlaceholder) - 1]).toBe(RETENTION_SWEEP_BATCH);
+    expect(deleteParams?.at(-1)).toBe(RETENTION_SWEEP_BATCH);
+  });
+
+  it('does not delete a conversation whose messages a narrowed hold preserves', async () => {
+    const h = harness({
+      holds: [hold({ scope: 'organization', subject_user_id: null, resource_types: ['message'] })],
+    });
+    const result = await sweepOrganizationRetention(h.db, ORG, { now: NOW });
+
+    expect(isSwept(result) && result.outcome).toBe('deleted');
+    expect(h.deletes[0]).toMatch(/from public\.web_messages hold_cascade_1/);
+    const deleteParams = h.query.mock.calls.find((call) =>
+      /delete from public\.web_conversations/i.test(String(call[0])),
+    )?.[1] as unknown[];
+    expect(deleteParams?.slice(2, 4)).toEqual(['conversation', 'message']);
   });
 
   it('a dry run deletes nothing and records nothing as deleted', async () => {
@@ -511,6 +527,29 @@ describe('legal holds', () => {
     expect(h.holdInserts[0]?.[5]).toEqual(['conversation', 'file']);
     expect(created.custodianUserIds).toEqual(['a', 'b']);
     expect(h.db.transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('takes the workspace hold-placement lock before the hold becomes visible', async () => {
+    const h = harness({ holds: [hold()] });
+    const statements: string[] = [];
+    h.query.mockImplementation(async (sql: string) => {
+      const text = String(sql);
+      statements.push(text);
+      if (/insert into public\.legal_holds/i.test(text)) return [{ id: 'hold-1' }];
+      return [hold()];
+    });
+
+    await createLegalHold(h.db, {
+      organizationId: ORG,
+      name: 'Matter 41',
+      reason: null,
+      scope: 'member',
+      subjectUserId: 'user-held',
+      createdByUserId: 'user-admin',
+    });
+
+    expect(statements[0]).toMatch(/pg_advisory_xact_lock\(/);
+    expect(statements[1]).toMatch(/insert into public\.legal_holds/i);
   });
 });
 
