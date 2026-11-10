@@ -316,6 +316,48 @@ describe('useDictation', () => {
     expect(useVoiceInputStore.getState().captureStream).not.toBeNull();
   });
 
+  it('discards a running recording on interrupt, releases the microphone and says why', async () => {
+    const { result, onInsert } = mount();
+    await act(async () => {
+      result.current.start();
+    });
+    expect(useVoiceInputStore.getState().captureStream).not.toBeNull();
+
+    act(() => result.current.interrupt('Recording stopped when the window closed.'));
+
+    expect(result.current.status).toBe(DICTATION_STATUS.error);
+    expect(result.current.error).toBe('Recording stopped when the window closed.');
+    expect(useVoiceInputStore.getState().captureStream).toBeNull();
+    expect(currentRecorder.stop).toHaveBeenCalled();
+
+    act(() => result.current.stop());
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(onInsert).not.toHaveBeenCalled();
+    expect(useVoiceInputStore.getState().transcript).toBe('');
+  });
+
+  it('ignores an interrupt when nothing is recording', () => {
+    const { result } = mount();
+    act(() => result.current.interrupt('Recording stopped.'));
+    expect(result.current.status).toBe(DICTATION_STATUS.idle);
+    expect(result.current.error).toBeNull();
+  });
+
+  it('starts a fresh recording when retry follows an interrupt', async () => {
+    const { result } = mount();
+    await act(async () => {
+      result.current.start();
+    });
+    act(() => result.current.interrupt('Recording stopped.'));
+    await act(async () => {
+      result.current.retry();
+    });
+    expect(result.current.status).toBe(DICTATION_STATUS.recording);
+    expect(result.current.error).toBeNull();
+  });
+
   it('hands the transcript to the field on stop and returns to idle', async () => {
     const { result, onInsert, onSend } = mount();
 

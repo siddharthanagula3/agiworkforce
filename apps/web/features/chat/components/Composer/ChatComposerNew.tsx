@@ -77,8 +77,11 @@ import {
   readHostClipboard,
   useDesktopHost,
   useDesktopVoiceHotkey,
+  useDesktopWindowHidden,
   useLocalModelSelection,
 } from '@/features/desktop-host';
+import { isQuickAskPath } from '@features/chat/lib/new-chat-entry';
+import { DICTATION_STATUS } from '@features/chat/lib/dictation-machine';
 import { useLeaveLocalModel } from '@features/chat/hooks/useLeaveLocalModel';
 import { AttachmentPreview, type AttachmentUploadVisualStatus } from './AttachmentPreview';
 import { AnchoredComposerMenu } from './AnchoredComposerMenu';
@@ -338,6 +341,8 @@ const WORK_MODE_PLACEHOLDERS: Record<ComposerWorkMode, string | null> = {
  * send control is what says a message is waiting.
  */
 const TURN_ACTIVE_PLACEHOLDER = 'Follow up';
+const QUICK_ASK_HIDDEN_DICTATION_NOTE =
+  'Recording stopped and was discarded when this window closed. Try again.';
 const LOCAL_FOLDER_ATTACH_UNAVAILABLE_NOTICE =
   'Files cannot be attached with the current mode or model.';
 
@@ -2089,6 +2094,10 @@ const ChatComposerNewComponent = ({
     if (dictation.isActive) dictation.stop();
     else startDictation();
   });
+  useDesktopWindowHidden(() => {
+    if (!isQuickAskPath(window.location.pathname)) return;
+    dictation.interrupt(QUICK_ASK_HIDDEN_DICTATION_NOTE);
+  }, dictation.status === DICTATION_STATUS.recording);
 
   const takeIdleFocus = useCallback(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
