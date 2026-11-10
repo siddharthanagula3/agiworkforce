@@ -322,6 +322,7 @@ export interface AutoFillJobApplicationResponse {
   genericFlowStarted?: boolean;
   missingRequiredFields?: string[];
   submitted?: boolean;
+  submissionAttempted?: boolean;
   stepsAdvanced?: number;
   details?: {
     filledFields: string[];

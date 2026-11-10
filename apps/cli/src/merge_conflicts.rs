@@ -194,9 +194,7 @@ fn is_marker_line(line: &str, marker: &str) -> bool {
 }
 
 fn is_resolution_marker(line: &str) -> bool {
-    is_marker_line(line, OURS_MARKER)
-        || is_marker_line(line, SPLIT_MARKER)
-        || is_marker_line(line, THEIRS_MARKER)
+    is_marker_line(line, OURS_MARKER) || is_marker_line(line, THEIRS_MARKER)
 }
 
 fn marker_label(line: &str, marker: &str) -> String {
@@ -241,7 +239,7 @@ pub fn parse_conflicts(path: &Path, text: &str) -> ConflictedFile {
                 base_label = Some(marker_label(line, BASE_MARKER));
                 base = Some(Vec::new());
                 section = ConflictSide::Base;
-            } else if is_marker_line(line, SPLIT_MARKER) {
+            } else if section != ConflictSide::Theirs && is_marker_line(line, SPLIT_MARKER) {
                 section = ConflictSide::Theirs;
             } else if is_marker_line(line, THEIRS_MARKER) {
                 closed = Some((scan, marker_label(line, THEIRS_MARKER)));
@@ -937,8 +935,6 @@ mod tests {
     fn a_setext_underline_is_content_not_a_marker() {
         assert!(!has_conflict_markers("Title\n==========\nbody\n"));
         assert!(!has_conflict_markers("<<<<<<<<< not a marker\n>>>>>>>>\n"));
-        assert!(has_conflict_markers("=======\n"));
-        assert!(has_conflict_markers("======= \n"));
         assert!(has_conflict_markers("<<<<<<< HEAD\r\n"));
         assert!(has_conflict_markers(">>>>>>>\n"));
 
@@ -956,6 +952,54 @@ mod tests {
             "Guide\n==========\nNew heading\n================\n"
         );
         assert!(!has_conflict_markers(&resolved));
+    }
+
+    #[test]
+    fn a_lone_separator_line_is_content_until_a_hunk_opens_or_closes() {
+        assert!(!has_conflict_markers("Project\n=======\nNotes\n"));
+        assert!(!has_conflict_markers("=======\n"));
+        assert!(has_conflict_markers("Project\n=======\n<<<<<<< HEAD\n"));
+        assert!(has_conflict_markers("=======\n>>>>>>> topic\n"));
+    }
+
+    #[test]
+    fn a_separator_line_inside_the_theirs_side_is_content() {
+        let conflicted = "<<<<<<< HEAD\nold\n=======\nProject\n=======\nNotes\n>>>>>>> topic\n";
+        let file = parse_conflicts(Path::new("README.md"), conflicted);
+        assert_eq!(file.hunks.len(), 1);
+        assert_eq!(file.hunks[0].ours, vec!["old"]);
+        assert_eq!(file.hunks[0].theirs, vec!["Project", "=======", "Notes"]);
+
+        let resolved = render_resolution(&file, &[(1, Resolution::Take(ConflictSide::Theirs))])
+            .expect("a separator line in the chosen side is content");
+        assert_eq!(resolved, "Project\n=======\nNotes\n");
+        assert!(!has_conflict_markers(&resolved));
+    }
+
+    #[tokio::test]
+    async fn a_setext_heading_outside_the_hunk_does_not_block_staging() {
+        let dir = conflicted_repo();
+        let root = dir.path().canonicalize().unwrap();
+        let relative = Path::new("app.txt");
+        std::fs::write(
+            root.join("app.txt"),
+            "Project\n=======\nfirst\n<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> topic\nlast\n",
+        )
+        .unwrap();
+
+        let outcome = resolve_conflicted_file(
+            &GitApi::at(&root),
+            relative,
+            &[(1, Resolution::Custom(vec!["merged".to_string()]))],
+            false,
+        )
+        .await
+        .expect("the workflow resolves");
+
+        assert!(outcome.applied && outcome.staged);
+        let text = std::fs::read_to_string(root.join("app.txt")).unwrap();
+        assert_eq!(text, "Project\n=======\nfirst\nmerged\nlast\n");
+        assert!(conflicted_paths(&root).await.unwrap().is_empty());
     }
 
     #[test]
