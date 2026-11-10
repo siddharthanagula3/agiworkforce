@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../src/features/cloud-bridge/freeTrialClient', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../src/features/cloud-bridge/freeTrialClient')>()),
+  ...(await importOriginal<FreeTrialClientModule>()),
   FREE_TRIAL_GATEWAY: 'https://agiworkforce.example',
   getAuthToken: vi.fn(async () => 'clerk-session-token'),
 }));
@@ -12,6 +12,7 @@ import {
   resetChromeHeartbeatForTests,
   sendChromeHeartbeatIfDue,
 } from '../src/features/cloud-bridge/deviceHeartbeat';
+type FreeTrialClientModule = typeof import('../src/features/cloud-bridge/freeTrialClient');
 
 const storage = new Map<string, unknown>();
 

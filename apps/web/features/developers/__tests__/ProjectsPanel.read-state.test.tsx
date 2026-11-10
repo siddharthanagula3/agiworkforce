@@ -1,21 +1,36 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProjectsPanel } from '../components/ProjectsPanel';
+type UseDeveloperProjectsModule = typeof import('../hooks/use-developer-projects');
+type UseDeveloperUsageModule = typeof import('../hooks/use-developer-usage');
+type UseSettingsQueriesModule = typeof import('@features/settings/hooks/use-settings-queries');
+type UseSessionSnapshotModule = typeof import('@/lib/identity/useSessionSnapshot');
+type UseWorkspacesModule = typeof import('@/features/workspaces/hooks/use-workspaces');
+type WorkspaceAdmissionModule = typeof import('@/features/workspaces/lib/workspace-admission');
 
 const { mockProjects, mockUsage, mockKeys } = vi.hoisted(() => ({
   mockProjects: vi.fn(),
   mockUsage: vi.fn(),
   mockKeys: vi.fn(),
 }));
-vi.mock('../hooks/use-developer-projects', () => ({
+vi.mock('../hooks/use-developer-projects', async () => ({
+  ...(await vi.importActual<UseDeveloperProjectsModule>('../hooks/use-developer-projects')),
+
   ProjectMutationRejectedError: class ProjectMutationRejectedError extends Error {},
   useDeveloperProjects: () => mockProjects(),
   useCreateDeveloperProject: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useUpdateDeveloperProject: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useArchiveDeveloperProject: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
-vi.mock('../hooks/use-developer-usage', () => ({ useDeveloperUsage: () => mockUsage() }));
-vi.mock('@features/settings/hooks/use-settings-queries', () => ({
+vi.mock('../hooks/use-developer-usage', async () => ({
+  ...(await vi.importActual<UseDeveloperUsageModule>('../hooks/use-developer-usage')),
+  useDeveloperUsage: () => mockUsage(),
+}));
+vi.mock('@features/settings/hooks/use-settings-queries', async () => ({
+  ...(await vi.importActual<UseSettingsQueriesModule>(
+    '@features/settings/hooks/use-settings-queries',
+  )),
+
   useAPIKeys: () => mockKeys(),
 }));
 
@@ -36,13 +51,21 @@ const admission = vi.hoisted(() => {
   };
   return { data, session, owner };
 });
-vi.mock('@/lib/identity/useSessionSnapshot', () => ({
+vi.mock('@/lib/identity/useSessionSnapshot', async () => ({
+  ...(await vi.importActual<UseSessionSnapshotModule>('@/lib/identity/useSessionSnapshot')),
+
   useSessionSnapshot: () => () => admission.session,
 }));
-vi.mock('@/features/workspaces/hooks/use-workspaces', () => ({
+vi.mock('@/features/workspaces/hooks/use-workspaces', async () => ({
+  ...(await vi.importActual<UseWorkspacesModule>('@/features/workspaces/hooks/use-workspaces')),
+
   useAccountWorkspaces: () => ({ data: admission.data }),
 }));
-vi.mock('@/features/workspaces/lib/workspace-admission', () => ({
+vi.mock('@/features/workspaces/lib/workspace-admission', async () => ({
+  ...(await vi.importActual<WorkspaceAdmissionModule>(
+    '@/features/workspaces/lib/workspace-admission',
+  )),
+
   observeWorkspaceOwner: () => admission.owner,
   workspaceOwnerIsCurrent: () => true,
   subscribeWorkspaceAdmission: () => () => undefined,

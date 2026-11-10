@@ -15,7 +15,10 @@ vi.mock('@/lib/identity/client', async (original) => ({
   useCurrentUser: () => ({ isLoaded: true, isSignedIn: false, user: null }),
   useSignOut: () => vi.fn(),
 }));
-vi.mock('@shared/stores/authentication-store', () => ({ useAuthStore: () => vi.fn() }));
+vi.mock('@shared/stores/authentication-store', async () => ({
+  ...(await vi.importActual<AuthenticationStoreModule>('@shared/stores/authentication-store')),
+  useAuthStore: () => vi.fn(),
+}));
 vi.mock('@agiworkforce/ui', async (original) => ({
   ...(await original<ImportedModule1>()),
   useConfirmAction: () => ({ confirm: vi.fn(), dialog: null }),
@@ -23,7 +26,11 @@ vi.mock('@agiworkforce/ui', async (original) => ({
 vi.mock('@features/settings/hooks/useStepUp', () => ({
   useStepUp: () => ({ withStepUp: vi.fn(), dialog: null }),
 }));
-vi.mock('@features/settings/hooks/use-settings-queries', () => ({
+vi.mock('@features/settings/hooks/use-settings-queries', async () => ({
+  ...(await vi.importActual<UseSettingsQueriesModule>(
+    '@features/settings/hooks/use-settings-queries',
+  )),
+
   useUserSettings: () => ({ data: fixture.settings, isLoading: false, isError: false }),
   useUpdateSettings: () => ({ mutate: fixture.mutate, isPending: false }),
 }));
@@ -58,10 +65,16 @@ vi.mock('@features/settings/components/DeviceSignInToggle', () => ({
   ),
 }));
 vi.mock('@/features/support/components/HelpArticleLink', () => ({ HelpArticleLink: () => null }));
-vi.mock('@features/settings/components/SettingsSectionLink', () => ({
+vi.mock('@features/settings/components/SettingsSectionLink', async () => ({
+  ...(await vi.importActual<SettingsSectionLinkModule>(
+    '@features/settings/components/SettingsSectionLink',
+  )),
+
   SettingsSectionLink: () => null,
 }));
-vi.mock('./AccountSection', () => ({
+vi.mock('./AccountSection', async () => ({
+  ...(await vi.importActual<AccountSectionModule>('./AccountSection')),
+
   readApiError: (_body: unknown, fallback: string) => fallback,
 }));
 vi.mock('@features/settings/components/Settings/TwoFactor', async (original) => ({
@@ -89,6 +102,10 @@ vi.mock('@features/settings/components/Settings/TwoFactor', async (original) => 
 }));
 
 import { SecuritySection } from './SecuritySection';
+type AuthenticationStoreModule = typeof import('@shared/stores/authentication-store');
+type UseSettingsQueriesModule = typeof import('@features/settings/hooks/use-settings-queries');
+type SettingsSectionLinkModule = typeof import('@features/settings/components/SettingsSectionLink');
+type AccountSectionModule = typeof import('./AccountSection');
 
 beforeEach(() => {
   vi.clearAllMocks();

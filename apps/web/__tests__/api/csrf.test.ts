@@ -4,15 +4,23 @@ type ScanModule0 = typeof import('@/lib/server/neon-chat');
 
 vi.mock('server-only', () => ({}));
 
-vi.mock('@/lib/rate-limit', () => ({
+vi.mock('@/lib/rate-limit', async () => ({
+  ...(await vi.importActual<RateLimitModule>('@/lib/rate-limit')),
+
   withRateLimit: vi.fn().mockResolvedValue(null),
 }));
-vi.mock('@/lib/services/active-workspace-service', () => ({
+vi.mock('@/lib/services/active-workspace-service', async () => ({
+  ...(await vi.importActual<ActiveWorkspaceServiceModule>(
+    '@/lib/services/active-workspace-service',
+  )),
+
   resolveActiveOrganizationId: vi.fn(async () => null),
   resolveOrganizationMembershipId: vi.fn(async () => null),
 }));
 
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async () => ({
+  ...(await vi.importActual<LoggerModule>('@/lib/logger')),
+
   logger: {
     info: vi.fn(),
     error: vi.fn(),
@@ -30,7 +38,9 @@ vi.mock('@/lib/error-handler', () => ({
 }));
 
 const mockRequireCsrfToken = vi.fn();
-vi.mock('@/lib/csrf', () => ({
+vi.mock('@/lib/csrf', async () => ({
+  ...(await vi.importActual<CsrfModule>('@/lib/csrf')),
+
   requireCsrfToken: (...args: unknown[]) => mockRequireCsrfToken(...args),
   generateCsrfToken: vi.fn(() => 'valid-token'),
   verifyCsrfToken: vi.fn(() => true),
@@ -38,7 +48,9 @@ vi.mock('@/lib/csrf', () => ({
 }));
 
 const mockGetClerkAuthUser = vi.fn();
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async () => ({
+  ...(await vi.importActual<ApiAuthModule>('@/lib/api-auth')),
+
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
 
@@ -73,7 +85,9 @@ vi.mock('@/lib/server/neon-chat', async (importOriginal) => ({
   normalizeMessageMetadata: (v: unknown) => v,
 }));
 
-vi.mock('@/lib/server/rls-db', () => ({
+vi.mock('@/lib/server/rls-db', async () => ({
+  ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
+
   getUserScopedDb: async (request: Request) => {
     if (new URL(request.url).pathname.startsWith('/api/memory/')) {
       const { userId } = await mockGetClerkAuthUser(request);
@@ -118,6 +132,12 @@ import {
   DELETE as convDELETE,
   GET as convGET,
 } from '@/app/api/chat/conversations/[id]/route';
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type ActiveWorkspaceServiceModule = typeof import('@/lib/services/active-workspace-service');
+type LoggerModule = typeof import('@/lib/logger');
+type CsrfModule = typeof import('@/lib/csrf');
+type ApiAuthModule = typeof import('@/lib/api-auth');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
 
 function csrfBlockedResponse(): Response {
   return new Response(

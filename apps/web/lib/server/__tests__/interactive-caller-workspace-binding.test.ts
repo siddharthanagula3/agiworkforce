@@ -20,16 +20,32 @@ const mocks = vi.hoisted(() => ({
   assertOrganizationIpAllowList: vi.fn(),
 }));
 
-vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mocks.getUserScopedDb }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: mocks.getNeonDb }));
-vi.mock('@/lib/services/active-workspace-service', () => ({
+vi.mock('@/lib/server/rls-db', async () => ({
+  ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
+  getUserScopedDb: mocks.getUserScopedDb,
+}));
+vi.mock('@/lib/server/neon-db', async () => ({
+  ...(await vi.importActual<NeonDbModule>('@/lib/server/neon-db')),
+  getNeonDb: mocks.getNeonDb,
+}));
+vi.mock('@/lib/services/active-workspace-service', async () => ({
+  ...(await vi.importActual<ActiveWorkspaceServiceModule>(
+    '@/lib/services/active-workspace-service',
+  )),
+
   resolveActiveOrganizationId: mocks.resolveActiveOrganizationId,
 }));
-vi.mock('@/lib/services/organization-permission-service', () => ({
+vi.mock('@/lib/services/organization-permission-service', async () => ({
+  ...(await vi.importActual<OrganizationPermissionServiceModule>(
+    '@/lib/services/organization-permission-service',
+  )),
+
   requireMemberPermission: mocks.requireMemberPermission,
   resolveOrganizationPermissions: mocks.resolveOrganizationPermissions,
 }));
-vi.mock('@/lib/services/org-entitlements', () => ({
+vi.mock('@/lib/services/org-entitlements', async () => ({
+  ...(await vi.importActual<OrgEntitlementsModule>('@/lib/services/org-entitlements')),
+
   getOrganizationEntitlements: vi.fn(),
   getSharedProjectLimitErrorMessage: vi.fn(),
   isOrgResourceLimitError: vi.fn(),
@@ -38,10 +54,15 @@ vi.mock('@/app/api/settings/team/team-admin-access', () => ({
   requireTeamAdminAccess: mocks.requireTeamAdminAccess,
   getTeamAdminAccess: mocks.getTeamAdminAccess,
 }));
-vi.mock('@/lib/ip-allow-list-gate', () => ({
+vi.mock('@/lib/ip-allow-list-gate', async () => ({
+  ...(await vi.importActual<IpAllowListGateModule>('@/lib/ip-allow-list-gate')),
+
   assertOrganizationIpAllowList: mocks.assertOrganizationIpAllowList,
 }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn() }));
+vi.mock('@/lib/csrf', async () => ({
+  ...(await vi.importActual<CsrfModule>('@/lib/csrf')),
+  requireCsrfToken: vi.fn(),
+}));
 vi.mock('@/lib/server/admin-api-keys', async (importOriginal) => ({
   ...(await importOriginal<ImportedModule0>()),
   verifyAdminApiKey: mocks.verifyAdminApiKey,
@@ -51,6 +72,14 @@ import { createError } from '@/lib/errors';
 import * as compliance from '../compliance-caller';
 import { resolveWorkspaceApiCaller } from '../service-principals/caller';
 import { WORKSPACE_ROUTE_ACCESS } from '../service-principals/route-access';
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type NeonDbModule = typeof import('@/lib/server/neon-db');
+type ActiveWorkspaceServiceModule = typeof import('@/lib/services/active-workspace-service');
+type OrganizationPermissionServiceModule =
+  typeof import('@/lib/services/organization-permission-service');
+type OrgEntitlementsModule = typeof import('@/lib/services/org-entitlements');
+type IpAllowListGateModule = typeof import('@/lib/ip-allow-list-gate');
+type CsrfModule = typeof import('@/lib/csrf');
 
 const ORG_A = '11111111-1111-4111-8111-111111111111';
 const ORG_B = '22222222-2222-4222-8222-222222222222';

@@ -1676,7 +1676,7 @@ export function buildKnowledgeGraph(repoRoot, options = {}) {
       slashCommands.push({ name: command, file: filePath });
     }
 
-    if (filePath === 'apps/web/proxy.ts' || filePath === 'apps/web/middleware.ts') {
+    if (filePath === 'apps/web/proxy.ts') {
       const methods = HTTP_METHODS.filter((method) => parsed.exports?.includes(method));
       routes.push({
         surface: 'web',

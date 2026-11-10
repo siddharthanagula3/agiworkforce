@@ -7,12 +7,31 @@ import { moderateManagedPrompt } from '@/lib/moderation';
 import { inspectOutboundContent } from '@/lib/security/outbound-content-inspection';
 import { resolveSecretHandlingPolicy } from '@/lib/services/organization-policy-gate';
 import { preparePublishedArtifactPublication } from './published-artifact-publication-policy';
+type ManagedComputeGateModule = typeof import('@/lib/managed-compute-gate');
+type ModerationModule = typeof import('@/lib/moderation');
+type OutboundContentInspectionModule = typeof import('@/lib/security/outbound-content-inspection');
+type OrganizationPolicyGateModule = typeof import('@/lib/services/organization-policy-gate');
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/managed-compute-gate', () => ({ buildExternalSharingGateResponse: vi.fn() }));
-vi.mock('@/lib/moderation', () => ({ moderateManagedPrompt: vi.fn() }));
-vi.mock('@/lib/security/outbound-content-inspection', () => ({ inspectOutboundContent: vi.fn() }));
-vi.mock('@/lib/services/organization-policy-gate', () => ({
+vi.mock('@/lib/managed-compute-gate', async () => ({
+  ...(await vi.importActual<ManagedComputeGateModule>('@/lib/managed-compute-gate')),
+  buildExternalSharingGateResponse: vi.fn(),
+}));
+vi.mock('@/lib/moderation', async () => ({
+  ...(await vi.importActual<ModerationModule>('@/lib/moderation')),
+  moderateManagedPrompt: vi.fn(),
+}));
+vi.mock('@/lib/security/outbound-content-inspection', async () => ({
+  ...(await vi.importActual<OutboundContentInspectionModule>(
+    '@/lib/security/outbound-content-inspection',
+  )),
+  inspectOutboundContent: vi.fn(),
+}));
+vi.mock('@/lib/services/organization-policy-gate', async () => ({
+  ...(await vi.importActual<OrganizationPolicyGateModule>(
+    '@/lib/services/organization-policy-gate',
+  )),
+
   resolveSecretHandlingPolicy: vi.fn(),
 }));
 

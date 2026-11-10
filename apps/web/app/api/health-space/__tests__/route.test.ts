@@ -45,7 +45,9 @@ vi.mock('@/lib/logger', () => ({
   shouldUsePrettyLogTransport: vi.fn(),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async () => ({
+  ...(await vi.importActual<ApiAuthModule>('@/lib/api-auth')),
+
   getClerkAuthUser: vi.fn(),
   getClerkAuthorizedParties: vi.fn(),
   getOptionalAuthUser: vi.fn(),
@@ -53,7 +55,9 @@ vi.mock('@/lib/api-auth', () => ({
   isAccountUnavailableError: vi.fn(),
   assertAccountActive: mocks.assertAccountActive,
 }));
-vi.mock('@/lib/server/rls-db', () => ({
+vi.mock('@/lib/server/rls-db', async () => ({
+  ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
+
   ACTIVE_ORG_HEADER: vi.fn(),
   getCurrentUserRlsDb: vi.fn(),
   getVerifiedBearerUserScopedDb: vi.fn(),
@@ -70,6 +74,8 @@ vi.mock('@/lib/services/health-space-service', () => ({
 
 import { createError } from '@/lib/errors';
 import { GET, POST } from '../route';
+type ApiAuthModule = typeof import('@/lib/api-auth');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
 
 const PROJECT = '77777777-7777-4777-8777-777777777777';
 const db = { query: vi.fn() };

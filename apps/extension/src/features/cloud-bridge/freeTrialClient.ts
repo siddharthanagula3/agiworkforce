@@ -39,6 +39,7 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import {
   classifyManagedQuotaErrorCode,
+  messageKindForAgentEvent,
   effectivePlanTier,
   getDefaultModelFor,
   IMAGE_CARD_KIND,
@@ -1631,7 +1632,10 @@ export async function* streamFreeChat(
         if (frame.agentEvent) {
           callerReader.observe(frame.agentEvent);
           sawAgentActivity = true;
-          if (frame.agentEvent.event.type === 'text-delta') {
+          if (
+            messageKindForAgentEvent(frame.agentEvent.event.type) === 'text' &&
+            frame.agentEvent.event.type === 'text-delta'
+          ) {
             unacknowledgedPublicText = reconcileManagedCloudPublicText(
               unacknowledgedPublicText,
               frame.agentEvent.event.delta,
@@ -1735,7 +1739,10 @@ export async function* streamFreeChat(
           onEvent: (envelope) => {
             armInactivityWatchdog();
             callerReader.observe(envelope);
-            if (envelope.event.type === 'text-delta') {
+            if (
+              messageKindForAgentEvent(envelope.event.type) === 'text' &&
+              envelope.event.type === 'text-delta'
+            ) {
               const reconciled = reconcileManagedCloudPublicText(
                 unacknowledgedPublicText,
                 envelope.event.delta,

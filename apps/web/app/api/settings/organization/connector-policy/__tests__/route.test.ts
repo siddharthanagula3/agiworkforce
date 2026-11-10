@@ -28,19 +28,31 @@ const {
   mockCsrf: vi.fn(),
 }));
 
-vi.mock('@/lib/services/organization-permission-service', () => ({
+vi.mock('@/lib/services/organization-permission-service', async () => ({
+  ...(await vi.importActual<OrganizationPermissionServiceModule>(
+    '@/lib/services/organization-permission-service',
+  )),
+
   resolveOrganizationPermissions: mockResolvePermissions,
   requireMemberPermission: mockRequirePermission,
 }));
-vi.mock('@/lib/services/active-workspace-service', () => ({
+vi.mock('@/lib/services/active-workspace-service', async () => ({
+  ...(await vi.importActual<ActiveWorkspaceServiceModule>(
+    '@/lib/services/active-workspace-service',
+  )),
+
   resolveActiveOrganizationId: mockResolveActiveOrganizationId,
 }));
-vi.mock('@/lib/services/org-entitlements', () => ({
+vi.mock('@/lib/services/org-entitlements', async () => ({
+  ...(await vi.importActual<OrgEntitlementsModule>('@/lib/services/org-entitlements')),
+
   getOrganizationEntitlements: vi.fn(),
   getSharedProjectLimitErrorMessage: vi.fn(),
   isOrgResourceLimitError: vi.fn(),
 }));
-vi.mock('@/lib/error-handler', () => ({
+vi.mock('@/lib/error-handler', async () => ({
+  ...(await vi.importActual<ErrorHandlerModule>('@/lib/error-handler')),
+
   withErrorHandler:
     (handler: (request: Request) => Promise<Response>) => async (request: Request) => {
       try {
@@ -51,25 +63,47 @@ vi.mock('@/lib/error-handler', () => ({
       }
     },
 }));
-vi.mock('@/lib/cors', () => ({ handleCorsPreflightRequest: vi.fn(() => null) }));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mockRateLimit }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mockCsrf }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/cors', async () => ({
+  ...(await vi.importActual<CorsModule>('@/lib/cors')),
+  handleCorsPreflightRequest: vi.fn(() => null),
+}));
+vi.mock('@/lib/rate-limit', async () => ({
+  ...(await vi.importActual<RateLimitModule>('@/lib/rate-limit')),
+  withRateLimit: mockRateLimit,
+}));
+vi.mock('@/lib/csrf', async () => ({
+  ...(await vi.importActual<CsrfModule>('@/lib/csrf')),
+  requireCsrfToken: mockCsrf,
+}));
+vi.mock('@/lib/logger', async () => ({
+  ...(await vi.importActual<LoggerModule>('@/lib/logger')),
+
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mockGetUserScopedDb }));
-vi.mock('@/lib/server/neon-db', () => ({
+vi.mock('@/lib/server/rls-db', async () => ({
+  ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
+  getUserScopedDb: mockGetUserScopedDb,
+}));
+vi.mock('@/lib/server/neon-db', async () => ({
+  ...(await vi.importActual<NeonDbModule>('@/lib/server/neon-db')),
+
   getNeonDb: () => ({ query: mockPrivilegedQuery }),
 }));
-vi.mock('@/lib/security-audit', () => ({
+vi.mock('@/lib/security-audit', async () => ({
+  ...(await vi.importActual<SecurityAuditModule>('@/lib/security-audit')),
+
   recordAuditEvent: mockRecordAuditEvent,
   BLOCK_APPEAL_PATH: '/support',
   logRateLimitExceeded: vi.fn(),
 }));
-vi.mock('@/app/api/settings/team/team-admin-access', () => ({
+vi.mock('@/app/api/settings/team/team-admin-access', async () => ({
+  ...(await vi.importActual<TeamAdminAccessModule>('@/app/api/settings/team/team-admin-access')),
+
   requireTeamAdminAccess: mockRequireTeamAdminAccess,
 }));
-vi.mock('@/lib/user-connector-tools', () => ({
+vi.mock('@/lib/user-connector-tools', async () => ({
+  ...(await vi.importActual<UserConnectorToolsModule>('@/lib/user-connector-tools')),
+
   getOperatorMappedConnectorIds: () => new Set(['fixture-alpha', 'fixture-beta']),
 }));
 
@@ -81,6 +115,20 @@ import {
 import { createError } from '@/lib/errors';
 
 import { GET, PUT } from '../route';
+type OrganizationPermissionServiceModule =
+  typeof import('@/lib/services/organization-permission-service');
+type ActiveWorkspaceServiceModule = typeof import('@/lib/services/active-workspace-service');
+type OrgEntitlementsModule = typeof import('@/lib/services/org-entitlements');
+type ErrorHandlerModule = typeof import('@/lib/error-handler');
+type CorsModule = typeof import('@/lib/cors');
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type CsrfModule = typeof import('@/lib/csrf');
+type LoggerModule = typeof import('@/lib/logger');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type NeonDbModule = typeof import('@/lib/server/neon-db');
+type SecurityAuditModule = typeof import('@/lib/security-audit');
+type TeamAdminAccessModule = typeof import('@/app/api/settings/team/team-admin-access');
+type UserConnectorToolsModule = typeof import('@/lib/user-connector-tools');
 
 const ORG = '11111111-1111-4111-8111-111111111111';
 const OTHER_ORG = '22222222-2222-4222-8222-222222222222';

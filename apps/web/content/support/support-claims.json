@@ -637,7 +637,7 @@
         {
           "kind": "test",
           "file": "apps/web/features/settings/sections/__tests__/MemorySection.test.tsx",
-          "name": "asks for confirmation before clearing all memories, then clears the store"
+          "name": "asks before clearing cloud memories, then refreshes the acknowledged count"
         }
       ]
     },
@@ -1275,7 +1275,7 @@
         {
           "kind": "test",
           "file": "apps/web/features/settings/sections/__tests__/PrivacySection.persistence.test.tsx",
-          "name": "does not enable telemetry until opt-in is saved and sends only one write in StrictMode"
+          "name": "sends one field once in StrictMode and grants only after a stored receipt"
         }
       ]
     },
@@ -1506,11 +1506,11 @@
       "section": "Deleting conversations without deleting the account",
       "kind": "prose",
       "sentence": "Both ask first and name the current-workspace scope.",
-      "implementation": ["apps/web/features/settings/sections/PrivacySection.tsx"],
+      "implementation": ["apps/web/features/settings/components/BulkConversationControls.tsx"],
       "proof": [
         {
           "kind": "copy",
-          "file": "apps/web/features/settings/sections/PrivacySection.tsx",
+          "file": "apps/web/features/settings/components/BulkConversationControls.tsx",
           "text": "Delete all chats in this workspace?"
         }
       ]
@@ -1592,7 +1592,7 @@
         {
           "kind": "test",
           "file": "apps/web/features/chat/components/share/ShareConversationDialog.test.tsx",
-          "name": "revokes the chat’s link from the result state"
+          "name": "revokes the chat\u2019s link from the result state"
         },
         {
           "kind": "copy",
@@ -1678,7 +1678,7 @@
         {
           "kind": "test",
           "file": "apps/web/features/chat/components/share/ShareConversationDialog.test.tsx",
-          "name": "updates the chat’s link in place, keeping its address and expiry"
+          "name": "updates the chat\u2019s link in place, keeping its address and expiry"
         },
         {
           "kind": "test",
@@ -3224,7 +3224,7 @@
       "doc": "chat-basics",
       "section": "Branch a conversation",
       "kind": "prose",
-      "sentence": "While a branch is being created the control reads \"Creating branch…\" and cannot be pressed a second time.",
+      "sentence": "While a branch is being created the control reads \"Creating branch\u2026\" and cannot be pressed a second time.",
       "implementation": [
         "apps/web/features/chat/components/messages/MessageBubble.tsx",
         "apps/web/features/chat/hooks/use-conversation-branches.ts"
@@ -3294,7 +3294,7 @@
         {
           "kind": "copy",
           "file": "apps/web/app/chrome-extension/page.tsx",
-          "text": "AGI Extension · {SURFACE_STATUS.chrome}"
+          "text": "Extension \u00b7 {SURFACE_STATUS.chrome}"
         },
         {
           "kind": "copy",
@@ -3304,7 +3304,7 @@
         {
           "kind": "copy",
           "file": "apps/extension/manifest.json",
-          "text": "\"name\": \"AGI Extension\""
+          "text": "\"name\": \"Extension\""
         },
         {
           "kind": "test",
@@ -4046,12 +4046,7 @@
         {
           "kind": "test",
           "file": "apps/web/features/settings/components/Settings/TwoFactorEnrollment.test.tsx",
-          "name": "keeps setup visible but disabled, says why, and calls no setup route"
-        },
-        {
-          "kind": "test",
-          "file": "apps/web/features/settings/components/Settings/TwoFactorEnrollment.test.tsx",
-          "name": "disables new backup codes but still lets an enrolled account turn two-factor off"
+          "name": "keeps unavailable enrollment controls disabled for enabled=%s"
         },
         {
           "kind": "copy",
@@ -4185,13 +4180,23 @@
       "doc": "account-security",
       "section": "Password",
       "kind": "prose",
-      "sentence": "Every other device signed in to the account is signed out when the password changes.",
+      "sentence": "Changing your password attempts to sign out every other device; if the provider's session cleanup is incomplete, AGI reports that the password changed and asks you to end the remaining sessions in Settings.",
       "implementation": ["apps/web/app/api/settings/password/route.ts"],
       "proof": [
         {
-          "kind": "copy",
-          "file": "apps/web/app/api/settings/password/route.ts",
-          "text": "const signOut = await revokeEveryOtherSession(identity, userId, currentSessionId);"
+          "kind": "test",
+          "file": "apps/web/app/api/settings/password/__tests__/route.test.ts",
+          "name": "changes the password, ends other sessions and announces it"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/settings/password/__tests__/route.test.ts",
+          "name": "does not report success when the device credentials could not be revoked"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/settings/password/__tests__/route.test.ts",
+          "name": "does not mask provider cleanup $failed/$incomplete with intent success"
         }
       ]
     },
@@ -4214,7 +4219,7 @@
         {
           "kind": "copy",
           "file": "apps/web/features/settings/components/EmailAddressChange.tsx",
-          "text": "Your previous address stays on the account because a sign-in method still uses it."
+          "text": "The server reported that your previous address was kept."
         }
       ]
     },
@@ -4290,7 +4295,7 @@
         {
           "kind": "copy",
           "file": "apps/web/features/settings/hooks/useStepUp.tsx",
-          "text": "const silent = await requestStepUpGrant(challenge.action, challenge.resourceId);"
+          "text": "requestStepUpGrant(challenge.action, challenge.resourceId, undefined, authority)"
         }
       ]
     },
@@ -4793,13 +4798,13 @@
       "doc": "search",
       "section": "Letting AGI search your past chats",
       "kind": "prose",
-      "sentence": "Settings, Memory holds **Search past chats**: \"Let AGI look up excerpts from your other conversations when answering.\" It is never used in temporary chats.",
+      "sentence": "Settings, Memory holds **Search past chats**: \"Let the assistant look up excerpts from your other conversations when answering.\" It is never used in temporary chats.",
       "implementation": ["apps/web/features/settings/sections/MemorySection.tsx"],
       "proof": [
         {
           "kind": "copy",
           "file": "apps/web/features/settings/sections/MemorySection.tsx",
-          "text": "Let AGI look up excerpts from your other conversations when answering. Never used in temporary chats."
+          "text": "Let the assistant look up excerpts from your other conversations when answering. Never used in temporary chats."
         }
       ]
     },
@@ -5264,7 +5269,7 @@
       "implementation": [
         "apps/cli/src/secure_store.rs#pub fn uses_keychain()",
         "apps/cli/src/secure_store.rs#pub fn keyring_disabled()",
-        "apps/cli/src/auth.rs#pub fn save(&self)"
+        "apps/cli/src/auth.rs#fn save_unlocked(&self)"
       ],
       "proof": [
         {
@@ -7084,7 +7089,7 @@
       "doc": "models-and-reasoning",
       "section": "What the badges mean",
       "kind": "prose",
-      "sentence": "**Auto (free) · community models, capacity varies**: the free routing lane, whose capacity is not guaranteed.",
+      "sentence": "**Auto (free) \u00b7 community models, capacity varies**: the free routing lane, whose capacity is not guaranteed.",
       "implementation": [
         "apps/web/features/chat/components/Composer/ComposerFooter.tsx#FREE_LANE_SLOT_TEXT"
       ],
@@ -7092,7 +7097,7 @@
         {
           "kind": "copy",
           "file": "apps/web/features/chat/components/Composer/ComposerFooter.tsx",
-          "text": "const FREE_LANE_SLOT_TEXT = 'Auto (free) · community models, capacity varies';"
+          "text": "const FREE_LANE_SLOT_TEXT = 'Auto (free) \u00b7 community models, capacity varies';"
         },
         {
           "kind": "test",

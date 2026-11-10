@@ -12,22 +12,39 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('next/server', () => ({ after: mocks.after }));
-vi.mock('@/lib/logger', () => ({ logger: { error: mocks.error, warn: mocks.warn } }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: mocks.forbidden }));
+vi.mock('@/lib/logger', async () => ({
+  ...(await vi.importActual<LoggerModule>('@/lib/logger')),
+  logger: { error: mocks.error, warn: mocks.warn },
+}));
+vi.mock('@/lib/server/neon-db', async () => ({
+  ...(await vi.importActual<NeonDbModule>('@/lib/server/neon-db')),
+  getNeonDb: mocks.forbidden,
+}));
 vi.mock('@/lib/server/claimed-user-scope-db', () => ({
   createClaimedUserScopedDb: mocks.forbidden,
 }));
-vi.mock('@/lib/egress-policy', () => ({
+vi.mock('@/lib/egress-policy', async () => ({
+  ...(await vi.importActual<EgressPolicyModule>('@/lib/egress-policy')),
+
   EgressPolicyError: class EgressPolicyError extends Error {},
   assertResolvedPublicHostname: mocks.forbidden,
   pinnedPublicFetch: mocks.forbidden,
 }));
-vi.mock('@/lib/crypto/cmek', () => ({ platformTenantKeyRing: mocks.forbidden }));
-vi.mock('@/lib/crypto/envelope', () => ({
+vi.mock('@/lib/crypto/cmek', async () => ({
+  ...(await vi.importActual<CmekModule>('@/lib/crypto/cmek')),
+  platformTenantKeyRing: mocks.forbidden,
+}));
+vi.mock('@/lib/crypto/envelope', async () => ({
+  ...(await vi.importActual<EnvelopeModule>('@/lib/crypto/envelope')),
+
   openEnvelope: mocks.forbidden,
   sealEnvelope: mocks.forbidden,
 }));
-vi.mock('@/lib/server/organization-encryption-keys', () => ({
+vi.mock('@/lib/server/organization-encryption-keys', async () => ({
+  ...(await vi.importActual<OrganizationEncryptionKeysModule>(
+    '@/lib/server/organization-encryption-keys',
+  )),
+
   PLATFORM_TENANT_KEY_ENV: 'UNUSED_WEBHOOK_FIXTURE_KEY',
 }));
 
@@ -40,6 +57,12 @@ import {
   redeliverWebhook,
   sendWebhookTestEvent,
 } from '../developer-webhook-service';
+type LoggerModule = typeof import('@/lib/logger');
+type NeonDbModule = typeof import('@/lib/server/neon-db');
+type EgressPolicyModule = typeof import('@/lib/egress-policy');
+type CmekModule = typeof import('@/lib/crypto/cmek');
+type EnvelopeModule = typeof import('@/lib/crypto/envelope');
+type OrganizationEncryptionKeysModule = typeof import('@/lib/server/organization-encryption-keys');
 
 const USER_ID = 'webhook-owner';
 const ENDPOINT_ID = 'endpoint-one';

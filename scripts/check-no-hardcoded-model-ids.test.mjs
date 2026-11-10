@@ -129,6 +129,36 @@ function writeFiles(root, files) {
   });
 }
 
+test('credits only inert index paths to existing measurement owners and still rejects model values', () => {
+  const sandbox = createSandbox();
+  const measurement = `tools/evals/measurements/prompt-evals/runs/${canonicalId}.json`;
+  const index = 'docs/agent-context/generated/knowledge-graph/files/tools.jsonl';
+  const record = { path: measurement, unit: 'tools/evals', role: 'config', unparsed: 'notCode' };
+  const files = writeFiles(sandbox, { [measurement]: '{}', [index]: JSON.stringify(record) });
+  assert.equal(
+    scanModelIdFiles({ repoRoot: sandbox, filePaths: files, tokens }).violations.length,
+    0,
+  );
+  for (const changed of [
+    { ...record, model: canonicalId },
+    { ...record, role: 'source' },
+    { ...record, path: `tools/evals/measurements/prompt-evals/runs/${canonicalId}.missing.json` },
+  ]) {
+    writeFiles(sandbox, { [index]: JSON.stringify(changed) });
+    assert.ok(
+      scanModelIdFiles({ repoRoot: sandbox, filePaths: files, tokens }).violations.length > 0,
+    );
+  }
+  writeFiles(sandbox, { ['docs/copied-index.jsonl']: JSON.stringify(record) });
+  assert.ok(
+    scanModelIdFiles({
+      repoRoot: sandbox,
+      filePaths: [path.join(sandbox, 'docs/copied-index.jsonl')],
+      tokens,
+    }).violations.length > 0,
+  );
+});
+
 test('derives canonical keys, display names, provider wire IDs, and aliases from registry metadata', () => {
   assert.ok(tokenIds.has(canonicalId));
   assert.ok(tokenIds.has(canonicalDisplayName));

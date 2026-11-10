@@ -7,19 +7,27 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/rate-limit', () => ({
+vi.mock('@/lib/rate-limit', async () => ({
+  ...(await vi.importActual<RateLimitModule>('@/lib/rate-limit')),
+
   withRateLimit: vi.fn(async () => null),
 }));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async () => ({
+  ...(await vi.importActual<ApiAuthModule>('@/lib/api-auth')),
+
   isAccountUnavailableError: vi.fn(() => false),
   getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1' })),
 }));
-vi.mock('@/lib/server/neon-db', () => ({
+vi.mock('@/lib/server/neon-db', async () => ({
+  ...(await vi.importActual<NeonDbModule>('@/lib/server/neon-db')),
+
   getNeonDb: vi.fn(() => ({
     query: (...args: unknown[]) => mocks.query(...args),
   })),
 }));
-vi.mock('@/lib/server/rls-db', () => ({
+vi.mock('@/lib/server/rls-db', async () => ({
+  ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
+
   getUserScopedDb: vi.fn(async () => ({
     db: {
       query: (...args: unknown[]) => mocks.query(...args),
@@ -29,7 +37,9 @@ vi.mock('@/lib/server/rls-db', () => ({
     organizationId: null,
   })),
 }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async () => ({
+  ...(await vi.importActual<LoggerModule>('@/lib/logger')),
+
   logger: {
     debug: vi.fn(),
     error: vi.fn(),
@@ -45,6 +55,11 @@ vi.mock('@/lib/github-app', async (importOriginal) => ({
 import { GET } from './route';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { IpNotAllowedError } from '@/lib/ip-allow-list-gate';
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type ApiAuthModule = typeof import('@/lib/api-auth');
+type NeonDbModule = typeof import('@/lib/server/neon-db');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type LoggerModule = typeof import('@/lib/logger');
 
 describe('GitHub installation listing ownership proof', () => {
   beforeEach(() => {

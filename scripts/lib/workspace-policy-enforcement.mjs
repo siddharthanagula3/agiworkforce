@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import ts from 'typescript';
 
 export const CONTRACT_FILE = 'packages/contracts/types/src/enterprise/workspace-controls.ts';
 export const BASELINE_FILE = 'scripts/config/workspace-policy-enforcement-baseline.json';
@@ -134,6 +135,92 @@ export function identifiersIn(source) {
   return new Set([...source.matchAll(/\b([a-zA-Z_][a-zA-Z0-9_]*)\b/g)].map((m) => m[1]));
 }
 
+export function controlPredicateReads(source) {
+  const program = ts.createSourceFile(CONTRACT_FILE, source, ts.ScriptTarget.Latest, true);
+  const predicates = new Map();
+  for (const node of program.statements) {
+    if (
+      !ts.isFunctionDeclaration(node) ||
+      !node.name ||
+      !node.body ||
+      node.type?.kind !== ts.SyntaxKind.BooleanKeyword ||
+      !node.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword)
+    )
+      continue;
+    const keys = new Set();
+    const calls = new Set();
+    const visit = (child) => {
+      if (
+        ts.isPropertyAccessExpression(child) &&
+        ts.isIdentifier(child.expression) &&
+        child.expression.text === 'controls'
+      )
+        keys.add(child.name.text);
+      if (ts.isCallExpression(child) && ts.isIdentifier(child.expression))
+        calls.add(child.expression.text);
+      ts.forEachChild(child, visit);
+    };
+    visit(node.body);
+    predicates.set(node.name.text, { keys, calls });
+  }
+  return predicates;
+}
+
+export function invokedControlPredicateKeys(source, predicates) {
+  const keys = new Set();
+  if (![...predicates.keys()].some((name) => source.includes(name))) return keys;
+  const program = ts.createSourceFile('consumer.ts', source, ts.ScriptTarget.Latest, true);
+  const bindings = new Map();
+  for (const node of program.statements) {
+    if (
+      !ts.isImportDeclaration(node) ||
+      !ts.isStringLiteral(node.moduleSpecifier) ||
+      node.moduleSpecifier.text !== '@agiworkforce/types' ||
+      node.importClause?.isTypeOnly
+    )
+      continue;
+    const imports = node.importClause?.namedBindings;
+    if (!imports || !ts.isNamedImports(imports)) continue;
+    for (const item of imports.elements) {
+      const original = item.propertyName?.text ?? item.name.text;
+      if (!item.isTypeOnly && predicates.has(original)) bindings.set(item.name.text, original);
+    }
+  }
+  const discardShadowed = (node) => {
+    if (
+      [
+        ts.SyntaxKind.VariableDeclaration,
+        ts.SyntaxKind.Parameter,
+        ts.SyntaxKind.FunctionDeclaration,
+        ts.SyntaxKind.ClassDeclaration,
+        ts.SyntaxKind.BindingElement,
+      ].includes(node.kind) &&
+      node.name &&
+      ts.isIdentifier(node.name)
+    )
+      bindings.delete(node.name.text);
+    ts.forEachChild(node, discardShadowed);
+  };
+  discardShadowed(program);
+  const collect = (name, seen = new Set()) => {
+    if (seen.has(name)) return;
+    seen.add(name);
+    const predicate = predicates.get(name);
+    if (!predicate) return;
+    for (const key of predicate.keys) keys.add(key);
+    for (const callee of predicate.calls) collect(callee, seen);
+  };
+  const visit = (node) => {
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
+      const name = bindings.get(node.expression.text);
+      if (name) collect(name);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(program);
+  return keys;
+}
+
 export function walk(scanRoot, dir) {
   const abs = path.join(scanRoot, dir);
   if (!fs.existsSync(abs)) return [];
@@ -158,7 +245,8 @@ export function findUnenforcedKeys(scanRoot) {
   if (!fs.existsSync(contractPath)) {
     return { error: `${CONTRACT_FILE} is missing, so no policy key can be enumerated.` };
   }
-  const keys = declaredPolicyKeys(fs.readFileSync(contractPath, 'utf8'));
+  const contractSource = fs.readFileSync(contractPath, 'utf8');
+  const keys = declaredPolicyKeys(contractSource);
   if (keys.length === 0) {
     return { error: `${CONTRACT_FILE} declared no policy keys, which cannot be right.` };
   }
@@ -166,13 +254,16 @@ export function findUnenforcedKeys(scanRoot) {
   const enforcedFeatures = new Set();
   const enforcedIdentifiers = new Set();
   const invokedActs = new Set();
-  const actsByControl = codeActsByControl(fs.readFileSync(contractPath, 'utf8'));
+  const actsByControl = codeActsByControl(contractSource);
+  const predicates = controlPredicateReads(contractSource);
   for (const root of SCAN_ROOTS) {
     for (const full of walk(scanRoot, root)) {
       if (!isEnforcementFile(full)) continue;
       const source = fs.readFileSync(path.join(scanRoot, full), 'utf8');
       for (const feature of featuresEnforcedIn(source)) enforcedFeatures.add(feature);
       for (const identifier of identifiersIn(source)) enforcedIdentifiers.add(identifier);
+      for (const key of invokedControlPredicateKeys(source, predicates))
+        enforcedIdentifiers.add(key);
       for (const act of invokedCodeActs(source)) invokedActs.add(act);
     }
   }
@@ -203,7 +294,8 @@ export function servedFamilies(effectiveRouteSource) {
     families.add('feature');
     families.add('control');
   }
-  if (/code:\s*effective\.code/.test(effectiveRouteSource)) families.add('code');
+  if (/code:\s*(?:effective\.code\b|\{\s*\.\.\.effective\.code\b)/.test(effectiveRouteSource))
+    families.add('code');
   return families;
 }
 

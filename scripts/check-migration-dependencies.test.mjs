@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { parse } from 'yaml';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { after, test } from 'node:test';
@@ -85,6 +86,21 @@ test('every real allowlist entry names a migration still pending in production',
       `${entry.file} allowlists migration ${entry.migration}, which is not currently pending`,
     );
   }
+});
+
+test('coordinated source dependencies cannot skip production schema verification before build', () => {
+  const workflow = parse(
+    readFileSync(path.join(REPO_ROOT, '.github/workflows/deploy-production.yml'), 'utf8'),
+  );
+  const steps = workflow.jobs['deploy-web'].steps;
+  const verification = steps.findIndex((step) =>
+    /^\s*pnpm db:migrate -- verify\s*$/m.test(step.run ?? ''),
+  );
+  const build = steps.findIndex((step) => /\bvercel build --prod\b/.test(step.run ?? ''));
+  assert.ok(verification >= 0 && build > verification);
+  assert.equal(steps[verification].if, undefined);
+  assert.notEqual(steps[verification]['continue-on-error'], true);
+  assert.notEqual(workflow.jobs['deploy-web']['continue-on-error'], true);
 });
 
 test('parseDraftMigration reads a numbered migration without relying on header prose', () => {

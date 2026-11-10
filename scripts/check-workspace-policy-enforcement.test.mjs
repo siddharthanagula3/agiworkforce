@@ -10,9 +10,11 @@ import {
   codeActsByControl,
   compareToBaseline,
   declaredPolicyKeys,
+  controlPredicateReads,
   featuresEnforcedIn,
   findUnenforcedKeys,
   invokedCodeActs,
+  invokedControlPredicateKeys,
   isEnforcementFile,
   servedFamilies,
 } from './lib/workspace-policy-enforcement.mjs';
@@ -27,6 +29,48 @@ export interface WorkspaceControls {
 
 export const WORKSPACE_CODE_CONTROL_KEYS = ['allowGithubConnection'] as const;
 `;
+
+test('follows real shared control predicates without crediting imports, strings or shadowed names', () => {
+  const contract = `
+    export function isRestrictionActive(controls): boolean {
+      return controls.countryRestrictionActive;
+    }
+    export function isCountryAllowed(controls, country): boolean {
+      return !isRestrictionActive(controls) || controls.allowedCountries.includes(country);
+    }
+  `;
+  const predicates = controlPredicateReads(contract);
+  const imported = "import { isCountryAllowed as permitsCountry } from '@agiworkforce/types';";
+  const consumer = `${imported}\nif (!permitsCountry(controls, country)) throw new Error('Denied');`;
+  assert.deepEqual([...invokedControlPredicateKeys(consumer, predicates)].sort(), [
+    'allowedCountries',
+    'countryRestrictionActive',
+  ]);
+  assert.equal(invokedControlPredicateKeys(imported, predicates).size, 0);
+  assert.equal(
+    invokedControlPredicateKeys(
+      `${imported}\nconst note = 'permitsCountry(controls, country)';`,
+      predicates,
+    ).size,
+    0,
+  );
+  assert.equal(
+    invokedControlPredicateKeys(consumer.replace('@agiworkforce/types', 'untrusted'), predicates)
+      .size,
+    0,
+  );
+  assert.equal(
+    invokedControlPredicateKeys(
+      `${imported}\nfunction decide(permitsCountry) { return permitsCountry(controls, country); }`,
+      predicates,
+    ).size,
+    0,
+  );
+  const changed = controlPredicateReads(
+    contract.replace('controls.allowedCountries.includes(country)', 'true'),
+  );
+  assert.equal(invokedControlPredicateKeys(consumer, changed).has('allowedCountries'), false);
+});
 
 function tree(files) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'policy-enforcement-'));
@@ -163,6 +207,11 @@ test('the published families are read off the effective route, not assumed', () 
     'feature',
   ]);
   assert.ok(servedFamilies('code: effective.code,').has('code'));
+  assert.ok(servedFamilies('code: { ...effective.code, allowMcpServers: permitted },').has('code'));
+  assert.equal(
+    servedFamilies('code: { allowMcpServers: effective.code.allowMcpServers },').has('code'),
+    false,
+  );
   assert.equal(servedFamilies('return NextResponse.json({});').size, 0);
 });
 

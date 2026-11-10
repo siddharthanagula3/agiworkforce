@@ -24,7 +24,7 @@ const CLAIM_PAGES = [
   },
   {
     file: 'apps/web/features/settings/sections/PrivacySection.tsx',
-    must: [/There is\s*\n?\s*no training opt-in, because that data path does not exist/i],
+    must: [/There\s+is\s+no\s+training opt-in, because that data path does not exist/i],
   },
 ];
 

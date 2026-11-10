@@ -62,7 +62,7 @@ const conditionalPlugins = [
 ];
 
 const config = {
-  name: 'AGI Mobile',
+  name: 'Mobile',
   slug: 'agi-workforce',
   version: '0.0.1',
   orientation: 'portrait',

@@ -9,7 +9,7 @@
 # `v-desktop-*` release: the Tauri updater feed and /api/download match by tag
 # prefix and first-asset heuristics, and mixing assets would cross the streams.
 appId: com.agiworkforce.desktop.cloud
-productName: AGI Desktop
+productName: Desktop
 electronLanguages:
   - en
 

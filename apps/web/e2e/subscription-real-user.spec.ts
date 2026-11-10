@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { managedUsageBucketLabel, normalizeUsagePercentage } from '@agiworkforce/types';
 import { mintSignInTicketFor, signInAsDevAccount, signInWithTicket } from './qa-capability-harness';
 
 const FREE_EXTERNAL_ID = 'agi-live-check:free-surface';
@@ -145,10 +146,13 @@ test.describe('a signed-in person uses one AGI Subscription', () => {
     expect(usage.status).toBe(200);
     expect(usage.usage.plan_tier).toBe('basic');
     expect(usage.usage.effective_plan_tier ?? usage.usage.plan_tier).toBe('basic');
-    const shown = Math.round(usage.usage.usage_percentage ?? -1);
-    await expect(page.getByText('This billing period').locator('xpath=..')).toContainText(
-      `${shown}% used`,
-    );
+    const shown = normalizeUsagePercentage(usage.usage.usage_percentage);
+    await expect(
+      page.getByRole('progressbar', {
+        name: `${managedUsageBucketLabel('period')} usage`,
+        exact: true,
+      }),
+    ).toHaveAttribute('aria-valuenow', String(shown));
 
     const chrome = await askManagedCloud(page, 'chrome');
     expect(chrome.status).toBe(403);
@@ -168,10 +172,13 @@ test.describe('a signed-in person uses one AGI Subscription', () => {
     expect(usage.status).toBe(200);
     expect(usage.usage.plan_tier).toBe('pro');
     expect(usage.usage.effective_plan_tier ?? usage.usage.plan_tier).toBe('pro');
-    const shown = Math.round(usage.usage.usage_percentage ?? -1);
-    await expect(page.getByText('This billing period').locator('xpath=..')).toContainText(
-      `${shown}% used`,
-    );
+    const shown = normalizeUsagePercentage(usage.usage.usage_percentage);
+    await expect(
+      page.getByRole('progressbar', {
+        name: `${managedUsageBucketLabel('period')} usage`,
+        exact: true,
+      }),
+    ).toHaveAttribute('aria-valuenow', String(shown));
     expect(usage.usage.usage_reset_at).toEqual(expect.any(String));
 
     const chrome = await askManagedCloud(page, 'chrome');

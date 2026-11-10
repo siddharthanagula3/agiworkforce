@@ -26,11 +26,26 @@ const {
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: authUserMock }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: csrfMock }));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: rateLimitMock }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: getNeonDbMock }));
-vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: userScopedDbMock }));
+vi.mock('@/lib/api-auth', async () => ({
+  ...(await vi.importActual<ApiAuthModule>('@/lib/api-auth')),
+  getClerkAuthUser: authUserMock,
+}));
+vi.mock('@/lib/csrf', async () => ({
+  ...(await vi.importActual<CsrfModule>('@/lib/csrf')),
+  requireCsrfToken: csrfMock,
+}));
+vi.mock('@/lib/rate-limit', async () => ({
+  ...(await vi.importActual<RateLimitModule>('@/lib/rate-limit')),
+  withRateLimit: rateLimitMock,
+}));
+vi.mock('@/lib/server/neon-db', async () => ({
+  ...(await vi.importActual<NeonDbModule>('@/lib/server/neon-db')),
+  getNeonDb: getNeonDbMock,
+}));
+vi.mock('@/lib/server/rls-db', async () => ({
+  ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
+  getUserScopedDb: userScopedDbMock,
+}));
 
 import {
   PluginMarketplaceFetchError,
@@ -54,6 +69,11 @@ import { GET as getEntries } from '../entries/route';
 import { DELETE } from '../[id]/route';
 import { POST as refresh } from '../[id]/refresh/route';
 import { GET, POST } from '../route';
+type ApiAuthModule = typeof import('@/lib/api-auth');
+type CsrfModule = typeof import('@/lib/csrf');
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type NeonDbModule = typeof import('@/lib/server/neon-db');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
 
 const SOURCE = {
   id: 'source-1',

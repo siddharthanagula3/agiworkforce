@@ -47,6 +47,25 @@ test('passes a blob route that authorizes its read', () => {
   assert.match(result.output, /1 object-storage routes/);
 });
 
+test('credits the shared platform administrator guard only when the route calls it', () => {
+  const source = AUTHORIZED.replace(
+    "getUserScopedDb } from '@/lib/server/rls-db'",
+    "requirePlatformAdmin } from '@/lib/auth-guards'",
+  ).replace('await getUserScopedDb(request)', 'await requirePlatformAdmin(request)');
+  assert.equal(run(fixture({ 'operator/route.ts': source })).code, 0);
+  assert.equal(
+    run(
+      fixture({
+        'operator/route.ts': source.replace(
+          'await requirePlatformAdmin(request)',
+          "{ userId: 'unverified' }",
+        ),
+      }),
+    ).code,
+    1,
+  );
+});
+
 test('fails a blob route that reads bytes with no authorization call', () => {
   const root = fixture({
     'files/[id]/route.ts': AUTHORIZED,

@@ -6,11 +6,15 @@ import { tmpdir } from 'node:os';
 
 vi.mock('server-only', () => ({}));
 
-vi.mock('@/lib/rate-limit', () => ({
+vi.mock('@/lib/rate-limit', async () => ({
+  ...(await vi.importActual<RateLimitModule>('@/lib/rate-limit')),
+
   withRateLimit: vi.fn().mockResolvedValue(null),
 }));
 
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async () => ({
+  ...(await vi.importActual<LoggerModule>('@/lib/logger')),
+
   logger: {
     info: vi.fn(),
     error: vi.fn(),
@@ -19,22 +23,32 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-vi.mock('@/lib/error-handler', () => ({
+vi.mock('@/lib/error-handler', async () => ({
+  ...(await vi.importActual<ErrorHandlerModule>('@/lib/error-handler')),
+
   withErrorHandler:
     (handler: (req: NextRequest, context?: unknown) => Promise<Response>) =>
     (req: NextRequest, context?: unknown) =>
       handler(req, context),
 }));
 
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async () => ({
+  ...(await vi.importActual<ApiAuthModule>('@/lib/api-auth')),
+
   getClerkAuthUser: vi.fn().mockResolvedValue({ userId: 'user_test' }),
 }));
 
-vi.mock('@/lib/services/plugin-installation-service', () => ({
+vi.mock('@/lib/services/plugin-installation-service', async () => ({
+  ...(await vi.importActual<PluginInstallationServiceModule>(
+    '@/lib/services/plugin-installation-service',
+  )),
+
   listEnabledPluginIds: vi.fn().mockResolvedValue(new Set(['research-pack'])),
 }));
 
-vi.mock('@/lib/server/rls-db', () => ({
+vi.mock('@/lib/server/rls-db', async () => ({
+  ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
+
   getUserScopedDb: vi.fn().mockResolvedValue({
     db: { query: vi.fn().mockResolvedValue([]) },
     userId: 'user_test',
@@ -42,11 +56,17 @@ vi.mock('@/lib/server/rls-db', () => ({
   }),
 }));
 
-vi.mock('@/features/plugins/server/directory/installed-skills', () => ({
+vi.mock('@/features/plugins/server/directory/installed-skills', async () => ({
+  ...(await vi.importActual<InstalledSkillsModule>(
+    '@/features/plugins/server/directory/installed-skills',
+  )),
+
   findInstalledDirectorySkillWithFiles: vi.fn(async () => null),
   listInstalledDirectorySkills: vi.fn(async () => []),
 }));
-vi.mock('@/lib/server/neon-db', () => ({
+vi.mock('@/lib/server/neon-db', async () => ({
+  ...(await vi.importActual<NeonDbModule>('@/lib/server/neon-db')),
+
   getNeonDb: vi.fn(() => ({ query: vi.fn().mockResolvedValue([]) })),
 }));
 
@@ -54,6 +74,14 @@ import { GET as listSkills } from '@/app/api/skills/route';
 import { GET as getSkillBody } from '@/app/api/skills/[name]/route';
 import { GET as downloadSkill } from '@/app/api/skills/[name]/download/route';
 import { resetManagedSkillCatalogCacheForTests } from '@/lib/services/skill-catalog-service';
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type LoggerModule = typeof import('@/lib/logger');
+type ErrorHandlerModule = typeof import('@/lib/error-handler');
+type ApiAuthModule = typeof import('@/lib/api-auth');
+type PluginInstallationServiceModule = typeof import('@/lib/services/plugin-installation-service');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type InstalledSkillsModule = typeof import('@/features/plugins/server/directory/installed-skills');
+type NeonDbModule = typeof import('@/lib/server/neon-db');
 
 function request(path: string, origin?: string): NextRequest {
   return new NextRequest(`http://localhost${path}`, {

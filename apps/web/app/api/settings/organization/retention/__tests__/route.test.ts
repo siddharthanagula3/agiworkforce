@@ -30,6 +30,10 @@ vi.mock('@/lib/services/organization-permission-service', async () => {
     await import('@/lib/services/__tests__/organization-permission-service-mock');
   const { createError } = await import('@/lib/errors');
   return {
+    ...(await vi.importActual<OrganizationPermissionServiceModule>(
+      '@/lib/services/organization-permission-service',
+    )),
+
     resolveOrganizationPermissions: vi.fn(async (organizationId: string) =>
       permissionsForRole(fixture.roles.get(organizationId) ?? null),
     ),
@@ -52,27 +56,52 @@ vi.mock('@/lib/services/org-sharing-service', async (importOriginal) => ({
   ...(await importOriginal<ImportedModule0>()),
   resolveOrgMembership: fixture.savedMembership,
 }));
-vi.mock('@/lib/services/active-workspace-service', () => ({
+vi.mock('@/lib/services/active-workspace-service', async () => ({
+  ...(await vi.importActual<ActiveWorkspaceServiceModule>(
+    '@/lib/services/active-workspace-service',
+  )),
+
   resolveActiveOrganizationId: fixture.savedOrganization,
 }));
-vi.mock('@/lib/services/org-entitlements', () => ({
+vi.mock('@/lib/services/org-entitlements', async () => ({
+  ...(await vi.importActual<OrgEntitlementsModule>('@/lib/services/org-entitlements')),
+
   getOrganizationEntitlements: fixture.forbiddenIo,
   getSharedProjectLimitErrorMessage: fixture.forbiddenIo,
   isOrgResourceLimitError: fixture.forbiddenIo,
 }));
-vi.mock('@/lib/resources/purge-soft-deleted', () => ({ purgeDerivedRecords: fixture.forbiddenIo }));
-vi.mock('@/lib/server/media-storage', () => ({ deleteStoredMediaObjects: fixture.forbiddenIo }));
-vi.mock('@/lib/server/object-storage', () => ({ objectKeyFromStorageUri: fixture.forbiddenIo }));
-vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
+vi.mock('@/lib/resources/purge-soft-deleted', async () => ({
+  ...(await vi.importActual<PurgeSoftDeletedModule>('@/lib/resources/purge-soft-deleted')),
+  purgeDerivedRecords: fixture.forbiddenIo,
+}));
+vi.mock('@/lib/server/media-storage', async () => ({
+  ...(await vi.importActual<MediaStorageModule>('@/lib/server/media-storage')),
+  deleteStoredMediaObjects: fixture.forbiddenIo,
+}));
+vi.mock('@/lib/server/object-storage', async () => ({
+  ...(await vi.importActual<ObjectStorageModule>('@/lib/server/object-storage')),
+  objectKeyFromStorageUri: fixture.forbiddenIo,
+}));
+vi.mock('@/lib/server/project-knowledge-object-storage', async () => ({
+  ...(await vi.importActual<ProjectKnowledgeObjectStorageModule>(
+    '@/lib/server/project-knowledge-object-storage',
+  )),
+
   deleteProjectKnowledgeObject: fixture.forbiddenIo,
 }));
-vi.mock('@/lib/services/organization-policy-service', () => ({
+vi.mock('@/lib/services/organization-policy-service', async () => ({
+  ...(await vi.importActual<OrganizationPolicyServiceModule>(
+    '@/lib/services/organization-policy-service',
+  )),
+
   readOrganizationPolicy: fixture.forbiddenIo,
   readWorkspaceCodeControls: fixture.forbiddenIo,
 }));
 vi.mock('@/lib/error-handler', async () => {
   const { AppError } = await import('@/lib/errors');
   return {
+    ...(await vi.importActual<ErrorHandlerModule>('@/lib/error-handler')),
+
     withErrorHandler:
       (handler: (request: Request) => Promise<Response>) => async (request: Request) => {
         try {
@@ -84,26 +113,43 @@ vi.mock('@/lib/error-handler', async () => {
       },
   };
 });
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn() }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn() }));
-vi.mock('@/lib/cors', () => ({ handleCorsPreflightRequest: vi.fn(() => null) }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/rate-limit', async () => ({
+  ...(await vi.importActual<RateLimitModule>('@/lib/rate-limit')),
+  withRateLimit: vi.fn(),
+}));
+vi.mock('@/lib/csrf', async () => ({
+  ...(await vi.importActual<CsrfModule>('@/lib/csrf')),
+  requireCsrfToken: vi.fn(),
+}));
+vi.mock('@/lib/cors', async () => ({
+  ...(await vi.importActual<CorsModule>('@/lib/cors')),
+  handleCorsPreflightRequest: vi.fn(() => null),
+}));
+vi.mock('@/lib/logger', async () => ({
+  ...(await vi.importActual<LoggerModule>('@/lib/logger')),
+
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/server/rls-db', () => ({
+vi.mock('@/lib/server/rls-db', async () => ({
+  ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
+
   getUserScopedDb: vi.fn(async () => ({
     db: { query: fixture.scopedQuery },
     userId: 'user-1',
     organizationId: fixture.organizationId,
   })),
 }));
-vi.mock('@/lib/server/neon-db', () => ({
+vi.mock('@/lib/server/neon-db', async () => ({
+  ...(await vi.importActual<NeonDbModule>('@/lib/server/neon-db')),
+
   getNeonDb: vi.fn(() => ({ query: fixture.mockQuery })),
 }));
 vi.mock('@/lib/server/admin-data-access', () => ({
   logAdminDataAccess: fixture.logAdminDataAccess,
 }));
-vi.mock('@/lib/security-audit', () => ({
+vi.mock('@/lib/security-audit', async () => ({
+  ...(await vi.importActual<SecurityAuditModule>('@/lib/security-audit')),
+
   recordAuditEvent: fixture.mockRecordAuditEvent,
   BLOCK_APPEAL_PATH: '/support',
   logRateLimitExceeded: fixture.forbiddenIo,
@@ -111,6 +157,8 @@ vi.mock('@/lib/security-audit', () => ({
 vi.mock('@/app/api/settings/team/team-admin-access', async () => {
   const { createError } = await import('@/lib/errors');
   return {
+    ...(await vi.importActual<TeamAdminAccessModule>('@/app/api/settings/team/team-admin-access')),
+
     requireTeamAdminAccess: vi.fn(async (_db: unknown, userId: string, organizationId: string) => {
       expect(userId).toBe('user-1');
       if (fixture.deniedPlans.has(organizationId)) throw createError.forbidden('Plan denied');
@@ -126,6 +174,25 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { requireMemberPermission } from '@/lib/services/organization-permission-service';
 import { requireTeamAdminAccess } from '@/app/api/settings/team/team-admin-access';
 import { GET, PUT } from '../route';
+type OrganizationPermissionServiceModule =
+  typeof import('@/lib/services/organization-permission-service');
+type ActiveWorkspaceServiceModule = typeof import('@/lib/services/active-workspace-service');
+type OrgEntitlementsModule = typeof import('@/lib/services/org-entitlements');
+type PurgeSoftDeletedModule = typeof import('@/lib/resources/purge-soft-deleted');
+type MediaStorageModule = typeof import('@/lib/server/media-storage');
+type ObjectStorageModule = typeof import('@/lib/server/object-storage');
+type ProjectKnowledgeObjectStorageModule =
+  typeof import('@/lib/server/project-knowledge-object-storage');
+type OrganizationPolicyServiceModule = typeof import('@/lib/services/organization-policy-service');
+type ErrorHandlerModule = typeof import('@/lib/error-handler');
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type CsrfModule = typeof import('@/lib/csrf');
+type CorsModule = typeof import('@/lib/cors');
+type LoggerModule = typeof import('@/lib/logger');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type NeonDbModule = typeof import('@/lib/server/neon-db');
+type SecurityAuditModule = typeof import('@/lib/security-audit');
+type TeamAdminAccessModule = typeof import('@/app/api/settings/team/team-admin-access');
 
 const ORG_A = '11111111-1111-4111-8111-111111111111';
 const ORG = '22222222-2222-4222-8222-222222222222';

@@ -13,7 +13,7 @@ import {
   type ManagedCloudAgentRunReference,
 } from '@agiworkforce/cloud-contracts';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
-import { TERMINAL_AGENT_TASK_STATES } from '@agiworkforce/types';
+import { TERMINAL_AGENT_TASK_STATES, messageKindForAgentEvent } from '@agiworkforce/types';
 import { FREE_TRIAL_GATEWAY, getAuthToken } from './freeTrialClient';
 import { platformRequestHeaders } from '../../platformHeaders';
 import { chatBrowserToolDefinitions } from '../computer-use/chatBrowserTools';
@@ -212,7 +212,10 @@ export async function resumeChromeManagedRun(
           }
           if (toolUseJournal.observe(envelope.event)) askedForBrowserTool = true;
         }
-        if (envelope.event.type === 'text-delta') {
+        if (
+          messageKindForAgentEvent(envelope.event.type) === 'text' &&
+          envelope.event.type === 'text-delta'
+        ) {
           const reconciled = reconcileManagedCloudPublicText(
             pendingPublicText,
             envelope.event.delta,

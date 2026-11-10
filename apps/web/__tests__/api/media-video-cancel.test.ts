@@ -14,25 +14,40 @@ const mocks = vi.hoisted(() => ({
   reconcile: vi.fn(),
 }));
 
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async () => ({
+  ...(await vi.importActual<ApiAuthModule>('@/lib/api-auth')),
+
   getClerkAuthUser: (...args: unknown[]) => mocks.auth(...args),
 }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: (...args: unknown[]) => mocks.csrf(...args) }));
-vi.mock('@/lib/rate-limit', () => ({
+vi.mock('@/lib/csrf', async () => ({
+  ...(await vi.importActual<CsrfModule>('@/lib/csrf')),
+  requireCsrfToken: (...args: unknown[]) => mocks.csrf(...args),
+}));
+vi.mock('@/lib/rate-limit', async () => ({
+  ...(await vi.importActual<RateLimitModule>('@/lib/rate-limit')),
+
   withRateLimit: (...args: unknown[]) => mocks.rateLimit(...args),
 }));
-vi.mock('@/lib/cors', () => ({
+vi.mock('@/lib/cors', async () => ({
+  ...(await vi.importActual<CorsModule>('@/lib/cors')),
+
   handleCorsPreflightRequest: () => null,
   getCorsHeaders: () => ({}),
   getSecurityHeaders: () => ({}),
 }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async () => ({
+  ...(await vi.importActual<LoggerModule>('@/lib/logger')),
+
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/server/rls-db', () => ({
+vi.mock('@/lib/server/rls-db', async () => ({
+  ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
+
   getUserScopedDb: (...args: unknown[]) => mocks.scoped(...args),
 }));
-vi.mock('@/lib/server/video-generation-jobs', () => ({
+vi.mock('@/lib/server/video-generation-jobs', async () => ({
+  ...(await vi.importActual<VideoGenerationJobsModule>('@/lib/server/video-generation-jobs')),
+
   getVideoGenerationJob: (...args: unknown[]) => mocks.getJob(...args),
   requestVideoGenerationCancellation: (...args: unknown[]) => mocks.requestCancel(...args),
   beginVideoProviderCancellationAttempt: vi.fn(),
@@ -45,7 +60,11 @@ vi.mock('@/lib/server/video-generation-jobs', () => ({
   markVideoGenerationOutcomeUnknown: vi.fn(),
   recordVideoProviderCancellationAttempt: vi.fn(),
 }));
-vi.mock('@/lib/services/video-job-reconciliation-service', () => ({
+vi.mock('@/lib/services/video-job-reconciliation-service', async () => ({
+  ...(await vi.importActual<VideoJobReconciliationServiceModule>(
+    '@/lib/services/video-job-reconciliation-service',
+  )),
+
   publicVideoJobStatus: (job: VideoGenerationJob) => ({
     success: true,
     task_id: job.id,
@@ -55,6 +74,15 @@ vi.mock('@/lib/services/video-job-reconciliation-service', () => ({
 }));
 
 import { POST } from '@/app/api/media/video/cancel/route';
+type ApiAuthModule = typeof import('@/lib/api-auth');
+type CsrfModule = typeof import('@/lib/csrf');
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type CorsModule = typeof import('@/lib/cors');
+type LoggerModule = typeof import('@/lib/logger');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type VideoGenerationJobsModule = typeof import('@/lib/server/video-generation-jobs');
+type VideoJobReconciliationServiceModule =
+  typeof import('@/lib/services/video-job-reconciliation-service');
 
 const JOB_ID = '11111111-1111-4111-8111-111111111111';
 const db = {} as never;

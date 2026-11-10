@@ -1082,6 +1082,7 @@ async function dispatchChatCompletions(
         onCallerToolCheckpoint: async (checkpoint) => {
           const saved = await saveCloudAgentCallerCheckpoint(runDb, {
             userId,
+            organizationId: processed.organizationId ?? null,
             runId: run.id,
             sessionId: checkpoint.sessionId,
             turnId: checkpoint.turnId,

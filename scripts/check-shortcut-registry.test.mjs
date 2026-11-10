@@ -16,6 +16,7 @@ import {
   WEB_REGISTRY_PATH,
   WEB_SHARED_SHORTCUT_PATH,
   checkShortcutRegistry,
+  crossPlatformAccelerator,
   normalizeAccelerator,
   readHostMenuShortcuts,
   readRendererShortcuts,
@@ -63,6 +64,13 @@ test('it reads the registries rather than a list of its own', () => {
   );
   assert.ok(renderer.length >= 8, 'the renderer registry should carry several shortcuts');
   assert.equal(normalizeAccelerator('Shift+CommandOrControl+K'), 'commandorcontrol+k+shift');
+});
+
+test('tab navigation uses physical Control without admitting platform-bound primary chords', () => {
+  assert.equal(crossPlatformAccelerator('Ctrl+Tab'), true);
+  assert.equal(crossPlatformAccelerator('Control+Shift+Tab'), true);
+  assert.equal(crossPlatformAccelerator('Ctrl+K'), false);
+  assert.equal(crossPlatformAccelerator('Command+Tab'), false);
 });
 
 test('a second claim on one chord in the app menu fails', () => {

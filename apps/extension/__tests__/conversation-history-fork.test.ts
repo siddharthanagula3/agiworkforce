@@ -12,21 +12,24 @@ import {
   type ConversationEntry,
 } from '../src/features/background/conversation-history';
 import { forkManagedCloudConversationHistory } from '../src/features/cloud-bridge/conversationHistoryPull';
+type FreeTrialClientModule = typeof import('../src/features/cloud-bridge/freeTrialClient');
+type ClerkAuthModule = typeof import('../src/features/cloud-bridge/clerkAuth');
+type CloudMirroringModule = typeof import('../src/features/privacy/cloudMirroring');
 
 const state = vi.hoisted(() => ({
   owner: { accountId: 'account-a', authIncarnation: 'session-a' },
   mirror: true,
 }));
 vi.mock('../src/features/cloud-bridge/freeTrialClient', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../src/features/cloud-bridge/freeTrialClient')>()),
+  ...(await importOriginal<FreeTrialClientModule>()),
   getManagedCloudAuthContext: async () => ({ owner: state.owner, token: 'fixture-token' }),
 }));
 vi.mock('../src/features/cloud-bridge/clerkAuth', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../src/features/cloud-bridge/clerkAuth')>()),
+  ...(await importOriginal<ClerkAuthModule>()),
   getFreshClerkAuthContext: async () => ({ owner: state.owner, token: 'fixture-token' }),
 }));
 vi.mock('../src/features/privacy/cloudMirroring', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../src/features/privacy/cloudMirroring')>()),
+  ...(await importOriginal<CloudMirroringModule>()),
   readCloudMirroringEnabled: async () => state.mirror,
 }));
 

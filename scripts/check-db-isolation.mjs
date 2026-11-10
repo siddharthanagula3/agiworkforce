@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import { stripComments } from './lib/module-graph.mjs';
 import { USER_OWNED_TABLES } from './lib/db-isolation-tables.mjs';
+import { expandProjectReadScope } from './lib/project-scope-sql.mjs';
 import path from 'node:path';
 import process from 'node:process';
 
@@ -1372,7 +1373,8 @@ for (const file of files) {
   if (exemptions.some((a) => !a.tables)) continue;
   const decls = declarationIndex(maskLiterals(source));
 
-  for (const { sql, index } of extractStatements(source)) {
+  for (const { sql: sourceSql, index } of extractStatements(source)) {
+    const sql = expandProjectReadScope(sourceSql, source, rel, root);
     const where = enclosingDeclaration(decls, index);
     const exemptTables = new Set(
       exemptions

@@ -6,6 +6,19 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { centsFromCredits } from '@agiworkforce/types';
 import { createError } from '@/lib/errors';
+type ErrorHandlerModule = typeof import('@/lib/error-handler');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type NeonDbModule = typeof import('@/lib/server/neon-db');
+type ActiveWorkspaceServiceModule = typeof import('@/lib/services/active-workspace-service');
+type OrgEntitlementsModule = typeof import('@/lib/services/org-entitlements');
+type TeamAdminAccessModule = typeof import('@/app/api/settings/team/team-admin-access');
+type OrganizationPermissionServiceModule =
+  typeof import('@/lib/services/organization-permission-service');
+type CsrfModule = typeof import('@/lib/csrf');
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type CorsModule = typeof import('@/lib/cors');
+type SecurityAuditModule = typeof import('@/lib/security-audit');
+type SpendLimitServiceModule = typeof import('@/lib/services/spend-limit-service');
 
 const mocks = vi.hoisted(() => ({
   scoped: vi.fn(),
@@ -24,31 +37,65 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/error-handler', () => ({
+vi.mock('@/lib/error-handler', async () => ({
+  ...(await vi.importActual<ErrorHandlerModule>('@/lib/error-handler')),
+
   withErrorHandler: (handler: (request: NextRequest) => Promise<Response>) => handler,
 }));
-vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mocks.scoped }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => mocks.privilegedDb }));
-vi.mock('@/lib/services/active-workspace-service', () => ({
+vi.mock('@/lib/server/rls-db', async () => ({
+  ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
+  getUserScopedDb: mocks.scoped,
+}));
+vi.mock('@/lib/server/neon-db', async () => ({
+  ...(await vi.importActual<NeonDbModule>('@/lib/server/neon-db')),
+  getNeonDb: () => mocks.privilegedDb,
+}));
+vi.mock('@/lib/services/active-workspace-service', async () => ({
+  ...(await vi.importActual<ActiveWorkspaceServiceModule>(
+    '@/lib/services/active-workspace-service',
+  )),
+
   resolveActiveOrganizationId: mocks.savedSelection,
 }));
-vi.mock('@/lib/services/org-entitlements', () => ({
+vi.mock('@/lib/services/org-entitlements', async () => ({
+  ...(await vi.importActual<OrgEntitlementsModule>('@/lib/services/org-entitlements')),
+
   getOrganizationEntitlements: vi.fn(),
   getSharedProjectLimitErrorMessage: vi.fn(),
   isOrgResourceLimitError: vi.fn(),
 }));
-vi.mock('@/app/api/settings/team/team-admin-access', () => ({
+vi.mock('@/app/api/settings/team/team-admin-access', async () => ({
+  ...(await vi.importActual<TeamAdminAccessModule>('@/app/api/settings/team/team-admin-access')),
+
   requireTeamAdminAccess: mocks.teamAccess,
 }));
-vi.mock('@/lib/services/organization-permission-service', () => ({
+vi.mock('@/lib/services/organization-permission-service', async () => ({
+  ...(await vi.importActual<OrganizationPermissionServiceModule>(
+    '@/lib/services/organization-permission-service',
+  )),
+
   requireMemberPermission: mocks.permission,
   resolveOrganizationPermissions: mocks.permissions,
 }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mocks.csrf }));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.rateLimit }));
-vi.mock('@/lib/cors', () => ({ handleCorsPreflightRequest: vi.fn() }));
-vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: mocks.audit }));
-vi.mock('@/lib/services/spend-limit-service', () => ({
+vi.mock('@/lib/csrf', async () => ({
+  ...(await vi.importActual<CsrfModule>('@/lib/csrf')),
+  requireCsrfToken: mocks.csrf,
+}));
+vi.mock('@/lib/rate-limit', async () => ({
+  ...(await vi.importActual<RateLimitModule>('@/lib/rate-limit')),
+  withRateLimit: mocks.rateLimit,
+}));
+vi.mock('@/lib/cors', async () => ({
+  ...(await vi.importActual<CorsModule>('@/lib/cors')),
+  handleCorsPreflightRequest: vi.fn(),
+}));
+vi.mock('@/lib/security-audit', async () => ({
+  ...(await vi.importActual<SecurityAuditModule>('@/lib/security-audit')),
+  recordAuditEvent: mocks.audit,
+}));
+vi.mock('@/lib/services/spend-limit-service', async () => ({
+  ...(await vi.importActual<SpendLimitServiceModule>('@/lib/services/spend-limit-service')),
+
   readSpendState: mocks.read,
   upsertSpendLimit: mocks.upsert,
   deleteSpendLimit: mocks.remove,

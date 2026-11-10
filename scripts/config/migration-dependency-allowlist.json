@@ -1,4 +1,10 @@
 {
   "schemaVersion": 1,
-  "entries": []
+  "entries": [
+    {
+      "file": "apps/web/lib/server/account-security/store.ts",
+      "migration": 394,
+      "reason": "Coordinated recovery-batch rollout: docs/development/ci-and-deploys.md requires applying pending migrations before release. deploy-production.yml unconditionally runs pnpm db:migrate -- verify before the Vercel build, and verifyMigrations rejects any pending migration. Production remains recorded through 391; this entry admits source publication, not deployment or schema mutation."
+    }
+  ]
 }

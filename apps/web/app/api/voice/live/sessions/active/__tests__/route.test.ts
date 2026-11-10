@@ -17,9 +17,18 @@ const {
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: authUserMock }));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: rateLimitMock }));
-vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: userScopedDbMock }));
+vi.mock('@/lib/api-auth', async () => ({
+  ...(await vi.importActual<ApiAuthModule>('@/lib/api-auth')),
+  getClerkAuthUser: authUserMock,
+}));
+vi.mock('@/lib/rate-limit', async () => ({
+  ...(await vi.importActual<RateLimitModule>('@/lib/rate-limit')),
+  withRateLimit: rateLimitMock,
+}));
+vi.mock('@/lib/server/rls-db', async () => ({
+  ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
+  getUserScopedDb: userScopedDbMock,
+}));
 vi.mock('../../lib/voice-session-settlement', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   settleAbandonedVoiceSessions: settleAbandonedMock,
@@ -32,6 +41,9 @@ vi.mock('../../lib/voice-session-store', async (importOriginal) => ({
 
 import { NextRequest } from 'next/server';
 import { GET } from '../route';
+type ApiAuthModule = typeof import('@/lib/api-auth');
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
 
 const SESSION = {
   providerSessionId: 'live_1',

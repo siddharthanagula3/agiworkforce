@@ -75,8 +75,9 @@ and a recovery key is the only way back in.
 The same page changes your password. Changing it requires your current password,
 and a code from your authenticator app as well when two-factor authentication is
 on. An account that signs in without a password can add one after confirming it
-is you. Every other device signed in to the account is signed out when the
-password changes. A new password the identity provider refuses, such as one
+is you. Changing your password attempts to sign out every other device; if the
+provider's session cleanup is incomplete, AGI reports that the password changed
+and asks you to end the remaining sessions in Settings. A new password the identity provider refuses, such as one
 found in a data breach, is refused with the reason it gives, and the current
 password keeps working. A forgotten password is reset from the sign-in screen
 with **Forgot password?**.

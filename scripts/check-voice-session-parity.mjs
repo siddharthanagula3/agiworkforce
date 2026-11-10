@@ -75,10 +75,19 @@ export function repliesPendingMute(source) {
 }
 
 export function readDisposingEndings(source) {
+  function disposes(name, seen = new Set()) {
+    if (seen.has(name)) return false;
+    seen.add(name);
+    const body = methodBody(source, name);
+    if (body === null) return false;
+    if (/this\.dispose\(\)/.test(body)) return true;
+    return [...body.matchAll(/\bthis\.(\w+)\s*\(/g)].some((match) =>
+      disposes(match[1], new Set(seen)),
+    );
+  }
   const disposing = [];
   for (const name of ENDING_METHODS) {
-    const body = methodBody(source, name);
-    if (body !== null && /this\.dispose\(\)/.test(body)) disposing.push(name);
+    if (disposes(name)) disposing.push(name);
   }
   const handler = methodBody(source, 'handleMessage');
   if (handler !== null) {

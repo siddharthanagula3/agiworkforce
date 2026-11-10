@@ -8,9 +8,17 @@ type ScanModule3 = typeof import('@/lib/server/image-generation-jobs');
 
 vi.mock('server-only', () => ({}));
 
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn().mockResolvedValue(null) }));
-vi.mock('@/lib/cors', () => ({
+vi.mock('@/lib/rate-limit', async () => ({
+  ...(await vi.importActual<RateLimitModule>('@/lib/rate-limit')),
+  withRateLimit: vi.fn().mockResolvedValue(null),
+}));
+vi.mock('@/lib/csrf', async () => ({
+  ...(await vi.importActual<CsrfModule>('@/lib/csrf')),
+  requireCsrfToken: vi.fn().mockResolvedValue(null),
+}));
+vi.mock('@/lib/cors', async () => ({
+  ...(await vi.importActual<CorsModule>('@/lib/cors')),
+
   handleCorsPreflightRequest: vi.fn().mockReturnValue(null),
   getCorsHeaders: vi.fn().mockReturnValue({}),
   getSecurityHeaders: vi.fn().mockReturnValue({}),
@@ -19,12 +27,16 @@ vi.mock('@/lib/cors', () => ({
     (...args: unknown[]) =>
       handler(...args),
 }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async () => ({
+  ...(await vi.importActual<LoggerModule>('@/lib/logger')),
+
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
 const mockGetClerkAuthUser = vi.fn();
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async () => ({
+  ...(await vi.importActual<ApiAuthModule>('@/lib/api-auth')),
+
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
 
@@ -66,7 +78,9 @@ const assetMocks = vi.hoisted(() => ({
   ]),
   byId: vi.fn(),
 }));
-vi.mock('@/lib/server/media-assets', () => ({
+vi.mock('@/lib/server/media-assets', async () => ({
+  ...(await vi.importActual<MediaAssetsModule>('@/lib/server/media-assets')),
+
   insertMediaAsset: assetMocks.insert,
   insertMediaAssetsAtomically: assetMocks.insertMany,
   getActiveWorkspaceMediaAssetById: assetMocks.byId,
@@ -168,7 +182,9 @@ const managedUsageMocks = vi.hoisted(() => ({
   delivered: vi.fn(async () => undefined),
 }));
 const rlsMocks = vi.hoisted(() => ({ getUserScopedDb: vi.fn() }));
-vi.mock('@/lib/server/rls-db', () => ({
+vi.mock('@/lib/server/rls-db', async () => ({
+  ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
+
   getUserScopedDb: (...args: unknown[]) => rlsMocks.getUserScopedDb(...args),
 }));
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
@@ -181,7 +197,9 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
 
 // Provider bytes leave through the egress guard rather than global fetch, so
 // the URL candidate is resolved here the same way the route resolves it.
-vi.mock('@/lib/url-fetch/guarded-fetch', () => ({
+vi.mock('@/lib/url-fetch/guarded-fetch', async () => ({
+  ...(await vi.importActual<GuardedFetchModule>('@/lib/url-fetch/guarded-fetch')),
+
   createDeadline: () => ({
     signal: new AbortController().signal,
     reason: () => null,
@@ -222,6 +240,14 @@ import {
   AI_GENERATED_PROVENANCE_HEADER,
   hasAiGeneratedProvenance,
 } from '@/lib/compliance/ai-act';
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type CsrfModule = typeof import('@/lib/csrf');
+type CorsModule = typeof import('@/lib/cors');
+type LoggerModule = typeof import('@/lib/logger');
+type ApiAuthModule = typeof import('@/lib/api-auth');
+type MediaAssetsModule = typeof import('@/lib/server/media-assets');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type GuardedFetchModule = typeof import('@/lib/url-fetch/guarded-fetch');
 
 const BASE_URL = 'http://localhost/api/media/image/generate';
 const TEST_USER = { userId: 'user-test-id', email: 'test@example.com' };

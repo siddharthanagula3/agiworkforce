@@ -176,7 +176,7 @@ const STORAGE: StorageRow[] = [
     key: 'agiworkforce-web-chat',
     store: 'Local storage',
     holds:
-      'Your model choice, the sidebar state, and the standing per-conversation decisions you made: which connectors a chat may not reach, whether Memory is off for it, and whether it is a Chat or an Work thread. No message text.',
+      'Your model choice, the sidebar state, and the standing per-conversation decisions you made: which connectors a chat may not reach, whether Memory is off for it, and whether it is a Chat or a Work thread. No message text.',
     clearedBy: 'Signing out, or clearing site data.',
     source: 'shared/stores/web-chat-store.ts',
   },

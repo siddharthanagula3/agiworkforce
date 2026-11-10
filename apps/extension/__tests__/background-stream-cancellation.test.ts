@@ -12,6 +12,8 @@ import type {
   ChromeManagedChatResult,
 } from '../src/features/cloud-bridge/managedChatHandler';
 import type { ChromeManagedRunCancellationResult } from '../src/features/cloud-bridge/managedRunControl';
+type ConversationSyncModule = typeof import('../src/features/cloud-bridge/conversationSync');
+type TabAuthorityModule = typeof import('../src/features/browser-tools/tabAuthority');
 
 type FreeTrialClientModule = typeof import('../src/features/cloud-bridge/freeTrialClient');
 type ManagedChatHandlerModule = typeof import('../src/features/cloud-bridge/managedChatHandler');
@@ -145,7 +147,7 @@ vi.mock('../src/features/cloud-bridge/managedChatHandler', async (importOriginal
 }));
 
 vi.mock('../src/features/cloud-bridge/conversationSync', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../src/features/cloud-bridge/conversationSync')>()),
+  ...(await importOriginal<ConversationSyncModule>()),
   flushQuestionBeforeTurn: vi.fn(async () => undefined),
 }));
 
@@ -156,7 +158,7 @@ vi.mock('../src/features/cloud-bridge/callerConversationAuthority', async (impor
 }));
 
 vi.mock('../src/features/browser-tools/tabAuthority', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../src/features/browser-tools/tabAuthority')>()),
+  ...(await importOriginal<TabAuthorityModule>()),
   authorizeBrowserToolTab: harness.authorizeTab,
 }));
 

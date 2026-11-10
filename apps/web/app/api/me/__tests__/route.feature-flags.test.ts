@@ -15,33 +15,47 @@ const { mockGetClerkAuthUser, mockNeonQuery, mockGetSubscription, flagMocks } = 
   },
 }));
 
-vi.mock('@/lib/feature-flags/flag-store', () => ({
+vi.mock('@/lib/feature-flags/flag-store', async () => ({
+  ...(await vi.importActual<FlagStoreModule>('@/lib/feature-flags/flag-store')),
+
   getActiveFlagDefinitions: (...args: unknown[]) => flagMocks.getActiveFlagDefinitions(...args),
   getSubjectOverrides: (...args: unknown[]) => flagMocks.getSubjectOverrides(...args),
 }));
 
-vi.mock('@/lib/services/org-sharing-service', () => ({
+vi.mock('@/lib/services/org-sharing-service', async () => ({
+  ...(await vi.importActual<OrgSharingServiceModule>('@/lib/services/org-sharing-service')),
+
   resolveOrgMembership: (...args: unknown[]) => flagMocks.resolveOrgMembership(...args),
 }));
 
-vi.mock('@/lib/rate-limit', () => ({
+vi.mock('@/lib/rate-limit', async () => ({
+  ...(await vi.importActual<RateLimitModule>('@/lib/rate-limit')),
+
   withRateLimit: vi.fn().mockResolvedValue(null),
   getClientIpForRateLimit: vi.fn(() => '203.0.113.7'),
 }));
 
-vi.mock('@/lib/csrf', () => ({
+vi.mock('@/lib/csrf', async () => ({
+  ...(await vi.importActual<CsrfModule>('@/lib/csrf')),
+
   requireCsrfToken: vi.fn().mockResolvedValue(null),
 }));
 
-vi.mock('@/lib/web-search/web-search-tool', () => ({
+vi.mock('@/lib/web-search/web-search-tool', async () => ({
+  ...(await vi.importActual<WebSearchToolModule>('@/lib/web-search/web-search-tool')),
+
   webSearchBackendConfigured: vi.fn(() => true),
 }));
 
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async () => ({
+  ...(await vi.importActual<LoggerModule>('@/lib/logger')),
+
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async () => ({
+  ...(await vi.importActual<ApiAuthModule>('@/lib/api-auth')),
+
   getClerkAuthUser: mockGetClerkAuthUser,
 }));
 
@@ -59,13 +73,16 @@ vi.mock('@clerk/nextjs/server', () => ({
   }),
 }));
 
-vi.mock('@/lib/server/neon-db', () => {
+vi.mock('@/lib/server/neon-db', async () => {
   const db = {
     query: (...args: unknown[]) => mockNeonQuery(...args),
     execute: async () => 0,
     transaction: async <T>(fn: (tx: unknown) => Promise<T>) => fn(db),
   };
-  return { getNeonDb: vi.fn(() => db) };
+  return {
+    ...(await vi.importActual<NeonDbModule>('@/lib/server/neon-db')),
+    getNeonDb: vi.fn(() => db),
+  };
 });
 
 vi.mock('@/lib/services/subscription-service', () => ({
@@ -73,6 +90,14 @@ vi.mock('@/lib/services/subscription-service', () => ({
 }));
 
 import { GET } from '../route';
+type FlagStoreModule = typeof import('@/lib/feature-flags/flag-store');
+type OrgSharingServiceModule = typeof import('@/lib/services/org-sharing-service');
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type CsrfModule = typeof import('@/lib/csrf');
+type WebSearchToolModule = typeof import('@/lib/web-search/web-search-tool');
+type LoggerModule = typeof import('@/lib/logger');
+type ApiAuthModule = typeof import('@/lib/api-auth');
+type NeonDbModule = typeof import('@/lib/server/neon-db');
 
 const WORKSPACE_ID = '22222222-2222-4222-8222-222222222222';
 
