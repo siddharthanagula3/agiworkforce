@@ -8567,6 +8567,18 @@ fn sdk_tool_lifecycle_event(
     }
 }
 
+fn wire_session_id(
+    requested: Option<&str>,
+    resuming: bool,
+    managed: Option<&str>,
+) -> Option<String> {
+    requested
+        .filter(|_| !resuming)
+        .or(managed)
+        .or(requested)
+        .map(str::to_string)
+}
+
 /// Execute a single prompt and exit.
 #[allow(clippy::too_many_arguments)]
 pub async fn run_oneshot(
@@ -8670,9 +8682,11 @@ pub async fn run_oneshot(
     // persistence would silently lose the id it correlates events by. When
     // persistence is on this is the same value `override_session_id` just
     // wrote, so the two paths agree.
-    let event_session_id = session_id_override
-        .clone()
-        .or_else(|| session.managed_session_id().map(str::to_string));
+    let event_session_id = wire_session_id(
+        session_id_override.as_deref(),
+        resuming,
+        session.managed_session_id(),
+    );
     // Thread json_events mode into the session so ALL turns (continuation,
     // retry, fallback) emit MessageDelta events instead of raw print!.
     if json_events && output_mode != OneShotOutputMode::JsonLine {
@@ -8708,9 +8722,8 @@ pub async fn run_oneshot(
 
     let sdk_stream_context = if output_mode == OneShotOutputMode::JsonLine {
         let context = agent::SdkStreamContext {
-            session_id: session
-                .managed_session_id()
-                .map(str::to_string)
+            session_id: event_session_id
+                .clone()
                 .unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
             message_id: uuid::Uuid::new_v4().to_string(),
         };
@@ -9130,6 +9143,36 @@ mod tests {
                 account_only: false
             })
         ));
+    }
+
+    #[test]
+    fn an_embedders_session_id_survives_disabled_persistence_on_the_wire() {
+        let preallocated = "0b6f8d5e-6c1d-4a37-9a55-6f0f3f2d9c11";
+        assert_eq!(
+            wire_session_id(Some(preallocated), false, None).as_deref(),
+            Some(preallocated)
+        );
+        assert_eq!(
+            wire_session_id(Some(preallocated), false, Some("managed-id")).as_deref(),
+            Some(preallocated)
+        );
+        assert_eq!(wire_session_id(None, false, None), None);
+        assert_eq!(
+            wire_session_id(None, false, Some("managed-id")).as_deref(),
+            Some("managed-id")
+        );
+    }
+
+    #[test]
+    fn a_resumed_session_keeps_its_own_identity_on_the_wire() {
+        assert_eq!(
+            wire_session_id(Some("requested"), true, Some("resumed")).as_deref(),
+            Some("resumed")
+        );
+        assert_eq!(
+            wire_session_id(Some("requested"), true, None).as_deref(),
+            Some("requested")
+        );
     }
 
     /// `--repo`/`-C` moves the session; `--add-dir` only adds a second root.

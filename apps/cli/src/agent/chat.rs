@@ -1191,7 +1191,7 @@ impl AgentSession {
             )
             .await;
 
-            self.compact_history(config, &compaction_config).await;
+            let compaction = self.compact_history(config, &compaction_config).await;
 
             let new_usage = context_budget(
                 &self.messages,
@@ -1199,10 +1199,15 @@ impl AgentSession {
                 compaction_config.reserved_output_tokens,
                 None,
             );
+            let outcome = if compaction.compacted {
+                "Context compacted"
+            } else {
+                "Context unchanged, nothing earlier could be summarized"
+            };
             narrate!(
                 "  {}",
                 format!(
-                    "Context compacted: {}/{} tokens ({}%)",
+                    "{outcome}: {}/{} tokens ({}%)",
                     new_usage.used_tokens,
                     new_usage.usable_input_tokens,
                     (new_usage.used_fraction * 100.0) as u32
@@ -1418,7 +1423,7 @@ message -- revise and call `update_plan` again.\n\n",
             require_confirmation: !self.skips_approval(),
         };
         let project_conversation = self.project_conversation().await;
-        let (run_result, completion_usage, managed_request_ids, incomplete, sources) = {
+        let (run_result, completion_usage, managed_request_ids, superseded, incomplete, sources) = {
             let mut adapter = TurnHostAdapter {
                 session: &mut *self,
                 config,
@@ -1432,6 +1437,7 @@ message -- revise and call `update_plan` again.\n\n",
                 hook_additional_contexts: Vec::new(),
                 completion_usage: Vec::new(),
                 managed_request_ids: Vec::new(),
+                superseded_usage: agiworkforce_agent_core::UsageTotals::default(),
                 incomplete: None,
             };
             let ((result, side_requests), sources) =
@@ -1452,6 +1458,7 @@ message -- revise and call `update_plan` again.\n\n",
                 result,
                 std::mem::take(&mut adapter.completion_usage),
                 std::mem::take(&mut adapter.managed_request_ids),
+                adapter.superseded_usage,
                 adapter.incomplete,
                 sources,
             )
@@ -1479,11 +1486,12 @@ message -- revise and call `update_plan` again.\n\n",
             }
         };
 
-        let total_input = outcome.totals.input_tokens;
-        let total_output = outcome.totals.output_tokens;
-        let total_cache_read = outcome.totals.cache_read_tokens;
-        let total_cache_creation = outcome.totals.cache_creation_tokens;
-        let result_reasoning = outcome.totals.reasoning_tokens;
+        let total_input = outcome.totals.input_tokens + superseded.input_tokens;
+        let total_output = outcome.totals.output_tokens + superseded.output_tokens;
+        let total_cache_read = outcome.totals.cache_read_tokens + superseded.cache_read_tokens;
+        let total_cache_creation =
+            outcome.totals.cache_creation_tokens + superseded.cache_creation_tokens;
+        let result_reasoning = outcome.totals.reasoning_tokens + superseded.reasoning_tokens;
         let last_input_tokens = outcome.last_input_tokens;
         // The presentation flag means the whole logical turn was included.
         // Mixed subscription/metered tool loops must display their exact paid
@@ -1758,6 +1766,10 @@ struct TurnHostAdapter<'a> {
     /// enforcement must not treat several tool-loop completions as one request.
     completion_usage: Vec<crate::cost_ledger::CompletionUsage>,
     managed_request_ids: Vec<String>,
+    /// Usage of completions an empty-reply retry replaced. They were paid for
+    /// and belong in the turn's token receipt, but not in the final request's
+    /// context anchor.
+    superseded_usage: agiworkforce_agent_core::UsageTotals,
     /// Set when the answer this turn delivers is real but was cut short, so
     /// every surface can say so beside the text instead of presenting a
     /// truncated reply as a whole one.
@@ -1765,6 +1777,33 @@ struct TurnHostAdapter<'a> {
 }
 
 impl TurnHostAdapter<'_> {
+    async fn persisted_tool_output(
+        &mut self,
+        hcfg: &hooks::HooksConfig,
+        tool_name: String,
+        tool_args: serde_json::Value,
+        output: String,
+    ) -> String {
+        let persist_results = hooks::run_hooks(
+            hcfg,
+            hooks::HookEvent::ToolResultPersist,
+            &hooks::HookInput {
+                event: "ToolResultPersist".to_string(),
+                session_id: Some(self.session.runtime_session_id.clone()),
+                model: Some(self.session.model.clone()),
+                tool_name: Some(tool_name),
+                tool_args: Some(tool_args),
+                tool_output: Some(output.clone()),
+                message: None,
+                tool_execution: None,
+            },
+        )
+        .await;
+        hooks::aggregate_transformers(&persist_results)
+            .updated_mcp_tool_output
+            .unwrap_or(output)
+    }
+
     fn tool_search_catalog_for(
         &self,
         tool_name: &str,
@@ -2187,6 +2226,7 @@ impl TurnHostAdapter<'_> {
                     "  {}",
                     ts::warning(format!("{} Sending it once more.", cause.summary()))
                 );
+                self.superseded_usage.add(&completion.outcome.usage);
                 let retried = models::stream_completion(
                     self.config,
                     &self.session.provider,
@@ -2924,11 +2964,12 @@ impl TurnHost for TurnHostAdapter<'_> {
             let mut tool_result = match id_result {
                 Ok(ref id) => {
                     if let Some(ref mgr) = self.session.subagent_manager {
+                        if let Some(spent) = mgr.get_spent(id).await {
+                            self.session
+                                .cost_ledger
+                                .record_subagent_run(&spent.model, spent.cost_usd);
+                        }
                         if let Some(sa_result) = mgr.get_result(id).await {
-                            self.session.cost_ledger.record_subagent_run(
-                                &sa_result.usage.model,
-                                sa_result.usage.cost_usd,
-                            );
                             let mut output = format!("Child task: {id}\n\n{}", sa_result.output);
                             if !sa_result.files_modified.is_empty() {
                                 output.push_str("\n\nFiles modified:\n");
@@ -3013,25 +3054,13 @@ impl TurnHost for TurnHostAdapter<'_> {
             )
             .await;
 
-            hooks::run_hooks(
-                &hcfg,
-                hooks::HookEvent::ToolResultPersist,
-                &hooks::HookInput {
-                    event: "ToolResultPersist".to_string(),
-                    session_id: Some(self.session.runtime_session_id.clone()),
-                    model: Some(self.session.model.clone()),
-                    tool_name: Some(tool_name),
-                    tool_args: Some(tool_args),
-                    tool_output: Some(tool_result.output.clone()),
-                    message: None,
-                    tool_execution: None,
-                },
-            )
-            .await;
+            let content = self
+                .persisted_tool_output(&hcfg, tool_name, tool_args, tool_result.output)
+                .await;
 
             result_blocks.push(ResultBlock {
                 tool_use_id,
-                content: tool_result.output,
+                content,
                 is_error: !tool_result.success,
             });
         }
@@ -3107,25 +3136,13 @@ impl TurnHost for TurnHostAdapter<'_> {
         )
         .await;
 
-        hooks::run_hooks(
-            &hcfg,
-            hooks::HookEvent::ToolResultPersist,
-            &hooks::HookInput {
-                event: "ToolResultPersist".to_string(),
-                session_id: Some(self.session.runtime_session_id.clone()),
-                model: Some(self.session.model.clone()),
-                tool_name: Some(prepared.name),
-                tool_args: Some(prepared.args),
-                tool_output: Some(result.output.clone()),
-                message: None,
-                tool_execution: None,
-            },
-        )
-        .await;
+        let content = self
+            .persisted_tool_output(&hcfg, prepared.name, prepared.args, result.output)
+            .await;
 
         ResultBlock {
             tool_use_id: prepared.id,
-            content: result.output,
+            content,
             is_error: !result.ok,
         }
     }
@@ -3172,25 +3189,13 @@ impl TurnHost for TurnHostAdapter<'_> {
             self.hook_additional_contexts.push(ctx);
         }
 
-        hooks::run_hooks(
-            &hcfg,
-            hooks::HookEvent::ToolResultPersist,
-            &hooks::HookInput {
-                event: "ToolResultPersist".to_string(),
-                session_id: Some(self.session.runtime_session_id.clone()),
-                model: Some(self.session.model.clone()),
-                tool_name: Some(call.name.clone()),
-                tool_args: Some(args.clone()),
-                tool_output: Some(final_output.clone()),
-                message: None,
-                tool_execution: None,
-            },
-        )
-        .await;
+        let content = self
+            .persisted_tool_output(&hcfg, call.name.clone(), args, final_output)
+            .await;
 
         ResultBlock {
             tool_use_id: call.id.clone(),
-            content: final_output,
+            content,
             is_error: !result.ok,
         }
     }
@@ -4158,6 +4163,7 @@ mod tests {
             hook_additional_contexts: Vec::new(),
             completion_usage: Vec::new(),
             managed_request_ids: Vec::new(),
+            superseded_usage: agiworkforce_agent_core::UsageTotals::default(),
             incomplete: None,
         };
 
@@ -4209,6 +4215,7 @@ mod tests {
                 hook_additional_contexts: Vec::new(),
                 completion_usage: Vec::new(),
                 managed_request_ids: Vec::new(),
+                superseded_usage: agiworkforce_agent_core::UsageTotals::default(),
                 incomplete: None,
             };
 
@@ -4241,6 +4248,7 @@ mod tests {
             hook_additional_contexts: Vec::new(),
             completion_usage: Vec::new(),
             managed_request_ids: Vec::new(),
+            superseded_usage: agiworkforce_agent_core::UsageTotals::default(),
             incomplete: None,
         };
         let completion = |request_id: Option<&str>| models::CompletionResult {
@@ -4459,6 +4467,7 @@ mod tests {
             hook_additional_contexts: Vec::new(),
             completion_usage: Vec::new(),
             managed_request_ids: Vec::new(),
+            superseded_usage: agiworkforce_agent_core::UsageTotals::default(),
             incomplete: None,
         };
 
@@ -4854,6 +4863,7 @@ mod tests {
                 hook_additional_contexts: Vec::new(),
                 completion_usage: Vec::new(),
                 managed_request_ids: Vec::new(),
+                superseded_usage: agiworkforce_agent_core::UsageTotals::default(),
                 incomplete: None,
             },
             scripted: completions.into(),
@@ -5227,6 +5237,96 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn live_turn_commits_the_tool_result_persist_transform_on_every_dispatch_path() {
+        let scratch = workspace_scratch();
+        let readable = scratch.path().join("notes.txt");
+        std::fs::write(&readable, "persist-marker-body").unwrap();
+
+        for concurrency_safe in [&["read_file"][..], &[][..]] {
+            let mut session = live_session();
+            session.hooks_config = hook_config(&[(
+                "ToolResultPersist",
+                "printf '%s' '{\"updated_mcp_tool_output\":\"[redacted]\"}'".to_string(),
+            )]);
+
+            run_live_turn(
+                &mut session,
+                LiveTurnTools {
+                    available: &["read_file"],
+                    concurrency_safe,
+                    plan_mode_mutating: &[],
+                },
+                vec![
+                    live_completion(
+                        "reading",
+                        vec![live_call(
+                            "read-1",
+                            "read_file",
+                            serde_json::json!({"path": readable.to_string_lossy()}),
+                        )],
+                    ),
+                    live_completion("done", vec![]),
+                ],
+            )
+            .await;
+
+            let (content, is_error) = committed_result(&session, "read-1");
+            assert_eq!(
+                content, "[redacted]",
+                "the ToolResultPersist transform must replace the committed output (parallel={})",
+                !concurrency_safe.is_empty()
+            );
+            assert!(!is_error);
+        }
+    }
+
+    #[tokio::test]
+    async fn live_turn_tool_result_persist_runs_after_the_post_tool_use_transform() {
+        let scratch = workspace_scratch();
+        let readable = scratch.path().join("notes.txt");
+        std::fs::write(&readable, "ordering-body").unwrap();
+
+        let mut session = live_session();
+        session.hooks_config = hook_config(&[
+            (
+                "PostToolUse",
+                "printf '%s' '{\"updated_mcp_tool_output\":\"post-scrubbed\"}'".to_string(),
+            ),
+            (
+                "ToolResultPersist",
+                "printf '%s' '{\"updated_mcp_tool_output\":\"persist-scrubbed\"}'".to_string(),
+            ),
+        ]);
+
+        run_live_turn(
+            &mut session,
+            LiveTurnTools {
+                available: &["read_file"],
+                concurrency_safe: &[],
+                plan_mode_mutating: &[],
+            },
+            vec![
+                live_completion(
+                    "reading",
+                    vec![live_call(
+                        "read-1",
+                        "read_file",
+                        serde_json::json!({"path": readable.to_string_lossy()}),
+                    )],
+                ),
+                live_completion("done", vec![]),
+            ],
+        )
+        .await;
+
+        let (content, _) = committed_result(&session, "read-1");
+        assert_eq!(
+            content, "persist-scrubbed",
+            "the storage transform is the last word before the result enters history"
+        );
+    }
+
+    #[tokio::test]
     async fn live_turn_subagent_batch_rejects_an_unknown_named_agent_without_spawning() {
         let mut session = live_session();
 
@@ -5561,6 +5661,16 @@ mod tests {
         config: &CliConfig,
         first: models::CompletionResult,
     ) -> Result<Completion> {
+        settle_keeping_superseded_usage(session, config, first)
+            .await
+            .0
+    }
+
+    async fn settle_keeping_superseded_usage(
+        session: &mut AgentSession,
+        config: &CliConfig,
+        first: models::CompletionResult,
+    ) -> (Result<Completion>, agiworkforce_agent_core::UsageTotals) {
         let mut adapter = TurnHostAdapter {
             session,
             config,
@@ -5574,6 +5684,7 @@ mod tests {
             hook_additional_contexts: Vec::new(),
             completion_usage: Vec::new(),
             managed_request_ids: Vec::new(),
+            superseded_usage: agiworkforce_agent_core::UsageTotals::default(),
             incomplete: None,
         };
         let settled = adapter
@@ -5585,7 +5696,25 @@ mod tests {
                 "a provider request that was paid for stays on the turn's ledger"
             );
         }
-        settled
+        (settled, adapter.superseded_usage)
+    }
+
+    #[tokio::test]
+    async fn an_empty_generation_that_was_retried_stays_in_the_turn_receipt() {
+        let (base_url, _hits) = local_completion_fixture(vec![ANSWERED_STREAM]).await;
+        let config = fixture_config(&base_url);
+        let mut session = live_session();
+        fixture_session(&mut session);
+
+        let (settled, superseded) =
+            settle_keeping_superseded_usage(&mut session, &config, empty_generation()).await;
+
+        let settled = settled.expect("the second attempt answered");
+        assert_eq!(superseded.input_tokens, 7);
+        assert_eq!(
+            settled.outcome.usage.input_tokens, 0,
+            "the replaced request is not folded into the final request's context size"
+        );
     }
 
     #[tokio::test]
@@ -5620,6 +5749,7 @@ mod tests {
             hook_additional_contexts: Vec::new(),
             completion_usage: Vec::new(),
             managed_request_ids: Vec::new(),
+            superseded_usage: agiworkforce_agent_core::UsageTotals::default(),
             incomplete: None,
         };
         let totals = agiworkforce_agent_core::UsageTotals::default();
@@ -5760,6 +5890,7 @@ mod tests {
             hook_additional_contexts: Vec::new(),
             completion_usage: Vec::new(),
             managed_request_ids: Vec::new(),
+            superseded_usage: agiworkforce_agent_core::UsageTotals::default(),
             incomplete: None,
         };
         let settled = adapter
@@ -5807,6 +5938,7 @@ mod tests {
             hook_additional_contexts: Vec::new(),
             completion_usage: Vec::new(),
             managed_request_ids: Vec::new(),
+            superseded_usage: agiworkforce_agent_core::UsageTotals::default(),
             incomplete: None,
         };
 
