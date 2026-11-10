@@ -46,6 +46,13 @@ const REQUEST_TYPE_LABEL: Record<DataRightsRequestType, string> = {
   grievance: 'Grievance',
 };
 
+interface OpenQueueWindow {
+  requests: OpenDataRightsRequest[];
+  count: number;
+  total: number;
+  hasMore: boolean;
+}
+
 interface ErasureReport {
   complete: boolean;
   deleted: number;
@@ -56,6 +63,8 @@ interface ErasureReport {
 export default function PrivacyRequestsPanel() {
   const [requests, setRequests] = useState<OpenDataRightsRequest[] | null>(null);
   const [listError, setListError] = useState<string | null>(null);
+  const [total, setTotal] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [email, setEmail] = useState('');
   const [reason, setReason] = useState('');
   const [erasing, setErasing] = useState(false);
@@ -66,12 +75,28 @@ export default function PrivacyRequestsPanel() {
   const load = useCallback(async () => {
     setListError(null);
     try {
-      const body = await requestJson<{ requests: OpenDataRightsRequest[] }>(REQUESTS_ENDPOINT);
+      const body = await requestJson<OpenQueueWindow>(REQUESTS_ENDPOINT);
       setRequests(body.requests);
+      setTotal(body.total);
     } catch (error) {
       setListError(toUserMessage(error, 'Could not load data rights requests.'));
     }
   }, []);
+
+  const loadMore = useCallback(async () => {
+    setListError(null);
+    setLoadingMore(true);
+    try {
+      const loaded = requests?.length ?? 0;
+      const body = await requestJson<OpenQueueWindow>(`${REQUESTS_ENDPOINT}?offset=${loaded}`);
+      setRequests((current) => [...(current ?? []), ...body.requests]);
+      setTotal(body.total);
+    } catch (error) {
+      setListError(toUserMessage(error, 'Could not load more data rights requests.'));
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [requests]);
 
   useEffect(() => {
     void load();
@@ -132,11 +157,11 @@ export default function PrivacyRequestsPanel() {
           Data rights requests
         </h2>
         <p className="mt-1 text-xs text-muted-foreground">
-          Every request still open, closest to its deadline first. A request that does not record
-          where the person is runs on the shorter of the two clocks, one month from receipt, so no
-          queue position depends on assuming the longer one. A signed-in subject deletes their own
-          account data from settings; this queue is what someone with no account, or a request that
-          needs a human, arrives through.
+          Every request still open, oldest first within each window of 100. A request that does not
+          record where the person is runs on the shorter of the two clocks, one month from receipt,
+          so no queue position depends on assuming the longer one. A signed-in subject deletes their
+          own account data from settings; this queue is what someone with no account, or a request
+          that needs a human, arrives through.
         </p>
       </div>
 
@@ -210,6 +235,24 @@ export default function PrivacyRequestsPanel() {
           </table>
         </div>
       )}
+
+      {requests !== null && requests.length > 0 ? (
+        <div className="flex items-center gap-3">
+          <p className="text-xs text-muted-foreground">
+            Showing {formatCount(requests.length)} of {formatCount(total)} open requests.
+          </p>
+          {requests.length < total ? (
+            <button
+              type="button"
+              className="rounded-lg border border-border px-3 py-1.5 text-sm"
+              disabled={loadingMore}
+              onClick={() => void loadMore()}
+            >
+              {loadingMore ? 'Loading…' : 'Load more'}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className={CARD_CLASS}>
         <h3 className="text-h5">Erase a subject with no account</h3>

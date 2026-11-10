@@ -472,14 +472,25 @@ describe('applying an update moves one installation and nothing else', () => {
     installedVersion: string,
     versions: Record<string, VersionFixture>,
     approved: string[] = ['network'],
+    rowChangedBeforeWrite = false,
   ): { db: DatabaseAdapter; writes: unknown[][] } {
     const writes: unknown[][] = [];
     const db = {
       query: vi.fn(async (sql: string, params: unknown[] = []) => {
-        if (sql.includes('select installed_version, approved_permissions')) {
+        if (sql.includes('select id, installed_version, approved_permissions')) {
           return installedVersion
-            ? [{ installed_version: installedVersion, approved_permissions: approved }]
+            ? [
+                {
+                  id: 'installation_1',
+                  installed_version: installedVersion,
+                  approved_permissions: approved,
+                },
+              ]
             : [];
+        }
+        if (sql.includes('update public.plugin_installations')) {
+          writes.push(params);
+          return rowChangedBeforeWrite ? [] : [{ plugin_id: PLUGIN_ID }];
         }
         if (sql.includes('select source, publisher_kind')) {
           return [{ source: 'marketplace', publisher_kind: 'first-party' }];
@@ -491,10 +502,7 @@ describe('applying an update moves one installation and nothing else', () => {
         }
         return [];
       }),
-      execute: vi.fn(async (sql: string, params: unknown[] = []) => {
-        if (sql.includes('update public.plugin_installations')) writes.push(params);
-        return [];
-      }),
+      execute: vi.fn(async () => 0),
       transaction: vi.fn(),
       withUser: vi.fn(),
       dispose: vi.fn(),
@@ -522,7 +530,33 @@ describe('applying an update moves one installation and nothing else', () => {
 
     expect(applied).toMatchObject({ fromVersion: '1.0.0', toVersion: '1.1.0', reEnabled: false });
     expect(writes).toHaveLength(1);
-    expect(writes[0]).toEqual(['user_1', PLUGIN_ID, '1.1.0', false, '["network"]']);
+    expect(writes[0]).toEqual([
+      'user_1',
+      PLUGIN_ID,
+      '1.1.0',
+      false,
+      '["network"]',
+      'installation_1',
+      '1.0.0',
+    ]);
+  });
+
+  it('fails instead of reporting success when the installation changed before the write', async () => {
+    const { db, writes } = updateWorld(
+      '1.0.0',
+      {
+        '1.0.0': published('1.0.0', ['network']),
+        '1.1.0': published('1.1.0', ['network']),
+      },
+      ['network'],
+      true,
+    );
+
+    await expect(
+      applyPluginUpdate(db, { userId: 'user_1', pluginId: PLUGIN_ID, toVersion: '1.1.0' }),
+    ).rejects.toThrow(/changed while it was being updated/);
+    expect(writes).toHaveLength(1);
+    expect(writes[0]?.slice(5)).toEqual(['installation_1', '1.0.0']);
   });
 
   it('refuses a version that adds a permission the member has not approved', async () => {
@@ -567,7 +601,15 @@ describe('applying an update moves one installation and nothing else', () => {
     });
 
     expect(applied.reEnabled).toBe(true);
-    expect(writes[0]).toEqual(['user_1', PLUGIN_ID, '1.1.0', true, '[]']);
+    expect(writes[0]).toEqual([
+      'user_1',
+      PLUGIN_ID,
+      '1.1.0',
+      true,
+      '[]',
+      'installation_1',
+      '1.0.0',
+    ]);
   });
 
   it('refuses to move onto a version that is not published', async () => {

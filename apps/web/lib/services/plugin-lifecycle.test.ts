@@ -46,6 +46,7 @@ interface VersionRow {
 }
 
 interface Installation {
+  id: string;
   installedVersion: string;
   enabled: boolean;
   approvedPermissions: string[];
@@ -98,6 +99,7 @@ function freshWorld(overrides: Partial<World> = {}): World {
     ],
     scans: { [SIGNED_DIGEST]: 'pass' },
     installation: {
+      id: 'installation_1',
       installedVersion: '1.0.0',
       enabled: true,
       approvedPermissions: ['network'],
@@ -145,9 +147,10 @@ function adapterFor(world: World): DatabaseAdapter {
           ]
         : [];
     }
-    if (sql.includes('select installed_version, approved_permissions')) {
+    if (sql.includes('select id, installed_version, approved_permissions')) {
       return [
         {
+          id: world.installation.id,
           installed_version: world.installation.installedVersion,
           approved_permissions: world.installation.approvedPermissions,
         },
@@ -180,13 +183,20 @@ function adapterFor(world: World): DatabaseAdapter {
       return [];
     }
     if (sql.includes('update public.plugin_installations')) {
+      if (
+        params[5] !== world.installation.id ||
+        params[6] !== world.installation.installedVersion
+      ) {
+        return [];
+      }
       world.installation = {
+        id: world.installation.id,
         installedVersion: String(params[2]),
         enabled: world.installation.enabled || Boolean(params[3]),
         approvedPermissions: JSON.parse(String(params[4])) as string[],
         reviewRequired: false,
       };
-      return [];
+      return [{ plugin_id: PLUGIN_ID }];
     }
     if (sql.includes('insert into public.plugin_registry_lifecycle_events')) return [];
     return [];
@@ -216,6 +226,25 @@ describe('moving an installation onto another published version', () => {
 
     expect(applied.toVersion).toBe('1.1.0');
     expect(world.installation.installedVersion).toBe('1.1.0');
+  });
+
+  it('does not overwrite an installation replaced while the update was being checked', async () => {
+    const inner = adapterFor(world);
+    const replacing = {
+      query: async (sql: string, params?: unknown[]) => {
+        const rows = await inner.query(sql, params);
+        if (sql.includes('from public.plugin_package_scans')) {
+          world.installation = { ...world.installation, id: 'installation_2' };
+        }
+        return rows;
+      },
+      execute: inner.execute,
+    } as unknown as DatabaseAdapter;
+
+    await expect(
+      applyPluginUpdate(replacing, { userId: 'user_1', pluginId: PLUGIN_ID, toVersion: '1.1.0' }),
+    ).rejects.toThrow(/changed while it was being updated/);
+    expect(world.installation.installedVersion).toBe('1.0.0');
   });
 
   it('refuses a target whose artifact was never scanned', async () => {

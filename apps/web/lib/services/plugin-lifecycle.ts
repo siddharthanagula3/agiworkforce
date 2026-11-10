@@ -665,8 +665,12 @@ export async function applyPluginUpdate(
   const pluginId = PluginIdSchema.parse(input.pluginId);
   const toVersion = VersionSchema.parse(input.toVersion);
 
-  const installed = await db.query<{ installed_version: string; approved_permissions: unknown }>(
-    `select installed_version, approved_permissions from public.plugin_installations
+  const installed = await db.query<{
+    id: string;
+    installed_version: string;
+    approved_permissions: unknown;
+  }>(
+    `select id, installed_version, approved_permissions from public.plugin_installations
       where user_id = $1 and plugin_id = $2`,
     [input.userId, pluginId],
   );
@@ -711,7 +715,7 @@ export async function applyPluginUpdate(
   });
 
   const reEnabled = current?.status === 'suspended';
-  await db.execute(
+  const written = await db.query<{ plugin_id: string }>(
     `update public.plugin_installations
         set installed_version = $3,
             enabled = enabled or $4,
@@ -719,9 +723,23 @@ export async function applyPluginUpdate(
             pending_permissions = null,
             review_required = false,
             updated_at = now()
-      where user_id = $1 and plugin_id = $2`,
-    [input.userId, pluginId, toVersion, reEnabled, JSON.stringify(target.permissions)],
+      where user_id = $1 and plugin_id = $2 and id = $6 and installed_version = $7
+      returning plugin_id`,
+    [
+      input.userId,
+      pluginId,
+      toVersion,
+      reEnabled,
+      JSON.stringify(target.permissions),
+      installed[0]?.id,
+      fromVersion,
+    ],
   );
+  if (written.length === 0) {
+    throw new PluginLifecycleError(
+      `${pluginId} changed while it was being updated. Reload and try again.`,
+    );
+  }
 
   return { pluginId, fromVersion, toVersion, diff, reEnabled };
 }

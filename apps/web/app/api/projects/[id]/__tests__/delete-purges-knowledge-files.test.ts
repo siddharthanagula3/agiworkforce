@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   getClerkAuthUser: vi.fn(),
   resolveActiveOrganizationId: vi.fn(),
   deleteProjectKnowledgeObject: vi.fn(),
+  held: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -73,15 +74,17 @@ beforeEach(() => {
   mocks.getClerkAuthUser.mockResolvedValue({ userId: 'user-abc' });
   mocks.resolveActiveOrganizationId.mockResolvedValue(null);
   mocks.execute.mockResolvedValue(1);
-  mocks.query.mockImplementation(async (sql: string) =>
-    sql.includes('select distinct storage_uri')
+  mocks.held.mockReturnValue([]);
+  mocks.query.mockImplementation(async (sql: string) => {
+    if (sql.includes('public.legal_holds')) return mocks.held();
+    return sql.includes('select distinct storage_uri')
       ? []
       : [
           { storage_uri: 'knowledge-files/projects/proj-1/notes.txt' },
           { storage_uri: 'knowledge-files/projects/proj-1/spec.pdf' },
           { storage_uri: null },
-        ],
-  );
+        ];
+  });
   mocks.deleteProjectKnowledgeObject.mockResolvedValue(undefined);
 });
 
@@ -115,20 +118,34 @@ describe('DELETE /api/projects/[id] · knowledge-file retention', () => {
   });
 
   it('keeps an object a duplicated project still points at', async () => {
-    mocks.query.mockImplementation(async (sql: string) =>
-      sql.includes('select distinct storage_uri')
+    mocks.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('public.legal_holds')) return [];
+      return sql.includes('select distinct storage_uri')
         ? [{ storage_uri: 'knowledge-files/projects/proj-1/spec.pdf' }]
         : [
             { storage_uri: 'knowledge-files/projects/proj-1/notes.txt' },
             { storage_uri: 'knowledge-files/projects/proj-1/spec.pdf' },
-          ],
-    );
+          ];
+    });
 
     await callDelete();
 
     expect(mocks.deleteProjectKnowledgeObject.mock.calls).toEqual([
       ['knowledge-files/projects/proj-1/notes.txt'],
     ]);
+  });
+
+  it('keeps the bytes of a file an active legal hold preserves', async () => {
+    mocks.held.mockReturnValue([{ storage_uri: 'knowledge-files/projects/proj-1/spec.pdf' }]);
+
+    const res = await callDelete();
+
+    expect(res.status).toBe(200);
+    expect(mocks.deleteProjectKnowledgeObject.mock.calls).toEqual([
+      ['knowledge-files/projects/proj-1/notes.txt'],
+    ]);
+    const holdQuery = knowledgeFileCalls().find(([sql]) => sql.includes('public.legal_holds'));
+    expect(holdQuery?.[0]).toContain('h.released_at is null');
   });
 
   it('does not purge knowledge files when no live project matched', async () => {

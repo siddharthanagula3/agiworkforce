@@ -2,6 +2,8 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
+import { legalHoldPredicate } from '@/lib/services/legal-hold-gate';
+import { serializeDestructionWithHolds } from '@/lib/services/legal-hold-placement';
 import { objectKeyFromStorageUri } from '@/lib/server/object-storage';
 import { deleteProjectKnowledgeObject } from '@/lib/server/project-knowledge-object-storage';
 
@@ -9,6 +11,22 @@ export interface DeletedProjectScope {
   projectId: string;
   userId: string;
   organizationId: string | null;
+}
+
+export async function projectStorageUrisUnderHold(
+  tx: Pick<DatabaseAdapter, 'query'>,
+  storageUris: readonly string[],
+): Promise<Set<string>> {
+  if (storageUris.length === 0) return new Set();
+  const held = legalHoldPredicate('project_file', { alias: 'r', nextParamIndex: 2 });
+  const rows = await tx.query<{ storage_uri: string }>(
+    `select distinct r.storage_uri
+       from project_knowledge_files r
+      where r.storage_uri = any($1::text[])
+        and ${held.sql}`,
+    [[...storageUris], ...held.params],
+  );
+  return new Set(rows.map((row) => row.storage_uri));
 }
 
 /**
@@ -20,6 +38,7 @@ export async function releaseDeletedProjectContents(
   tx: Pick<DatabaseAdapter, 'execute' | 'query'>,
   scope: DeletedProjectScope,
 ): Promise<string[]> {
+  await serializeDestructionWithHolds(tx, scope.organizationId);
   await tx.execute(
     `update web_conversations
         set project_id = null, updated_at = now()
@@ -63,7 +82,14 @@ export async function releaseDeletedProjectContents(
     [released, scope.userId, scope.organizationId],
   );
   const shared = new Set(stillReferenced.map((row) => row.storage_uri));
-  return released.filter((uri) => !shared.has(uri));
+  const preserved = await projectStorageUrisUnderHold(tx, released);
+  if (preserved.size > 0) {
+    logger.info(
+      { projectId: scope.projectId, userId: scope.userId, preserved: preserved.size },
+      'Kept project knowledge objects that an active legal hold preserves',
+    );
+  }
+  return released.filter((uri) => !shared.has(uri) && !preserved.has(uri));
 }
 
 export async function deleteDeletedProjectObjects(

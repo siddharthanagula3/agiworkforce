@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   createDataRightsRequest: vi.fn(),
   sendSupportEmail: vi.fn(),
   loggerError: vi.fn(),
+  recordAuditEvent: vi.fn(async () => undefined),
 }));
 
 vi.hoisted(() => {
@@ -16,6 +17,7 @@ vi.hoisted(() => {
 });
 
 vi.mock('server-only', () => ({}));
+vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: mocks.recordAuditEvent }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@clerk/nextjs/server', () => ({ auth: vi.fn(async () => ({ userId: null })) }));
@@ -55,6 +57,7 @@ describe('POST /api/privacy/requests', () => {
       status: 'received',
       createdAt: '2026-08-15T10:00:00.000Z',
       resolvedAt: null,
+      replayed: false,
     });
     mocks.sendSupportEmail.mockResolvedValue({ delivered: true, providerMessageId: 'msg_1' });
   });
@@ -114,5 +117,32 @@ describe('POST /api/privacy/requests', () => {
 
     expect(response.status).toBe(500);
     expect(mocks.sendSupportEmail).not.toHaveBeenCalled();
+  });
+
+  it('forwards the submission token and does not audit a replayed submission twice', async () => {
+    const token = '8c1f6a52-3d0e-4b0a-9a53-6a2f0c1d7e11';
+    mocks.createDataRightsRequest.mockResolvedValue({
+      reference: 'DPDP-ABC1234567',
+      requestType: 'erasure',
+      status: 'received',
+      createdAt: '2026-08-15T10:00:00.000Z',
+      resolvedAt: null,
+      replayed: true,
+    });
+
+    const response = await POST(request({ ...payload, submissionToken: token }));
+
+    expect(response.status).toBe(200);
+    expect(mocks.createDataRightsRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ submissionToken: token }),
+    );
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('rejects a submission token that is not a uuid', async () => {
+    const response = await POST(request({ ...payload, submissionToken: 'abc' }));
+
+    expect(response.status).toBe(400);
+    expect(mocks.createDataRightsRequest).not.toHaveBeenCalled();
   });
 });
