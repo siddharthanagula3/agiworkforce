@@ -3856,7 +3856,7 @@ Resolution/acceptance: Construct an otherwise admitted request with adequate bud
 
 ## VSCODE-CLI-HANDOFF-NOT-ACTIVATED-01
 
-Severity: Medium. Status: open in source snapshot `49d0c30f38ca53570dd4eade84548c9cf43705ae`; deployment unknown.
+Severity: Medium. Status: opening corrected in source (`895d49809b`); replay-receipt ordering open. Original: open in source snapshot `49d0c30f38ca53570dd4eade84548c9cf43705ae`; deployment unknown.
 
 Continue CLI Session accepts the chosen thread but never opens it in VS Code. continueCliSessionHere selects newest/requested ID, validates and accepts its handoff, then only executes agi-workforce.chat. That command reveals native chat or the sidebar; it does not resume the accepted thread. The existing fork command explicitly calls sidebarProvider.resumeConversation(forkedId), demonstrating the required activation is separate. Deep links reach the same command.
 
@@ -3867,6 +3867,8 @@ Start at `apps/extension-vscode/src/core/commandSetup.ts:498` in `.worktrees/bil
 Verification: Read complete command consumer and target command. Limit: No mounted VS Code invocation; existing admission helper tests do not exercise this command-to-sidebar activation.
 
 Resolution/acceptance: After acceptance, reveal first-party chat and resume newest.id; only record acceptance once backend admission and activation succeed. Add a command test with a different active thread.
+
+Update 2026-11-10: `895d49809b` makes `continueCliSessionHere` call `revealFirstPartyChat` and `sidebarProvider.resumeConversation` after `acceptHandoff` (`apps/extension-vscode/src/core/commandSetup.ts:528-571,1404-1413`); `sessionHandoffCommands.test.ts:170,197` covers an accepted and a declined review. Open: the replay receipt is still recorded (`accepted.add`) before the backend accepts and the thread is opened, so a failed accept consumes the link; no mounted VS Code invocation was run.
 
 ## CLI-INTERRUPT-RELEASE-BEFORE-CLEANUP-01
 
@@ -9291,6 +9293,8 @@ universal settings or memory lifecycle closure is established.
   database lock held across remote storage calls is not an established solution.
   No new retry/deletion policy, tests, checks, database or network actions were performed.
 
+Update 2026-11-10: `f84d38a885` stops the project retention sweep listing a `storage_uri` that another live knowledge file in a recent or held project still references, and treats a `project_file`-only hold as holding the project (`lib/services/domain-retention-service.ts:78-102`, `domain-retention-service.test.ts:166,181`); checked by SQL-text tests only, not against Postgres. Duplicate-route races and object-removal recovery remain open.
+
 ## WEB-MEDIA-SESSION-CLEANUP-01
 
 Status: Bounded source correction accepted at `d37734df30`; unmounted SDK-object
@@ -9994,6 +9998,8 @@ reads have no direct authored fixture; those remain acceptance cases, not proven
 source defects. No tests, lint, typechecks, builds, browser/auth, server export,
 push or deployment ran for this slice.
 
+Update 2026-11-10: `e24ae2c271` orders the latest-export lookup by request time, re-checks admission under a per-account advisory lock in one transaction, and publishes the stored deletion deadline as the final-volume expiry (`lib/server/data-export-archive.ts:450,533,583`, `data-export-archive.test.ts`). Runtime and cross-view acceptance remain open.
+
 ## WEB-CSRF-ACQUISITION-RETIREMENT-01
 
 Status: Boundedly source-corrected in
@@ -10570,6 +10576,8 @@ Continue/logout and global cleanup remain open; connector-history compatibility
 is still held. No product tests, lint, typechecks, builds, installations, live
 account actions, migration application or deployment ran. Publication is separate.
 
+Update 2026-11-10: `d9782438fa` binds scheduling to the confirming session (`use-settings-queries.ts:507-595`: owned status snapshot, captured-session request, receipt session) and skips the post-success sign-out and navigation when that session was superseded (`authentication-manager.ts:73-93`, `useDeleteAccount.retry.test.tsx`). `cleanupAllStores()` cannot be aborted once started, so a replacement session during it can still have local stores cleared. Cleanup and unique generation remain open.
+
 ## WEB-ACCOUNT-CONSENT-RECEIPT-01
 
 Status: Boundedly source-corrected in
@@ -11013,6 +11021,8 @@ they do not establish provider behavior, database transactions or real browser
 ordering. No tests, lint, typechecks, builds, installs, app/service execution,
 push or deployment ran.
 
+Update 2026-11-10: `4d97ccfd06` makes shared-chat continuation read the active workspace once and send it on create, every bulk batch and the cleanup delete (`app/chat/from-share/[token]/ContinueSharedSession.tsx:80-190`, `fork-from-share.test.tsx:176`). Other Team lifetimes and runtime acceptance remain open.
+
 ## WEB-WORKSPACE-LEAVE-RECEIPT-01
 
 Severity: Medium. Status: Bounded receipt/UI correction `2d9f982e0282698d5be95f986594b0d75a54790c`,
@@ -11050,6 +11060,8 @@ to be skipped. Empty warnings therefore do not prove every session ended.
 Deprovision retries/resumption, durable receipt recovery and server completion
 semantics remain open. All review remained source-only; no tests, checks, builds,
 installations, live/database actions, push or deployment ran.
+
+Update 2026-11-10: `94bd5b25cc` makes member removal parse its receipt and show a persistent warning for cleanup warnings or an unreadable receipt (`features/settings/hooks/use-settings-queries.ts:1247-1289`, `useSettingsQueries.member-removal-receipt.test.tsx`). Durable recovery and full credential cleanup remain open.
 
 ## WEB-WORKSPACE-CACHE-ACCOUNT-IDENTITY-01
 
@@ -11217,6 +11229,8 @@ No tests, lint, typechecks, builds, installations, live/database actions, push o
 deployment ran. Claim only refusal to proceed after lock-establishment failure
 and removal of erasure's own premature flag deletion, not universal isolation.
 
+Update 2026-11-10: `4d97ccfd06` makes `openSharedCloudCodeSession` call `assertTenantNotLockedDown` before any transcript is read, owner included (`lib/services/cloud-code-session-sharing.ts:137`, `cloud-code-session-sharing.lockdown.test.ts`). Broader isolation and runtime acceptance remain open.
+
 ## WEB-ACCOUNT-EXPORT-ERASURE-CUSTODY-01
 
 Severity: High. Status: Retry-pointer loss source-corrected in
@@ -11340,6 +11354,8 @@ mobile cleanup, existing mobile-only failure, full success and audit outcomes.
 External boundaries are mocked; no actual sessions, provider calls or runtime
 acceptance were exercised. No tests, lint, typechecks, builds, installations,
 live/database actions, push or deployment ran.
+
+Update 2026-11-10: `471ff596a4` clears the matured recovery hold and records the session verification in one transaction, announcing only after commit (`lib/server/account-security/service.ts:822`, `recovery-completion.test.ts`).
 
 ## WEB-CREDENTIAL-MUTATION-RETRY-01
 
@@ -11698,6 +11714,8 @@ This reports omissions; it does not retrieve older invoices/lines, recover
 historical or unlinked customers, verify other providers, or solve archive
 snapshot/erasure custody. No tests, lint, typechecks, builds, installations,
 live database/provider actions, push or deployment ran.
+
+Update 2026-11-10: `6757c6732a` makes the signed-in invoices route return `available` and `hasMore` (`app/api/billing/invoices/route.ts:28`) and the list show a truncation note or an unavailable state instead of "No invoices yet" (`app/billing/invoices/InvoiceList.tsx:98-119`, `InvoicesPage.test.tsx`). Retrieval of older history and live-provider acceptance remain open.
 
 ## WEB-STORE-BILLING-ERASURE-CUSTODY-01
 
@@ -12755,6 +12773,8 @@ regression, not the correction proposed here. This plan concerns persisted
 allowance resurrection, not instantaneous cancellation of already authorized
 in-memory execution. No implementation or runtime acceptance is represented.
 
+Update 2026-11-10: `f3ce0fd085` binds each remembered approval to a per-connector permission generation (`connector-tool-permissions.ts:129-178`, `approve/route.ts:391-416`) and refuses a stale card with 409. It requires migration 0410, an unapplied draft, applied before deploy; without it permission changes and disconnect fail. Checkpoints written before the change can approve once only. Not runtime accepted.
+
 ## CONNECTOR-DISCONNECT-GRANT-CLEANUP-01
 
 Severity: Medium. Status: Open source finding, independently confirmed on
@@ -12790,6 +12810,8 @@ Preserve directory `target.serverId` for permissions versus `target.connectorId`
 for OAuth. Include failure, partial-loop, retry and reconnect coverage, and the
 permission-generation contract above. No source patch was accepted for this gap.
 
+Update 2026-11-10: `4c7a0cb704` makes `clearConnectorToolPermissions` (`apps/web/lib/connectors/mcp-custom-connections.ts:403`) revoke conversation grants and delete standing rows in one transaction and return whether it succeeded; `apps/web/app/api/connectors/route.ts` reports a failed clear in its notice. The custom-connector DELETE (`app/api/connectors/custom/route.ts:194`) and plugin uninstall (`lib/connectors/plugin-connectors.ts:97`) still discard the result. The transaction also advances the permission generation of migration 0410, an unapplied draft; without it the clear fails and nothing is cleared. Fixtures not re-run here.
+
 ## SUPPORT-CONNECTOR-REVOCATION-LIFECYCLE-01
 
 Severity: High. Status: Open source finding, independently confirmed on
@@ -12821,6 +12843,8 @@ not silently added under that old contract. Keep custom exclusions and explicit
 user confirmation intact. Integrate with the permission-generation fence and
 exercise upstream failure, absent targets, mixed states, permission failure and
 retry before representing successful disconnect. No live service was contacted.
+
+Update 2026-11-10: `4c7a0cb704` makes support revoke run `disconnectConnectorOAuthGrant`, evict OAuth caches, uninstall the GitHub App at GitHub before forgetting it, and stop claiming permissions were cleared when clearing failed (`apps/web/lib/support/actions/executors/revoke-connector.ts:62-100`, `revoke-connector.test.ts`). Still missing against `app/api/connectors/route.ts`: the vendor-revocation outcome is not reported, MCP response caches are not purged, and the GitHub path skips its OAuth grant disconnect. The permission clear needs migration 0410, an unapplied draft.
 
 ## CONNECTOR-OAUTH-PARTIAL-CREDENTIAL-01
 
@@ -13044,6 +13068,8 @@ CSRF/fetch and a layout stub. Service/email/route/schema fixtures model boundari
 not real provider ownership, unique counts, token rollback, database or browser
 acceptance. Deferred cases settle their gates; no product tests, lint, typechecks,
 builds, installs, live services or migration actions were run.
+
+Update 2026-11-10: `212ede787b` records each emailed-undo cleanup step durably (`lib/server/account-security/undo.ts:57-166`, `undo.test.ts`, `undo-cleanup-store.test.ts`), so reopening the same link finishes only the unfinished steps and never repeats a settled one, until the link's original expiry. It writes columns added by migration 0406, an unapplied draft that must be applied before this code deploys. Cleanup after the link expires remains open.
 
 ## WEB-DEVELOPER-WEBHOOK-QUEUE-ATOMICITY-01
 
@@ -14143,6 +14169,8 @@ server cancellation. No new polling or automatic recap generation is intended.
 Authored success and adversarial lifetime fixtures remain unrun. Installed
 React/Next/SDK integration and live workspace/account transitions still require
 acceptance; no tests, lint, typechecks, builds, app execution, push or deploy ran.
+
+Update 2026-11-10: the mobile Reflect screen now aborts and fences refresh and Retry loads on supersede and unmount (`180dc2ec2b`, `apps/mobile/app/(app)/settings/reflect.tsx:73-131`, `ReflectScreen.test.tsx`). Runtime acceptance remains open.
 
 ## WEB-PASSKEY-APPLICATION-LIFETIME-01
 
@@ -16736,6 +16764,8 @@ publication inventory remain outside this correction. No product tests, lint,
 typechecks, builds, app execution, live provider/database/migration actions,
 push or deployment. Prior 0394/0395 remain UNAPPLIED.
 
+Update 2026-11-10: three further consumers are corrected. CLI `agi shares` keeps the server's `complete` flag and prints a bounded-inventory notice (`02f5bfe207`, `apps/cli/src/cloud/shares.rs:24-30,51,80`; Rust tests unrun). Mobile `fetchSharedLinks` returns `{ links, complete }` and the screen says nothing is shared only for a confirmed complete list (`02f5bfe207`, `apps/mobile/src/features/shared-links/service.ts:68-80`, `SharedLinks.test.tsx`). Live-artifact refresh-policy PATCH and DELETE require the binding's conversation to be live and in the selected workspace (`289d02803e`, `lib/services/artifact-runtime-service.ts:987-1030`). Other consumers and runtime acceptance remain open.
+
 ## WEB-PUBLICATION-QUOTA-ADMISSION-01
 
 Severity: Medium. Bounded canonical admission correction source-reviewed in
@@ -17858,6 +17888,8 @@ No database role, RLS, advisory permission/wait, isolation, snapshot, rollback,
 durability or deployed concurrency behavior has been exercised. No transaction
 retry, migration application, client change, live service, push or deployment.
 Existing recovery prerequisites, unapplied migrations and lost-history limits remain.
+
+Update 2026-11-10: `816db30469` makes the VS Code published-artifact list follow every page cursor and shows a retry row instead of marking every artifact unpublished (`apps/extension-vscode/src/features/artifacts/artifactsClient.ts:70-96`, `artifactsView.test.ts`). Reconciliation and live acceptance remain open.
 
 ## ELECTRON-RUN-AS-NODE-FUSE-ON-01
 
