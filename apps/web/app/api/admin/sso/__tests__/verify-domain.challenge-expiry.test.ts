@@ -170,6 +170,90 @@ describe('POST /api/admin/sso/verify-domain, challenge expiry', () => {
     expect(writes.some((w) => w.sql.includes('domain_verified_at = now()'))).toBe(true);
   });
 
+  it('does not accept a lookup that finishes after the challenge expired', async () => {
+    const token = issueDomainVerificationToken(ISSUED_AT);
+    vi.useFakeTimers();
+    vi.setSystemTime(ISSUED_AT + DOMAIN_VERIFICATION_CHALLENGE_TTL_MS - 1_000);
+
+    const writes = withDraft(token);
+    const dns = await import('node:dns/promises');
+    vi.spyOn(dns.Resolver.prototype, 'resolveTxt').mockImplementation(async () => {
+      vi.setSystemTime(ISSUED_AT + DOMAIN_VERIFICATION_CHALLENGE_TTL_MS + 1_000);
+      return [[`agiworkforce-sso-verification=${token}`]];
+    });
+
+    const response = await VERIFY(req('POST'));
+
+    expect(response.status).toBe(409);
+    expect((await response.json()).reason).toBe('challenge_expired');
+    expect(writes).toHaveLength(0);
+  });
+
+  it('does not consume a challenge that was replaced while the lookup ran', async () => {
+    const stale = issueDomainVerificationToken(ISSUED_AT);
+    const replacement = issueDomainVerificationToken(ISSUED_AT + 1_000);
+    vi.useFakeTimers();
+    vi.setSystemTime(ISSUED_AT + 60_000);
+
+    const writes: { sql: string; params: unknown[] }[] = [];
+    let current = stale;
+    mockQuery.mockImplementation(async (sql: string, params: unknown[]) => {
+      const text = String(sql).replace(/\s+/g, ' ').trim().toLowerCase();
+      const entitlement = answerSsoEntitlementSql(text, OWNER_WORLD);
+      if (entitlement) return entitlement;
+      if (text.startsWith('select role from organization_members')) return [{ role: 'owner' }];
+      if (text.includes('from sso_connections where id =')) return [draftRow(current)];
+      if (text.startsWith('update sso_connections')) {
+        writes.push({ sql: text, params });
+        return current === params[1] ? [draftRow(null)] : [];
+      }
+      throw new Error(`unexpected sql in test: ${text}`);
+    });
+
+    const dns = await import('node:dns/promises');
+    vi.spyOn(dns.Resolver.prototype, 'resolveTxt').mockImplementation(async () => {
+      current = replacement;
+      return [[`agiworkforce-sso-verification=${stale}`]];
+    });
+
+    const response = await VERIFY(req('POST'));
+
+    expect(response.status).toBe(409);
+    const body = (await response.json()) as {
+      verified: boolean;
+      code: string;
+      domainVerification: { recordValue: string };
+    };
+    expect(body.verified).toBe(false);
+    expect(body.code).toBe('CHALLENGE_REPLACED');
+    expect(body.domainVerification.recordValue).toBe(
+      `agiworkforce-sso-verification=${replacement}`,
+    );
+    expect(writes).toHaveLength(1);
+    expect(writes[0]?.sql).toContain('domain_verification_token = $2');
+    expect(writes[0]?.params[1]).toBe(stale);
+  });
+
+  it('refuses to reissue when the connection was activated while the request ran', async () => {
+    mockQuery.mockImplementation(async (sql: string) => {
+      const text = String(sql).replace(/\s+/g, ' ').trim().toLowerCase();
+      const entitlement = answerSsoEntitlementSql(text, OWNER_WORLD);
+      if (entitlement) return entitlement;
+      if (text.startsWith('select role from organization_members')) return [{ role: 'owner' }];
+      if (text.includes('from sso_connections where id =')) return [draftRow(null)];
+      if (text.startsWith('update sso_connections')) {
+        expect(text).toContain('is_active = false');
+        return [];
+      }
+      throw new Error(`unexpected sql in test: ${text}`);
+    });
+
+    const response = await REISSUE(req('PUT'));
+
+    expect(response.status).toBe(409);
+    expect((await response.json()).code).toBe('CONNECTION_CHANGED');
+  });
+
   it('cannot be replayed against an already-verified connection', async () => {
     mockQuery.mockImplementation(async (sql: string) => {
       const text = String(sql).replace(/\s+/g, ' ').trim().toLowerCase();

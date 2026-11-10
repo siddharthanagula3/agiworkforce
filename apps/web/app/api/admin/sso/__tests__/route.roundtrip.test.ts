@@ -147,6 +147,7 @@ const mockQuery = vi.fn(async (sql: string, params: unknown[] = []): Promise<Row
 
   if (text.startsWith('update sso_connections set display_name =')) {
     const current = store.connection!;
+    if (params[11] === true && !current['domain_verified_at']) return [];
     store.connection = {
       ...current,
       display_name: params[1],
@@ -356,6 +357,49 @@ describe('SSO configuration round trip', () => {
         attributeMapping: { emailAddress: 'user.email' },
       },
     });
+  });
+
+  it('removes a connection it just created when the domain was reset before it could be saved', async () => {
+    await createDraft();
+    store.connection!['domain_verified_at'] = '2026-08-04T01:00:00.000Z';
+    store.connection!['domain_verification_token'] = null;
+    mockCreateEnterpriseConnection.mockImplementation(async () => {
+      store.connection!['domain_verified_at'] = null;
+      return { id: 'ec_live_1', active: true, samlConnection: null };
+    });
+
+    const response = await PATCH(
+      req(`http://localhost/api/admin/sso/${CONNECTION_ID}`, 'PATCH', { is_active: true }),
+      params,
+    );
+
+    expect(response.status).toBe(409);
+    expect((await response.json()).code).toBe('CONNECTION_CHANGED');
+    expect(mockDeleteEnterpriseConnection).toHaveBeenCalledWith('ec_live_1');
+    expect(store.connection!['is_active']).toBe(false);
+  });
+
+  it('switches an existing provider connection back off when the domain was reset before activation was saved', async () => {
+    await createDraft();
+    store.connection!['domain_verified_at'] = '2026-08-04T01:00:00.000Z';
+    store.connection!['domain_verification_token'] = null;
+    store.connection!['clerk_connection_id'] = 'ec_live_1';
+    mockUpdateEnterpriseConnection.mockImplementationOnce(async () => {
+      store.connection!['domain_verified_at'] = null;
+      return { id: 'ec_live_1', active: true, samlConnection: null };
+    });
+
+    const response = await PATCH(
+      req(`http://localhost/api/admin/sso/${CONNECTION_ID}`, 'PATCH', { is_active: true }),
+      params,
+    );
+
+    expect(response.status).toBe(409);
+    expect(mockUpdateEnterpriseConnection).toHaveBeenLastCalledWith('ec_live_1', {
+      active: false,
+    });
+    expect(mockDeleteEnterpriseConnection).not.toHaveBeenCalled();
+    expect(store.connection!['is_active']).toBe(false);
   });
 
   it('reads the connection back with its stored provider reference hidden', async () => {

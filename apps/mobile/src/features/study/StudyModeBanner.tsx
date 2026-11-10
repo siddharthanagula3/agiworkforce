@@ -38,8 +38,9 @@ export function StudyModeBanner({ conversationId }: { conversationId: string }) 
     if (!session || pending) return;
     setPending(true);
     setError(null);
+    const leaving = isStudySessionActive(session);
     try {
-      if (isStudySessionActive(session)) {
+      if (leaving) {
         setSession(await endStudySession(conversationId));
         setEndedHere(true);
       } else {
@@ -54,7 +55,15 @@ export function StudyModeBanner({ conversationId }: { conversationId: string }) 
         setEndedHere(false);
       }
     } catch (cause) {
-      setError(toUserMessage(cause, 'Study mode could not be changed. Try again.'));
+      const settled = leaving
+        ? await studySessionForConversation(conversationId).catch(() => null)
+        : null;
+      if (settled && !isStudySessionActive(settled)) {
+        setSession(settled);
+        setEndedHere(true);
+      } else {
+        setError(toUserMessage(cause, 'Study mode could not be changed. Try again.'));
+      }
     } finally {
       setPending(false);
     }
