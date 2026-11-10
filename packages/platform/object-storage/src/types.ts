@@ -55,6 +55,11 @@ export interface PresignPutInput {
   expiresInSeconds: number;
 }
 
+export interface PresignedPutRequest {
+  url: string;
+  headers: Readonly<Record<string, string>>;
+}
+
 export interface PresignGetInput {
   bucket: string;
   key: string;
@@ -136,7 +141,12 @@ export interface ObjectStore {
    */
   copyIfMatch(input: CopyObjectIfMatchInput): Promise<boolean>;
 
-  presignPut(input: PresignPutInput): Promise<string>;
+  /**
+   * `headers` are signed into the URL: the holder must send every one of them
+   * with the PUT, and the host refuses an upload that omits or changes one.
+   * They are empty only when the host applies no policy of its own to a write.
+   */
+  presignPut(input: PresignPutInput): Promise<PresignedPutRequest>;
 
   presignGet(input: PresignGetInput): Promise<string>;
 

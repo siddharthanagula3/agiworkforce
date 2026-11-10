@@ -349,6 +349,51 @@ describe('settingsService · uploadAvatar', () => {
     expect(result).toEqual({ data: presign.publicUrl });
   });
 
+  it('sends exactly the headers the server returned, encryption included', async () => {
+    const uploadHeaders = {
+      'Content-Type': 'image/png',
+      'x-amz-server-side-encryption': 'aws:kms',
+      'x-amz-server-side-encryption-aws-kms-key-id': 'key-id',
+    };
+    const signedPresign = {
+      ...presign,
+      uploadUrl:
+        'https://storage.example.com/put?X-Amz-SignedHeaders=content-length%3Bcontent-type%3Bhost%3Bx-amz-server-side-encryption%3Bx-amz-server-side-encryption-aws-kms-key-id',
+      uploadHeaders,
+    };
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(signedPresign))
+      .mockResolvedValueOnce(makeResponse({}))
+      .mockResolvedValueOnce(makeResponse({ id: 'u1' }));
+
+    const { settingsService } = await import('./user-preferences');
+    const result = await settingsService.uploadAvatar(file);
+
+    expect(result).toEqual({ data: presign.publicUrl });
+    expect(fetchMock.mock.calls[1]).toEqual([
+      signedPresign.uploadUrl,
+      expect.objectContaining({ method: 'PUT', headers: uploadHeaders }),
+    ]);
+  });
+
+  it('refuses to upload when the signed url needs a header the server did not return', async () => {
+    fetchMock.mockResolvedValueOnce(
+      makeResponse({
+        ...presign,
+        uploadUrl:
+          'https://storage.example.com/put?X-Amz-SignedHeaders=content-length%3Bcontent-type%3Bhost%3Bx-amz-server-side-encryption',
+        uploadHeaders: { 'Content-Type': 'image/png' },
+      }),
+    );
+
+    const { settingsService } = await import('./user-preferences');
+    const result = await settingsService.uploadAvatar(file);
+
+    expect(result.data).toBe('');
+    expect(result.error).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it.each([401, 403, 429, 500])(
     'fails when the profile write returns HTTP %i after the object upload',
     async (status) => {

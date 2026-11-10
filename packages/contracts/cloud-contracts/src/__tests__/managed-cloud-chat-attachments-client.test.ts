@@ -44,6 +44,66 @@ describe('createManagedCloudChatAttachmentsClient', () => {
     expect(uploadFetchImpl).toHaveBeenCalledOnce();
   });
 
+  describe('a direct storage upload that carries required headers', () => {
+    const ENCRYPTION_HEADERS = {
+      'x-amz-server-side-encryption': 'aws:kms',
+      'x-amz-server-side-encryption-aws-kms-key-id': 'key-id',
+    };
+    const SIGNED_URL =
+      'https://storage.example.test/object?X-Amz-SignedHeaders=content-length%3Bcontent-type%3Bhost%3Bx-amz-server-side-encryption%3Bx-amz-server-side-encryption-aws-kms-key-id';
+    const ATTACHMENT = {
+      id: '00000000-0000-4000-8000-000000000001',
+      name: 'fixture.txt',
+      mimeType: 'text/plain',
+      byteCount: 1,
+      type: 'file',
+      url: '/api/files/00000000-0000-4000-8000-000000000001',
+    };
+
+    function presignResponse(uploadHeaders: Record<string, string>) {
+      return Response.json({
+        storageKey: 'owned/fixture.txt',
+        uploadUrl: SIGNED_URL,
+        uploadMethod: 'PUT',
+        uploadHeaders,
+      });
+    }
+
+    it('sends every header the server returned, encryption included', async () => {
+      const uploadHeaders = { 'Content-Type': 'text/plain', ...ENCRYPTION_HEADERS };
+      const fetchImpl = vi
+        .fn()
+        .mockResolvedValueOnce(presignResponse(uploadHeaders))
+        .mockResolvedValueOnce(Response.json({ attachment: ATTACHMENT }));
+      const uploadFetchImpl = vi.fn(async () => new Response(null, { status: 200 }));
+      const client = createManagedCloudChatAttachmentsClient({ fetchImpl, uploadFetchImpl });
+
+      await client.upload([new File(['x'], 'fixture.txt', { type: 'text/plain' })]);
+
+      const sent = new Headers(
+        (uploadFetchImpl.mock.calls[0] as unknown as [string, RequestInit])[1].headers,
+      );
+      expect(Object.fromEntries(sent.entries())).toEqual({
+        'content-type': 'text/plain',
+        'x-amz-server-side-encryption': 'aws:kms',
+        'x-amz-server-side-encryption-aws-kms-key-id': 'key-id',
+      });
+    });
+
+    it('refuses to send an upload that omits a header the url was signed with', async () => {
+      const fetchImpl = vi
+        .fn()
+        .mockResolvedValueOnce(presignResponse({ 'Content-Type': 'text/plain' }));
+      const uploadFetchImpl = vi.fn();
+      const client = createManagedCloudChatAttachmentsClient({ fetchImpl, uploadFetchImpl });
+
+      await expect(
+        client.upload([new File(['x'], 'fixture.txt', { type: 'text/plain' })]),
+      ).rejects.toThrow('x-amz-server-side-encryption');
+      expect(uploadFetchImpl).not.toHaveBeenCalled();
+    });
+  });
+
   it('authenticates a configured API relay PUT using fresh account headers', async () => {
     let credential = 0;
     const getHeaders = vi.fn(async () => ({

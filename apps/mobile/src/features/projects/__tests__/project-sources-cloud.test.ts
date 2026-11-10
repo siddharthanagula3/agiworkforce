@@ -160,6 +160,57 @@ beforeEach(() => {
 });
 
 describe('adding sources to a cloud project', () => {
+  it('sends the encryption headers the presign returned with the native upload', async () => {
+    primeHappyPath();
+    (api.post as jest.Mock).mockImplementation(async (path: string) =>
+      path === '/api/uploads/presign'
+        ? {
+            uploadUrl:
+              'https://storage.example.com/knowledge/notes.md?X-Amz-SignedHeaders=content-length%3Bcontent-type%3Bhost%3Bx-amz-server-side-encryption',
+            uploadMethod: 'PUT',
+            uploadHeaders: {
+              'Content-Type': 'text/markdown',
+              'x-amz-server-side-encryption': 'AES256',
+            },
+            storageKey: STORAGE_KEY,
+          }
+        : registeredFile(),
+    );
+
+    await useProjectStore.getState().addSource(CLOUD_PROJECT_ID, PICKED_SOURCE);
+
+    const options = (createUploadTask as jest.Mock).mock.calls[0]?.[2] as {
+      headers: Record<string, string>;
+    };
+    expect(options.headers).toEqual({
+      'content-type': 'text/markdown',
+      'x-amz-server-side-encryption': 'AES256',
+    });
+    expect(mockUploadAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not upload when the presigned url needs a header the presign did not return', async () => {
+    primeHappyPath();
+    (api.post as jest.Mock).mockImplementation(async (path: string) =>
+      path === '/api/uploads/presign'
+        ? {
+            uploadUrl:
+              'https://storage.example.com/knowledge/notes.md?X-Amz-SignedHeaders=content-length%3Bcontent-type%3Bhost%3Bx-amz-server-side-encryption',
+            uploadMethod: 'PUT',
+            uploadHeaders: { 'Content-Type': 'text/markdown' },
+            storageKey: STORAGE_KEY,
+          }
+        : registeredFile(),
+    );
+
+    await expect(
+      useProjectStore.getState().addSource(CLOUD_PROJECT_ID, PICKED_SOURCE),
+    ).rejects.toThrow(/x-amz-server-side-encryption/);
+    expect(createUploadTask).not.toHaveBeenCalled();
+    expect(mockUploadAsync).not.toHaveBeenCalled();
+    expect(knowledgeRegistrations()).toHaveLength(0);
+  });
+
   it('presigns, uploads the bytes, and registers the file instead of silently dropping it', async () => {
     primeHappyPath();
 

@@ -92,6 +92,48 @@ describe('user-approved browser file upload', () => {
     expect(fetchMock.mock.calls.every(([, options]) => options?.redirect === 'error')).toBe(true);
   });
 
+  it('sends the encryption headers the presign returned to a direct storage destination', async () => {
+    const metadata = await approvedFile();
+    fetchMock
+      .mockResolvedValueOnce(
+        Response.json({
+          storageKey: 'chat-attachments/account-a/fixture.txt',
+          uploadUrl:
+            'https://storage.example/private?X-Amz-SignedHeaders=content-length%3Bcontent-type%3Bhost%3Bx-amz-server-side-encryption',
+          uploadMethod: 'PUT',
+          uploadHeaders: {
+            'Content-Type': 'text/plain',
+            'x-amz-server-side-encryption': 'AES256',
+          },
+        }),
+      )
+      .mockResolvedValueOnce(Response.json({ success: true }))
+      .mockResolvedValueOnce(Response.json({ attachment: metadata.attachment }));
+    await uploadSelectedUserFiles(
+      [new File([bytes], 'fixture.txt', { type: 'text/plain' })],
+      binding,
+    );
+    const sent = new Headers(fetchMock.mock.calls[1]?.[1]?.headers);
+    expect(sent.get('x-amz-server-side-encryption')).toBe('AES256');
+    expect(sent.get('Content-Type')).toBe('text/plain');
+  });
+
+  it('does not send a file to storage when the signed url needs a header the presign omitted', async () => {
+    fetchMock.mockResolvedValueOnce(
+      Response.json({
+        storageKey: 'chat-attachments/account-a/fixture.txt',
+        uploadUrl:
+          'https://storage.example/private?X-Amz-SignedHeaders=content-length%3Bcontent-type%3Bhost%3Bx-amz-server-side-encryption',
+        uploadMethod: 'PUT',
+        uploadHeaders: { 'Content-Type': 'text/plain' },
+      }),
+    );
+    await expect(
+      uploadSelectedUserFiles([new File([bytes], 'fixture.txt', { type: 'text/plain' })], binding),
+    ).rejects.toThrow('x-amz-server-side-encryption');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('refuses a failed inspection and never returns a usable file grant', async () => {
     fetchMock
       .mockResolvedValueOnce(

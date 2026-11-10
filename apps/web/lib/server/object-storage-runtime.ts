@@ -26,7 +26,14 @@ export function objectStorageConfig(): ObjectStorageConfig {
 }
 
 function connectionIdentity(config: ObjectStorageConfig): string {
-  return [config.provider, config.endpoint ?? '', config.region, config.forcePathStyle].join('|');
+  return [
+    config.provider,
+    config.endpoint ?? '',
+    config.region,
+    config.forcePathStyle,
+    config.encryption?.algorithm ?? '',
+    config.encryption?.keyId ?? '',
+  ].join('|');
 }
 
 export function getObjectStore(): ObjectStore {

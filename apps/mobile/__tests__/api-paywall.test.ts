@@ -617,6 +617,51 @@ describe('Cloud account request isolation', () => {
     expect(globalThis.fetch).toHaveBeenCalledTimes(1);
   });
 
+  it('sends the encryption headers the presign returned with the native upload', async () => {
+    const encryptionHeaders = {
+      'x-amz-server-side-encryption': 'aws:kms',
+      'x-amz-server-side-encryption-aws-kms-key-id': 'key-id',
+    };
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      makeResponse(200, {
+        storageKey: 'users/account-a/attachment.txt',
+        uploadUrl:
+          'https://storage.example.test/upload?X-Amz-SignedHeaders=content-length%3Bcontent-type%3Bhost%3Bx-amz-server-side-encryption%3Bx-amz-server-side-encryption-aws-kms-key-id',
+        uploadMethod: 'PUT',
+        uploadHeaders: { 'Content-Type': 'text/plain', ...encryptionHeaders },
+      }),
+    );
+
+    await api
+      .uploadFile({ name: 'attachment.txt', type: 'text/plain', uri: 'file:///attachment.txt' })
+      .catch(() => undefined);
+
+    expect(mockCreateUploadTask).toHaveBeenCalledTimes(1);
+    const options = mockCreateUploadTask.mock.calls[0]?.[2] as { headers: Record<string, string> };
+    expect(options.headers).toEqual({ 'content-type': 'text/plain', ...encryptionHeaders });
+  });
+
+  it('refuses a native upload that leaves out a header the presigned url was signed with', async () => {
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      makeResponse(200, {
+        storageKey: 'users/account-a/attachment.txt',
+        uploadUrl:
+          'https://storage.example.test/upload?X-Amz-SignedHeaders=content-length%3Bcontent-type%3Bhost%3Bx-amz-server-side-encryption',
+        uploadMethod: 'PUT',
+        uploadHeaders: { 'Content-Type': 'text/plain' },
+      }),
+    );
+
+    await expect(
+      api.uploadFile({
+        name: 'attachment.txt',
+        type: 'text/plain',
+        uri: 'file:///attachment.txt',
+      }),
+    ).rejects.toThrow('x-amz-server-side-encryption');
+    expect(mockCreateUploadTask).not.toHaveBeenCalled();
+  });
+
   it('rejects an insecure presigned upload destination before creating a native task', async () => {
     jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
       makeResponse(200, {

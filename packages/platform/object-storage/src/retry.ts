@@ -9,6 +9,7 @@ import {
   type PendingMultipartUpload,
   type PresignGetInput,
   type PresignPutInput,
+  type PresignedPutRequest,
   type PresignUploadPartInput,
   type PutObjectInput,
   type StoredObjectBytes,
@@ -214,7 +215,7 @@ export function createRetryingObjectStore(
       return run('copyIfMatch', () => store.copyIfMatch(input));
     },
 
-    presignPut(input: PresignPutInput): Promise<string> {
+    presignPut(input: PresignPutInput): Promise<PresignedPutRequest> {
       return run('presignPut', () => store.presignPut(input));
     },
 

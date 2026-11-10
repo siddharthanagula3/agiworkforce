@@ -17,6 +17,7 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { bindPresignedDownload, bindPresignedUpload, bindPresignedUploadPart } from '../presign';
 import { type ObjectStorageConfig } from '../config';
+import { encryptionUploadHeaders } from '../upload-headers';
 import {
   ObjectStorageConfigError,
   ObjectStorageTimeoutError,
@@ -30,6 +31,7 @@ import {
   type PresignGetInput,
   type PresignPutInput,
   type PresignUploadPartInput,
+  type PresignedPutRequest,
   type PutObjectInput,
   type StoredObjectBytes,
   type StoredObjectHead,
@@ -252,21 +254,23 @@ export function createS3ObjectStore(options: S3ObjectStoreOptions): ObjectStore 
       }
     },
 
-    async presignPut(input: PresignPutInput): Promise<string> {
+    async presignPut(input: PresignPutInput): Promise<PresignedPutRequest> {
       const bound = bindPresignedUpload(input);
-      return getSignedUrl(
+      const url = await getSignedUrl(
         client,
         new PutObjectCommand({
           Bucket: input.bucket,
           Key: input.key,
           ContentType: bound.contentType,
           ContentLength: bound.contentLength,
+          ...encryptionHeaders(),
         }),
         {
           expiresIn: bound.expiresInSeconds,
           signableHeaders: new Set(SIGNABLE_UPLOAD_HEADERS),
         },
       );
+      return { url, headers: encryptionUploadHeaders(encryption) };
     },
 
     async presignGet(input: PresignGetInput): Promise<string> {
