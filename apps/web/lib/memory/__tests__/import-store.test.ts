@@ -85,7 +85,7 @@ describe('persistImportedMemories row identity', () => {
 
     const { sql } = issued();
     expect(sql).toContain(
-      'on conflict (user_id, source, import_key) where import_key is not null do nothing',
+      "on conflict (user_id, source, import_key, (coalesce(organization_id, '00000000-0000-0000-0000-000000000000'::uuid))) where import_key is not null do nothing",
     );
     expect(sql).not.toContain('on conflict (id)');
     expect(batch()).toEqual([
