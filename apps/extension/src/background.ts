@@ -1,3 +1,22 @@
+import { parseTaskTabScope, type TaskTabScope } from './features/browser-tools/taskTabScope';
+import {
+  isPageDocumentId,
+  parseFormObservationReference,
+  readPageDocument,
+} from './features/browser-tools/documentBridge';
+import { MAX_CALLER_TOOL_STEPS, TOOL_CALL_ID_MAX_LENGTH } from '@agiworkforce/cloud-contracts';
+import { recoverCallerToolCheckpoint } from './features/cloud-bridge/callerToolExecution';
+import {
+  captureCallerConversationContext,
+  assertCallerConversationAuthority,
+  assertCallerConversationLink,
+} from './features/cloud-bridge/callerConversationAuthority';
+import {
+  captureCallerBrowserContext,
+  parseCallerBrowserContext,
+  readCallerBrowserContext,
+  type CallerBrowserContext,
+} from './features/cloud-bridge/callerBrowserContext';
 import {
   replayScheduledShortcut,
   ScheduledShortcutReplayDeferredError,
@@ -185,6 +204,8 @@ import {
   createChromeManagedApprovalDependencies,
   createChromeManagedToolInputDependencies,
   executeChromeManagedChat,
+  executeChromeManagedCallerResume,
+  createChromeManagedCallerResumeDependencies,
   executeChromeManagedApproval,
   executeChromeManagedToolInput,
   normalizeChromeManagedRoutingMetadata,
@@ -193,11 +214,11 @@ import {
   type ChromeManagedToolHandoffOutcome,
 } from './features/cloud-bridge/managedChatHandler';
 import {
+  CHAT_BROWSER_TASK_TOOL,
   chatBrowserToolDefinitions,
   isChatBrowserToolTier,
   CHAT_TOOL_HANDOFF_TIMEOUT_MS,
   MAX_CHAT_TOOL_CALLS_PER_HANDOFF,
-  MAX_CHAT_TOOL_RESULT_CHARS,
 } from './features/computer-use/chatBrowserTools';
 import type { ToolCall } from './features/computer-use/toolHandoff';
 import {
@@ -220,6 +241,12 @@ import {
   NATIVE_RECONNECT_MAX_ATTEMPTS,
 } from './features/native-bridge/reconnect';
 import { parseManagedChatPortName } from './features/cloud-bridge/managedChatPort';
+import {
+  createChromeCallerToolCustody,
+  readChromeCallerToolCustody,
+  acknowledgeCompletedCallerRun,
+} from './features/cloud-bridge/callerToolCustody';
+import { validChatToolResults, type ChatToolCursor } from './features/computer-use/chatToolResults';
 import {
   BROWSER_COMMAND_POLL_WINDOW_MS,
   BROWSER_COMMAND_PROTOCOL_VERSION,
@@ -245,6 +272,7 @@ import {
   findChromeManagedRunByRequestId,
   MANAGED_RUN_CANCELLATION_TIMEOUT_MS,
   resumeChromeManagedRun,
+  assertChromeManagedCallerRun,
 } from './features/cloud-bridge/managedRunControl';
 import {
   getFreshClerkAuthContext,
@@ -403,10 +431,135 @@ interface PendingChatToolHandoff {
   clientInstanceId: string;
   streamId: string;
   callIds: readonly string[];
+  callNames: readonly string[];
+  signal: AbortSignal;
+  nativeTask?: {
+    runId: string;
+    toolCallId: string;
+    context?: CallerBrowserContext;
+    taskTabs?: TaskTabScope;
+    terminal: boolean;
+    cancel?: () => void;
+  };
+  callerCheckpoint?: ChatToolCursor;
   finish: (outcome: ChromeManagedToolHandoffOutcome) => void;
 }
 
 const pendingChatToolHandoffs = new Map<string, PendingChatToolHandoff>();
+
+function bindCallerBrowserTask(value: unknown, owner: ManagedCloudOwner, runId: string) {
+  if (value === undefined) return undefined;
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    throw new Error('The caller task link is invalid.');
+  const link = value as Record<string, unknown>;
+  const keys = ['handoffId', 'toolCallId', 'clientInstanceId', 'streamId'];
+  if (
+    Object.keys(link).length !== keys.length ||
+    keys.some(
+      (key) =>
+        typeof link[key] !== 'string' ||
+        (link[key] as string).length === 0 ||
+        (link[key] as string).length > TOOL_CALL_ID_MAX_LENGTH,
+    )
+  )
+    throw new Error('The caller task link is invalid.');
+  const pending = pendingChatToolHandoffs.get(link['handoffId'] as string);
+  const index = pending?.callIds.indexOf(link['toolCallId'] as string) ?? -1;
+  if (
+    !pending ||
+    pending.signal.aborted ||
+    !pending.callerCheckpoint ||
+    pending.nativeTask ||
+    index < 0 ||
+    pending.callNames[index] !== CHAT_BROWSER_TASK_TOOL ||
+    !sameManagedCloudOwner(pending.owner, owner) ||
+    pending.clientInstanceId !== link['clientInstanceId'] ||
+    pending.streamId !== link['streamId']
+  )
+    throw new Error('The browser task does not belong to the pending caller action.');
+  const task = {
+    runId,
+    toolCallId: link['toolCallId'] as string,
+    context: undefined as CallerBrowserContext | undefined,
+    taskTabs: undefined as TaskTabScope | undefined,
+    terminal: false,
+    cancel: undefined as (() => void) | undefined,
+  };
+  pending.nativeTask = task;
+  const isCurrent = () =>
+    pendingChatToolHandoffs.get(link['handoffId'] as string) === pending &&
+    pending.nativeTask === task &&
+    !pending.signal.aborted;
+  const assertCurrent = () => {
+    if (!isCurrent()) throw new Error('The parent caller action stopped.');
+  };
+  const readAdmission = async () => {
+    assertCurrent();
+    const saved = await readChromeCallerToolCustody(
+      owner,
+      pending.callerCheckpoint!.run_id,
+      assertCurrent,
+    );
+    const cursor = saved?.step?.cursor;
+    const action = saved?.step?.actions?.find((entry) => entry.callId === task.toolCallId);
+    const call = saved?.step?.calls.find((entry) => entry.id === task.toolCallId);
+    if (
+      !saved ||
+      !cursor ||
+      cursor.schema_version !== pending.callerCheckpoint!.schema_version ||
+      cursor.next_event_sequence !== pending.callerCheckpoint!.next_event_sequence ||
+      cursor.turn_id !== pending.callerCheckpoint!.turn_id ||
+      action?.state !== 'in_flight' ||
+      call?.function.name !== CHAT_BROWSER_TASK_TOOL
+    )
+      throw new Error('The native task does not match its owned caller action.');
+    await assertCallerConversationAuthority(
+      saved.binding,
+      saved.binding.historyConversationId,
+      isCurrent,
+      pending.signal,
+    );
+    assertCurrent();
+    return saved;
+  };
+  return {
+    signal: pending.signal,
+    isCurrent,
+    async assertAuthority() {
+      await readAdmission();
+    },
+    async readTaskTabs() {
+      return (await readAdmission()).taskTabs;
+    },
+    async assertPage(tabId: number) {
+      const saved = await readAdmission();
+      const page = saved.currentBrowserContext ?? saved.binding.browserContext;
+      if (!page?.documentId || page.tabId !== tabId)
+        throw new Error('The native task does not match its owned caller page.');
+      await readCallerBrowserContext(page, assertCurrent);
+    },
+    attachCancellation(cancel: () => void) {
+      if (!isCurrent()) {
+        cancel();
+        return;
+      }
+      task.cancel = cancel;
+    },
+    fail() {
+      if (isCurrent() && !task.terminal) task.terminal = true;
+    },
+    complete(value: CallerBrowserContext, scope: TaskTabScope) {
+      if (!isCurrent()) throw new Error('The parent caller action stopped before task completion.');
+      const context = parseCallerBrowserContext(value);
+      if (!context.documentId)
+        throw new Error('The completed caller task has no document identity.');
+      if (task.terminal) throw new Error('The caller task already completed.');
+      task.taskTabs = parseTaskTabScope(scope, context);
+      task.context = context;
+      task.terminal = true;
+    },
+  };
+}
 
 function unansweredToolResults(calls: readonly ToolCall[], content: string) {
   return calls.map((call) => ({ toolCallId: call.id, content }));
@@ -416,7 +569,17 @@ function requestChatToolHandoff(
   active: ActiveChatStream,
   streamId: string,
   calls: ToolCall[],
+  checkpoint?: import('./features/computer-use/toolHandoff').CallerToolContinuation,
+  recoveryContext?: import('./types').ChatToolHandoffMessage['recoveryContext'],
 ): Promise<ChromeManagedToolHandoffOutcome> {
+  const callerCheckpoint = checkpoint
+    ? {
+        schema_version: checkpoint.schema_version,
+        run_id: checkpoint.run_id,
+        turn_id: checkpoint.turn_id,
+        next_event_sequence: checkpoint.next_event_sequence,
+      }
+    : undefined;
   const handoffId = `handoff_${crypto.randomUUID()}`;
   const signal = active.controller.signal;
   if (calls.length > MAX_CHAT_TOOL_CALLS_PER_HANDOFF) {
@@ -432,16 +595,22 @@ function requestChatToolHandoff(
       settled = true;
       clearTimeout(timeout);
       signal.removeEventListener('abort', onAbort);
+      const pendingTask = pendingChatToolHandoffs.get(handoffId)?.nativeTask;
       pendingChatToolHandoffs.delete(handoffId);
+      if (!pendingTask?.terminal) pendingTask?.cancel?.();
       resolve(outcome);
     };
     const onAbort = (): void => finish({ status: 'cancelled' });
     const timeout = setTimeout(
       () =>
-        finish({
-          status: 'resolved',
-          results: unansweredToolResults(calls, 'The browser tool did not answer in time.'),
-        }),
+        finish(
+          callerCheckpoint
+            ? { status: 'cancelled' }
+            : {
+                status: 'resolved',
+                results: unansweredToolResults(calls, 'The browser tool did not answer in time.'),
+              },
+        ),
       CHAT_TOOL_HANDOFF_TIMEOUT_MS,
     );
     signal.addEventListener('abort', onAbort, { once: true });
@@ -454,6 +623,9 @@ function requestChatToolHandoff(
       clientInstanceId: active.clientInstanceId,
       streamId,
       callIds: calls.map((call) => call.id),
+      callNames: calls.map((call) => call.function.name),
+      signal,
+      ...(callerCheckpoint ? { callerCheckpoint } : {}),
       finish,
     });
     const handoff: import('./types').ChatToolHandoffMessage = {
@@ -463,15 +635,21 @@ function requestChatToolHandoff(
       id: streamId,
       handoffId,
       calls,
+      ...(callerCheckpoint ? { callerCheckpoint } : {}),
+      ...(recoveryContext ? { recoveryContext } : {}),
     };
     void chrome.runtime.sendMessage(handoff).catch(() =>
-      finish({
-        status: 'resolved',
-        results: unansweredToolResults(
-          calls,
-          'The side panel closed, so the browser tool could not run.',
-        ),
-      }),
+      finish(
+        callerCheckpoint
+          ? { status: 'cancelled' }
+          : {
+              status: 'resolved',
+              results: unansweredToolResults(
+                calls,
+                'The side panel closed, so the browser tool could not run.',
+              ),
+            },
+      ),
     );
   });
 }
@@ -499,13 +677,14 @@ function resolveChatToolHandoff(message: import('./types').ResolveChatToolsMessa
       (result, index) =>
         !result ||
         result.toolCallId !== pending.callIds[index] ||
-        typeof result.content !== 'string' ||
-        result.content.length > MAX_CHAT_TOOL_RESULT_CHARS,
+        typeof result.content !== 'string',
     ) ||
+    !validChatToolResults(results, pending.callerCheckpoint) ||
     (message.browserToolTier !== undefined && !isChatBrowserToolTier(message.browserToolTier)) ||
     (message.browserHistory !== undefined && message.browserHistory !== true)
   )
     return false;
+  if (pending.nativeTask && !pending.nativeTask.terminal) return false;
   const tools = chatBrowserToolDefinitions(
     message.browserToolTier,
     message.browserHistory === true,
@@ -515,6 +694,10 @@ function resolveChatToolHandoff(message: import('./types').ResolveChatToolsMessa
     results: results.map((result) => ({
       toolCallId: result.toolCallId,
       content: result.content,
+      ...(pending.nativeTask?.context && pending.nativeTask.toolCallId === result.toolCallId
+        ? { browserContext: pending.nativeTask.context, taskTabs: pending.nativeTask.taskTabs }
+        : {}),
+      ...(result.observation !== undefined ? { observation: result.observation } : {}),
     })),
     ...(tools.length ? { tools } : {}),
   });
@@ -4262,6 +4445,8 @@ async function handleMessageAsync(
         (message.type === 'FILL_APPLICATION_CONTACT' &&
           message.replaceExisting !== undefined &&
           typeof message.replaceExisting !== 'boolean') ||
+        (message.type === 'FILL_OBSERVED_FORM' && !isPageDocumentId(message.documentId)) ||
+        (message.documentId !== undefined && !isPageDocumentId(message.documentId)) ||
         (!profile && !plan) ||
         !Number.isSafeInteger(message.tabId) ||
         message.tabId < 0
@@ -4279,15 +4464,20 @@ async function handleMessageAsync(
         return { success: false, error: 'The application page changed before autofill.' };
       if (isRetiredManagedCloudOwner(owner))
         return { success: false, error: 'The application autofill account changed.' };
+      let document: import('./features/browser-tools/documentBridge').PageDocumentReference;
+      try {
+        document = await readPageDocument(target.tabId, target.url, message.documentId);
+      } catch {
+        return {
+          success: false,
+          error:
+            message.type === 'FILL_OBSERVED_FORM'
+              ? 'The form document changed. Read the page again.'
+              : 'The application page could not be verified before autofill.',
+        };
+      }
       if (message.type === 'FILL_OBSERVED_FORM') {
-        const [document] = await chrome.scripting.executeScript({
-          target: { tabId: target.tabId },
-          func: () => location.href,
-        });
         if (
-          !document?.documentId ||
-          document.documentId !== message.documentId ||
-          document.result !== target.url ||
           typeof message.formSnapshotId !== 'string' ||
           !UUID_PATTERN.test(message.formSnapshotId)
         )
@@ -4300,16 +4490,22 @@ async function handleMessageAsync(
           { documentId: document.documentId },
         );
       }
-      return chrome.tabs.sendMessage(target.tabId, {
-        type: 'FILL_APPLICATION_CONTACT',
-        tabId: target.tabId,
-        pageUrl: target.url,
-        profile,
-        ...(message.replaceExisting !== undefined
-          ? { replaceExisting: message.replaceExisting }
-          : {}),
-        owner,
-      });
+      if (isRetiredManagedCloudOwner(owner))
+        return { success: false, error: 'The application autofill account changed.' };
+      return chrome.tabs.sendMessage(
+        target.tabId,
+        {
+          type: 'FILL_APPLICATION_CONTACT',
+          tabId: target.tabId,
+          pageUrl: target.url,
+          profile,
+          ...(message.replaceExisting !== undefined
+            ? { replaceExisting: message.replaceExisting }
+            : {}),
+          owner,
+        },
+        { documentId: document.documentId },
+      );
     }
     case 'GET_CLOUD_AUTH_TOKEN': {
       await revokeMismatchedDesktopPairing();
@@ -5417,14 +5613,18 @@ async function handleMessageAsync(
       computerUseStarts.begin(cuRunId, startGeneration);
       cancelActiveComputerUseRun('superseded');
 
+      let callerTask: ReturnType<typeof bindCallerBrowserTask>;
       const failStart = (error: string): ExtensionResponse => {
+        callerTask?.fail();
         if (isCurrentComputerUseStart(cuRunId, startGeneration)) {
           clearPendingComputerUseStart(cuRunId);
         }
         return { success: false, error } as ExtensionResponse;
       };
 
-      const startWasCancelled = (): boolean => !isCurrentComputerUseStart(cuRunId, startGeneration);
+      const startWasCancelled = (): boolean =>
+        !isCurrentComputerUseStart(cuRunId, startGeneration) ||
+        (callerTask !== undefined && !callerTask.isCurrent());
 
       let cuTab: chrome.tabs.Tab | undefined;
       try {
@@ -5496,6 +5696,14 @@ async function handleMessageAsync(
         );
       }
 
+      try {
+        callerTask = bindCallerBrowserTask(cuMsg.callerHandoff, authContext.owner, cuRunId);
+      } catch (error) {
+        return failStart(
+          error instanceof Error ? error.message : 'The caller task link is invalid.',
+        );
+      }
+
       let askPref: Record<string, unknown>;
       try {
         askPref = await chrome.storage.local.get(ASK_BEFORE_ACTING_KEY);
@@ -5524,6 +5732,7 @@ async function handleMessageAsync(
       }
 
       let selectedTabs: readonly import('./types').BrowserContextTabReference[];
+      let restoredTaskTabs: TaskTabScope | undefined;
       const assertStartCurrent = async (): Promise<void> => {
         if (startWasCancelled())
           throw new Error('The browser task start was cancelled or superseded.');
@@ -5535,6 +5744,7 @@ async function handleMessageAsync(
           !sameManagedCloudOwner(current.owner, authContext!.owner)
         )
           throw new Error('The account changed during browser task admission.');
+        await callerTask?.assertPage(cuTabId);
         const currentTarget = await authorizeBrowserToolTab(cuTabId);
         if (startWasCancelled()) throw new Error('The browser task start was cancelled.');
         const latest = await chrome.tabs.get(cuTabId);
@@ -5554,6 +5764,7 @@ async function handleMessageAsync(
           cuTab.windowId,
           assertStartCurrent,
         );
+        restoredTaskTabs = await callerTask?.readTaskTabs();
         await assertStartCurrent();
       } catch (error) {
         return failStart(
@@ -5577,6 +5788,11 @@ async function handleMessageAsync(
         authOwner: authContext.owner,
         credential: authContext.token,
       });
+
+      const onCallerAbort = () => cancelActiveComputerUseRun('user_stopped', lease.runId);
+      callerTask?.attachCancellation(onCallerAbort);
+      callerTask?.signal.addEventListener('abort', onCallerAbort, { once: true });
+      if (callerTask?.signal.aborted) onCallerAbort();
 
       const allowedForTask = new Set<string>();
       const approvedUploadFiles = new WeakMap<
@@ -5767,6 +5983,7 @@ async function handleMessageAsync(
           ? new TaskTabs({
               initialTabId: cuTabId,
               selectedTabs,
+              restoredTabs: restoredTaskTabs,
               windowId: lease.windowId,
               signal: lease.controller.signal,
               currentTabId: () => lease.tabId,
@@ -5791,11 +6008,20 @@ async function handleMessageAsync(
         ...(cuMsg.pageContext ? { pageContext: cuMsg.pageContext } : {}),
         runId: lease.runId,
         signal: lease.controller.signal,
-        assertOwnership: () => assertComputerUseOwnership(lease).then(() => undefined),
+        assertOwnership: async () => {
+          await callerTask?.assertAuthority();
+          await assertComputerUseOwnership(lease);
+        },
         assertInputCleanupOwnership: () =>
           assertComputerUseInputCleanupOwnership(lease, startGeneration),
-        resolveOwnedCredential: () => assertComputerUseOwnership(lease),
-        onActionStateChange: (active) => updateComputerUseActionState(lease, active),
+        resolveOwnedCredential: async () => {
+          await callerTask?.assertAuthority();
+          return assertComputerUseOwnership(lease);
+        },
+        onActionStateChange: async (active) => {
+          if (active) await callerTask?.assertAuthority();
+          return updateComputerUseActionState(lease, active);
+        },
         taskTabs,
         browserSiteTools: new BrowserAgentSiteTools({
           signal: lease.controller.signal,
@@ -5833,10 +6059,28 @@ async function handleMessageAsync(
         onUsageUpdate: (usage) => {
           broadcastComputerUseForCurrentRun(lease, { type: 'AGI_CU_USAGE', usage });
         },
+      }).then(async () => {
+        await callerTask?.assertAuthority();
+        await assertComputerUseOwnership(lease);
+        if (!lease.tabIntentUrl) throw new Error('The completed task has no verified page.');
+        const browserContext = await captureCallerBrowserContext(
+          { tabId: lease.tabId, windowId: lease.windowId, url: lease.tabIntentUrl },
+          undefined,
+          () => computerUseRuns.assertCurrent(lease),
+          true,
+        );
+        await assertComputerUseOwnership(lease);
+        if (callerTask) {
+          if (!taskTabs) throw new Error('The native task has no tab ownership broker.');
+          const scope = await taskTabs.snapshot();
+          callerTask.complete(browserContext, scope);
+        }
+        return browserContext;
       });
       computerUseRuns.trackCompletion(lease, completion);
       void completion
         .finally(() => {
+          callerTask?.signal.removeEventListener('abort', onCallerAbort);
           if (computerUseGuidance.get(lease.runId) === guidanceQueue)
             computerUseGuidance.delete(lease.runId);
           for (const pending of guidanceQueue.splice(0, guidanceQueue.length))
@@ -5844,12 +6088,18 @@ async function handleMessageAsync(
         })
         .catch(() => undefined);
       watchComputerUseUserInput(cuTabId, true);
-      void completion.finally(() => watchComputerUseUserInput(cuTabId, false));
       const unmarkTab = markComputerUseTab(cuTabId);
-      void completion.finally(() => flushAutomationAuditOutbox().catch(() => false));
-      void completion.finally(() => unmarkTab.then((unmark) => unmark()));
+      const cleanupActions: Array<() => unknown> = [
+        () => watchComputerUseUserInput(cuTabId, false),
+        () => flushAutomationAuditOutbox().catch(() => false),
+        () => unmarkTab.then((unmark) => unmark()),
+      ];
+      for (const cleanup of cleanupActions)
+        void completion
+          .then(cleanup, cleanup)
+          .catch((error) => logger.warn('Browser task cleanup failed', error));
       void completion.then(
-        () => {
+        (browserContext) => {
           if (!computerUseRuns.finish(lease)) return;
           void notifyBrowserTask('finished', notificationTarget);
           sendComputerUseLifecycle({
@@ -5858,9 +6108,11 @@ async function handleMessageAsync(
             runId: lease.runId,
             runGeneration: lease.generation,
             tabId: lease.tabId,
+            browserContext,
           });
         },
         (err: unknown) => {
+          callerTask?.fail();
           if (!computerUseRuns.finish(lease)) return;
           const errMsg = err instanceof Error ? err.message : String(err);
           logger.error('Computer-use agent loop error', err);
@@ -6877,6 +7129,44 @@ async function handleChatMessage(
   };
 
   try {
+    const browserContext =
+      message.browserContext === undefined
+        ? undefined
+        : await readCallerBrowserContext(message.browserContext, () => {
+            if (
+              !isCurrentManagedCloudOperation(activeChatStreams.get(streamKey), activeStream) ||
+              isRetiredManagedCloudOwner(owner)
+            )
+              throw new DOMException('This browser task is no longer current.', 'AbortError');
+            activeStream.controller.signal.throwIfAborted();
+          });
+    const browserObservation =
+      message.browserObservation === undefined
+        ? undefined
+        : parseFormObservationReference(message.browserObservation);
+    if (
+      message.browserObservation !== undefined &&
+      (!browserObservation ||
+        browserObservation.tabId !== browserContext?.tabId ||
+        browserObservation.url !== browserContext.url ||
+        browserObservation.documentId !== browserContext.documentId)
+    )
+      throw new Error('The original form observation could not be admitted.');
+    const conversationContext = !delivery
+      ? await captureCallerConversationContext(
+          owner,
+          message.historyConversationId,
+          message.conversationId,
+          () => {
+            if (
+              !isCurrentManagedCloudOperation(activeChatStreams.get(streamKey), activeStream) ||
+              isRetiredManagedCloudOwner(owner)
+            )
+              throw new DOMException('This browser task is no longer current.', 'AbortError');
+            activeStream.controller.signal.throwIfAborted();
+          },
+        )
+      : undefined;
     let systemPrompt: string | undefined;
     if (!delivery) {
       try {
@@ -6894,6 +7184,7 @@ async function handleChatMessage(
     const result = await executeChromeManagedChat(
       {
         id,
+        ...(browserObservation ? { browserObservation } : {}),
         text: message.text,
         modelSelection: message.modelSelection,
         quickMode: message.quickMode,
@@ -6978,11 +7269,57 @@ async function handleChatMessage(
               done: false,
               quotaWarning,
             }),
-          onToolHandoff: (calls) =>
+          beforeCallerAction: async (checkpoint) => {
+            const saved = await readChromeCallerToolCustody(owner, checkpoint.run_id, () => {
+              activeStream.controller.signal.throwIfAborted();
+              if (
+                !isCurrentManagedCloudOperation(activeChatStreams.get(streamKey), activeStream) ||
+                isRetiredManagedCloudOwner(owner)
+              )
+                throw new Error('The browser task owner changed.');
+            });
+            if (!saved) throw new Error('The original browser admission is unavailable.');
+            await assertOwnedCallerBrowserAction(
+              saved,
+              checkpoint,
+              message.historyConversationId,
+              streamKey,
+              activeStream,
+            );
+          },
+          onToolHandoff: (calls, checkpoint) =>
             isCurrentManagedCloudOperation(activeChatStreams.get(streamKey), activeStream)
-              ? requestChatToolHandoff(activeStream, id, calls)
+              ? requestChatToolHandoff(activeStream, id, calls, checkpoint)
               : Promise.resolve({ status: 'cancelled' }),
         }),
+        ...(!delivery && chatTools.length
+          ? {
+              callerCustody: createChromeCallerToolCustody(
+                {
+                  owner,
+                  clientInstanceId,
+                  streamId: id,
+                  ...(browserContext ? { browserContext } : {}),
+                  ...(conversationContext ? { conversationContext } : {}),
+                  ...(message.historyConversationId
+                    ? { historyConversationId: message.historyConversationId }
+                    : {}),
+                  ...(_sender?.documentId ? { originatingDocumentId: _sender.documentId } : {}),
+                },
+                () => {
+                  if (
+                    !isCurrentManagedCloudOperation(
+                      activeChatStreams.get(streamKey),
+                      activeStream,
+                    ) ||
+                    isRetiredManagedCloudOwner(owner)
+                  )
+                    throw new DOMException('This browser task is no longer current.', 'AbortError');
+                  activeStream.controller.signal.throwIfAborted();
+                },
+              ),
+            }
+          : {}),
         ...(scheduledTransport
           ? {
               streamChat: (...args: Parameters<typeof streamFreeChat>) => {
@@ -7120,6 +7457,7 @@ async function handleResumeChatRun(message: import('./types').ResumeChatRunMessa
     });
     return;
   }
+
   for (const [detachedKey, detached] of activeChatStreams) {
     if (
       detached.panelDetached &&
@@ -7150,7 +7488,100 @@ async function handleResumeChatRun(message: import('./types').ResumeChatRunMessa
   };
   activeChatStreams.set(streamKey, activeStream);
 
+  await resumeOwnedManagedRun(message, streamKey, activeStream, routing ?? undefined);
+}
+
+async function assertOwnedCallerBrowserAction(
+  saved: NonNullable<Awaited<ReturnType<typeof readChromeCallerToolCustody>>>,
+  checkpoint: import('./features/computer-use/toolHandoff').CallerToolContinuation,
+  historyConversationId: string | undefined,
+  streamKey: string,
+  active: ActiveChatStream,
+): Promise<void> {
+  const assertCurrent = () => {
+    active.controller.signal.throwIfAborted();
+    if (
+      !isCurrentManagedCloudOperation(activeChatStreams.get(streamKey), active) ||
+      isRetiredManagedCloudOwner(active.owner)
+    )
+      throw new Error('The browser task owner changed.');
+  };
+  const browserContext = saved.currentBrowserContext ?? saved.binding.browserContext;
+  if (!browserContext?.documentId)
+    throw new Error('The original browser document could not be recovered.');
+  await assertCallerConversationAuthority(
+    saved.binding,
+    historyConversationId,
+    () =>
+      isCurrentManagedCloudOperation(activeChatStreams.get(streamKey), active) &&
+      !isRetiredManagedCloudOwner(active.owner),
+    active.controller.signal,
+  );
+  await assertChromeManagedCallerRun(
+    checkpoint,
+    { requestId: saved.requestId, conversationId: saved.binding.conversationContext!.id },
+    {
+      getAuthToken: async () => {
+        assertCurrent();
+        const current = await getManagedCloudAuthContext();
+        assertCurrent();
+        if (!current || !sameManagedCloudOwner(current.owner, active.owner)) return null;
+        active.token = current.token;
+        return current.token;
+      },
+    },
+    active.controller.signal,
+  );
+  const authorized = await authorizeBrowserToolTab(browserContext.tabId);
+  assertCurrent();
+  if (authorized.url !== browserContext.url) throw new Error('The original browser site changed.');
+  await readCallerBrowserContext(browserContext, assertCurrent);
+}
+
+async function resumeOwnedManagedRun(
+  message: import('./types').ResumeChatRunMessage,
+  streamKey: string,
+  activeStream: ActiveChatStream,
+  routing?: Exclude<ReturnType<typeof normalizeChromeManagedRoutingMetadata>, null>,
+): Promise<void> {
+  const { clientInstanceId, id } = message;
   try {
+    let savedCaller: Awaited<ReturnType<typeof readChromeCallerToolCustody>> = null;
+    try {
+      savedCaller = await readChromeCallerToolCustody(
+        activeStream.owner,
+        message.cloudRun.runId,
+        () => {
+          activeStream.controller.signal.throwIfAborted();
+          if (
+            activeChatStreams.get(streamKey) !== activeStream ||
+            isRetiredManagedCloudOwner(activeStream.owner)
+          )
+            throw new Error('The Managed Cloud account changed.');
+        },
+      );
+      if (savedCaller?.binding.historyConversationId)
+        assertCallerConversationLink(savedCaller.binding, message.historyConversationId);
+      if (savedCaller && (savedCaller.binding.conversationContext || savedCaller.step))
+        await assertCallerConversationAuthority(
+          savedCaller.binding,
+          message.historyConversationId,
+          () =>
+            isCurrentManagedCloudOperation(activeChatStreams.get(streamKey), activeStream) &&
+            !isRetiredManagedCloudOwner(activeStream.owner),
+          activeStream.controller.signal,
+        );
+    } catch {
+      if (activeStream.controller.signal.aborted) return;
+      broadcastManagedChatChunk(message.owner, clientInstanceId, id, {
+        text: '',
+        done: true,
+        error:
+          'Saved browser recovery state could not be verified. No browser action was repeated.',
+      });
+      return;
+    }
+
     if (routing) {
       publishManagedChatChunk(streamKey, activeStream, id, {
         text: '',
@@ -7158,36 +7589,256 @@ async function handleResumeChatRun(message: import('./types').ResumeChatRunMessa
         routing,
       });
     }
-    const result = await resumeChromeManagedRun(
-      {
-        run: message.cloudRun,
-        alreadyVisibleText: message.alreadyVisibleText,
-        signal: activeStream.controller.signal,
-      },
-      {
-        getAuthToken: async () => credential.token,
-        onText: (text) =>
-          publishManagedChatChunk(streamKey, activeStream, id, { text, done: false }),
-        onAgentEvent: (agentEvent) =>
-          publishManagedChatChunk(streamKey, activeStream, id, {
-            text: '',
-            done: false,
-            agentEvent,
-            durableReplay: true,
-          }),
-        onRunReference: (cloudRun) => {
-          if (activeChatStreams.get(streamKey) !== activeStream) return;
-          activeStream.cloudRun = { ...cloudRun };
-          publishManagedChatChunk(streamKey, activeStream, id, {
-            text: '',
-            done: false,
-            cloudRun,
-          });
+    const getCurrentResumeToken = async (): Promise<string | null> => {
+      if (
+        activeChatStreams.get(streamKey) !== activeStream ||
+        activeStream.controller.signal.aborted
+      )
+        return null;
+      const current = await getManagedCloudAuthContext();
+      if (
+        !current ||
+        activeChatStreams.get(streamKey) !== activeStream ||
+        !sameManagedCloudOwner(current.owner, activeStream.owner) ||
+        isRetiredManagedCloudOwner(current.owner) ||
+        activeStream.controller.signal.aborted
+      )
+        return null;
+      activeStream.token = current.token;
+      return current.token;
+    };
+    let visibleText = message.alreadyVisibleText;
+    const replayPublicJournal = (
+      onCallerCheckpoint?: (
+        checkpoint: import('./features/computer-use/toolHandoff').CallerToolContinuation,
+      ) => void,
+    ) =>
+      resumeChromeManagedRun(
+        {
+          run: message.cloudRun,
+          alreadyVisibleText: visibleText,
+          ...(savedCaller ? { originalCallerToolNames: savedCaller.originalToolNames } : {}),
+          signal: activeStream.controller.signal,
         },
-      },
-    );
-
+        {
+          getAuthToken: getCurrentResumeToken,
+          onText: (text) => {
+            visibleText += text;
+            publishManagedChatChunk(streamKey, activeStream, id, { text, done: false });
+          },
+          ...(onCallerCheckpoint ? { onCallerCheckpoint } : {}),
+          onAgentEvent: (agentEvent) =>
+            publishManagedChatChunk(streamKey, activeStream, id, {
+              text: '',
+              done: false,
+              agentEvent,
+              durableReplay: true,
+            }),
+          onRunReference: (cloudRun) => {
+            if (activeChatStreams.get(streamKey) !== activeStream) return;
+            activeStream.cloudRun = { ...cloudRun };
+            publishManagedChatChunk(streamKey, activeStream, id, {
+              text: '',
+              done: false,
+              cloudRun,
+            });
+          },
+        },
+      );
+    const postReceipt = async (
+      receipt: import('@agiworkforce/cloud-contracts').CallerToolResumeRequest,
+    ) =>
+      await executeChromeManagedCallerResume(
+        {
+          id,
+          run: message.cloudRun,
+          receipt: receipt,
+          originalToolNames: savedCaller!.originalToolNames,
+          signal: activeStream.controller.signal,
+        },
+        {
+          ...createChromeManagedCallerResumeDependencies(() => undefined, {
+            onCallerCheckpoint: () => undefined,
+            onCodeExecution: (chunk) =>
+              publishManagedChatChunk(streamKey, activeStream, id, {
+                text: '',
+                done: false,
+                codeExecution: chunk.execution,
+              }),
+            onGeneratedFiles: (chunk) =>
+              publishManagedChatChunk(streamKey, activeStream, id, {
+                text: '',
+                done: false,
+                generatedFiles: chunk.files,
+              }),
+            onInteractiveCard: (chunk) =>
+              publishManagedChatChunk(streamKey, activeStream, id, {
+                text: '',
+                done: false,
+                interactiveCard: chunk.card,
+              }),
+            onSources: (chunk) =>
+              publishManagedChatChunk(streamKey, activeStream, id, {
+                text: '',
+                done: false,
+                sources: { citations: chunk.citations, results: chunk.results },
+              }),
+            onQuotaWarning: (quotaWarning) =>
+              publishManagedChatChunk(streamKey, activeStream, id, {
+                text: '',
+                done: false,
+                quotaWarning,
+              }),
+            onAgentEvent: (chunk) =>
+              publishManagedChatChunk(streamKey, activeStream, id, {
+                text: '',
+                done: false,
+                agentEvent: chunk.envelope,
+                ...(chunk.durableReplay ? { durableReplay: true } : {}),
+              }),
+            onRunReference: (cloudRun) => {
+              if (activeChatStreams.get(streamKey) !== activeStream) return;
+              activeStream.cloudRun = { ...cloudRun };
+              publishManagedChatChunk(streamKey, activeStream, id, {
+                text: '',
+                done: false,
+                cloudRun,
+              });
+            },
+          }),
+          getAuthToken: getCurrentResumeToken,
+        },
+      );
+    let result:
+      | Awaited<ReturnType<typeof resumeChromeManagedRun>>
+      | Awaited<ReturnType<typeof executeChromeManagedCallerResume>> = { status: 'success' };
+    const posted = new Set<number>();
+    for (let step = 0; step <= MAX_CALLER_TOOL_STEPS; step += 1) {
+      let checkpoint:
+        import('./features/computer-use/toolHandoff').CallerToolContinuation | undefined;
+      result = await replayPublicJournal(
+        savedCaller
+          ? (value) => {
+              checkpoint = value;
+            }
+          : undefined,
+      );
+      if (!checkpoint) break;
+      if (step === MAX_CALLER_TOOL_STEPS || !savedCaller) {
+        result = {
+          status: 'error',
+          code: 'server_error',
+          message: 'The browser recovery step budget was exhausted.',
+        };
+        break;
+      }
+      try {
+        const assertCurrent = () => {
+          activeStream.controller.signal.throwIfAborted();
+          if (
+            !isCurrentManagedCloudOperation(activeChatStreams.get(streamKey), activeStream) ||
+            isRetiredManagedCloudOwner(activeStream.owner)
+          )
+            throw new Error('The browser task owner changed.');
+        };
+        const current = await readChromeCallerToolCustody(
+          activeStream.owner,
+          message.cloudRun.runId,
+          assertCurrent,
+        );
+        if (!current?.binding.historyConversationId)
+          throw new Error('The original browser conversation could not be recovered.');
+        savedCaller = current;
+        const ready = async () => {
+          const latest = await readChromeCallerToolCustody(
+            activeStream.owner,
+            message.cloudRun.runId,
+            assertCurrent,
+          );
+          if (!latest || latest.requestId !== current.requestId)
+            throw new Error('The original browser admission changed.');
+          await assertOwnedCallerBrowserAction(
+            latest,
+            checkpoint!,
+            message.historyConversationId,
+            streamKey,
+            activeStream,
+          );
+        };
+        if (posted.has(checkpoint.next_event_sequence))
+          throw new Error(
+            'The browser continuation was not acknowledged. Its receipt is retained.',
+          );
+        const receipt = await recoverCallerToolCheckpoint({
+          saved: current,
+          checkpoint,
+          assertCurrent,
+          beforeAction: ready,
+          signal: activeStream.controller.signal,
+          dispatch: async (calls, cursor) => {
+            const latest = await readChromeCallerToolCustody(
+              activeStream.owner,
+              message.cloudRun.runId,
+              assertCurrent,
+            );
+            const browserContext = latest?.currentBrowserContext ?? latest?.binding.browserContext;
+            if (!latest || !browserContext?.documentId)
+              throw new Error('The original browser document is unavailable.');
+            return requestChatToolHandoff(activeStream, id, calls, cursor, {
+              historyConversationId: current.binding.historyConversationId!,
+              projectId: current.binding.conversationContext!.projectId,
+              organizationId: current.binding.conversationContext!.organizationId,
+              browserContext,
+              ...(latest.browserObservation ? { observation: latest.browserObservation } : {}),
+            });
+          },
+        });
+        savedCaller = await readChromeCallerToolCustody(
+          activeStream.owner,
+          message.cloudRun.runId,
+          assertCurrent,
+        );
+        posted.add(checkpoint.next_event_sequence);
+        result = await postReceipt(receipt);
+        if (result.status !== 'success') break;
+      } catch (error) {
+        result = {
+          status: 'error',
+          code: activeStream.controller.signal.aborted ? 'cancelled' : 'server_error',
+          message:
+            error instanceof Error
+              ? error.message
+              : 'The original browser task could not be recovered.',
+        };
+        break;
+      }
+    }
     if (result.status === 'success') {
+      if (
+        savedCaller?.step?.state === 'completed' &&
+        activeStream.cloudRun?.state === 'completed'
+      ) {
+        try {
+          await acknowledgeCompletedCallerRun(
+            activeStream.owner,
+            activeStream.cloudRun,
+            savedCaller.step.cursor.next_event_sequence,
+            () => {
+              activeStream.controller.signal.throwIfAborted();
+              if (
+                activeChatStreams.get(streamKey) !== activeStream ||
+                isRetiredManagedCloudOwner(activeStream.owner)
+              )
+                throw new Error('The browser recovery owner changed.');
+            },
+          );
+        } catch {
+          logger.warn('Completed browser recovery payload cleanup was deferred', {
+            runId: message.cloudRun.runId,
+          });
+        }
+      }
+
       publishManagedChatChunk(streamKey, activeStream, id, {
         text: '',
         done: true,
@@ -7196,6 +7847,10 @@ async function handleResumeChatRun(message: import('./types').ResumeChatRunMessa
       });
       return;
     }
+    const failure: Extract<
+      Awaited<ReturnType<typeof executeChromeManagedCallerResume>>,
+      { status: 'error' }
+    > = result;
     if (!activeStream.cancelNotified) {
       activeStream.cancelNotified = true;
       publishManagedChatChunk(streamKey, activeStream, id, {
@@ -7203,6 +7858,11 @@ async function handleResumeChatRun(message: import('./types').ResumeChatRunMessa
         done: true,
         error: result.code === 'auth_required' ? '__AUTH_REQUIRED__' : result.message,
         errorCode: result.code,
+        ...(failure.retryAfterSeconds !== undefined
+          ? { errorRetryAfterSeconds: failure.retryAfterSeconds }
+          : {}),
+        ...(failure.requestId !== undefined ? { errorRequestId: failure.requestId } : {}),
+        ...(failure.quota ? { errorQuota: failure.quota } : {}),
         ...(routing ? { routing } : {}),
         ...(activeStream.cloudRun ? { cloudRun: activeStream.cloudRun } : {}),
       });
@@ -7260,12 +7920,46 @@ async function handleResolveChatApproval(
   activeChatStreams.set(streamKey, activeStream);
 
   try {
-    const onText = (text: string) =>
-      publishManagedChatChunk(streamKey, activeStream, id, {
-        text,
-        done: false,
-      });
+    const assertCurrentResume = () => {
+      if (
+        !isCurrentManagedCloudOperation(activeChatStreams.get(streamKey), activeStream) ||
+        isRetiredManagedCloudOwner(activeStream.owner)
+      )
+        throw new DOMException('This browser task is no longer current.', 'AbortError');
+      activeStream.controller.signal.throwIfAborted();
+    };
+    const savedCaller = await readChromeCallerToolCustody(
+      activeStream.owner,
+      message.cloudRun.runId,
+      assertCurrentResume,
+    );
+    if (savedCaller?.terminal || savedCaller?.step?.state === 'in_flight')
+      throw new Error(
+        'This browser task has finished or has an uncertain action. Open its saved result before continuing.',
+      );
+    if (savedCaller && (savedCaller.binding.conversationContext || savedCaller.step))
+      await assertCallerConversationAuthority(
+        savedCaller.binding,
+        message.historyConversationId,
+        () =>
+          isCurrentManagedCloudOperation(activeChatStreams.get(streamKey), activeStream) &&
+          !isRetiredManagedCloudOwner(activeStream.owner),
+        activeStream.controller.signal,
+      );
+    let visibleText = message.alreadyVisibleText ?? '';
+    let browserPending = false;
+    const onText = (text: string) => {
+      visibleText += text;
+      publishManagedChatChunk(streamKey, activeStream, id, { text, done: false });
+    };
     const callbacks: ChromeManagedResumeCallbacks = {
+      ...(savedCaller
+        ? {
+            onCallerCheckpoint: () => {
+              browserPending = true;
+            },
+          }
+        : {}),
       onCodeExecution: (chunk) =>
         publishManagedChatChunk(streamKey, activeStream, id, {
           text: '',
@@ -7313,13 +8007,21 @@ async function handleResolveChatApproval(
           quotaWarning,
         }),
     };
-    const getResumeToken = async () => credential.token;
+    const getResumeToken = async () => {
+      assertCurrentResume();
+      const current = await getManagedCloudAuthContext();
+      assertCurrentResume();
+      if (!current || !sameManagedCloudOwner(current.owner, activeStream.owner)) return null;
+      activeStream.token = current.token;
+      return current.token;
+    };
     const result =
       message.type === 'RESOLVE_CHAT_INPUT'
         ? await executeChromeManagedToolInput(
             {
               id,
               run: message.cloudRun,
+              ...(savedCaller ? { originalCallerToolNames: savedCaller.originalToolNames } : {}),
               toolInputs: message.toolInputs,
               signal: activeStream.controller.signal,
             },
@@ -7332,6 +8034,7 @@ async function handleResolveChatApproval(
             {
               id,
               run: message.cloudRun,
+              ...(savedCaller ? { originalCallerToolNames: savedCaller.originalToolNames } : {}),
               toolApprovals: message.toolApprovals,
               ...(typeof message.guidance === 'string' ? { guidance: message.guidance } : {}),
               signal: activeStream.controller.signal,
@@ -7342,6 +8045,22 @@ async function handleResolveChatApproval(
             },
           );
 
+    if (result.status === 'success' && browserPending) {
+      await resumeOwnedManagedRun(
+        {
+          type: 'RESUME_CHAT_RUN',
+          owner: activeStream.owner,
+          clientInstanceId,
+          id,
+          historyConversationId: message.historyConversationId,
+          cloudRun: activeStream.cloudRun ?? message.cloudRun,
+          alreadyVisibleText: visibleText,
+        },
+        streamKey,
+        activeStream,
+      );
+      return;
+    }
     if (result.status === 'success') {
       publishManagedChatChunk(streamKey, activeStream, id, {
         text: '',
@@ -7367,6 +8086,17 @@ async function handleResolveChatApproval(
     }
     if (result.code === 'auth_required') {
       await invalidateRejectedManagedCloudCredential(activeStream);
+    }
+  } catch (error) {
+    if (!activeStream.cancelNotified) {
+      activeStream.cancelNotified = true;
+      publishManagedChatChunk(streamKey, activeStream, id, {
+        text: '',
+        done: true,
+        error: error instanceof Error ? error.message : 'The saved run could not be continued.',
+        errorCode: activeStream.controller.signal.aborted ? 'cancelled' : 'server_error',
+        ...(activeStream.cloudRun ? { cloudRun: activeStream.cloudRun } : {}),
+      });
     }
   } finally {
     releaseChatStream(streamKey, activeStream);

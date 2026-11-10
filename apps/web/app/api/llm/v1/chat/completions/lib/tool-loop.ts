@@ -51,6 +51,11 @@
 import 'server-only';
 
 import { createHash } from 'node:crypto';
+import {
+  DOM_SUMMARY_HEADING,
+  isBrowserDomObservationText,
+  pruneObservationHistory,
+} from '@agiworkforce/client-runtime/observation-history';
 
 import {
   beginOperation,
@@ -87,7 +92,6 @@ import type {
 } from '@agiworkforce/types/protocol';
 import type { InteractiveCard, ThinkingBlock } from '@agiworkforce/types';
 import {
-  SECRET_HANDLING_MODE_DEFAULT,
   getModelMetadataById,
   getRegistryRoute,
   harnessFeatureImplemented,
@@ -102,9 +106,10 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { recordAuditEvent, type AuditEventType } from '@/lib/security-audit';
-import { resolveSecretHandlingPolicy } from '@/lib/services/organization-policy-gate';
-import { redactAuditedSecrets, scanForSecrets } from '@/lib/security/secrets-audit';
-import { isHighConfidenceSecretName } from '@/lib/security/secret-patterns';
+import { redactAuditedSecrets } from '@/lib/security/secrets-audit';
+import { applyToolResultSecretPolicy } from '@/lib/security/tool-result-secret-policy';
+import { fingerprintRequestBody } from '@/lib/server/idempotency';
+export { applyToolResultSecretPolicy } from '@/lib/security/tool-result-secret-policy';
 import type { McpInputRequiredState } from '@agiworkforce/mcp';
 import { getRoutePricing } from '@agiworkforce/model-registry';
 import {
@@ -178,6 +183,7 @@ import {
   STORED_RESULT_NOTICE_MARKER,
   TOOL_RESULT_READER_TOOL_NAME,
   keepTrimmedToolResult,
+  createToolResultReference,
   listConversationToolResults,
   readStoredToolResult,
   referenceOversizedToolResult,
@@ -189,6 +195,7 @@ import {
 import {
   EXECUTE_CODE_TOOL,
   isExecutionTool,
+  executionToolArgumentProblem,
   routeExecutionTool,
   capOutput,
 } from '@/lib/e2b/execution-tools';
@@ -207,10 +214,23 @@ import {
   type DesktopHostDeclaration,
 } from '@agiworkforce/local-runtime-contract';
 import {
+  AGENT_EVENT_SCHEMA_VERSION,
+  AgentEventEnvelopeSchema,
+  CALLER_TOOL_BOUNDARY_EVENT_COUNT,
+  CallerToolResultsSchema,
+  CallerToolObservationsSchema,
+  DEFAULT_CHAT_TOOL_MAX_STEPS,
+  DEFAULT_WORK_TOOL_MAX_STEPS,
+  DEFAULT_CALLER_TOOL_MAX_STEPS,
+  HostedCallerToolBatchSchema,
   DEVICE_SCREENSHOT_MESSAGE_PREFIX,
   MANAGED_OFFICE_FILE_TOOL_NAME,
   MAX_DEVICE_STEPS_PER_PAUSE,
+  MAX_HOSTED_TOOL_CALLS_PER_STEP,
   cloudAgentRunSteerProgressId,
+  createCallerToolHandoffDelta,
+  type CallerToolResultWire,
+  type CallerToolObservation,
   type ToolApprovalReviewWire,
   type ToolApprovalScope,
   type ToolApprovalRiskTier,
@@ -474,15 +494,13 @@ import {
   withProviderDeadlines,
 } from './provider-deadlines';
 
-const DEFAULT_CHAT_MAX_STEPS = 10;
-const DEFAULT_AGI_WORK_MAX_STEPS = 100;
 const TTFT_SLO_TARGET_MS = Number(process.env['LLM_TTFT_SLO_TARGET_MS'] ?? 2500);
 const TTFT_SLO_BREACH_MS = Number(process.env['LLM_TTFT_SLO_BREACH_MS'] ?? 5000);
 // teardown; it is a safety boundary, not restart-safe background execution.
 
 const MAX_TOOL_ARGS_JSON_CHARS = 256 * 1024;
 const MAX_RETRY_HELD_PROVIDER_CHARS = 64 * 1024;
-const MAX_TOOL_CALLS_PER_STEP = 32;
+const MAX_TOOL_CALLS_PER_STEP = MAX_HOSTED_TOOL_CALLS_PER_STEP;
 const SENSITIVE_DATA_MEMORY_REFUSAL =
   'Nothing was saved to memory: this turn read health or bank records, and those are never kept in memory. Tell the user it was not saved.';
 
@@ -547,6 +565,8 @@ export interface ResumeDeviceResult {
 
 export interface ResumeApproval {
   approvals?: ToolApprovalDecision[];
+  callerResults?: CallerToolResultWire[];
+  callerObservations?: CallerToolObservation[];
   /** Responses to a prior MCP `input_required` (MRTR) pause, per paused call. */
   inputResponses?: ResumeInputResponse[];
   /** What the user's own machine produced for a prior device-step pause. */
@@ -633,6 +653,11 @@ export interface ToolLoopInvocationCheckpoint {
   messages: ProcessedRequest['llmRequest']['messages'];
 }
 
+export interface ToolLoopCallerCheckpoint extends ToolLoopInvocationCheckpoint {
+  events: AgentEventEnvelope[];
+  pendingToolCalls: PendingToolCall[];
+}
+
 /**
  * Emitted when the run exhausts its CUMULATIVE step budget.
  *
@@ -716,6 +741,7 @@ interface E2BExecutorResolution {
 export interface ToolLoopToolResult {
   content: string;
   isError: boolean;
+  retainedReference?: string;
   searchOutcome?: 'no_results';
   /**
    * The tool was never runnable for this turn rather than invoked and failing.
@@ -767,6 +793,9 @@ export interface ToolLoopOptions {
   onApprovalCheckpoint?: (checkpoint: ToolLoopApprovalCheckpoint) => Promise<void>;
   onInputCheckpoint?: (checkpoint: ToolLoopInputCheckpoint) => Promise<void>;
   onInvocationCheckpoint?: (checkpoint: ToolLoopInvocationCheckpoint) => Promise<void>;
+  onCallerToolCheckpoint?: (
+    checkpoint: ToolLoopCallerCheckpoint,
+  ) => Promise<{ events: AgentEventEnvelope[] }>;
   /**
    * Persist a pause on a step only the user's own machine can carry out.
    * Without it a device call cannot suspend, and the model is told so rather
@@ -829,8 +858,15 @@ export function resolveToolLoopPolicy(
   options: Pick<ToolLoopOptions, 'maxSteps' | 'maxDurationMs'>,
 ): ToolLoopPolicy {
   const isAgiWork = processed.chatRequest?.work_mode === 'agiwork';
+  const callerSteps =
+    processed.chatRequest?.caller_tool_handoff_version === AGENT_EVENT_SCHEMA_VERSION
+      ? (processed.chatRequest.caller_tool_max_steps ?? DEFAULT_CALLER_TOOL_MAX_STEPS)
+      : undefined;
   return {
-    maxSteps: options.maxSteps ?? (isAgiWork ? DEFAULT_AGI_WORK_MAX_STEPS : DEFAULT_CHAT_MAX_STEPS),
+    maxSteps:
+      options.maxSteps ??
+      callerSteps ??
+      (isAgiWork ? DEFAULT_WORK_TOOL_MAX_STEPS : DEFAULT_CHAT_TOOL_MAX_STEPS),
     maxDurationMs: options.maxDurationMs ?? CHAT_TOOL_LOOP_BUDGET_MS,
   };
 }
@@ -1182,15 +1218,13 @@ function toolHandoffEvent(calls: readonly PendingToolCall[], responseModel: stri
   return sseData({
     choices: [
       {
-        delta: {
-          tool_calls: calls.map((call, index) => ({
-            index,
+        delta: createCallerToolHandoffDelta(
+          calls.map((call) => ({
             id: call.id,
             type: 'function',
             function: { name: call.qualifiedName, arguments: JSON.stringify(call.args) },
           })),
-          x_tool_handoff: { tool_call_ids: calls.map((call) => call.id) },
-        },
+        ),
         index: 0,
         finish_reason: 'tool_calls',
       },
@@ -1522,10 +1556,18 @@ export async function mapWithConcurrency<T, R>(
 }
 
 function toolResultsToTrim(
-  messages: ReadonlyArray<{ role: string; content?: unknown; tool_call_id?: string }>,
+  messages: ReadonlyArray<{
+    role: string;
+    content?: unknown;
+    tool_call_id?: string;
+    __retainedToolResultReference?: string;
+  }>,
   maxChars: number,
   keepRecent: number,
-  replacementFor: (message: { tool_call_id?: string }) => string,
+  replacementFor: (
+    message: { tool_call_id?: string; __retainedToolResultReference?: string },
+    index: number,
+  ) => string,
 ): Map<number, string> {
   const toolIdx: number[] = [];
   for (let i = 0; i < messages.length; i++) {
@@ -1542,7 +1584,7 @@ function toolResultsToTrim(
   for (const i of truncatable) {
     if (total <= maxChars) break;
     const before = len(i);
-    const replacement = replacementFor(messages[i]!);
+    const replacement = replacementFor(messages[i]!, i);
     if (before <= replacement.length) continue;
     selected.set(i, replacement);
     total -= before - replacement.length;
@@ -1575,29 +1617,45 @@ export function trimToolResultHistory(
 }
 
 export async function trimToolResultHistoryKeepingReferences(
-  messages: Array<{ role: string; content?: unknown; tool_call_id?: string }>,
+  messages: Array<{
+    role: string;
+    content?: unknown;
+    tool_call_id?: string;
+    __retainedToolResultReference?: string;
+  }>,
   owner: ToolResultOwner,
   maxChars: number = MAX_TOOL_RESULT_HISTORY_CHARS,
   keepRecent: number = KEEP_RECENT_TOOL_RESULTS,
 ): Promise<number> {
-  const selected = toolResultsToTrim(
-    messages,
-    maxChars,
-    keepRecent,
-    (message) => trimmedToolResultNotice(message.tool_call_id) ?? TRUNCATED_TOOL_RESULT_MARKER,
-  );
+  const references = new Map<number, string>();
+  const selected = toolResultsToTrim(messages, maxChars, keepRecent, (message, index) => {
+    const existing = message.__retainedToolResultReference;
+    const reference =
+      existing && trimmedToolResultNotice(existing) ? existing : createToolResultReference();
+    const notice = trimmedToolResultNotice(reference);
+    if (!notice) return TRUNCATED_TOOL_RESULT_MARKER;
+    references.set(index, reference);
+    return notice;
+  });
   await Promise.all(
     [...selected].map(async ([i, notice]) => {
       const message = messages[i]!;
-      const kept =
-        notice !== TRUNCATED_TOOL_RESULT_MARKER &&
-        message.tool_call_id !== undefined &&
-        (await keepTrimmedToolResult({
-          ...owner,
-          toolCallId: message.tool_call_id,
-          content: String(message.content),
-        }));
+      const reference = references.get(i);
+      let kept = false;
+      if (reference && owner.userId && owner.conversationId) {
+        kept =
+          message.__retainedToolResultReference === reference ||
+          (message.tool_call_id !== undefined &&
+            (await keepTrimmedToolResult({
+              ...owner,
+              reference,
+              toolCallId: message.tool_call_id,
+              content: String(message.content),
+            })));
+      }
       message.content = kept ? notice : TRUNCATED_TOOL_RESULT_MARKER;
+      if (kept && reference) message.__retainedToolResultReference = reference;
+      else delete message.__retainedToolResultReference;
     }),
   );
   return selected.size;
@@ -2692,11 +2750,12 @@ async function runMcpTool(
         : null;
     return {
       content: result.ok
-        ? (referenced ?? (result.output || '(no output)'))
+        ? (referenced?.content ?? (result.output || '(no output)'))
         : toolCall.qualifiedName === EXECUTE_CODE_TOOL && !result.unavailable
           ? `Notebook cell failed. No process exit code is available for a notebook cell. An exception traceback is a cell error, not stderr.\n${result.error ?? 'Execution error'}`
           : (result.error ?? 'Execution error'),
       isError: !result.ok,
+      ...(referenced?.reference ? { retainedReference: referenced.reference } : {}),
       pngResults: result.pngResults,
       ...(result.unavailable ? { unavailable: true, unavailableFamily: 'execution' as const } : {}),
     };
@@ -2740,17 +2799,21 @@ async function runMcpTool(
         },
       );
       if (connectorResult.handled) {
+        const referenced = connectorResult.isError
+          ? null
+          : await referenceOversizedToolResult({
+              userId: executionContext?.userId,
+              conversationId: executionContext?.conversationId,
+              toolCallId: toolCall.id,
+              toolName: toolCall.qualifiedName,
+              content: connectorResult.content,
+            });
         return {
           content: connectorResult.isError
             ? capOutput(connectorResult.content)
-            : ((await referenceOversizedToolResult({
-                userId: executionContext?.userId,
-                conversationId: executionContext?.conversationId,
-                toolCallId: toolCall.id,
-                toolName: toolCall.qualifiedName,
-                content: connectorResult.content,
-              })) ?? capOutput(connectorResult.content)),
+            : (referenced?.content ?? capOutput(connectorResult.content)),
           isError: connectorResult.isError,
+          ...(referenced?.reference ? { retainedReference: referenced.reference } : {}),
           ...(connectorResult.interactiveCard
             ? { interactiveCard: connectorResult.interactiveCard }
             : {}),
@@ -2831,18 +2894,20 @@ async function runMcpTool(
     }
     const output =
       text || (result.task ? `MCP task started: ${result.task.taskId}` : '(no output)');
+    const referenced =
+      result.isError === true
+        ? null
+        : await referenceOversizedToolResult({
+            userId: executionContext?.userId,
+            conversationId: executionContext?.conversationId,
+            toolCallId: toolCall.id,
+            toolName: toolCall.qualifiedName,
+            content: output,
+          });
     return {
-      content:
-        (result.isError === true
-          ? null
-          : await referenceOversizedToolResult({
-              userId: executionContext?.userId,
-              conversationId: executionContext?.conversationId,
-              toolCallId: toolCall.id,
-              toolName: toolCall.qualifiedName,
-              content: output,
-            })) ?? capOutput(output),
+      content: referenced?.content ?? capOutput(output),
       isError: result.isError === true,
+      ...(referenced?.reference ? { retainedReference: referenced.reference } : {}),
       ...(interactiveCard ? { interactiveCard } : {}),
     };
   } catch (err) {
@@ -2902,6 +2967,49 @@ function dropStaleDeviceScreenshots(messages: ProcessedRequest['llmRequest']['me
       delete message.multimodal_content;
     }
   }
+}
+
+function pruneCallerObservationHistory(messages: ProcessedRequest['llmRequest']['messages']): void {
+  const observations = messages.map((message) => {
+    const hasAttachments = message.multimodal_content?.some(
+      (part) =>
+        typeof part !== 'object' || part === null || !('type' in part) || part.type !== 'text',
+    );
+    const browserObservation =
+      message.role === 'tool' ||
+      (message.role === 'user' &&
+        (message.content.startsWith(DEVICE_SCREENSHOT_MESSAGE_PREFIX) ||
+          (!hasAttachments &&
+            message.content.includes(DOM_SUMMARY_HEADING) &&
+            isBrowserDomObservationText(message.content))));
+    return {
+      ...message,
+      content: browserObservation ? (message.multimodal_content ?? message.content) : null,
+    };
+  });
+  const pruned = pruneObservationHistory(observations);
+  pruned.forEach((entry, index) => {
+    if (entry === observations[index]) return;
+    const { multimodal_content: _priorParts, ...message } = messages[index]!;
+    if (typeof entry.content === 'string') {
+      messages[index] = { ...message, content: entry.content };
+    } else if (Array.isArray(entry.content)) {
+      messages[index] = {
+        ...message,
+        content: entry.content
+          .flatMap((part: unknown) =>
+            typeof part === 'object' &&
+            part !== null &&
+            'text' in part &&
+            typeof part.text === 'string'
+              ? [part.text]
+              : [],
+          )
+          .join('\n\n'),
+        multimodal_content: entry.content,
+      };
+    }
+  });
 }
 
 export function isToolOffered(
@@ -3225,69 +3333,6 @@ export function hasUntrustedContext(
   );
 }
 
-function toolResultSecretBlockedMessage(toolName: string): string {
-  return `The result from "${toolName}" was blocked because it contained a secret. This organization's policy blocks sensitive values before they reach the model.`;
-}
-
-export async function applyToolResultSecretPolicy(
-  userId: string | undefined,
-  toolName: string,
-  content: string,
-): Promise<string> {
-  const detections = scanForSecrets(content);
-  if (detections.length === 0) return content;
-
-  const highConfidence = detections.filter((detection) =>
-    isHighConfidenceSecretName(detection.name),
-  );
-  const lowConfidence = detections.filter(
-    (detection) => !isHighConfidenceSecretName(detection.name),
-  );
-  const hasHighConfidence = highConfidence.length > 0;
-
-  const { mode, organizationId } = userId
-    ? await resolveSecretHandlingPolicy(getNeonDb(), userId)
-    : { mode: SECRET_HANDLING_MODE_DEFAULT.personal, organizationId: null as string | null };
-
-  const action: 'warned' | 'redacted' | 'blocked' = !hasHighConfidence
-    ? 'warned'
-    : mode === 'block'
-      ? 'blocked'
-      : mode === 'redact'
-        ? 'redacted'
-        : 'warned';
-
-  const relevantDetections = hasHighConfidence ? highConfidence : lowConfidence;
-  const patternNames = [...new Set(relevantDetections.map((detection) => detection.name))];
-
-  let nextContent = content;
-  if (action === 'redacted') {
-    const highConfidenceNames = new Set(highConfidence.map((detection) => detection.name));
-    nextContent = redactAuditedSecrets(content, highConfidenceNames);
-  } else if (action === 'blocked') {
-    nextContent = toolResultSecretBlockedMessage(toolName);
-  }
-
-  await recordAuditEvent({
-    userId,
-    organizationId,
-    eventType: 'secret_detected',
-    outcome: action === 'blocked' ? 'denied' : 'success',
-    severity: action === 'blocked' ? 'warning' : 'info',
-    detail: {
-      resourceType: 'tool_result',
-      resourceId: toolName,
-      source: patternNames.join(','),
-      count: relevantDetections.length,
-      status: action,
-    },
-  }).catch((error) => {
-    logger.error({ error, userId }, '[tool-loop] secret audit event could not be recorded');
-  });
-
-  return nextContent;
-}
-
 export function toolAuditEventType(toolName: string): AuditEventType {
   if (isBrowserCommand(toolName)) return 'browser_action';
   if (isDeviceStepTool(toolName) && deviceStepScope(toolName) === 'screen') {
@@ -3468,10 +3513,12 @@ export async function executeOfferedToolCall(
     };
   }
 
-  const argumentProblem = toolArgumentProblem(
-    call,
-    input.mcpTools?.find((tool) => tool.qualifiedName === toolName)?.inputSchema,
-  );
+  const argumentProblem = isExecutionTool(toolName)
+    ? executionToolArgumentProblem(toolName, call)
+    : toolArgumentProblem(
+        call,
+        input.mcpTools?.find((tool) => tool.qualifiedName === toolName)?.inputSchema,
+      );
   if (argumentProblem) {
     await audit('failed');
     return {
@@ -3638,6 +3685,8 @@ export async function* runToolLoop(
   const encoder = new TextEncoder();
   const responseModel = processed.requestedModel;
   const turnId = options.eventTurnId ?? (processed.requestId || crypto.randomUUID());
+  const callerContinuation =
+    processed.chatRequest?.caller_tool_handoff_version === AGENT_EVENT_SCHEMA_VERSION;
   const serverOwnedSearchCallId = (step: number): string =>
     `call_agisearch_${createHash('sha256').update(`${turnId}:${step}`).digest('hex').slice(0, 24)}`;
   const adaptedCodeCallId = (step: number): string =>
@@ -3715,7 +3764,7 @@ export async function* runToolLoop(
   const toolResultOwner = toolResultOwnerForTurn({
     userId: options.userId,
     conversationId: processed.conversationId,
-    requestId: processed.requestId,
+    requestId: callerContinuation ? turnId : processed.requestId,
   });
   const earlierStoredResults = await listConversationToolResults(toolResultOwner);
   const offeredMcpToolDefs = (): WebMcpToolDef[] => {
@@ -3791,14 +3840,15 @@ export async function* runToolLoop(
   const externalToolSchemas = new Map<string, unknown>(
     mcpTools.map((tool) => [tool.qualifiedName, tool.inputSchema]),
   );
-  // The CLI runs its own loop, so every tool it declares is its own even when
-  // a platform tool shares the name: its write_file is not the sandbox's. Any
-  // other caller keeps the hosted tools it names and owns only the rest.
+  const argumentProblemFor = (call: PendingToolCall): string | null =>
+    isExecutionTool(call.qualifiedName)
+      ? executionToolArgumentProblem(call.qualifiedName, call)
+      : toolArgumentProblem(call, externalToolSchemas.get(call.qualifiedName));
   const callerDeclaredTools = (processed.chatRequest?.tools ?? [])
     .map(functionToolName)
     .filter(Boolean);
   const callerOwnedTools = new Set(
-    processed.chatSurface === 'cli'
+    processed.chatSurface === 'cli' || processed.chatSurface === 'api'
       ? callerDeclaredTools
       : callerDeclaredTools.filter(
           (name) =>
@@ -3863,11 +3913,13 @@ export async function* runToolLoop(
   }
 
   const privateContextPresent = hasPrivateContext(processed, messages);
-  const sensitiveSourceAvailable = sensitiveSourceReachable({
-    privateContextPresent,
-    offeredTools: mcpTools,
-    availableToolNames: [...availableTools],
-  });
+  const sensitiveSourceAvailable =
+    (callerContinuation && callerOwnedTools.size > 0) ||
+    sensitiveSourceReachable({
+      privateContextPresent,
+      offeredTools: mcpTools,
+      availableToolNames: [...availableTools],
+    });
   let untrustedContentInContext = hasUntrustedContext(processed, messages);
 
   function gateForToolCall(
@@ -5102,7 +5154,7 @@ export async function* runToolLoop(
           { shouldPropagateExecutionError: options.shouldPropagateExecutionError },
         );
       }
-      const argumentProblem = toolArgumentProblem(tc, externalToolSchemas.get(tc.qualifiedName));
+      const argumentProblem = argumentProblemFor(tc);
       if (argumentProblem) {
         return Promise.resolve({
           content: invalidToolArgumentsMessage(tc.qualifiedName, argumentProblem),
@@ -5370,6 +5422,7 @@ export async function* runToolLoop(
       generatedFiles,
       interactiveCard,
       inputRequired,
+      retainedReference,
     } of results) {
       if (inputRequired) {
         const boundedRequests = boundedInputRequests(inputRequired.inputRequests);
@@ -5516,6 +5569,9 @@ export async function* runToolLoop(
         role: 'tool',
         content: policedContent,
         tool_call_id: tc.id,
+        ...(retainedReference && policedContent === content
+          ? { __retainedToolResultReference: retainedReference }
+          : {}),
       });
       if (!isError && interactiveCard && isMapSearchTool(tc.qualifiedName)) {
         mapSearchBatchCompleted = true;
@@ -5610,6 +5666,86 @@ export async function* runToolLoop(
     }
   }
 
+  function latestToolBatch() {
+    let assistantIndex = messages.length - 1;
+    while (assistantIndex >= 0 && messages[assistantIndex]!.role !== 'assistant') assistantIndex--;
+    const rawCalls = messages[assistantIndex]?.tool_calls;
+    const calls = Array.isArray(rawCalls) ? parseAssistantToolCalls(rawCalls) : [];
+    const resolved = new Set(
+      messages
+        .slice(assistantIndex + 1)
+        .filter((message) => message.role === 'tool')
+        .map((message) => message.tool_call_id),
+    );
+    return { assistantIndex, calls, resolved };
+  }
+
+  async function* checkpointCallerTools(
+    completedSteps: number,
+  ): AsyncGenerator<Uint8Array, boolean> {
+    if (!callerContinuation) return false;
+    const { calls, resolved } = latestToolBatch();
+    const pending = calls.filter((call) => !resolved.has(call.id));
+    if (pending.length === 0) return false;
+    if (pending.some((call) => !callerOwnedTools.has(call.qualifiedName) || call.argsMalformed)) {
+      throw new Error('Caller continuation has unresolved hosted or invalid calls.');
+    }
+    if (!options.onCallerToolCheckpoint) {
+      throw new Error('Caller continuation persistence is not available.');
+    }
+    const nextEventSequence = eventStream.nextSequence() + CALLER_TOOL_BOUNDARY_EVENT_COUNT;
+    const caller = eventStream.emitWithEnvelope({
+      type: 'caller-tools-requested',
+      nextEventSequence,
+      calls: createCallerToolHandoffDelta(
+        pending.map((call) => ({
+          id: call.id,
+          type: 'function',
+          function: { name: call.qualifiedName, arguments: JSON.stringify(call.args) },
+        })),
+      ).tool_calls,
+    });
+    const previousState = taskState;
+    taskState = 'awaiting_input';
+    const state = eventStream.emitWithEnvelope({
+      type: 'task-state-changed',
+      taskId,
+      state: 'awaiting_input',
+      ...(previousState !== undefined ? { previousState } : {}),
+      summary: 'Working in your browser.',
+    });
+    const paused = eventStream.emitWithEnvelope({ type: 'lifecycle', phase: 'paused' });
+    const events = [caller.envelope, state.envelope, paused.envelope];
+    const withoutTime = (event: AgentEventEnvelope) => ({ ...event, emittedAtMs: undefined });
+    const expectedFingerprint = fingerprintRequestBody(events.map(withoutTime));
+    await recordGroundingSpend(true);
+    const saved = await options.onCallerToolCheckpoint({
+      toolSchemaState: createToolSchemaState(loadedToolNames),
+      sessionId,
+      turnId,
+      nextEventSequence,
+      completedSteps,
+      messages: structuredClone(messages),
+      pendingToolCalls: structuredClone(pending),
+      events,
+    });
+    const persisted = saved.events.map((event) => AgentEventEnvelopeSchema.parse(event));
+    if (expectedFingerprint !== fingerprintRequestBody(persisted.map(withoutTime))) {
+      throw new Error('Caller continuation persistence returned a different boundary.');
+    }
+    for (const call of pending) await auditToolCall(call.qualifiedName, 'handed_off');
+    for (const envelope of persisted) {
+      yield encoder.encode(
+        sseData({
+          choices: [{ delta: { x_agent_event: envelope }, index: 0 }],
+          model: responseModel,
+        }),
+      );
+    }
+    yield encoder.encode(sseDone());
+    return true;
+  }
+
   if (!options.invocationContinuation) {
     if (!options.resume) {
       yield encoder.encode(taskStateEvent('queued', 'Task accepted by the agent engine.'));
@@ -5653,6 +5789,9 @@ export async function* runToolLoop(
   }
 
   try {
+    if (callerContinuation && !options.onCallerToolCheckpoint) {
+      throw new Error('Caller continuation persistence is not available.');
+    }
     if (await shouldStopForCancellation()) {
       yield* flushTerminal('cancelled');
       return;
@@ -5700,6 +5839,30 @@ export async function* runToolLoop(
             '[tool-loop] AGI Work planning turn failed; continuing without a plan',
           );
         }
+      }
+
+      if (
+        agiWorkGoal &&
+        agiWorkPlan.length === 0 &&
+        !suppliedPlan &&
+        !unattended &&
+        processed.chatRequest?.agi_work_plan_approval === true
+      ) {
+        const streamError = {
+          code: 'agi_work_plan_unavailable',
+          message:
+            'A plan could not be prepared for review. No work steps were started. Try the goal again.',
+          retryable: true,
+        };
+        yield encoder.encode(eventStream.emit({ type: 'error', ...streamError }));
+        yield encoder.encode(
+          sseData({
+            choices: [{ index: 0, delta: { x_stream_error: streamError } }],
+            model: responseModel,
+          }),
+        );
+        yield* flushTerminal('error');
+        return;
       }
 
       if (
@@ -5761,8 +5924,18 @@ export async function* runToolLoop(
     }
 
     if (options.resume) {
-      let pending: PendingToolCall[] = [];
-      for (let i = messages.length - 1; i >= 0; i--) {
+      const callerObservations = CallerToolObservationsSchema.parse(
+        options.resume.callerObservations ?? [],
+      );
+      if (
+        options.resume.callerObservations !== undefined &&
+        options.resume.callerResults === undefined
+      ) {
+        throw new Error('Caller observations require the outstanding caller results.');
+      }
+      const currentBatch = latestToolBatch();
+      let pending: PendingToolCall[] = callerContinuation ? currentBatch.calls : [];
+      for (let i = callerContinuation ? -1 : messages.length - 1; i >= 0; i--) {
         const m = messages[i]!;
         const tcs = m.tool_calls;
         if (m.role === 'assistant' && Array.isArray(tcs) && tcs.length > 0) {
@@ -5833,11 +6006,68 @@ export async function* runToolLoop(
       }
 
       const alreadyResolved = new Set(
-        messages
+        (callerContinuation ? messages.slice(currentBatch.assistantIndex + 1) : messages)
           .filter((m) => m.role === 'tool' && typeof m.tool_call_id === 'string')
           .map((m) => m.tool_call_id),
       );
       const approvalById = new Map(resumeApprovals.map((a) => [a.toolCallId, a.decision] as const));
+
+      if (options.resume.callerResults !== undefined) {
+        const results = CallerToolResultsSchema.parse(options.resume.callerResults);
+        const unresolved = pending.filter((call) => !alreadyResolved.has(call.id));
+        const resultById = new Map(results.map((result) => [result.tool_call_id, result]));
+        if (
+          !callerContinuation ||
+          resumeApprovals.length > 0 ||
+          resumeInputByCallId.size > 0 ||
+          resumeDeviceByCallId.size > 0 ||
+          unresolved.length !== results.length ||
+          unresolved.some(
+            (call) => !callerOwnedTools.has(call.qualifiedName) || !resultById.has(call.id),
+          )
+        ) {
+          throw new Error('Caller results do not match the outstanding caller batch.');
+        }
+        let insertion = currentBatch.assistantIndex + 1;
+        while (messages[insertion]?.role === 'tool') insertion++;
+        for (const call of unresolved) {
+          const content = await applyToolResultSecretPolicy(
+            options.userId,
+            call.qualifiedName,
+            resultById.get(call.id)!.content,
+          );
+          messages.splice(insertion++, 0, { role: 'tool', tool_call_id: call.id, content });
+          alreadyResolved.add(call.id);
+        }
+        for (const observation of callerObservations) {
+          const text = await applyToolResultSecretPolicy(
+            options.userId,
+            unresolved[0]!.qualifiedName,
+            observation.text,
+          );
+          const images = observation.images ?? [];
+          const content = images.length ? `${DEVICE_SCREENSHOT_MESSAGE_PREFIX}. ${text}` : text;
+          messages.splice(insertion++, 0, {
+            role: 'user',
+            content,
+            ...(images.length
+              ? {
+                  multimodal_content: [
+                    { type: 'text', text: content },
+                    ...images.map((image) => ({
+                      type: 'image_url',
+                      image_url: {
+                        url: `data:${image.mime_type};base64,${image.base64}`,
+                      },
+                    })),
+                  ],
+                }
+              : {}),
+          });
+        }
+        pruneCallerObservationHistory(messages);
+        untrustedContentInContext = true;
+      }
 
       const toRun: PendingToolCall[] = [];
       let requiredSearchCouldNotRun = false;
@@ -5863,6 +6093,7 @@ export async function* runToolLoop(
       }
       for (const p of pending) {
         if (alreadyResolved.has(p.id)) continue;
+        if (callerContinuation && callerOwnedTools.has(p.qualifiedName)) continue;
         const deviceResult = resumeDeviceByCallId.get(p.id);
         if (deviceResult) {
           // The step already ran, on the machine that was asked. What comes back
@@ -6038,6 +6269,11 @@ export async function* runToolLoop(
           }),
         );
       }
+      if (
+        yield* checkpointCallerTools(Math.max(0, Math.trunc(options.initialCompletedSteps ?? 0)))
+      ) {
+        return;
+      }
       // Fall through into the loop: the next provider call sees the completed
       // thread (assistant tool_calls + every tool result) and continues.
     }
@@ -6135,9 +6371,19 @@ export async function* runToolLoop(
         );
       }
 
-      const stepMcpTools = offeredMcpToolDefs().map(toOpenAiToolDef);
+      const stepMcpTools = offeredMcpToolDefs()
+        .filter((tool) => !callerOwnedTools.has(tool.qualifiedName))
+        .map(toOpenAiToolDef);
+      const seenCallerToolNames = new Set<string>();
+      const requestTools = llmRequest.tools?.filter((tool) => {
+        const name = functionToolName(tool);
+        if (!callerOwnedTools.has(name)) return true;
+        if (seenCallerToolNames.has(name)) return false;
+        seenCallerToolNames.add(name);
+        return true;
+      });
       const turnTools =
-        stepMcpTools.length > 0 ? [...(llmRequest.tools ?? []), ...stepMcpTools] : llmRequest.tools;
+        stepMcpTools.length > 0 ? [...(requestTools ?? []), ...stepMcpTools] : requestTools;
       const offeredTools = mapSearchBatchCompleted
         ? turnTools?.filter((tool) => !isMapSearchTool(functionToolName(tool)))
         : turnTools;
@@ -6503,6 +6749,26 @@ export async function* runToolLoop(
 
       const { finishReason, pendingToolCalls, textContent, publicTextTail } = providerStep;
 
+      if (
+        callerContinuation &&
+        pendingToolCalls.some((call) => callerOwnedTools.has(call.qualifiedName))
+      ) {
+        if (
+          pendingToolCalls.some(
+            (call) => callerOwnedTools.has(call.qualifiedName) && call.argsMalformed,
+          )
+        ) {
+          throw new Error('Caller continuation received malformed caller arguments.');
+        }
+        HostedCallerToolBatchSchema.parse(
+          pendingToolCalls.map((call) => ({
+            id: call.id,
+            type: 'function',
+            function: { name: call.qualifiedName, arguments: JSON.stringify(call.args) },
+          })),
+        );
+      }
+
       if (!releasedProviderLines) {
         const stillWorking = finishReason === 'tool_calls' && pendingToolCalls.length > 0;
         if (!stillWorking && searchRetryEligible()) {
@@ -6552,6 +6818,7 @@ export async function* runToolLoop(
       }
 
       if (
+        !callerContinuation &&
         finishReason === 'tool_calls' &&
         pendingToolCalls.some((tc) => callerOwnedTools.has(tc.qualifiedName))
       ) {
@@ -6765,19 +7032,27 @@ export async function* runToolLoop(
       }
       messages.push(assistantMessage);
 
-      const prohibitedCalls = pendingToolCalls.filter((tc) =>
-        turnProhibitsTool(turnToolProhibition, tc.qualifiedName),
+      const prohibitedCalls = pendingToolCalls.filter(
+        (tc) =>
+          (!callerContinuation || !callerOwnedTools.has(tc.qualifiedName)) &&
+          turnProhibitsTool(turnToolProhibition, tc.qualifiedName),
       );
       const gatedCalls = pendingToolCalls
+        .filter((tc) => !callerContinuation || !callerOwnedTools.has(tc.qualifiedName))
         .filter((tc) => !prohibitedCalls.includes(tc))
         .map((tc) => ({
           tc,
           gate: gateForToolCall(tc, pendingToolCalls),
         }));
       const blockedCalls = gatedCalls.filter((entry) => entry.gate.verdict === 'deny');
-      const approvalCalls = gatedCalls.filter((entry) => entry.gate.verdict === 'ask');
+      const invalidCalls = gatedCalls
+        .filter(({ tc, gate }) => gate.verdict !== 'deny' && argumentProblemFor(tc) !== null)
+        .map(({ tc }) => tc);
+      const approvalCalls = gatedCalls.filter(
+        (entry) => entry.gate.verdict === 'ask' && !invalidCalls.includes(entry.tc),
+      );
       const allowedCalls = gatedCalls
-        .filter((entry) => entry.gate.verdict === 'allow')
+        .filter((entry) => entry.gate.verdict === 'allow' && !invalidCalls.includes(entry.tc))
         .map((entry) => entry.tc);
       // A device step never runs here: it runs on the user's machine. Splitting
       // it out before execution is what keeps the cloud from ever holding a path
@@ -6785,10 +7060,12 @@ export async function* runToolLoop(
       const deviceCalls = deviceHost
         ? allowedCalls.filter((call) => isDeviceStepTool(call.qualifiedName))
         : [];
-      const autoRunCalls =
-        deviceCalls.length > 0
+      const callsToSettle = [
+        ...invalidCalls,
+        ...(deviceCalls.length > 0
           ? allowedCalls.filter((call) => !isDeviceStepTool(call.qualifiedName))
-          : allowedCalls;
+          : allowedCalls),
+      ];
 
       const refusedCalls = [...prohibitedCalls.map((tc) => ({ tc, gate: null })), ...blockedCalls];
       for (const { tc, gate } of refusedCalls) {
@@ -6860,8 +7137,8 @@ export async function* runToolLoop(
         return;
       }
 
-      if (autoRunCalls.length > 0) {
-        yield* runAndStreamToolCalls(autoRunCalls, { completedSteps: step });
+      if (callsToSettle.length > 0) {
+        yield* runAndStreamToolCalls(callsToSettle, { completedSteps: step });
         if (suspendedForInput) return;
         if (serverSearchUnavailable) {
           yield* failRequiredTool(
@@ -6905,8 +7182,8 @@ export async function* runToolLoop(
 
         if (
           (mapSearchBatchCompleted &&
-            autoRunCalls.every((call) => isMapSearchTool(call.qualifiedName))) ||
-          (clarifyTurnCompleted && autoRunCalls.every((call) => isClarifyTool(call.qualifiedName)))
+            callsToSettle.every((call) => isMapSearchTool(call.qualifiedName))) ||
+          (clarifyTurnCompleted && callsToSettle.every((call) => isClarifyTool(call.qualifiedName)))
         ) {
           yield* flushTerminal('end-turn');
           return;
@@ -7139,6 +7416,8 @@ export async function* runToolLoop(
         yield encoder.encode(sseDone());
         return;
       }
+
+      if (yield* checkpointCallerTools(step)) return;
 
       // Every call was resolved without suspending (allowed and/or blocked):
       // fall through to the next provider step with the completed thread.

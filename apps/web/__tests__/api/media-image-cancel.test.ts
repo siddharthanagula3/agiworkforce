@@ -6,14 +6,24 @@ type ScanModule2 = typeof import('@/lib/server/image-generation-jobs');
 
 vi.mock('server-only', () => ({}));
 
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn().mockResolvedValue(null) }));
+vi.mock('@/lib/rate-limit', async () => ({
+  ...(await vi.importActual<RateLimitModule>('@/lib/rate-limit')),
+  withRateLimit: vi.fn().mockResolvedValue(null),
+}));
+vi.mock('@/lib/csrf', async () => ({
+  ...(await vi.importActual<CsrfModule>('@/lib/csrf')),
+  requireCsrfToken: vi.fn().mockResolvedValue(null),
+}));
 
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async () => ({
+  ...(await vi.importActual<LoggerModule>('@/lib/logger')),
+
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock('@/lib/cors', () => ({
+vi.mock('@/lib/cors', async () => ({
+  ...(await vi.importActual<CorsModule>('@/lib/cors')),
+
   handleCorsPreflightRequest: vi.fn().mockReturnValue(null),
   getCorsHeaders: vi.fn().mockReturnValue({}),
   getSecurityHeaders: vi.fn().mockReturnValue({}),
@@ -43,15 +53,21 @@ const mocks = vi.hoisted(() => ({
   assetIds: vi.fn(),
 }));
 
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async () => ({
+  ...(await vi.importActual<ApiAuthModule>('@/lib/api-auth')),
+
   getClerkAuthUser: (...args: unknown[]) => mocks.authUser(...args),
 }));
 
-vi.mock('@/lib/server/rls-db', () => ({
+vi.mock('@/lib/server/rls-db', async () => ({
+  ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
+
   getUserScopedDb: (...args: unknown[]) => mocks.scoped(...args),
 }));
 
-vi.mock('@/lib/server/media-storage', () => ({
+vi.mock('@/lib/server/media-storage', async () => ({
+  ...(await vi.importActual<MediaStorageModule>('@/lib/server/media-storage')),
+
   authenticatedMediaUrl: (assetId: string) => `/api/files/${assetId}`,
   isImageStorageConfigured: () => true,
   bytesFromBase64: vi.fn(),
@@ -61,7 +77,11 @@ vi.mock('@/lib/server/media-storage', () => ({
   readStoredMedia: vi.fn(),
 }));
 
-vi.mock('@/lib/services/managed-usage-request-service', () => ({
+vi.mock('@/lib/services/managed-usage-request-service', async () => ({
+  ...(await vi.importActual<ManagedUsageRequestServiceModule>(
+    '@/lib/services/managed-usage-request-service',
+  )),
+
   finalizeManagedUsageRequest: (...args: unknown[]) => mocks.finalize(...args),
   markManagedUsageClientDelivered: vi.fn(),
   markManagedUsageProviderStarted: vi.fn(),
@@ -80,6 +100,15 @@ vi.mock('@/lib/server/image-generation-jobs', async (importOriginal) => {
 
 import { POST } from '../../app/api/media/image/cancel/route';
 import type { ImageGenerationJob } from '@/lib/server/image-generation-jobs';
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type CsrfModule = typeof import('@/lib/csrf');
+type LoggerModule = typeof import('@/lib/logger');
+type CorsModule = typeof import('@/lib/cors');
+type ApiAuthModule = typeof import('@/lib/api-auth');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type MediaStorageModule = typeof import('@/lib/server/media-storage');
+type ManagedUsageRequestServiceModule =
+  typeof import('@/lib/services/managed-usage-request-service');
 
 const JOB_ID = '12121212-1212-4121-8121-121212121212';
 

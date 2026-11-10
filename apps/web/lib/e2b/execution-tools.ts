@@ -7,6 +7,7 @@
  * Pure logic (no `server-only`), unit tested against a mocked {@link E2BExecutor}.
  */
 import type { E2BExecutor, ExecutionResult } from './types';
+import { invalidToolArgumentsMessage, toolArgumentProblem } from '@agiworkforce/provider-protocol';
 import { codeExecutionUnavailableMessage, type E2BUnavailableCause } from './unavailability';
 import { MAX_EXECUTION_OUTPUT_BYTES, MAX_KEPT_TOOL_OUTPUT_CHARS } from './types';
 
@@ -169,6 +170,23 @@ export function e2bExecutionToolDefs(options: { officeRendering?: boolean } = {}
   ];
 }
 
+const EXECUTION_TOOL_SCHEMAS = new Map(
+  e2bExecutionToolDefs().map((tool) => [tool.function.name, tool.function.parameters]),
+);
+
+export function executionToolArgumentProblem(
+  name: string,
+  call: { args: Record<string, unknown>; argsMalformed?: true },
+): string | null {
+  return toolArgumentProblem(call, EXECUTION_TOOL_SCHEMAS.get(name));
+}
+
+function requiredStringArgument(args: Record<string, unknown>, name: string): string {
+  const value = args[name];
+  if (typeof value !== 'string') throw new Error(`Argument "${name}" must be a string.`);
+  return value;
+}
+
 function countLines(text: string): number {
   return text.length === 0 ? 0 : text.split('\n').length;
 }
@@ -290,46 +308,50 @@ export async function routeExecutionTool(
   if (!isExecutionTool(name)) {
     return { ok: false, output: '', error: `Not an execution tool: ${name}` };
   }
-  let args = rawArgs;
-  if (PATH_TOOLS.has(name)) {
-    const raw = typeof rawArgs['path'] === 'string' ? rawArgs['path'] : '';
-    const requested = raw || (name === LIST_FILES_TOOL ? '.' : '');
-    const confined = confineWorkspacePath(requested, workspaceRoot);
-    if (!confined) {
-      return {
-        ok: false,
-        output: '',
-        error: `Refused "${raw}": paths must be workspace-relative and may not traverse upward.`,
-      };
-    }
-    args = { ...rawArgs, path: confined };
-  }
   try {
+    const argumentProblem = executionToolArgumentProblem(name, { args: rawArgs });
+    if (argumentProblem) {
+      return { ok: false, output: '', error: invalidToolArgumentsMessage(name, argumentProblem) };
+    }
+    let args = rawArgs;
+    if (PATH_TOOLS.has(name)) {
+      const raw = typeof rawArgs['path'] === 'string' ? rawArgs['path'] : '';
+      const requested = raw || (name === LIST_FILES_TOOL ? '.' : '');
+      const confined = confineWorkspacePath(requested, workspaceRoot);
+      if (!confined) {
+        return {
+          ok: false,
+          output: '',
+          error: `Refused "${raw}": paths must be workspace-relative and may not traverse upward.`,
+        };
+      }
+      args = { ...rawArgs, path: confined };
+    }
     let result: ExecutionResult;
     switch (name) {
       case EXECUTE_CODE_TOOL:
         result = await executor.runCode({
-          language: typeof args['language'] === 'string' ? args['language'] : 'python',
-          code: typeof args['code'] === 'string' ? args['code'] : '',
+          language: requiredStringArgument(args, 'language'),
+          code: requiredStringArgument(args, 'code'),
           ...(signal ? { signal } : {}),
         });
         break;
       case WRITE_FILE_TOOL:
         result = await executor.writeFile({
-          path: typeof args['path'] === 'string' ? args['path'] : '',
-          content: typeof args['content'] === 'string' ? args['content'] : '',
+          path: requiredStringArgument(args, 'path'),
+          content: requiredStringArgument(args, 'content'),
         });
         break;
       case CREATE_FOLDER_TOOL:
         result = await executor.createFolder({
-          path: typeof args['path'] === 'string' ? args['path'] : '',
+          path: requiredStringArgument(args, 'path'),
         });
         break;
       case LIST_FILES_TOOL: {
         if (!executor.listFiles) {
           return { ok: false, output: '', error: 'Listing files is unavailable in this sandbox.' };
         }
-        const dir = typeof args['path'] === 'string' ? args['path'] : '.';
+        const dir = requiredStringArgument(args, 'path');
         const entries = await executor.listFiles(dir);
         if (!entries) {
           return { ok: false, output: '', error: `No such folder in the workspace: ${dir}` };
@@ -343,16 +365,16 @@ export async function routeExecutionTool(
         break;
       }
       case READ_FILE_TOOL: {
-        const path = typeof args['path'] === 'string' ? args['path'] : '';
+        const path = requiredStringArgument(args, 'path');
         const read = await readWorkspaceText(executor, path);
         if (!read.ok) return { ok: false, output: '', error: read.error };
         result = { ok: true, output: read.text };
         break;
       }
       case EDIT_FILE_TOOL: {
-        const path = typeof args['path'] === 'string' ? args['path'] : '';
-        const oldText = typeof args['old_text'] === 'string' ? args['old_text'] : '';
-        const newText = typeof args['new_text'] === 'string' ? args['new_text'] : '';
+        const path = requiredStringArgument(args, 'path');
+        const oldText = requiredStringArgument(args, 'old_text');
+        const newText = requiredStringArgument(args, 'new_text');
         if (!oldText) {
           return { ok: false, output: '', error: 'old_text must not be empty.' };
         }

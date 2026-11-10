@@ -1,6 +1,6 @@
 {
   "name": "agi-workforce",
-  "displayName": "AGI Code",
+  "displayName": "Code",
   "description": "Multi-provider AI coding assistant for VS Code",
   "version": "0.0.1",
   "publisher": "agiworkforce",

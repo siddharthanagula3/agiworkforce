@@ -16,6 +16,51 @@ const BASE_ENVELOPE = {
 } as const;
 
 describe('AgentEventEnvelopeSchema / parseAgentEventDelta', () => {
+  it('parses a caller-tools boundary with its exact resume cursor', () => {
+    const envelope = {
+      ...BASE_ENVELOPE,
+      sequence: 7,
+      event: {
+        type: 'caller-tools-requested',
+        nextEventSequence: 10,
+        calls: [
+          { id: 'local-call', type: 'function', function: { name: 'read_dom', arguments: '{}' } },
+        ],
+      },
+    };
+    expect(parseAgentEventDelta(envelope)).toEqual(envelope);
+  });
+
+  it('refuses a caller-tools boundary that does not advance its event cursor', () => {
+    expect(
+      parseAgentEventDelta({
+        ...BASE_ENVELOPE,
+        sequence: 7,
+        event: {
+          type: 'caller-tools-requested',
+          nextEventSequence: 7,
+          calls: [
+            { id: 'local-call', type: 'function', function: { name: 'read_dom', arguments: '{}' } },
+          ],
+        },
+      }),
+    ).toBeNull();
+  });
+
+  it('refuses duplicate caller obligations in a durable boundary', () => {
+    const call = {
+      id: 'local-call',
+      type: 'function',
+      function: { name: 'read_dom', arguments: '{}' },
+    };
+    expect(
+      parseAgentEventDelta({
+        ...BASE_ENVELOPE,
+        event: { type: 'caller-tools-requested', nextEventSequence: 3, calls: [call, call] },
+      }),
+    ).toBeNull();
+  });
+
   it('reads the canonical schema version rather than keeping its own', () => {
     // This package used to declare its own copy of the number, which drifted
     // one behind the wire and made the envelope schema reject events the

@@ -2,10 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/rate-limit', () => ({
+vi.mock('@/lib/rate-limit', async () => ({
+  ...(await vi.importActual<RateLimitModule>('@/lib/rate-limit')),
+
   withRateLimit: vi.fn(() => Promise.resolve(null)),
 }));
-vi.mock('@/lib/cors', () => ({
+vi.mock('@/lib/cors', async () => ({
+  ...(await vi.importActual<CorsModule>('@/lib/cors')),
+
   getCorsHeaders: vi.fn(() => ({})),
 }));
 
@@ -13,13 +17,17 @@ const authMocks = vi.hoisted(() => ({
   db: { query: async () => [], execute: async () => 0 },
   getClerkAuthUser: vi.fn(),
 }));
-vi.mock('@/lib/server/rls-db', () => ({
+vi.mock('@/lib/server/rls-db', async () => ({
+  ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
+
   getUserScopedDb: async (...args: unknown[]) => {
     const { userId } = (await authMocks.getClerkAuthUser(...args)) as { userId: string };
     return { db: authMocks.db, userId, organizationId: null };
   },
 }));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async () => ({
+  ...(await vi.importActual<ApiAuthModule>('@/lib/api-auth')),
+
   isAccountUnavailableError: vi.fn(() => false),
   getClerkAuthUser: authMocks.getClerkAuthUser,
 }));
@@ -30,9 +38,16 @@ const subscriptionMocks = vi.hoisted(() => ({
 vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: { getSubscription: subscriptionMocks.getSubscription },
 }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({}) }));
+vi.mock('@/lib/server/neon-db', async () => ({
+  ...(await vi.importActual<NeonDbModule>('@/lib/server/neon-db')),
+  getNeonDb: () => ({}),
+}));
 vi.mock('@/lib/server/claimed-user-scope-db', () => ({ createClaimedUserScopedDb: () => ({}) }));
-vi.mock('@/lib/services/provider-adapter-service', () => ({
+vi.mock('@/lib/services/provider-adapter-service', async () => ({
+  ...(await vi.importActual<ProviderAdapterServiceModule>(
+    '@/lib/services/provider-adapter-service',
+  )),
+
   listAvailableManagedProviderIds: () => everyRoutedProvider(),
 }));
 const availabilityMocks = vi.hoisted(() => ({
@@ -40,10 +55,17 @@ const availabilityMocks = vi.hoisted(() => ({
     async (): Promise<Record<string, { state: 'degraded'; reason: string; until: string }>> => ({}),
   ),
 }));
-vi.mock('@/lib/services/provider-availability-service', () => ({
+vi.mock('@/lib/services/provider-availability-service', async () => ({
+  ...(await vi.importActual<ProviderAvailabilityServiceModule>(
+    '@/lib/services/provider-availability-service',
+  )),
+
   getProviderAvailabilityMap: availabilityMocks.getProviderAvailabilityMap,
 }));
-vi.mock('@/lib/server/free-pools', () => ({ freePoolDecisions: () => [] }));
+vi.mock('@/lib/server/free-pools', async () => ({
+  ...(await vi.importActual<FreePoolsModule>('@/lib/server/free-pools')),
+  freePoolDecisions: () => [],
+}));
 
 import { GET } from './route';
 function everyRoutedProvider(): Set<string> {
@@ -60,6 +82,15 @@ import {
   listChatModels,
   listManagedRoutesForModel,
 } from '@agiworkforce/types';
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type CorsModule = typeof import('@/lib/cors');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type ApiAuthModule = typeof import('@/lib/api-auth');
+type NeonDbModule = typeof import('@/lib/server/neon-db');
+type ProviderAdapterServiceModule = typeof import('@/lib/services/provider-adapter-service');
+type ProviderAvailabilityServiceModule =
+  typeof import('@/lib/services/provider-availability-service');
+type FreePoolsModule = typeof import('@/lib/server/free-pools');
 
 const CONTEXTLESS_MEDIA_MODEL = (() => {
   const model = listCanonicalModels().find(

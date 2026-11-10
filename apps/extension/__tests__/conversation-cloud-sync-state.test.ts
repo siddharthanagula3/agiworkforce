@@ -306,6 +306,135 @@ describe('conversation cloud-sync state', () => {
     expect(metadata).not.toHaveProperty('agentEvents');
   });
 
+  async function activeTitleFixture() {
+    const fixture = await activityFixture();
+    const existing = (await getConversation(OWNER, CLOUD_CONVERSATION_ID))!;
+    await recordCloudSyncState(OWNER, CLOUD_CONVERSATION_ID, {
+      syncedTitle: existing.title,
+      remoteUpdatedAt: '2026-11-08T00:00:00.000Z',
+    });
+    return {
+      ...fixture,
+      existing: (await getConversation(OWNER, CLOUD_CONVERSATION_ID))!,
+      conversation: { ...fixture.conversation, updatedAt: '2026-11-09T00:00:00.000Z' },
+    };
+  }
+
+  it('refreshes only the synced title of an active settled chat without replacing its messages or metadata', async () => {
+    const { existing, conversation } = await activeTitleFixture();
+    const before = structuredClone(existing);
+    expect(
+      await importManagedCloudConversationHistory(
+        OWNER,
+        null,
+        [{ conversation, messages: [] }],
+        () => true,
+        (id) => id === existing.id,
+      ),
+    ).toBe(1);
+    const after = (await getConversation(OWNER, existing.id))!;
+    expect(after).toEqual({
+      ...before,
+      title: conversation.title,
+      customTitle: conversation.title,
+      cloudSync: {
+        ...before.cloudSync,
+        syncedTitle: conversation.title,
+        remoteUpdatedAt: conversation.updatedAt,
+      },
+    });
+    expect(pendingCloudMessages(after)).toEqual([]);
+    expect(
+      await importManagedCloudConversationHistory(
+        OWNER,
+        null,
+        [
+          {
+            conversation: {
+              ...conversation,
+              title: 'Stale title',
+              updatedAt: '2026-11-08T12:00:00.000Z',
+            },
+          },
+        ],
+        () => true,
+        () => true,
+      ),
+    ).toBe(0);
+    expect(await getConversation(OWNER, existing.id)).toEqual(after);
+  });
+
+  it.each([
+    'local rename',
+    'unsynced message',
+    'streaming',
+    'cancellation',
+    'non-cloud runtime',
+    'blocked runtime',
+    'unacknowledged',
+    'sync in progress',
+    'other workspace',
+    'stale snapshot',
+  ] as const)('preserves an active chat with %s during a title refresh', async (condition) => {
+    const { existing, conversation } = await activeTitleFixture();
+    if (condition === 'local rename') existing.customTitle = existing.title = 'My new title';
+    if (condition === 'unsynced message') existing.messages[0]!.content += ' locally edited';
+    if (condition === 'streaming') existing.messages[0]!.streaming = true;
+    if (condition === 'cancellation') existing.messages[0]!.streamCancellation = 'pending';
+    if (condition === 'non-cloud runtime') existing.messages[0]!.runtime = 'local';
+    if (condition === 'blocked runtime') existing.cloudSync!.blockedReason = 'non-cloud-runtime';
+    if (condition === 'unacknowledged') existing.cloudSync!.createAcknowledged = false;
+    if (condition === 'sync in progress') existing.cloudSync!.state = 'pending';
+    if (condition === 'other workspace')
+      existing.cloudSync!.organizationId = '66666666-6666-4666-8666-666666666666';
+    if (condition === 'stale snapshot')
+      existing.cloudSync!.remoteUpdatedAt = '2026-11-10T00:00:00.000Z';
+    writeStoreDirect([existing]);
+    expect(await getConversation(OWNER, existing.id)).toBeDefined();
+    const before = structuredClone(readStoredEntries());
+    expect(
+      await importManagedCloudConversationHistory(
+        OWNER,
+        null,
+        [{ conversation }],
+        () => true,
+        () => true,
+      ),
+    ).toBe(0);
+    expect(readStoredEntries()).toEqual(before);
+  });
+
+  it('discards an active title refresh when its owner changes before commit', async () => {
+    const { existing, conversation } = await activeTitleFixture();
+    const before = structuredClone(readStoredEntries());
+    const ownerIsCurrent = vi.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    expect(
+      await importManagedCloudConversationHistory(
+        OWNER,
+        null,
+        [{ conversation }],
+        ownerIsCurrent,
+        (id) => id === existing.id,
+      ),
+    ).toBe(0);
+    expect(readStoredEntries()).toEqual(before);
+  });
+
+  it('does not update a protected title from another authentication incarnation', async () => {
+    const { conversation } = await activeTitleFixture();
+    const before = structuredClone(readStoredEntries());
+    expect(
+      await importManagedCloudConversationHistory(
+        { ...OWNER, authIncarnation: 'session-replaced' },
+        null,
+        [{ conversation }],
+        () => true,
+        () => true,
+      ),
+    ).toBe(0);
+    expect(readStoredEntries()).toEqual(before);
+  });
+
   it.each(['content', 'role', 'cloudMessageId'] as const)(
     'does not attach activity to changed %s',
     async (field) => {

@@ -585,6 +585,9 @@ importers:
 
   apps/extension:
     dependencies:
+      '@agiworkforce/agent-core':
+        specifier: workspace:*
+        version: link:../../packages/ai/agent-core
       '@agiworkforce/artifacts':
         specifier: workspace:*
         version: link:../../packages/platform/artifacts

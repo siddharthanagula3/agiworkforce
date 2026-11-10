@@ -7,6 +7,8 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { AutofillResult } from '../src/features/content/autofill/filler';
+import type { EscalationDecision } from '../src/features/computer-use/escalationEngine';
 
 if (typeof globalThis.CSS === 'undefined') {
   (globalThis as Record<string, unknown>).CSS = {};
@@ -129,10 +131,18 @@ function buildGreenhouseLikeDom(): void {
   `;
 }
 
-function runAutofill(): Promise<{ success?: boolean; error?: string; platform?: string }> {
+interface AutofillResponse {
+  success?: boolean;
+  error?: string;
+  platform?: string;
+  autofill?: AutofillResult;
+  escalation?: EscalationDecision;
+}
+
+function runAutofill(): Promise<AutofillResponse> {
   return new Promise((resolve) => {
     handleMessage({ type: 'AGI_RUN_AUTOFILL' }, {} as chrome.runtime.MessageSender, (response) =>
-      resolve(response as { success?: boolean; error?: string; platform?: string }),
+      resolve(response as AutofillResponse),
     );
   });
 }
@@ -213,5 +223,111 @@ describe('SEC-15, AGI_RUN_AUTOFILL gates the stored profile on the site allowlis
     expect(response.platform).toBe('greenhouse');
     expect((document.querySelector('#first_name') as HTMLInputElement).value).toBe('Jane');
     expect((document.querySelector('#email') as HTMLInputElement).value).toBe('jane@example.com');
+  });
+});
+
+describe.each([
+  [
+    'linkedin',
+    'https://www.linkedin.com/jobs/view/123',
+    'application-form',
+    'jobs-easy-apply-modal',
+    'email',
+  ],
+  [
+    'lever',
+    'https://jobs.lever.co/acme/123/apply',
+    'application-form',
+    'application-form',
+    'email',
+  ],
+  [
+    'greenhouse',
+    'https://boards.greenhouse.io/acme/jobs/123',
+    'application_form',
+    '',
+    'job_application[email]',
+  ],
+  ['ashby', 'https://jobs.ashbyhq.com/acme/123', 'application-form', '', '_systemfield_email'],
+])('mounted autofill field custody on %s', (platform, href, id, className, emailName) => {
+  beforeEach(() => {
+    for (const key of Object.keys(chromeMock._localStore)) delete chromeMock._localStore[key];
+    setPageUrl(href);
+    chromeMock._localStore.agi_site_allowlist = [new URL(href).origin];
+    chromeMock._localStore[AUTOFILL_PROFILE_STORAGE_KEY] = { email: 'jane@example.com' };
+    document.body.innerHTML = `<form id="${id}" class="${className}">
+      <label for="email">Email</label><input id="email" name="${emailName}" type="email" required>
+      <button type="submit">Submit application</button></form>`;
+  });
+
+  it('finishes an email-only form without inventing file or location work', async () => {
+    const submit = vi.fn((event: Event) => event.preventDefault());
+    document.querySelector('form')!.addEventListener('submit', submit);
+    const response = await runAutofill();
+    expect(response.success).toBe(true);
+    expect(response.platform).toBe(platform);
+    expect((document.querySelector('#email') as HTMLInputElement).value).toBe('jane@example.com');
+    expect(response.escalation).toMatchObject({ shouldEscalate: false, triggers: [] });
+    expect(response.autofill?.filled.some((result) => result.key.startsWith('files.'))).toBe(false);
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it('leaves an optional unrequested upload empty without starting the agent', async () => {
+    document
+      .querySelector('form')!
+      .insertAdjacentHTML(
+        'beforeend',
+        '<label for="resume">Resume</label><input id="resume" name="resume" type="file">',
+      );
+    const response = await runAutofill();
+    expect(response.success).toBe(true);
+    expect(response.escalation).toMatchObject({ shouldEscalate: false, triggers: [] });
+    expect((document.getElementById('resume') as HTMLInputElement).files).toHaveLength(0);
+  });
+
+  it('keeps an actual required upload incomplete and requests assistance', async () => {
+    document
+      .querySelector('form')!
+      .insertAdjacentHTML(
+        'beforeend',
+        '<label for="resume">Resume</label><input id="resume" name="resume" type="file" required>',
+      );
+    const response = await runAutofill();
+    expect(response.success).toBe(true);
+    expect(response.escalation?.shouldEscalate).toBe(true);
+    expect(response.escalation?.triggers).toContainEqual(
+      expect.objectContaining({ fieldKey: 'files.resume', reason: 'file_upload' }),
+    );
+    expect((document.getElementById('resume') as HTMLInputElement).files).toHaveLength(0);
+  });
+
+  it('does not call a required unanswered question complete when the profile has no answer', async () => {
+    chromeMock._localStore[AUTOFILL_PROFILE_STORAGE_KEY] = {};
+    const response = await runAutofill();
+    expect(response.success).toBe(true);
+    expect(response.autofill?.filledCount).toBe(0);
+    expect(response.escalation?.triggers).toContainEqual(
+      expect.objectContaining({ fieldKey: 'email', reason: 'required_field_empty' }),
+    );
+  });
+
+  it('retains the request to upload an explicitly saved optional file', async () => {
+    chromeMock._localStore[AUTOFILL_PROFILE_STORAGE_KEY] = {
+      email: 'jane@example.com',
+      files: {
+        resumeDataUrl: 'data:text/plain;base64,VGVzdA==',
+        resumeFileName: 'test-resume.txt',
+      },
+    };
+    document
+      .querySelector('form')!
+      .insertAdjacentHTML(
+        'beforeend',
+        '<label for="resume">Resume</label><input id="resume" name="resume" type="file">',
+      );
+    const response = await runAutofill();
+    expect(response.escalation?.triggers).toContainEqual(
+      expect.objectContaining({ fieldKey: 'files.resume', reason: 'file_upload' }),
+    );
   });
 });

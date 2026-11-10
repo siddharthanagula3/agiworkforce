@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import { stripComments } from './lib/module-graph.mjs';
 import { USER_OWNED_TABLES } from './lib/db-isolation-tables.mjs';
+import { expandProjectReadScope } from './lib/project-scope-sql.mjs';
 import path from 'node:path';
 import process from 'node:process';
 
@@ -168,7 +169,7 @@ function workspaceScopeExempt(relativePath) {
  */
 const WORKSPACE_SCOPE_BASELINE = new Map([
   ['apps/web/lib/services/cloud-agent-run-service.ts', 25],
-  ['apps/web/lib/services/conversation-branch-service.ts', 6],
+  ['apps/web/lib/services/conversation-branch-service.ts', 3],
   ['apps/web/lib/connectors/mcp-custom-connections.ts', 5],
   ['apps/web/lib/user-connector-tools.ts', 4],
   ['apps/web/lib/server/video-generation-transcript.ts', 3],
@@ -1372,7 +1373,8 @@ for (const file of files) {
   if (exemptions.some((a) => !a.tables)) continue;
   const decls = declarationIndex(maskLiterals(source));
 
-  for (const { sql, index } of extractStatements(source)) {
+  for (const { sql: sourceSql, index } of extractStatements(source)) {
+    const sql = expandProjectReadScope(sourceSql, source, rel, root);
     const where = enclosingDeclaration(decls, index);
     const exemptTables = new Set(
       exemptions

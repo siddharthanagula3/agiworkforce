@@ -2,6 +2,10 @@ import type React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { PublishedArtifactView } from './PublishedArtifactView';
+type ArtifactsStoreModule = typeof import('@/features/chat/stores/artifacts-store');
+type UseSessionSnapshotModule = typeof import('@/lib/identity/useSessionSnapshot');
+type SandboxedIframeModule = typeof import('@/features/chat/components/SandboxedIframe');
+type ClientModule = typeof import('@/lib/identity/client');
 
 const routerPush = vi.hoisted(() => vi.fn());
 const copySharedArtifactToChat = vi.hoisted(() => vi.fn());
@@ -12,10 +16,14 @@ const identity = vi.hoisted(() => ({
   sessionId: 'session-a',
 }));
 const artifactUpsert = vi.hoisted(() => vi.fn());
-vi.mock('@/features/chat/stores/artifacts-store', () => ({
+vi.mock('@/features/chat/stores/artifacts-store', async () => ({
+  ...(await vi.importActual<ArtifactsStoreModule>('@/features/chat/stores/artifacts-store')),
+
   useArtifactsStore: { getState: () => ({ upsertArtifact: artifactUpsert }) },
 }));
-vi.mock('@/lib/identity/useSessionSnapshot', () => ({
+vi.mock('@/lib/identity/useSessionSnapshot', async () => ({
+  ...(await vi.importActual<UseSessionSnapshotModule>('@/lib/identity/useSessionSnapshot')),
+
   useSessionSnapshot: () => () => {
     if (!identity.loaded || !identity.signedIn || !identity.current) return null;
     const sessionId = identity.sessionId;
@@ -58,7 +66,9 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@/features/chat/components/SandboxedIframe', () => ({
+vi.mock('@/features/chat/components/SandboxedIframe', async () => ({
+  ...(await vi.importActual<SandboxedIframeModule>('@/features/chat/components/SandboxedIframe')),
+
   SandboxedIframe: (props: {
     payload: { kind: string };
     fallbackSrcDoc: string;
@@ -99,7 +109,9 @@ vi.mock('next/link', () => ({
   ),
 }));
 
-vi.mock('@/lib/identity/client', () => ({
+vi.mock('@/lib/identity/client', async () => ({
+  ...(await vi.importActual<ClientModule>('@/lib/identity/client')),
+
   useSession: () => ({
     isLoaded: identity.loaded,
     isSignedIn: identity.signedIn,

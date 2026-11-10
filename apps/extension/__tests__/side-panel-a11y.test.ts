@@ -93,7 +93,7 @@ describe('Chrome side-panel composer at side-panel widths', () => {
     expect(source).toContain('pageContextStillDescribes(_ctx.pendingPageContextSource');
     expect(source).toContain("composerContextNotice = t('spContextChipDropped')");
     expect(source).toMatch(
-      /function updateActivePage\(url: string, tabId\?: number\): void \{\n\s*dropPageContextOnNavigation\(tabId, url\);/,
+      /function updateActivePage\(url: string, tabId\?: number, windowId\?: number\): void \{\n\s*dropPageContextOnNavigation\(tabId, url\);/,
     );
   });
 });

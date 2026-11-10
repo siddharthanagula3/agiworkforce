@@ -43,8 +43,8 @@ describe('SubprocessorsPage', () => {
     expect(screen.getByText('OpenAI (dictation and Voice Mode)')).toBeInTheDocument();
 
     const copy = flatCopy();
-    expect(copy).toMatch(/Workers AI: an inference route that can serve a Managed Cloud chat/);
-    expect(copy).toMatch(/Vercel AI Gateway: an inference route that can serve a Managed Cloud/);
+    expect(copy).toMatch(/Workers AI: an inference route that can serve a Cloud chat/);
+    expect(copy).toMatch(/Vercel AI Gateway: an inference route that can serve a Cloud/);
   });
 
   it('states the condition under which a gateway route carries a request, rather than implying every one does', () => {
@@ -69,7 +69,7 @@ describe('SubprocessorsPage', () => {
     render(<SubprocessorsPage />);
 
     expect(declaredRecipients()).not.toContain('MiniMax, Qwen and Zhipu');
-    expect(flatCopy()).toMatch(/No MiniMax route is admitted for Managed Cloud traffic/);
+    expect(flatCopy()).toMatch(/No MiniMax route is admitted for Cloud traffic/);
   });
 
   it('dates the last review of the list to the day the latest correction was found, not to the page revision', () => {

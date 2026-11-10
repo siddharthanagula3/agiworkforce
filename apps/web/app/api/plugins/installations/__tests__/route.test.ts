@@ -33,15 +33,32 @@ const {
 const featureGateMock = vi.hoisted(() =>
   vi.fn(async (..._args: unknown[]): Promise<Response | null> => null),
 );
-vi.mock('@/lib/managed-compute-gate', () => ({
+vi.mock('@/lib/managed-compute-gate', async () => ({
+  ...(await vi.importActual<ManagedComputeGateModule>('@/lib/managed-compute-gate')),
+
   buildWorkspaceFeatureGateResponse: (...args: unknown[]) => featureGateMock(...args),
 }));
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: authUserMock }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: csrfMock }));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: rateLimitMock }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: getNeonDbMock }));
-vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: userScopedDbMock }));
+vi.mock('@/lib/api-auth', async () => ({
+  ...(await vi.importActual<ApiAuthModule>('@/lib/api-auth')),
+  getClerkAuthUser: authUserMock,
+}));
+vi.mock('@/lib/csrf', async () => ({
+  ...(await vi.importActual<CsrfModule>('@/lib/csrf')),
+  requireCsrfToken: csrfMock,
+}));
+vi.mock('@/lib/rate-limit', async () => ({
+  ...(await vi.importActual<RateLimitModule>('@/lib/rate-limit')),
+  withRateLimit: rateLimitMock,
+}));
+vi.mock('@/lib/server/neon-db', async () => ({
+  ...(await vi.importActual<NeonDbModule>('@/lib/server/neon-db')),
+  getNeonDb: getNeonDbMock,
+}));
+vi.mock('@/lib/server/rls-db', async () => ({
+  ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
+  getUserScopedDb: userScopedDbMock,
+}));
 vi.mock('@/lib/workspace-audit', () => ({
   recordWorkspaceAuditEvent: recordWorkspaceAuditEventMock,
 }));
@@ -54,7 +71,11 @@ vi.mock('@/features/plugins/server/directory/installed-dependents', async (impor
   ...(await importOriginal<DependentsModule>()),
   listRegistryDependents: listRegistryDependentsMock,
 }));
-vi.mock('@/lib/services/plugin-installation-service', () => ({
+vi.mock('@/lib/services/plugin-installation-service', async () => ({
+  ...(await vi.importActual<PluginInstallationServiceModule>(
+    '@/lib/services/plugin-installation-service',
+  )),
+
   installWebPlugin: installWebPluginMock,
   planWebPluginInstall: planWebPluginInstallMock,
   listPluginInstallations: listPluginInstallationsMock,
@@ -65,6 +86,13 @@ vi.mock('@/lib/services/plugin-installation-service', () => ({
 import { NextRequest } from 'next/server';
 import { DELETE, PATCH } from '../[id]/route';
 import { GET, POST } from '../route';
+type ManagedComputeGateModule = typeof import('@/lib/managed-compute-gate');
+type ApiAuthModule = typeof import('@/lib/api-auth');
+type CsrfModule = typeof import('@/lib/csrf');
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type NeonDbModule = typeof import('@/lib/server/neon-db');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type PluginInstallationServiceModule = typeof import('@/lib/services/plugin-installation-service');
 
 const INSTALLATION = {
   pluginId: 'research-pack',

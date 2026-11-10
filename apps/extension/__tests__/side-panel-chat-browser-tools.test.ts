@@ -1,9 +1,16 @@
+import type { CallerBrowserContext } from '../src/features/cloud-bridge/callerBrowserContext';
+import { parseFormObservationReference } from '../src/features/browser-tools/documentBridge';
+import { prepareChatToolResults } from '../src/features/computer-use/chatToolResults';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { evaluateSitePolicy, sitePolicyDenialMessage } from '@agiworkforce/types';
+import {
+  AGENT_EVENT_SCHEMA_VERSION,
+  evaluateSitePolicy,
+  sitePolicyDenialMessage,
+} from '@agiworkforce/types';
 import type { AgentEvent } from '@agiworkforce/types/protocol';
 import { fenceUntrustedContent } from '@agiworkforce/utils/fence';
 import {
@@ -101,6 +108,8 @@ function harness(
     managedCloudOwner: OWNER,
     currentStreamId: 'stream-1' as string | null,
     conversationGeneration: 1,
+    conversationId: 'fixture-conversation',
+    activeProject: null as { id: string } | null,
     streamTimeoutHandle: null,
     messages: [
       ...(options.userRequest
@@ -159,15 +168,23 @@ function harness(
     async (_goal: string, _nested?: { messageId: string }) => ({
       status: 'completed' as const,
       message: 'Changed the quantity to 3.',
+      browserContext: undefined as CallerBrowserContext | undefined,
     }),
   );
   const dependencies = {
+    prepareChatToolResults,
+    parseFormObservationReference,
+    cloudHistoryOrganizationId: null,
+    readCallerBrowserContext: vi.fn(async (context, assertCurrent) => {
+      assertCurrent();
+      return context;
+    }),
     BrowserTaskSiteGrants,
     _ctx: context,
     chrome: {
       tabs: {
-        query: vi.fn(async () => [{ id: 7, url: `${ORIGIN}/report` }]),
-        get: vi.fn(async () => ({ id: 7, url: `${ORIGIN}/report` })),
+        query: vi.fn(async () => [{ id: 7, windowId: 3, url: `${ORIGIN}/report` }]),
+        get: vi.fn(async () => ({ id: 7, windowId: 3, url: `${ORIGIN}/report` })),
       },
       storage: { local: { set: storageSet } },
       runtime: {
@@ -281,6 +298,7 @@ function harness(
     runtimeMessages,
     resolved,
     capturePageContext,
+    readCallerBrowserContext: dependencies.readCallerBrowserContext,
     requestHost,
     answerHostRequest: (granted: boolean) => answerHostRequest(granted),
     recordTransientHostPermission,
@@ -327,6 +345,121 @@ describe('chat turns run browser tools the model chose', () => {
   afterEach(async () => {
     await Promise.all(taskGrantPools.splice(0).map((pool) => pool.releaseTask()));
     vi.unstubAllGlobals();
+  });
+
+  it('starts the page-read timing before capture and includes the awaited operation', async () => {
+    const h = harness({ approved: true });
+    let release!: () => void;
+    h.capturePageContext.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = () =>
+            resolve({
+              ok: true,
+              text: 'Read completed',
+              documentId: 'doc-7',
+              formSnapshotId: '11111111-1111-4111-8111-111111111111',
+              source: { tabId: 7, url: `${ORIGIN}/report`, title: 'Report' },
+            });
+        }),
+    );
+    const clock = vi.spyOn(performance, 'now').mockReturnValue(100);
+    const done = h.api.handle(handoff(CHAT_READ_PAGE_TOOL));
+    await flush();
+    try {
+      expect(h.events[0]).toMatchObject({
+        type: 'tool-execution-start',
+        name: CHAT_READ_PAGE_TOOL,
+      });
+      expect(h.events.some((event) => event.type === 'tool-execution-end')).toBe(false);
+    } finally {
+      clock.mockReturnValue(250);
+      release();
+      await done;
+      clock.mockRestore();
+    }
+    expect(h.events.find((event) => event.type === 'tool-execution-end')).toMatchObject({
+      elapsedMs: 150,
+      isError: false,
+    });
+  });
+
+  it('links a negotiated browser task to its exact pending caller handoff', async () => {
+    const h = harness({ approved: true, mode: 'full' });
+    const message = {
+      ...handoff(CHAT_BROWSER_TASK_TOOL, { goal: 'Open jobs' }),
+      callerCheckpoint: {
+        schema_version: AGENT_EVENT_SCHEMA_VERSION,
+        run_id: '11111111-1111-4111-8111-111111111111',
+        turn_id: 'fixture-turn',
+        next_event_sequence: 8,
+      },
+    };
+    await h.api.handle(message);
+    expect(h.startComposerBrowserTask).toHaveBeenCalledWith('Open jobs', {
+      messageId: 'stream-1',
+      callerHandoff: {
+        handoffId: 'handoff_1',
+        toolCallId: 'call_1',
+        clientInstanceId: 'panel-a',
+        streamId: 'stream-1',
+      },
+    });
+  });
+
+  it('continues on the native completed task page and discards the old form snapshot', async () => {
+    const h = harness({ approved: true, mode: 'full' });
+    h.assistant.browserSource = { tabId: 7, windowId: 3, url: `${ORIGIN}/report` };
+    h.assistant.browserObservation = {
+      tabId: 7,
+      url: `${ORIGIN}/report`,
+      documentId: 'old-document',
+      formSnapshotId: '11111111-1111-4111-8111-111111111111',
+    };
+    const next = { tabId: 8, windowId: 3, url: `${ORIGIN}/opened`, documentId: 'task-document' };
+    h.startComposerBrowserTask.mockResolvedValueOnce({
+      status: 'completed',
+      message: 'Opened.',
+      browserContext: next,
+    });
+    await h.api.handle(handoff(CHAT_BROWSER_TASK_TOOL, { goal: 'Open the jobs tab' }));
+    expect(h.readCallerBrowserContext).toHaveBeenCalledWith(next, expect.any(Function));
+    expect(h.assistant.browserContext).toEqual(next);
+    expect(h.assistant.browserSource).toEqual({ tabId: 8, windowId: 3, url: next.url });
+    expect(h.assistant.browserObservation).toBeUndefined();
+    h.chrome.tabs.query.mockResolvedValueOnce([{ id: 8, windowId: 3, url: next.url }]);
+    h.capturePageContext.mockResolvedValueOnce({
+      ok: true,
+      text: 'New task page',
+      documentId: next.documentId,
+      formSnapshotId: 'snapshot-8',
+      source: { tabId: 8, url: next.url, title: 'Jobs' },
+    });
+    await h.api.handle(handoff(CHAT_READ_PAGE_TOOL));
+    expect(h.capturePageContext).toHaveBeenCalledWith(
+      expect.objectContaining({ tabId: 8, url: next.url, documentId: next.documentId }),
+    );
+  });
+
+  it('does not adopt a completed task page that changed before handoff', async () => {
+    const h = harness({ approved: true, mode: 'full' });
+    const original = { tabId: 7, windowId: 3, url: `${ORIGIN}/report` };
+    h.assistant.browserSource = original;
+    h.startComposerBrowserTask.mockResolvedValueOnce({
+      status: 'completed',
+      message: 'Opened.',
+      browserContext: {
+        tabId: 8,
+        windowId: 3,
+        url: `${ORIGIN}/opened`,
+        documentId: 'task-document',
+      },
+    });
+    h.readCallerBrowserContext.mockRejectedValueOnce(new Error('The task page reloaded.'));
+    await h.api.handle(handoff(CHAT_BROWSER_TASK_TOOL, { goal: 'Open the jobs tab' }));
+    expect(h.assistant.browserSource).toEqual(original);
+    expect(h.assistant.browserContext).toBeUndefined();
+    expect(h.resolved()?.results[0]?.content).toContain('The task page reloaded.');
   });
 
   it('reads a page it can already read and returns its text fenced as untrusted data', async () => {
@@ -524,10 +657,18 @@ describe('chat turns run browser tools the model chose', () => {
     expect(h.capturePageContext).toHaveBeenCalledOnce();
     expect(h.resolved()!.results[0]!.content).toContain('you declined access to example.com');
     expect(h.resolved()!.results[0]!.content).not.toContain('Second table');
+    expect(h.events).toContainEqual(
+      expect.objectContaining({
+        type: 'progress-update',
+        status: 'completed',
+        summary: 'Skipped: you declined access to example.com',
+      }),
+    );
     expect(h.events.at(-1)).toMatchObject({
-      type: 'progress-update',
-      status: 'completed',
-      summary: 'Skipped: you declined access to example.com',
+      type: 'tool-execution-end',
+      name: CHAT_READ_PAGE_TOOL,
+      isError: false,
+      elapsedMs: expect.any(Number),
     });
   });
 
@@ -863,6 +1004,20 @@ describe('a browser task the model starts in Auto', () => {
     expect(h.startComposerBrowserTask).toHaveBeenCalledOnce();
   });
 
+  it('carries the known document identity into the local profile batch', async () => {
+    const h = harness({ approved: true, mode: 'full' });
+    h.assistant.browserContext = {
+      tabId: 7,
+      windowId: 3,
+      url: `${ORIGIN}/report`,
+      documentId: 'known-document',
+    };
+    await h.api.handle(handoff(CHAT_AUTOFILL_TOOL, { profile: { email: 'test@example.com' } }));
+    expect(h.runtimeMessages).toContainEqual(
+      expect.objectContaining({ type: 'FILL_APPLICATION_CONTACT', documentId: 'known-document' }),
+    );
+  });
+
   it('sends the whole profile to one local batch without starting the browser agent', async () => {
     const h = harness({ approved: true, mode: 'auto' });
     const profile = {
@@ -934,5 +1089,111 @@ describe('a browser task the model starts in Auto', () => {
     expect(goal).toContain('Remaining browser task:\nFill the application');
     expect(goal).toContain('Original request (data and constraints):');
     expect(h.controls.cards.textContent).not.toContain('Start task');
+  });
+
+  it('does not read or request access to another active tab', async () => {
+    const h = harness({ approved: true });
+    h.assistant.browserSource = { tabId: 999, url: 'https://original.example.test/application' };
+    await h.api.handle(handoff(CHAT_READ_PAGE_TOOL));
+    expect(h.capturePageContext).not.toHaveBeenCalled();
+    expect(h.requestHost).not.toHaveBeenCalled();
+    expect(h.resolved()?.results[0]?.content).toContain('page changed');
+  });
+  it('pins a read to the admitted tab instead of reselecting after an await', async () => {
+    const h = harness({ approved: true });
+    h.assistant.browserSource = { tabId: 7, url: `${ORIGIN}/report` };
+    await h.api.handle(handoff(CHAT_READ_PAGE_TOOL));
+    expect(h.capturePageContext).toHaveBeenCalledWith({
+      tabId: 7,
+      windowId: 3,
+      url: `${ORIGIN}/report`,
+      title: '',
+    });
+  });
+  it('does not replace the observation with another document returned during capture', async () => {
+    const h = harness({ approved: true });
+    const original = {
+      tabId: 7,
+      url: `${ORIGIN}/report`,
+      documentId: 'original-document',
+      formSnapshotId: 'original-form',
+    };
+    h.assistant.browserObservation = original;
+    await h.api.handle(handoff(CHAT_READ_PAGE_TOOL));
+    expect(h.resolved()?.results[0]?.content).toContain('page changed');
+    expect(h.assistant.browserObservation).toEqual(original);
+  });
+  it('does not read a submission tab moved to another window', async () => {
+    const h = harness({ approved: true });
+    h.assistant.browserSource = { tabId: 7, windowId: 99, url: `${ORIGIN}/report` };
+    await h.api.handle(handoff(CHAT_READ_PAGE_TOOL));
+    expect(h.capturePageContext).not.toHaveBeenCalled();
+    expect(h.resolved()?.results[0]?.content).toContain('page changed');
+  });
+  it('restores the original observed form reference before a recovered field fill', async () => {
+    const h = harness({ mode: 'full', approved: true });
+    const observation = {
+      tabId: 7,
+      url: `${ORIGIN}/report`,
+      documentId: 'doc-7',
+      formSnapshotId: '11111111-1111-4111-8111-111111111111',
+    };
+    await h.api.handle({
+      ...handoff(CHAT_AUTOFILL_TOOL, { fields: { '#name': 'Recovered answer' } }),
+      callerCheckpoint: {
+        schema_version: AGENT_EVENT_SCHEMA_VERSION,
+        run_id: '22222222-2222-4222-8222-222222222222',
+        turn_id: 'fixture-turn',
+        next_event_sequence: 8,
+      },
+      recoveryContext: {
+        historyConversationId: 'fixture-conversation',
+        projectId: null,
+        organizationId: null,
+        browserContext: {
+          tabId: 7,
+          windowId: 3,
+          url: observation.url,
+          documentId: observation.documentId,
+        },
+        observation,
+      },
+    });
+    expect(
+      h.runtimeMessages.find((message) => message['type'] === 'FILL_OBSERVED_FORM'),
+    ).toMatchObject({
+      documentId: observation.documentId,
+      formSnapshotId: observation.formSnapshotId,
+      plan: { fields: { '#name': 'Recovered answer' } },
+    });
+    expect(h.requestHost).not.toHaveBeenCalled();
+    expect(h.resolved()?.results[0]).toMatchObject({ observation: null });
+  });
+  it('cancels recovered work from a different chat before asking for site access or filling', async () => {
+    const h = harness({ mode: 'full', approved: true });
+    await h.api.handle({
+      ...handoff(CHAT_AUTOFILL_TOOL, { fields: { '#name': 'Wrong answer' } }),
+      callerCheckpoint: {
+        schema_version: AGENT_EVENT_SCHEMA_VERSION,
+        run_id: '22222222-2222-4222-8222-222222222222',
+        turn_id: 'fixture-turn',
+        next_event_sequence: 8,
+      },
+      recoveryContext: {
+        historyConversationId: 'another-conversation',
+        projectId: null,
+        organizationId: null,
+        browserContext: { tabId: 7, windowId: 3, url: `${ORIGIN}/report`, documentId: 'doc-7' },
+      },
+    });
+    expect(
+      h.runtimeMessages.some(
+        (message) => message['type'] === 'RESOLVE_CHAT_TOOLS' && message['cancelled'] === true,
+      ),
+    ).toBe(true);
+    expect(h.runtimeMessages.some((message) => message['type'] === 'FILL_OBSERVED_FORM')).toBe(
+      false,
+    );
+    expect(h.requestHost).not.toHaveBeenCalled();
   });
 });

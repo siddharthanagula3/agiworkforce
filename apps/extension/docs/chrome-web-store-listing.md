@@ -1,6 +1,6 @@
 # Chrome Web Store listing, source of truth
 
-Last updated: 2026-11-07
+Last updated: 2026-11-09
 
 Everything a reviewer reads in the Developer Dashboard is written here first and
 copied there verbatim. The dashboard has no version history and no diff; this
@@ -42,6 +42,10 @@ optional link to the AGI Desktop app.
 > list and separately confirmed for browser control, the assistant can click,
 > type, scroll and navigate for you, filling a long job application, for
 > instance. You approve each action before it runs unless you turn that off.
+> Full access opens and switches task tabs on approved sites without another
+> action prompt. Closing a tab still asks because it can discard unsaved work.
+> A browser task can open an approved-site tab and return it to chat for a
+> follow-up page read.
 > Chrome shows its own debugging bar the whole time; dismissing that bar stops
 > the run immediately.
 >

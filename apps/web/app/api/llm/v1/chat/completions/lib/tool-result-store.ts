@@ -1,10 +1,13 @@
 import 'server-only';
 
+import { randomUUID } from 'node:crypto';
 import { fenceUntrustedContent } from '@agiworkforce/utils/fence';
 import { MAX_EXECUTION_OUTPUT_BYTES, MAX_KEPT_TOOL_OUTPUT_CHARS } from '@/lib/e2b/types';
+import { capOutput } from '@/lib/e2b/execution-tools';
 import { logger } from '@/lib/logger';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import { getKeyValueStore } from '@/lib/server/key-value';
+import { evaluateToolResultSecretPolicy } from '@/lib/security/tool-result-secret-policy';
 
 export const TOOL_RESULT_READER_TOOL_NAME = 'read_tool_result';
 
@@ -21,6 +24,7 @@ const STORED_RESULT_SENTINEL =
 export const STORED_RESULT_NOTICE_MARKER = `${TOOL_RESULT_READER_TOOL_NAME} with reference`;
 
 interface StoredToolResult {
+  reference?: string;
   toolName?: string;
   content: string;
   totalChars: number;
@@ -72,7 +76,7 @@ async function indexStoredToolResult(
   try {
     await store
       .batch()
-      .hashSet(key, { [reference]: JSON.stringify(entry) })
+      .hashSet(key, { [reference]: JSON.stringify({ ...entry, reference }) })
       .expire(key, TTL_SECONDS)
       .exec();
   } catch (error) {
@@ -80,7 +84,7 @@ async function indexStoredToolResult(
   }
 }
 
-function readIndexedToolResult(raw: unknown): IndexedToolResult | null {
+function readIndexedToolResult(raw: unknown, reference: string): IndexedToolResult | null {
   let value: unknown = raw;
   if (typeof raw === 'string') {
     try {
@@ -91,6 +95,7 @@ function readIndexedToolResult(raw: unknown): IndexedToolResult | null {
   }
   if (!value || typeof value !== 'object') return null;
   const record = value as Record<string, unknown>;
+  if (record['reference'] !== reference) return null;
   const totalChars = record['totalChars'];
   const storedAt = record['storedAt'];
   if (typeof totalChars !== 'number' || typeof storedAt !== 'number') return null;
@@ -120,16 +125,20 @@ export async function listConversationToolResults(
   return Object.entries(fields)
     .flatMap(([reference, raw]) => {
       if (!REFERENCE_PATTERN.test(reference)) return [];
-      const entry = readIndexedToolResult(raw);
+      const entry = readIndexedToolResult(raw, reference);
       return entry && now - entry.storedAt < TTL_MS ? [{ reference, ...entry }] : [];
     })
     .sort((left, right) => right.storedAt - left.storedAt)
     .slice(0, MAX_LISTED_RESULTS);
 }
 
-function referenceFor(toolCallId: string): string | null {
-  const reference = toolCallId.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 128);
-  return REFERENCE_PATTERN.test(reference) ? reference : null;
+export function createToolResultReference(): string {
+  return randomUUID();
+}
+
+export interface ReferencedToolResult {
+  reference?: string;
+  content: string;
 }
 
 function exceedsInlineLimit(content: string): boolean {
@@ -148,41 +157,53 @@ export async function referenceOversizedToolResult(
     content: string;
     totalChars?: number;
   },
-): Promise<string | null> {
+): Promise<ReferencedToolResult | null> {
   if (!exceedsInlineLimit(input.content)) return null;
+  const bounded = input.content.slice(0, MAX_KEPT_TOOL_OUTPUT_CHARS);
+  const policed = await evaluateToolResultSecretPolicy(input.userId, input.toolName, bounded);
+  if (policed.action === 'blocked') return { content: policed.content };
+  const changed = policed.content !== bounded;
+  const fallback = changed ? { content: capOutput(policed.content) } : null;
+  if (!exceedsInlineLimit(policed.content)) return fallback;
   const store = getKeyValueStore();
-  const reference = referenceFor(input.toolCallId);
-  if (!store || !input.userId || !input.conversationId || !reference) return null;
-  const kept = input.content.slice(0, MAX_KEPT_TOOL_OUTPUT_CHARS);
-  const totalChars = input.totalChars ?? input.content.length;
+  if (!store || !input.userId || !input.conversationId || !input.toolCallId) return fallback;
+  const reference = createToolResultReference();
+  const kept = policed.content;
+  const totalChars = changed ? kept.length : (input.totalChars ?? input.content.length);
   try {
     const saved = await store.set(
       storageKey(input.userId, input.conversationId, reference),
-      { toolName: input.toolName, content: kept, totalChars },
-      { ttlSeconds: TTL_SECONDS },
+      {
+        reference,
+        toolName: input.toolName,
+        content: kept,
+        totalChars,
+      },
+      { ttlSeconds: TTL_SECONDS, onlyIfAbsent: true },
     );
-    if (!saved) return null;
+    if (!saved) return fallback;
   } catch (error) {
     logger.warn({ error, tool: input.toolName }, '[tool-result-store] oversized result not kept');
-    return null;
+    return fallback;
   }
   await indexStoredToolResult(input, reference, {
     toolName: input.toolName,
     totalChars,
     storedAt: Date.now(),
   });
-  const shown = inlineSlice(input.content);
+  const shown = inlineSlice(kept);
   const cut = kept.length < totalChars;
-  return (
-    `${shown}\n[This result is ${totalChars} characters and only the first ${shown.length} are shown. ` +
-    `Call ${STORED_RESULT_NOTICE_MARKER} "${reference}" and an offset to read the rest` +
-    (cut ? `; only the first ${kept.length} characters were kept.]` : '.]')
-  );
+  return {
+    reference,
+    content:
+      `${shown}\n[This result is ${totalChars} characters and only the first ${shown.length} are shown. ` +
+      `Call ${STORED_RESULT_NOTICE_MARKER} "${reference}" and an offset to read the rest` +
+      (cut ? `; only the first ${kept.length} characters were kept.]` : '.]'),
+  };
 }
 
-export function trimmedToolResultNotice(toolCallId: string | undefined): string | null {
-  const reference = toolCallId ? referenceFor(toolCallId) : null;
-  return reference
+export function trimmedToolResultNotice(reference: string | undefined): string | null {
+  return reference && REFERENCE_PATTERN.test(reference)
     ? `[This earlier tool result was removed to keep the conversation within the model context window. Call ${STORED_RESULT_NOTICE_MARKER} "${reference}" and an offset to read it again.]`
     : null;
 }
@@ -190,23 +211,39 @@ export function trimmedToolResultNotice(toolCallId: string | undefined): string 
 export async function keepTrimmedToolResult(
   input: ToolResultOwner & {
     toolCallId: string;
+    reference: string;
     toolName?: string;
     content: string;
   },
 ): Promise<boolean> {
   const store = getKeyValueStore();
-  const reference = referenceFor(input.toolCallId);
-  if (!store || !input.userId || !input.conversationId || !reference) return false;
-  if (input.content.includes(`${STORED_RESULT_NOTICE_MARKER} "${reference}"`)) return true;
+  const reference = input.reference;
+  if (
+    !store ||
+    !input.userId ||
+    !input.conversationId ||
+    !input.toolCallId ||
+    !REFERENCE_PATTERN.test(reference)
+  )
+    return false;
+  const policed = await evaluateToolResultSecretPolicy(
+    input.userId,
+    input.toolName ?? 'tool result',
+    input.content.slice(0, MAX_KEPT_TOOL_OUTPUT_CHARS),
+  );
+  if (policed.action === 'blocked') return false;
+  const totalChars = policed.action === 'redacted' ? policed.content.length : input.content.length;
   let saved: boolean;
   try {
     saved = await store.set(
       storageKey(input.userId, input.conversationId, reference),
       {
-        content: input.content.slice(0, MAX_KEPT_TOOL_OUTPUT_CHARS),
-        totalChars: input.content.length,
+        reference,
+        content: policed.content,
+        totalChars,
+        ...(input.toolName ? { toolName: input.toolName } : {}),
       },
-      { ttlSeconds: TTL_SECONDS },
+      { ttlSeconds: TTL_SECONDS, onlyIfAbsent: true },
     );
   } catch (error) {
     logger.warn({ error }, '[tool-result-store] trimmed result not kept');
@@ -215,7 +252,7 @@ export async function keepTrimmedToolResult(
   if (saved) {
     await indexStoredToolResult(input, reference, {
       toolName: input.toolName ?? null,
-      totalChars: input.content.length,
+      totalChars,
       storedAt: Date.now(),
     });
   }
@@ -249,22 +286,39 @@ export async function readStoredToolResult(
       isError: true,
     };
   }
-  if (offset >= stored.content.length) {
+  if (stored.reference !== reference) {
     return {
-      content: `Offset ${offset} is past the end of the kept result (${stored.content.length} characters).`,
+      content: 'That stored result cannot be verified. Its original output is unavailable.',
       isError: true,
     };
   }
-  const end = Math.min(offset + PAGE_CHARS, stored.content.length);
+  if (stored.content.length > MAX_KEPT_TOOL_OUTPUT_CHARS) {
+    return { content: 'The stored tool result exceeds the retained size limit.', isError: true };
+  }
+  const policed = await evaluateToolResultSecretPolicy(
+    owner.userId,
+    stored.toolName ?? 'tool result',
+    stored.content,
+  );
+  if (policed.action === 'blocked') return { content: policed.content, isError: true };
+  const approved = policed.content;
+  const totalChars = policed.action === 'redacted' ? approved.length : stored.totalChars;
+  if (offset >= approved.length) {
+    return {
+      content: `Offset ${offset} is past the end of the kept result (${approved.length} characters).`,
+      isError: true,
+    };
+  }
+  const end = Math.min(offset + PAGE_CHARS, approved.length);
   const fenced = fenceUntrustedContent(
-    stored.content.slice(offset, end).replaceAll('<', '&lt;'),
+    approved.slice(offset, end).replaceAll('<', '&lt;'),
     STORED_RESULT_TAG,
     STORED_RESULT_SENTINEL,
   );
   const next =
-    end < stored.content.length
-      ? `Characters ${offset} to ${end} of ${stored.totalChars}. Read on from offset ${end}.`
-      : `Characters ${offset} to ${end} of ${stored.totalChars}. This is the end of the kept result.`;
+    end < approved.length
+      ? `Characters ${offset} to ${end} of ${totalChars}. Read on from offset ${end}.`
+      : `Characters ${offset} to ${end} of ${totalChars}. This is the end of the kept result.`;
   return { content: `${fenced}\n${next}`, isError: false };
 }
 

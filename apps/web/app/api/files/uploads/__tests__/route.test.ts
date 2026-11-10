@@ -29,28 +29,51 @@ vi.mock('@/lib/server/attachment-allowance', async (importOriginal) => ({
   admitAttachmentUpload: (input: unknown) => mockAdmitAttachmentUpload(input),
 }));
 
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn().mockResolvedValue(null) }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/rate-limit', async () => ({
+  ...(await vi.importActual<RateLimitModule>('@/lib/rate-limit')),
+  withRateLimit: vi.fn().mockResolvedValue(null),
+}));
+vi.mock('@/lib/csrf', async () => ({
+  ...(await vi.importActual<CsrfModule>('@/lib/csrf')),
+  requireCsrfToken: vi.fn().mockResolvedValue(null),
+}));
+vi.mock('@/lib/logger', async () => ({
+  ...(await vi.importActual<LoggerModule>('@/lib/logger')),
+
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mockGetUserScopedDb }));
-vi.mock('@/lib/server/product-analytics', () => ({
+vi.mock('@/lib/server/rls-db', async () => ({
+  ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
+  getUserScopedDb: mockGetUserScopedDb,
+}));
+vi.mock('@/lib/server/product-analytics', async () => ({
+  ...(await vi.importActual<ProductAnalyticsModule>('@/lib/server/product-analytics')),
+
   resolveProductAnalyticsSurface: () => 'web',
   trackProductAnalyticsEvent: vi.fn(),
 }));
-vi.mock('@/lib/server/chat-attachment-completion', () => ({
+vi.mock('@/lib/server/chat-attachment-completion', async () => ({
+  ...(await vi.importActual<ChatAttachmentCompletionModule>(
+    '@/lib/server/chat-attachment-completion',
+  )),
+
   completeChatAttachmentUpload: mockCompleteChatAttachmentUpload,
   findCompletedChatAttachment: vi.fn().mockResolvedValue(null),
   resolveTemporaryChatUpload: vi.fn().mockResolvedValue(false),
   resolveUploadSourceSurface: () => 'web',
 }));
-vi.mock('@/lib/server/project-knowledge-files', () => ({
+vi.mock('@/lib/server/project-knowledge-files', async () => ({
+  ...(await vi.importActual<ProjectKnowledgeFilesModule>('@/lib/server/project-knowledge-files')),
+
   checkProjectKnowledgeCapacity: mockCheckProjectKnowledgeCapacity,
   findProjectKnowledgeFileByChecksum: vi.fn().mockResolvedValue(null),
   registerProjectKnowledgeFile: mockRegisterProjectKnowledgeFile,
 }));
-vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
+vi.mock('@/lib/server/project-knowledge-object-storage', async () => ({
+  ...(await vi.importActual<ProjectKnowledgeObjectStorageModule>(
+    '@/lib/server/project-knowledge-object-storage',
+  )),
+
   deleteProjectKnowledgeObject: vi.fn().mockResolvedValue(undefined),
   sealProjectKnowledgeObject: vi.fn(),
 }));
@@ -78,6 +101,15 @@ import {
   PUT as relayPart,
 } from '../[uploadId]/route';
 import { POST as signParts } from '../[uploadId]/parts/route';
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type CsrfModule = typeof import('@/lib/csrf');
+type LoggerModule = typeof import('@/lib/logger');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type ProductAnalyticsModule = typeof import('@/lib/server/product-analytics');
+type ChatAttachmentCompletionModule = typeof import('@/lib/server/chat-attachment-completion');
+type ProjectKnowledgeFilesModule = typeof import('@/lib/server/project-knowledge-files');
+type ProjectKnowledgeObjectStorageModule =
+  typeof import('@/lib/server/project-knowledge-object-storage');
 
 const USER_ID = 'user-owner';
 const PRIVATE_BUCKET = 'agi-private';

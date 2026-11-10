@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   ManagedCloudAgentRunHttpError,
+  AgentEventEnvelopeSchema,
   AGENT_EVENT_SCHEMA_VERSION,
   createManagedCloudAgentRunClient,
   readManagedCloudAgentRunHandle,
@@ -20,6 +21,7 @@ import {
   cancelAndConfirmChromeManagedRun,
   findChromeManagedRunByRequestId,
   resumeChromeManagedRun,
+  assertChromeManagedCallerRun,
   type ChromeManagedRunDependencies,
 } from '../src/features/cloud-bridge/managedRunControl';
 
@@ -60,6 +62,180 @@ function completedRun() {
 afterEach(() => vi.useRealTimers());
 
 describe('Chrome managed run control', () => {
+  it.each(['completed', 'awaiting_input'] as const)(
+    'distinguishes %s from a pending canonical caller boundary',
+    async (state) => {
+      const client: ManagedCloudAgentRunClient = {
+        listRuns: vi.fn(),
+        getRun: vi.fn(),
+        cancelRun: vi.fn(),
+        followRun: vi.fn(async (_id, options) => {
+          await options?.onEvent?.(
+            AgentEventEnvelopeSchema.parse({
+              schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+              sessionId: 'fixture-session',
+              turnId: 'fixture-turn',
+              sequence: 0,
+              emittedAtMs: 1000,
+              event: {
+                type: 'caller-tools-requested',
+                nextEventSequence: 3,
+                calls: [
+                  {
+                    id: 'fixture-call',
+                    type: 'function',
+                    function: { name: 'original_fixture_tool', arguments: '{}' },
+                  },
+                ],
+              },
+            }),
+          );
+          return {
+            run: {
+              ...completedRun(),
+              state,
+              completedAt: state === 'completed' ? completedRun().completedAt : null,
+            },
+            lastSequence: 3,
+          };
+        }),
+      };
+      const result = await resumeChromeManagedRun(
+        {
+          run: reference,
+          alreadyVisibleText: '',
+          originalCallerToolNames: ['original_fixture_tool'],
+        },
+        dependencies(client),
+      );
+      expect(result.status).toBe(state === 'completed' ? 'success' : 'error');
+      if (result.status === 'error') expect(result.message).not.toContain('Send the request again');
+    },
+  );
+
+  it('does not confuse an acknowledged caller boundary with a later hosted approval', async () => {
+    const events = [
+      {
+        type: 'caller-tools-requested',
+        nextEventSequence: 3,
+        calls: [
+          {
+            id: 'fixture-call',
+            type: 'function',
+            function: { name: 'original_fixture_tool', arguments: '{}' },
+          },
+        ],
+      },
+      { type: 'task-state-changed', taskId: 'fixture-turn', state: 'awaiting_input' },
+      { type: 'lifecycle', phase: 'paused' },
+      { type: 'lifecycle', phase: 'resumed' },
+      { type: 'task-state-changed', taskId: 'fixture-turn', state: 'awaiting_approval' },
+    ];
+    const client: ManagedCloudAgentRunClient = {
+      listRuns: vi.fn(),
+      getRun: vi.fn(),
+      cancelRun: vi.fn(),
+      followRun: vi.fn(async (_id, options) => {
+        for (const [sequence, event] of events.entries())
+          await options?.onEvent?.(
+            AgentEventEnvelopeSchema.parse({
+              schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+              sessionId: 'fixture-session',
+              turnId: 'fixture-turn',
+              emittedAtMs: 1000 + sequence,
+              sequence,
+              event,
+            }),
+          );
+        return {
+          run: {
+            ...completedRun(),
+            state: 'awaiting_approval',
+            completedAt: null,
+            lastEventSequence: 4,
+          },
+          lastSequence: 4,
+        };
+      }),
+    };
+    expect(
+      (
+        await resumeChromeManagedRun(
+          {
+            run: reference,
+            alreadyVisibleText: '',
+            originalCallerToolNames: ['original_fixture_tool'],
+          },
+          dependencies(client),
+        )
+      ).status,
+    ).toBe('success');
+  });
+
+  it('reads legacy journal calls against the captured original names before auth yields', async () => {
+    const names = ['original_fixture_tool'];
+    const events = [
+      { type: 'tool-use-start', toolUseId: 'fixture-call', name: names[0] },
+      { type: 'tool-use-delta', toolUseId: 'fixture-call', deltaJson: '{}' },
+      { type: 'tool-use-end', toolUseId: 'fixture-call' },
+      { type: 'stop', reason: 'tool-use' },
+    ];
+    const client: ManagedCloudAgentRunClient = {
+      listRuns: vi.fn(),
+      getRun: vi.fn(),
+      cancelRun: vi.fn(),
+      followRun: vi.fn(async (_id, options) => {
+        for (const [sequence, event] of events.entries())
+          await options?.onEvent?.(
+            AgentEventEnvelopeSchema.parse({
+              schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+              sessionId: 'fixture-session',
+              turnId: 'fixture-turn',
+              emittedAtMs: 1000 + sequence,
+              sequence,
+              event,
+            }),
+          );
+        return {
+          run: { ...completedRun(), state: 'awaiting_input', completedAt: null },
+          lastSequence: 4,
+        };
+      }),
+    };
+    const result = await resumeChromeManagedRun(
+      { run: reference, alreadyVisibleText: '', originalCallerToolNames: names },
+      {
+        ...dependencies(client),
+        getAuthToken: async () => {
+          names[0] = 'changed_after_admission';
+          return 'fixture-token';
+        },
+      },
+    );
+    expect(result).toMatchObject({ status: 'error', code: 'server_error' });
+  });
+
+  it('returns a structured failure when recovery credentials cannot refresh', async () => {
+    const client: ManagedCloudAgentRunClient = {
+      listRuns: vi.fn(),
+      getRun: vi.fn(),
+      cancelRun: vi.fn(),
+      followRun: vi.fn(),
+    };
+    expect(
+      await resumeChromeManagedRun(
+        { run: reference, alreadyVisibleText: '' },
+        {
+          ...dependencies(client),
+          getAuthToken: async () => {
+            throw new Error('offline');
+          },
+        },
+      ),
+    ).toMatchObject({ status: 'error', code: 'server_error' });
+    expect(client.followRun).not.toHaveBeenCalled();
+  });
+
   it.each([401, 403])('classifies HTTP %s as an auth boundary failure', async (status) => {
     const client: ManagedCloudAgentRunClient = {
       listRuns: vi.fn(),
@@ -495,4 +671,183 @@ describe('Chrome Stop authoritative terminal confirmation', () => {
     await expect(result).resolves.toMatchObject({ status: 'error', code: 'server_error' });
     expect(readSignal?.aborted).toBe(true);
   });
+});
+
+describe('authoritative caller checkpoint inspection', () => {
+  const calls = [
+    {
+      id: 'fixture-call',
+      type: 'function' as const,
+      function: { name: 'original_fixture_tool', arguments: '{}' },
+    },
+  ];
+  const checkpoint = {
+    schema_version: AGENT_EVENT_SCHEMA_VERSION,
+    run_id: RUN_ID,
+    turn_id: 'fixture-turn',
+    next_event_sequence: 8,
+    calls,
+  };
+  const event = (sequence: number, value: unknown) =>
+    AgentEventEnvelopeSchema.parse({
+      schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+      sessionId: 'fixture-session',
+      turnId: 'fixture-turn',
+      sequence,
+      emittedAtMs: 1000 + sequence,
+      event: value,
+    });
+  function clientFor(
+    state: 'awaiting_input' | 'completed' | 'cancelled' = 'awaiting_input',
+    complete = true,
+  ) {
+    const events = [
+      event(5, { type: 'caller-tools-requested', calls, nextEventSequence: 8 }),
+      event(6, {
+        type: 'task-state-changed',
+        taskId: 'fixture-turn',
+        state: 'awaiting_input',
+        summary: 'Browser work',
+      }),
+      ...(complete ? [event(7, { type: 'lifecycle', phase: 'paused' })] : []),
+    ];
+    const last = complete ? 7 : 6;
+    const fetchImpl = vi.fn(
+      async (input: string | URL | Request) =>
+        new Response(
+          JSON.stringify({
+            run: {
+              ...completedRun(),
+              requestId: 'fixture-request',
+              state,
+              lastEventSequence: last,
+              completedAt: state === 'completed' ? completedRun().completedAt : null,
+            },
+            events: events.filter(
+              (event) =>
+                event.sequence >
+                Number(
+                  new URL(
+                    typeof input === 'string'
+                      ? input
+                      : input instanceof URL
+                        ? input.href
+                        : input.url,
+                  ).searchParams.get('after') ?? -1,
+                ),
+            ),
+            nextAfterSequence: last,
+            hasMore: false,
+          }),
+          { headers: { 'Content-Type': 'application/json' } },
+        ),
+    );
+    return {
+      client: createManagedCloudAgentRunClient({
+        baseUrl: 'https://example.test',
+        getAuthToken: async () => 'fixture-token',
+        fetchImpl,
+      }),
+      fetchImpl,
+    };
+  }
+  it('exposes a complete current caller boundary using the saved offering', async () => {
+    const h = clientFor(),
+      onCallerCheckpoint = vi.fn();
+    const result = await resumeChromeManagedRun(
+      {
+        run: reference,
+        alreadyVisibleText: '',
+        originalCallerToolNames: ['original_fixture_tool'],
+      },
+      { ...dependencies(h.client), onCallerCheckpoint },
+    );
+    expect(result.status).toBe('error');
+    expect(onCallerCheckpoint).toHaveBeenCalledExactlyOnceWith(checkpoint);
+  });
+  it.each(['completed', 'cancelled'] as const)(
+    'does not dispatch historical caller work from a %s run',
+    async (state) => {
+      const h = clientFor(state),
+        onCallerCheckpoint = vi.fn();
+      await resumeChromeManagedRun(
+        {
+          run: reference,
+          alreadyVisibleText: '',
+          originalCallerToolNames: ['original_fixture_tool'],
+        },
+        { ...dependencies(h.client), onCallerCheckpoint },
+      );
+      expect(onCallerCheckpoint).not.toHaveBeenCalled();
+    },
+  );
+  it('does not expose an incomplete pause boundary', async () => {
+    const h = clientFor('awaiting_input', false),
+      onCallerCheckpoint = vi.fn();
+    expect(
+      (
+        await resumeChromeManagedRun(
+          {
+            run: reference,
+            alreadyVisibleText: '',
+            originalCallerToolNames: ['original_fixture_tool'],
+          },
+          { ...dependencies(h.client), onCallerCheckpoint },
+        )
+      ).status,
+    ).toBe('error');
+    expect(onCallerCheckpoint).not.toHaveBeenCalled();
+  });
+  it('checks live run state and original request identity immediately before an effect', async () => {
+    const h = clientFor();
+    await assertChromeManagedCallerRun(
+      checkpoint,
+      { requestId: 'fixture-request', conversationId: null },
+      dependencies(h.client),
+    );
+    await expect(
+      assertChromeManagedCallerRun(
+        checkpoint,
+        { requestId: 'another-request', conversationId: null },
+        dependencies(h.client),
+      ),
+    ).rejects.toThrow('checkpoint changed');
+    expect(h.fetchImpl).toHaveBeenCalledTimes(2);
+  });
+  it('refuses a run attached to another cloud conversation', async () => {
+    const h = clientFor();
+    await expect(
+      assertChromeManagedCallerRun(
+        checkpoint,
+        { requestId: 'fixture-request', conversationId: '33333333-3333-4333-8333-333333333333' },
+        dependencies(h.client),
+      ),
+    ).rejects.toThrow('checkpoint changed');
+  });
+  it('snapshots checkpoint and request identity before credential refresh yields', async () => {
+    const h = clientFor(),
+      input = structuredClone(checkpoint),
+      identity = { requestId: 'fixture-request', conversationId: null };
+    const deps = dependencies(h.client);
+    vi.mocked(deps.getAuthToken).mockImplementationOnce(async () => {
+      input.next_event_sequence = 9;
+      identity.requestId = 'another-request';
+      return 'fixture-token';
+    });
+    await assertChromeManagedCallerRun(input, identity, deps);
+    expect(String(h.fetchImpl.mock.calls[0]![0])).toContain('after=7');
+  });
+  it.each(['completed', 'cancelled'] as const)(
+    'refuses an effect after a live %s state',
+    async (state) => {
+      const h = clientFor(state);
+      await expect(
+        assertChromeManagedCallerRun(
+          checkpoint,
+          { requestId: 'fixture-request', conversationId: null },
+          dependencies(h.client),
+        ),
+      ).rejects.toThrow('run stopped');
+    },
+  );
 });

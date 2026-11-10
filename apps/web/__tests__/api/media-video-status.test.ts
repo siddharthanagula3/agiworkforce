@@ -3,11 +3,15 @@ import { NextRequest } from 'next/server';
 
 vi.mock('server-only', () => ({}));
 
-vi.mock('@/lib/rate-limit', () => ({
+vi.mock('@/lib/rate-limit', async () => ({
+  ...(await vi.importActual<RateLimitModule>('@/lib/rate-limit')),
+
   withRateLimit: vi.fn().mockResolvedValue(null),
 }));
 
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async () => ({
+  ...(await vi.importActual<LoggerModule>('@/lib/logger')),
+
   logger: {
     info: vi.fn(),
     error: vi.fn(),
@@ -16,7 +20,9 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-vi.mock('@/lib/cors', () => ({
+vi.mock('@/lib/cors', async () => ({
+  ...(await vi.importActual<CorsModule>('@/lib/cors')),
+
   handleCorsPreflightRequest: vi.fn().mockReturnValue(null),
   getCorsHeaders: vi.fn().mockReturnValue({}),
   getSecurityHeaders: vi.fn().mockReturnValue({}),
@@ -38,7 +44,9 @@ vi.mock('@/lib/error-handler', async () => {
 
 const mockGetClerkAuthUser = vi.fn();
 
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async () => ({
+  ...(await vi.importActual<ApiAuthModule>('@/lib/api-auth')),
+
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
 
@@ -50,10 +58,14 @@ const durableMocks = vi.hoisted(() => ({
   incidentAlert: vi.fn(),
 }));
 
-vi.mock('@/lib/server/rls-db', () => ({
+vi.mock('@/lib/server/rls-db', async () => ({
+  ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
+
   getUserScopedDb: (...args: unknown[]) => durableMocks.scoped(...args),
 }));
-vi.mock('@/lib/server/video-generation-jobs', () => ({
+vi.mock('@/lib/server/video-generation-jobs', async () => ({
+  ...(await vi.importActual<VideoGenerationJobsModule>('@/lib/server/video-generation-jobs')),
+
   getVideoGenerationJob: (...args: unknown[]) => durableMocks.get(...args),
   beginVideoProviderCancellationAttempt: vi.fn(),
   claimVideoGenerationJob: vi.fn(),
@@ -75,7 +87,11 @@ vi.mock('@/lib/server/video-generation-jobs', () => ({
   markVideoGenerationOutcomeUnknown: vi.fn(),
   recordVideoProviderCancellationAttempt: vi.fn(),
 }));
-vi.mock('@/lib/services/video-job-reconciliation-service', () => ({
+vi.mock('@/lib/services/video-job-reconciliation-service', async () => ({
+  ...(await vi.importActual<VideoJobReconciliationServiceModule>(
+    '@/lib/services/video-job-reconciliation-service',
+  )),
+
   reconcileVideoGenerationJob: (...args: unknown[]) => durableMocks.reconcile(...args),
   publicVideoJobStatus: (job: Record<string, unknown>) => ({
     success: true,
@@ -84,13 +100,21 @@ vi.mock('@/lib/services/video-job-reconciliation-service', () => ({
     ...(job['assetId'] ? { video_url: `/api/files/${String(job['assetId'])}` } : {}),
   }),
 }));
-vi.mock('@/lib/services/managed-usage-request-service', () => ({
+vi.mock('@/lib/services/managed-usage-request-service', async () => ({
+  ...(await vi.importActual<ManagedUsageRequestServiceModule>(
+    '@/lib/services/managed-usage-request-service',
+  )),
+
   estimateMicrousdOf: (source: { estimatedCostMicrousd?: number; estimatedCostCents: number }) =>
     source.estimatedCostMicrousd ?? Math.round(source.estimatedCostCents) * 10_000,
 
   markManagedUsageClientDelivered: (...args: unknown[]) => durableMocks.delivered(...args),
 }));
-vi.mock('@/lib/services/video-incident-alert-service', () => ({
+vi.mock('@/lib/services/video-incident-alert-service', async () => ({
+  ...(await vi.importActual<VideoIncidentAlertServiceModule>(
+    '@/lib/services/video-incident-alert-service',
+  )),
+
   deliverPendingVideoIncidentAlert: (...args: unknown[]) => durableMocks.incidentAlert(...args),
 }));
 
@@ -98,6 +122,17 @@ const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
 import { GET, OPTIONS } from '@/app/api/media/video/status/route';
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type LoggerModule = typeof import('@/lib/logger');
+type CorsModule = typeof import('@/lib/cors');
+type ApiAuthModule = typeof import('@/lib/api-auth');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type VideoGenerationJobsModule = typeof import('@/lib/server/video-generation-jobs');
+type VideoJobReconciliationServiceModule =
+  typeof import('@/lib/services/video-job-reconciliation-service');
+type ManagedUsageRequestServiceModule =
+  typeof import('@/lib/services/managed-usage-request-service');
+type VideoIncidentAlertServiceModule = typeof import('@/lib/services/video-incident-alert-service');
 
 const BASE_URL = 'http://localhost/api/media/video/status';
 

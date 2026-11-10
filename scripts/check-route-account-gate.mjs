@@ -274,6 +274,7 @@ const reachCache = new Map();
  * The principal kinds reachable from one symbol, and whether the gate is among
  * them. A result computed while a cycle was open is incomplete and is not
  * cached, so a mutually recursive pair cannot freeze a half-walked answer.
+ * A proven gate is definitive because gated classification dominates principal kinds.
  */
 function reachFrom(file, symbol, stack) {
   if (file === GATE_MODULE && symbol === GATE_SYMBOL) {
@@ -309,15 +310,18 @@ function reachFrom(file, symbol, stack) {
   } else if (module.symbols.has(symbol)) {
     const declaration = module.symbols.get(symbol);
     for (const reference of declaration.names) {
+      if (result.gate) break;
       if (reference === symbol) continue;
       if (module.imports.has(reference) || module.symbols.has(reference)) {
         merge(reachFrom(file, reference, stack));
       }
     }
     for (const edge of declaration.dynamic) {
+      if (result.gate) break;
       const target = resolveModule(edge.specifier, file);
       if (edge.names) {
         for (const name of edge.names) {
+          if (result.gate) break;
           addKind(terminalKind(edge.specifier, target, name));
           if (target) merge(reachFrom(target, name, stack));
         }
@@ -328,11 +332,13 @@ function reachFrom(file, symbol, stack) {
     }
   } else {
     for (const star of module.starExports) {
+      if (result.gate) break;
       if (star.target) merge(reachFrom(star.target, symbol, stack));
     }
   }
 
   stack.delete(key);
+  if (result.gate) result.complete = true;
   if (result.complete) reachCache.set(key, result);
   return result;
 }
@@ -346,12 +352,14 @@ function reachModule(file, stack) {
   walkingModules.add(file);
   const result = { gate: false, kinds: new Set(), complete: true };
   for (const name of analyzeModule(file).exportNames) {
+    if (result.gate) break;
     const from = reachFrom(file, name, stack);
     if (from.gate) result.gate = true;
     for (const kind of from.kinds) result.kinds.add(kind);
     if (!from.complete) result.complete = false;
   }
   walkingModules.delete(file);
+  if (result.gate) result.complete = true;
   if (result.complete) moduleCache.set(file, result);
   return result;
 }

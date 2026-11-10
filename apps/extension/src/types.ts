@@ -443,6 +443,8 @@ export interface RunPageActionsResponse {
 
 export interface ChatMessageMessage extends BaseMessage {
   type: 'CHAT_MESSAGE';
+  browserObservation?: import('./features/browser-tools/documentBridge').FormObservationReference;
+  browserContext?: import('./features/cloud-bridge/callerBrowserContext').CallerBrowserContext;
   owner: ManagedCloudOwner;
   clientInstanceId: string;
   id: string;
@@ -481,6 +483,14 @@ export interface ChatToolHandoffMessage {
   id: string;
   handoffId: string;
   calls: ToolCall[];
+  callerCheckpoint?: import('./features/computer-use/chatToolResults').ChatToolCursor;
+  recoveryContext?: {
+    historyConversationId: string;
+    projectId: string | null;
+    organizationId: string | null;
+    browserContext: import('./features/cloud-bridge/callerBrowserContext').CallerBrowserContext;
+    observation?: import('./features/browser-tools/documentBridge').FormObservationReference;
+  };
 }
 
 export interface ResolveChatToolsMessage extends BaseMessage {
@@ -490,7 +500,7 @@ export interface ResolveChatToolsMessage extends BaseMessage {
   id: string;
   handoffId: string;
   cancelled?: boolean;
-  results?: Array<{ toolCallId: string; content: string }>;
+  results?: import('./features/computer-use/chatToolResults').ChatToolResult[];
   browserToolTier?: ChatBrowserToolTier;
   browserHistory?: boolean;
 }
@@ -531,6 +541,7 @@ export interface ChromeManagedRoutingMetadata {
 
 export interface ResumeChatRunMessage extends BaseMessage {
   type: 'RESUME_CHAT_RUN';
+  historyConversationId?: string;
   owner: ManagedCloudOwner;
   clientInstanceId: string;
   id: string;
@@ -555,6 +566,8 @@ export interface AdoptedChatTurn {
 
 export interface ResolveChatApprovalMessage extends BaseMessage {
   type: 'RESOLVE_CHAT_APPROVAL';
+  alreadyVisibleText?: string;
+  historyConversationId?: string;
   owner: ManagedCloudOwner;
   clientInstanceId: string;
   id: string;
@@ -565,6 +578,8 @@ export interface ResolveChatApprovalMessage extends BaseMessage {
 
 export interface ResolveChatInputMessage extends BaseMessage {
   type: 'RESOLVE_CHAT_INPUT';
+  alreadyVisibleText?: string;
+  historyConversationId?: string;
   owner: ManagedCloudOwner;
   clientInstanceId: string;
   id: string;
@@ -962,6 +977,7 @@ export interface FillApplicationContactMessage {
   type: 'FILL_APPLICATION_CONTACT';
   tabId: number;
   pageUrl: string;
+  documentId?: string;
   profile: JobApplicationProfile;
   replaceExisting?: boolean;
   owner: ManagedCloudOwner;
@@ -1029,6 +1045,12 @@ export interface StartComputerUseMessage {
   selectedTabs?: readonly BrowserContextTabReference[];
   pageContext?: string;
   historyConversationId?: string;
+  callerHandoff?: {
+    handoffId: string;
+    toolCallId: string;
+    clientInstanceId: string;
+    streamId: string;
+  };
 }
 
 export interface CancelComputerUseMessage extends BaseMessage {

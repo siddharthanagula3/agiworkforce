@@ -1,3 +1,4 @@
+import { MAX_CALLER_TOOL_STEPS } from '@agiworkforce/cloud-contracts';
 import { describe, expect, it, vi } from 'vitest';
 import {
   getModelEffortOptions,
@@ -19,6 +20,10 @@ import {
   FREE_TRIAL_MODEL,
   type FreeTrialChunk,
 } from '../src/features/cloud-bridge/freeTrialClient';
+import {
+  chatBrowserToolDefinitions,
+  MAX_CHAT_TOOL_RESULT_CHARS,
+} from '../src/features/computer-use/chatBrowserTools';
 
 const ADMITTED_MANAGED_MODEL_IDS = getPickerModels().map((model) => model.id);
 // What a paid plan's economy Auto resolves to; the free plan's model is FREE_TRIAL_MODEL.
@@ -58,6 +63,515 @@ function approvalDependencies(
 }
 
 describe('executeChromeManagedChat', () => {
+  function callerCheckpoint() {
+    const tool = chatBrowserToolDefinitions('read')[0]!;
+    const calls = [
+      {
+        id: 'browser-call',
+        type: 'function' as const,
+        function: { name: tool.function.name, arguments: '{}' },
+      },
+    ];
+    return {
+      type: 'tool-handoff' as const,
+      calls,
+      continuation: {
+        schema_version: AGENT_EVENT_SCHEMA_VERSION,
+        run_id: '11111111-1111-4111-8111-111111111111',
+        turn_id: 'fixture-turn',
+        next_event_sequence: 8,
+        calls,
+      },
+    };
+  }
+
+  it.each(['admission', 'claim', 'receipt'] as const)(
+    'stops at a failed durable caller %s boundary',
+    async (fault) => {
+      const handoff = callerCheckpoint();
+      const { calls: _calls, ...cursor } = handoff.continuation;
+      const receipt = {
+        ...cursor,
+        tool_results: [{ tool_call_id: 'browser-call', content: 'result' }],
+      };
+      const rejectAt = (boundary: string) => {
+        if (fault === boundary) throw new Error('Fixture durable storage failure');
+      };
+      const custody = {
+        admit: vi.fn(async () => rejectAt('admission')),
+        bindRun: vi.fn(async () => undefined),
+        claim: vi.fn(async () => {
+          rejectAt('claim');
+          return null;
+        }),
+        claimAction: vi.fn(async () => null),
+        completeAction: vi.fn(async (_checkpoint, result) => result),
+        complete: vi.fn(async () => {
+          rejectAt('receipt');
+          return receipt;
+        }),
+        finish: vi.fn(async () => undefined),
+      };
+      const deps = dependencies({
+        callerCustody: custody,
+        streamChat: vi
+          .fn()
+          .mockReturnValueOnce(stream(handoff, { type: 'done' }))
+          .mockReturnValueOnce(stream({ type: 'text', text: 'Done.' }, { type: 'done' })),
+        onToolHandoff: vi.fn(async () => ({
+          status: 'resolved',
+          results: [{ toolCallId: 'browser-call', content: 'result' }],
+        })),
+      });
+      const result = await executeChromeManagedChat(
+        {
+          id: `caller-durable-${fault}`,
+          text: 'Read this page.',
+          modelSelection: PAID_ECONOMY_MODEL,
+          tools: chatBrowserToolDefinitions('read'),
+        },
+        deps,
+      );
+      expect(result.status).toBe('error');
+      expect(custody.admit).toHaveBeenCalledOnce();
+      expect(deps.streamChat).toHaveBeenCalledTimes(fault === 'admission' ? 0 : 1);
+      expect(deps.onToolHandoff).toHaveBeenCalledTimes(fault === 'receipt' ? 1 : 0);
+      expect(custody.finish).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([12, MAX_CALLER_TOOL_STEPS])(
+    'finishes %s negotiated actions and posts the final receipt',
+    async (steps) => {
+      let leg = 0;
+      const deps = dependencies({
+        streamChat: vi.fn(() => {
+          if (leg === steps) return stream({ type: 'text', text: 'All done.' }, { type: 'done' });
+          const checkpoint = callerCheckpoint();
+          checkpoint.calls[0]!.id = `browser-call-${leg}`;
+          checkpoint.continuation.next_event_sequence += leg * 5;
+          leg += 1;
+          return stream(checkpoint, { type: 'done' });
+        }),
+        onToolHandoff: vi.fn(async (calls) => ({
+          status: 'resolved',
+          results: calls.map((call) => ({
+            toolCallId: call.id,
+            content: 'Verified fixture result',
+          })),
+        })),
+      });
+      expect(
+        (
+          await executeChromeManagedChat(
+            {
+              id: `caller-budget-${steps}`,
+              text: 'Complete the browser task.',
+              modelSelection: PAID_ECONOMY_MODEL,
+              tools: chatBrowserToolDefinitions('read'),
+            },
+            deps,
+          )
+        ).status,
+      ).toBe('success');
+      expect(deps.onToolHandoff).toHaveBeenCalledTimes(steps);
+      expect(deps.streamChat).toHaveBeenCalledTimes(steps + 1);
+    },
+  );
+
+  it('refuses a caller action beyond the shared maximum before execution', async () => {
+    let leg = 0;
+    const deps = dependencies({
+      streamChat: vi.fn(() => {
+        const checkpoint = callerCheckpoint();
+        checkpoint.calls[0]!.id = `browser-call-${leg}`;
+        checkpoint.continuation.next_event_sequence += leg * 5;
+        leg += 1;
+        return stream(checkpoint, { type: 'done' });
+      }),
+      onToolHandoff: vi.fn(async (calls) => ({
+        status: 'resolved',
+        results: calls.map((call) => ({ toolCallId: call.id, content: 'Verified fixture result' })),
+      })),
+    });
+    expect(
+      await executeChromeManagedChat(
+        {
+          id: 'caller-over-budget',
+          text: 'Complete the browser task.',
+          modelSelection: PAID_ECONOMY_MODEL,
+          tools: chatBrowserToolDefinitions('read'),
+        },
+        deps,
+      ),
+    ).toMatchObject({ status: 'error', code: 'protocol_error' });
+    expect(deps.onToolHandoff).toHaveBeenCalledTimes(MAX_CALLER_TOOL_STEPS);
+    expect(deps.streamChat).toHaveBeenCalledTimes(MAX_CALLER_TOOL_STEPS + 1);
+  });
+
+  it('captures the tool offering before authentication can yield to another operation', async () => {
+    const offered = structuredClone([...chatBrowserToolDefinitions('read')]);
+    const original = structuredClone(offered);
+    const deps = dependencies({
+      getAuthToken: vi.fn(async () => {
+        offered[0]!.function.name = 'later_capability';
+        return 'token';
+      }),
+    });
+    const result = await executeChromeManagedChat(
+      {
+        id: 'caller-offer-snapshot',
+        text: 'Read this page.',
+        modelSelection: PAID_ECONOMY_MODEL,
+        tools: offered,
+      },
+      deps,
+    );
+    expect(result.status).toBe('success');
+    const options = vi.mocked(deps.streamChat).mock.calls[0]![2];
+    expect(options && !('aborted' in options) && options.tools).toEqual(original);
+  });
+
+  it.each([
+    'conflicting calls',
+    'unoffered tool',
+    'duplicate calls',
+    'malformed arguments',
+    'invalid cursor',
+  ])('rejects %s before any browser dispatch', async (fault) => {
+    const handoff = callerCheckpoint();
+    if (fault === 'conflicting calls')
+      handoff.continuation.calls = [
+        {
+          ...handoff.calls[0]!,
+          function: { ...handoff.calls[0]!.function, arguments: '{"different":true}' },
+        },
+      ];
+    if (fault === 'unoffered tool') handoff.calls[0]!.function.name = 'unoffered_browser_action';
+    if (fault === 'duplicate calls') handoff.calls.push(structuredClone(handoff.calls[0]!));
+    if (fault === 'malformed arguments') handoff.calls[0]!.function.arguments = '[]';
+    if (fault === 'invalid cursor') handoff.continuation.next_event_sequence = 0;
+    const deps = dependencies({
+      streamChat: vi.fn(() => stream(handoff, { type: 'done' })),
+      onToolHandoff: vi.fn(async () => ({
+        status: 'resolved',
+        results: [{ toolCallId: 'browser-call', content: 'result' }],
+      })),
+    });
+    const result = await executeChromeManagedChat(
+      {
+        id: 'caller-preflight',
+        text: 'Read this page.',
+        modelSelection: PAID_ECONOMY_MODEL,
+        tools: chatBrowserToolDefinitions('read'),
+      },
+      deps,
+    );
+    expect(result).toMatchObject({ status: 'error', code: 'protocol_error' });
+    expect(deps.onToolHandoff).not.toHaveBeenCalled();
+    expect(deps.streamChat).toHaveBeenCalledOnce();
+  });
+
+  it('retains the negotiated offering instead of adopting executor capability changes', async () => {
+    const original = chatBrowserToolDefinitions('read');
+    const deps = dependencies({
+      streamChat: vi
+        .fn()
+        .mockReturnValueOnce(stream(callerCheckpoint(), { type: 'done' }))
+        .mockReturnValueOnce(stream({ type: 'text', text: 'Done.' }, { type: 'done' })),
+      onToolHandoff: vi.fn(async () => ({
+        status: 'resolved',
+        results: [{ toolCallId: 'browser-call', content: 'result' }],
+        tools: chatBrowserToolDefinitions('act', true),
+      })),
+    });
+    const result = await executeChromeManagedChat(
+      {
+        id: 'caller-fixed-offer',
+        text: 'Read this page.',
+        modelSelection: PAID_ECONOMY_MODEL,
+        tools: original,
+      },
+      deps,
+    );
+    expect(result.status).toBe('success');
+    const options = vi.mocked(deps.streamChat).mock.calls[1]![2];
+    expect(options && !('aborted' in options) && options.tools).toEqual(original);
+  });
+
+  it('does not let executor mutation rewrite the owned result cursor', async () => {
+    const handoff = callerCheckpoint();
+    const deps = dependencies({
+      streamChat: vi
+        .fn()
+        .mockReturnValueOnce(stream(handoff, { type: 'done' }))
+        .mockReturnValueOnce(stream({ type: 'text', text: 'Done.' }, { type: 'done' })),
+      onToolHandoff: vi.fn(async () => {
+        handoff.continuation.run_id = '22222222-2222-4222-8222-222222222222';
+        handoff.continuation.turn_id = 'different-turn';
+        handoff.continuation.next_event_sequence = 99;
+        return { status: 'resolved', results: [{ toolCallId: 'browser-call', content: 'result' }] };
+      }),
+    });
+    const result = await executeChromeManagedChat(
+      {
+        id: 'caller-owned-cursor',
+        text: 'Read this page.',
+        modelSelection: PAID_ECONOMY_MODEL,
+        tools: chatBrowserToolDefinitions('read'),
+      },
+      deps,
+    );
+    expect(result.status).toBe('success');
+    const options = vi.mocked(deps.streamChat).mock.calls[1]![2];
+    expect(options && !('aborted' in options) && options.callerResume).toMatchObject({
+      run_id: '11111111-1111-4111-8111-111111111111',
+      turn_id: 'fixture-turn',
+      next_event_sequence: 8,
+    });
+  });
+
+  it.each(['replayed', 'regressed', 'different run'])(
+    'refuses a %s caller cursor before repeating browser effects',
+    async (fault) => {
+      const first = callerCheckpoint();
+      const next = structuredClone(first);
+      if (fault === 'regressed') next.continuation.next_event_sequence -= 1;
+      if (fault === 'different run')
+        next.continuation.run_id = '22222222-2222-4222-8222-222222222222';
+      const deps = dependencies({
+        streamChat: vi
+          .fn()
+          .mockReturnValueOnce(stream(first, { type: 'done' }))
+          .mockImplementation(() => stream(next, { type: 'done' })),
+        onToolHandoff: vi.fn(async () => ({
+          status: 'resolved',
+          results: [{ toolCallId: 'browser-call', content: 'result' }],
+        })),
+      });
+      const result = await executeChromeManagedChat(
+        {
+          id: 'caller-cursor-replay',
+          text: 'Read this page.',
+          modelSelection: PAID_ECONOMY_MODEL,
+          tools: chatBrowserToolDefinitions('read'),
+        },
+        deps,
+      );
+      expect(result).toMatchObject({ status: 'error', code: 'protocol_error' });
+      expect(deps.onToolHandoff).toHaveBeenCalledOnce();
+      expect(deps.streamChat).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it('accepts the same provider call id at a later cursor without reusing an older receipt', async () => {
+    const first = callerCheckpoint();
+    const next = structuredClone(first);
+    next.continuation.next_event_sequence += 5;
+    const deps = dependencies({
+      streamChat: vi
+        .fn()
+        .mockReturnValueOnce(stream(first, { type: 'done' }))
+        .mockReturnValueOnce(stream(next, { type: 'done' }))
+        .mockReturnValueOnce(stream({ type: 'text', text: 'Done.' }, { type: 'done' })),
+      onToolHandoff: vi.fn(async () => ({
+        status: 'resolved',
+        results: [{ toolCallId: 'browser-call', content: 'result' }],
+      })),
+    });
+    const result = await executeChromeManagedChat(
+      {
+        id: 'caller-advanced-cursor',
+        text: 'Read this page.',
+        modelSelection: PAID_ECONOMY_MODEL,
+        tools: chatBrowserToolDefinitions('read'),
+      },
+      deps,
+    );
+    expect(result.status).toBe('success');
+    expect(deps.onToolHandoff).toHaveBeenCalledTimes(2);
+    const options = vi
+      .mocked(deps.streamChat)
+      .mock.calls.slice(1)
+      .map((call) => call[2]);
+    expect(
+      options.map(
+        (value) => value && !('aborted' in value) && value.callerResume?.next_event_sequence,
+      ),
+    ).toEqual([8, 13]);
+  });
+
+  it('keeps the owned call transcript separate from executor invocation objects', async () => {
+    const handoff = callerCheckpoint();
+    const deps = dependencies({
+      streamChat: vi
+        .fn()
+        .mockReturnValueOnce(stream(handoff, { type: 'done' }))
+        .mockReturnValueOnce(stream({ type: 'text', text: 'Done.' }, { type: 'done' })),
+      onToolHandoff: vi.fn(async (calls) => {
+        calls[0]!.function.arguments = '{"rewritten":true}';
+        return { status: 'resolved', results: [{ toolCallId: 'browser-call', content: 'result' }] };
+      }),
+    });
+    const result = await executeChromeManagedChat(
+      {
+        id: 'caller-owned-transcript',
+        text: 'Read this page.',
+        modelSelection: PAID_ECONOMY_MODEL,
+        tools: chatBrowserToolDefinitions('read'),
+      },
+      deps,
+    );
+    expect(result.status).toBe('success');
+    expect(handoff.calls[0]!.function.arguments).toBe('{}');
+    const messages = vi.mocked(deps.streamChat).mock.calls[1]![0];
+    expect(
+      messages.find((message) => message.role === 'assistant' && message.tool_calls)
+        ?.tool_calls?.[0]?.function.arguments,
+    ).toBe('{}');
+  });
+
+  it('honors cancellation between the caller boundary and terminal chunk before dispatch', async () => {
+    const controller = new AbortController();
+    const deps = dependencies({
+      streamChat: vi.fn(() =>
+        (async function* () {
+          yield callerCheckpoint();
+          controller.abort();
+          yield { type: 'done' as const };
+        })(),
+      ),
+      onToolHandoff: vi.fn(async () => ({
+        status: 'resolved',
+        results: [{ toolCallId: 'browser-call', content: 'result' }],
+      })),
+    });
+    const result = await executeChromeManagedChat(
+      {
+        id: 'caller-cancelled-dispatch',
+        text: 'Read this page.',
+        modelSelection: PAID_ECONOMY_MODEL,
+        tools: chatBrowserToolDefinitions('read'),
+        signal: controller.signal,
+      },
+      deps,
+    );
+    expect(result).toMatchObject({ status: 'error', code: 'cancelled' });
+    expect(deps.onToolHandoff).not.toHaveBeenCalled();
+    expect(deps.streamChat).toHaveBeenCalledOnce();
+  });
+
+  it('returns a server-owned receipt after local execution without truncating the result', async () => {
+    const handoff = callerCheckpoint();
+    const content = 'x'.repeat(MAX_CHAT_TOOL_RESULT_CHARS + 1);
+    const deps = dependencies({
+      streamChat: vi
+        .fn()
+        .mockReturnValueOnce(stream(handoff, { type: 'done' }))
+        .mockReturnValueOnce(stream({ type: 'text', text: 'Done.' }, { type: 'done' })),
+      onToolHandoff: vi.fn(async () => ({
+        status: 'resolved',
+        results: [{ toolCallId: 'browser-call', content }],
+      })),
+    });
+    const result = await executeChromeManagedChat(
+      {
+        id: 'caller-receipt',
+        text: 'Read this page.',
+        modelSelection: PAID_ECONOMY_MODEL,
+        tools: chatBrowserToolDefinitions('read'),
+      },
+      deps,
+    );
+    expect(result.status).toBe('success');
+    expect(deps.onToolHandoff).toHaveBeenCalledTimes(1);
+    expect(deps.streamChat).toHaveBeenCalledTimes(2);
+    const options = vi.mocked(deps.streamChat).mock.calls[1]![2];
+    expect(options && !('aborted' in options) && options.callerResume).toEqual({
+      schema_version: AGENT_EVENT_SCHEMA_VERSION,
+      run_id: handoff.continuation.run_id,
+      turn_id: 'fixture-turn',
+      next_event_sequence: 8,
+      tool_results: [{ tool_call_id: 'browser-call', content }],
+    });
+  });
+
+  it('retries the same receipt without repeating local actions or changing its request identity', async () => {
+    const deps = dependencies({
+      streamChat: vi
+        .fn()
+        .mockReturnValueOnce(stream(callerCheckpoint(), { type: 'done' }))
+        .mockReturnValueOnce(
+          stream({ type: 'error', code: 'server_error', message: 'Temporary refusal' }),
+        )
+        .mockReturnValueOnce(stream({ type: 'text', text: 'Done.' }, { type: 'done' })),
+      onToolHandoff: vi.fn(async () => ({
+        status: 'resolved',
+        results: [{ toolCallId: 'browser-call', content: 'result' }],
+      })),
+    });
+    const result = await executeChromeManagedChat(
+      {
+        id: 'caller-retry',
+        text: 'Read this page.',
+        modelSelection: PAID_ECONOMY_MODEL,
+        tools: chatBrowserToolDefinitions('read'),
+      },
+      deps,
+    );
+    expect(result.status).toBe('success');
+    expect(deps.onToolHandoff).toHaveBeenCalledTimes(1);
+    const calls = vi.mocked(deps.streamChat).mock.calls;
+    expect(calls).toHaveLength(3);
+    expect(calls[2]![2]).toEqual(calls[1]![2]);
+  });
+
+  it('refuses a missing native result instead of fabricating a caller answer', async () => {
+    const deps = dependencies({
+      streamChat: vi.fn(() => stream(callerCheckpoint(), { type: 'done' })),
+      onToolHandoff: vi.fn(async () => ({ status: 'resolved', results: [] })),
+    });
+    const result = await executeChromeManagedChat(
+      {
+        id: 'caller-incomplete',
+        text: 'Read this page.',
+        modelSelection: PAID_ECONOMY_MODEL,
+        tools: chatBrowserToolDefinitions('read'),
+      },
+      deps,
+    );
+    expect(result).toMatchObject({ status: 'error', code: 'protocol_error' });
+    expect(deps.streamChat).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not execute a downgraded handoff after sending a caller receipt', async () => {
+    const checkpoint = callerCheckpoint();
+    const deps = dependencies({
+      streamChat: vi
+        .fn()
+        .mockReturnValueOnce(stream(checkpoint, { type: 'done' }))
+        .mockReturnValueOnce(
+          stream({ type: 'tool-handoff', calls: checkpoint.calls }, { type: 'done' }),
+        ),
+      onToolHandoff: vi.fn(async () => ({
+        status: 'resolved',
+        results: [{ toolCallId: 'browser-call', content: 'result' }],
+      })),
+    });
+    const result = await executeChromeManagedChat(
+      {
+        id: 'caller-downgrade',
+        text: 'Read this page.',
+        modelSelection: PAID_ECONOMY_MODEL,
+        tools: chatBrowserToolDefinitions('read'),
+      },
+      deps,
+    );
+    expect(result).toMatchObject({ status: 'error', code: 'protocol_error' });
+    expect(deps.streamChat).toHaveBeenCalledTimes(2);
+    expect(deps.onToolHandoff).toHaveBeenCalledTimes(1);
+  });
+
   it('admits a named-model text-only shortcut that explicitly forbids tools', async () => {
     const deps = dependencies();
     const selected = getRoutingSlotModel('general_fast');

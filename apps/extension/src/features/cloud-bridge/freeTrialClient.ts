@@ -9,6 +9,11 @@ import {
   type ServerSentEvent,
 } from '@agiworkforce/client-runtime';
 import {
+  AGENT_EVENT_SCHEMA_VERSION,
+  CALLER_TOOL_RESUME_PATH,
+  CallerToolResumeRequestSchema,
+  DEFAULT_CALLER_TOOL_MAX_STEPS,
+  CallerToolStepBudgetSchema,
   createManagedCloudAgentRunClient,
   MAX_CHAT_ATTACHMENT_BYTES,
   MAX_CHAT_ATTACHMENT_COUNT,
@@ -29,10 +34,12 @@ import {
   type ToolApprovalResumeRequest,
   type ToolInputResponseWire,
   type ToolInputResumeRequest,
+  type CallerToolResumeRequest,
   type ManagedCloudChatAttachmentContentPart,
 } from '@agiworkforce/cloud-contracts';
 import {
   classifyManagedQuotaErrorCode,
+  messageKindForAgentEvent,
   effectivePlanTier,
   getDefaultModelFor,
   IMAGE_CARD_KIND,
@@ -62,7 +69,15 @@ import { UUID_PATTERN } from '../../lib/uuid';
 import { logger } from '../../utils';
 import { readAnsweredModel } from './answeredModel';
 import type { ToolDefinition } from '../computer-use/browserToolDefinitions';
-import { createToolUseJournal, readToolHandoff, type ToolCall } from '../computer-use/toolHandoff';
+import {
+  CallerToolContinuationError,
+  createCallerToolContinuationReader,
+  createToolUseJournal,
+  readToolHandoff,
+  type ToolCall,
+  type ToolOfferingReference,
+  type CallerToolContinuation,
+} from '../computer-use/toolHandoff';
 import type { MemoryCommandKind, MemoryCommandStatus } from './memoryClient';
 import {
   ThinkingTagSplitter,
@@ -691,7 +706,7 @@ export type FreeTrialChunk =
   | { type: 'run'; run: ManagedCloudAgentRunReference }
   | { type: 'quota-warning'; warning: ManagedQuotaWarningSignal }
   | { type: 'answered-model'; model: string }
-  | { type: 'tool-handoff'; calls: ToolCall[] }
+  | { type: 'tool-handoff'; calls: ToolCall[]; continuation?: CallerToolContinuation }
   | { type: 'done' }
   | {
       type: 'error';
@@ -741,6 +756,10 @@ export interface ManagedChatStreamOptions {
   webFetch?: boolean;
   approvalResume?: ToolApprovalResumeRequest;
   inputResume?: ToolInputResumeRequest;
+  callerResume?: CallerToolResumeRequest;
+  originalCallerToolNames?: readonly string[];
+  callerToolContinuation?: boolean;
+  callerToolMaxSteps?: number;
   idempotencyKey?: string;
   conversationId?: string;
   assistantMessageId?: string;
@@ -982,7 +1001,10 @@ class ManagedChatProtocolError extends Error {
   }
 }
 
-function parseSseData(dataPayload: string, tools: readonly ToolDefinition[] = []): ParsedSseFrame {
+function parseSseData(
+  dataPayload: string,
+  tools: readonly ToolOfferingReference[] = [],
+): ParsedSseFrame {
   const data = dataPayload.trim();
   if (!data) return { recognized: true };
   if (data === '[DONE]') return { terminal: true };
@@ -1033,6 +1055,7 @@ function parseSseData(dataPayload: string, tools: readonly ToolDefinition[] = []
           deltaRecord['x_tool_status'],
         );
         agentEvent = parseAgentEventDelta(deltaRecord['x_agent_event']);
+        if (deltaRecord['x_agent_event'] != null && !agentEvent) return protocolError();
         generatedFiles = parseGeneratedFilesDelta(deltaRecord['x_generated_files']);
         interactiveCard = parseInteractiveCardDelta(deltaRecord['x_interactive_card']);
         citations = parseCitationDelta(deltaRecord[WEB_SEARCH_CITATION_DELTA_KEY]);
@@ -1232,6 +1255,21 @@ export async function* streamFreeChat(
   optionsOrSignal?: ManagedChatStreamOptions | AbortSignal,
 ): AsyncGenerator<FreeTrialChunk> {
   const options = normalizeStreamOptions(optionsOrSignal);
+  let callerToolMaxSteps: number | undefined;
+  if (options.callerToolContinuation && options.tools?.length) {
+    const parsed = CallerToolStepBudgetSchema.safeParse(
+      options.callerToolMaxSteps ?? DEFAULT_CALLER_TOOL_MAX_STEPS,
+    );
+    if (!parsed.success) {
+      yield {
+        type: 'error',
+        message: 'The caller-action step budget is invalid.',
+        code: 'protocol_error',
+      };
+      return;
+    }
+    callerToolMaxSteps = parsed.data;
+  }
   const model = (options.model ?? FREE_TRIAL_MODEL).trim();
   const idempotencyKey = options.idempotencyKey?.trim() ?? `agi.chrome.chat.${crypto.randomUUID()}`;
   if (!MANAGED_CHAT_IDEMPOTENCY_KEY_PATTERN.test(idempotencyKey)) {
@@ -1249,7 +1287,50 @@ export async function* streamFreeChat(
   let cappedMessages: FreeTrialMessage[] = [];
   let approvalResume: ToolApprovalResumeRequest | undefined;
   let inputResume: ToolInputResumeRequest | undefined;
-  if (options.inputResume) {
+  let callerResume: CallerToolResumeRequest | undefined;
+  if (
+    options.originalCallerToolNames !== undefined &&
+    (!(options.callerResume || options.approvalResume || options.inputResume) ||
+      !Array.isArray(options.originalCallerToolNames) ||
+      !options.originalCallerToolNames.every(
+        (name) => typeof name === 'string' && name.trim().length > 0,
+      ) ||
+      new Set(options.originalCallerToolNames).size !== options.originalCallerToolNames.length)
+  ) {
+    yield {
+      type: 'error',
+      code: 'protocol_error',
+      message: 'Original browser tools are only accepted for a saved run continuation.',
+    };
+    return;
+  }
+  const decoderTools =
+    options.originalCallerToolNames !== undefined
+      ? options.originalCallerToolNames.map((name) => ({ function: { name } }))
+      : (options.tools ?? []);
+
+  if (
+    [options.inputResume, options.approvalResume, options.callerResume].filter(Boolean).length > 1
+  ) {
+    yield {
+      type: 'error',
+      message: 'A continuation must answer one pending checkpoint.',
+      code: 'protocol_error',
+    };
+    return;
+  }
+  if (options.callerResume) {
+    const parsed = CallerToolResumeRequestSchema.safeParse(options.callerResume);
+    if (!parsed.success || !decoderTools.length) {
+      yield {
+        type: 'error',
+        message: 'The caller-action receipt is invalid or its local tools are unavailable.',
+        code: 'protocol_error',
+      };
+      return;
+    }
+    callerResume = parsed.data;
+  } else if (options.inputResume) {
     const parsed = ToolInputResumeRequestSchema.safeParse(options.inputResume);
     if (!parsed.success) {
       yield {
@@ -1292,12 +1373,14 @@ export async function* streamFreeChat(
     }
   }
 
-  const resumeBody = inputResume ?? approvalResume;
-  const resumeEndpoint = inputResume
-    ? MANAGED_INPUT_RESUME_ENDPOINT
-    : approvalResume
-      ? MANAGED_APPROVAL_ENDPOINT
-      : undefined;
+  const resumeBody = callerResume ?? inputResume ?? approvalResume;
+  const resumeEndpoint = callerResume
+    ? `${FREE_TRIAL_GATEWAY}${CALLER_TOOL_RESUME_PATH}`
+    : inputResume
+      ? MANAGED_INPUT_RESUME_ENDPOINT
+      : approvalResume
+        ? MANAGED_APPROVAL_ENDPOINT
+        : undefined;
   const controller = new AbortController();
   let abortKind: 'cancelled' | 'timeout' | null = null;
   const abortFromCaller = (): void => {
@@ -1381,6 +1464,12 @@ export async function* streamFreeChat(
               ? { assistant_message_id: options.assistantMessageId }
               : {}),
             ...(options.tools?.length ? { tools: options.tools, tool_choice: 'auto' } : {}),
+            ...(options.callerToolContinuation && options.tools?.length
+              ? {
+                  caller_tool_handoff_version: AGENT_EVENT_SCHEMA_VERSION,
+                  caller_tool_max_steps: callerToolMaxSteps,
+                }
+              : {}),
           },
         ),
         signal: controller.signal,
@@ -1456,6 +1545,9 @@ export async function* streamFreeChat(
     let runReference: ManagedCloudAgentRunReference | undefined;
     try {
       const runHandle = readManagedCloudAgentRunHandle(response);
+      if (callerResume && runHandle?.runId !== callerResume.run_id) {
+        throw new CallerToolContinuationError();
+      }
       if (runHandle) {
         runReference = { ...runHandle, lastSequence: -1 };
         yield { type: 'run', run: { ...runReference } };
@@ -1484,6 +1576,7 @@ export async function* streamFreeChat(
     let sawAgentActivity = false;
     let sawRichOutput = false;
     let handedOff = false;
+    const callerReader = createCallerToolContinuationReader(decoderTools);
     let streamedTextCharacters = 0;
     let unacknowledgedPublicText = '';
     const contentSplitter = new ThinkingTagSplitter();
@@ -1517,7 +1610,7 @@ export async function* streamFreeChat(
       for (const data of dataEvents.flatMap((event) =>
         splitJoinedServerSentEventData(event.data),
       )) {
-        const frame = parseSseData(data, options.tools);
+        const frame = parseSseData(data, decoderTools);
         if (frame.error) {
           chunks.push(...publicTextChunks(contentSplitter.flush(true)));
           contentSplitter.closeThinking();
@@ -1537,8 +1630,12 @@ export async function* streamFreeChat(
           chunks.push(...publicTextChunks(contentSplitter.push(frame.text)));
         }
         if (frame.agentEvent) {
+          callerReader.observe(frame.agentEvent);
           sawAgentActivity = true;
-          if (frame.agentEvent.event.type === 'text-delta') {
+          if (
+            messageKindForAgentEvent(frame.agentEvent.event.type) === 'text' &&
+            frame.agentEvent.event.type === 'text-delta'
+          ) {
             unacknowledgedPublicText = reconcileManagedCloudPublicText(
               unacknowledgedPublicText,
               frame.agentEvent.event.delta,
@@ -1567,6 +1664,8 @@ export async function* streamFreeChat(
         }
         if (frame.sources) chunks.push({ type: 'sources', ...frame.sources });
         if (frame.toolHandoff) {
+          if (callerResume || options.callerToolContinuation)
+            throw new CallerToolContinuationError();
           if (handedOff) {
             chunks.push({
               type: 'error',
@@ -1580,6 +1679,13 @@ export async function* streamFreeChat(
           chunks.push({ type: 'tool-handoff', calls: frame.toolHandoff });
         }
         if (frame.terminal || (frame.providerFinished && !runReference)) {
+          if (callerReader.incomplete()) throw new CallerToolContinuationError();
+          const continuation = callerReader.read(runReference?.runId);
+          if (continuation) {
+            if (handedOff) throw new CallerToolContinuationError();
+            handedOff = true;
+            chunks.push({ type: 'tool-handoff', calls: continuation.calls, continuation });
+          }
           chunks.push(...publicTextChunks(contentSplitter.flush(true)));
           contentSplitter.closeThinking();
           if (!sawVisibleText && !sawAgentActivity && !sawRichOutput && !handedOff) {
@@ -1615,7 +1721,7 @@ export async function* streamFreeChat(
         ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
       });
       const replayed: FreeTrialChunk[] = [];
-      const toolUseJournal = createToolUseJournal(options.tools ?? []);
+      const toolUseJournal = createToolUseJournal(decoderTools);
       let wakeConsumer: (() => void) | undefined;
       let followed: Awaited<ReturnType<typeof client.followRun>> | undefined;
       let followError: unknown;
@@ -1632,7 +1738,11 @@ export async function* streamFreeChat(
           signal: controller.signal,
           onEvent: (envelope) => {
             armInactivityWatchdog();
-            if (envelope.event.type === 'text-delta') {
+            callerReader.observe(envelope);
+            if (
+              messageKindForAgentEvent(envelope.event.type) === 'text' &&
+              envelope.event.type === 'text-delta'
+            ) {
               const reconciled = reconcileManagedCloudPublicText(
                 unacknowledgedPublicText,
                 envelope.event.delta,
@@ -1650,6 +1760,8 @@ export async function* streamFreeChat(
             }
             publish({ type: 'agent-event', envelope, durableReplay: true });
             const replayedHandoff = toolUseJournal.observe(envelope.event);
+            if (replayedHandoff && (callerResume || options.callerToolContinuation))
+              throw new CallerToolContinuationError();
             if (replayedHandoff && !handedOff) {
               handedOff = true;
               publish({ type: 'tool-handoff', calls: replayedHandoff });
@@ -1709,6 +1821,15 @@ export async function* streamFreeChat(
       if (followed.run.state === 'cancelled') {
         yield { type: 'error', message: 'Cancelled.', code: 'cancelled' };
         return;
+      }
+      if (callerReader.incomplete()) throw new CallerToolContinuationError();
+      if (followed.run.state === 'awaiting_input') {
+        const continuation = callerReader.read(runReference?.runId);
+        if (continuation) {
+          if (handedOff) throw new CallerToolContinuationError();
+          handedOff = true;
+          yield { type: 'tool-handoff', calls: continuation.calls, continuation };
+        }
       }
       yield { type: 'done' };
     };
@@ -1789,7 +1910,8 @@ export async function* streamFreeChat(
       }
       if (
         error instanceof ServerSentEventFrameLimitError ||
-        error instanceof ManagedChatProtocolError
+        error instanceof ManagedChatProtocolError ||
+        error instanceof CallerToolContinuationError
       ) {
         yield* publicTextChunks(contentSplitter.flush(true));
         contentSplitter.closeThinking();
@@ -1868,5 +1990,19 @@ export function streamManagedChatApproval(
       tool_approvals: toolApprovals,
       ...(guidance ? { guidance } : {}),
     },
+  });
+}
+
+export function streamManagedCallerReceipt(
+  receipt: CallerToolResumeRequest,
+  originalToolNames: readonly string[],
+  token: string,
+  options: Pick<ManagedChatStreamOptions, 'signal' | 'fetchImpl'> = {},
+): AsyncGenerator<FreeTrialChunk> {
+  return streamFreeChat([], token, {
+    ...options,
+    callerResume: structuredClone(receipt),
+    originalCallerToolNames: [...originalToolNames],
+    idempotencyKey: `caller.resume.${receipt.run_id}.${receipt.next_event_sequence}`,
   });
 }

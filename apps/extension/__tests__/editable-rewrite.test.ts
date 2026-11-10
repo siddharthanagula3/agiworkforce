@@ -89,6 +89,8 @@ function historyRefresh(controller: EditableRewriteController) {
   const openStoredConversation = vi.fn();
   const dependencies = {
     managedCloudChatState: 'ready',
+    historyRestoreInProgress: false,
+    openChatRefreshAbort: null,
     _ctx: {
       isStreaming: false,
       temporaryChat: false,
@@ -125,7 +127,7 @@ describe('inline rewrite review controls', () => {
     expect(refresh.openStoredConversation).not.toHaveBeenCalled();
     refresh.setTabCleanupPending(false);
     refresh.run();
-    expect(refresh.openStoredConversation).toHaveBeenCalledWith('conversation-a');
+    expect(refresh.openStoredConversation).toHaveBeenCalledWith('conversation-a', 'refresh');
   });
 
   it('retains the live draft when returning to the panel and refreshes after cancellation', () => {
@@ -135,7 +137,7 @@ describe('inline rewrite review controls', () => {
     expect(refresh.openStoredConversation).not.toHaveBeenCalled();
     h.controller.cancel();
     refresh.run();
-    expect(refresh.openStoredConversation).toHaveBeenCalledWith('conversation-a');
+    expect(refresh.openStoredConversation).toHaveBeenCalledWith('conversation-a', 'refresh');
   });
 
   it('retains Undo across panel returns and allows history refresh after restoration', async () => {

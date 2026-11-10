@@ -56,7 +56,8 @@ const authContext = {
     owner: { accountId: 'account-a', authIncarnation: 'session-a' },
   } as { token: string; owner: { accountId: string; authIncarnation: string } } | null,
 };
-vi.mock('../src/features/cloud-bridge/freeTrialClient', () => ({
+vi.mock('../src/features/cloud-bridge/freeTrialClient', async (importOriginal) => ({
+  ...(await importOriginal<FreeTrialClientModule>()),
   CODE_EXECUTION_OUTPUT_MAX_CHARS: 16_000,
   FREE_TRIAL_GATEWAY: 'https://agiworkforce.com',
   getManagedCloudAuthContext: vi.fn(async () => authContext.current),
@@ -79,6 +80,7 @@ import {
   type HistoryMessage,
 } from '../src/features/background/conversation-history';
 import type { ManagedCloudOwner } from '../src/features/cloud-bridge/managedCloudAuthority';
+type FreeTrialClientModule = typeof import('../src/features/cloud-bridge/freeTrialClient');
 
 const OWNER: ManagedCloudOwner = { accountId: 'account-a', authIncarnation: 'session-a' };
 const OTHER_OWNER: ManagedCloudOwner = { accountId: 'account-b', authIncarnation: 'session-b' };

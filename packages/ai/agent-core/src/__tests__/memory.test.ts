@@ -70,6 +70,34 @@ describe('shared memory engine', () => {
 });
 
 describe('parseExplicitMemoryCommand', () => {
+  it.each([
+    'Remember the original application tab ID with list_tabs.',
+    'Remember that the current frame ID is frame-7 for this task.',
+    'Remember element index 7 while filling this form.',
+    'Remember the current tab ID only for this task, not long-term.',
+    'Remember I need the current tab ID for this task.',
+    'Remember tab ID 42 but do not store it long-term.',
+    'N9T4: Use browser_task exactly once. Remember the original application tab ID with list_tabs. Preserve the original form.',
+  ])('keeps a runtime reference in task context instead of a memory command: %s', (message) => {
+    expect(parseExplicitMemoryCommand(message)).toBeNull();
+  });
+
+  it('preserves a durable personal statement about browser automation', () => {
+    expect(
+      parseExplicitMemoryCommand('Remember that I use the current tab ID for browser automation.'),
+    ).toMatchObject({
+      kind: 'remember',
+      subject: 'I use the current tab ID for browser automation',
+    });
+  });
+
+  it('respects an explicit request to retain a runtime reference across chats', () => {
+    expect(parseExplicitMemoryCommand('Remember the tab ID 42 for future chats.')).toMatchObject({
+      kind: 'remember',
+      subject: 'the tab ID 42 for future chats',
+    });
+  });
+
   it('reads a remember command out of the phrasings people actually use', () => {
     for (const utterance of [
       'Remember that I use TypeScript',
@@ -121,6 +149,18 @@ describe('parseExplicitMemoryCommand', () => {
 });
 
 describe('extractPassiveMemoryFacts', () => {
+  it('excludes runtime reminders while retaining unrelated durable preferences', () => {
+    expect(
+      extractCandidateMemoryFacts('Remember that the tab ID is 42. I prefer dark mode.'),
+    ).toEqual(['User prefers dark mode']);
+    expect(
+      extractPassiveMemoryFacts('Remember that the tab ID is 42. I prefer dark mode.'),
+    ).toEqual(['User prefers dark mode']);
+    expect(passiveMemoryText('Remember the current tab ID. I prefer dark mode.', false)).toBe(
+      'I prefer dark mode.',
+    );
+  });
+
   it('leaves the explicit command to its own handler', () => {
     expect(extractPassiveMemoryFacts('Remember that I use TypeScript')).toEqual([]);
   });

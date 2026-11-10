@@ -1,3 +1,5 @@
+import { readPageDocument } from './documentBridge';
+import { parseTaskTabScope, type TaskTabScope } from './taskTabScope';
 import { authorizeBrowserToolUrl, authorizeBrowserToolTab } from './tabAuthority';
 import { isTaskTabAction, type TaskTabAction } from '../computer-use/browserToolDefinitions';
 import type { BrowserContextTabReference } from '../../types';
@@ -102,6 +104,9 @@ export interface TaskTabPlan {
   readonly action: TaskTabAction;
   readonly sourceTabId: number;
   readonly sourceUrl: string;
+  readonly sourceDocumentId: string;
+  readonly targetDocumentId: string | null;
+  readonly returnDocumentId: string | null;
   readonly targetTabId: number | null;
   readonly targetUrl: string;
   readonly returnTabId: number | null;
@@ -141,6 +146,7 @@ export interface TaskWindowResizeReceipt {
 export interface TaskTabContext {
   readonly initialTabId: number;
   readonly selectedTabs?: readonly BrowserContextTabReference[];
+  readonly restoredTabs?: TaskTabScope;
   readonly windowId: number | undefined;
   readonly signal?: AbortSignal;
   readonly currentTabId: () => number;
@@ -160,11 +166,24 @@ class TaskTabUnavailableError extends Error {
 export class TaskTabs {
   private readonly owned = new Map<number, boolean>();
   private readonly selectedSnapshots = new Map<number, BrowserContextTabReference>();
+  private readonly restoredSnapshots = new Map<number, TaskTabScope[number]>();
   private readonly plans = new WeakSet<TaskTabPlan>();
   private readonly resizePlans = new WeakSet<TaskWindowResizePlan>();
 
   constructor(private readonly context: TaskTabContext) {
     this.owned.set(context.initialTabId, false);
+    if (context.restoredTabs) {
+      const restored = parseTaskTabScope(context.restoredTabs);
+      if (
+        !restored.some((tab) => tab.tabId === context.initialTabId) ||
+        restored.some((tab) => tab.windowId !== context.windowId)
+      )
+        throw new Error('The restored task tabs do not include the current task window and tab.');
+      for (const reference of restored) {
+        this.owned.set(reference.tabId, reference.closeable);
+        this.restoredSnapshots.set(reference.tabId, reference);
+      }
+    }
     for (const reference of context.selectedTabs ?? []) {
       this.owned.set(reference.tabId, false);
       this.selectedSnapshots.set(reference.tabId, reference);
@@ -186,6 +205,7 @@ export class TaskTabs {
           throw error;
         this.owned.delete(tabId);
         this.selectedSnapshots.delete(tabId);
+        this.restoredSnapshots.delete(tabId);
       }
     }
     await this.assertCurrent();
@@ -340,8 +360,55 @@ export class TaskTabs {
       throw new Error('The task tab changed while its permission was being verified.');
     if (snapshot && current.url !== snapshot.url)
       throw new Error('The attached tab changed before this task first read it. Attach it again.');
+    const restored = this.restoredSnapshots.get(tabId);
+    if (restored) {
+      if (restored.url !== current.url) throw new Error('The restored task page changed.');
+      await readPageDocument(tabId, restored.url, restored.documentId);
+      await this.assertCurrent();
+      const verified = await chrome.tabs.get(tabId);
+      await this.assertCurrent();
+      if (
+        verified.url !== current.url ||
+        verified.windowId !== this.context.windowId ||
+        verified.status === 'loading'
+      )
+        throw new Error('The restored task page changed during admission.');
+      this.restoredSnapshots.delete(tabId);
+    }
     this.selectedSnapshots.delete(tabId);
     return { ...current, url: admitted.url };
+  }
+
+  private async readDocument(
+    tabId: number,
+  ): Promise<chrome.tabs.Tab & { url: string; documentId: string }> {
+    const tab = await this.read(tabId);
+    if (tab.status === 'loading') throw new Error('The task document is still loading.');
+    const document = await readPageDocument(tabId, tab.url);
+    await this.assertCurrent();
+    const current = await this.read(tabId);
+    if (current.url !== tab.url || current.status === 'loading')
+      throw new Error('The task document changed while being verified.');
+    return { ...current, documentId: document.documentId };
+  }
+
+  async snapshot(): Promise<TaskTabScope> {
+    const listed = await this.list();
+    const tabs: TaskTabScope[number][] = [];
+    for (const reference of listed.tabs) {
+      const tab = await this.readDocument(reference.tabId);
+      tabs.push({
+        tabId: reference.tabId,
+        windowId: tab.windowId,
+        url: tab.url,
+        documentId: tab.documentId,
+        closeable: reference.closeable,
+      });
+    }
+    await this.assertCurrent();
+    if (listed.tabId !== this.context.currentTabId())
+      throw new Error('The task tab changed during capture.');
+    return parseTaskTabScope(tabs);
   }
 
   async prepare(action: TaskTabAction, args: Record<string, unknown>): Promise<TaskTabPlan> {
@@ -350,11 +417,13 @@ export class TaskTabs {
     if (this.context.windowId === undefined)
       throw new Error('This task has no verified browser window for tab management.');
     const sourceTabId = this.context.currentTabId();
-    const source = await this.read(sourceTabId);
+    const source = await this.readDocument(sourceTabId);
     let targetTabId: number | null = null;
     let targetUrl: string;
     let returnTabId: number | null = null;
     let returnUrl: string | null = null;
+    let targetDocumentId: string | null = null;
+    let returnDocumentId: string | null = null;
     if (action === 'open_tab') {
       if (Object.keys(args).length !== 1 || typeof args['url'] !== 'string')
         throw new Error('open_tab requires only a URL.');
@@ -374,8 +443,9 @@ export class TaskTabs {
       targetTabId = args['tabId'];
       if (action === 'close_tab' && this.owned.get(targetTabId) !== true)
         throw new Error('Only tabs created by this task can be closed.');
-      const target = await this.read(targetTabId);
+      const target = await this.readDocument(targetTabId);
       targetUrl = target.url;
+      targetDocumentId = target.documentId;
       if (action === 'close_tab' && targetTabId === sourceTabId) {
         const requestedReturn = args['returnToTabId'];
         if (
@@ -388,7 +458,9 @@ export class TaskTabs {
             'Closing the current task tab requires an explicit different returnToTabId owned by the task.',
           );
         returnTabId = requestedReturn;
-        returnUrl = (await this.read(returnTabId)).url;
+        const returning = await this.readDocument(returnTabId);
+        returnUrl = returning.url;
+        returnDocumentId = returning.documentId;
       } else if (
         args['returnToTabId'] !== undefined &&
         (args['returnToTabId'] !== sourceTabId || !source.active)
@@ -399,6 +471,9 @@ export class TaskTabs {
       action,
       sourceTabId,
       sourceUrl: source.url,
+      sourceDocumentId: source.documentId,
+      targetDocumentId,
+      returnDocumentId,
       targetTabId,
       targetUrl,
       returnTabId,
@@ -408,16 +483,22 @@ export class TaskTabs {
     return plan;
   }
 
-  private async activate(tabId: number, url: string): Promise<void> {
-    const target = await this.read(tabId);
-    if (target.url !== url) throw new Error('The approved task tab changed before activation.');
+  private async activate(
+    tabId: number,
+    url: string,
+    documentId: string | null = null,
+  ): Promise<void> {
+    const target = await this.readDocument(tabId);
+    if (target.url !== url || (documentId !== null && target.documentId !== documentId))
+      throw new Error('The approved task tab changed before activation.');
     await this.assertCurrent();
     const token = this.context.beginTransition(tabId);
     try {
       await chrome.tabs.update(tabId, { active: true });
       await this.assertCurrent();
-      const current = await this.read(tabId);
-      if (current.url !== url) throw new Error('The approved task tab changed during activation.');
+      const current = await this.readDocument(tabId);
+      if (current.url !== url || current.documentId !== target.documentId)
+        throw new Error('The approved task tab changed during activation.');
       if (!current.active) throw new Error('Chrome did not activate the approved task tab.');
       this.context.commitTransition(token, url);
       await this.assertCurrent();
@@ -439,8 +520,8 @@ export class TaskTabs {
       await this.assertCurrent();
       if (tab.windowId !== this.context.windowId)
         throw new Error('The new task tab moved to another window.');
-      if (tab.url === url) return;
-      if (tab.url && tab.url !== 'about:blank')
+      if (tab.url === url && tab.status !== 'loading') return;
+      if (tab.url && tab.url !== 'about:blank' && tab.url !== url)
         throw new Error('The new task tab navigated away from the approved URL.');
       await this.waitForPreparation(
         new Promise<void>((resolve) => setTimeout(resolve, 100)),
@@ -492,9 +573,13 @@ export class TaskTabs {
   async execute(plan: TaskTabPlan): Promise<TaskTabReceipt> {
     if (!this.plans.has(plan)) throw new Error('The tab action has no task-owned approval plan.');
     this.plans.delete(plan);
-    const source = await this.read(this.context.currentTabId());
-    if (this.context.currentTabId() !== plan.sourceTabId || source.url !== plan.sourceUrl)
-      throw new Error('The current task tab changed after approval.');
+    const source = await this.readDocument(this.context.currentTabId());
+    if (
+      this.context.currentTabId() !== plan.sourceTabId ||
+      source.url !== plan.sourceUrl ||
+      source.documentId !== plan.sourceDocumentId
+    )
+      throw new Error('The current task document changed after approval.');
     let affectedTabId = plan.targetTabId;
     if (plan.action === 'open_tab') {
       await authorizeBrowserToolUrl(plan.targetUrl);
@@ -510,19 +595,21 @@ export class TaskTabs {
       this.owned.set(created.id, true);
       await this.assertCurrent();
       await this.waitForCreatedTab(created.id, plan.targetUrl);
-      const target = await this.read(created.id);
-      await this.activate(created.id, target.url);
+      const target = await this.readDocument(created.id);
+      await this.activate(created.id, target.url, target.documentId);
     } else {
-      const target = await this.read(plan.targetTabId!);
-      if (target.url !== plan.targetUrl)
-        throw new Error('The approved task tab changed after approval.');
-      if (plan.action === 'switch_tab') await this.activate(plan.targetTabId!, plan.targetUrl);
+      const target = await this.readDocument(plan.targetTabId!);
+      if (target.url !== plan.targetUrl || target.documentId !== plan.targetDocumentId)
+        throw new Error('The approved task document changed after approval.');
+      if (plan.action === 'switch_tab')
+        await this.activate(plan.targetTabId!, plan.targetUrl, plan.targetDocumentId);
       else {
-        if (plan.returnTabId !== null) await this.activate(plan.returnTabId, plan.returnUrl!);
+        if (plan.returnTabId !== null)
+          await this.activate(plan.returnTabId, plan.returnUrl!, plan.returnDocumentId);
         await this.assertCurrent();
-        const closing = await this.read(plan.targetTabId!);
-        if (closing.url !== plan.targetUrl)
-          throw new Error('The task-created tab changed before closing.');
+        const closing = await this.readDocument(plan.targetTabId!);
+        if (closing.url !== plan.targetUrl || closing.documentId !== plan.targetDocumentId)
+          throw new Error('The task-created document changed before closing.');
         await chrome.tabs.remove(plan.targetTabId!);
         this.owned.delete(plan.targetTabId!);
         await this.assertCurrent();

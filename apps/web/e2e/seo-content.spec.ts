@@ -319,7 +319,12 @@ test.describe('public buying guidance', () => {
               .allTextContents();
             for (const features of cardFeatures) expect(features).not.toMatch(/\d/);
             const comparisonValues = (label: string) =>
-              page.getByRole('rowheader', { name: label, exact: true }).locator('..').locator('td');
+              page
+                .getByRole('row')
+                .filter({
+                  has: page.getByRole('rowheader', { name: label, exact: true }),
+                })
+                .getByRole('cell');
             await expect(comparisonValues('Knowledge storage')).toHaveText([
               '100 MB',
               '1 GB',

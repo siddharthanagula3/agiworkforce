@@ -59,6 +59,10 @@ const NON_DOC_MARKDOWN = [
 
 const NON_DOC_FILES = new Map([
   [
+    'docs/launch/QA_LEDGER.md',
+    'application acceptance evidence owned by the launch workflow at the user-mandated path',
+  ],
+  [
     'apps/web/AGENTS.md',
     'written by `next dev`; committing it is cheaper than reverting a diff that regenerates',
   ],

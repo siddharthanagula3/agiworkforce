@@ -2,6 +2,8 @@ import { z } from 'zod';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
+  CallerToolResultsSchema,
+  CallerToolObservationsSchema,
   MAX_DEVICE_STEP_IMAGE_BASE64_LENGTH,
   TOOL_APPROVAL_GUIDANCE_MAX_LENGTH,
 } from '@agiworkforce/cloud-contracts';
@@ -65,6 +67,7 @@ const MessageSchema = z
     tool_calls: z.array(z.unknown()).optional(),
     tool_call_id: z.string().optional(),
     __canonicalThinking: z.array(z.unknown()).optional(),
+    __retainedToolResultReference: z.string().uuid().optional(),
     name: z.literal(MANAGED_TOOL_INVENTORY_MESSAGE_NAME).optional(),
     __managedToolInventoryVersion: ManagedToolInventoryVersionSchema.optional(),
   })
@@ -389,6 +392,8 @@ const ResumeApprovalSchema = z
     approvals: z.array(ToolApprovalDecisionSchema).min(1).max(32).optional(),
     inputResponses: z.array(ResumeInputResponseSchema).min(1).max(32).optional(),
     deviceResults: z.array(ResumeDeviceResultSchema).min(1).max(8).optional(),
+    callerResults: CallerToolResultsSchema.optional(),
+    callerObservations: CallerToolObservationsSchema.optional(),
     guidance: z.string().trim().min(1).max(TOOL_APPROVAL_GUIDANCE_MAX_LENGTH).optional(),
   })
   .strict();

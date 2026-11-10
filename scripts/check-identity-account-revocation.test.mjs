@@ -19,6 +19,38 @@ import { ROUTE_GATE } from './check-membership-revocation.mjs';
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const guard = path.join(repoRoot, 'scripts/check-identity-account-revocation.mjs');
 
+test('a delegated principal is gated only when every helper return is gated', () => {
+  const source = `
+    async function entry() { return cookiePrincipal(); }
+    async function cookiePrincipal() {
+      if (valid) {
+        await assertAccountActive(userId);
+        return { userId };
+      }
+      throw new Error('Unauthorized');
+    }
+  `;
+  assert.deepEqual(ungatedReturns(source, 'entry'), []);
+  assert.equal(
+    ungatedReturns(source.replace('await assertAccountActive(userId);', ''), 'entry').length,
+    1,
+  );
+  assert.equal(
+    ungatedReturns(
+      source.replace("throw new Error('Unauthorized');", 'return { userId };'),
+      'entry',
+    ).length,
+    1,
+  );
+  assert.equal(
+    ungatedReturns(
+      'function entry() { return cookiePrincipal(); } function cookiePrincipal() { return entry(); }',
+      'entry',
+    ).length,
+    1,
+  );
+});
+
 const GATE = `
 import { verifyDeveloperTokenSignature } from '@/lib/server/device-tokens';
 import { getRequestIdentity } from '@/lib/server/identity';

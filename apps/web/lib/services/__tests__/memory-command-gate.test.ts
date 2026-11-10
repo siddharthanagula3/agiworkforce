@@ -42,6 +42,22 @@ function fakeDb(state: FakeState) {
 const SCOPE = { userId: 'u1', organizationId: null };
 
 describe('an explicit remember obeys the memory switch', () => {
+  it.each([false, true])(
+    'does not route task-local browser references into memory when enabled=%s',
+    async (memoryEnabled) => {
+      const fake = fakeDb({ memoryEnabled, rows: [] });
+      const query = vi.spyOn(fake.db, 'query');
+      const result = await runMemoryCommand(fake.db, SCOPE, {
+        message:
+          'Use the browser. Remember the original application tab ID with list_tabs. Keep the form unchanged.',
+      });
+      expect(result).toBeNull();
+      expect(query).not.toHaveBeenCalled();
+      expect(fake.inserts()).toEqual([]);
+      expect(fake.deletes()).toEqual([]);
+    },
+  );
+
   it('writes nothing and says why when Memory is off in settings', async () => {
     const fake = fakeDb({ memoryEnabled: false, rows: [] });
     const result = await runMemoryCommand(fake.db, SCOPE, {

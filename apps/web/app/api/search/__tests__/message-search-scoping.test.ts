@@ -7,17 +7,29 @@ const { mockGetClerkAuthUser, mockNeonQuery, mockResolveActiveOrganizationId } =
   mockResolveActiveOrganizationId: vi.fn(),
 }));
 
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn().mockResolvedValue(null) }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/rate-limit', async () => ({
+  ...(await vi.importActual<RateLimitModule>('@/lib/rate-limit')),
+  withRateLimit: vi.fn().mockResolvedValue(null),
+}));
+vi.mock('@/lib/csrf', async () => ({
+  ...(await vi.importActual<CsrfModule>('@/lib/csrf')),
+  requireCsrfToken: vi.fn().mockResolvedValue(null),
+}));
+vi.mock('@/lib/logger', async () => ({
+  ...(await vi.importActual<LoggerModule>('@/lib/logger')),
+
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async () => ({
+  ...(await vi.importActual<ApiAuthModule>('@/lib/api-auth')),
+
   getClerkAuthUser: mockGetClerkAuthUser,
   getAuthenticatedUserWithClient: vi.fn(),
   getAuthenticatedUser: vi.fn(),
 }));
-vi.mock('@/lib/server/neon-db', () => ({
+vi.mock('@/lib/server/neon-db', async () => ({
+  ...(await vi.importActual<NeonDbModule>('@/lib/server/neon-db')),
+
   getNeonDb: vi.fn(() => ({
     query: (...args: unknown[]) => mockNeonQuery(...args),
     execute: vi.fn(),
@@ -26,7 +38,9 @@ vi.mock('@/lib/server/neon-db', () => ({
     dispose: vi.fn(),
   })),
 }));
-vi.mock('@/lib/server/rls-db', () => ({
+vi.mock('@/lib/server/rls-db', async () => ({
+  ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
+
   getUserScopedDb: vi.fn(async () => ({
     db: { query: (...args: unknown[]) => mockNeonQuery(...args) },
     userId: await mockGetClerkAuthUser().then((auth: { userId: string }) => auth.userId),
@@ -34,7 +48,11 @@ vi.mock('@/lib/server/rls-db', () => ({
   })),
 }));
 
-vi.mock('@/lib/services/active-workspace-service', () => ({
+vi.mock('@/lib/services/active-workspace-service', async () => ({
+  ...(await vi.importActual<ActiveWorkspaceServiceModule>(
+    '@/lib/services/active-workspace-service',
+  )),
+
   resolveActiveOrganizationId: mockResolveActiveOrganizationId,
   resolveOrganizationMembershipId: vi.fn(async () => null),
 }));
@@ -46,6 +64,13 @@ import {
   readableVisibilities,
   workspaceScopeSql,
 } from '@/lib/resources';
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type CsrfModule = typeof import('@/lib/csrf');
+type LoggerModule = typeof import('@/lib/logger');
+type ApiAuthModule = typeof import('@/lib/api-auth');
+type NeonDbModule = typeof import('@/lib/server/neon-db');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type ActiveWorkspaceServiceModule = typeof import('@/lib/services/active-workspace-service');
 
 type QueryCall = [string, unknown[]];
 

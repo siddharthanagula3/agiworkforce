@@ -246,9 +246,9 @@ describe('managed-cloud conversation wire contract', () => {
     expect(ManagedCloudCreateConversationRequestSchema.parse({}).model).toBe(
       MANAGED_CLOUD_DEFAULT_MODEL_SELECTION,
     );
-    expect(ManagedCloudCreateMessageRequestSchema.parse({ content: 'Hello' }).model).toBe(
-      MANAGED_CLOUD_DEFAULT_MODEL_SELECTION,
-    );
+    expect(
+      ManagedCloudCreateMessageRequestSchema.parse({ content: 'Hello' }).model,
+    ).toBeUndefined();
     expect(
       ManagedCloudCreateConversationRequestSchema.parse({
         id: conversation.id,
@@ -277,6 +277,24 @@ describe('managed-cloud conversation wire contract', () => {
     expect(ManagedCloudDeleteConversationResponseSchema.parse({ success: true })).toEqual({
       success: true,
     });
+  });
+
+  it('keeps saved native assistant receipts unattributed', () => {
+    const parsed = ManagedCloudCreateMessageRequestSchema.parse({
+      role: 'assistant',
+      content: 'Filled 7 fields from your saved profile without submitting.',
+      skipLlm: true,
+      metadata: { runtime: 'managed-cloud' },
+    });
+    expect(parsed).not.toHaveProperty('model');
+    expect(
+      ManagedCloudCreateMessageRequestSchema.parse({
+        role: 'assistant',
+        content: 'An explicitly attributed answer',
+        model: conversation.model,
+        skipLlm: true,
+      }).model,
+    ).toBe(conversation.model);
   });
 
   it('carries the message tree without making an old client send it', () => {

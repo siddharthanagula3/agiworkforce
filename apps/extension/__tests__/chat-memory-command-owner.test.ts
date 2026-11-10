@@ -1,3 +1,4 @@
+import { parseExplicitMemoryCommand } from '@agiworkforce/agent-core';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -22,6 +23,7 @@ const functions = program.statements
         'renderMemoryNotice',
         'memoryCommandKindHint',
         'runChatMemoryCommand',
+        'continueTurnWithMemory',
       ].includes(node.name?.text ?? ''),
   )
   .map((node) => node.getText(program))
@@ -65,6 +67,8 @@ function harness() {
   const command = vi.fn(async (): Promise<MemoryCommandResult | null> => FORGET);
   const dependencies = {
     _ctx: context,
+    parseExplicitMemoryCommand,
+    continueTurn: vi.fn(),
     activePersistenceEntry: persistence,
     sameManagedCloudOwner,
     getManagedCloudAuthContext: auth,
@@ -82,7 +86,7 @@ function harness() {
   const compiled = ts.transpileModule(
     `let currentMemoryNotice = null;
      ${functions}
-     return { runChatMemoryCommand, renderMemoryNotice, advanceConversationGeneration,
+     return { runChatMemoryCommand, continueTurnWithMemory, renderMemoryNotice, advanceConversationGeneration,
        getNotice: () => currentMemoryNotice };`,
     { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } },
   ).outputText;
@@ -95,12 +99,20 @@ function harness() {
       streamId: string,
       owner: ManagedCloudOwner,
     ): Promise<unknown>;
+    continueTurnWithMemory(
+      user: object,
+      payload: { prompt: string },
+      streamId: string,
+      owner: ManagedCloudOwner,
+      quickMode: boolean,
+    ): void;
     renderMemoryNotice(notice: Notice | null): void;
     advanceConversationGeneration(): void;
     getNotice(): Notice | null;
   };
   return {
     ...api,
+    continueTurn: dependencies.continueTurn,
     context,
     persistence,
     auth,
@@ -115,6 +127,20 @@ beforeEach(() => {
 });
 
 describe('chat memory command ownership', () => {
+  it('passes a task-local reminder through unchanged without auth or a memory request', () => {
+    const h = harness();
+    const user = { id: 'user-a' };
+    const payload = {
+      prompt:
+        'Use browser_task. Remember the original application tab ID with list_tabs. Preserve the form.',
+    };
+    h.continueTurnWithMemory(user, payload, 'stream-a', OWNER, false);
+    expect(h.auth).not.toHaveBeenCalled();
+    expect(h.command).not.toHaveBeenCalled();
+    expect(h.continueTurn).toHaveBeenCalledExactlyOnceWith(user, payload, 'stream-a', OWNER, false);
+    expect(h.getNotice()).toBeNull();
+  });
+
   it('does not start authentication for an already replaced turn', async () => {
     const h = harness();
     h.context.currentStreamId = 'stream-b';

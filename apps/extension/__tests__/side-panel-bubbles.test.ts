@@ -378,6 +378,34 @@ describe('side-panel buildBubbleWithTools (real render)', () => {
 });
 
 describe('resolveManagedArtifactUrl', () => {
+  it.each(['http://localhost:3000', 'http://127.0.0.1:3000', 'http://[::1]:3000'])(
+    'resolves generated files against the configured development origin %s',
+    (origin) => {
+      expect(resolveManagedArtifactUrl('/api/files/fixture-asset', origin)).toBe(
+        `${origin}/api/files/fixture-asset`,
+      );
+      expect(resolveManagedArtifactUrl(`${origin}/api/files/fixture-asset`, origin)).toBe(
+        `${origin}/api/files/fixture-asset`,
+      );
+    },
+  );
+
+  it.each([
+    'http://localhost:3001/api/files/fixture-asset',
+    'http://127.0.0.1:3000/api/files/fixture-asset',
+    'http://downloads.example.com/report.mp4',
+    'http://localhost.example.com/report.mp4',
+    '//downloads.example.com/report.mp4',
+  ])('refuses HTTP payloads outside the configured origin: %s', (uri) => {
+    expect(resolveManagedArtifactUrl(uri, 'http://localhost:3000')).toBeNull();
+  });
+
+  it('does not admit an untrusted configured HTTP gateway', () => {
+    expect(
+      resolveManagedArtifactUrl('/api/files/fixture-asset', 'http://downloads.example.com'),
+    ).toBeNull();
+  });
+
   it('allows HTTPS payload URLs and rejects non-web schemes', () => {
     expect(resolveManagedArtifactUrl('https://downloads.example.com/report.pdf')).toBe(
       'https://downloads.example.com/report.pdf',

@@ -56,6 +56,7 @@ import {
   isCloudAgentRunCancellationRequested,
   isCloudAgentRunPauseRequested,
   saveCloudAgentApprovalCheckpoint,
+  saveCloudAgentCallerCheckpoint,
   saveCloudAgentDeviceCheckpoint,
   saveCloudAgentInputCheckpoint,
   saveCloudAgentPauseCheckpoint,
@@ -337,6 +338,7 @@ const ToolResultSchema = z
   .object({
     content: z.string(),
     isError: z.boolean(),
+    retainedReference: z.string().uuid().optional(),
     searchOutcome: z.literal('no_results').optional(),
     unavailable: z.boolean().optional(),
     unavailableFamily: z.literal('execution').optional(),
@@ -785,6 +787,31 @@ export async function executeCloudAgentWorkflowInvocation(
           events: checkpoint.events,
         });
         pauseCheckpointSaved = true;
+      },
+      onCallerToolCheckpoint: async (checkpoint) => {
+        const saved = await saveCloudAgentCallerCheckpoint(db, {
+          userId: input.userId,
+          organizationId: input.processed.organizationId ?? null,
+          runId: input.runId,
+          sessionId: checkpoint.sessionId,
+          turnId: checkpoint.turnId,
+          nextEventSequence: checkpoint.nextEventSequence,
+          completedSteps: checkpoint.completedSteps,
+          request: buildApprovalCheckpointRequest(
+            processed.chatRequest,
+            processed.callerToolFields,
+            processed.turnAttachments,
+            processed.modelSelection,
+            processed.turnToolProhibition,
+            checkpoint.toolSchemaState,
+            processed.contextPolicySnapshot,
+          ),
+          messages: checkpoint.messages,
+          pendingToolCalls: checkpoint.pendingToolCalls,
+          events: checkpoint.events,
+        });
+        approvalCheckpointSaved = true;
+        return saved;
       },
       onApprovalCheckpoint: async (checkpoint) => {
         await saveCloudAgentApprovalCheckpoint(db, {

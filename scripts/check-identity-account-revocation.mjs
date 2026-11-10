@@ -100,7 +100,9 @@ const PRINCIPAL_RETURN =
 const EXPORTED_FUNCTION = /^export\s+(?:async\s+)?function\s+(\w+)/gm;
 
 /** Every return that hands a caller a principal, and whether the gate ran first. */
-export function ungatedReturns(source, name) {
+export function ungatedReturns(source, name, seen = new Set()) {
+  if (seen.has(name)) return null;
+  const visited = new Set(seen).add(name);
   const found = functionBody(source, name);
   if (found === null) return null;
   const { body } = found;
@@ -112,6 +114,16 @@ export function ungatedReturns(source, name) {
   PRINCIPAL_RETURN.lastIndex = 0;
   for (const match of body.matchAll(PRINCIPAL_RETURN)) {
     if (gates.some((gate) => dominates(body, gate, match.index, depth))) continue;
+    const delegate = /^return\s+(?:await\s+)?([A-Za-z_$][\w$]*)\s*\(/.exec(body.slice(match.index));
+    if (delegate) {
+      const callee = functionBody(source, delegate[1]);
+      const returns = callee ? ungatedReturns(source, delegate[1], visited) : null;
+      if (
+        returns?.length === 0 &&
+        new RegExp(`\\b${ACCOUNT_GATE}\\s*\\(`).test(withCallees(source, callee.body))
+      )
+        continue;
+    }
     ungated.push(body.slice(match.index, body.indexOf('\n', match.index)).trim());
   }
   return ungated;

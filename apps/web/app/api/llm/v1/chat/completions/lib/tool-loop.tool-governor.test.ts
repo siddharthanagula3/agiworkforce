@@ -228,7 +228,9 @@ describe('tool loop · repeated query breaker', () => {
 describe('tool loop · unavailable tool withdrawal', () => {
   it('names the cause once and stops offering the execution tool', async () => {
     factoryMocks.streamRequest
-      .mockResolvedValueOnce(toolCallStream(EXECUTE_CODE_TOOL, { code: 'print(1)' }, 'call_x1'))
+      .mockResolvedValueOnce(
+        toolCallStream(EXECUTE_CODE_TOOL, { language: 'python', code: 'print(1)' }, 'call_x1'),
+      )
       .mockResolvedValueOnce(finalAnswerStream('Answered without running code.'));
 
     const output = await collect(
@@ -246,7 +248,9 @@ describe('tool loop · unavailable tool withdrawal', () => {
   it('names a deployment configuration cause when the sandbox is not configured', async () => {
     e2bMocks.cause = 'not-configured';
     factoryMocks.streamRequest
-      .mockResolvedValueOnce(toolCallStream(EXECUTE_CODE_TOOL, { code: 'print(1)' }, 'call_x2'))
+      .mockResolvedValueOnce(
+        toolCallStream(EXECUTE_CODE_TOOL, { language: 'python', code: 'print(1)' }, 'call_x2'),
+      )
       .mockResolvedValueOnce(finalAnswerStream('Answered without running code.'));
 
     const output = await collect(
@@ -258,7 +262,9 @@ describe('tool loop · unavailable tool withdrawal', () => {
 
   it('withdraws every execution tool, not only the one that was called', async () => {
     factoryMocks.streamRequest
-      .mockResolvedValueOnce(toolCallStream(EXECUTE_CODE_TOOL, { code: 'print(1)' }, 'call_x4'))
+      .mockResolvedValueOnce(
+        toolCallStream(EXECUTE_CODE_TOOL, { language: 'python', code: 'print(1)' }, 'call_x4'),
+      )
       .mockResolvedValueOnce(finalAnswerStream('Answered without running code.'));
 
     await collect(runToolLoop(makeProcessed(e2bExecutionToolDefs()), { approvalMode: 'auto' }));
@@ -270,7 +276,9 @@ describe('tool loop · unavailable tool withdrawal', () => {
 
   it('sends no tool choice on a step that offers no tools', async () => {
     factoryMocks.streamRequest
-      .mockResolvedValueOnce(toolCallStream(EXECUTE_CODE_TOOL, { code: 'print(1)' }, 'call_x3'))
+      .mockResolvedValueOnce(
+        toolCallStream(EXECUTE_CODE_TOOL, { language: 'python', code: 'print(1)' }, 'call_x3'),
+      )
       .mockResolvedValueOnce(finalAnswerStream('Answered without running code.'));
 
     const processed = makeProcessed(e2bExecutionToolDefs());

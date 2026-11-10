@@ -1,7 +1,55 @@
+import { UUID_PATTERN } from '../../lib/uuid';
+import { TOOL_CALL_ID_MAX_LENGTH, WEB_PAGE_URL_MAX_LENGTH } from '@agiworkforce/cloud-contracts';
 export interface PageDocumentReference {
   tabId: number;
   url: string;
   documentId: string;
+}
+
+export interface FormObservationReference extends PageDocumentReference {
+  formSnapshotId: string;
+}
+
+export function isPageDocumentId(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.length > 0 &&
+    value.length <= TOOL_CALL_ID_MAX_LENGTH &&
+    ![...value].some(
+      (character) => character.charCodeAt(0) <= 0x20 || character.charCodeAt(0) === 0x7f,
+    )
+  );
+}
+
+export function parseFormObservationReference(value: unknown): FormObservationReference | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const raw = value as Record<string, unknown>;
+  if (
+    Object.keys(raw).some(
+      (key) => !['tabId', 'url', 'documentId', 'formSnapshotId'].includes(key),
+    ) ||
+    typeof raw['tabId'] !== 'number' ||
+    !Number.isSafeInteger(raw['tabId']) ||
+    raw['tabId'] < 0 ||
+    typeof raw['url'] !== 'string' ||
+    raw['url'].length > WEB_PAGE_URL_MAX_LENGTH ||
+    !isPageDocumentId(raw['documentId']) ||
+    typeof raw['formSnapshotId'] !== 'string' ||
+    !UUID_PATTERN.test(raw['formSnapshotId'])
+  )
+    return null;
+  try {
+    const url = new URL(raw['url']);
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return null;
+  } catch {
+    return null;
+  }
+  return {
+    tabId: raw['tabId'],
+    url: raw['url'],
+    documentId: raw['documentId'],
+    formSnapshotId: raw['formSnapshotId'],
+  };
 }
 
 export async function readPageDocument(
@@ -14,7 +62,7 @@ export async function readPageDocument(
     func: () => location.href,
   });
   if (
-    !observed?.documentId ||
+    !isPageDocumentId(observed?.documentId) ||
     observed.result !== expectedUrl ||
     (expectedDocumentId !== undefined && observed.documentId !== expectedDocumentId)
   )

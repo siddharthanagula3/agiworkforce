@@ -66,13 +66,33 @@ function splitMemorySentences(value: string): string[] {
     .filter(Boolean);
 }
 
+function isTaskScopedMemoryReminder(sentence: string): boolean {
+  const text = sentence.trim();
+  if (!/^(?:please\s+)?remember\b/i.test(text)) return false;
+  const runtimeReference =
+    /\b(?:original|current|active|selected|created|new|this)\s+(?:(?:application|browser|page)\s+)?(?:tab|window|frame|element|snapshot)\s+(?:id|identifier|index|handle)\b|\b(?:tab|window|frame|element|snapshot)\s+(?:id|identifier|index|handle)\s*(?:is\s+|=\s*|:\s*)?\d+\b/i.test(
+      text,
+    );
+  if (!runtimeReference) return false;
+  if (
+    /\b(?:for|during)\s+this\s+(?:task|turn|session|page)\b|\b(?:do not|don't|never|without)\s+(?:save|store|persist|saving|storing|persisting)\b/i.test(
+      text,
+    )
+  )
+    return true;
+  if (/^(?:please\s+)?remember\s+(?:that\s+)?(?:i|we)\b/i.test(text)) return false;
+  return !/\b(?:long[- ]term|permanent(?:ly)?|(?:future|other)\s+(?:chats?|conversations?|sessions?)|across\s+(?:chats?|conversations?|sessions?))\b/i.test(
+    text,
+  );
+}
+
 export function extractCandidateMemoryFacts(message: string): string[] {
   if (!message || typeof message !== 'string') return [];
 
   const facts: string[] = [];
   const seen = new Set<string>();
   for (const sentence of splitMemorySentences(message)) {
-    if (sentence.trimEnd().endsWith('?')) continue;
+    if (sentence.trimEnd().endsWith('?') || isTaskScopedMemoryReminder(sentence)) continue;
 
     for (const pattern of MEMORY_EXTRACTION_PATTERNS) {
       const match = pattern.re.exec(sentence);
@@ -142,7 +162,13 @@ const MIN_MEMORY_COMMAND_SUBJECT_CHARS = 2;
 
 function matchExplicitCommand(sentence: string): ExplicitMemoryCommand | null {
   const trimmed = sentence.trim();
-  if (!trimmed || trimmed.endsWith('?') || MEMORY_QUESTION_RE.test(trimmed)) return null;
+  if (
+    !trimmed ||
+    trimmed.endsWith('?') ||
+    MEMORY_QUESTION_RE.test(trimmed) ||
+    isTaskScopedMemoryReminder(trimmed)
+  )
+    return null;
 
   for (const [kind, patterns] of [
     ['forget', EXPLICIT_FORGET_PATTERNS],
@@ -189,6 +215,7 @@ export function passiveMemoryText(message: string, rememberAnswered: boolean): s
   if (!message || typeof message !== 'string') return '';
   return splitMemorySentences(withoutInlinedContent(message))
     .filter((sentence) => {
+      if (isTaskScopedMemoryReminder(sentence)) return false;
       const command = matchExplicitCommand(sentence);
       return command === null || (command.kind === 'remember' && !rememberAnswered);
     })
@@ -436,6 +463,7 @@ export function isMemoryExtractionWorthwhile(message: string): boolean {
   return splitMemorySentences(trimmed).some(
     (sentence) =>
       !sentence.trimEnd().endsWith('?') &&
+      !isTaskScopedMemoryReminder(sentence) &&
       (SELF_REFERENCE_RE.test(sentence) || MEMORY_INTENT_RE.test(sentence)),
   );
 }
@@ -525,13 +553,14 @@ export async function extractMemoryFactsWithModel(
   options: ModelMemoryExtractionOptions,
 ): Promise<ModelMemoryExtractionResult> {
   const maxFacts = Math.max(1, Math.floor(options.maxFacts ?? DEFAULT_MAX_MEMORY_FACTS));
-  const patternFacts = extractCandidateMemoryFacts(message).slice(0, maxFacts);
+  const sourceText = passiveMemoryText(message, false);
+  const patternFacts = extractCandidateMemoryFacts(sourceText).slice(0, maxFacts);
   const fallback = (reason: MemoryFactExtractionFallbackReason): ModelMemoryExtractionResult => {
     options.onFallback?.(reason);
     return { facts: patternFacts, source: 'pattern', fallbackReason: reason };
   };
 
-  if (!isMemoryExtractionWorthwhile(message)) return fallback('not_worthwhile');
+  if (!isMemoryExtractionWorthwhile(sourceText)) return fallback('not_worthwhile');
 
   const timeoutMs = Math.max(
     1,
@@ -547,7 +576,7 @@ export async function extractMemoryFactsWithModel(
       options.runner(
         {
           systemPrompt: options.systemPrompt ?? MEMORY_FACT_EXTRACTION_SYSTEM_PROMPT,
-          message: message.slice(0, MAX_MEMORY_EXTRACTION_SOURCE_CHARS),
+          message: sourceText.slice(0, MAX_MEMORY_EXTRACTION_SOURCE_CHARS),
         },
         controller.signal,
       ),

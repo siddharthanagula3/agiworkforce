@@ -32,7 +32,11 @@ vi.mock('@/lib/server/rls-db', () => ({
   getVerifiedBearerUserScopedDb: vi.fn(),
   getUserScopedDb: vi.fn(),
 }));
-vi.mock('@/lib/services/cloud-agent-run-service', () => ({
+vi.mock('@/lib/services/cloud-agent-run-service', async () => ({
+  ...(await vi.importActual<typeof import('@/lib/services/cloud-agent-run-service')>(
+    '@/lib/services/cloud-agent-run-service',
+  )),
+
   APPROVAL_CHECKPOINT_TTL_HOURS: vi.fn(),
   ARCHIVABLE_TASK_STATES: vi.fn(),
   CLOUD_AGENT_RUN_CANCELLATION: vi.fn(),

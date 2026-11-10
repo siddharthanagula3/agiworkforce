@@ -89,6 +89,7 @@ function harness() {
     ...Object.values(dependencies),
   ) as (...args: unknown[]) => void;
   const payload = {
+    browserSource: { ...CAPTURE.source },
     prompt: 'Fill this form with the supplied answers.',
     pageText: null as string | null,
     capturePage: true,
@@ -142,6 +143,15 @@ describe('DOM-first model turn admission', () => {
       expect(capture).toHaveBeenCalledTimes(2);
     },
   );
+
+  it('refuses a changed submission page before requesting context or site access', () => {
+    const h = harness();
+    h.payload.browserSource = { ...CAPTURE.source, tabId: 99, url: 'https://example.test/other' };
+    h.run();
+    expect(h.capture).not.toHaveBeenCalled();
+    expect(h.post).not.toHaveBeenCalled();
+    expect(h.fail).toHaveBeenCalledWith('stream-1', 'Page changed');
+  });
 
   it('supplies the complete observed form and source binding before the first model request', async () => {
     const h = harness();
@@ -288,11 +298,12 @@ function savedProfileTurnHarness() {
   const mode = vi.fn().mockResolvedValue('auto');
   const approved = vi.fn().mockResolvedValue(true);
   const fill = vi.fn(async (...args: unknown[]) => {
-    if (typeof args[5] === 'function') args[5]();
-    return '[untrusted form_fill]{"verified":true}[/untrusted]';
+    if (typeof args[5] === 'function') args[5](2);
+    return '[untrusted form_fill]{"verified":true,"filledCount":2}[/untrusted]';
   });
   const historyPermission = vi.fn().mockResolvedValue(false);
   const read = vi.fn().mockResolvedValue(REFRESHED_CAPTURE);
+  const complete = vi.fn();
   const dependencies = {
     _ctx: context,
     activePageSource: CAPTURE.source,
@@ -317,7 +328,18 @@ function savedProfileTurnHarness() {
     pageContextStillDescribes,
     PAGE_CONTEXT_CHANGED_REASON: 'Page changed',
     fencedToolResult: (label: string, text: string) => `[untrusted ${label}]${text}[/untrusted]`,
+    originHasHostPermission: vi.fn(async () => true),
+    captureCallerBrowserContext: vi.fn(async (source, documentId, assertCurrent) => {
+      assertCurrent();
+      return {
+        tabId: source.tabId,
+        windowId: 3,
+        url: source.url,
+        ...(documentId ? { documentId } : {}),
+      };
+    }),
     sendChatTurn: send,
+    completeVerifiedProfileFill: complete,
     handleStreamError: fail,
   };
   const compiled = ts.transpileModule(
@@ -346,13 +368,14 @@ function savedProfileTurnHarness() {
     fill,
     read,
     historyPermission,
+    complete,
     changePage: boundary.changePage,
     run: () => boundary.run(user, payload, 'stream-1', OWNER, false),
   };
 }
 
 describe('saved profile at the first managed form request', () => {
-  it('fills known profile fields before the first provider request in Full access', async () => {
+  it('finishes verified profile filling without making a provider request in Full access', async () => {
     const h = savedProfileTurnHarness();
     h.mode.mockResolvedValue('full');
     await h.run();
@@ -365,22 +388,18 @@ describe('saved profile at the first managed form request', () => {
       false,
       expect.any(Function),
     );
-    expect(h.fill.mock.invocationCallOrder[0]).toBeLessThan(h.send.mock.invocationCallOrder[0]!);
-    expect(h.send.mock.calls[0]![2].pageText).toContain('[untrusted form_fill]');
-    expect(h.send.mock.calls[0]![2].pageText).not.toContain(CAPTURE.text);
-    expect(h.send.mock.calls[0]![2].pageText).toContain(REFRESHED_CAPTURE.text);
     expect(h.read).toHaveBeenCalledWith(CAPTURE.source.tabId, CAPTURE.source.url);
-    expect(h.send.mock.calls[0]![6]).toBeUndefined();
-    expect(h.send.mock.calls[0]![7]).toBe(false);
+    expect(h.complete).toHaveBeenCalledExactlyOnceWith('stream-1', 2);
+    expect(h.send).not.toHaveBeenCalled();
   });
 
-  it('offers no browser or history actions after a fully verified native batch', async () => {
+  it('does not invoke a model for confirmation or additional history actions after a verified batch', async () => {
     const h = savedProfileTurnHarness();
     h.mode.mockResolvedValue('full');
     h.historyPermission.mockResolvedValue(true);
     await h.run();
-    expect(h.send.mock.calls[0]![6]).toBeUndefined();
-    expect(h.send.mock.calls[0]![7]).toBe(false);
+    expect(h.complete).toHaveBeenCalledOnce();
+    expect(h.send).not.toHaveBeenCalled();
   });
 
   it('keeps browser tools available when a native batch has unresolved fields', async () => {
@@ -389,6 +408,7 @@ describe('saved profile at the first managed form request', () => {
     h.fill.mockImplementation(async () => '[untrusted form_fill]{"verified":false}[/untrusted]');
     await h.run();
     expect(h.send.mock.calls[0]![6]).toBe('act');
+    expect(h.complete).not.toHaveBeenCalled();
   });
 
   it.each(['ask', 'auto'])('keeps %s mode on the existing planner path', async (mode) => {

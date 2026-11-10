@@ -4,6 +4,11 @@ import { randomUUID } from 'node:crypto';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   AGENT_EVENT_SCHEMA_VERSION,
+  CALLER_TOOL_BOUNDARY_EVENT_COUNT,
+  CallerToolResultsSchema,
+  CallerToolResumeRequestSchema,
+  MAX_HOSTED_TOOL_CALLS_PER_STEP,
+  readCompleteCallerToolCalls,
   ToolApprovalReviewWireSchema,
   AgentEventEnvelopeSchema,
   AgentTaskStateSchema,
@@ -19,6 +24,7 @@ import {
   type CloudAgentRunSteer,
   type CloudAgentRunUsage,
   type CloudAgentWorkMode,
+  type CallerToolResumeRequest,
 } from '@agiworkforce/cloud-contracts';
 import {
   INTERACTIVE_CARDS_METADATA_KEY,
@@ -41,6 +47,7 @@ import { OBSERVABILITY_ATTRIBUTE } from '@/lib/observability/attributes';
 import { recordFailure } from '@/lib/observability/metrics';
 import { withSpan } from '@/lib/observability/span';
 import { toIsoTimestamp } from '@/lib/server/iso-timestamps';
+import { fingerprintRequestBody } from '@/lib/server/idempotency';
 import { notifyAgentRunEvent, type AgentRunNotice } from './agent-notification-service';
 
 const TERMINAL_STATE_VALUES: string[] = [...TERMINAL_AGENT_TASK_STATES];
@@ -195,6 +202,7 @@ const CheckpointMessageSchema = z
     tool_calls: z.array(z.unknown()).optional(),
     tool_call_id: z.string().optional(),
     __canonicalThinking: z.array(CheckpointThinkingBlockSchema).optional(),
+    __retainedToolResultReference: z.string().uuid().optional(),
   })
   .passthrough();
 
@@ -208,7 +216,7 @@ const PendingToolCallSchema = z.object({
 });
 
 const CheckpointStateSchema = z.enum(['pending', 'resuming', 'resolved', 'failed']);
-const CheckpointKindSchema = z.enum(['approval', 'input', 'device']);
+const CheckpointKindSchema = z.enum(['approval', 'input', 'device', 'caller']);
 
 const DeviceStepBindingSchema = z.object({
   deviceId: z.string().min(1).max(200),
@@ -322,6 +330,24 @@ export interface ClaimedCloudAgentInputCheckpoint {
   leaseToken: string;
 }
 
+export interface SavedCloudAgentCallerCheckpoint {
+  checkpoint: CloudAgentApprovalCheckpoint;
+  events: AgentEventEnvelope[];
+}
+
+export interface ClaimedCloudAgentCallerCheckpoint {
+  checkpoint: CloudAgentApprovalCheckpoint;
+  resume: CallerToolResumeRequest;
+  leaseToken: string;
+}
+
+export class CloudAgentCallerResultError extends Error {
+  constructor(message = 'Tool results do not match the pending caller tools') {
+    super(message);
+    this.name = 'CloudAgentCallerResultError';
+  }
+}
+
 export class CloudAgentInputResponseError extends Error {
   constructor(message = 'Input responses do not match the paused tool calls') {
     super(message);
@@ -380,6 +406,10 @@ export class CloudAgentApprovalCheckpointConflictError extends Error {
 }
 
 export const APPROVAL_CHECKPOINT_TTL_HOURS = 24;
+
+function checkpointLeaseSeconds(value: number | undefined): number {
+  return Math.min(86_400, Math.max(60, Math.trunc(value ?? 900)));
+}
 
 const CONVERSATION_PREVIEW_LATERAL = `
   left join lateral (
@@ -1299,20 +1329,22 @@ export async function readCloudAgentRunAssistantText(
   };
 }
 
+interface CloudAgentCheckpointWrite {
+  userId: string;
+  runId: string;
+  sessionId: string;
+  turnId: string;
+  nextEventSequence: number;
+  completedSteps: number;
+  request: Record<string, unknown>;
+  messages: unknown[];
+  pendingToolCalls: unknown[];
+  events: unknown[];
+}
+
 export async function saveCloudAgentApprovalCheckpoint(
   db: DatabaseAdapter,
-  input: {
-    userId: string;
-    runId: string;
-    sessionId: string;
-    turnId: string;
-    nextEventSequence: number;
-    completedSteps: number;
-    request: Record<string, unknown>;
-    messages: unknown[];
-    pendingToolCalls: unknown[];
-    events: unknown[];
-  },
+  input: CloudAgentCheckpointWrite,
 ): Promise<CloudAgentApprovalCheckpoint> {
   const request = z.record(z.string(), z.unknown()).parse(input.request);
   const messages = z.array(CheckpointMessageSchema).parse(input.messages);
@@ -1436,6 +1468,372 @@ export async function saveCloudAgentApprovalCheckpoint(
   return checkpoint;
 }
 
+async function lockActiveCallerRun(
+  tx: DatabaseAdapter,
+  input: { userId: string; organizationId: string | null; runId: string },
+): Promise<void> {
+  const rows = await tx.query<{
+    id: string;
+    state: string;
+    cancellation_requested_at: string | Date | null;
+  }>(
+    `select id, state, cancellation_requested_at from public.cloud_agent_runs
+      where id = $1 and user_id = $2 and organization_id is not distinct from $3::uuid for update`,
+    [input.runId, input.userId, input.organizationId],
+  );
+  const run = rows[0];
+  if (!run) throw new CloudAgentRunNotFoundError();
+  if (run.cancellation_requested_at !== null || run.state === 'cancelled') {
+    throw new DOMException('Cloud agent run was cancelled', 'AbortError');
+  }
+  if (TERMINAL_STATE_VALUES.includes(run.state) || run.state === 'paused') {
+    throw new CloudAgentApprovalCheckpointConflictError('Cloud agent run is no longer resumable');
+  }
+}
+
+function validateCallerCheckpointBoundary(
+  input: Pick<CloudAgentCheckpointWrite, 'sessionId' | 'turnId' | 'nextEventSequence'>,
+  messages: CloudAgentCheckpointMessage[],
+  pending: CloudAgentPendingToolCall[],
+  events: AgentEventEnvelope[],
+): void {
+  const event = events[0]?.event;
+  const state = events[1]?.event;
+  const lifecycle = events[2]?.event;
+  if (
+    events.length !== CALLER_TOOL_BOUNDARY_EVENT_COUNT ||
+    event?.type !== 'caller-tools-requested' ||
+    event.nextEventSequence !== input.nextEventSequence ||
+    state?.type !== 'task-state-changed' ||
+    state.state !== 'awaiting_input' ||
+    lifecycle?.type !== 'lifecycle' ||
+    lifecycle.phase !== 'paused' ||
+    !events.every(
+      (item, index) =>
+        item.sessionId === input.sessionId &&
+        item.turnId === input.turnId &&
+        (index === 0 || item.sequence === events[index - 1]!.sequence + 1),
+    ) ||
+    events.at(-1)!.sequence + 1 !== input.nextEventSequence
+  )
+    throw new CloudAgentCallerResultError(
+      'Caller checkpoint events do not form a complete boundary',
+    );
+
+  const expected = pending.map((call) => ({
+    id: call.id,
+    name: call.qualifiedName,
+    args: call.args,
+  }));
+  const observed = event.calls.map((call) => ({
+    id: call.id,
+    name: call.function.name,
+    args: JSON.parse(call.function.arguments) as unknown,
+  }));
+  if (fingerprintRequestBody(expected) !== fingerprintRequestBody(observed)) {
+    throw new CloudAgentCallerResultError('Caller checkpoint calls do not match its event');
+  }
+
+  let assistantIndex = messages.length - 1;
+  while (assistantIndex >= 0 && messages[assistantIndex]!.role !== 'assistant') assistantIndex--;
+  const rawCalls = messages[assistantIndex]?.tool_calls;
+  if (!rawCalls?.length)
+    throw new CloudAgentCallerResultError('Caller checkpoint has no assistant calls');
+  const calls = readCompleteCallerToolCalls(
+    rawCalls.map((raw, index) =>
+      raw && typeof raw === 'object' && !Array.isArray(raw) ? { ...raw, index } : raw,
+    ),
+    rawCalls.map((raw) =>
+      raw && typeof raw === 'object' ? (raw as Record<string, unknown>)['id'] : null,
+    ),
+  );
+  if (!calls || calls.length > MAX_HOSTED_TOOL_CALLS_PER_STEP)
+    throw new CloudAgentCallerResultError();
+  const allIds = new Set(calls.map((call) => call.id));
+  const answered = new Set<string>();
+  for (const message of messages.slice(assistantIndex + 1)) {
+    if (message.role !== 'tool') continue;
+    const id = message.tool_call_id;
+    if (!id || !allIds.has(id) || answered.has(id)) throw new CloudAgentCallerResultError();
+    answered.add(id);
+  }
+  const unresolved = calls
+    .filter((call) => !answered.has(call.id))
+    .map((call) => ({
+      id: call.id,
+      name: call.function.name,
+      args: JSON.parse(call.function.arguments) as unknown,
+    }));
+  if (fingerprintRequestBody(unresolved) !== fingerprintRequestBody(expected)) {
+    throw new CloudAgentCallerResultError(
+      'Caller checkpoint leaves unmatched assistant obligations',
+    );
+  }
+}
+
+export async function saveCloudAgentCallerCheckpoint(
+  db: DatabaseAdapter,
+  input: CloudAgentCheckpointWrite & { organizationId: string | null },
+): Promise<SavedCloudAgentCallerCheckpoint> {
+  const request = z.record(z.string(), z.unknown()).parse(input.request);
+  if (request['caller_tool_handoff_version'] !== AGENT_EVENT_SCHEMA_VERSION) {
+    throw new CloudAgentCallerResultError('The caller did not offer this continuation protocol');
+  }
+  const messages = z.array(CheckpointMessageSchema).parse(input.messages);
+  const pending = z
+    .array(
+      PendingToolCallSchema.extend({ argsMalformed: z.literal(true).optional() }).refine(
+        (call) => call.argsMalformed !== true && call.approvalScopes === undefined,
+      ),
+    )
+    .min(1)
+    .max(MAX_HOSTED_TOOL_CALLS_PER_STEP)
+    .parse(input.pendingToolCalls);
+  const nextEventSequence = z
+    .number()
+    .int()
+    .positive()
+    .max(Number.MAX_SAFE_INTEGER)
+    .parse(input.nextEventSequence);
+  const completedSteps = z.number().int().nonnegative().parse(input.completedSteps);
+  const events = z
+    .array(AgentEventEnvelopeSchema)
+    .length(CALLER_TOOL_BOUNDARY_EVENT_COUNT)
+    .parse(input.events);
+  validateCallerCheckpointBoundary(input, messages, pending, events);
+  const requestJson = JSON.stringify(request);
+  const messagesJson = JSON.stringify(messages);
+  const pendingJson = JSON.stringify(pending);
+
+  return db.transaction(async (tx) => {
+    await lockActiveCallerRun(tx, input);
+    const existing = await tx.query<CloudAgentApprovalCheckpointRow>(
+      `select *, (request = $5::jsonb and messages = $6::jsonb and pending_tool_calls = $7::jsonb) as same_context
+         from public.cloud_agent_approval_checkpoints
+        where run_id = $1 and user_id = $2 and checkpoint_kind = 'caller'
+          and turn_id = $3 and next_event_sequence = $4 for update`,
+      [
+        input.runId,
+        input.userId,
+        input.turnId,
+        nextEventSequence,
+        requestJson,
+        messagesJson,
+        pendingJson,
+      ],
+    );
+    if (existing[0]) {
+      if (existing[0].state !== 'pending' || existing[0]['same_context'] !== true) {
+        throw new CloudAgentApprovalCheckpointConflictError(
+          'Caller checkpoint already holds a different continuation',
+        );
+      }
+      const checkpoint = requireApprovalCheckpoint(existing);
+      const stored = await tx.query<{ envelope: unknown }>(
+        `select envelope from public.cloud_agent_events
+          where run_id = $1 and user_id = $2 and sequence >= $3 and sequence < $4
+          order by sequence`,
+        [input.runId, input.userId, events[0]!.sequence, nextEventSequence],
+      );
+      const storedEvents = stored.map((row) => AgentEventEnvelopeSchema.parse(row.envelope));
+      validateCallerCheckpointBoundary(
+        input,
+        checkpoint.messages,
+        checkpoint.pendingToolCalls,
+        storedEvents,
+      );
+      return { checkpoint, events: storedEvents };
+    }
+    const pendingRows = await tx.query<{ id: string }>(
+      `select id from public.cloud_agent_approval_checkpoints
+        where run_id = $1 and user_id = $2 and state = 'pending' limit 1 for update`,
+      [input.runId, input.userId],
+    );
+    if (pendingRows[0]) {
+      throw new CloudAgentApprovalCheckpointConflictError('Another checkpoint is awaiting input');
+    }
+    await tx.query(
+      `update public.cloud_agent_approval_checkpoints set state = 'resolved',
+         resolved_at = coalesce(resolved_at, now()), lease_expires_at = null, updated_at = now()
+        where run_id = $1 and user_id = $2 and state = 'resuming'`,
+      [input.runId, input.userId],
+    );
+    const versions = await tx.query<{ next_version: number | string }>(
+      `select coalesce(max(version), 0) + 1 as next_version from public.cloud_agent_approval_checkpoints
+        where run_id = $1 and user_id = $2`,
+      [input.runId, input.userId],
+    );
+    const version = z.coerce.number().int().positive().parse(versions[0]?.next_version);
+    const rows = await tx.query<CloudAgentApprovalCheckpointRow>(
+      `insert into public.cloud_agent_approval_checkpoints (
+        run_id, user_id, version, session_id, turn_id, next_event_sequence,
+        completed_steps, request, messages, pending_tool_calls, state, checkpoint_kind
+      ) values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10::jsonb, 'pending', 'caller') returning *`,
+      [
+        input.runId,
+        input.userId,
+        version,
+        input.sessionId,
+        input.turnId,
+        nextEventSequence,
+        completedSteps,
+        requestJson,
+        messagesJson,
+        pendingJson,
+      ],
+    );
+    const checkpoint = requireApprovalCheckpoint(rows);
+    await appendCloudAgentEventsWithinTransaction(tx, {
+      userId: input.userId,
+      runId: input.runId,
+      envelopes: events,
+    });
+    const persistedRows = await tx.query<{ envelope: unknown }>(
+      `select envelope from public.cloud_agent_events
+        where run_id = $1 and user_id = $2 and sequence >= $3 and sequence < $4
+        order by sequence`,
+      [input.runId, input.userId, events[0]!.sequence, nextEventSequence],
+    );
+    const persistedEvents = persistedRows.map((row) =>
+      AgentEventEnvelopeSchema.parse(row.envelope),
+    );
+    validateCallerCheckpointBoundary(input, messages, pending, persistedEvents);
+    if (fingerprintRequestBody(persistedEvents) !== fingerprintRequestBody(events)) {
+      throw new CloudAgentApprovalCheckpointConflictError('Caller event cursor is already in use');
+    }
+    await tx.query(
+      `update public.cloud_agent_runs set state = 'awaiting_input', completed_at = null, updated_at = now()
+        where id = $1 and user_id = $2 and organization_id is not distinct from $4::uuid and ${RUN_HAS_NOT_ENDED}`,
+      [input.runId, input.userId, TERMINAL_STATE_VALUES, input.organizationId],
+    );
+    return { checkpoint, events: persistedEvents };
+  });
+}
+
+export async function claimCloudAgentCallerCheckpoint(
+  db: DatabaseAdapter,
+  input: {
+    userId: string;
+    organizationId: string | null;
+    resume: CallerToolResumeRequest;
+    leaseSeconds?: number;
+  },
+): Promise<ClaimedCloudAgentCallerCheckpoint> {
+  const resume = CallerToolResumeRequestSchema.parse(input.resume);
+  const leaseSeconds = checkpointLeaseSeconds(input.leaseSeconds);
+  return db.transaction(async (tx) => {
+    await lockActiveCallerRun(tx, {
+      userId: input.userId,
+      organizationId: input.organizationId,
+      runId: resume.run_id,
+    });
+    const rows = await tx.query<CloudAgentApprovalCheckpointRow>(
+      `select *, created_at <= now() - make_interval(hours => $5) as expired,
+        lease_expires_at <= now() as lease_expired
+       from public.cloud_agent_approval_checkpoints
+       where run_id = $1 and user_id = $2 and checkpoint_kind = 'caller'
+         and turn_id = $3 and next_event_sequence = $4 for update`,
+      [
+        resume.run_id,
+        input.userId,
+        resume.turn_id,
+        resume.next_event_sequence,
+        APPROVAL_CHECKPOINT_TTL_HOURS,
+      ],
+    );
+    if (!rows[0]) throw new CloudAgentApprovalCheckpointNotFoundError();
+    if (rows[0]['expired'] === true) throw new CloudAgentApprovalCheckpointExpiredError();
+    const checkpoint = requireApprovalCheckpoint(rows);
+    if (
+      checkpoint.state !== 'pending' &&
+      !(checkpoint.state === 'resuming' && rows[0]['lease_expired'] === true)
+    ) {
+      throw new CloudAgentApprovalCheckpointConflictError('Caller results are already resuming');
+    }
+    const byId = new Map(resume.tool_results.map((result) => [result.tool_call_id, result]));
+    if (
+      byId.size !== checkpoint.pendingToolCalls.length ||
+      checkpoint.pendingToolCalls.some((call) => !byId.has(call.id))
+    )
+      throw new CloudAgentCallerResultError();
+    const normalizedResume = {
+      ...resume,
+      tool_results: CallerToolResultsSchema.parse(
+        checkpoint.pendingToolCalls.map((call) => byId.get(call.id)),
+      ),
+    };
+    const fingerprint = fingerprintRequestBody(normalizedResume);
+    const storedState = rows[0].request_state;
+    if (storedState !== null && storedState !== undefined) {
+      const stored = z
+        .object({ callerResumeFingerprint: z.string().regex(/^[a-f0-9]{64}$/) })
+        .strict()
+        .parse(storedState);
+      if (stored.callerResumeFingerprint !== fingerprint)
+        throw new CloudAgentCallerResultError('Caller results changed after being claimed');
+    } else if (checkpoint.state === 'resuming')
+      throw new CloudAgentCallerResultError('Caller receipt cannot be verified');
+
+    const leaseToken = randomUUID();
+    const claimedRows = await tx.query<CloudAgentApprovalCheckpointRow>(
+      `update public.cloud_agent_approval_checkpoints set state = 'resuming', lease_token = $3,
+        lease_expires_at = now() + make_interval(secs => $4), request_state = $5::jsonb, updated_at = now()
+       where id = $1 and user_id = $2 and checkpoint_kind = 'caller'
+         and (state = 'pending' or (state = 'resuming' and lease_expires_at <= now())) returning *`,
+      [
+        checkpoint.id,
+        input.userId,
+        leaseToken,
+        leaseSeconds,
+        JSON.stringify({ callerResumeFingerprint: fingerprint }),
+      ],
+    );
+    const claimed = requireApprovalCheckpoint(
+      claimedRows,
+      new CloudAgentApprovalCheckpointConflictError(),
+    );
+    const runs = await tx.query<CloudAgentRunRow>(
+      `update public.cloud_agent_runs set state = 'running', completed_at = null, updated_at = now()
+        where id = $1 and user_id = $2 and organization_id is not distinct from $4::uuid and ${RUN_HAS_NOT_ENDED} returning *`,
+      [resume.run_id, input.userId, TERMINAL_STATE_VALUES, input.organizationId],
+    );
+    if (!runs[0] || !claimed.leaseToken) throw new CloudAgentApprovalCheckpointConflictError();
+    return { checkpoint: claimed, resume: normalizedResume, leaseToken: claimed.leaseToken };
+  });
+}
+
+export async function releaseCloudAgentCallerCheckpoint(
+  db: DatabaseAdapter,
+  input: {
+    userId: string;
+    organizationId: string | null;
+    runId: string;
+    checkpointId: string;
+    leaseToken: string;
+  },
+): Promise<CloudAgentApprovalCheckpoint> {
+  return db.transaction(async (tx) => {
+    await lockActiveCallerRun(tx, input);
+    const rows = await tx.query<CloudAgentApprovalCheckpointRow>(
+      `update public.cloud_agent_approval_checkpoints set state = 'pending', lease_token = null,
+         lease_expires_at = null, updated_at = now()
+       where id = $1 and user_id = $2 and run_id = $3 and checkpoint_kind = 'caller'
+         and lease_token = $4 and state = 'resuming' and lease_expires_at > now() returning *`,
+      [input.checkpointId, input.userId, input.runId, input.leaseToken],
+    );
+    const checkpoint = requireApprovalCheckpoint(
+      rows,
+      new CloudAgentApprovalCheckpointConflictError(),
+    );
+    await tx.query(
+      `update public.cloud_agent_runs set state = 'awaiting_input', completed_at = null, updated_at = now()
+        where id = $1 and user_id = $2 and organization_id is not distinct from $4::uuid and ${RUN_HAS_NOT_ENDED}`,
+      [input.runId, input.userId, TERMINAL_STATE_VALUES, input.organizationId],
+    );
+    return checkpoint;
+  });
+}
+
 export async function claimCloudAgentApprovalCheckpoint(
   db: DatabaseAdapter,
   input: {
@@ -1455,7 +1853,7 @@ export async function claimCloudAgentApprovalCheckpoint(
     .min(1)
     .max(32)
     .parse(input.approvals);
-  const leaseSeconds = Math.min(86_400, Math.max(60, Math.trunc(input.leaseSeconds ?? 900)));
+  const leaseSeconds = checkpointLeaseSeconds(input.leaseSeconds);
 
   return db.transaction(async (tx) => {
     const rows = await tx.query<CloudAgentApprovalCheckpointRow>(
@@ -1784,7 +2182,7 @@ export async function claimCloudAgentInputCheckpoint(
     .min(1)
     .max(32)
     .parse(input.inputs);
-  const leaseSeconds = Math.min(86_400, Math.max(60, Math.trunc(input.leaseSeconds ?? 900)));
+  const leaseSeconds = checkpointLeaseSeconds(input.leaseSeconds);
 
   return db.transaction(async (tx) => {
     const rows = await tx.query<CloudAgentApprovalCheckpointRow>(
@@ -2567,7 +2965,7 @@ export async function claimCloudAgentPauseCheckpoint(
   db: DatabaseAdapter,
   input: { userId: string; runId: string; leaseSeconds?: number },
 ): Promise<ClaimedCloudAgentPauseCheckpoint> {
-  const leaseSeconds = Math.min(86_400, Math.max(60, Math.trunc(input.leaseSeconds ?? 900)));
+  const leaseSeconds = checkpointLeaseSeconds(input.leaseSeconds);
   return db.transaction(async (tx) => {
     const rows = await tx.query<CloudAgentApprovalCheckpointRow>(
       `select * from public.cloud_agent_approval_checkpoints

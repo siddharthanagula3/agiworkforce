@@ -189,6 +189,61 @@ describe('browser conversation session ownership', () => {
     expect(secondWindow.conversationId).not.toBe('conv-shared');
     await expect(claimConversationOwner('window:2')).resolves.toEqual({
       conversationId: secondWindow.conversationId,
+      seedConversationId: 'conv-shared',
+    });
+  });
+
+  it('retains one branch request identity across retry, rollback and module restart', async () => {
+    await claimSelectedConversationOwner('window:1', 'conv-shared');
+    await assignConversationOwner('window:2', 'conv-before');
+    const branch = await claimSelectedConversationOwner('window:2', 'conv-shared');
+    expect(branch.conversationId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+    );
+    expect(await claimSelectedConversationOwner('window:2', 'conv-shared')).toEqual(branch);
+    expect(
+      await restoreConversationOwnerIfCurrent('window:2', branch.conversationId, 'conv-before'),
+    ).toBe(true);
+    vi.resetModules();
+    const reloaded = await import('../src/features/background/conversation-session');
+    expect(await reloaded.claimSelectedConversationOwner('window:2', OWNER, 'conv-shared')).toEqual(
+      branch,
+    );
+    expect(await reloaded.claimConversationOwner('window:2', OWNER)).toEqual({
+      conversationId: branch.conversationId,
+      seedConversationId: 'conv-shared',
+    });
+  });
+
+  it('clears an unfinished branch intent when the user selects a new chat', async () => {
+    await claimSelectedConversationOwner('window:1', 'conv-shared');
+    const first = await claimSelectedConversationOwner('window:2', 'conv-shared');
+    await assignConversationOwner('window:2', 'conv-new');
+    const next = await claimSelectedConversationOwner('window:2', 'conv-shared');
+    expect(next.conversationId).not.toBe(first.conversationId);
+  });
+
+  it('does not retarget a pending branch when the original chat gets another message', async () => {
+    const firstPoint = '11111111-1111-4111-8111-111111111111';
+    const laterPoint = '22222222-2222-4222-8222-222222222222';
+    await claimSelectedConversationOwner('window:1', 'conv-shared');
+    const first = await claimSelectedOwnedConversationOwner(
+      'window:2',
+      OWNER,
+      'conv-shared',
+      firstPoint,
+    );
+    expect(first.forkPointMessageId).toBe(firstPoint);
+    await restoreConversationOwnerIfCurrent('window:2', first.conversationId, 'conv-before');
+    vi.resetModules();
+    const reloaded = await import('../src/features/background/conversation-session');
+    expect(
+      await reloaded.claimSelectedConversationOwner('window:2', OWNER, 'conv-shared', laterPoint),
+    ).toEqual(first);
+    expect(await reloaded.claimConversationOwner('window:2', OWNER)).toEqual({
+      conversationId: first.conversationId,
+      seedConversationId: 'conv-shared',
+      forkPointMessageId: firstPoint,
     });
   });
 

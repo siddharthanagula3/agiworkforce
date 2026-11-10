@@ -2,6 +2,9 @@ import type React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+type SandboxedIframeModule = typeof import('@/features/chat/components/SandboxedIframe');
+type ClientModule = typeof import('@/lib/identity/client');
+type UseSessionSnapshotModule = typeof import('@/lib/identity/useSessionSnapshot');
 
 type ReactI18nextModule = typeof import('react-i18next');
 
@@ -12,7 +15,9 @@ vi.mock('react-i18next', async (importOriginal) => ({
   useTranslation: () => ({ t: (key: string, fallback?: string) => fallback ?? key }),
 }));
 
-vi.mock('@/features/chat/components/SandboxedIframe', () => ({
+vi.mock('@/features/chat/components/SandboxedIframe', async () => ({
+  ...(await vi.importActual<SandboxedIframeModule>('@/features/chat/components/SandboxedIframe')),
+
   SandboxedIframe: () => <div data-testid="sandboxed-frame" />,
 }));
 
@@ -32,7 +37,9 @@ vi.mock('next/link', () => ({
   ),
 }));
 
-vi.mock('@/lib/identity/client', () => ({
+vi.mock('@/lib/identity/client', async () => ({
+  ...(await vi.importActual<ClientModule>('@/lib/identity/client')),
+
   useSession: () => ({
     isLoaded: true,
     isSignedIn: false,
@@ -41,7 +48,9 @@ vi.mock('@/lib/identity/client', () => ({
   }),
 }));
 
-vi.mock('@/lib/identity/useSessionSnapshot', () => ({
+vi.mock('@/lib/identity/useSessionSnapshot', async () => ({
+  ...(await vi.importActual<UseSessionSnapshotModule>('@/lib/identity/useSessionSnapshot')),
+
   useSessionSnapshot: () => () => null,
 }));
 

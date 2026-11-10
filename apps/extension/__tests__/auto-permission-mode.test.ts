@@ -149,6 +149,23 @@ describe('Auto acts without asking and stops for crucial actions', () => {
     ).resolves.toBe(true);
   });
 
+  it.each([
+    { toolName: 'open_tab', args: { url: 'https://shop.example/jobs' } },
+    { toolName: 'switch_tab', args: { tabId: 7 } },
+  ])('lets Full access perform $toolName only on approved sites', async (action) => {
+    const input = { ...action, pageUrl: PAGE };
+    await expect(asks('full', input, true)).resolves.toBe(false);
+    await expect(asks('full', input, false)).resolves.toBe(true);
+    await expect(asks('ask', input, true)).resolves.toBe(true);
+    await expect(asks('auto', input)).resolves.toBe(false);
+  });
+
+  it('keeps approval for closing a tab that can contain unsaved changes', async () => {
+    await expect(
+      asks('full', { toolName: 'close_tab', args: { tabId: 7 }, pageUrl: PAGE }, true),
+    ).resolves.toBe(true);
+  });
+
   it('keeps Ask first asking for everything and Full access on approved sites only', async () => {
     const navigate = {
       toolName: 'navigate',

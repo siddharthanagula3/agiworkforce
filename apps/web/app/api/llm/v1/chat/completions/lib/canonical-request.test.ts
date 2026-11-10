@@ -85,6 +85,22 @@ function makeProcessed(llmRequest: Partial<LlmRequest>, provider = 'anthropic'):
 }
 
 describe('toCanonicalChatRequest', () => {
+  it('keeps server retention metadata out of the provider request', () => {
+    const processed = makeProcessed({
+      messages: [
+        {
+          role: 'tool',
+          content: 'tool text',
+          tool_call_id: 'provider-local-id',
+          __retainedToolResultReference: '0190a000-0000-4000-8000-000000000009',
+        },
+      ],
+    });
+    const request = toCanonicalChatRequest(processed);
+    expect(JSON.stringify(request)).not.toContain('__retainedToolResultReference');
+    expect(JSON.stringify(request)).not.toContain('0190a000-0000-4000-8000-000000000009');
+    expect(JSON.stringify(request)).toContain('provider-local-id');
+  });
   it('converts plain system/user/assistant text messages', () => {
     const processed = makeProcessed({
       messages: [

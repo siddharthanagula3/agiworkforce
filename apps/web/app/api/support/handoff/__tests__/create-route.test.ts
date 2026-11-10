@@ -17,7 +17,9 @@ const routeMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@clerk/nextjs/server', () => ({ auth: routeMocks.auth }));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async () => ({
+  ...(await vi.importActual<ApiAuthModule>('@/lib/api-auth')),
+
   getSuspendedAccountUser: vi.fn(async () => null),
   getOptionalAuthUser: routeMocks.optionalUser,
   getClerkAuthUser: vi.fn(),
@@ -31,15 +33,24 @@ vi.mock('@/lib/server/identity', () => ({
   getRequestIdentity: vi.fn(async () => ({ subject: null })),
   verifyIdentitySessionToken: vi.fn(async () => null),
 }));
-vi.mock('@/lib/csrf', () => ({
+vi.mock('@/lib/csrf', async () => ({
+  ...(await vi.importActual<CsrfModule>('@/lib/csrf')),
+
   requireCsrfToken: routeMocks.requireCsrfToken,
   getOrCreateAnonSession: routeMocks.getOrCreateAnonSession,
 }));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: routeMocks.withRateLimit }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/rate-limit', async () => ({
+  ...(await vi.importActual<RateLimitModule>('@/lib/rate-limit')),
+  withRateLimit: routeMocks.withRateLimit,
+}));
+vi.mock('@/lib/logger', async () => ({
+  ...(await vi.importActual<LoggerModule>('@/lib/logger')),
+
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/support/handoff/store', () => ({
+vi.mock('@/lib/support/handoff/store', async () => ({
+  ...(await vi.importActual<StoreModule>('@/lib/support/handoff/store')),
+
   insertHandoffSession: routeMocks.insertHandoffSession,
   listFreshOnlineAgents: routeMocks.listFreshOnlineAgents,
   recordEmailOutcome: routeMocks.recordEmailOutcome,
@@ -58,10 +69,14 @@ vi.mock('@/lib/services/subscription-service', () => ({
 vi.mock('@/lib/services/managed-usage-summary-service', () => ({
   getManagedUsageSummary: routeMocks.getManagedUsageSummary,
 }));
-vi.mock('@/lib/security/bot-challenge', () => ({
+vi.mock('@/lib/security/bot-challenge', async () => ({
+  ...(await vi.importActual<BotChallengeModule>('@/lib/security/bot-challenge')),
+
   requireHumanCaller: routeMocks.requireHumanCaller,
 }));
-vi.mock('@/lib/server/rls-db', () => ({
+vi.mock('@/lib/server/rls-db', async () => ({
+  ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
+
   getCurrentUserRlsDb: routeMocks.getCurrentUserRlsDb,
 }));
 
@@ -70,6 +85,13 @@ import { BOT_CHALLENGED_ENDPOINTS } from '@/lib/security/bot-challenge-routes';
 import { POST } from '../route';
 import { clearAvailabilityCache } from '@/lib/support/handoff/presence-service';
 import { REFERENCE_ID_PATTERN } from '@/lib/support/handoff/reference-id';
+type ApiAuthModule = typeof import('@/lib/api-auth');
+type CsrfModule = typeof import('@/lib/csrf');
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type LoggerModule = typeof import('@/lib/logger');
+type StoreModule = typeof import('@/lib/support/handoff/store');
+type BotChallengeModule = typeof import('@/lib/security/bot-challenge');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
 
 const fetchMock = vi.fn();
 

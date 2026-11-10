@@ -1,3 +1,4 @@
+import { executeOwnedCallerToolCalls } from './callerToolExecution';
 import { ScheduledTaskTransportControl } from '../background/scheduled-task-transport';
 import type { RoutingTaskType } from '@agiworkforce/routing';
 import type { AgentTaskState } from '@agiworkforce/types/protocol';
@@ -7,17 +8,23 @@ import {
   getModelMetadataById,
   isWorkspaceReasoningEffort,
   resolveModelEffort,
+  TERMINAL_AGENT_TASK_STATES,
   type Effort,
 } from '@agiworkforce/types';
 import { fenceUntrustedContent } from '@agiworkforce/utils/fence';
 import {
   AGIWORK_PLAN_MAX_STEPS,
+  DEFAULT_CHAT_TOOL_MAX_STEPS,
+  MAX_CALLER_TOOL_STEPS,
+  CallerToolResumeRequestSchema,
+  HostedCallerToolBatchSchema,
   MAX_AGIWORK_GOAL_CHARS,
   MAX_AGIWORK_PLAN_STEP_CHARS,
   ManagedCloudAgentRunReferenceSchema,
   ToolApprovalResumeRequestSchema,
   ToolInputResumeRequestSchema,
   type ManagedCloudAgentRunReference,
+  type CallerToolResumeRequest,
   type ToolApprovalDecisionWire,
   type ToolInputResponseWire,
   ManagedCloudUploadedChatAttachmentsSchema,
@@ -34,6 +41,7 @@ import {
   getManagedModelAccess,
   streamFreeChat,
   streamManagedChatApproval,
+  streamManagedCallerReceipt,
   streamManagedChatToolInput,
   type FreeTrialChunk,
   type FreeTrialMessage,
@@ -55,14 +63,15 @@ import { UUID_PATTERN } from '../../lib/uuid';
 import type { ChromeManagedRoutingMetadata } from '../../types';
 import type { ToolDefinition } from '../computer-use/browserToolDefinitions';
 import { MAX_CHAT_TOOL_RESULT_CHARS } from '../computer-use/chatBrowserTools';
-import type { ToolCall } from '../computer-use/toolHandoff';
+import type { ToolCall, CallerToolContinuation } from '../computer-use/toolHandoff';
+import { CallerToolCustodyError, type ChromeCallerToolCustody } from './callerToolCustody';
 
 const MAX_MESSAGE_CHARS = 32_000;
 const MAX_PAGE_CONTEXT_CHARS = 64_000;
 const MAX_SYSTEM_PROMPT_CHARS = 16_000;
 const MAX_HISTORY_MESSAGES = 100;
 const MAX_IDENTIFIER_CHARS = 200;
-export const MAX_MANAGED_TOOL_LEGS = 10;
+export const MAX_MANAGED_TOOL_LEGS = DEFAULT_CHAT_TOOL_MAX_STEPS;
 export const MANAGED_TOOL_CONTINUATION_RETRIES = 2;
 export const MANAGED_TOOL_CONTINUATION_RETRY_MS = 750;
 
@@ -93,6 +102,7 @@ export function createChromeManagedStreamKey(clientInstanceId: string, streamId:
 }
 
 export interface ChromeManagedChatRequest {
+  browserObservation?: import('../browser-tools/documentBridge').FormObservationReference;
   id: string;
   text: string;
   modelSelection?: string;
@@ -124,10 +134,10 @@ export interface ChromeManagedChatRequest {
   signal?: AbortSignal;
 }
 
-export interface ChromeManagedToolResult {
-  toolCallId: string;
-  content: string;
-}
+export type ChromeManagedToolResult = import('../computer-use/chatToolResults').ChatToolResult & {
+  browserContext?: import('./callerBrowserContext').CallerBrowserContext;
+  taskTabs?: import('../browser-tools/taskTabScope').TaskTabScope;
+};
 
 export type ChromeManagedToolHandoffOutcome =
   | { status: 'resolved'; results: ChromeManagedToolResult[]; tools?: readonly ToolDefinition[] }
@@ -172,13 +182,19 @@ export interface ChromeManagedChatDependencies {
   onSources?: (chunk: Extract<FreeTrialChunk, { type: 'sources' }>) => void | Promise<void>;
   onRunReference?: (run: Extract<FreeTrialChunk, { type: 'run' }>['run']) => void | Promise<void>;
   onQuotaWarning?: (warning: ManagedQuotaWarningSignal) => void | Promise<void>;
-  onToolHandoff?: (calls: ToolCall[]) => Promise<ChromeManagedToolHandoffOutcome>;
+  onToolHandoff?: (
+    calls: ToolCall[],
+    checkpoint?: CallerToolContinuation,
+  ) => Promise<ChromeManagedToolHandoffOutcome>;
+  callerCustody?: ChromeCallerToolCustody;
+  beforeCallerAction?: (checkpoint: CallerToolContinuation) => Promise<void>;
 }
 
 export interface ChromeManagedApprovalRequest {
   id: string;
   run: ManagedCloudAgentRunReference;
   toolApprovals: ToolApprovalDecisionWire[];
+  originalCallerToolNames?: readonly string[];
   guidance?: string;
   signal?: AbortSignal;
 }
@@ -199,12 +215,14 @@ export interface ChromeManagedToolInputRequest {
   id: string;
   run: ManagedCloudAgentRunReference;
   toolInputs: ToolInputResponseWire[];
+  originalCallerToolNames?: readonly string[];
   signal?: AbortSignal;
 }
 
 export interface ChromeManagedApprovalDependencies {
   getAuthToken: typeof getAuthToken;
   streamApproval: typeof streamManagedChatApproval;
+  onCallerCheckpoint?: (checkpoint: CallerToolContinuation) => void | Promise<void>;
   onText: (text: string) => void | Promise<void>;
   onCodeExecution?: (
     chunk: Extract<FreeTrialChunk, { type: 'code-execution' }>,
@@ -531,6 +549,16 @@ export async function executeChromeManagedChat(
     return { status: 'error', code: 'invalid_request', message: validationError };
   }
 
+  let initialTools: readonly ToolDefinition[];
+  try {
+    if (request.tools !== undefined && !Array.isArray(request.tools)) {
+      throw new Error('Invalid browser tool offering.');
+    }
+    initialTools = structuredClone(request.tools ?? []);
+  } catch {
+    return { status: 'error', code: 'invalid_request', message: 'Invalid browser tool offering.' };
+  }
+
   const userContent = buildUserContent(request.text.trim(), request.pageContext);
   const uploadedAttachments = ManagedCloudUploadedChatAttachmentsSchema.parse(
     request.uploadedAttachments ?? [],
@@ -744,10 +772,21 @@ export async function executeChromeManagedChat(
   };
   let latestTaskState: AgentTaskState | undefined;
   let tools =
-    getModelMetadataById(routing.modelKey)?.capabilities.tools === true
-      ? (request.tools ?? [])
-      : [];
-  for (let leg = 0; leg < MAX_MANAGED_TOOL_LEGS; leg += 1) {
+    getModelMetadataById(routing.modelKey)?.capabilities.tools === true ? initialTools : [];
+  let custodyAdmitted = false;
+  const custodyFailure = (error: unknown): ChromeManagedChatResult => ({
+    status: 'error',
+    code: request.signal?.aborted ? 'cancelled' : 'protocol_error',
+    message: request.signal?.aborted
+      ? 'Cancelled.'
+      : error instanceof CallerToolCustodyError
+        ? error.message
+        : 'Browser recovery state could not be saved. Check the page before trying again.',
+    routing: routingResult,
+  });
+  let callerResume: CallerToolResumeRequest | undefined;
+  let callerStepCount = 0;
+  for (let leg = 0; leg < MAX_MANAGED_TOOL_LEGS || callerResume !== undefined; leg += 1) {
     if (leg > 0) {
       // A tool leg can wait on the user and a browser task for minutes, longer
       // than a session token lives, so each continuation asks for a fresh one.
@@ -760,7 +799,7 @@ export async function executeChromeManagedChat(
         };
       }
     }
-    const legTools = leg === MAX_MANAGED_TOOL_LEGS - 1 ? [] : tools;
+    const legTools = !callerResume && leg === MAX_MANAGED_TOOL_LEGS - 1 ? [] : tools;
     const legOptions: ManagedChatStreamOptions = {
       ...streamOptions,
       ...(leg === 0
@@ -771,16 +810,18 @@ export async function executeChromeManagedChat(
               `${streamOptions.idempotencyKey}:${leg}`,
             ),
           }),
-      ...(legTools.length > 0 ? { tools: legTools } : {}),
+      ...(legTools.length > 0 ? { tools: structuredClone(legTools) } : {}),
+      ...(callerResume ? { callerResume: structuredClone(callerResume) } : {}),
     };
     let legText = '';
     let handoff: ToolCall[] | null = null;
+    let continuation: Extract<FreeTrialChunk, { type: 'tool-handoff' }>['continuation'];
     let terminal: ChromeManagedChatResult | null = null;
     for (let attempt = 0; ; attempt += 1) {
       let admitted = false;
       terminal = null;
       const attemptOptions: ManagedChatStreamOptions =
-        attempt === 0
+        attempt === 0 || callerResume
           ? legOptions
           : {
               ...legOptions,
@@ -789,6 +830,21 @@ export async function executeChromeManagedChat(
                 `${streamOptions.idempotencyKey}:${leg}:${attempt}`,
               ),
             };
+      if (!callerResume) {
+        custodyAdmitted = false;
+        if (legTools.length && dependencies.callerCustody) {
+          try {
+            await dependencies.callerCustody.admit(
+              attemptOptions.idempotencyKey!,
+              structuredClone(legTools),
+              request.browserObservation,
+            );
+            custodyAdmitted = true;
+          } catch (error) {
+            return custodyFailure(error);
+          }
+        }
+      }
       for await (const chunk of dependencies.streamChat(messages, token, attemptOptions)) {
         if (chunk.type !== 'error' && chunk.type !== 'answered-model') admitted = true;
         if (chunk.type === 'text') {
@@ -820,6 +876,13 @@ export async function executeChromeManagedChat(
           continue;
         }
         if (chunk.type === 'run') {
+          if (custodyAdmitted) {
+            try {
+              await dependencies.callerCustody!.bindRun(chunk.run.runId);
+            } catch (error) {
+              return custodyFailure(error);
+            }
+          }
           if (chunk.run.state) latestTaskState = chunk.run.state;
           await dependencies.onRunReference?.(chunk.run);
           continue;
@@ -837,6 +900,7 @@ export async function executeChromeManagedChat(
         }
         if (chunk.type === 'tool-handoff') {
           handoff = chunk.calls;
+          continuation = chunk.continuation;
           continue;
         }
         if (chunk.type === 'error') {
@@ -875,8 +939,30 @@ export async function executeChromeManagedChat(
       }
       break;
     }
-    if (terminal) return terminal;
+    if (terminal) {
+      if (
+        custodyAdmitted &&
+        terminal.status === 'success' &&
+        ((!callerResume && latestTaskState === undefined) ||
+          (latestTaskState !== undefined && TERMINAL_AGENT_TASK_STATES.has(latestTaskState)))
+      ) {
+        try {
+          await dependencies.callerCustody!.finish();
+        } catch (error) {
+          return custodyFailure(error);
+        }
+      }
+      return terminal;
+    }
     if (!handoff) break;
+    if (callerResume && !continuation) {
+      return {
+        status: 'error',
+        code: 'protocol_error',
+        message: 'The resumed caller task lost its owned continuation.',
+        routing: routingResult,
+      };
+    }
     if (!dependencies.onToolHandoff || legTools.length === 0) {
       return {
         status: 'error',
@@ -885,22 +971,174 @@ export async function executeChromeManagedChat(
         routing: routingResult,
       };
     }
-    const outcome = await dependencies.onToolHandoff(handoff);
+    let ownedCalls = handoff;
+    let ownedCursor: Omit<CallerToolResumeRequest, 'tool_results' | 'observations'> | undefined;
+    if (continuation) {
+      if (callerStepCount >= MAX_CALLER_TOOL_STEPS) {
+        return {
+          status: 'error',
+          code: 'protocol_error',
+          message: 'The browser task exceeded its caller action budget.',
+          routing: routingResult,
+        };
+      }
+      callerStepCount += 1;
+      const calls = HostedCallerToolBatchSchema.safeParse(handoff);
+      const checkpointCalls = HostedCallerToolBatchSchema.safeParse(continuation.calls);
+      if (
+        !calls.success ||
+        !checkpointCalls.success ||
+        JSON.stringify(calls.data) !== JSON.stringify(checkpointCalls.data) ||
+        calls.data.some(
+          (call) => !legTools.some((tool) => tool.function.name === call.function.name),
+        )
+      ) {
+        return {
+          status: 'error',
+          code: 'protocol_error',
+          message: 'The pending caller actions do not match this run’s browser tool offering.',
+          routing: routingResult,
+        };
+      }
+      const checkpoint = CallerToolResumeRequestSchema.safeParse({
+        schema_version: continuation.schema_version,
+        run_id: continuation.run_id,
+        turn_id: continuation.turn_id,
+        next_event_sequence: continuation.next_event_sequence,
+        tool_results: calls.data.map((call) => ({ tool_call_id: call.id, content: '' })),
+      });
+      if (
+        !checkpoint.success ||
+        (callerResume &&
+          (checkpoint.data.run_id !== callerResume.run_id ||
+            checkpoint.data.next_event_sequence <= callerResume.next_event_sequence))
+      ) {
+        return {
+          status: 'error',
+          code: 'protocol_error',
+          message: 'The caller checkpoint does not advance the current browser run.',
+          routing: routingResult,
+        };
+      }
+      const { tool_results: _preflightResults, ...cursor } = checkpoint.data;
+      ownedCursor = cursor;
+      ownedCalls = calls.data;
+    }
+    if (request.signal?.aborted) {
+      return { status: 'error', code: 'cancelled', message: 'Cancelled.', routing: routingResult };
+    }
+    const custodyCheckpoint = ownedCursor
+      ? { ...ownedCursor, calls: structuredClone(ownedCalls) }
+      : undefined;
+    let replay: CallerToolResumeRequest | null = null;
+    if (custodyAdmitted && custodyCheckpoint) {
+      try {
+        replay = await dependencies.callerCustody!.claim(custodyCheckpoint);
+        if (replay) {
+          const { tool_results: _results, observations: _observations, ...replayCursor } = replay;
+          if (JSON.stringify(replayCursor) !== JSON.stringify(ownedCursor))
+            throw new CallerToolCustodyError(
+              'The saved browser receipt belongs to another checkpoint.',
+            );
+        }
+      } catch (error) {
+        return custodyFailure(error);
+      }
+    }
+    if (request.signal?.aborted)
+      return { status: 'error', code: 'cancelled', message: 'Cancelled.', routing: routingResult };
+    let outcome: ChromeManagedToolHandoffOutcome;
+    if (replay) {
+      outcome = {
+        status: 'resolved',
+        results: replay.tool_results.map((result) => ({
+          toolCallId: result.tool_call_id,
+          content: result.content,
+        })),
+      };
+    } else if (custodyCheckpoint && custodyAdmitted) {
+      try {
+        outcome = await executeOwnedCallerToolCalls({
+          checkpoint: custodyCheckpoint,
+          custody: dependencies.callerCustody!,
+          dispatch: dependencies.onToolHandoff,
+          signal: request.signal,
+          ...(dependencies.beforeCallerAction
+            ? {
+                beforeAction: () =>
+                  dependencies.beforeCallerAction!(structuredClone(custodyCheckpoint)),
+              }
+            : {}),
+        });
+      } catch (error) {
+        return custodyFailure(error);
+      }
+    } else {
+      outcome = custodyCheckpoint
+        ? await dependencies.onToolHandoff(
+            structuredClone(ownedCalls),
+            structuredClone(custodyCheckpoint),
+          )
+        : await dependencies.onToolHandoff(structuredClone(ownedCalls));
+    }
     if (outcome.status === 'cancelled' || request.signal?.aborted) {
       return { status: 'error', code: 'cancelled', message: 'Cancelled.', routing: routingResult };
     }
     const resultsById = new Map(outcome.results.map((result) => [result.toolCallId, result]));
-    messages.push({ role: 'assistant', content: legText, tool_calls: handoff });
-    for (const call of handoff) {
+    if (ownedCursor) {
+      const parsed = CallerToolResumeRequestSchema.safeParse({
+        ...ownedCursor,
+        tool_results: outcome.results.map((result) => ({
+          tool_call_id: result.toolCallId,
+          content: result.content,
+        })),
+        ...(replay?.observations ? { observations: replay.observations } : {}),
+      });
+      if (
+        !parsed.success ||
+        outcome.results.length !== ownedCalls.length ||
+        ownedCalls.some((call) => !resultsById.has(call.id))
+      ) {
+        return {
+          status: 'error',
+          code: 'protocol_error',
+          message: 'The browser results do not match the pending caller actions.',
+          routing: routingResult,
+        };
+      }
+      if (custodyAdmitted && custodyCheckpoint && !replay) {
+        try {
+          callerResume = await dependencies.callerCustody!.complete(custodyCheckpoint, parsed.data);
+        } catch (error) {
+          return custodyFailure(error);
+        }
+      } else {
+        callerResume = parsed.data;
+      }
+    } else {
+      callerResume = undefined;
+      if (custodyAdmitted) {
+        try {
+          await dependencies.callerCustody!.finish();
+        } catch (error) {
+          return custodyFailure(error);
+        }
+        custodyAdmitted = false;
+      }
+    }
+    messages.push({ role: 'assistant', content: legText, tool_calls: ownedCalls });
+    for (const call of ownedCalls) {
       messages.push({
         role: 'tool',
         tool_call_id: call.id,
-        content: (
-          resultsById.get(call.id)?.content ?? 'This browser tool did not return a result.'
-        ).slice(0, MAX_CHAT_TOOL_RESULT_CHARS),
+        content: callerResume
+          ? resultsById.get(call.id)!.content
+          : (
+              resultsById.get(call.id)?.content ?? 'This browser tool did not return a result.'
+            ).slice(0, MAX_CHAT_TOOL_RESULT_CHARS),
       });
     }
-    if (outcome.tools) tools = outcome.tools;
+    if (outcome.tools && !ownedCursor) tools = structuredClone(outcome.tools);
   }
 
   return {
@@ -915,6 +1153,7 @@ async function relayManagedResume(
   stream: AsyncGenerator<FreeTrialChunk>,
   dependencies: ChromeManagedResumeHandlers,
   unterminatedMessage: string,
+  expectedRunId: string,
 ): Promise<ChromeManagedApprovalResult> {
   for await (const chunk of stream) {
     if (chunk.type === 'text') {
@@ -942,6 +1181,12 @@ async function relayManagedResume(
       continue;
     }
     if (chunk.type === 'run') {
+      if (chunk.run.runId !== expectedRunId)
+        return {
+          status: 'error',
+          code: 'protocol_error',
+          message: 'The continuation returned another run.',
+        };
       await dependencies.onRunReference?.(chunk.run);
       continue;
     }
@@ -951,10 +1196,27 @@ async function relayManagedResume(
     }
     if (chunk.type === 'answered-model') continue;
     if (chunk.type === 'tool-handoff') {
+      if (
+        dependencies.onCallerCheckpoint &&
+        chunk.continuation &&
+        chunk.continuation.run_id === expectedRunId &&
+        JSON.stringify(chunk.calls) === JSON.stringify(chunk.continuation.calls)
+      ) {
+        const { calls, ...cursor } = chunk.continuation;
+        const parsed = CallerToolResumeRequestSchema.safeParse({
+          ...cursor,
+          tool_results: calls.map((call) => ({ tool_call_id: call.id, content: '' })),
+        });
+        if (parsed.success && HostedCallerToolBatchSchema.safeParse(calls).success) {
+          await dependencies.onCallerCheckpoint(structuredClone(chunk.continuation));
+          continue;
+        }
+      }
       return {
         status: 'error',
         code: 'protocol_error',
-        message: 'This resumed AGI Cloud run asked for a browser tool. Send the request again.',
+        message:
+          'This run has more browser work. Its original browser context must be recovered before continuing.',
       };
     }
     if (chunk.type === 'error') {
@@ -995,6 +1257,14 @@ export async function executeChromeManagedApproval(
     };
   }
 
+  request = {
+    ...request,
+    run: { ...request.run },
+    toolApprovals: structuredClone(request.toolApprovals),
+    ...(request.originalCallerToolNames !== undefined
+      ? { originalCallerToolNames: [...request.originalCallerToolNames] }
+      : {}),
+  };
   const token = await dependencies.getAuthToken();
   if (!token) {
     return {
@@ -1007,6 +1277,9 @@ export async function executeChromeManagedApproval(
   return relayManagedResume(
     dependencies.streamApproval(request.run.runId, request.toolApprovals, token, {
       signal: request.signal,
+      ...(request.originalCallerToolNames !== undefined
+        ? { originalCallerToolNames: request.originalCallerToolNames }
+        : {}),
       ...(request.guidance === undefined ? {} : { guidance: request.guidance }),
       idempotencyKey: await managedChatIdempotencyKey(
         'approval',
@@ -1015,6 +1288,7 @@ export async function executeChromeManagedApproval(
     }),
     dependencies,
     'AGI Cloud closed the approval stream without a terminal event.',
+    request.run.runId,
   );
 }
 
@@ -1037,6 +1311,14 @@ export async function executeChromeManagedToolInput(
     };
   }
 
+  request = {
+    ...request,
+    run: { ...request.run },
+    toolInputs: structuredClone(request.toolInputs),
+    ...(request.originalCallerToolNames !== undefined
+      ? { originalCallerToolNames: [...request.originalCallerToolNames] }
+      : {}),
+  };
   const token = await dependencies.getAuthToken();
   if (!token) {
     return {
@@ -1049,6 +1331,9 @@ export async function executeChromeManagedToolInput(
   return relayManagedResume(
     dependencies.streamToolInput(request.run.runId, request.toolInputs, token, {
       signal: request.signal,
+      ...(request.originalCallerToolNames !== undefined
+        ? { originalCallerToolNames: request.originalCallerToolNames }
+        : {}),
       idempotencyKey: await managedChatIdempotencyKey(
         'input',
         `${request.id}:${request.run.runId}:${request.run.lastSequence}:${JSON.stringify(request.toolInputs)}`,
@@ -1056,6 +1341,7 @@ export async function executeChromeManagedToolInput(
     }),
     dependencies,
     'AGI Cloud closed the input stream without a terminal event.',
+    request.run.runId,
   );
 }
 
@@ -1072,6 +1358,7 @@ export function createChromeManagedChatDependencies(
     | 'onRunReference'
     | 'onQuotaWarning'
     | 'onToolHandoff'
+    | 'beforeCallerAction'
   > = {},
 ): ChromeManagedChatDependencies {
   return { ...DEFAULT_DEPENDENCIES, onText, ...callbacks };
@@ -1098,4 +1385,82 @@ export function createChromeManagedToolInputDependencies(
   callbacks: ChromeManagedResumeCallbacks = {},
 ): ChromeManagedToolInputDependencies {
   return { ...DEFAULT_TOOL_INPUT_DEPENDENCIES, onText, ...callbacks };
+}
+
+export interface ChromeManagedCallerResumeRequest {
+  id: string;
+  run: ManagedCloudAgentRunReference;
+  receipt: CallerToolResumeRequest;
+  originalToolNames: readonly string[];
+  signal?: AbortSignal;
+}
+export interface ChromeManagedCallerResumeDependencies extends ChromeManagedResumeHandlers {
+  getAuthToken: typeof getAuthToken;
+  streamCaller: typeof streamManagedCallerReceipt;
+}
+export function createChromeManagedCallerResumeDependencies(
+  onText: ChromeManagedResumeHandlers['onText'],
+  callbacks: ChromeManagedResumeCallbacks = {},
+): ChromeManagedCallerResumeDependencies {
+  return { getAuthToken, streamCaller: streamManagedCallerReceipt, onText, ...callbacks };
+}
+export async function executeChromeManagedCallerResume(
+  request: ChromeManagedCallerResumeRequest,
+  dependencies: ChromeManagedCallerResumeDependencies,
+): Promise<ChromeManagedApprovalResult> {
+  const receipt = CallerToolResumeRequestSchema.safeParse(request.receipt);
+  if (
+    !STREAM_ID_PATTERN.test(request.id) ||
+    !ManagedCloudAgentRunReferenceSchema.safeParse(request.run).success ||
+    !receipt.success ||
+    receipt.data.run_id !== request.run.runId ||
+    !Array.isArray(request.originalToolNames) ||
+    request.originalToolNames.length === 0 ||
+    !request.originalToolNames.every(
+      (name) => typeof name === 'string' && name.trim().length > 0,
+    ) ||
+    new Set(request.originalToolNames).size !== request.originalToolNames.length
+  )
+    return {
+      status: 'error',
+      code: 'invalid_request',
+      message: 'Invalid saved browser continuation.',
+    };
+  const names = [...request.originalToolNames];
+  if (request.signal?.aborted) return { status: 'error', code: 'cancelled', message: 'Cancelled.' };
+  let token: string | null;
+  try {
+    token = await dependencies.getAuthToken();
+  } catch {
+    return {
+      status: 'error',
+      code: request.signal?.aborted ? 'cancelled' : 'server_error',
+      message: 'Sign-in could not be refreshed for the saved browser result.',
+    };
+  }
+  if (request.signal?.aborted) return { status: 'error', code: 'cancelled', message: 'Cancelled.' };
+  if (!token)
+    return {
+      status: 'error',
+      code: 'auth_required',
+      message: 'Sign in to continue this browser task.',
+    };
+  try {
+    return await relayManagedResume(
+      dependencies.streamCaller(receipt.data, names, token, {
+        ...(request.signal ? { signal: request.signal } : {}),
+      }),
+      dependencies,
+      'The saved browser continuation closed without a terminal event.',
+      request.run.runId,
+    );
+  } catch (error) {
+    if (error instanceof ScheduledTaskTransportControl) throw error;
+    return {
+      status: 'error',
+      code: request.signal?.aborted ? 'cancelled' : 'server_error',
+      message:
+        'The saved browser result could not be delivered. Its receipt is retained for recovery.',
+    };
+  }
 }

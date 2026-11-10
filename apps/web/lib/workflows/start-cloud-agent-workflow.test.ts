@@ -13,6 +13,9 @@ const workflowMocks = vi.hoisted(() => ({
   buildStream: vi.fn(),
   saveApproval: vi.fn(async () => undefined),
   saveInput: vi.fn(async () => undefined),
+  saveCaller: vi.fn(async (_db: unknown, input: { events: unknown[] }) => ({
+    events: input.events,
+  })),
   completeCheckpoint: vi.fn(async () => undefined),
   autoMemory: vi.fn(async () => undefined),
   connectorExecutor: vi.fn(),
@@ -70,6 +73,7 @@ vi.mock('@/lib/services/cloud-agent-run-service', () => ({
   saveCloudAgentPauseCheckpoint: vi.fn(),
   recordCloudAgentRunSettledUsage: vi.fn(),
   saveCloudAgentApprovalCheckpoint: workflowMocks.saveApproval,
+  saveCloudAgentCallerCheckpoint: workflowMocks.saveCaller,
   saveCloudAgentInputCheckpoint: workflowMocks.saveInput,
   saveCloudAgentDeviceCheckpoint: vi.fn(),
   transitionCloudAgentRun: vi.fn(),
@@ -506,6 +510,35 @@ describe('the inline transport records every non-terminal boundary', () => {
     workflowMocks.start.mockRejectedValue(new Error('down'));
     workflowMocks.runToolLoop.mockReturnValue((async function* () {})());
     workflowMocks.buildStream.mockReturnValue(new ReadableStream<Uint8Array>());
+  });
+
+  it('persists caller obligations and keeps the run awaiting input on disconnect', async () => {
+    await runCloudAgentTurn(turnInput());
+    const onCallerCheckpoint = toolLoopOptions()['onCallerToolCheckpoint'] as (
+      checkpoint: unknown,
+    ) => Promise<{ events: unknown[] }>;
+    const events = [{ event: { type: 'caller-tools-requested' } }];
+    const saved = await onCallerCheckpoint({
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      nextEventSequence: 9,
+      completedSteps: 2,
+      messages: [{ role: 'assistant', content: '', tool_calls: [] }],
+      pendingToolCalls: [{ id: 'local-1', qualifiedName: 'read_dom', args: {} }],
+      events,
+    });
+    expect(saved).toEqual({ events });
+    expect(workflowMocks.saveCaller).toHaveBeenCalledWith(
+      db,
+      expect.objectContaining({
+        userId: 'user-1',
+        runId: RUN_ID,
+        nextEventSequence: 9,
+        pendingToolCalls: [{ id: 'local-1', qualifiedName: 'read_dom', args: {} }],
+        events,
+      }),
+    );
+    expect((streamInput()['preserveAwaitingInputOnCancel'] as () => boolean)()).toBe(true);
   });
 
   it('writes an approval checkpoint when the loop pauses for approval', async () => {

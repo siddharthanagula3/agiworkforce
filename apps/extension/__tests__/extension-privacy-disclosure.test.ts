@@ -83,7 +83,8 @@ const chromeMock = {
 };
 (globalThis as unknown as Record<string, unknown>).chrome = chromeMock;
 
-vi.mock('../src/features/cloud-bridge/freeTrialClient', () => ({
+vi.mock('../src/features/cloud-bridge/freeTrialClient', async (importOriginal) => ({
+  ...(await importOriginal<FreeTrialClientModule>()),
   CODE_EXECUTION_OUTPUT_MAX_CHARS: 16_000,
   FREE_TRIAL_GATEWAY: 'https://agiworkforce.com',
   getManagedCloudAuthContext: vi.fn(async () => ({
@@ -108,6 +109,7 @@ import {
 import { DATA_HANDLING_DISCLOSURES } from '../src/features/privacy/dataHandling';
 import { createDataHandlingSection } from '../src/features/options/data-handling-section';
 import type { ManagedCloudOwner } from '../src/features/cloud-bridge/managedCloudAuthority';
+type FreeTrialClientModule = typeof import('../src/features/cloud-bridge/freeTrialClient');
 
 const OWNER: ManagedCloudOwner = { accountId: 'account-a', authIncarnation: 'session-a' };
 

@@ -81,6 +81,40 @@ describe('a live voice connector approval', () => {
     mocks.catalog.mockResolvedValue({ tools: [], dropped: [], limit: null });
   });
 
+  it('rejects missing hosted content before asking for a voice approval', async () => {
+    const result = await handleLiveVoiceToolCall({
+      db: voiceDb(),
+      userId: 'user-1',
+      organizationId: null,
+      conversationId: CONVERSATION_ID,
+      modelId: 'voice-backend',
+      offeredTools: ['write_file'],
+      call: { callId: 'invalid-write', name: 'write_file', arguments: '{"path":"draft.txt"}' },
+    });
+    expect(result).toMatchObject({
+      status: 'completed',
+      isError: true,
+      output: expect.stringContaining('missing required argument'),
+    });
+  });
+
+  it('retains voice approval for an explicitly empty hosted write', async () => {
+    const result = await handleLiveVoiceToolCall({
+      db: voiceDb(),
+      userId: 'user-1',
+      organizationId: null,
+      conversationId: CONVERSATION_ID,
+      modelId: 'voice-backend',
+      offeredTools: ['write_file'],
+      call: {
+        callId: 'empty-write',
+        name: 'write_file',
+        arguments: '{"path":"draft.txt","content":""}',
+      },
+    });
+    expect(result.status).toBe('approval_required');
+  });
+
   it('carries the risk and reversibility review a typed approval card shows', async () => {
     const result = await call(voiceDb(), POST_COMMENT);
 

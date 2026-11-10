@@ -18,14 +18,30 @@ vi.hoisted(() => {
 });
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async () => ({
+  ...(await vi.importActual<LoggerModule>('@/lib/logger')),
+
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mocks.getUserScopedDb }));
-vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: mocks.getClerkAuthUser }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mocks.requireCsrfToken }));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
-vi.mock('@/lib/support/actions/service', () => ({
+vi.mock('@/lib/server/rls-db', async () => ({
+  ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
+  getUserScopedDb: mocks.getUserScopedDb,
+}));
+vi.mock('@/lib/api-auth', async () => ({
+  ...(await vi.importActual<ApiAuthModule>('@/lib/api-auth')),
+  getClerkAuthUser: mocks.getClerkAuthUser,
+}));
+vi.mock('@/lib/csrf', async () => ({
+  ...(await vi.importActual<CsrfModule>('@/lib/csrf')),
+  requireCsrfToken: mocks.requireCsrfToken,
+}));
+vi.mock('@/lib/rate-limit', async () => ({
+  ...(await vi.importActual<RateLimitModule>('@/lib/rate-limit')),
+  withRateLimit: mocks.withRateLimit,
+}));
+vi.mock('@/lib/support/actions/service', async () => ({
+  ...(await vi.importActual<ServiceModule>('@/lib/support/actions/service')),
+
   proposeSupportAction: mocks.propose,
   confirmSupportAction: mocks.confirm,
 }));
@@ -38,6 +54,12 @@ import { SupportActionRefusal } from '@/lib/support/actions/types';
 import { POST as CONFIRM } from '../confirm/route';
 import { POST as PROPOSE } from '../propose/route';
 import { GET as AVAILABLE } from '../available/route';
+type LoggerModule = typeof import('@/lib/logger');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type ApiAuthModule = typeof import('@/lib/api-auth');
+type CsrfModule = typeof import('@/lib/csrf');
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type ServiceModule = typeof import('@/lib/support/actions/service');
 
 function post(path: string, body: unknown): NextRequest {
   return new NextRequest(`https://agiworkforce.com${path}`, {

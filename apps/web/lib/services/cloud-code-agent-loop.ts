@@ -6,6 +6,7 @@ import {
   type CloudCodeTurnMode,
   type ToolApprovalPolicy,
 } from '@agiworkforce/types';
+import { invalidToolArgumentsMessage } from '@agiworkforce/provider-protocol';
 import type {
   ChatRequest,
   ContentBlock,
@@ -36,7 +37,11 @@ import {
   executeCodeAsShellCommand,
   gateCloudCodeTool,
 } from './cloud-code-agent-tools';
-import { EXECUTE_CODE_TOOL, isExecutionTool } from '@/lib/e2b/execution-tools';
+import {
+  EXECUTE_CODE_TOOL,
+  isExecutionTool,
+  executionToolArgumentProblem,
+} from '@/lib/e2b/execution-tools';
 import {
   accumulateObservedProviderUsage,
   createObservedProviderUsage,
@@ -359,6 +364,12 @@ async function runApprovedTool(
   args: Record<string, unknown>,
   commandDeadlineMs: number,
 ): Promise<CloudCodeToolOutcome> {
+  const argumentProblem = isExecutionTool(toolName)
+    ? executionToolArgumentProblem(toolName, { args })
+    : null;
+  if (argumentProblem) {
+    return { output: invalidToolArgumentsMessage(toolName, argumentProblem), isError: true };
+  }
   const path = typeof args['path'] === 'string' ? args['path'] : '';
   switch (toolName) {
     case CLOUD_CODE_RUN_COMMAND_TOOL:
@@ -557,6 +568,9 @@ export async function runCloudCodeAgentTurn(
       });
 
       let outcome: CloudCodeToolOutcome;
+      const argumentProblem = isExecutionTool(call.name)
+        ? executionToolArgumentProblem(call.name, { args: call.input })
+        : null;
 
       const shellCommand =
         call.name === CLOUD_CODE_RUN_COMMAND_TOOL
@@ -580,6 +594,11 @@ export async function runCloudCodeAgentTurn(
 
         if (gate.action === 'refuse') {
           outcome = { output: `Refused: ${gate.reason}`, isError: true };
+        } else if (argumentProblem) {
+          outcome = {
+            output: invalidToolArgumentsMessage(call.name, argumentProblem),
+            isError: true,
+          };
         } else if (gate.action === 'ask') {
           messages.push({ role: 'user', content: results });
           return {

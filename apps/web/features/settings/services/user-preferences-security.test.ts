@@ -8,8 +8,12 @@ import {
 } from './two-factor-client';
 import { generateOTPAuthURL, TOTP_CONFIG } from './user-preferences';
 import { getCsrfToken } from '@/lib/client/csrf';
+type CsrfModule = typeof import('@/lib/client/csrf');
 
-vi.mock('@/lib/client/csrf', () => ({ getCsrfToken: vi.fn(async () => 'csrf-token') }));
+vi.mock('@/lib/client/csrf', async () => ({
+  ...(await vi.importActual<CsrfModule>('@/lib/client/csrf')),
+  getCsrfToken: vi.fn(async () => 'csrf-token'),
+}));
 const fetchMock = vi.fn<typeof fetch>();
 const secret = TOTP_CONFIG.SECRET_ALPHABET[0]!.repeat(
   Math.ceil((TOTP_CONFIG.SECRET_LENGTH * 8) / 5),

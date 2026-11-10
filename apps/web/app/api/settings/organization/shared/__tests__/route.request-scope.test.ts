@@ -29,23 +29,49 @@ const mocks = vi.hoisted(() => ({
   unshareSession: vi.fn(),
 }));
 
-vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mocks.auth }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({ query: mocks.ownerQuery }) }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/server/rls-db', async () => ({
+  ...(await vi.importActual<RlsDbModule>('@/lib/server/rls-db')),
+  getUserScopedDb: mocks.auth,
+}));
+vi.mock('@/lib/server/neon-db', async () => ({
+  ...(await vi.importActual<NeonDbModule>('@/lib/server/neon-db')),
+  getNeonDb: () => ({ query: mocks.ownerQuery }),
+}));
+vi.mock('@/lib/logger', async () => ({
+  ...(await vi.importActual<LoggerModule>('@/lib/logger')),
+
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.rate }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mocks.csrf }));
-vi.mock('@/lib/security-audit', () => ({
+vi.mock('@/lib/rate-limit', async () => ({
+  ...(await vi.importActual<RateLimitModule>('@/lib/rate-limit')),
+  withRateLimit: mocks.rate,
+}));
+vi.mock('@/lib/csrf', async () => ({
+  ...(await vi.importActual<CsrfModule>('@/lib/csrf')),
+  requireCsrfToken: mocks.csrf,
+}));
+vi.mock('@/lib/security-audit', async () => ({
+  ...(await vi.importActual<SecurityAuditModule>('@/lib/security-audit')),
+
   recordAuditEvent: mocks.audit,
   BLOCK_APPEAL_PATH: '/support',
   logRateLimitExceeded: vi.fn(),
 }));
-vi.mock('@/lib/services/organization-permission-service', () => ({
+vi.mock('@/lib/services/organization-permission-service', async () => ({
+  ...(await vi.importActual<OrganizationPermissionServiceModule>(
+    '@/lib/services/organization-permission-service',
+  )),
+
   resolveOrganizationPermissions: mocks.permissions,
 }));
-vi.mock('@/lib/connectors/connector-capability', () => ({ assertConnectorsReleased: vi.fn() }));
-vi.mock('@/lib/user-connector-tools', () => ({ evictOrgSharedConnectorCaches: mocks.evict }));
+vi.mock('@/lib/connectors/connector-capability', async () => ({
+  ...(await vi.importActual<ConnectorCapabilityModule>('@/lib/connectors/connector-capability')),
+  assertConnectorsReleased: vi.fn(),
+}));
+vi.mock('@/lib/user-connector-tools', async () => ({
+  ...(await vi.importActual<UserConnectorToolsModule>('@/lib/user-connector-tools')),
+  evictOrgSharedConnectorCaches: mocks.evict,
+}));
 vi.mock('@/lib/services/org-sharing-service', async (importOriginal) => ({
   ...(await importOriginal<ImportedModule0>()),
   listSharedProjects: mocks.listProjects,
@@ -54,16 +80,28 @@ vi.mock('@/lib/services/org-sharing-service', async (importOriginal) => ({
   setProjectMemberAccess: mocks.setAccess,
   clearProjectMemberAccess: mocks.clearAccess,
 }));
-vi.mock('@/lib/services/org-shared-connector-service', () => ({
+vi.mock('@/lib/services/org-shared-connector-service', async () => ({
+  ...(await vi.importActual<OrgSharedConnectorServiceModule>(
+    '@/lib/services/org-shared-connector-service',
+  )),
+
   listSharedConnectors: mocks.listConnectors,
   shareConnector: mocks.shareConnector,
   unshareConnector: mocks.unshareConnector,
 }));
-vi.mock('@/lib/services/org-shared-artifact-service', () => ({
+vi.mock('@/lib/services/org-shared-artifact-service', async () => ({
+  ...(await vi.importActual<OrgSharedArtifactServiceModule>(
+    '@/lib/services/org-shared-artifact-service',
+  )),
+
   listSharedArtifacts: mocks.listArtifacts,
   unshareArtifactFromOrganization: mocks.unshareArtifact,
 }));
-vi.mock('@/lib/services/org-shared-session-service', () => ({
+vi.mock('@/lib/services/org-shared-session-service', async () => ({
+  ...(await vi.importActual<OrgSharedSessionServiceModule>(
+    '@/lib/services/org-shared-session-service',
+  )),
+
   updateSharedSessionAudience: vi.fn(),
   listSharedSessions: mocks.listSessions,
   unshareSessionFromOrganization: mocks.unshareSession,
@@ -78,6 +116,19 @@ import {
 import { PUT as connectorPut, DELETE as connectorDelete } from '../connectors/[connectorId]/route';
 import { DELETE as artifactDelete } from '../artifacts/[artifactId]/route';
 import { DELETE as sessionDelete } from '../conversations/[sharedSessionId]/route';
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type NeonDbModule = typeof import('@/lib/server/neon-db');
+type LoggerModule = typeof import('@/lib/logger');
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type CsrfModule = typeof import('@/lib/csrf');
+type SecurityAuditModule = typeof import('@/lib/security-audit');
+type OrganizationPermissionServiceModule =
+  typeof import('@/lib/services/organization-permission-service');
+type ConnectorCapabilityModule = typeof import('@/lib/connectors/connector-capability');
+type UserConnectorToolsModule = typeof import('@/lib/user-connector-tools');
+type OrgSharedConnectorServiceModule = typeof import('@/lib/services/org-shared-connector-service');
+type OrgSharedArtifactServiceModule = typeof import('@/lib/services/org-shared-artifact-service');
+type OrgSharedSessionServiceModule = typeof import('@/lib/services/org-shared-session-service');
 
 const A = '11111111-1111-4111-8111-111111111111';
 const B = '22222222-2222-4222-8222-222222222222';

@@ -27,10 +27,22 @@ const mocks = vi.hoisted(() => ({
   email: vi.fn(),
 }));
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn() } }));
-vi.mock('@/lib/seo/site', () => ({ SITE_URL: 'https://example.test', SITE_NAME: 'Test' }));
-vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: mocks.audit }));
-vi.mock('@/lib/server/identity', () => ({
+vi.mock('@/lib/logger', async () => ({
+  ...(await vi.importActual<LoggerModule>('@/lib/logger')),
+  logger: { error: vi.fn() },
+}));
+vi.mock('@/lib/seo/site', async () => ({
+  ...(await vi.importActual<SiteModule>('@/lib/seo/site')),
+  SITE_URL: 'https://example.test',
+  SITE_NAME: 'Test',
+}));
+vi.mock('@/lib/security-audit', async () => ({
+  ...(await vi.importActual<SecurityAuditModule>('@/lib/security-audit')),
+  recordAuditEvent: mocks.audit,
+}));
+vi.mock('@/lib/server/identity', async () => ({
+  ...(await vi.importActual<IdentityModule>('@/lib/server/identity')),
+
   getIdentityProvider: vi.fn(() => ({})),
   getRequestIdentity: vi.fn(),
   verifyIdentitySessionToken: vi.fn(),
@@ -39,20 +51,39 @@ vi.mock('@/lib/server/identity', () => ({
     primaryEmailVerification: 'verified',
   })),
 }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: vi.fn(() => ({})) }));
-vi.mock('@/lib/server/refresh-token-family', () => ({
+vi.mock('@/lib/server/neon-db', async () => ({
+  ...(await vi.importActual<NeonDbModule>('@/lib/server/neon-db')),
+  getNeonDb: vi.fn(() => ({})),
+}));
+vi.mock('@/lib/server/refresh-token-family', async () => ({
+  ...(await vi.importActual<RefreshTokenFamilyModule>('@/lib/server/refresh-token-family')),
+
   revokeEveryDeviceRefreshCredential: mocks.revokeDevices,
 }));
-vi.mock('@/lib/server/session-revocation', () => ({
+vi.mock('@/lib/server/session-revocation', async () => ({
+  ...(await vi.importActual<SessionRevocationModule>('@/lib/server/session-revocation')),
+
   revokeEveryOtherSession: mocks.revokeSessions,
 }));
-vi.mock('@/lib/server/step-up-auth', () => ({ requireStepUp: mocks.proof }));
-vi.mock('@/lib/services/identity-events', () => ({ emitIdentitySecurityEvent: mocks.event }));
-vi.mock('@/lib/services/notification-email-service', () => ({
+vi.mock('@/lib/server/step-up-auth', async () => ({
+  ...(await vi.importActual<StepUpAuthModule>('@/lib/server/step-up-auth')),
+  requireStepUp: mocks.proof,
+}));
+vi.mock('@/lib/services/identity-events', async () => ({
+  ...(await vi.importActual<IdentityEventsModule>('@/lib/services/identity-events')),
+  emitIdentitySecurityEvent: mocks.event,
+}));
+vi.mock('@/lib/services/notification-email-service', async () => ({
+  ...(await vi.importActual<NotificationEmailServiceModule>(
+    '@/lib/services/notification-email-service',
+  )),
+
   sendAccountSecurityCodeEmail: vi.fn(),
   sendAccountSecurityEnabledEmail: mocks.email,
 }));
-vi.mock('../gate', () => ({
+vi.mock('../gate', async () => ({
+  ...(await vi.importActual<GateModule>('../gate')),
+
   forgetSessionVerification: vi.fn(),
   rememberEnrollment: mocks.remember,
   sessionVerifiedUntil: vi.fn(),
@@ -79,6 +110,17 @@ vi.mock('../webauthn', async (importOriginal) => ({
 
 import { enrollAccountSecurity, removeCredential, type AccountSecurityCaller } from '../service';
 import { meetsEnrollmentRequirement } from '../webauthn';
+type LoggerModule = typeof import('@/lib/logger');
+type SiteModule = typeof import('@/lib/seo/site');
+type SecurityAuditModule = typeof import('@/lib/security-audit');
+type IdentityModule = typeof import('@/lib/server/identity');
+type NeonDbModule = typeof import('@/lib/server/neon-db');
+type RefreshTokenFamilyModule = typeof import('@/lib/server/refresh-token-family');
+type SessionRevocationModule = typeof import('@/lib/server/session-revocation');
+type StepUpAuthModule = typeof import('@/lib/server/step-up-auth');
+type IdentityEventsModule = typeof import('@/lib/services/identity-events');
+type NotificationEmailServiceModule = typeof import('@/lib/services/notification-email-service');
+type GateModule = typeof import('../gate');
 
 function credential(id: string, portable = true): StoredCredential {
   return {

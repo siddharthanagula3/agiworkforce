@@ -355,7 +355,10 @@ describe('Chrome inference stays inside the Managed Cloud boundary', () => {
     expect(body).toContain('executeChromeManagedChat');
     expect(body).toContain('getManagedCloudAuthContext');
     expect(body).toContain('activeChatStreams.set(streamKey, activeStream)');
-    expect(body).toContain('getAuthToken: async () => credential.token');
+    expect(body).toContain('getAuthToken: async () => {');
+    expect(body).toContain('const current = await getManagedCloudAuthContext()');
+    expect(body).toContain('!sameManagedCloudOwner(current.owner, owner)');
+    expect(body).toContain('return current.token');
     expect(body).toContain('signal: activeStream.controller.signal');
     expect(body).not.toContain('getAgiBridgeBaseUrl');
     expect(body).not.toContain('/v1/chat/stream');

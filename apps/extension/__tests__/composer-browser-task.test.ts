@@ -1,3 +1,7 @@
+import {
+  parseCallerBrowserContext,
+  type CallerBrowserContext,
+} from '../src/features/cloud-bridge/callerBrowserContext';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -95,7 +99,9 @@ interface RunSnapshot {
 
 interface HarnessAPI {
   sendMessage(text: string): void;
-  startComposerBrowserTask(goal: string): void;
+  startComposerBrowserTask(
+    goal: string,
+  ): Promise<{ status: string; message: string; browserContext?: CallerBrowserContext }>;
   cancelComposerBrowserTask(reason?: 'user_stopped' | 'user_cleared'): void;
   applyComposerBrowserMessage(message: Record<string, unknown>): void;
   canAdmitComposerMessage(text: string): boolean;
@@ -130,7 +136,7 @@ function harness(activePersistenceEntry?: {
     pendingPageContext: null,
     needsMessageRebuild: false,
   };
-  const query = vi.fn(async () => [{ id: 7, url: 'https://example.com/form' }]);
+  const query = vi.fn(async () => [{ id: 7, windowId: 3, url: 'https://example.com/form' }]);
   const admissions = new Set<string>();
   const admissionAtSend: boolean[] = [];
   const send = vi.fn(
@@ -156,6 +162,12 @@ function harness(activePersistenceEntry?: {
   const pendingDocuments: { assetId: string; mimeType: string; name: string }[] = [];
   const dependencies = {
     _ctx: context,
+    parseCallerBrowserContext,
+    originHasHostPermission: vi.fn(async () => false),
+    captureCallerBrowserContext: vi.fn(async (source, documentId, assertCurrent) => {
+      assertCurrent();
+      return { ...source, windowId: source.windowId ?? 3, ...(documentId ? { documentId } : {}) };
+    }),
     fencedToolResult: (label: string, text: string) => `<${label}>${text}</${label}>`,
     editableRewrites: {
       current: (): EditableSelectionTarget | null => null,
@@ -218,7 +230,7 @@ function harness(activePersistenceEntry?: {
     pendingManagedAdmissions: admissions,
     ensureTemporaryConversation: vi.fn(async () => 'temporary-conversation'),
     renderMemoryNotice: vi.fn(),
-    MEMORY_COMMAND_HINT: /(?!)/u,
+    memoryCommandKindHint: () => undefined,
     runChatMemoryCommand: vi.fn(async () => undefined),
     setThinkingLabel: vi.fn(),
     showThinking: vi.fn(),
@@ -306,9 +318,7 @@ function harness(activePersistenceEntry?: {
 }
 
 async function settle() {
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
+  for (let index = 0; index < 20; index += 1) await Promise.resolve();
 }
 
 describe('browser tasks from the real composer functions', () => {
@@ -827,6 +837,61 @@ describe('browser tasks from the real composer functions', () => {
     expect(assistant).toMatchObject({ content: 'Filled the name field.', streaming: false });
     expect(assistant.browserActivity?.status).toBe('completed');
   });
+
+  it('carries only the matching native completion document into the task outcome', async () => {
+    const h = harness();
+    const done = h.api.startComposerBrowserTask('Open the jobs tab');
+    await settle();
+    const runId = h.api.getRun()!.runId;
+    const browserContext = {
+      tabId: 8,
+      windowId: 3,
+      url: 'https://example.com/jobs',
+      documentId: 'task-document',
+    };
+    h.api.applyComposerBrowserMessage({
+      type: 'AGI_CU_STATE',
+      status: 'completed',
+      runId,
+      runGeneration: 99,
+      tabId: 8,
+      browserContext,
+    });
+    expect(h.api.getRun()?.runId).toBe(runId);
+    h.api.applyComposerBrowserMessage({
+      type: 'AGI_CU_STATE',
+      status: 'completed',
+      runId,
+      runGeneration: 2,
+      tabId: 8,
+      browserContext,
+    });
+    await expect(done).resolves.toMatchObject({ status: 'completed', browserContext });
+  });
+
+  it.each([
+    { tabId: 9, windowId: 3, url: 'https://example.com/jobs', documentId: 'task-document' },
+    { tabId: 8, windowId: 4, url: 'https://example.com/jobs', documentId: 'task-document' },
+    { tabId: 8, windowId: 3, url: 'https://example.com/jobs' },
+  ])(
+    'refuses an invalid native task completion context: $tabId/$windowId/$documentId',
+    async (browserContext) => {
+      const h = harness();
+      const done = h.api.startComposerBrowserTask('Open the jobs tab');
+      await settle();
+      const runId = h.api.getRun()!.runId;
+      h.api.applyComposerBrowserMessage({
+        type: 'AGI_CU_STATE',
+        status: 'completed',
+        runId,
+        runGeneration: 2,
+        tabId: 8,
+        browserContext,
+      });
+      await expect(done).resolves.toMatchObject({ status: 'error' });
+      expect((await done).browserContext).toBeUndefined();
+    },
+  );
 
   it('asks for approval inline and answers with the run, generation and tab it was asked for', async () => {
     const h = harness();

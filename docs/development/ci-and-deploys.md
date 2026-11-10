@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform/release
-Last updated: 2026-10-30
+Last updated: 2026-11-10
 
 ## Production invariant
 
@@ -38,6 +38,20 @@ The former local environment-push and global Fly setup helpers were deleted;
 neither is a deployment path. Production environment values belong in the
 protected Vercel/GitHub environments, and changing them does not implicitly
 redeploy an unverified worktree.
+
+## Schema prerequisites
+
+Source publication does not imply a production migration. The production workflow
+unconditionally runs `pnpm db:migrate -- verify` before building the web artifact;
+the migration runner rejects pending or drifted migrations. A coordinated source
+dependency in `scripts/config/migration-dependency-allowlist.json` never updates
+the production high-water mark or waives this deployment gate.
+
+The recovery-batch store requires migration 0394. The release operator must review
+and apply the pending migration chain before releasing that code. Migration 0394
+invalidates unacknowledged pending recovery-code batches; existing enrolled
+recovery keys survive. A publication carrying `Deployment: hold` leaves the
+production database and serving artifact unchanged while normal CI still runs.
 
 ## Negative guarantee
 

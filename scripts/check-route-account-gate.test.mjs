@@ -138,6 +138,40 @@ test('a clean tree passes and counts each class', () => {
   assert.match(result.out, /1 gated, 1 public, 1 machine, 0 session-lifecycle, 0 ungated-user/u);
 });
 
+test('a proven gate in a cycle does not authorize an unrelated raw principal', () => {
+  const root = fixture({
+    ...BASE,
+    [CONTRACT]: contract(),
+    'apps/web/lib/cycle-a.ts': `
+      import { assertAccountActive } from '@/lib/api-auth';
+      import { getRequestIdentity } from '@/lib/server/identity';
+      import { back } from './cycle-b';
+      export function front(request) {
+        if (request.retry) return back(request);
+        return assertAccountActive(request.userId, request);
+      }
+      export async function raw() { return (await getRequestIdentity()).subject; }
+    `,
+    'apps/web/lib/cycle-b.ts': `
+      import { front } from './cycle-a';
+      export function back(request) { return front(request); }
+    `,
+    'apps/web/app/api/cyclic/route.ts': `
+      import { front } from '@/lib/cycle-a';
+      export function GET(request) { return front(request); }
+    `,
+    'apps/web/app/api/raw/route.ts': `
+      import { raw } from '@/lib/cycle-a';
+      export async function GET() { return raw(); }
+    `,
+  });
+  const result = run(root);
+  assert.equal(result.code, 1);
+  assert.match(result.out, /api\/raw\/route.ts authenticates a user and never reaches/u);
+  assert.doesNotMatch(result.out, /FAIL .*api\/cyclic\/route.ts/u);
+  assert.match(result.out, /2 gated, 1 public, 1 machine, 0 session-lifecycle, 1 ungated-user/u);
+});
+
 test('a route that authenticates a user without the gate fails', () => {
   const root = fixture({
     ...BASE,
