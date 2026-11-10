@@ -1,3 +1,4 @@
+import { API_URL } from '@/lib/constants';
 import { api } from '@/services/api';
 
 export type InvitableRole = 'admin' | 'member' | 'viewer';
@@ -113,22 +114,63 @@ export async function fetchWorkspaceInvitations(
   };
 }
 
+export interface InvitationReceipt {
+  email: string;
+  emailSent: boolean;
+  reason: string | null;
+  link: string | null;
+  replacedPreviousLink: boolean;
+}
+
+function invitationLink(token: unknown): string | null {
+  const raw = asText(token);
+  if (!raw) return null;
+  const url = new URL('/invite', API_URL);
+  url.hash = new URLSearchParams({ token: raw }).toString();
+  return url.toString();
+}
+
+function parseInvitationReceipt(
+  response: unknown,
+  fallbackEmail: string,
+  replacedPreviousLink: boolean,
+): InvitationReceipt {
+  const body = isRecord(response) ? response : {};
+  const invitation = isRecord(body['invitation']) ? body['invitation'] : {};
+  const delivery = isRecord(body['delivery']) ? body['delivery'] : {};
+  const emailSent = delivery['emailSent'] === true;
+  return {
+    email: asText(invitation['email']) ?? fallbackEmail,
+    emailSent,
+    reason: emailSent ? null : asText(delivery['reason']),
+    link: invitationLink(body['inviteToken']),
+    replacedPreviousLink,
+  };
+}
+
 export async function inviteWorkspaceMember(
   organizationId: string,
   email: string,
   role: InvitableRole,
-): Promise<void> {
-  await api.post('/api/settings/team/invitations', { organizationId, email, role });
+): Promise<InvitationReceipt> {
+  const response = await api.post<unknown>('/api/settings/team/invitations', {
+    organizationId,
+    email,
+    role,
+  });
+  return parseInvitationReceipt(response, email, false);
 }
 
 export async function resendWorkspaceInvitation(
   organizationId: string,
   invitationId: string,
-): Promise<void> {
-  await api.post(`/api/settings/team/invitations/${encodeURIComponent(invitationId)}`, {
-    organizationId,
-    action: 'resend',
-  });
+  email: string,
+): Promise<InvitationReceipt> {
+  const response = await api.post<unknown>(
+    `/api/settings/team/invitations/${encodeURIComponent(invitationId)}`,
+    { organizationId, action: 'resend' },
+  );
+  return parseInvitationReceipt(response, email, true);
 }
 
 export async function revokeWorkspaceInvitation(

@@ -302,7 +302,13 @@ export default function WorkspaceScreen() {
             void (async () => {
               setBusyMemberId(member.id);
               try {
-                await removeWorkspaceMember(member.id);
+                const { cleanupComplete } = await removeWorkspaceMember(member.id);
+                if (!cleanupComplete) {
+                  Alert.alert(
+                    'Member removed',
+                    `${member.name} no longer has access to this workspace, but some of their sign-ins or keys could not be revoked. Check the web admin console.`,
+                  );
+                }
                 await load();
               } catch {
                 Alert.alert('Could not remove member', 'Check the member list before retrying.');
