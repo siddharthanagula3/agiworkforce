@@ -81,6 +81,11 @@ function clearLocalCloudAccountStateNow(): void {
     clearAccountScopedDrafts();
   });
 
+  runTeardownStep('composer handoff', () => {
+    const { clearComposerHandoff } = require('@/src/features/chat/composerHandoff');
+    clearComposerHandoff();
+  });
+
   runTeardownStep('memory cache', () => {
     const { useCloudMemoryStore } = require('@/stores/memory/cloudMemoryStore');
     useCloudMemoryStore.getState().clearCloudMemoryData();

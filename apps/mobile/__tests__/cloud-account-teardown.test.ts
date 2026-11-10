@@ -248,6 +248,12 @@ import { mmkvStorage } from '../lib/mmkv';
 import { useCloudSettingsStore } from '../stores/settings/cloudSettingsStore';
 import { applyCloudSettings, toCloudSettings } from '../services/cloudSettingsMapping';
 import { clearLocalCloudAccountState } from '../src/features/auth/services/cloudAccountTeardown';
+import {
+  stageComposerAttachments,
+  stageComposerText,
+  takeComposerAttachments,
+  takeComposerText,
+} from '@/src/features/chat/composerHandoff';
 
 describe('clearLocalCloudAccountState', () => {
   const resetCloudSync = jest.fn();
@@ -350,6 +356,18 @@ describe('clearLocalCloudAccountState', () => {
 
     expect(useLocalSettingsStore.setState).not.toHaveBeenCalled();
     expect(useChatMessageStore.setState).not.toHaveBeenCalled();
+  });
+
+  it('drops shared text and files staged for account A before account B opens a composer', () => {
+    stageComposerText('new-chat', 'Account A shared text');
+    stageComposerAttachments('new-chat', [
+      { id: 'share-a', uri: 'file:///cache/a.pdf', mimeType: 'application/pdf', fileName: 'a.pdf' },
+    ]);
+
+    clearLocalCloudAccountState();
+
+    expect(takeComposerText('new-chat')).toBe('');
+    expect(takeComposerAttachments('new-chat')).toEqual([]);
   });
 
   it('clears prior account memory consent even when the next settings omit capabilities', () => {

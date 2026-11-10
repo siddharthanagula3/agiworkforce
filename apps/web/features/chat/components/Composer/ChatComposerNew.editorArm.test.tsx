@@ -237,6 +237,15 @@ describe('editor arm · external message writers', () => {
     expect(editorHandle.setText).toHaveBeenCalledWith('drafted for you');
   });
 
+  it('adds a prefill after an unsent draft instead of replacing it', () => {
+    const view = render(<ChatComposerNew onSend={vi.fn()} />);
+    type('my unsent draft');
+
+    view.rerender(<ChatComposerNew onSend={vi.fn()} prefillText="drafted for you" />);
+
+    expect(editorHandle.setText).toHaveBeenLastCalledWith('my unsent draft\n\ndrafted for you');
+  });
+
   it('routes a slash-menu commit through setText and refocuses', async () => {
     useSettingsStore.setState({
       customCommands: [

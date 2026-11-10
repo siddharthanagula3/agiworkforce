@@ -295,6 +295,11 @@ jest.mock('../lib/constants', () => ({
 
 import { ChatInput, type ChatInputHandle } from '../src/features/chat/components/ChatInput';
 import { useUploadLifecycleStore } from '../src/features/chat/upload/uploadLifecycle';
+import {
+  adoptComposerHandoff,
+  stageComposerText,
+  takeComposerText,
+} from '../src/features/chat/composerHandoff';
 
 const defaultProps = {
   onSend: jest.fn(),
@@ -1095,6 +1100,39 @@ describe('ChatInput', () => {
       expect(screen.getByLabelText('Message input').props.value).toBe(
         'My existing draft\n\nAlso cover Q3',
       );
+    });
+
+    it('adds shared text after a parked draft instead of replacing it', () => {
+      mockGetDraft.mockImplementation(() => 'My parked draft');
+      const ref = React.createRef<ChatInputHandle>();
+      const screen = renderInput({
+        attachRef: ref,
+        draftKey: 'new-chat',
+        draftProvenance: { scope: 'local' },
+      });
+
+      adoptComposerHandoff('new-chat', null);
+      stageComposerText('new-chat', 'Shared article text');
+      stageComposerText('new-chat', 'Shared article text');
+      act(() => adoptComposerHandoff('new-chat', ref.current));
+
+      expect(screen.getByLabelText('Message input').props.value).toBe(
+        'My parked draft\n\nShared article text',
+      );
+      expect(mockSetDraft).toHaveBeenLastCalledWith(
+        'new-chat',
+        'My parked draft\n\nShared article text',
+        { scope: 'local' },
+      );
+      expect(takeComposerText('new-chat')).toBe('');
+      mockGetDraft.mockImplementation(() => '');
+    });
+
+    it('leaves shared text staged until a composer can receive it', () => {
+      stageComposerText('conversation-9', 'Shared before mount');
+      adoptComposerHandoff('conversation-9', null);
+
+      expect(takeComposerText('conversation-9')).toBe('Shared before mount');
     });
 
     it('exposes focus() and drives the real text field with it', () => {

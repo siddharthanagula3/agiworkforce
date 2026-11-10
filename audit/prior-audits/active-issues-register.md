@@ -8962,9 +8962,28 @@ Source-only review; no tests, checks, network or sharing actions.
 
 ## MOBILE-IOS-SHARE-INBOX-DELIVERY-01
 
-Severity: Medium. Status: OPEN source-backed received-copy preservation and
-acknowledgment design constraint, 2026-11-04. No runtime reproduction or observed
-production loss; no native implementation change is approved by this finding.
+Severity: Medium. Status: SOURCE-CORRECTED 2026-11-10, device acceptance open.
+
+Correction: the extension saves a share all-or-nothing into its own
+`PendingShares/files/<share>/` directory and lists the items it could not add.
+`AGIShareInbox.claimPendingShares` claims a batch of at most ten files and
+100 KB of text by renaming its manifests into `PendingShares/claims/<receipt>/`,
+copies (never moves) the files into `Caches/AGISharedInbox/<receipt>/`, reports
+copies that failed as `unavailableFileCount`, and re-delivers any claim not
+held by the running JS. `acknowledgePendingShares` deletes only the manifests
+and files that receipt owns. JS holds each receipt, acknowledges it from Share
+Preview (adopted, sent, or dismissed) with bounded retry, releases it when the
+preview is invalidated or the subscriber is gone, then claims the next batch.
+Unreferenced copies older than a day are pruned only when a new batch is
+claimed. Account teardown clears the in-memory composer handoff. The Swift was
+typechecked with `swiftc -typecheck` against the iOS 17 simulator SDK (React
+types stubbed); nothing ran on a device. Close after a device run proves: a
+claim survives killing the app before review; more than ten saved files arrive
+over successive previews; a share saved while a preview is open is not
+deleted; Dismiss deletes the App Group and cached copies; Add to chat keeps the
+cached copies until sent; an orphaned copy older than a day is pruned.
+
+Original finding, 2026-11-04:
 
 `apps/mobile/native/ios/AGIShareInbox.swift::consumePendingShares` aggregates JSON
 manifests, then `stageSharedFiles` processes `files.prefix(maximumSharedFiles)`

@@ -4,6 +4,8 @@ import {
   type ManagedMediaImageAspectRatio,
 } from '@agiworkforce/cloud-contracts';
 import { libraryItemToFile } from '@features/chat/components/Composer/ComposerFilesMenu';
+import { readPersistedDraft } from '@features/chat/components/Composer/composer-draft-storage';
+import { composerTextWithIncoming } from '@features/chat/components/Composer/incoming-composer-text';
 import { PENDING_CONVERSATION_KEY, useChatStore } from '@shared/stores/web-chat-store';
 
 export type LibraryHandoffMode = 'chat' | 'agiwork';
@@ -11,6 +13,13 @@ export type LibraryHandoffMode = 'chat' | 'agiwork';
 let stagedAttachments: File[] | null = null;
 
 const ASPECT_RATIO_TOLERANCE = 0.02;
+
+function stageNewChatDraft(incoming: string): void {
+  const store = useChatStore.getState();
+  const parked = store.getDraftContent(PENDING_CONVERSATION_KEY) || readPersistedDraft(null);
+  const next = composerTextWithIncoming(parked, incoming);
+  if (next) store.setDraftContent(next, PENDING_CONVERSATION_KEY);
+}
 
 async function readImageAspectRatio(image: Blob): Promise<ManagedMediaImageAspectRatio | null> {
   if (typeof createImageBitmap !== 'function') return null;
@@ -34,7 +43,7 @@ export async function stageLibraryItemForNewChat(
   stagedAttachments = [file];
   const store = useChatStore.getState();
   store.setComposerToggles({ workMode: options.workMode }, PENDING_CONVERSATION_KEY);
-  if (options.draft) store.setDraftContent(options.draft, PENDING_CONVERSATION_KEY);
+  if (options.draft) stageNewChatDraft(options.draft);
 }
 
 /**
@@ -61,7 +70,7 @@ export async function stageLibraryItemForImageRemix(item: LibraryItem): Promise<
     },
     PENDING_CONVERSATION_KEY,
   );
-  store.setDraftContent(item.prompt ?? '', PENDING_CONVERSATION_KEY);
+  stageNewChatDraft(item.prompt ?? '');
 }
 
 export function takeStagedLibraryAttachments(): File[] | null {

@@ -3,8 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { Alert, FlatList, RefreshControl, ScrollView, View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { useNavigation, useRouter } from 'expo-router';
-import { stageComposerAttachments } from '@/src/features/chat/composerHandoff';
-import { setDraft } from '@/src/features/chat/draftStore';
+import { stageComposerAttachments, stageComposerText } from '@/src/features/chat/composerHandoff';
 import { enterMediaMode, listMediaModels } from '@/src/features/chat/actions/mediaMode';
 import { useChatViewStore } from '@/stores/chat/chatViewStore';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -411,7 +410,7 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
         return;
       }
       if (asset.prompt?.trim() && clerkUserId) {
-        setDraft('new-chat', asset.prompt, { scope: 'cloud', ownerId: clerkUserId });
+        stageComposerText('new-chat', asset.prompt);
       }
       handleAddToChat(asset);
     },
