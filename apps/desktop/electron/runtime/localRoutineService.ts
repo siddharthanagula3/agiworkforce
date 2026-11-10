@@ -20,6 +20,7 @@ import {
 } from '@agiworkforce/local-runtime-contract';
 import { PRODUCT_NAMES } from '@agiworkforce/types';
 import {
+  LocalRoutineCapacityError,
   LocalRoutineEngine,
   validateLocalRoutineInput,
   type RoutineAuthority,
@@ -65,7 +66,9 @@ function storePath(): string {
 function save(routines: readonly LocalRoutine[]): void {
   const text = JSON.stringify({ version: 1, routines });
   if (Buffer.byteLength(text) > MAX_STORE_BYTES)
-    throw new Error('The local routine store is full. Remove old routines before adding more.');
+    throw new LocalRoutineCapacityError(
+      'The local routine store is full. Remove old routines before adding more.',
+    );
   const temporary = `${storePath()}.${randomUUID()}.tmp`;
   let descriptor: number | undefined;
   try {

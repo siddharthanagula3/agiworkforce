@@ -4,7 +4,11 @@ import type {
   LocalRoutineInput,
   DeveloperSessionEvent,
 } from '@agiworkforce/local-runtime-contract';
-import { LocalRoutineEngine, type LocalRoutineDependencies } from '../runtime/localRoutineEngine';
+import {
+  LocalRoutineCapacityError,
+  LocalRoutineEngine,
+  type LocalRoutineDependencies,
+} from '../runtime/localRoutineEngine';
 
 function fixture() {
   let now = new Date('2026-10-16T09:00:00Z');
@@ -460,6 +464,46 @@ describe('device-owned local routine lifecycle', () => {
     f.advance(60_000);
     await expect(f.engine.tick()).rejects.toThrow('disk full');
     expect(f.dependencies.createSession).not.toHaveBeenCalled();
+  });
+
+  it('refuses a create that exceeds store capacity without stopping or keeping the candidate', async () => {
+    const f = fixture();
+    const kept = f.engine.create(f.input);
+    f.dependencies.save = vi.fn(() => {
+      throw new LocalRoutineCapacityError('The local routine store is full.');
+    });
+    expect(() => f.engine.create({ ...f.input, name: 'One too many' })).toThrow(
+      LocalRoutineCapacityError,
+    );
+    expect(f.engine.state().error).toBeNull();
+    expect(f.engine.state().routines.map((routine) => routine.id)).toEqual([kept.id]);
+
+    f.dependencies.save = vi.fn();
+    f.advance(60_000);
+    await launched(f);
+    await f.engine.remove(kept.id);
+    expect(f.engine.state().routines).toEqual([]);
+    expect(() => f.engine.create({ ...f.input, name: 'After cleanup' })).not.toThrow();
+  });
+
+  it('still stops the engine when a create fails for a storage reason', () => {
+    const f = fixture();
+    f.dependencies.save = vi.fn(() => {
+      throw new Error('disk full');
+    });
+    expect(() => f.engine.create(f.input)).toThrow('disk full');
+    expect(f.engine.state().error).toMatch(/store could not be written/);
+    expect(() => f.engine.create(f.input)).toThrow(/unavailable/);
+  });
+
+  it('keeps a capacity refusal on an existing routine fatal because memory is ahead of disk', async () => {
+    const f = fixture();
+    const routine = f.engine.create(f.input);
+    f.dependencies.save = vi.fn(() => {
+      throw new LocalRoutineCapacityError('The local routine store is full.');
+    });
+    await expect(f.engine.setEnabled(routine.id, false)).rejects.toThrow(LocalRoutineCapacityError);
+    expect(f.engine.state().error).toMatch(/store could not be written/);
   });
 
   it('marks sleep interruption explicitly and never duplicates that claim on wake', async () => {

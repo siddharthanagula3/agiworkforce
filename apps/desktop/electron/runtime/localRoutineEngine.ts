@@ -105,6 +105,13 @@ export function validateLocalRoutineInput(value: unknown, now: Date): LocalRouti
   });
 }
 
+export class LocalRoutineCapacityError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'LocalRoutineCapacityError';
+  }
+}
+
 export interface RoutineAuthority {
   rootIdentity: string;
   grantRevision: string;
@@ -244,10 +251,11 @@ export class LocalRoutineEngine {
     });
   }
 
-  private persist(): void {
+  private persist(candidate?: readonly LocalRoutine[]): void {
     try {
-      this.dependencies.save(this.routines);
+      this.dependencies.save(candidate ?? this.routines);
     } catch (error) {
+      if (candidate && error instanceof LocalRoutineCapacityError) throw error;
       const firstFailure = this.fault === null;
       this.fault =
         'The local routine store could not be written. Runs were stopped where possible. Repair storage and restart before resuming.';
@@ -308,8 +316,9 @@ export class LocalRoutineEngine {
       createdAt: now.toISOString(),
       updatedAt: now.toISOString(),
     };
-    this.routines.push(routine);
-    this.persist();
+    const candidate = [...this.routines, routine];
+    this.persist(candidate);
+    this.routines = candidate;
     return structuredClone(routine);
   }
 
