@@ -16,8 +16,10 @@ function parseCidr(value: string): { address: string; family: 4 | 6; prefix: num
   return { address, family, prefix };
 }
 
+const MAX_CIDR_SEGMENTS = 2;
+
 export function isValidCidr(value: string): boolean {
-  return parseCidr(value) !== null;
+  return value.split('/').length <= MAX_CIDR_SEGMENTS && parseCidr(value) !== null;
 }
 
 export function isIpAllowed(clientIp: string | undefined, cidrs: readonly string[]): boolean {

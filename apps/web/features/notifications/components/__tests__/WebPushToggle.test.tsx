@@ -108,6 +108,39 @@ describe('WebPushToggle', () => {
     );
   });
 
+  it('keeps the switch on and says so when the browser could not be unsubscribed', async () => {
+    mocks.getSubscription.mockResolvedValue({ endpoint: 'https://push.example.test/a' });
+    mocks.disableWebPush.mockResolvedValue(false);
+    render(<WebPushToggle />);
+    await waitFor(() =>
+      expect(screen.getByRole('switch', SWITCH)).toHaveAttribute('aria-checked', 'true'),
+    );
+
+    await userEvent.click(screen.getByRole('switch', SWITCH));
+
+    expect(await screen.findByText(/could not be turned off/)).toBeInTheDocument();
+    expect(screen.getByRole('switch', SWITCH)).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('switch', SWITCH)).toBeEnabled();
+  });
+
+  it('reads off after an incomplete removal once the browser no longer holds the subscription', async () => {
+    mocks.getSubscription
+      .mockResolvedValueOnce({ endpoint: 'https://push.example.test/a' })
+      .mockResolvedValue(null);
+    mocks.disableWebPush.mockResolvedValue(false);
+    render(<WebPushToggle />);
+    await waitFor(() =>
+      expect(screen.getByRole('switch', SWITCH)).toHaveAttribute('aria-checked', 'true'),
+    );
+
+    await userEvent.click(screen.getByRole('switch', SWITCH));
+
+    await waitFor(() =>
+      expect(screen.getByRole('switch', SWITCH)).toHaveAttribute('aria-checked', 'false'),
+    );
+    expect(screen.queryByText(/could not be turned off/)).not.toBeInTheDocument();
+  });
+
   it('says so and stays inert when the site is blocked in browser settings', async () => {
     mocks.readNotificationPermission.mockReturnValue('denied');
 

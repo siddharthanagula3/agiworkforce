@@ -11,7 +11,7 @@ import {
 } from '../lib/web-push-client';
 import { isDesktopHost } from '@/features/desktop-host/lib/host';
 
-type ToggleState = 'unsupported' | 'desktop' | 'blocked' | 'off' | 'on';
+type ToggleState = 'unsupported' | 'desktop' | 'blocked' | 'off' | 'on' | 'stuck';
 
 const STATE_DESCRIPTION: Record<ToggleState, string> = {
   unsupported: 'Browser push is unavailable here.',
@@ -20,6 +20,7 @@ const STATE_DESCRIPTION: Record<ToggleState, string> = {
   blocked: 'Notifications are blocked for this site in your browser settings.',
   off: 'Get told when a run finishes, fails, or needs your approval.',
   on: 'Registered in this browser.',
+  stuck: 'This browser could not be turned off. Try again.',
 };
 
 export interface WebPushToggleState {
@@ -77,9 +78,15 @@ export function useWebPushToggle(): WebPushToggleState {
     setBusy(true);
     try {
       if (!next) {
-        await disableWebPush();
-        setSubscribed(false);
-        setState('off');
+        if (await disableWebPush()) {
+          setSubscribed(false);
+          setState('off');
+          return;
+        }
+        const registration = await readNotificationWorker();
+        const held = await registration?.pushManager.getSubscription().catch(() => null);
+        setSubscribed(Boolean(held));
+        setState(held ? 'stuck' : 'off');
         return;
       }
       const result = await enableWebPush();
@@ -90,7 +97,7 @@ export function useWebPushToggle(): WebPushToggleState {
     }
   }, []);
 
-  const interactive = state === 'off' || state === 'on';
+  const interactive = state === 'off' || state === 'on' || state === 'stuck';
 
   return {
     checked: subscribed,

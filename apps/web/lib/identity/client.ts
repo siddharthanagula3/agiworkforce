@@ -151,6 +151,14 @@ export function useSignOut(): IdentitySignOut {
   return useCallback(
     async (options?: IdentitySignOutOptions) => {
       const redirectUrl = signedOutRedirectUrl(options?.redirectUrl, getHostBridge() !== null);
+      if (options?.sessionId === undefined) {
+        try {
+          const { disableWebPush } = await import('@/features/notifications/lib/web-push-client');
+          await disableWebPush();
+        } catch {
+          // Leaving the browser registered must not keep the person signed in.
+        }
+      }
       await signOut(redirectUrl === undefined ? options : { ...options, redirectUrl });
     },
     [signOut],

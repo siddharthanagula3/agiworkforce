@@ -67,6 +67,78 @@ export async function dispatchSpendAlertIfDue(
   const periodKey = claimed[0]?.period_start;
   if (periodKey === undefined) return { dispatched: false, reason: 'already_sent' };
 
+  let delivery: AlertDelivery;
+  try {
+    delivery = await deliverSpendAlert(
+      db,
+      organizationId,
+      periodKey,
+      kind,
+      enforcement,
+      cap,
+      state,
+    );
+  } catch (error) {
+    await releaseSpendAlertClaim(db, organizationId, periodKey, kind);
+    throw error;
+  }
+  if (delivery.retryable) {
+    await releaseSpendAlertClaim(db, organizationId, periodKey, kind);
+    logger.warn(
+      { organizationId, kind, recipients: delivery.recipients },
+      '[spend-alert] email delivery failed; the claim was released so a later evaluation retries',
+    );
+    return { dispatched: true, kind, recipientsNotified: delivery.recipientsNotified };
+  }
+
+  logger.info(
+    {
+      organizationId,
+      kind,
+      enforcement,
+      recipients: delivery.recipients,
+      recipientsNotified: delivery.recipientsNotified,
+    },
+    '[spend-alert] workspace spend limit crossing announced',
+  );
+  return { dispatched: true, kind, recipientsNotified: delivery.recipientsNotified };
+}
+
+interface AlertDelivery {
+  recipients: number;
+  recipientsNotified: number;
+  retryable: boolean;
+}
+
+async function releaseSpendAlertClaim(
+  db: DatabaseAdapter,
+  organizationId: string,
+  periodKey: string,
+  kind: SpendAlertKind,
+): Promise<void> {
+  try {
+    await db.execute(
+      `delete from public.organization_spend_alerts
+        where organization_id = $1::uuid and period_start = $2::date and kind = $3`,
+      [organizationId, periodKey, kind],
+    );
+  } catch (error) {
+    logger.error(
+      { error, organizationId, kind },
+      '[spend-alert] claim could not be released after a failed delivery',
+    );
+  }
+}
+
+async function deliverSpendAlert(
+  db: DatabaseAdapter,
+  organizationId: string,
+  periodKey: string,
+  kind: SpendAlertKind,
+  enforcement: 'notify' | 'block',
+  cap: number,
+  state: SpendState,
+): Promise<AlertDelivery> {
   await recordAuditEvent({
     organizationId,
     eventType: 'spend_cap_exceeded',
@@ -92,7 +164,8 @@ export async function dispatchSpendAlertIfDue(
        from public.organization_members m
        join public.organizations o on o.id = m.organization_id
        left join public.profiles p on p.id = m.user_id
-      where m.organization_id = $1::uuid`,
+      where m.organization_id = $1::uuid
+        and m.status = 'active'`,
     [organizationId],
   );
   await Promise.all(
@@ -141,6 +214,11 @@ export async function dispatchSpendAlertIfDue(
     ),
   );
   const recipientsNotified = results.filter((result) => result?.delivered === true).length;
+  const retryable = results.some(
+    (result) =>
+      result === null ||
+      (!result.delivered && result.reason !== 'not_configured' && result.retryable === true),
+  );
 
   await db.execute(
     `update public.organization_spend_alerts
@@ -149,9 +227,5 @@ export async function dispatchSpendAlertIfDue(
     [organizationId, periodKey, kind, recipientsNotified],
   );
 
-  logger.info(
-    { organizationId, kind, enforcement, recipients: recipients.length, recipientsNotified },
-    '[spend-alert] workspace spend limit crossing announced',
-  );
-  return { dispatched: true, kind, recipientsNotified };
+  return { recipients: recipients.length, recipientsNotified, retryable };
 }

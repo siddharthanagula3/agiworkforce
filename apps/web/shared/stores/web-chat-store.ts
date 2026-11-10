@@ -335,7 +335,12 @@ export interface MessageMetadata {
   /** Durable owner-scoped attachment descriptors; raw bytes stay in object storage. */
   attachments?: Attachment[];
   mcpContext?: {
-    prompt?: { connectorId: string; name: string };
+    prompt?: {
+      connectorId: string;
+      name: string;
+      arguments?: Record<string, string>;
+      argumentsOmitted?: boolean;
+    };
     resources?: Array<{ connectorId: string; uri: string; name?: string }>;
   };
   /** True while server-managed code execution is running */
