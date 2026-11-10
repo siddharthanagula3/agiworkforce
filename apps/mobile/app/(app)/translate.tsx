@@ -20,6 +20,7 @@ import { typeScale } from '@/src/ui/theme/tokens';
 import {
   translate,
   translateBackendLabel,
+  findSupportedLanguage,
   SUPPORTED_LANGUAGES,
   DEFAULT_SOURCE_LANG,
   DEFAULT_TARGET_LANG,
@@ -58,6 +59,7 @@ export default function TranslateScreen() {
   const [sourceText, setSourceText] = useState('');
   const [state, setState] = useState<TranslateState>(initialState);
   const [langPickerFor, setLangPickerFor] = useState<'source' | 'target' | null>(null);
+  const [copyFailedFor, setCopyFailedFor] = useState<string | null>(null);
 
   const mountedRef = useRef(false);
   const focusedRef = useRef(false);
@@ -116,11 +118,17 @@ export default function TranslateScreen() {
     if (!text && !targetLanguage) return;
 
     prefilledRef.current = true;
-    const match = SUPPORTED_LANGUAGES.find(
-      (language) => language.label.toLowerCase() === targetLanguage?.toLowerCase(),
-    );
+    const requestedTarget = targetLanguage?.trim() ? targetLanguage : undefined;
+    const match = requestedTarget ? findSupportedLanguage(requestedTarget) : undefined;
     const draft = draftRef.current;
-    updateDraft(text ?? draft.text, draft.source, match?.code ?? draft.target);
+    const target = match?.code ?? draft.target;
+    updateDraft(text ?? draft.text, target === draft.source ? draft.target : draft.source, target);
+    if (requestedTarget && !match) {
+      setState({
+        ...initialState(),
+        errorMessage: "That language isn't available for translation. Pick a target language.",
+      });
+    }
   }, [params.text, params.targetLanguage, updateDraft]);
 
   const handleBack = useCallback(() => {
@@ -224,7 +232,15 @@ export default function TranslateScreen() {
 
   const handleCopyResult = useCallback(() => {
     const text = state.result?.translatedText ?? state.tokensAccum;
-    if (text) Clipboard.setStringAsync(text);
+    if (!text) return;
+    setCopyFailedFor(null);
+    Clipboard.setStringAsync(text)
+      .then((copied) => {
+        if (!copied && mountedRef.current) setCopyFailedFor(text);
+      })
+      .catch(() => {
+        if (mountedRef.current) setCopyFailedFor(text);
+      });
   }, [state.result, state.tokensAccum]);
 
   const handleSelectLang = useCallback(
@@ -446,18 +462,7 @@ export default function TranslateScreen() {
               </View>
 
               {state.errorMessage ? (
-                <View
-                  style={{
-                    backgroundColor: 'rgba(239,68,68,0.1)',
-                    borderRadius: 8,
-                    paddingHorizontal: 12,
-                    paddingVertical: 8,
-                  }}
-                >
-                  <Text style={{ fontSize: typeScale.footnote, color: '#f87171' }}>
-                    {state.errorMessage}
-                  </Text>
-                </View>
+                <ErrorNotice message={state.errorMessage} />
               ) : (
                 <Text
                   style={{
@@ -470,6 +475,12 @@ export default function TranslateScreen() {
                 >
                   {displayedTranslation}
                 </Text>
+              )}
+
+              {copyFailedFor !== null && copyFailedFor === displayedTranslation && (
+                <View style={{ marginTop: 8 }}>
+                  <ErrorNotice message="Could not copy the translation. Try again." />
+                </View>
               )}
 
               {state.isTranslating && displayedTranslation.length === 0 && (
@@ -619,6 +630,22 @@ export default function TranslateScreen() {
         </Pressable>
       </Modal>
     </SafeAreaView>
+  );
+}
+
+function ErrorNotice({ message }: { message: string }) {
+  return (
+    <View
+      accessibilityRole="alert"
+      style={{
+        backgroundColor: 'rgba(239,68,68,0.1)',
+        borderRadius: 8,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+      }}
+    >
+      <Text style={{ fontSize: typeScale.footnote, color: '#f87171' }}>{message}</Text>
+    </View>
   );
 }
 

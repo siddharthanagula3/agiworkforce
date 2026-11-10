@@ -225,10 +225,7 @@ fn load_skill_sources(project_root: Option<&Path>) -> SkillSources {
     }
 
     if let Ok(config_dir) = crate::config::CliConfig::config_dir() {
-        let global_dir = config_dir.join("skills");
-        if global_dir.exists() {
-            load_skills_from_dir(&global_dir, &mut sources.user);
-        }
+        load_user_skills(&config_dir, &mut sources.user);
         let account_dir = crate::cloud::skills::account_skills_dir(&config_dir);
         if account_dir.exists() {
             load_skills_from_dir(&account_dir, &mut sources.account);
@@ -587,22 +584,49 @@ fn catalog_entries(
 
 /// Turn a skill on or off for every surface.
 pub fn set_skill_enabled(name: &str, enabled: bool) -> std::io::Result<()> {
+    set_skills_enabled(&[(name.to_string(), enabled)])
+}
+
+/// Apply per-name choices to the current persisted set, leaving every name the
+/// caller did not choose (for example skills of another project) untouched.
+pub fn set_skills_enabled(choices: &[(String, bool)]) -> std::io::Result<()> {
     let mut disabled = load_disabled_skills();
-    let changed = if enabled {
-        disabled.remove(name)
-    } else {
-        disabled.insert(name.to_string())
-    };
-    if changed {
+    if apply_skill_choices(&mut disabled, choices) {
         save_disabled_skills(&disabled)?;
     }
     Ok(())
+}
+
+fn apply_skill_choices(
+    disabled: &mut std::collections::HashSet<String>,
+    choices: &[(String, bool)],
+) -> bool {
+    let mut changed = false;
+    for (name, enabled) in choices {
+        changed |= if *enabled {
+            disabled.remove(name)
+        } else {
+            disabled.insert(name.clone())
+        };
+    }
+    changed
 }
 
 fn file_name_is_readme(path: &Path) -> bool {
     path.file_name()
         .and_then(|name| name.to_str())
         .is_some_and(|name| name.eq_ignore_ascii_case("README.md"))
+}
+
+fn load_user_skills(config_dir: &Path, skills: &mut Vec<Skill>) {
+    let global_dir = config_dir.join("skills");
+    if global_dir.exists() {
+        load_skills_from_dir(&global_dir, skills);
+    }
+    let learned_dir = crate::skill_learner::learned_skills_dir(config_dir);
+    if learned_dir.is_dir() {
+        load_skills_from_dir(&learned_dir, skills);
+    }
 }
 
 /// Load SKILL.md files from a directory.
@@ -1600,6 +1624,46 @@ mod tests {
         }
     }
     use super::*;
+
+    #[test]
+    fn learned_skills_written_by_the_learner_are_discovered() {
+        let home = tempfile::tempdir().expect("home");
+        let learned = crate::skill_learner::LearnedSkill {
+            name: "auto-read-file-grep".to_string(),
+            description: "Read then search".to_string(),
+            pattern: "# Steps\n\n1. read_file\n2. grep".to_string(),
+            confidence: 0.7,
+            source_sessions: vec!["s1".to_string(), "s2".to_string(), "s3".to_string()],
+        };
+        crate::skill_learner::SkillLearner::save_skill(home.path(), &learned).expect("saved");
+
+        let mut skills = Vec::new();
+        load_user_skills(home.path(), &mut skills);
+
+        let found = skills
+            .iter()
+            .find(|skill| skill.name == "auto-read-file-grep")
+            .expect("learned skill discovered");
+        assert_eq!(found.description, "Read then search");
+    }
+
+    #[test]
+    fn skill_choices_keep_disabled_names_the_picker_did_not_show() {
+        let mut disabled: std::collections::HashSet<String> =
+            ["review-a".to_string(), "lint-b".to_string()].into();
+        let changed = apply_skill_choices(&mut disabled, &[]);
+        assert!(!changed);
+        assert!(disabled.contains("review-a"));
+
+        let changed = apply_skill_choices(
+            &mut disabled,
+            &[("lint-b".to_string(), true), ("draft-b".to_string(), false)],
+        );
+        assert!(changed);
+        let mut names: Vec<_> = disabled.into_iter().collect();
+        names.sort();
+        assert_eq!(names, vec!["draft-b".to_string(), "review-a".to_string()]);
+    }
 
     // ---- helpers ----------------------------------------------------------
 

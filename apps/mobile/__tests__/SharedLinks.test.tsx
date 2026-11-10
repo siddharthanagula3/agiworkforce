@@ -88,9 +88,32 @@ describe('shared links service', () => {
   });
 
   it('encodes the token when revoking', async () => {
-    mockDelete.mockResolvedValue(undefined);
+    mockDelete.mockResolvedValue({ success: true });
     await revokeSharedLink('a/b c', options);
     expect(mockDelete).toHaveBeenCalledWith('/api/share/a%2Fb%20c', options);
+  });
+
+  it.each([undefined, {}, { success: false }, { success: 'true' }])(
+    'rejects a revoke reply %p that does not confirm success',
+    async (reply) => {
+      mockDelete.mockResolvedValueOnce(reply);
+      await expect(revokeSharedLink('tok-1', options)).rejects.toThrow(
+        'The server did not confirm that the link was revoked.',
+      );
+    },
+  );
+
+  it('keeps the audience of each link and reads an unknown one as public', async () => {
+    mockGet.mockResolvedValue({
+      shares: [
+        row({ visibility: 'organization' }),
+        row({ token: 'tok-2' }),
+        row({ token: 'tok-3', visibility: 'team' }),
+      ],
+      complete: true,
+    });
+    const { links } = await fetchSharedLinks(options);
+    expect(links.map((link) => link.visibility)).toEqual(['organization', 'public', 'public']);
   });
 
   it('treats revoking a link that is already gone as done', async () => {

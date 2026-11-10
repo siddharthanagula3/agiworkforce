@@ -61,8 +61,8 @@ pub enum OverlayResult {
     StatusLine(crate::tui::widgets::statusline_setup::StatusLineConfig),
     /// Terminal-title field config chosen in `TerminalTitleSetupView`.
     TerminalTitle(crate::tui::widgets::terminal_title_setup::TerminalTitleConfig),
-    /// Skill names DISABLED in `SkillsToggleView` (persisted so discovery skips them).
-    SkillsDisabled(Vec<String>),
+    /// Skills whose enabled state changed in `SkillsToggleView`, as (name, enabled).
+    SkillChoices(Vec<(String, bool)>),
     /// Memory settings chosen in `MemoriesSettingsView`.
     Memory(crate::tui::widgets::memories_settings::MemorySettings),
     DiffApproved(Vec<std::path::PathBuf>),

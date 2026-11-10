@@ -1299,32 +1299,43 @@ impl TuiApp {
         if !super::tui_active() {
             return;
         }
-        if let Some(title) = self.terminal_title() {
-            set_terminal_title(title);
-        }
+        apply_terminal_title(
+            &mut io::stdout(),
+            self.terminal_title(),
+            &TERMINAL_TITLE_STACKED,
+        );
     }
 }
 
 static TERMINAL_TITLE_STACKED: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
 
-fn set_terminal_title(title: String) {
-    let mut stdout = io::stdout();
-    #[cfg(unix)]
-    if !TERMINAL_TITLE_STACKED.swap(true, std::sync::atomic::Ordering::Relaxed) {
-        use std::io::Write;
-        let _ = stdout.write_all(b"\x1b[22;0t");
+fn apply_terminal_title<W: std::io::Write>(
+    out: &mut W,
+    title: Option<String>,
+    stacked: &std::sync::atomic::AtomicBool,
+) {
+    match title {
+        Some(title) => {
+            #[cfg(unix)]
+            if !stacked.swap(true, std::sync::atomic::Ordering::Relaxed) {
+                let _ = out.write_all(b"\x1b[22;0t");
+            }
+            let _ = out.execute(crossterm::terminal::SetTitle(title));
+        }
+        None => release_title_stack(out, stacked),
     }
-    let _ = stdout.execute(crossterm::terminal::SetTitle(title));
+}
+
+fn release_title_stack<W: std::io::Write>(out: &mut W, stacked: &std::sync::atomic::AtomicBool) {
+    if stacked.swap(false, std::sync::atomic::Ordering::Relaxed) {
+        let _ = out.write_all(b"\x1b[23;0t");
+        let _ = out.flush();
+    }
 }
 
 fn release_terminal_title() {
-    if TERMINAL_TITLE_STACKED.swap(false, std::sync::atomic::Ordering::Relaxed) {
-        use std::io::Write;
-        let mut stdout = io::stdout();
-        let _ = stdout.write_all(b"\x1b[23;0t");
-        let _ = stdout.flush();
-    }
+    release_title_stack(&mut io::stdout(), &TERMINAL_TITLE_STACKED);
 }
 
 /// Build the OS window-title string from the enabled fields. `None` when no field
@@ -5045,6 +5056,7 @@ enum SlashResult {
     RunAttachUrl(String),
     RunPersonalize(String),
     RunBtw(String),
+    RunLocalModelSwitch(String),
     RunAgentDraft(crate::agents::AgentRequest),
     RunRemoteControl(String),
     RunFeedback(crate::cloud::feedback::FeedbackKind, String),
@@ -5127,6 +5139,9 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                         app.sync_stats();
                         let provider = crate::models::provider_name(&app.session.provider);
                         SlashResult::SystemMessage(format!("Switched to {} ({})", arg, provider))
+                    }
+                    Err(_) if app.session.privacy_mode == crate::agent::PrivacyMode::Local => {
+                        SlashResult::RunLocalModelSwitch(arg.to_string())
                     }
                     Err(err) => SlashResult::SystemMessage(format!("Model switch failed: {err}")),
                 }
@@ -5266,19 +5281,21 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                     ));
                 }
                 lines.push(String::new());
-                lines.push("Switch with: /output-style <name>".to_string());
+                lines.push(
+                    "Switch with: /output-style <name> (add --session to leave your default alone) · /output-style new <name> <instructions> · /output-style delete <name>"
+                        .to_string(),
+                );
                 SlashResult::SystemMessage(lines.join("\n"))
             } else {
-                app.session.apply_output_style(arg);
-                let mut message = format!(
-                    "Output style: {} (applies on next turn)",
-                    app.session.output_style
-                );
-                if let Err(err) = app
-                    .config
-                    .persist_output_style_project(&app.session.output_style)
-                {
-                    message.push_str(&format!("\nFailed to persist output style: {err}"));
+                let mut message =
+                    crate::claude_parity::handle_output_style(&mut app.session, arg);
+                if crate::claude_parity::output_style_arg_persists(arg) {
+                    if let Err(err) = app
+                        .config
+                        .persist_output_style_project(&app.session.output_style)
+                    {
+                        message.push_str(&format!("\nFailed to persist output style: {err}"));
+                    }
                 }
                 SlashResult::SystemMessage(message)
             }
@@ -6101,7 +6118,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         }
 
         "/diff-review" => {
-            use crate::tui::widgets::diff_review::{DiffReviewView, FileDiff};
+            use crate::tui::widgets::diff_review::DiffReviewView;
             // Gather changed files from `git status --porcelain` synchronously.
             let cwd = std::env::current_dir().unwrap_or_default();
             if let Err(error) = crate::platform::runtime::git::check_repository_config_blocking(
@@ -6171,41 +6188,13 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                     .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
                     .unwrap_or_default()
             };
-            let mut hunks_by_path: std::collections::HashMap<
-                std::path::PathBuf,
-                Vec<(Vec<String>, String, bool)>,
-            > = std::collections::HashMap::new();
-            for (text, staged) in [(read_diff(&["diff", "--cached"]), true), (read_diff(&["diff"]), false)] {
-                let model = crate::diff_model::Diff::parse(&text);
-                let patches = crate::diff_model::file_hunk_patches(&text);
-                if patches.len() != model.files.len() {
-                    continue;
-                }
-                for (file, patches) in model.files.iter().zip(patches) {
-                    if patches.len() != file.hunks.len() {
-                        continue;
-                    }
-                    let entry = hunks_by_path.entry(file.path().to_path_buf()).or_default();
-                    for (hunk, patch) in file.hunks.iter().zip(patches) {
-                        let mut preview = vec![hunk.header()];
-                        preview.extend(hunk.lines.iter().map(crate::diff_model::DiffLine::render));
-                        entry.push((preview, patch, staged));
-                    }
-                }
-            }
-            let mut files: Vec<FileDiff> = parsed
-                .files
-                .iter()
-                .map(|file| {
-                    let hunks = hunks_by_path.remove(file.path()).unwrap_or_default();
-                    FileDiff::from_model(file).with_hunks(hunks)
-                })
-                .collect();
-            files.extend(untracked.iter().map(|path| {
-                let mut file = FileDiff::new(path.as_str(), Vec::new(), 0, 0);
-                file.kind = crate::diff_model::FileChangeKind::Added;
-                file
-            }));
+            let staged_diff = read_diff(&["diff", "--cached"]);
+            let unstaged_diff = read_diff(&["diff"]);
+            let files = diff_review_files(
+                &parsed,
+                [(staged_diff.as_str(), true), (unstaged_diff.as_str(), false)],
+                &untracked,
+            );
             if files.is_empty() {
                 SlashResult::SystemMessage("No changed files (working tree clean).".into())
             } else {
@@ -6309,6 +6298,79 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
     }
 }
 
+fn diff_review_files(
+    tracked: &crate::diff_model::Diff,
+    side_diffs: [(&str, bool); 2],
+    untracked: &[String],
+) -> Vec<crate::tui::widgets::diff_review::FileDiff> {
+    use crate::diff_model::{file_hunk_patches, Diff, DiffLine, FileChangeKind};
+    use crate::tui::widgets::diff_review::FileDiff;
+
+    struct SideChanges {
+        kind: FileChangeKind,
+        additions: usize,
+        deletions: usize,
+        hunks: Vec<(Vec<String>, String, bool)>,
+    }
+
+    let mut by_path: std::collections::BTreeMap<std::path::PathBuf, SideChanges> =
+        std::collections::BTreeMap::new();
+    for (text, staged) in side_diffs {
+        let model = Diff::parse(text);
+        let patches = file_hunk_patches(text);
+        if patches.len() != model.files.len() {
+            continue;
+        }
+        for (file, patches) in model.files.iter().zip(patches) {
+            if patches.len() != file.hunks.len() {
+                continue;
+            }
+            let entry = by_path
+                .entry(file.path().to_path_buf())
+                .or_insert_with(|| SideChanges {
+                    kind: file.kind,
+                    additions: 0,
+                    deletions: 0,
+                    hunks: Vec::new(),
+                });
+            entry.additions += file.additions();
+            entry.deletions += file.deletions();
+            for (hunk, patch) in file.hunks.iter().zip(patches) {
+                let mut preview = vec![hunk.header()];
+                preview.extend(hunk.lines.iter().map(DiffLine::render));
+                entry.hunks.push((preview, patch, staged));
+            }
+        }
+    }
+    let mut files: Vec<FileDiff> = tracked
+        .files
+        .iter()
+        .map(|file| {
+            let hunks = by_path
+                .remove(file.path())
+                .map(|changes| changes.hunks)
+                .unwrap_or_default();
+            FileDiff::from_model(file).with_hunks(hunks)
+        })
+        .collect();
+    for (path, changes) in by_path {
+        let preview = changes
+            .hunks
+            .iter()
+            .flat_map(|(lines, _, _)| lines.iter().cloned())
+            .collect();
+        let mut file = FileDiff::new(path, preview, changes.additions, changes.deletions);
+        file.kind = changes.kind;
+        files.push(file.with_hunks(changes.hunks));
+    }
+    files.extend(untracked.iter().map(|path| {
+        let mut file = FileDiff::new(path.as_str(), Vec::new(), 0, 0);
+        file.kind = FileChangeKind::Added;
+        file
+    }));
+    files
+}
+
 fn format_advisor_tool_output(raw: &str) -> String {
     let Ok(value) = serde_json::from_str::<serde_json::Value>(raw) else {
         return raw.to_string();
@@ -6323,11 +6385,6 @@ fn format_advisor_tool_output(raw: &str) -> String {
 
 fn persist_tui_shared_ui_config(cmd: &str, arg: &str, app: &mut TuiApp) {
     match cmd {
-        "/output-style" if crate::claude_parity::output_style_arg_persists(arg) => {
-            let _ = app
-                .config
-                .persist_output_style_project(&app.session.output_style);
-        }
         "/privacy-mode" | "/trust-boundary" => {
             if crate::agent::PrivacyMode::from_arg(arg)
                 .is_some_and(|mode| mode == app.session.privacy_mode)
@@ -7107,6 +7164,28 @@ async fn run_event_loop(
                                     text,
                                 });
                             }
+                            SlashResult::RunLocalModelSwitch(model) => {
+                                let text = match app
+                                    .session
+                                    .switch_model_by_name_or_local(&app.config, &model)
+                                    .await
+                                {
+                                    Ok(()) => {
+                                        app.sync_stats();
+                                        let provider =
+                                            crate::models::provider_name(&app.session.provider);
+                                        format!("Switched to {} ({})", model, provider)
+                                    }
+                                    Err(err) => format!(
+                                        "Model switch failed: {}",
+                                        crate::errors::terminal_text(&err)
+                                    ),
+                                };
+                                app.chat_messages.push(ChatMessage {
+                                    role: ChatRole::System,
+                                    text: sanitize_terminal_text(&text).into_owned(),
+                                });
+                            }
                             SlashResult::RunPersonalize(argument) => {
                                 let text = match crate::cloud::personalization::run(&argument).await
                                 {
@@ -7255,7 +7334,7 @@ async fn run_event_loop(
                                 };
                                 let opts = crate::tools::ToolExecOptions {
                                     additional_workspace_roots: Vec::new(),
-                                    mcp_tool_definitions: None,
+                                    tool_search_catalog: None,
                                     require_confirmation: false,
                                     auto_approve_safe: true,
                                     auto_approve_edits: false,
@@ -8139,6 +8218,46 @@ mod tests {
         }
     }
 
+    const STAGED_A_TO_B: &str = "diff --git a/src/lib.rs b/src/lib.rs\nindex 1111111..2222222 100644\n--- a/src/lib.rs\n+++ b/src/lib.rs\n@@ -1 +1 @@\n-A\n+B\n";
+    const UNSTAGED_B_TO_A: &str = "diff --git a/src/lib.rs b/src/lib.rs\nindex 2222222..1111111 100644\n--- a/src/lib.rs\n+++ b/src/lib.rs\n@@ -1 +1 @@\n-B\n+A\n";
+
+    #[test]
+    fn diff_review_lists_a_file_whose_staged_edit_cancels_its_working_tree_edit() {
+        let tracked_against_head = crate::diff_model::Diff::parse("");
+        let files = diff_review_files(
+            &tracked_against_head,
+            [(STAGED_A_TO_B, true), (UNSTAGED_B_TO_A, false)],
+            &[],
+        );
+
+        assert_eq!(files.len(), 1);
+        let file = &files[0];
+        assert_eq!(file.path, std::path::PathBuf::from("src/lib.rs"));
+        assert_eq!(file.hunk_staged, vec![true, false]);
+        assert_eq!(file.hunk_patches.len(), 2);
+        assert_eq!((file.additions, file.deletions), (2, 2));
+    }
+
+    #[test]
+    fn diff_review_does_not_duplicate_a_file_the_head_comparison_already_lists() {
+        let against_head = crate::diff_model::Diff::parse(UNSTAGED_B_TO_A);
+        let files = diff_review_files(
+            &against_head,
+            [("", true), (UNSTAGED_B_TO_A, false)],
+            &["notes.txt".to_string()],
+        );
+
+        let paths: Vec<_> = files.iter().map(|file| file.path.clone()).collect();
+        assert_eq!(
+            paths,
+            vec![
+                std::path::PathBuf::from("src/lib.rs"),
+                std::path::PathBuf::from("notes.txt"),
+            ]
+        );
+        assert_eq!(files[0].hunk_staged, vec![false]);
+    }
+
     // Minimal stub view that tracks how many times handle_key was called.
     struct StubView {
         call_count: usize,
@@ -8681,7 +8800,7 @@ mod tests {
             };
             let opts = crate::tools::ToolExecOptions {
                 additional_workspace_roots: Vec::new(),
-                mcp_tool_definitions: None,
+                tool_search_catalog: None,
                 require_confirmation: true,
                 auto_approve_safe: false,
                 auto_approve_edits: false,
@@ -8743,7 +8862,7 @@ mod tests {
             };
             let opts = crate::tools::ToolExecOptions {
                 additional_workspace_roots: Vec::new(),
-                mcp_tool_definitions: None,
+                tool_search_catalog: None,
                 require_confirmation: true,
                 auto_approve_safe: false,
                 auto_approve_edits: false,
@@ -8844,7 +8963,7 @@ mod tests {
             };
             let opts = crate::tools::ToolExecOptions {
                 additional_workspace_roots: Vec::new(),
-                mcp_tool_definitions: None,
+                tool_search_catalog: None,
                 require_confirmation: true,
                 auto_approve_safe: false,
                 auto_approve_edits: false,
@@ -9135,6 +9254,47 @@ mod tests {
         }
     }
 
+    #[test]
+    fn output_style_slash_uses_the_shared_grammar_and_persists_only_a_plain_selection() {
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join(".agiworkforce").join("config.toml");
+        let mut config = crate::config::CliConfig::default();
+        config.ui.output_style = Some("learning".to_string());
+        config.source.project_path = Some(project.clone());
+        let mut app = minimal_app_with(config);
+        app.session.apply_output_style("learning");
+
+        let SlashResult::SystemMessage(text) =
+            handle_slash("/output-style concise --session", &mut app)
+        else {
+            panic!("/output-style concise --session should answer in the transcript");
+        };
+        assert_eq!(app.session.output_style, "concise");
+        assert!(text.contains("for this session only"), "{text}");
+        assert_eq!(app.config.ui.output_style.as_deref(), Some("learning"));
+        assert!(!project.exists(), "a session-only style must not be saved");
+
+        for refused in [
+            "/output-style concise --bogus",
+            "/output-style no-such-style",
+            "/output-style delete",
+        ] {
+            let SlashResult::SystemMessage(text) = handle_slash(refused, &mut app) else {
+                panic!("{refused} should answer in the transcript");
+            };
+            assert_eq!(app.session.output_style, "concise", "{refused}: {text}");
+            assert!(!project.exists(), "{refused} must not write the project");
+        }
+
+        let SlashResult::SystemMessage(text) = handle_slash("/output-style concise", &mut app)
+        else {
+            panic!("/output-style concise should answer in the transcript");
+        };
+        assert!(!text.contains("Failed to persist"), "{text}");
+        let saved = std::fs::read_to_string(&project).unwrap();
+        assert!(saved.contains("output_style = \"concise\""), "{saved}");
+    }
+
     /// Regression: `/voice` in the TUI printed "Voice mode requires the REPL
     /// (not TUI). Run: agi --no-tui --voice-lang en" on top of a complete,
     /// working 1,186-line implementation. Voice never needed the REPL, it
@@ -9255,6 +9415,52 @@ mod tests {
         app.dispatch_key_to_overlay(make_key(crossterm::event::KeyCode::Esc));
         assert!(app.active_overlay.is_none());
         assert_eq!(app.statusline_config, before, "Esc discards the toggle");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn disabling_every_title_field_releases_the_applied_title() {
+        use crate::tui::widgets::terminal_title_setup::TerminalTitleConfig;
+        let stacked = std::sync::atomic::AtomicBool::new(false);
+        let mut out: Vec<u8> = Vec::new();
+        let enabled = TerminalTitleConfig {
+            show_session_id: false,
+            show_model: true,
+            show_cwd: false,
+            show_branch: false,
+        };
+        let all_off = TerminalTitleConfig {
+            show_session_id: false,
+            show_model: false,
+            show_cwd: false,
+            show_branch: false,
+        };
+        let title = |cfg: &TerminalTitleConfig| build_terminal_title(cfg, "id", "one", "dir", None);
+
+        apply_terminal_title(&mut out, title(&all_off), &stacked);
+        assert!(out.is_empty(), "nothing applied means nothing to release");
+
+        apply_terminal_title(&mut out, title(&enabled), &stacked);
+        apply_terminal_title(&mut out, title(&enabled), &stacked);
+        assert_eq!(
+            String::from_utf8(out.clone()).unwrap(),
+            "\x1b[22;0t\x1b]0;agi · one\x07\x1b]0;agi · one\x07"
+        );
+
+        out.clear();
+        apply_terminal_title(&mut out, title(&all_off), &stacked);
+        assert_eq!(String::from_utf8(out.clone()).unwrap(), "\x1b[23;0t");
+
+        out.clear();
+        apply_terminal_title(&mut out, title(&all_off), &stacked);
+        assert!(out.is_empty(), "a second release must not pop again");
+
+        apply_terminal_title(&mut out, title(&enabled), &stacked);
+        assert_eq!(
+            String::from_utf8(out).unwrap(),
+            "\x1b[22;0t\x1b]0;agi · one\x07",
+            "enabling again pushes the original title once more"
+        );
     }
 
     #[test]

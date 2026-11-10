@@ -419,6 +419,10 @@ export default function SharedLinksScreen() {
                   one: '{{count}} message',
                   other: '{{count}} messages',
                 })}
+                {' · '}
+                <Text>
+                  {link.visibility === 'organization' ? 'Workspace only' : 'Anyone with the link'}
+                </Text>
                 {formatDate(link.createdAt) ? ` · shared ${formatDate(link.createdAt)}` : ''}
               </Text>
               <Text

@@ -280,7 +280,7 @@ describe('Shared links screen', () => {
   it('keeps the confirmed token across a same-owner refresh', async () => {
     const refresh = deferred<{ shares: (typeof share)[]; complete: boolean }>();
     mockGet.mockResolvedValueOnce({ shares: [share] }).mockReturnValueOnce(refresh.promise);
-    mockDelete.mockResolvedValueOnce(undefined);
+    mockDelete.mockResolvedValueOnce({ success: true });
     const alerts = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     const view = render(<SharedLinksScreen />);
     fireEvent.press(await screen.findByLabelText(`Revoke link to ${share.title}`));
@@ -365,7 +365,7 @@ describe('Shared links screen', () => {
   });
 
   it('uses the confirmed original epoch and admits only one revoke', async () => {
-    const deletion = deferred<void>();
+    const deletion = deferred<{ success: true }>();
     mockGet.mockResolvedValue({ shares: [share], complete: true });
     mockDelete.mockReturnValueOnce(deletion.promise);
     const alerts = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
@@ -385,7 +385,7 @@ describe('Shared links screen', () => {
       }),
     );
     await act(async () => {
-      deletion.resolve();
+      deletion.resolve({ success: true });
     });
     expect(screen.queryByText(share.title)).toBeNull();
     expect(screen.getByText('No shared links yet')).toBeTruthy();
@@ -395,7 +395,7 @@ describe('Shared links screen', () => {
   it.each(['resolve', 'reject'] as const)(
     'suppresses an old revoke %s after account replacement',
     async (outcome) => {
-      const deletion = deferred<void>();
+      const deletion = deferred<{ success: true }>();
       mockGet.mockResolvedValueOnce({ shares: [share] }).mockResolvedValue({ shares: [] });
       mockDelete.mockReturnValueOnce(deletion.promise);
       const alerts = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
@@ -408,7 +408,7 @@ describe('Shared links screen', () => {
         useAuthStore.setState({ clerkUserId: 'replacement-account' });
       });
       await act(async () => {
-        if (outcome === 'resolve') deletion.resolve();
+        if (outcome === 'resolve') deletion.resolve({ success: true });
         else deletion.reject(new Error('old deletion error'));
       });
       expect(alerts).toHaveBeenCalledTimes(1);
@@ -416,6 +416,36 @@ describe('Shared links screen', () => {
       expect(screen.queryByText('Could not load shared links')).toBeNull();
     },
   );
+
+  it('treats a revoke reply without success as unconfirmed instead of removing the row', async () => {
+    mockGet.mockResolvedValue({ shares: [share], complete: true });
+    mockDelete.mockResolvedValueOnce({});
+    const alerts = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    render(<SharedLinksScreen />);
+    fireEvent.press(await screen.findByLabelText(`Revoke link to ${share.title}`));
+    const confirm = alerts.mock.calls[0][2]?.find((button) => button.text === 'Revoke')?.onPress;
+    await act(async () => {
+      confirm?.();
+    });
+    expect(alerts).toHaveBeenLastCalledWith(
+      'Could not revoke',
+      'Could not confirm whether the link was revoked. Refresh the list before trying again.',
+    );
+    expect(screen.queryByText('No shared links yet')).toBeNull();
+  });
+
+  it('labels who can open each link', async () => {
+    mockGet.mockResolvedValue({
+      shares: [
+        share,
+        { ...share, token: 'tok-2', title: 'Team notes', visibility: 'organization' },
+      ],
+      complete: true,
+    });
+    render(<SharedLinksScreen />);
+    expect(await screen.findByText('Workspace only')).toBeTruthy();
+    expect(screen.getByText('Anyone with the link')).toBeTruthy();
+  });
 
   it('reports uncertain revocation without claiming the link is still active', async () => {
     mockGet.mockResolvedValue({ shares: [share] });
