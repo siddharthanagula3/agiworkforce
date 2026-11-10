@@ -3,6 +3,8 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
 import type { SearchResult, SearchStats } from '@/features/chat/services/global-search-service';
 import { CommandPalette } from './CommandPalette';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
+
 type ScanModule0 = typeof import('@/features/chat/services/global-search-service');
 type ScanModule1 = typeof import('@agiworkforce/ui');
 
@@ -436,10 +438,10 @@ describe('CommandPalette', () => {
       expect(mockPush).toHaveBeenCalledWith('/tasks');
     });
 
-    it('starts AGI Work in the chat composer instead of opening the marketing page', () => {
+    it(`starts ${PRODUCT_NAMES.work} in the chat composer instead of opening the marketing page`, () => {
       renderPalette();
 
-      fireEvent.click(screen.getByText('New AGI Work'));
+      fireEvent.click(screen.getByText(`New ${PRODUCT_NAMES.work}`));
       expect(chatStoreState.setComposerToggles).toHaveBeenCalledWith(
         { workMode: 'agiwork' },
         '__new_conversation__',

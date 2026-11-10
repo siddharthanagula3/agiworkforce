@@ -209,7 +209,7 @@ describe('host commands', () => {
     await act(async () => {
       deliver?.('find');
     });
-    const field = await screen.findByRole('textbox', { name: 'Find' });
+    const field = await screen.findByRole('textbox', { name: 'Find in page' });
     expect(field).toBeTruthy();
   });
 

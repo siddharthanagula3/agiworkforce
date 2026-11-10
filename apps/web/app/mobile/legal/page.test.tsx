@@ -4,6 +4,7 @@ import path from 'node:path';
 import { cleanup, render } from '@testing-library/react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { AVAILABLE_NOW_LABEL, COMING_SOON_LABEL } from '@/lib/surface-status';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 type ScanModule0 = typeof import('@/lib/marketing-constants');
 type MobileLegalModule = typeof import('./page');
 
@@ -58,15 +59,19 @@ describe('/mobile/legal EU AI Act section', () => {
   it('speaks of a planned app while mobile is unreleased', () => {
     const copy = renderCopy(PlannedMobileLegalPage);
 
-    expect(copy).toMatch(/The planned AGI Mobile release is a general-purpose AI assistant/);
+    expect(copy).toMatch(
+      new RegExp(`The planned ${PRODUCT_NAMES.mobile} release is a general-purpose AI assistant`),
+    );
     expect(copy).toMatch(/the planned app carries that disclosure on a first-run screen/);
   });
 
   it('switches to present tense the day mobile ships, like every other section on the page', () => {
     const copy = renderCopy(PublishedMobileLegalPage);
 
-    expect(copy).toMatch(/AGI Mobile is a general-purpose AI assistant/);
-    expect(copy).not.toMatch(/The planned AGI Mobile release is a general-purpose AI assistant/);
+    expect(copy).toMatch(new RegExp(`${PRODUCT_NAMES.mobile} is a general-purpose AI assistant`));
+    expect(copy).not.toMatch(
+      new RegExp(`The planned ${PRODUCT_NAMES.mobile} release is a general-purpose AI assistant`),
+    );
     expect(copy).toMatch(/the app carries that disclosure on a first-run screen/);
   });
 

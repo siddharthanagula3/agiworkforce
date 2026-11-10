@@ -6,6 +6,7 @@ import {
   getNextUpgradeTier,
   getPublishedPlanPriceCents,
   type SelfServePaidPlanTier,
+  getBillingPlanPricing,
 } from '@agiworkforce/types';
 type ScanModule0 = typeof import('@agiworkforce/ui');
 type ReactI18nextModule = typeof import('react-i18next');
@@ -109,6 +110,11 @@ import {
   type PricingT,
 } from '@features/billing/lib/plan-card-copy';
 import { UpgradePlanDialog } from './UpgradePlanDialog';
+const PLAN_LABEL = {
+  max: getBillingPlanPricing('max').label,
+  max_15x: getBillingPlanPricing('max_15x').label,
+  pro: getBillingPlanPricing('pro').label,
+} as const;
 
 function usd(cents: number | null): string {
   if (cents === null) throw new Error('catalog price missing');
@@ -247,7 +253,13 @@ describe('UpgradePlanDialog tells the pricing page story', () => {
 
     const text = document.body.textContent ?? '';
     expect(text).not.toMatch(/Billed yearly, or/);
-    for (const plan of ['Free', 'Basic', 'Pro', 'Max 5x', 'Max 20x']) {
+    for (const plan of [
+      'Free',
+      'Basic',
+      `${PLAN_LABEL.pro}`,
+      `${PLAN_LABEL.max}`,
+      `${PLAN_LABEL.max_15x}`,
+    ]) {
       expect(card(plan).queryByText(/billed (yearly|monthly)/i)).toBeNull();
     }
   });
@@ -352,7 +364,9 @@ describe('UpgradePlanDialog tells the pricing page story', () => {
     renderDialog();
     await showAllPlans();
 
-    expect(screen.getByText('Pro checkout is not available in your region yet.')).toBeTruthy();
+    expect(
+      screen.getByText(`${PLAN_LABEL.pro} checkout is not available in your region yet.`),
+    ).toBeTruthy();
     expect(screen.getByRole('button', { name: planCtaLabel('pro', t()) })).toBeDisabled();
     expect(screen.getByRole('button', { name: planCtaLabel('max', t()) })).toBeEnabled();
   });
@@ -373,7 +387,9 @@ describe('UpgradePlanDialog tells the pricing page story', () => {
   it('focuses the exact required tier carried by a transcript refusal', async () => {
     renderDialog({ currentTier: 'pro', targetTier: 'max_15x' });
 
-    expect(screen.getAllByText('Upgrade to Max 20x').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(`Upgrade to ${PLAN_LABEL.max_15x}`).length).toBeGreaterThanOrEqual(
+      1,
+    );
     expect(await screen.findByRole('button', { name: planCtaLabel('max_15x', t()) })).toBeEnabled();
     expect(screen.queryByRole('button', { name: planCtaLabel('max', t()) })).toBeNull();
   });
@@ -439,7 +455,7 @@ describe('UpgradePlanDialog recommended plan', () => {
     const marked = recommendedCards();
     expect(marked).toHaveLength(1);
     expect(marked[0]?.getAttribute('data-testid')).toBe(`plan-card-${getNextUpgradeTier('pro')}`);
-    expect(card('Pro').queryByText('Recommended')).toBeNull();
+    expect(card(`${PLAN_LABEL.pro}`).queryByText('Recommended')).toBeNull();
   });
 
   it('marks the exact tier a transcript refusal asked for', async () => {

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+import { getBillingPlanPricing } from '@agiworkforce/types';
 
 const stripeMocks = vi.hoisted(() => ({
   retrieveSubscription: vi.fn(),
@@ -413,7 +414,7 @@ describe('POST /api/upgrade/preview', () => {
       amountDueNowCents: 0,
       charge: { totalCents: -8_300, totalDueTodayCents: 0, creditToBalanceCents: 8_300 },
       grandfatheredNotice: expect.stringContaining(
-        'If you already pay yearly for Pro, nothing changes.',
+        `If you already pay yearly for ${getBillingPlanPricing('pro').label}, nothing changes.`,
       ),
     });
     expect(stripeMocks.createInvoicePreview).toHaveBeenCalledWith(
@@ -431,7 +432,11 @@ describe('POST /api/upgrade/preview', () => {
 
     expect(response.status).toBe(400);
     expect(await response.json()).toMatchObject({
-      error: { message: expect.stringContaining('Max 20x is not sold with yearly billing') },
+      error: {
+        message: expect.stringContaining(
+          `${getBillingPlanPricing('max_15x').label} is not sold with yearly billing`,
+        ),
+      },
     });
     expect(stripeMocks.createInvoicePreview).not.toHaveBeenCalled();
   });

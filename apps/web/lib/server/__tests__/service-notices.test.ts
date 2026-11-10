@@ -30,6 +30,7 @@ import {
   readIncidentRecoveries,
   readServiceNotices,
 } from '../service-notices';
+import { PRODUCT_BRAND } from '@agiworkforce/types';
 
 type RedisOutagePolicyModule = typeof import('@/lib/redis-outage-policy');
 
@@ -186,7 +187,7 @@ describe('readServiceNotices', () => {
 
       expect(scopes(notices)).toEqual([{ kind: 'incident', scope: 'product', tone: 'danger' }]);
       expect(notices[0]?.message).toBe(
-        'AGI is having a problem right now, and some requests may fail. We are working on it.',
+        `${PRODUCT_BRAND} is having a problem right now, and some requests may fail. We are working on it.`,
       );
     },
   );
@@ -311,8 +312,7 @@ describe('incident recovery', () => {
         kind: 'incident',
         tone: 'warning',
         scope: 'product',
-        message:
-          'AGI is working again after a problem. We are monitoring it and have not called it fully recovered yet.',
+        message: `${PRODUCT_BRAND} is working again after a problem. We are monitoring it and have not called it fully recovered yet.`,
         href: '/status',
         linkLabel: 'Status',
       },

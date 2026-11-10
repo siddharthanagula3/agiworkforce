@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
+import { getBillingPlanPricing } from '@agiworkforce/types';
 
 vi.mock('server-only', () => ({}));
 
@@ -164,7 +165,7 @@ describe('Me API', () => {
         expect(data.plan).toBeDefined();
         expect(data.plan.tier).toBe('pro');
         expect(data.plan.status).toBe('active');
-        expect(data.plan.display_name).toBe('Pro');
+        expect(data.plan.display_name).toBe(getBillingPlanPricing('pro').label);
       });
 
       it('should default to free tier when subscription is missing', async () => {

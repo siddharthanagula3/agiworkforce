@@ -421,6 +421,7 @@ describe('library hand-off actions', () => {
 
   afterEach(() => {
     takeStagedLibraryAttachments();
+    useChatStore.getState().clearDraftContent(PENDING_CONVERSATION_KEY);
     uploadProjectKnowledgeFile.mockClear();
     publish.mockClear();
     toastSuccess.mockClear();

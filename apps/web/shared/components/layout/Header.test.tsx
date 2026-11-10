@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { Header } from './Header';
+import { PRODUCT_BRAND } from '@agiworkforce/types';
 
 function clearCookies() {
   document.cookie.split(';').forEach((entry) => {
@@ -17,7 +18,7 @@ describe('Header', () => {
 
     expect(screen.getByRole('navigation', { name: 'Primary' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/login');
-    expect(screen.getByRole('link', { name: 'Try AGI Chat' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Try chat' })).toHaveAttribute(
       'href',
       '/login?redirectTo=%2F',
     );
@@ -28,20 +29,20 @@ describe('Header', () => {
 
     expect(screen.queryByRole('navigation', { name: 'Primary' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Sign in' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Try AGI Chat' })).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'AGI' })).toHaveAttribute('href', '/');
+    expect(screen.queryByRole('link', { name: 'Try chat' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: PRODUCT_BRAND })).toHaveAttribute('href', '/');
   });
 
-  it('flips the actions to Open AGI once a signed-in session cookie is read', async () => {
+  it('flips the actions to Open chat once a signed-in session cookie is read', async () => {
     document.cookie = '__client_uat=1700000000';
 
     render(<Header />);
 
     await waitFor(() => {
-      expect(screen.getByRole('link', { name: 'Open AGI' })).toHaveAttribute('href', '/chat');
+      expect(screen.getByRole('link', { name: 'Open chat' })).toHaveAttribute('href', '/chat');
     });
     expect(screen.queryByRole('link', { name: 'Sign in' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Try AGI Chat' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Try chat' })).not.toBeInTheDocument();
   });
 
   it('does not treat an anonymous clerk dev-browser cookie as signed in', async () => {
@@ -52,6 +53,6 @@ describe('Header', () => {
     await waitFor(() => {
       expect(screen.getByRole('link', { name: 'Sign in' })).toBeInTheDocument();
     });
-    expect(screen.queryByRole('link', { name: 'Open AGI' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Open chat' })).not.toBeInTheDocument();
   });
 });

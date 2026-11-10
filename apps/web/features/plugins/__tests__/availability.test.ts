@@ -19,6 +19,7 @@ import {
   pluginStatusLabel,
   pluginStatusMeaningNote,
 } from '../availability';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 const RELEASED_CLI: SurfaceStatusMap = { ...SURFACE_STATUS, cli: AVAILABLE_NOW_LABEL };
 const UNRELEASED_CLIENTS: SurfaceStatusMap = {
@@ -252,12 +253,12 @@ describe('pluginCliInstallNote', () => {
   it('carries the registry availability note while the CLI is unreleased', () => {
     const note = pluginCliInstallNote();
     expect(note).toContain(cliAvailabilityNote());
-    expect(note).toBe('The command below is for the AGI CLI. The CLI is coming soon.');
+    expect(note).toBe(`The command below is for the ${PRODUCT_NAMES.cli}. The CLI is coming soon.`);
   });
 
   it('drops the status clause once the registry releases the CLI', () => {
     const note = pluginCliInstallNote(RELEASED_CLI);
-    expect(note).toBe('Install it with the AGI CLI, using the command below.');
+    expect(note).toBe(`Install it with the ${PRODUCT_NAMES.cli}, using the command below.`);
     expect(note).not.toMatch(/coming soon/i);
   });
 });

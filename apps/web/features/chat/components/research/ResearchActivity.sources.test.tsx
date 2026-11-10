@@ -2,6 +2,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { MessageResearchState } from '@shared/stores/web-chat-store';
 
+vi.mock('@/features/chat/hooks/use-browser-reply-ready-preference', async () => {
+  const { NOTIFICATION_DEFAULTS } =
+    await import('@/features/settings/lib/notification-preferences');
+  return { useBrowserReplyReadyPreference: () => NOTIFICATION_DEFAULTS.browserReplyReady };
+});
+
 import { ResearchActivity, parseResearchDomainList, researchDomainRules } from './ResearchActivity';
 
 function awaitingApproval(): MessageResearchState {

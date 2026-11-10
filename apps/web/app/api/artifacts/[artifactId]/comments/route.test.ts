@@ -5,11 +5,13 @@ const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   csrf: vi.fn(async (..._args: unknown[]): Promise<Response | null> => null),
   rateLimit: vi.fn(async (..._args: unknown[]): Promise<Response | null> => null),
-  scopedDb: vi.fn(async (..._args: unknown[]) => ({
-    db: { query: (...args: unknown[]) => mocks.query(...args) },
-    userId: 'user-1',
-    organizationId: null,
-  })),
+  scopedDb: vi.fn(async (..._args: unknown[]) => {
+    const db = {
+      query: (...args: unknown[]) => mocks.query(...args),
+      transaction: async (work: (tx: unknown) => Promise<unknown>) => work(db),
+    };
+    return { db, userId: 'user-1', organizationId: null };
+  }),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -43,6 +45,12 @@ function row(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function admitted() {
+  return mocks.query
+    .mockResolvedValueOnce([{ isolation: 'read committed' }])
+    .mockResolvedValueOnce([{ locked: true }]);
+}
+
 function request(method: string, body?: unknown, path = `/api/artifacts/${ARTIFACT}/comments`) {
   return new NextRequest(`http://localhost${path}`, {
     method,
@@ -73,7 +81,9 @@ describe('/api/artifacts/[artifactId]/comments', () => {
   });
 
   it('creates an anchored comment behind the CSRF check', async () => {
-    mocks.query.mockResolvedValueOnce([{ total: 0 }]).mockResolvedValueOnce([row()]);
+    admitted()
+      .mockResolvedValueOnce([{ total: 0 }])
+      .mockResolvedValueOnce([row()]);
     const response = await POST(
       request('POST', {
         body: 'Is March firm?',
@@ -83,7 +93,7 @@ describe('/api/artifacts/[artifactId]/comments', () => {
     );
     expect(response.status).toBe(201);
     expect(mocks.csrf).toHaveBeenCalledTimes(1);
-    const [sql, params] = mocks.query.mock.calls[1] as [string, unknown[]];
+    const [sql, params] = mocks.query.mock.calls[3] as [string, unknown[]];
     expect(sql).toContain('insert into public.artifact_comments');
     expect(params[0]).toBe('user-1');
     expect(JSON.parse(params[3] as string)).toMatchObject({ kind: 'text', quote: 'ship in March' });
@@ -98,7 +108,7 @@ describe('/api/artifacts/[artifactId]/comments', () => {
   });
 
   it('threads a reply onto the top comment of its thread', async () => {
-    mocks.query
+    admitted()
       .mockResolvedValueOnce([{ total: 1 }])
       .mockResolvedValueOnce([{ id: 'reply-parent', parent_id: COMMENT }])
       .mockResolvedValueOnce([row({ id: 'r2', parent_id: COMMENT, body: 'Yes' })]);
@@ -107,12 +117,12 @@ describe('/api/artifacts/[artifactId]/comments', () => {
       context,
     );
     expect(response.status).toBe(201);
-    const [, params] = mocks.query.mock.calls[2] as [string, unknown[]];
+    const [, params] = mocks.query.mock.calls[4] as [string, unknown[]];
     expect(params[2]).toBe(COMMENT);
   });
 
   it('caps the comments on one artifact', async () => {
-    mocks.query.mockResolvedValueOnce([{ total: 500 }]);
+    admitted().mockResolvedValueOnce([{ total: 500 }]);
     const response = await POST(request('POST', { body: 'One more' }), context);
     expect(response.status).toBe(409);
   });

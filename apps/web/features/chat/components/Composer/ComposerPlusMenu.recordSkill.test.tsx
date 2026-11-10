@@ -12,6 +12,7 @@ import type {
 import { ComposerPlusMenu, type ComposerPlusMenuProps } from './ComposerPlusMenu';
 import { SKILL_CAPTURE_CONSENT_TEXT } from '@/features/skill-recorder';
 import { resetRecorderForTests } from '@/features/skill-recorder/lib/recorder-store';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 type SaveAsSkillModule = typeof import('@/features/skills/components/save-as-skill');
 
@@ -264,7 +265,7 @@ describe('Record a skill in the composer menu', () => {
         <Harness {...props} />
       </I18nextProvider>,
     );
-    const menu = screen.getByRole('menu', { name: 'AGI Work tools' });
+    const menu = screen.getByRole('menu', { name: `${PRODUCT_NAMES.work} tools` });
     expect(within(menu).getByRole('menuitem', { name: 'Record a skill' })).toBeInTheDocument();
   });
 
@@ -320,7 +321,7 @@ describe('Record a skill in the composer menu', () => {
       skill_capture_start: ok({
         started: false,
         reason: 'permission',
-        message: 'Screen Recording is off for AGI Desktop.',
+        message: `Screen Recording is off for ${PRODUCT_NAMES.desktop}.`,
         status: IDLE,
       }),
       system_permission_open: ok(true),
@@ -332,7 +333,7 @@ describe('Record a skill in the composer menu', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Start recording' }));
 
     expect(await within(dialog).findByRole('alert')).toHaveTextContent(
-      'Screen Recording is off for AGI Desktop.',
+      `Screen Recording is off for ${PRODUCT_NAMES.desktop}.`,
     );
     await userEvent.click(within(dialog).getByRole('button', { name: 'Open System Settings' }));
     expect(invoke).toHaveBeenCalledWith('system_permission_open', {

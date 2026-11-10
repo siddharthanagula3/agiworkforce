@@ -23,6 +23,7 @@ import { DesktopDownloadAvailability } from '../DesktopDownloadAvailability';
 import DesktopPage from '../../desktop/page';
 import DownloadLoading from '../loading';
 import DownloadError from '../error';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 const DESKTOP_RELEASE_PATH = '/api/releases/desktop-cloud/latest';
 const CHECKSUM_PATH = '/api/download/checksums';
@@ -128,7 +129,7 @@ describe('the Desktop installer section on /desktop', () => {
     expect(within(checksums).getByText(ARM64_SHA)).toBeInTheDocument();
     expect(within(checksums).getByText(X64_SHA)).toBeInTheDocument();
 
-    const steps = screen.getByRole('list', { name: 'Install AGI Desktop on macOS' });
+    const steps = screen.getByRole('list', { name: `Install ${PRODUCT_NAMES.desktop} on macOS` });
     expect(steps.tagName).toBe('OL');
     expect(within(steps).getAllByRole('listitem').length).toBeGreaterThanOrEqual(4);
     expect(steps).toHaveTextContent('shasum -a 256');
@@ -199,12 +200,16 @@ describe('the Desktop installer section on /desktop', () => {
     respondWith(null, null);
     render(<DesktopDownloadAvailability />);
 
-    const status = await screen.findByRole('status', { name: 'AGI Desktop downloads unavailable' });
-    expect(status).toHaveTextContent('No signed AGI Desktop installer is available right now.');
+    const status = await screen.findByRole('status', {
+      name: `${PRODUCT_NAMES.desktop} downloads unavailable`,
+    });
+    expect(status).toHaveTextContent(
+      `No signed ${PRODUCT_NAMES.desktop} installer is available right now.`,
+    );
     expect(
       screen.getByRole('region', { name: 'Desktop installer availability' }),
-    ).not.toHaveTextContent('AGI Desktop ships for macOS');
-    expect(within(status).getByRole('link', { name: 'Use AGI Chat' })).toHaveAttribute(
+    ).not.toHaveTextContent(`${PRODUCT_NAMES.desktop} ships for macOS`);
+    expect(within(status).getByRole('link', { name: `Use ${PRODUCT_NAMES.chat}` })).toHaveAttribute(
       'href',
       WEB_ENTRY_HREF,
     );
@@ -229,7 +234,7 @@ describe('the Desktop installer section on /desktop', () => {
     render(<DesktopDownloadAvailability />);
 
     const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent('We could not verify the AGI Desktop installer.');
+    expect(alert).toHaveTextContent(`We could not verify the ${PRODUCT_NAMES.desktop} installer.`);
     fireEvent.click(within(alert).getByRole('button', { name: 'Retry release check' }));
 
     await waitFor(() => {
@@ -241,7 +246,9 @@ describe('the Desktop installer section on /desktop', () => {
     fetchMock.mockReturnValueOnce(new Promise(() => {}));
     render(<DesktopDownloadAvailability />);
 
-    const status = screen.getByRole('status', { name: 'Checking AGI Desktop downloads' });
+    const status = screen.getByRole('status', {
+      name: `Checking ${PRODUCT_NAMES.desktop} downloads`,
+    });
     expect(status).toHaveAttribute('aria-live', 'polite');
     expect(status.closest('.agi-ds-ledger')).not.toBeNull();
     expect(status).not.toHaveClass('bg-black', 'text-white');
@@ -274,7 +281,7 @@ describe('the Desktop installer section on /desktop', () => {
     expect(screen.getByRole('heading', { name: 'Unable to load downloads' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(reset).toHaveBeenCalledOnce();
-    expect(screen.getByRole('link', { name: 'Use AGI Chat' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: `Use ${PRODUCT_NAMES.chat}` })).toHaveAttribute(
       'href',
       WEB_ENTRY_HREF,
     );

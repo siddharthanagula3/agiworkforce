@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 import { Button, ButtonRow, Eyebrow, Prose, Section } from '@/features/marketing/components/system';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 const STATEMENT_MAX_WIDTH = '30rem';
 
@@ -24,10 +25,10 @@ export function PairBody() {
           </h1>
         </div>
         <Prose>
-          Open chat Desktop, go to Settings, Capabilities, Remote Control, and choose Pair a phone.
-          Scan the QR code with Mobile on your phone, or choose Enter code manually and type the
-          code in. Pairing links your desktop to the app on your phone, so it cannot be completed in
-          a browser.
+          Open {PRODUCT_NAMES.desktop}, go to Settings, Capabilities, Remote Control, and choose
+          Pair a phone. Scan the QR code with Mobile on your phone, or choose Enter code manually
+          and type the code in. Pairing links your desktop to the app on your phone, so it cannot be
+          completed in a browser.
         </Prose>
         <ButtonRow>
           <Button href="/download" variant="secondary">

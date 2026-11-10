@@ -1,6 +1,9 @@
 import { render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { WorkspaceUsageAnalytics } from '../WorkspaceUsageAnalytics';
+import { PRIVACY_MODE_DISPLAY } from '@agiworkforce/types';
+
+const CLOUD = PRIVACY_MODE_DISPLAY.managed.label;
 
 const mocks = vi.hoisted(() => ({ query: vi.fn() }));
 vi.mock('../../hooks/use-workspace-usage', () => ({
@@ -52,7 +55,7 @@ describe('WorkspaceUsageAnalytics settlement visibility', () => {
     });
     render(<WorkspaceUsageAnalytics />);
     expect(screen.getByText(/2 requests are awaiting settlement/)).toBeInTheDocument();
-    expect(screen.getByText('No settled managed usage in this window')).toBeInTheDocument();
+    expect(screen.getByText(`No settled ${CLOUD} usage in this window`)).toBeInTheDocument();
     expect(screen.getByText('0 credits')).toBeInTheDocument();
     expect(screen.queryByText(/has cost nothing/)).not.toBeInTheDocument();
   });
@@ -62,7 +65,11 @@ describe('WorkspaceUsageAnalytics settlement visibility', () => {
     expect(container.querySelector('time')).toHaveAttribute('dateTime', '2026-09-19T10:00:00.000Z');
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
     expect(
-      screen.getByText(/Local and BYOK activity is not included in these managed cloud totals/),
+      screen.getByText(
+        new RegExp(
+          `Local and BYOK activity is not included in these ${CLOUD.toLowerCase()} totals`,
+        ),
+      ),
     ).toBeInTheDocument();
     expect(screen.queryByText(/never reaches our infrastructure/)).not.toBeInTheDocument();
   });

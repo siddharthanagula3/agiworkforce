@@ -222,7 +222,7 @@ export default function SubscriptionGuidePage() {
                 send to the selected service. The following is a method you can reproduce, not a
                 report of tests we have already run on these products.
               </Prose>
-              <ol className="list-decimal pl-[var(--space-5)]">
+              <ol className="list-decimal ps-[var(--space-5)]">
                 <li>
                   <Prose>
                     <strong>Document task:</strong> ask for a summary with specified facts. Keep a

@@ -22,10 +22,14 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: vi.fn(() => ({
-    query: (...args: unknown[]) => mocks.query(...args),
-    execute: (...args: unknown[]) => mocks.execute(...args),
-  })),
+  getNeonDb: vi.fn(() => {
+    const db = {
+      query: (...args: unknown[]) => mocks.query(...args),
+      execute: (...args: unknown[]) => mocks.execute(...args),
+      transaction: async (work: (tx: unknown) => Promise<unknown>) => work(db),
+    };
+    return db;
+  }),
 }));
 vi.mock('@/lib/server/media-storage', () => ({
   deleteStoredMediaObjects: (...args: unknown[]) => mocks.deleteStoredMediaObjects(...args),

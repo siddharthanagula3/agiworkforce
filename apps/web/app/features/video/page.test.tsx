@@ -11,6 +11,7 @@ import {
   getRoutingSlotModel,
   getTierPolicy,
   interactionMode,
+  PRIVACY_MODE_DISPLAY,
 } from '@agiworkforce/types';
 
 vi.mock('@shared/components/layout/Header', () => ({ Header: () => <div /> }));
@@ -46,7 +47,10 @@ const PRODUCT_STRINGS: ReadonlyArray<readonly [string, string]> = [
   ['Your video is ready.', 'features/chat/components/messages/MessageBubble.tsx'],
   ['Resume checking', 'features/chat/components/messages/MessageBubble.tsx'],
   ['Video generation', 'features/chat/pages/WebChatPage.tsx'],
-  ['AGI-managed cloud compute', 'features/settings/sections/WorkspacePolicySection.tsx'],
+  [
+    `${PRIVACY_MODE_DISPLAY.managed.label} compute`,
+    'features/settings/sections/WorkspacePolicySection.tsx',
+  ],
 ];
 
 beforeAll(() => {

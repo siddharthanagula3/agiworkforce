@@ -1,6 +1,9 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { PRIVACY_MODE_DISPLAY, PRODUCT_NAMES } from '@agiworkforce/types';
+
+const CLOUD = PRIVACY_MODE_DISPLAY.managed.label;
 
 const APP_DIR = path.resolve(__dirname, '..', '..');
 
@@ -62,7 +65,10 @@ describe('/press, launch date and upgrade access', () => {
 
   it('names the surfaces each route runs on without excluding the rest', () => {
     expect(source).toMatch(
-      /AGI Chat runs on managed cloud\. Local runs in the CLI\. BYOK runs on \$\{BYOK_SURFACES\.label\}\. \$\{BYOK_SURFACES\.availability\}`/u,
+      new RegExp(
+        `${PRODUCT_NAMES.chat} runs on ${CLOUD.toLowerCase()}\\. Local runs in the ${PRODUCT_NAMES.cli}\\. BYOK runs on \\$\\{BYOK_SURFACES\\.label\\}\\. \\$\\{BYOK_SURFACES\\.availability\\}\``,
+        'u',
+      ),
     );
     expect(source.match(/on(?:\s|\{' '\})+\{BYOK_SURFACES\.label\}\./gu)).toHaveLength(2);
     expect(source).not.toContain('BYOK_SURFACES.exclusion');
@@ -82,7 +88,10 @@ describe('unreleased Desktop is never described as a public product', () => {
   it('/enterprise reads the Desktop state from the registry', () => {
     const source = page('enterprise');
     expect(source).toMatch(
-      /Desktop is managed-cloud only and is \$\{SURFACE_STATUS\.desktop\.toLowerCase\(\)\}\./u,
+      new RegExp(
+        `${PRODUCT_NAMES.desktop} is ${CLOUD.toLowerCase()} only and is \\$\\{SURFACE_STATUS\\.desktop\\.toLowerCase\\(\\)\\}\\.`,
+        'u',
+      ),
     );
     expect(source).not.toMatch(/current public Desktop/iu);
   });
@@ -181,7 +190,12 @@ describe('/partners, the protocol claim names the surface that implements it', (
 
   it('ties MCP to the CLI and its state', () => {
     expect(source).not.toContain('already works with it');
-    expect(source).toMatch(/lede=\{`[^`]*AGI CLI[^`]*\$\{CLI_AVAILABILITY_NOTE\}`\}/u);
+    expect(source).toMatch(
+      new RegExp(
+        `lede=\\{\`[^\`]*${PRODUCT_NAMES.cli}[^\`]*\\$\\{CLI_AVAILABILITY_NOTE\\}\`\\}`,
+        'u',
+      ),
+    );
     expect(source).toContain('SURFACE_STATUS.desktop.toLowerCase()');
   });
 

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { buildMetadata } from '@/lib/seo/metadata';
-import { formatPrivacyModeLabel } from '@agiworkforce/types';
+import { formatPrivacyModeLabel, PRODUCT_NAMES } from '@agiworkforce/types';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import {
@@ -27,7 +27,10 @@ import {
 import { joinSurfaceNames } from '@/lib/surface-status';
 
 const LIVE_PATH_STEPS = [
-  { lead: 'Open chat Chat.', body: 'It runs in this browser, with nothing to install.' },
+  {
+    lead: `Open ${PRODUCT_NAMES.chat}.`,
+    body: 'It runs in this browser, with nothing to install.',
+  },
   { lead: 'Sign in.', body: 'Use the account you have, or create one in the same flow.' },
   { lead: 'Send a message.', body: 'Managed cloud is open by default with a small free cap.' },
 ] as const;
@@ -64,7 +67,7 @@ const NOTIFY_LIST_ROWS = NOTIFY_LIST_SURFACES.map((surface) => ({
 
 export const metadata = buildMetadata({
   title: 'Get started: from zero to a working chat',
-  description: `Open chat Chat in the browser, with nothing to install. ${surfaceAvailabilitySummary()} Local and BYOK run on the CLI.`,
+  description: `Open ${PRODUCT_NAMES.chat} in the browser, with nothing to install. ${surfaceAvailabilitySummary()} Local and BYOK run on the CLI.`,
   path: '/get-started',
 });
 
@@ -82,7 +85,7 @@ export default function GetStartedPage() {
           eyebrow="Get started"
           title="Get started."
           em="started."
-          lede="Open chat Chat, sign in, and send your first message. It runs in your browser, with nothing to install."
+          lede={`Open ${PRODUCT_NAMES.chat}, sign in, and send your first message. It runs in your browser, with nothing to install.`}
           ctas={[
             { href: WEB_ENTRY_HREF, label: 'Try chat' },
             { href: '/download', label: 'Check availability', variant: 'secondary' },

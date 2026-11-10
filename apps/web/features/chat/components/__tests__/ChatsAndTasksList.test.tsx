@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { ChatsAndTasksList, formatListTime } from '../ChatsAndTasksList';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 const NOW = new Date('2026-10-22T12:00:00Z').getTime();
 const MINUTE = 60_000;
@@ -157,16 +158,16 @@ describe('Chats and tasks page', () => {
     render(<ChatsAndTasksList />);
 
     const recent = screen.getByRole('link', { name: /Compile vendor list/ });
-    expect(recent.textContent).toContain('AGI Work');
+    expect(recent.textContent).toContain(`${PRODUCT_NAMES.work}`);
     expect(recent.textContent).toContain('Needs you');
     expect(screen.getByTestId('chats-activity-task-recent')).toBeTruthy();
 
     const quiet = screen.getByRole('link', { name: /Draft launch email/ });
-    expect(quiet.textContent).toContain('AGI Work');
+    expect(quiet.textContent).toContain(`${PRODUCT_NAMES.work}`);
     expect(screen.queryByTestId('chats-activity-task-quiet')).toBeNull();
 
     const chat = screen.getByRole('link', { name: /Greeting/ });
-    expect(chat.textContent).not.toContain('AGI Work');
+    expect(chat.textContent).not.toContain(`${PRODUCT_NAMES.work}`);
     expect(chat.getAttribute('href')).toBe('/chat/chat-greeting');
   });
 

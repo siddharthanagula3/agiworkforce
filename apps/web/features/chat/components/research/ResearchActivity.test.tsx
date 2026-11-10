@@ -3,6 +3,12 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { MessageResearchState } from '@shared/stores/web-chat-store';
 
+vi.mock('@/features/chat/hooks/use-browser-reply-ready-preference', async () => {
+  const { NOTIFICATION_DEFAULTS } =
+    await import('@/features/settings/lib/notification-preferences');
+  return { useBrowserReplyReadyPreference: () => NOTIFICATION_DEFAULTS.browserReplyReady };
+});
+
 import { ResearchActivity } from './ResearchActivity';
 import {
   ResearchRunControlsProvider,

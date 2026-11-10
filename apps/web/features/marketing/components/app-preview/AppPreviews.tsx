@@ -495,13 +495,6 @@ export function DesktopAppPreview({
   );
 }
 
-const PANEL_SUGGESTIONS = [
-  'Summarize this page',
-  'Explain this page in simple terms',
-  'Pull out the names, dates and numbers',
-  'Translate this page',
-];
-
 function SidePanel() {
   return (
     <div className="agi-app-panel">
@@ -512,14 +505,6 @@ function SidePanel() {
       </div>
       <div className="agi-app-panel-empty">
         <AgiMark className="agi-app-panel-mark" />
-        <div className="agi-app-panel-suggestions">
-          {PANEL_SUGGESTIONS.map((text) => (
-            <span key={text} className="agi-app-panel-suggestion">
-              <FileText className="agi-app-icon" />
-              {text}
-            </span>
-          ))}
-        </div>
       </div>
       <div className="agi-app-panel-composer">
         <span className="agi-app-panel-placeholder">How can I help you today?</span>
@@ -702,7 +687,7 @@ export function EditorAppPreview({ className }: { className?: string }) {
             </div>
           </div>
           <div className="agi-app-view-composer">
-            <span className="agi-app-view-placeholder">Ask anything…</span>
+            <span className="agi-app-view-placeholder">Ask AGI to do anything…</span>
             <div className="agi-app-view-bar">
               <Plus className="agi-app-icon" />
               <Slash className="agi-app-icon" />

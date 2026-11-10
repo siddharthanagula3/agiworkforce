@@ -40,9 +40,14 @@ interface MockSubscription {
   cancel_at_period_end?: boolean;
 }
 
+const PLAN_LABEL = {
+  max: getBillingPlanPricing('max').label,
+  pro: getBillingPlanPricing('pro').label,
+} as const;
+
 let mockSubscription: MockSubscription = {
   tier: 'pro',
-  display_name: 'Pro',
+  display_name: `${PLAN_LABEL.pro}`,
   status: 'active',
   current_period_end: 1_800_000_000,
 };
@@ -66,14 +71,13 @@ vi.mock('@shared/stores/web-auth-store', () => ({
 }));
 
 import { BillingSection } from '../BillingSection';
-
 const originalFetch = global.fetch;
 
 beforeEach(() => {
   vi.clearAllMocks();
   mockSubscription = {
     tier: 'pro',
-    display_name: 'Pro',
+    display_name: `${PLAN_LABEL.pro}`,
     status: 'active',
     current_period_end: 1_800_000_000,
     subscription_source: 'stripe',
@@ -302,7 +306,7 @@ describe('BillingSection', () => {
     );
   }
 
-  it('keeps a yearly Pro subscriber on what they bought and says nothing changes', async () => {
+  it(`keeps a yearly ${PLAN_LABEL.pro} subscriber on what they bought and says nothing changes`, async () => {
     global.fetch = planStateFetch();
 
     render(<BillingSection />);
@@ -311,12 +315,12 @@ describe('BillingSection', () => {
     expect(screen.queryByText('$20/mo')).toBeNull();
     expect(
       screen.getByText(
-        'If you already pay yearly for Pro, nothing changes. Your subscription keeps its price and renews yearly until you switch to monthly or cancel. Once you switch to monthly, yearly billing is no longer available for that plan.',
+        `If you already pay yearly for ${PLAN_LABEL.pro}, nothing changes. Your subscription keeps its price and renews yearly until you switch to monthly or cancel. Once you switch to monthly, yearly billing is no longer available for that plan.`,
       ),
     ).toBeTruthy();
   });
 
-  it('switches a yearly Pro subscriber to monthly billing at renewal after confirming', async () => {
+  it(`switches a yearly ${PLAN_LABEL.pro} subscriber to monthly billing at renewal after confirming`, async () => {
     const fetchMock = planStateFetch(() => ({
       ...YEARLY_PRO_STATE,
       scheduledChange: {
@@ -331,10 +335,16 @@ describe('BillingSection', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Switch to monthly billing' }));
     const confirmation = await screen.findByRole('alertdialog');
-    expect(confirmation).toHaveTextContent(/yearly billing is no longer available for Pro/);
+    expect(confirmation).toHaveTextContent(
+      new RegExp(`yearly billing is no longer available for ${PLAN_LABEL.pro}`),
+    );
     fireEvent.click(within(confirmation).getByRole('button', { name: 'Switch to monthly' }));
 
-    expect(await screen.findByText(/Your Pro plan switches to monthly billing on/)).toBeTruthy();
+    expect(
+      await screen.findByText(
+        new RegExp(`Your ${PLAN_LABEL.pro} plan switches to monthly billing on`),
+      ),
+    ).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Keep yearly billing' })).toBeTruthy();
     const post = fetchMock.mock.calls.find(
       ([url, init]) => String(url).includes('downgrade-preview') && init?.method === 'POST',
@@ -465,15 +475,18 @@ describe('BillingSection', () => {
     await waitFor(() => expect(billingMocks.startTopUpCheckout).toHaveBeenCalledWith(60));
   });
 
-  it('tells a Pro subscriber which plan gives more credits per dollar than a pack', () => {
+  it(`tells a ${PLAN_LABEL.pro} subscriber which plan gives more credits per dollar than a pack`, () => {
     global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({}) }) as Response);
     render(<BillingSection />);
 
     const block = within(screen.getByRole('region', { name: 'Buy credits' }));
     expect(
-      block.getByText('Max 5x gives you 2x more credits per dollar than this pack.'),
+      block.getByText(`${PLAN_LABEL.max} gives you 2x more credits per dollar than this pack.`),
     ).toBeTruthy();
-    expect(block.getByRole('link', { name: 'See Max 5x' })).toHaveAttribute('href', '/upgrade/max');
+    expect(block.getByRole('link', { name: `See ${PLAN_LABEL.max}` })).toHaveAttribute(
+      'href',
+      '/upgrade/max',
+    );
   });
 
   it('keeps packs off sale for a Free account and points it at the plans instead', () => {
@@ -490,7 +503,7 @@ describe('BillingSection', () => {
     expect(block.getByText('Credit packs are available on paid plans.')).toBeTruthy();
     expect(block.queryByRole('radio')).toBeNull();
     expect(
-      block.getByText('Pro gives you 2x more credits per dollar than a credit pack.'),
+      block.getByText(`${PLAN_LABEL.pro} gives you 2x more credits per dollar than a credit pack.`),
     ).toBeTruthy();
     expect(block.getByRole('link', { name: 'Compare plans' })).toHaveAttribute('href', '/pricing');
   });
@@ -732,7 +745,7 @@ describe('past-due payment notice', () => {
   it('stays silent on a healthy subscription', async () => {
     mockSubscription = { ...mockSubscription, status: 'active' };
     render(<BillingSection />);
-    await waitFor(() => expect(screen.getByText(/Pro/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(new RegExp(PLAN_LABEL.pro))).toBeTruthy());
     expect(screen.queryByText(/did not go through/)).toBeNull();
   });
 });

@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import type { HostBridge } from '@agiworkforce/local-runtime-contract';
 import { DesktopUpdateRow } from '../components/DesktopUpdateRow';
 import { hostBridgeStub } from '@/test/host-bridge-stub';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 function installHost(overrides: Partial<HostBridge> = {}): HostBridge {
   const host: HostBridge = {
@@ -184,13 +185,15 @@ describe('DesktopUpdateRow', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Relaunch to update' }));
 
     const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent('AGI Desktop could not restart to install the update.');
+    expect(alert).toHaveTextContent(
+      `${PRODUCT_NAMES.desktop} could not restart to install the update.`,
+    );
     expect(alert).not.toHaveTextContent('Error invoking remote method');
     expect(screen.getByRole('button', { name: 'Relaunch to update' })).toBeEnabled();
   });
 
   it.each([
-    ['deferred', 'status', 'The update will install the next time AGI Desktop quits.'],
+    ['deferred', 'status', `The update will install the next time ${PRODUCT_NAMES.desktop} quits.`],
     ['not-ready', 'alert', 'The update has not finished downloading.'],
   ] as const)('says what happened when the restart is %s', async (outcome, role, text) => {
     installHost({
@@ -237,7 +240,7 @@ describe('DesktopUpdateRow', () => {
   it('reports a failed check without claiming the app is current', async () => {
     installHost({
       checkForUpdate: async () => {
-        throw new Error('AGI Desktop update information is unavailable (503).');
+        throw new Error(`${PRODUCT_NAMES.desktop} update information is unavailable (503).`);
       },
     });
     render(<DesktopUpdateRow />);
@@ -245,7 +248,7 @@ describe('DesktopUpdateRow', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent(
-        'AGI Desktop update information is unavailable (503).',
+        `${PRODUCT_NAMES.desktop} update information is unavailable (503).`,
       );
     });
     expect(screen.queryByRole('status')).toBeNull();

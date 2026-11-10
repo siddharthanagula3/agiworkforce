@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { PRIVACY_MODE_DISPLAY } from '@agiworkforce/types';
+
+const CLOUD = PRIVACY_MODE_DISPLAY.managed.label;
 
 /**
  * /chrome-extension used to say "Inference in Chrome: None" and "AGI in Chrome
@@ -38,10 +41,10 @@ describe('the chrome-extension page describes the boundary the code implements',
     expect(chromePage).not.toMatch(/never runs models\b/);
   });
 
-  it('names Managed Cloud as the computer-use destination, as the sibling page does', () => {
+  it(`names ${CLOUD} as the computer-use destination, as the sibling page does`, () => {
     const collapse = (source: string) => source.replace(/\s+/g, ' ');
-    expect(collapse(chromePage)).toMatch(/Managed Cloud gateway directly/);
-    expect(collapse(permissionsPage)).toMatch(/calls the Managed Cloud gateway directly/);
+    expect(collapse(chromePage)).toMatch(new RegExp(`${CLOUD} gateway directly`));
+    expect(collapse(permissionsPage)).toMatch(new RegExp(`calls the ${CLOUD} gateway directly`));
   });
 
   it('says screenshots leave the browser, because they do', () => {

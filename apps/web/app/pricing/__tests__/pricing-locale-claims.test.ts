@@ -9,6 +9,7 @@ import {
   BILLING_PLAN_PRODUCT_LIMITS,
   MANAGED_USAGE_LIMITS,
   normalizeUIPlanTier,
+  PRIVACY_MODE_DISPLAY,
 } from '@agiworkforce/types';
 import { describe, expect, it } from 'vitest';
 
@@ -230,7 +231,7 @@ describe('pricing locale bundles, plan feature claims', () => {
       const minutes = sandboxTtlMs / 60_000;
       const run = minutes > 60 && minutes % 60 === 0 ? `${minutes / 60}-hour` : `${minutes}-minute`;
       expect(individualPlanFeatures(plan, t), `${plan} card`).toContain(
-        `${maxScheduledTasks} scheduled tasks and ${run} managed sandboxes`,
+        `${maxScheduledTasks} scheduled tasks and ${run} sandboxes`,
       );
     }
   });
@@ -274,7 +275,9 @@ describe('pricing locale bundles, enterprise capacity claims', () => {
 
     const bundle = pricingBundles().find(([locale]) => locale === 'en');
     expect(bundle).toBeDefined();
-    expect(bundle![1]['compareEnterpriseUsage']).toBe('Managed usage set by your contract');
+    expect(bundle![1]['compareEnterpriseUsage']).toBe(
+      `${PRIVACY_MODE_DISPLAY.managed.label} usage set by your contract`,
+    );
   });
 
   it('promises dedicated or reserved capacity in no language', () => {

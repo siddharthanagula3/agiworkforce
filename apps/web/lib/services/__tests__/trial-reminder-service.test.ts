@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { getBillingPlanPricing } from '@agiworkforce/types';
 import type { Stripe } from '@/lib/stripe-types';
 type BillingNoticeModule = typeof import('@/lib/services/billing-notice-service');
 type LoggerModule = typeof import('@/lib/logger');
@@ -242,7 +243,7 @@ describe('readTrialCancellation', () => {
 
     expect(await readTrialCancellation(openDb, token)).toEqual({
       state: 'trialing',
-      plan: 'Pro',
+      plan: getBillingPlanPricing(TRIAL.plan_tier).label,
       endsOn: 'October 4, 2026 at 12:00 PM UTC',
       token,
     });

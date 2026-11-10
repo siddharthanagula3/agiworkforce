@@ -465,7 +465,7 @@ describe('an agent working several conversations keeps each one separate', () =>
                 at: '2026-11-08T10:00:06.000Z',
               },
             ],
-            citations: [{ title: 'Sign in help' }],
+            citations: [{ title: 'Sign in help', url: '/help/sign-in' }],
             accountContext: {
               signedIn: true,
               userId: null,

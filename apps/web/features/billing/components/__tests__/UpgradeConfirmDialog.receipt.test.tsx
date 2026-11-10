@@ -201,13 +201,13 @@ describe('UpgradeConfirmDialog order details', () => {
     );
 
     const confirm = await screen.findByRole('button', { name: /pay \$85\.96/i });
-    expect(confirm.querySelector('.animate-spin')).toBeNull();
+    expect(confirm.querySelector('.agi-mark-spin')).toBeNull();
     fireEvent.click(confirm);
 
     const busy = await screen.findByRole('button', { name: /Upgrading/ });
     expect(busy).toHaveAttribute('aria-busy', 'true');
     expect(busy).toBeDisabled();
-    expect(busy.querySelector('.animate-spin')).not.toBeNull();
+    expect(busy.querySelector('.agi-mark-spin')).not.toBeNull();
     expect(within(busy).getByText(/Upgrading/)).toBeTruthy();
   });
 });

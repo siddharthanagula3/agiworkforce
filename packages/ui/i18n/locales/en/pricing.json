@@ -141,7 +141,7 @@
   "basicCta": "Get Basic",
   "perMonthBilledMonthly": "per month, billed monthly",
   "proTierBody": "For daily work, with research and image generation.",
-  "proFeature2": "4 chats at once and up to 150 connector tools",
+  "proFeature2": "3 chats at once and up to 150 connector tools",
   "proCta": "Get {{plan}}",
   "maxTierBody": "For intensive daily work that needs the flagship models.",
   "maxFeature2": "Priority access during high-traffic periods",

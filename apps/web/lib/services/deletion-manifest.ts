@@ -121,6 +121,7 @@ const OPERATIONAL_RECORD = [
   'account_security_sessions',
   'account_security_settings',
   'account_sessions',
+  'admin_account_actions',
   'admin_request_idempotency',
   'agent_approval_requests',
   'agent_tools',

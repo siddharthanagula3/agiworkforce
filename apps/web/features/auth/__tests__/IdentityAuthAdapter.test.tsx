@@ -70,6 +70,7 @@ vi.mock('@/features/desktop-host/lib/browser-sign-in', async (importOriginal) =>
 import { useIdentityAuthClient } from '../IdentityAuthAdapter';
 import type { AuthMode } from '../authContract';
 import { AUTH_ERROR_SOURCE_COPY } from '@/lib/auth/error-taxonomy.copy';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 const REDIRECTS = {
   completeUrl: '/login/complete?redirectTo=%2Fchat',
@@ -1496,7 +1497,7 @@ it('offers an update instead of starting uncancellable browser sign-in on an old
   window.agiHost = hostBridgeStub({ browserSignIn: undefined });
   expect(await client('login').current.startProvider('google')).toMatchObject({
     status: 'failed',
-    message: expect.stringContaining('Update AGI Desktop'),
+    message: expect.stringContaining(`Update ${PRODUCT_NAMES.desktop}`),
   });
   expect(browserSignIn.begin).not.toHaveBeenCalled();
   expect(signInState.sso).not.toHaveBeenCalled();

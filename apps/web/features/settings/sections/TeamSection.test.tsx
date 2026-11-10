@@ -263,6 +263,7 @@ vi.mock('./team/SSOPanel', () => ({ SSOPanel: () => null }));
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { TeamSection } from './TeamSection';
 import { SettingsSectionNavigationProvider } from '../components/SettingsSectionLink';
+import { getBillingPlanPricing } from '@agiworkforce/types';
 
 describe('TeamSection', () => {
   beforeEach(() => {
@@ -454,7 +455,11 @@ describe('TeamSection', () => {
 
     expect(screen.getByText(/requires a Team or Enterprise plan/i)).toBeVisible();
     expect(screen.getByText(/Choose at least 2 Team seats/i)).toBeVisible();
-    expect(screen.getByText(/Your current plan is Max 20x\./i)).toBeVisible();
+    expect(
+      screen.getByText(
+        new RegExp(`Your current plan is ${getBillingPlanPricing('max_15x').label}\\.`, 'i'),
+      ),
+    ).toBeVisible();
     expect(screen.queryByText(/Max_15x/)).toBeNull();
     expect(screen.queryByRole('button', { name: 'Create workspace' })).toBeNull();
     expect(screen.getByRole('link', { name: 'Choose Team seats' })).toHaveAttribute(

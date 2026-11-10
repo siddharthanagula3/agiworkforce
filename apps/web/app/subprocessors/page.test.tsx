@@ -11,6 +11,9 @@ vi.mock('@/features/marketing/components/MarketingFooter', () => ({
 }));
 
 import SubprocessorsPage from './page';
+import { PRIVACY_MODE_DISPLAY } from '@agiworkforce/types';
+
+const CLOUD = PRIVACY_MODE_DISPLAY.managed.label;
 
 const SOURCE = readFileSync(path.join(__dirname, 'page.tsx'), 'utf8');
 
@@ -43,8 +46,12 @@ describe('SubprocessorsPage', () => {
     expect(screen.getByText('OpenAI (dictation and Voice Mode)')).toBeInTheDocument();
 
     const copy = flatCopy();
-    expect(copy).toMatch(/Workers AI: an inference route that can serve a Managed Cloud chat/);
-    expect(copy).toMatch(/Vercel AI Gateway: an inference route that can serve a Managed Cloud/);
+    expect(copy).toMatch(
+      new RegExp(`Workers AI: an inference route that can serve a ${CLOUD} chat`),
+    );
+    expect(copy).toMatch(
+      new RegExp(`Vercel AI Gateway: an inference route that can serve a ${CLOUD}`),
+    );
   });
 
   it('states the condition under which a gateway route carries a request, rather than implying every one does', () => {
@@ -69,7 +76,7 @@ describe('SubprocessorsPage', () => {
     render(<SubprocessorsPage />);
 
     expect(declaredRecipients()).not.toContain('MiniMax, Qwen and Zhipu');
-    expect(flatCopy()).toMatch(/No MiniMax route is admitted for Managed Cloud traffic/);
+    expect(flatCopy()).toMatch(new RegExp(`No MiniMax route is admitted for ${CLOUD} traffic`));
   });
 
   it('dates the last review of the list to the day the latest correction was found, not to the page revision', () => {

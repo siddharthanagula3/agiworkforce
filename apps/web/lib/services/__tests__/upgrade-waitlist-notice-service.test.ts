@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { PRODUCT_BRAND, getBillingPlanPricing } from '@agiworkforce/types';
 import {
   UNATTENDED_RUN_DENIED_STATUSES,
   ownerMayRunUnattendedSql,
@@ -136,17 +137,16 @@ describe('notifyUpgradeWaitlist', () => {
       emailChannel: 'available',
     });
 
+    const joinedPlans = `${getBillingPlanPricing('basic').label} or ${getBillingPlanPricing('pro').label}`;
     const notice = mocks.record.mock.calls[0]?.[1];
     expect(notice).toMatchObject({
       userId: 'user-1',
-      title: 'You can now upgrade to Basic or Pro',
-      message:
-        'Paid upgrades are open on AGI. You joined the waitlist for Basic or Pro, and you can upgrade now.',
+      title: `You can now upgrade to ${joinedPlans}`,
+      message: `Paid upgrades are open on ${PRODUCT_BRAND}. You joined the waitlist for ${joinedPlans}, and you can upgrade now.`,
       dedupeKey: `${UPGRADE_WAITLIST_OPEN_NOTICE}user-1`,
       action: { label: 'See plans', url: expect.stringMatching(/\/pricing$/) },
       promotion: {
-        reason:
-          'You are receiving this because you joined the AGI waitlist for Basic or Pro. It is the only email about that waitlist.',
+        reason: `You are receiving this because you joined the ${PRODUCT_BRAND} waitlist for ${joinedPlans}. It is the only email about that waitlist.`,
       },
     });
     expect(mocks.email).toHaveBeenCalledWith(db, notice);

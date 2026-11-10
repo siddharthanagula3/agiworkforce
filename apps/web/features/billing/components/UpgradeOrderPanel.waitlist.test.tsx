@@ -58,6 +58,12 @@ vi.mock('@shared/components/ServiceNotices', () => ({ ServiceNotices: () => null
 
 import { CheckoutRequiredError } from '../services/stripe-payments';
 import { UpgradeOrderPanel } from './UpgradeOrderPanel';
+import { getBillingPlanPricing } from '@agiworkforce/types';
+
+const PLAN_LABEL = {
+  max: getBillingPlanPricing('max').label,
+  max_15x: getBillingPlanPricing('max_15x').label,
+} as const;
 
 describe('UpgradeOrderPanel waitlist', () => {
   beforeEach(() => {
@@ -76,13 +82,15 @@ describe('UpgradeOrderPanel waitlist', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Join upgrade waitlist' }));
     expect(
-      await screen.findByRole('heading', { name: 'You’re on the Max 5x waitlist' }),
+      await screen.findByRole('heading', { name: `You’re on the ${PLAN_LABEL.max} waitlist` }),
     ).toBeVisible();
 
     view.rerender(<UpgradeOrderPanel plan="max_15x" returnPath="/upgrade/max_15x" />);
 
     expect(
-      await screen.findByRole('heading', { name: 'Join the Max 20x upgrade waitlist' }),
+      await screen.findByRole('heading', {
+        name: `Join the ${PLAN_LABEL.max_15x} upgrade waitlist`,
+      }),
     ).toBeVisible();
     expect(screen.getByRole('button', { name: 'Join upgrade waitlist' })).toBeEnabled();
     expect(screen.queryByText(/when you can upgrade to Max 20x/)).toBeNull();
@@ -91,7 +99,7 @@ describe('UpgradeOrderPanel waitlist', () => {
     view.rerender(<UpgradeOrderPanel plan="max" returnPath="/upgrade/max" />);
 
     expect(
-      await screen.findByRole('heading', { name: 'You’re on the Max 5x waitlist' }),
+      await screen.findByRole('heading', { name: `You’re on the ${PLAN_LABEL.max} waitlist` }),
     ).toBeVisible();
   });
 });

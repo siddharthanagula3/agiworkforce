@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   getRoutingSlotModel,
   NOTEBOOK_TEMPLATE_ID,
+  PRODUCT_NAMES,
   type CloudCodeSession,
 } from '@agiworkforce/types';
 import {
@@ -741,7 +742,7 @@ describe('CloudCodePage', () => {
     expect(screen.getByTestId('code-first-run')).toBeInTheDocument();
   });
 
-  it('shows an upgrade screen, not a composer, when the plan does not include AGI Code', async () => {
+  it('shows an upgrade screen, not a composer, when the plan does not include Code', async () => {
     const api = createApi({
       list: vi.fn(async () => ({
         availability: { ...availability, planEntitled: false, planTier: 'free', maxSessions: 1 },
@@ -752,7 +753,7 @@ describe('CloudCodePage', () => {
     render(<CloudCodePage api={api} />);
 
     expect(
-      await screen.findByRole('heading', { name: 'AGI Code is on paid plans' }),
+      await screen.findByRole('heading', { name: `${PRODUCT_NAMES.code} is on paid plans` }),
     ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Upgrade' })).toHaveAttribute('href', '/upgrade');
     expect(
@@ -761,7 +762,7 @@ describe('CloudCodePage', () => {
     expect(screen.queryByRole('heading', { name: /What's up next/ })).not.toBeInTheDocument();
   });
 
-  it('shows no upgrade screen to a plan that includes AGI Code', async () => {
+  it('shows no upgrade screen to a plan that includes Code', async () => {
     render(<CloudCodePage api={createApi()} />);
 
     await screen.findByRole('heading', { name: "What's up next, Ada?" });
@@ -939,7 +940,9 @@ describe('CloudCodePage', () => {
     render(<CloudCodePage api={api} />);
 
     const wizard = await screen.findByTestId('code-first-run');
-    expect(within(wizard).getByRole('heading', { name: 'Set up AGI Code' })).toBeInTheDocument();
+    expect(
+      within(wizard).getByRole('heading', { name: `Set up ${PRODUCT_NAMES.code}` }),
+    ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'More' })).not.toBeInTheDocument();
     expect(api.list).toHaveBeenCalledWith('all', expect.anything());
 

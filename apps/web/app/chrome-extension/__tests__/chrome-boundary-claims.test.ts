@@ -1,6 +1,9 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { PRIVACY_MODE_DISPLAY } from '@agiworkforce/types';
+
+const CLOUD = PRIVACY_MODE_DISPLAY.managed.label;
 
 /**
  * Claim guard for /chrome-extension, the page that describes where extension
@@ -98,9 +101,9 @@ describe('/chrome-extension, transmission claims', () => {
     expect(collapsed()).not.toMatch(/scoped task permissions|permissions scoped to the task/iu);
   });
 
-  it('names the Managed Cloud gateway as the destination reached from the extension', () => {
+  it(`names the ${CLOUD} gateway as the destination reached from the extension`, () => {
     const source = collapsed();
-    expect(source).toMatch(/Managed Cloud gateway/u);
+    expect(source).toMatch(new RegExp(`${CLOUD} gateway`, 'u'));
     expect(source).toMatch(/directly from the extension/iu);
   });
 
@@ -111,31 +114,31 @@ describe('/chrome-extension, transmission claims', () => {
     expect(source).toMatch(/account token/iu);
   });
 
-  it('states the screenshot and Managed Cloud boundary in the architecture introduction', () => {
+  it(`states the screenshot and ${CLOUD} boundary in the architecture introduction`, () => {
     const introduction = architectureLede();
     expect(introduction).toMatch(/computer use/iu);
-    expect(introduction).toMatch(/Managed Cloud/u);
+    expect(introduction).toMatch(new RegExp(`${CLOUD}`, 'u'));
     expect(introduction).toMatch(/screenshots/iu);
     expect(introduction).toMatch(/never stores provider keys/iu);
   });
 
   it('carries the exception where the page names its destinations', () => {
     const destinations = copyBlock('ARCHITECTURE_STEPS');
-    expect(destinations).toMatch(/Managed Cloud/u);
+    expect(destinations).toMatch(new RegExp(`${CLOUD}`, 'u'));
     expect(destinations).toMatch(/screenshot/iu);
   });
 
   it('carries the exception in the capabilities grid', () => {
     const capabilities = copyBlock('CAPABILITIES');
     expect(capabilities).toMatch(/computer use/iu);
-    expect(capabilities).toMatch(/Managed Cloud/u);
+    expect(capabilities).toMatch(new RegExp(`${CLOUD}`, 'u'));
   });
 
   it('carries an egress row in the boundary ledger', () => {
     const ledger = copyBlock('BOUNDARY_LEDGER');
     expect(ledger).toMatch(/Computer-use egress/u);
     expect(ledger).toMatch(/screenshot/iu);
-    expect(ledger).toMatch(/Managed Cloud gateway/u);
+    expect(ledger).toMatch(new RegExp(`${CLOUD} gateway`, 'u'));
   });
 
   it('scopes the Desktop key claim to Desktop', () => {
@@ -145,13 +148,13 @@ describe('/chrome-extension, transmission claims', () => {
     expect(keys![1]!).toMatch(/computer use/iu);
   });
 
-  it('names Managed Cloud as the chat destination, not the Desktop bridge', () => {
+  it(`names ${CLOUD} as the chat destination, not the Desktop bridge`, () => {
     const destinations = copyBlock('ARCHITECTURE_STEPS');
-    expect(destinations).toMatch(/AGI Managed Cloud/u);
+    expect(destinations).toMatch(new RegExp(`${CLOUD}`, 'u'));
     const ledger = copyBlock('BOUNDARY_LEDGER');
     const inference = /k: 'Inference in Chrome',\s*v:\s*'((?:[^'\\]|\\.)*)'/u.exec(ledger);
     expect(inference, 'Inference in Chrome row not found').not.toBeNull();
-    expect(inference![1]!).toMatch(/Managed Cloud/u);
+    expect(inference![1]!).toMatch(new RegExp(`${CLOUD}`, 'u'));
   });
 
   it('sends the reader to the page that details the residual screenshot risk', () => {
@@ -162,9 +165,9 @@ describe('/chrome-extension, transmission claims', () => {
 describe('/chrome-extension, consistency with /agent-permissions', () => {
   it('agrees with the permissions page on where computer-use inference happens', () => {
     const permissions = rendered(PERMISSIONS_PAGE).replace(/\s+/gu, ' ');
-    expect(permissions).toMatch(/Managed Cloud gateway/u);
+    expect(permissions).toMatch(new RegExp(`${CLOUD} gateway`, 'u'));
     expect(permissions).toMatch(/directly from the extension/iu);
-    expect(collapsed()).toMatch(/Managed Cloud gateway/u);
+    expect(collapsed()).toMatch(new RegExp(`${CLOUD} gateway`, 'u'));
   });
 
   it('does not soften the screenshot risk the permissions page states plainly', () => {

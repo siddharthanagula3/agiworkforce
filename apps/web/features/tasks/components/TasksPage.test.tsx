@@ -22,7 +22,7 @@ vi.mock('../services/cloud-tasks-client', () => ({
   setWebCloudTaskArchived: vi.fn(),
 }));
 
-import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
+import { AGENT_EVENT_SCHEMA_VERSION, PRODUCT_NAMES } from '@agiworkforce/types';
 import { TasksPage } from './TasksPage';
 import { useChatStore, PENDING_CONVERSATION_KEY } from '@shared/stores/web-chat-store';
 
@@ -83,7 +83,7 @@ describe('web TasksPage empty state', () => {
   it('offers a way forward when there are no tasks', async () => {
     render(<TasksPage />);
 
-    const start = await screen.findByRole('button', { name: 'Start AGI Work' });
+    const start = await screen.findByRole('button', { name: `Start ${PRODUCT_NAMES.work}` });
     await userEvent.click(start);
 
     await waitFor(() => expect(push).toHaveBeenCalledWith('/chat'));
@@ -92,7 +92,7 @@ describe('web TasksPage empty state', () => {
     ).toBe('agiwork');
   });
 
-  it('saves a finished AGI Work task as a routine by opening Schedules with its goal', async () => {
+  it(`saves a finished ${PRODUCT_NAMES.work} task as a routine by opening Schedules with its goal`, async () => {
     const RUN_ID = '0190a000-0000-7000-8000-00000000abce';
     search.value = `run=${RUN_ID}`;
     const run = {

@@ -29,7 +29,7 @@ describe('recordNotification', () => {
         target: { kind: 'schedule', id: 'task-1' },
         dedupeKey: 'schedule-run:run-1',
       }),
-    ).resolves.toEqual({ recorded: true });
+    ).resolves.toEqual({ recorded: true, failed: false });
 
     const [sql, params] = query.mock.calls[0]!;
     expect(sql).toContain(
@@ -57,7 +57,7 @@ describe('recordNotification', () => {
       message: 'Done.',
       dedupeKey: 'research:req-1',
     });
-    expect(result).toEqual({ recorded: false });
+    expect(result).toEqual({ recorded: false, failed: false });
   });
 
   it('drops a target no surface can open rather than storing a dead link', async () => {
@@ -84,7 +84,7 @@ describe('recordNotification', () => {
         title: 'Payment failed',
         message: 'Update your card.',
       }),
-    ).resolves.toEqual({ recorded: false });
+    ).resolves.toEqual({ recorded: false, failed: true });
   });
 
   it('skips a row with no owner or no title', async () => {
@@ -96,7 +96,7 @@ describe('recordNotification', () => {
         title: 'x',
         message: '',
       }),
-    ).resolves.toEqual({ recorded: false });
+    ).resolves.toEqual({ recorded: false, failed: false });
     expect(query).not.toHaveBeenCalled();
   });
 });

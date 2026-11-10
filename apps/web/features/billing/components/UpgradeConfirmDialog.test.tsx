@@ -58,6 +58,11 @@ vi.mock('../services/stripe-payments', () => {
 
 import { CheckoutRequiredError } from '../services/stripe-payments';
 import { UpgradeConfirmDialog } from './UpgradeConfirmDialog';
+import { getBillingPlanPricing } from '@agiworkforce/types';
+
+const PLAN_LABEL = {
+  max_15x: getBillingPlanPricing('max_15x').label,
+} as const;
 
 describe('UpgradeConfirmDialog', () => {
   it('discloses the full price when there is no paid Stripe charge to prorate', async () => {
@@ -75,7 +80,7 @@ describe('UpgradeConfirmDialog', () => {
     );
 
     const continueButton = await screen.findByRole('button', {
-      name: 'Start Max 20x · pay $200.00',
+      name: `Start ${PLAN_LABEL.max_15x} · pay $200.00`,
     });
     expect(screen.getByText(/no paid Stripe charge to credit/i)).toBeTruthy();
     expect(screen.getByText(/\$200\.00 today/i)).toBeTruthy();

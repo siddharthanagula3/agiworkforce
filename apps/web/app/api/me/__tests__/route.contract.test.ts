@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { MeResponseSchema } from '@agiworkforce/cloud-contracts';
+import { getBillingPlanPricing } from '@agiworkforce/types';
 
 vi.mock('server-only', () => ({}));
 vi.mock('@agiworkforce/types', async (importOriginal) => ({
@@ -196,7 +197,7 @@ describe('GET /api/me, shared cloud contract', () => {
     expect(parsed.plan.subscription_source).toBeUndefined();
   });
 
-  it('names the plan by its catalog label, so max_15x reads as Max 20x', async () => {
+  it('names the plan by its catalog label, so max_15x reads by its registry label', async () => {
     mockGetSubscription.mockResolvedValue({
       plan_tier: 'max_15x',
       status: 'active',
@@ -208,7 +209,7 @@ describe('GET /api/me, shared cloud contract', () => {
     const parsed = MeResponseSchema.parse(await res.json());
 
     expect(parsed.plan.tier).toBe('max_15x');
-    expect(parsed.plan.display_name).toBe('Max 20x');
+    expect(parsed.plan.display_name).toBe(getBillingPlanPricing('max_15x').label);
   });
 
   it.each([
