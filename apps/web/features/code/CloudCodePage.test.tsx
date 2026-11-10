@@ -3369,6 +3369,106 @@ describe('the environment the composer starts a session in', () => {
     }
   });
 
+  it('keeps a linked local session when its folder could not be read, and opens it on retry', async () => {
+    const user = userEvent.setup();
+    replace.mockClear();
+    host = {};
+    localGroups = [folder({ rootId: 'root-recent', sessions: [localSession] })];
+    listDeveloperSessions.mockResolvedValueOnce({
+      groups: [
+        folder({
+          rootId: 'root-recent',
+          sessions: [],
+          unavailable: { message: 'The session list timed out.', hint: 'Try again.' },
+        }),
+      ],
+    });
+    window.history.replaceState({}, '', '/code?local=root-recent&thread=thread-1');
+    try {
+      render(<CloudCodePage api={createApi()} />);
+
+      expect(await screen.findByText('The session list timed out. Try again.')).toBeInTheDocument();
+      expect(screen.queryByText('That coding session is not on this device any more.')).toBeNull();
+      expect(replace).not.toHaveBeenCalledWith('/code');
+
+      await user.click(screen.getByRole('button', { name: 'Retry' }));
+
+      expect(
+        await screen.findByRole('heading', { level: 1, name: 'Quote the readme' }),
+      ).toBeInTheDocument();
+      expect(screen.queryByText('The session list timed out. Try again.')).toBeNull();
+      expect(replace).not.toHaveBeenCalledWith('/code');
+    } finally {
+      window.history.replaceState({}, '', '/');
+    }
+  });
+
+  it('keeps a linked local session when the whole list read fails, then opens it on retry', async () => {
+    const user = userEvent.setup();
+    replace.mockClear();
+    host = {};
+    localGroups = [folder({ rootId: 'root-recent', sessions: [localSession] })];
+    listDeveloperSessions.mockRejectedValueOnce(new Error('bridge closed'));
+    window.history.replaceState({}, '', '/code?local=root-recent&thread=thread-1');
+    try {
+      render(<CloudCodePage api={createApi()} />);
+
+      expect(
+        await screen.findByText(
+          'The coding sessions on this device could not be read, so that one is not open yet.',
+        ),
+      ).toBeInTheDocument();
+      expect(screen.queryByText('That coding session is not on this device any more.')).toBeNull();
+      expect(replace).not.toHaveBeenCalledWith('/code');
+
+      await user.click(screen.getByRole('button', { name: 'Retry' }));
+
+      expect(
+        await screen.findByRole('heading', { level: 1, name: 'Quote the readme' }),
+      ).toBeInTheDocument();
+    } finally {
+      window.history.replaceState({}, '', '/');
+    }
+  });
+
+  it('keeps a linked local session while its folder withholds sessions, without a retry button', async () => {
+    replace.mockClear();
+    host = {};
+    localGroups = [folder({ rootId: 'root-recent', sessions: [], sessionsWithheld: true })];
+    window.history.replaceState({}, '', '/code?local=root-recent&thread=thread-1');
+    try {
+      render(<CloudCodePage api={createApi()} />);
+
+      expect(
+        await screen.findByText(
+          'Allow running commands in this folder to open that coding session.',
+        ),
+      ).toBeInTheDocument();
+      expect(screen.queryByText('That coding session is not on this device any more.')).toBeNull();
+      expect(replace).not.toHaveBeenCalledWith('/code');
+      expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+    } finally {
+      window.history.replaceState({}, '', '/');
+    }
+  });
+
+  it('says a linked local session is gone only after a complete list lacks it', async () => {
+    replace.mockClear();
+    host = {};
+    localGroups = [folder({ rootId: 'root-recent', sessions: [] })];
+    window.history.replaceState({}, '', '/code?local=root-recent&thread=thread-1');
+    try {
+      render(<CloudCodePage api={createApi()} />);
+
+      expect(
+        await screen.findByText('That coding session is not on this device any more.'),
+      ).toBeInTheDocument();
+      expect(replace).toHaveBeenCalledWith('/code');
+    } finally {
+      window.history.replaceState({}, '', '/');
+    }
+  });
+
   it('keeps what was typed in a local session for when it is opened again', async () => {
     const user = userEvent.setup();
     host = {};

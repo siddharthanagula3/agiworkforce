@@ -100,6 +100,7 @@ import {
   localSessionDeletedLine,
   localWorktreeRemovedLine,
   preferredLocalRootId,
+  resolveLocalRoute,
   startingModelId,
   type LocalPlacement,
 } from './local-code';
@@ -299,6 +300,7 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
   );
   const setLocalSession = useCallback(
     (next: LocalDeveloperSession | null) => {
+      routeLocalRef.current = null;
       if (
         localSelectionRef.current?.rootId !== next?.rootId ||
         localSelectionRef.current?.id !== next?.id
@@ -352,6 +354,7 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
   const railTriggerRef = useRef<HTMLButtonElement>(null);
   const hiddenProbeRef = useRef(false);
   const routeSessionRef = useRef<string | null>(sessionId ?? null);
+  const routeWaitingNotice = useRef<string | null>(null);
   const routeLocalRef = useRef<{ rootId: string; threadId: string } | null>(
     typeof window === 'undefined' || pane ? null : localSessionFromSearch(window.location.search),
   );
@@ -424,7 +427,10 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
     const next = sessionId ?? null;
     if (routeSessionRef.current === next) return;
     routeSessionRef.current = next;
-    if (next !== null) setRouteNotice(null);
+    if (next !== null) {
+      routeLocalRef.current = null;
+      setRouteNotice(null);
+    }
     if (selectionRef.current === next) return;
     setSelectedId(next);
     setTurns([]);
@@ -856,17 +862,29 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
   useEffect(() => {
     const wanted = routeLocalRef.current;
     if (wanted === null || !local.settled || local.loading) return;
+    const resolution = resolveLocalRoute(local.groups, wanted, local.error);
+    if (resolution.kind === 'waiting') {
+      routeWaitingNotice.current = resolution.notice;
+      setRouteNotice(resolution.notice);
+      return;
+    }
     routeLocalRef.current = null;
-    const found = local.groups
-      .find((group) => group.rootId === wanted.rootId)
-      ?.sessions.find((session) => session.id === wanted.threadId);
-    if (found) {
-      setLocalSession(found);
+    if (resolution.kind === 'found') {
+      const waiting = routeWaitingNotice.current;
+      routeWaitingNotice.current = null;
+      setRouteNotice((current) => (current === waiting ? null : current));
+      setLocalSession(resolution.session);
       return;
     }
     setRouteNotice(LOCAL_CODE_COPY.sessionNotFound);
     routerRef.current.replace(CODE_ROUTES.root);
-  }, [local.settled, local.loading, local.groups, setLocalSession]);
+  }, [local.settled, local.loading, local.groups, local.error, setLocalSession]);
+
+  const dismissRouteNotice = useCallback(() => {
+    routeLocalRef.current = null;
+    routeWaitingNotice.current = null;
+    setRouteNotice(null);
+  }, []);
 
   const openLocalSession = useCallback(
     (session: LocalDeveloperSession) => {
@@ -1584,10 +1602,16 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
           <TriangleAlert size={NOTICE_GLYPH_SIZE} aria-hidden="true" />
           <span>{routeNotice}</span>
           <span className={styles['noticeActions']}>
+            {routeNotice === routeWaitingNotice.current &&
+              routeNotice !== LOCAL_CODE_COPY.sessionWithheld && (
+                <button type="button" className={styles['secondaryButton']} onClick={local.refresh}>
+                  {CODE_COPY.retry}
+                </button>
+              )}
             <button
               type="button"
               className={styles['secondaryButton']}
-              onClick={() => setRouteNotice(null)}
+              onClick={dismissRouteNotice}
             >
               <X size={NOTICE_GLYPH_SIZE} aria-hidden="true" />
               {CODE_COPY.dismiss}

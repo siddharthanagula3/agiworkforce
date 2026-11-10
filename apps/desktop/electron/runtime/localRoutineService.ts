@@ -43,6 +43,7 @@ let engine: LocalRoutineEngine | null = null;
 let loading: Promise<LocalRoutineEngine> | null = null;
 let timer: ReturnType<typeof setInterval> | undefined;
 let quitting = false;
+let noticeSink: ((rootId: string, event: DeveloperSessionEvent) => void) | undefined;
 
 function authority(rootId: string): RoutineAuthority | null {
   const root = getRoot(rootId);
@@ -111,6 +112,13 @@ async function ownedEngine(): Promise<LocalRoutineEngine> {
             .turnId,
         cancel: async (rootId, threadId, turnId) => {
           await interruptOwnedDeveloperTurn(rootId, threadId, turnId);
+        },
+        deliverNotice: (rootId, event) => {
+          try {
+            noticeSink?.(rootId, event);
+          } catch (error) {
+            console.warn('[local-routines] deferred notice failed:', error);
+          }
         },
         keepAwake: () => {
           const id = powerSaveBlocker.start('prevent-app-suspension');
@@ -236,7 +244,10 @@ const suspended = () => {
 const resumed = () => {
   engine?.resume();
 };
-export async function startLocalRoutines(): Promise<void> {
+export async function startLocalRoutines(
+  deliver: (rootId: string, event: DeveloperSessionEvent) => void,
+): Promise<void> {
+  noticeSink = deliver;
   const owner = await ownedEngine();
   if (quitting || timer) return;
   powerMonitor.on('suspend', suspended);

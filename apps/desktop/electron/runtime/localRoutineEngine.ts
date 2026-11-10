@@ -131,6 +131,7 @@ export interface LocalRoutineDependencies {
   ): Promise<string>;
   cancel(rootId: string, threadId: string, turnId: string): Promise<void>;
   keepAwake(): () => void;
+  deliverNotice?(rootId: string, event: DeveloperSessionEvent): void;
 }
 
 const TERMINAL = new Set<LocalRoutineRun['state']>([
@@ -183,6 +184,11 @@ function lifecycleEvent(event: DeveloperSessionEvent): RoutineLifecycleEvent | n
   return null;
 }
 
+interface BufferedStartEvent {
+  lifecycle: RoutineLifecycleEvent;
+  event: DeveloperSessionEvent;
+}
+
 export class LocalRoutineEngine {
   private routines: LocalRoutine[];
   private suspended = false;
@@ -192,7 +198,7 @@ export class LocalRoutineEngine {
   private releases = new Map<string, () => void>();
   private pending = new Map<string, Set<string>>();
   private startRequests = new Set<string>();
-  private startEvents = new Map<string, RoutineLifecycleEvent[]>();
+  private startEvents = new Map<string, BufferedStartEvent[]>();
   private stopRequests = new Map<string, RoutineStopRequest>();
 
   constructor(
@@ -561,11 +567,20 @@ export class LocalRoutineEngine {
         if (run.state !== 'awaiting_input') run.state = 'running';
         const events = this.startEvents.get(run.id) ?? [];
         this.startEvents.delete(run.id);
-        for (const event of events) {
+        const notices: DeveloperSessionEvent[] = [];
+        for (const buffered of events) {
           if (TERMINAL.has(run.state)) break;
-          if (event.turnId === turnId) this.applyLifecycle(routine, run, event);
+          if (
+            buffered.lifecycle.turnId === turnId &&
+            this.applyLifecycle(routine, run, buffered.lifecycle)
+          )
+            notices.push(buffered.event);
         }
         this.persist();
+        for (const notice of notices) {
+          if (this.noticeIsCurrent(run, notice))
+            this.dependencies.deliverNotice?.(routine.rootId, notice);
+        }
         const stop = this.stopRequests.get(run.id);
         if (stop) await this.cancelRun(routine, run, stop);
       }
@@ -620,7 +635,7 @@ export class LocalRoutineEngine {
         notify = false;
         const events = this.startEvents.get(run.id) ?? [];
         if (events.length < PENDING_START_EVENT_LIMIT) {
-          events.push(lifecycle);
+          events.push({ lifecycle, event });
           this.startEvents.set(run.id, events);
         } else {
           this.requestStop(
@@ -640,6 +655,13 @@ export class LocalRoutineEngine {
       notify = this.applyLifecycle(routine, run, lifecycle);
     }
     return { notify };
+  }
+
+  private noticeIsCurrent(run: LocalRoutineRun, event: DeveloperSessionEvent): boolean {
+    if (event.type === 'turn-finished') return TERMINAL.has(run.state);
+    if (event.type === 'approval-requested' || event.type === 'user-input-requested')
+      return !TERMINAL.has(run.state) && this.pending.get(run.id)?.has(event.requestId) === true;
+    return false;
   }
 
   private applyLifecycle(
