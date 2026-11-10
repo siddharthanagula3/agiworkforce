@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process';
 import process from 'node:process';
+import { GIT_MAX_BUFFER } from './lib/git-output.mjs';
 
 const errors = [];
 const warnings = [];
@@ -9,7 +10,7 @@ function gitLines(args) {
   const result = spawnSync('git', args, {
     cwd: process.cwd(),
     encoding: 'utf8',
-    maxBuffer: 256 * 1024 * 1024,
+    maxBuffer: GIT_MAX_BUFFER,
   });
   if (result.status !== 0) {
     errors.push(`git ${args.join(' ')} failed: ${result.stderr.trim()}`);

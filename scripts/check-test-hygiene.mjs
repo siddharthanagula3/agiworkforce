@@ -12,6 +12,7 @@ import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { GIT_MAX_BUFFER } from './lib/git-output.mjs';
 
 export const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const BASELINE_PATH = 'scripts/config/test-hygiene.json';
@@ -68,7 +69,7 @@ function productFiles(root) {
   return execFileSync('git', ['ls-files', '-c', '-o', '--exclude-standard', '-z'], {
     cwd: root,
     encoding: 'utf8',
-    maxBuffer: 256 * 1024 * 1024,
+    maxBuffer: GIT_MAX_BUFFER,
   })
     .split('\0')
     .filter(Boolean);

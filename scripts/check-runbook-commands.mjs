@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { GIT_MAX_BUFFER } from './lib/git-output.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -237,7 +238,7 @@ function settingFiles(root) {
     const output = execFileSync(
       'git',
       ['ls-files', '-c', '-o', '--exclude-standard', '-z', '--', ...SETTING_ROOTS],
-      { cwd: root, encoding: 'utf8' },
+      { maxBuffer: GIT_MAX_BUFFER, cwd: root, encoding: 'utf8' },
     );
     return output
       .split('\0')

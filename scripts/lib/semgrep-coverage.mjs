@@ -7,6 +7,7 @@ import { Buffer } from 'node:buffer';
 import { setTimeout, clearTimeout } from 'node:timers';
 import { performance } from 'node:perf_hooks';
 import { spawn, execFileSync } from 'node:child_process';
+import { GIT_MAX_BUFFER } from './git-output.mjs';
 
 export const VERIFIED_STRUCTURAL_SEMGREP = '1.178.0';
 const MAX_REPORT_BYTES = 192 * 1024 * 1024;
@@ -523,7 +524,7 @@ export async function qualifyInternalCoverage({
     execFileSync('git', args, {
       cwd: root,
       encoding: 'utf8',
-      maxBuffer: 16 * 1024 * 1024,
+      maxBuffer: GIT_MAX_BUFFER,
       env: { PATH: process.env.PATH, GIT_OPTIONAL_LOCKS: '0' },
       stdio: ['ignore', 'pipe', 'pipe'],
     });

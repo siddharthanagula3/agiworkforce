@@ -6,6 +6,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { stripComments } from './lib/module-graph.mjs';
+import { GIT_MAX_BUFFER } from './lib/git-output.mjs';
 
 export const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 
@@ -126,9 +127,7 @@ export function loadDraftMigrations({ repoRoot = REPO_ROOT, appliedThrough } = {
       '--',
       `${MIGRATIONS_DIR}/*.sql`,
     ],
-    {
-      encoding: 'utf8',
-    },
+    { maxBuffer: GIT_MAX_BUFFER, encoding: 'utf8' },
   )
     .split('\0')
     .filter(Boolean)

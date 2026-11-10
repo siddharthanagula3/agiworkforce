@@ -11,6 +11,7 @@ import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import process from 'node:process';
+import { GIT_MAX_BUFFER } from './lib/git-output.mjs';
 
 const root = process.cwd();
 const LEDGER = 'audit/ledger/ecosystem-capability-ledger.jsonl';
@@ -249,10 +250,7 @@ function renderWaves(items, waveSections, files) {
           execFileSync(
             'git',
             ['ls-files', '-co', '--exclude-standard', '-z', '--', 'audit/blockers'],
-            {
-              cwd: root,
-              encoding: 'utf8',
-            },
+            { maxBuffer: GIT_MAX_BUFFER, cwd: root, encoding: 'utf8' },
           ).split('\0'),
         ),
       ]

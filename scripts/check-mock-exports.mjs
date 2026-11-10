@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { GIT_MAX_BUFFER } from './lib/git-output.mjs';
 
 export const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 
@@ -492,9 +493,7 @@ export function findSubjectFiles(repoRoot, testFileAbsolutePath, testText, mocke
         '--',
         toPosixPath(path.relative(repoRoot, testDir)),
       ],
-      {
-        encoding: 'utf8',
-      },
+      { maxBuffer: GIT_MAX_BUFFER, encoding: 'utf8' },
     )
       .split('\n')
       .filter(Boolean);

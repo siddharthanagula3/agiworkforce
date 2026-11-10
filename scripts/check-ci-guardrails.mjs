@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { spawnSync } from 'node:child_process';
+import { GIT_MAX_BUFFER } from './lib/git-output.mjs';
 
 const root = process.cwd();
 const errors = [];
@@ -292,10 +293,7 @@ const productionMutationPatterns = [
 const repositoryFiles = spawnSync(
   'git',
   ['ls-files', '--cached', '--others', '--exclude-standard', '-z'],
-  {
-    cwd: root,
-    encoding: 'utf8',
-  },
+  { maxBuffer: GIT_MAX_BUFFER, cwd: root, encoding: 'utf8' },
 );
 if (repositoryFiles.status !== 0) {
   errors.push('Unable to inventory repository files for production deployment bypasses');

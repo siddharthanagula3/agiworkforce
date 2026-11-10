@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { GIT_MAX_BUFFER } from './lib/git-output.mjs';
 
 const root = process.cwd();
 
@@ -130,15 +131,13 @@ const SKIP_CENSUS_PATTERNS = [
   },
 ];
 
-const MAX_GIT_OUTPUT_BYTES = 16 * 1024 * 1024;
-
 function gitText(args, cwd = root) {
   try {
     return execFileSync('git', args, {
       cwd,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
-      maxBuffer: MAX_GIT_OUTPUT_BYTES,
+      maxBuffer: GIT_MAX_BUFFER,
     });
   } catch (error) {
     throw new Error(`Git ${args[0]} failed (${error.code ?? error.status ?? 'unknown'})`);

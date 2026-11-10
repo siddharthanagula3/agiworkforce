@@ -6,6 +6,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import process from 'node:process';
 import { URL, fileURLToPath, pathToFileURL } from 'node:url';
+import { GIT_MAX_BUFFER } from './lib/git-output.mjs';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -442,6 +443,7 @@ function checkExampleContracts() {
   const parsed = new Map();
   const documentedByScope = new Map();
   const tracked = execFileSync('git', ['ls-files'], {
+    maxBuffer: GIT_MAX_BUFFER,
     cwd: REPO_ROOT,
     encoding: 'utf8',
   })
@@ -450,7 +452,7 @@ function checkExampleContracts() {
   const scannable = execFileSync(
     'git',
     ['ls-files', '--cached', '--others', '--exclude-standard'],
-    { cwd: REPO_ROOT, encoding: 'utf8' },
+    { maxBuffer: GIT_MAX_BUFFER, cwd: REPO_ROOT, encoding: 'utf8' },
   )
     .split(/\r?\n/)
     .filter(Boolean);
