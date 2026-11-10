@@ -2457,15 +2457,15 @@
       "lanes": [
         "chrome-extension"
       ],
-      "files": 538,
+      "files": 540,
       "roles": {
         "asset": 5,
         "config": 5,
         "doc": 3,
         "other": 29,
-        "source": 219,
+        "source": 220,
         "style": 2,
-        "test": 275
+        "test": 276
       }
     },
     {
@@ -2504,14 +2504,14 @@
       "lanes": [
         "vscode-extension"
       ],
-      "files": 384,
+      "files": 386,
       "roles": {
         "asset": 3,
         "config": 5,
         "doc": 8,
         "other": 4,
         "source": 187,
-        "test": 177
+        "test": 179
       }
     },
     {
@@ -2551,7 +2551,7 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 1633,
+      "files": 1639,
       "roles": {
         "asset": 6,
         "config": 10,
@@ -2560,7 +2560,7 @@
         "other": 46,
         "source": 895,
         "style": 1,
-        "test": 670
+        "test": 676
       }
     },
     {
@@ -2615,17 +2615,17 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 8252,
+      "files": 8273,
       "roles": {
         "asset": 57,
-        "config": 70,
+        "config": 76,
         "doc": 51,
         "generated": 2,
         "migration": 738,
         "other": 37,
-        "source": 3507,
+        "source": 3509,
         "style": 35,
-        "test": 3755
+        "test": 3768
       }
     },
     {
@@ -4004,11 +4004,11 @@
       "lanes": [
         "contracts-types"
       ],
-      "files": 165,
+      "files": 166,
       "roles": {
         "config": 7,
         "source": 100,
-        "test": 58
+        "test": 59
       }
     },
     {
@@ -4264,12 +4264,12 @@
       "lanes": [
         "contracts-types"
       ],
-      "files": 814,
+      "files": 815,
       "roles": {
         "config": 27,
         "generated": 485,
         "source": 173,
-        "test": 129
+        "test": 130
       }
     },
     {
@@ -4981,12 +4981,12 @@
       "lanes": [
         "chat-artifacts"
       ],
-      "files": 444,
+      "files": 445,
       "roles": {
         "config": 3,
         "source": 206,
         "style": 3,
-        "test": 232
+        "test": 233
       }
     },
     {
@@ -5024,12 +5024,12 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 719,
+      "files": 720,
       "roles": {
         "config": 67,
         "doc": 1,
         "other": 21,
-        "source": 374,
+        "source": 375,
         "test": 256
       }
     },
@@ -5052,13 +5052,13 @@
       "lanes": [
         "backend-services"
       ],
-      "files": 78,
+      "files": 79,
       "roles": {
         "config": 6,
         "doc": 1,
         "other": 4,
         "source": 28,
-        "test": 39
+        "test": 40
       }
     },
     {

@@ -10880,6 +10880,9 @@
     "best_color": [
       "apps/cli/src/tui/terminal_palette.rs"
     ],
+    "bestOccurrence": [
+      "apps/web/features/chat/components/artifacts/text-occurrence.ts"
+    ],
     "BETA_INVITE_EXPORT_SECTION": [
       "apps/web/lib/server/beta-invite-export-section.ts"
     ],
@@ -15886,6 +15889,9 @@
     "ChartDataEditor": [
       "apps/web/features/chat/components/artifacts/presentation/ChartDataEditor.tsx"
     ],
+    "ChartDisplay": [
+      "apps/web/features/chat/components/artifacts/presentation/chart-block.ts"
+    ],
     "chartFence": [
       "apps/web/features/chat/components/artifacts/presentation/chart-block.ts"
     ],
@@ -20793,6 +20799,9 @@
     "CloudCodeAgentTurnSchema": [
       "packages/contracts/cloud-contracts/src/cloud-code-sessions.ts"
     ],
+    "CloudCodeAgentTurnWindow": [
+      "apps/web/lib/services/cloud-code-session-service.ts"
+    ],
     "cloudCodeApi": [
       "apps/mobile/src/features/cloud-code/service.ts",
       "apps/web/features/code/index.ts",
@@ -21091,6 +21100,9 @@
     ],
     "CloudCodeRequestContext": [
       "packages/contracts/cloud-contracts/src/managed-cloud-code-client.ts"
+    ],
+    "cloudCodeRestoreRefusedGoal": [
+      "apps/mobile/src/features/cloud-code/presentation.ts"
     ],
     "CloudCodeRetrySafety": [
       "apps/web/lib/services/cloud-code-agent-loop.ts"
@@ -23342,6 +23354,9 @@
     ],
     "COMMENTS_LABEL": [
       "apps/web/features/chat/components/artifacts/comments/ArtifactCommentsPanel.tsx"
+    ],
+    "commentUiProps": [
+      "apps/web/features/chat/components/artifacts/comments/use-comment-highlights.ts"
     ],
     "COMMERCIAL_AGREEMENT_STATUSES": [
       "apps/web/lib/services/enterprise-contracts/index.ts",
@@ -30561,6 +30576,9 @@
     "createRun": [
       "apps/web/lib/services/developer-prompt-service.ts"
     ],
+    "createRunInputWatch": [
+      "apps/extension/src/features/computer-use/inputWatch.ts"
+    ],
     "createS3Client": [
       "packages/platform/object-storage/src/adapters/s3.ts",
       "packages/platform/object-storage/src/index.ts"
@@ -32529,6 +32547,9 @@
     ],
     "declaredTools": [
       "scripts/check-tool-registry.mjs"
+    ],
+    "declaredVersion": [
+      "apps/web/features/plugins/server/directory/entries.ts"
     ],
     "decline": [
       "apps/cli/src/trust/mod.rs",
@@ -34782,6 +34803,9 @@
     ],
     "denySupportAccess": [
       "apps/web/lib/server/support-access-service.ts"
+    ],
+    "dependenciesUnavailableMessage": [
+      "apps/web/features/plugins/server/directory/installed-dependents.ts"
     ],
     "DEPENDENCY_CATEGORIES": [
       "apps/web/lib/config/dependency-readiness.ts"
@@ -40891,6 +40915,7 @@
       "apps/web/app/github/connect/page.tsx",
       "apps/web/app/login/not-me/page.tsx",
       "apps/web/app/login/verify/page.tsx",
+      "apps/web/app/maintenance/page.tsx",
       "apps/web/app/open/[target]/[id]/page.tsx",
       "apps/web/app/operator/page.tsx",
       "apps/web/app/operator/support/page.tsx",
@@ -41010,6 +41035,9 @@
     ],
     "earliestExhaustedUsageResetAt": [
       "packages/contracts/types/src/work-usage.ts"
+    ],
+    "earliestPickerDateInZone": [
+      "apps/mobile/src/features/schedules/timing.ts"
     ],
     "ECONOMICS_GROUPINGS": [
       "apps/web/features/admin/services/economics-summary.ts"
@@ -41893,8 +41921,7 @@
       "apps/extension-vscode/src/__tests__/__mocks__/vscode.ts"
     ],
     "EMPTY_ASSISTANT_CONTENT_PLACEHOLDER": [
-      "apps/desktop/src/runtime/persistedCloudMessage.ts",
-      "apps/web/lib/hooks/useChatStream.ts"
+      "apps/desktop/src/runtime/persistedCloudMessage.ts"
     ],
     "EMPTY_BRIEF": [
       "apps/web/features/chat/components/artifacts/design/design-brief.ts"
@@ -41910,6 +41937,9 @@
     ],
     "EMPTY_INSTALL_STATE": [
       "apps/web/features/directory/services/plugins-directory.ts"
+    ],
+    "EMPTY_KEPT_ASSISTANT_CONTENT": [
+      "apps/web/lib/chat-kept-messages.ts"
     ],
     "EMPTY_LIVE_VOICE_CONTEXT": [
       "apps/web/app/api/voice/live/sessions/lib/live-voice-context.ts"
@@ -49138,6 +49168,9 @@
     "formatMaintenanceEnd": [
       "apps/web/lib/server/service-notices.ts"
     ],
+    "formatMaintenanceStart": [
+      "apps/web/lib/server/service-notices.ts"
+    ],
     "formatManagedMemorySystemPrompt": [
       "apps/web/lib/services/managed-memory-context-service.ts"
     ],
@@ -52916,6 +52949,9 @@
     "getCloudChatSurfaceCapability": [
       "apps/web/lib/free-chat-surface-policy.ts"
     ],
+    "getCloudCodeAgentTurn": [
+      "apps/web/lib/services/cloud-code-session-service.ts"
+    ],
     "getCloudCodeSession": [
       "apps/web/lib/services/cloud-code-session-service.ts"
     ],
@@ -54748,6 +54784,9 @@
     ],
     "git_log": [
       "apps/desktop/src-tauri/src/sys/commands/git.rs"
+    ],
+    "GIT_MAX_BUFFER": [
+      "scripts/lib/git-output.mjs"
     ],
     "GIT_METADATA_ENTRY": [
       "crates/agiworkforce-sandbox-policy/src/lib.rs",
@@ -56902,6 +56941,9 @@
     ],
     "hasCompatibleFreeErrorRecoveryModel": [
       "apps/web/features/chat/lib/free-error-model-recovery.ts"
+    ],
+    "hasCompletedMediaResult": [
+      "apps/web/lib/chat-kept-messages.ts"
     ],
     "hasConnectorLogo": [
       "packages/ui/ui/src/settings-modal/ConnectorLogo.tsx"
@@ -59427,6 +59469,9 @@
       "packages/ui/unified-chat/src/composer-editor/ime-composition.ts",
       "packages/ui/unified-chat/src/composer-editor/index.ts"
     ],
+    "immediateNotificationTrigger": [
+      "apps/mobile/services/notificationChannels.ts"
+    ],
     "Implementation": [
       "apps/desktop/src-tauri/src/core/mcp/protocol.rs",
       "crates/agiworkforce-mcp/src/lib.rs",
@@ -60400,6 +60445,9 @@
     ],
     "InputTransaction": [
       "apps/cli/src/terminals.rs"
+    ],
+    "InputWatchLease": [
+      "apps/extension/src/features/computer-use/inputWatch.ts"
     ],
     "inSeedOrder": [
       "apps/web/scripts/dev-accounts/catalog.ts"
@@ -63613,6 +63661,9 @@
     "isJobQueueName": [
       "apps/web/lib/jobs/job-queues.ts"
     ],
+    "isKeepableChatMessage": [
+      "apps/web/lib/chat-kept-messages.ts"
+    ],
     "isKeyRewrapState": [
       "packages/contracts/types/src/encryption-key.ts"
     ],
@@ -65740,6 +65791,9 @@
     "keepVoiceSessionAcrossNavigation": [
       "apps/web/features/chat/hooks/use-voice-session.ts"
     ],
+    "keptMessageContent": [
+      "apps/web/lib/chat-kept-messages.ts"
+    ],
     "KeptPlan": [
       "apps/web/lib/server/stripe-plan-change.ts"
     ],
@@ -66817,6 +66871,9 @@
     ],
     "lets_commands_write": [
       "apps/desktop/src-tauri/src/sys/commands/tool_confirmation.rs"
+    ],
+    "lettersOnly": [
+      "apps/web/features/chat/components/artifacts/text-occurrence.ts"
     ],
     "LEVEL_STATUS_LABELS": [
       "apps/mobile/src/features/settings/permissions/types.ts"
@@ -68490,6 +68547,12 @@
     ],
     "listTriggers": [
       "apps/web/lib/triggers/trigger-service.ts"
+    ],
+    "listUnmetMarketplaceDependencies": [
+      "apps/web/features/plugins/server/directory/installed-dependents.ts"
+    ],
+    "listUnmetRegistryDependencies": [
+      "apps/web/features/plugins/server/directory/installed-dependents.ts"
     ],
     "listUpgradeAccessCodes": [
       "apps/web/features/admin/services/operator-upgrade-access.ts"
@@ -70708,6 +70771,9 @@
     "LocalRewindTarget": [
       "apps/web/features/code/components/LocalRewindChooser.tsx"
     ],
+    "LocalRouteResolution": [
+      "apps/web/features/code/local-code.ts"
+    ],
     "LocalRoutine": [
       "packages/contracts/local-runtime/src/index.ts",
       "packages/contracts/local-runtime/src/local-routines.ts"
@@ -71517,6 +71583,12 @@
     ],
     "MaintenancePage": [
       "apps/web/app/maintenance/page.tsx"
+    ],
+    "MaintenancePhase": [
+      "apps/web/lib/server/service-notices.ts"
+    ],
+    "MaintenanceSchedule": [
+      "apps/web/lib/server/service-notices.ts"
     ],
     "maintenanceUnderway": [
       "apps/web/lib/server/service-notices.ts"
@@ -84636,6 +84708,12 @@
     "observeWorkspaceOwner": [
       "apps/web/features/workspaces/lib/workspace-admission.ts"
     ],
+    "OCCURRENCE_WINDOW": [
+      "apps/web/features/chat/components/artifacts/text-occurrence.ts"
+    ],
+    "OccurrenceContext": [
+      "apps/web/features/chat/components/artifacts/text-occurrence.ts"
+    ],
     "OcrRegion": [
       "apps/mobile/src/features/image/services/ocr.ts"
     ],
@@ -92032,6 +92110,9 @@
     "PLATFORM_KMS_REGION_ENV": [
       "apps/web/lib/crypto/platform-keys.ts"
     ],
+    "PLATFORM_LITERAL_ACCELERATORS": [
+      "scripts/check-shortcut-registry.mjs"
+    ],
     "PLATFORM_POLICY_REFUSAL": [
       "apps/web/lib/moderation/index.ts"
     ],
@@ -92921,6 +93002,9 @@
     ],
     "pluginDependenciesInstalledLine": [
       "apps/web/features/directory/constants.ts"
+    ],
+    "pluginDependenciesUnavailableResponse": [
+      "apps/web/features/plugins/server/directory/install-responses.ts"
     ],
     "PluginDependency": [
       "apps/cli/src/features/plugins/plugins.rs"
@@ -95498,6 +95582,9 @@
       "apps/web/features/desktop-host/index.ts",
       "apps/web/features/desktop-host/lib/deep-links.ts"
     ],
+    "PRODUCT_INSTALLED_NAMES": [
+      "packages/contracts/types/src/product-names.ts"
+    ],
     "PRODUCT_LINK_PATH_PREFIX": [
       "packages/contracts/types/src/index.ts",
       "packages/contracts/types/src/product-links.ts"
@@ -95728,6 +95815,9 @@
       "packages/contracts/types/src/product-analytics.ts"
     ],
     "ProductName": [
+      "packages/contracts/types/src/product-names.ts"
+    ],
+    "productNameWithArticle": [
       "packages/contracts/types/src/product-names.ts"
     ],
     "ProductNoticeCard": [
@@ -98730,6 +98820,9 @@
     "PushRegistrationIssue": [
       "apps/mobile/services/notifications.ts"
     ],
+    "PushTokenCleanupCredentialRejectedError": [
+      "apps/mobile/src/features/auth/services/signOutPushTokenCleanup.ts"
+    ],
     "PushTransports": [
       "apps/web/lib/services/push-notification-service.ts"
     ],
@@ -100015,6 +100108,9 @@
     "readCloudAgentRunBudget": [
       "apps/web/lib/services/cloud-agent-budget.ts"
     ],
+    "readCloudCodeAgentTurnWindow": [
+      "apps/web/lib/services/cloud-code-session-service.ts"
+    ],
     "readCloudCodeNotebookFile": [
       "apps/web/lib/services/cloud-code-session-service.ts"
     ],
@@ -100564,6 +100660,9 @@
     "readingSystemFailures": [
       "scripts/check-ui-typography.mjs"
     ],
+    "readInstalledNames": [
+      "scripts/check-product-names.mjs"
+    ],
     "readInstalledSkills": [
       "apps/web/features/plugins/server/directory/snapshot-cache.ts"
     ],
@@ -100681,6 +100780,9 @@
     ],
     "readLockdown": [
       "apps/web/app/api/llm/v1/chat/completions/lib/connector-tool-permissions.ts"
+    ],
+    "readMaintenanceSchedule": [
+      "apps/web/lib/server/service-notices.ts"
     ],
     "readManagedCloudAgentRunHandle": [
       "packages/contracts/cloud-contracts/src/managed-cloud-agent-runs-client.ts"
@@ -101118,6 +101220,9 @@
     ],
     "readQueueDepth": [
       "apps/web/features/admin/services/service-health-metrics.ts"
+    ],
+    "readRangeContext": [
+      "apps/web/features/chat/components/artifacts/comments/use-comment-highlights.ts"
     ],
     "readRateCard": [
       "scripts/check-money-paths.mjs"
@@ -102027,6 +102132,9 @@
     ],
     "recentMobileFiles": [
       "apps/mobile/src/features/search/mobileGlobalSearch.ts"
+    ],
+    "RecentRunsReadKind": [
+      "apps/mobile/src/features/schedules/store.ts"
     ],
     "RecentScheduleResults": [
       "apps/web/features/schedules/components/RecentScheduleResults.tsx"
@@ -108926,6 +109034,9 @@
     "resolveLocalModelRef": [
       "apps/mobile/src/features/model-picker/localModelRuntime.ts"
     ],
+    "resolveLocalRoute": [
+      "apps/web/features/code/local-code.ts"
+    ],
     "resolveLocalTurnPersonalContext": [
       "apps/web/lib/services/turn-context-service.ts"
     ],
@@ -112876,6 +112987,12 @@
     ],
     "runInlineCommand": [
       "apps/extension-vscode/src/core/runInlineCommand.ts"
+    ],
+    "RunInputWatch": [
+      "apps/extension/src/features/computer-use/inputWatch.ts"
+    ],
+    "RunInputWatchOptions": [
+      "apps/extension/src/features/computer-use/inputWatch.ts"
     ],
     "runKeyRewrap": [
       "apps/web/lib/crypto/cmek-lifecycle.ts"
@@ -136018,6 +136135,9 @@
     "unmetConstraint": [
       "apps/web/lib/services/plugin-dependencies.ts"
     ],
+    "UnmetDependency": [
+      "apps/web/features/plugins/server/directory/installed-dependents.ts"
+    ],
     "UNOWNED_FILE_SCOPE": [
       "packages/contracts/types/src/file-reference.ts",
       "packages/platform/files/src/index.ts"
@@ -143520,6 +143640,9 @@
     ],
     "windowAnswersUserInput": [
       "apps/desktop/electron/runtime/dispatcher.ts"
+    ],
+    "windowAround": [
+      "apps/web/features/chat/components/artifacts/text-occurrence.ts"
     ],
     "WindowArrangement": [
       "apps/desktop/electron/garnishCore.ts"

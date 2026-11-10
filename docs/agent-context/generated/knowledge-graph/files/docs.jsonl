@@ -107,7 +107,6 @@
 {"path":"docs/generated/provider-capability-matrix.md","unit":"docs","role":"generated","unparsed":"notCode"}
 {"path":"docs/generated/README.md","unit":"docs","role":"generated","unparsed":"notCode"}
 {"path":"docs/generated/trust-mode-surface-matrix.md","unit":"docs","role":"generated","unparsed":"notCode"}
-{"path":"docs/launch/QA_LEDGER.md","unit":"docs","role":"doc","unparsed":"oversize"}
 {"path":"docs/product/commercial.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/product/competitive-guidance.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/product/definition.md","unit":"docs","role":"doc","unparsed":"notCode"}
@@ -220,4 +219,5 @@
 {"path":"docs/standards/README.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/standards/service-layer.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/work/app-store-listing.md","unit":"docs","role":"doc","unparsed":"notCode"}
+{"path":"docs/work/QA_LEDGER.md","unit":"docs","role":"doc","unparsed":"oversize"}
 {"path":"docs/work/README.md","unit":"docs","role":"doc","unparsed":"notCode"}
