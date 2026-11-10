@@ -94,6 +94,21 @@ function readStringClaim(claims: Record<string, unknown>, key: string): string |
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
+const AUTHORIZED_PARTY_CLAIM = 'azp';
+
+/**
+ * The provider checks the authorized party only when it is handed the
+ * allowlist, and then refuses a token that has none. The admitting path
+ * verifies without the allowlist, so this is the only check left on that
+ * claim: absent passes, anything present must be a string on the allowlist.
+ */
+function authorizedPartyAbsentOrAllowed(claims: unknown, allowlist: readonly string[]): boolean {
+  if (!claims || typeof claims !== 'object') return false;
+  if (!(AUTHORIZED_PARTY_CLAIM in claims)) return true;
+  const party = (claims as Record<string, unknown>)[AUTHORIZED_PARTY_CLAIM];
+  return typeof party === 'string' && allowlist.includes(party);
+}
+
 function stripFapiHostPadding(value: string): string {
   let end = value.length;
   while (end > 0 && value[end - 1] === CLERK_FAPI_HOST_PADDING_CHAR) end -= 1;
@@ -311,11 +326,19 @@ export class ClerkIdentityProvider<Request = unknown> implements IdentityProvide
     // it lazily inside the try turned an unresolvable module into a silent 401
     // on every bearer request.
     const verify = this.config.verifyToken ?? clerkVerifyToken;
+    const admitMissingAuthorizedParty = options.admitMissingAuthorizedParty === true;
 
     let claims: Record<string, unknown>;
     try {
-      claims = (await verify(token, { secretKey, authorizedParties })) as Record<string, unknown>;
+      claims = (await verify(
+        token,
+        admitMissingAuthorizedParty ? { secretKey } : { secretKey, authorizedParties },
+      )) as Record<string, unknown>;
     } catch {
+      return null;
+    }
+
+    if (admitMissingAuthorizedParty && !authorizedPartyAbsentOrAllowed(claims, authorizedParties)) {
       return null;
     }
 

@@ -1011,8 +1011,8 @@ async function resolveVerifiedUserBucket(request: NextRequest): Promise<string |
     if (!token || token.startsWith('sk_live_') || token.startsWith('sk_test_')) return null;
 
     try {
-      const { verifyIdentitySessionToken } = await import('./server/identity');
-      const claims = await verifyIdentitySessionToken(token);
+      const { verifyRequestSessionToken } = await import('./server/native-session-token');
+      const claims = await verifyRequestSessionToken(request, token);
       return claims ? `user:${claims.subject}` : null;
     } catch {
       return null;
