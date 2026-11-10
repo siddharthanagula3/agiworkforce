@@ -16,6 +16,7 @@
     "./cn": "./src/cn.ts",
     "./dialog": "./src/primitives/Dialog.tsx",
     "./i18n": "./src/i18n.ts",
+    "./ime-composition": "./src/lib/ime-composition.ts",
     "./label": "./src/primitives/Label.tsx",
     "./search-shortcut": "./src/sidebar/searchShortcut.ts",
     "./sheet": "./src/primitives/Sheet.tsx",

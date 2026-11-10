@@ -475,6 +475,7 @@ describe('email editor ownership and completion', () => {
     act(() => {
       oldSubmit({
         key: 'Enter',
+        nativeEvent: new KeyboardEvent('keydown', { key: 'Enter' }),
         preventDefault: vi.fn(),
       } as unknown as React.KeyboardEvent<HTMLInputElement>);
       oldClose(false);
@@ -1047,6 +1048,7 @@ describe('mapped product account admission', () => {
         productAccount(kind === 'foreign-product' ? 'product-b' : null);
         oldSubmit({
           key: 'Enter',
+          nativeEvent: new KeyboardEvent('keydown', { key: 'Enter' }),
           preventDefault: vi.fn(),
         } as unknown as React.KeyboardEvent<HTMLInputElement>);
         oldClose(false);

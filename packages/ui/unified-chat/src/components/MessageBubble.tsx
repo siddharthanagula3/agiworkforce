@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Button, translateUiPlural, useUiTranslation } from '@agiworkforce/ui';
+import { isImeComposingKey } from '@agiworkforce/ui/ime-composition';
 import { ActionBar, type MessageActionSlots } from './ActionBar';
 import { ThinkingBlock } from './ThinkingBlock';
 import { LegacyWebSearchCard } from './WebSearchCard';
@@ -741,6 +742,7 @@ export function MessageBubble({
               value={editDraft ?? ''}
               onChange={(event) => setEditDraft(event.target.value)}
               onKeyDown={(event) => {
+                if (isImeComposingKey(event.nativeEvent)) return;
                 if (event.key === 'Enter' && !event.shiftKey) {
                   event.preventDefault();
                   commitEdit();

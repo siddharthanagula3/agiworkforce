@@ -5,6 +5,7 @@ import { X } from 'lucide-react';
 
 import { cn } from '../cn';
 import { useUiTranslation } from '../i18n';
+import { isImeComposingKey } from '../lib/ime-composition';
 
 const SEPARATOR = /[\s,;]+/;
 
@@ -110,6 +111,7 @@ export function ChipInput({
   };
 
   const onInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (isImeComposingKey(event.nativeEvent)) return;
     if (event.key === 'Enter' || event.key === ',') {
       event.preventDefault();
       if (text.trim()) commit(text.split(SEPARATOR));

@@ -1,3 +1,4 @@
+import { isImeComposingKey } from '@agiworkforce/unified-chat/ime-composition';
 import { t } from '../../i18n';
 import {
   beginPairing,
@@ -155,7 +156,7 @@ export function createDesktopPairingRows(api: PairingApi = browserPairing): Desk
     void api.submitPairingCode(code.value).then(apply);
   });
   code.addEventListener('keydown', (event) => {
-    if (event.key !== 'Enter') return;
+    if (event.key !== 'Enter' || isImeComposingKey(event)) return;
     event.preventDefault();
     void api.submitPairingCode(code.value).then(apply);
   });

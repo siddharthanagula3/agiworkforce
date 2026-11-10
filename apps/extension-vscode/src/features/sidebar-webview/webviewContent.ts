@@ -5929,7 +5929,7 @@ export function getWebviewContent(
             event.stopPropagation();
             return;
           }
-          if (event.key === 'Enter') {
+          if (event.key === 'Enter' && !event.isComposing && event.keyCode !== 229) {
             event.preventDefault();
             var first = menuItemsOf(slashMenu)[0];
             if (first) first.click();
@@ -6372,7 +6372,8 @@ export function getWebviewContent(
       guidance.placeholder = 'Or deny and tell AGI what to do instead, then press Enter';
       guidance.setAttribute('aria-label', 'Deny and tell AGI what to do instead');
       guidance.addEventListener('keydown', function (event) {
-        if (event.key !== 'Enter' || !guidance.value.trim()) return;
+        if (event.key !== 'Enter' || event.isComposing || event.keyCode === 229) return;
+        if (!guidance.value.trim()) return;
         event.preventDefault();
         vscode.postMessage({
           type: 'respondToApproval',
@@ -6458,7 +6459,8 @@ export function getWebviewContent(
           : 'Type your answer, then press Enter';
       typed.setAttribute('aria-label', 'Your answer');
       typed.addEventListener('keydown', function (event) {
-        if (event.key !== 'Enter' || !typed.value.trim()) return;
+        if (event.key !== 'Enter' || event.isComposing || event.keyCode === 229) return;
+        if (!typed.value.trim()) return;
         event.preventDefault();
         answer(typed.value.trim());
       });

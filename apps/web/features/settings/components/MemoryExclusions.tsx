@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { isImeComposingKey } from '@agiworkforce/ui/ime-composition';
 import { X } from 'lucide-react';
 
 import {
@@ -176,7 +177,7 @@ function OwnedMemoryExclusions({ owner }: { owner: PreferenceOwner | null }) {
             if (error) setError(null);
           }}
           onKeyDown={(event) => {
-            if (event.key === 'Enter') {
+            if (event.key === 'Enter' && !isImeComposingKey(event.nativeEvent)) {
               event.preventDefault();
               addTerm();
             }

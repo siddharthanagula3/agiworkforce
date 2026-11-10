@@ -288,6 +288,11 @@ export {
   type UseComboboxResult,
 } from './primitives/useCombobox';
 export { useDialogKeyboard } from './primitives/useDialogKeyboard';
+export {
+  IME_PROCESSING_KEY_CODE,
+  isImeComposingKey,
+  type ImeCompositionSignals,
+} from './lib/ime-composition';
 
 export {
   DirectoryPanel,

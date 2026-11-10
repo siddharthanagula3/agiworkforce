@@ -317,6 +317,24 @@ describe('CommandPalette', () => {
       });
     });
 
+    it('does not run a command when Enter confirms an input-method composition', () => {
+      const onOpenChange = vi.fn();
+      renderPalette(true, onOpenChange);
+      const input = screen.getByPlaceholderText('Search chats and actions');
+
+      fireEvent.change(input, { target: { value: 'new' } });
+      fireEvent.keyDown(input, { key: 'Enter', isComposing: true });
+      fireEvent.keyDown(input, { key: 'Enter', keyCode: 229 });
+
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(onOpenChange).not.toHaveBeenCalled();
+
+      fireEvent.keyDown(input, { key: 'Enter' });
+
+      expect(mockPush).toHaveBeenCalledTimes(1);
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+    });
+
     it('shows a Close button in the field, not an ESC chip', () => {
       renderPalette();
       expect(screen.getByLabelText('Close')).toBeInTheDocument();

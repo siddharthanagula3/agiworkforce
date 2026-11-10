@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { isImeComposingKey } from '@agiworkforce/ui/ime-composition';
 import { useRouter } from 'next/navigation';
 import { Lightbulb, Smile } from 'lucide-react';
 import {
@@ -106,7 +107,7 @@ function CreateProjectDialogImpl({ open, onOpenChange, onCreated }: CreateProjec
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === 'Enter' && canSubmit) {
+      if (e.key === 'Enter' && canSubmit && !isImeComposingKey(e.nativeEvent)) {
         e.preventDefault();
         void handleSubmit();
       }

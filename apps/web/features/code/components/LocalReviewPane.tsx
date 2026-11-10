@@ -1,6 +1,7 @@
 'use client';
 
 import { useId, useState } from 'react';
+import { isImeComposingKey } from '@agiworkforce/ui/ime-composition';
 import {
   ChevronDown,
   ChevronRight,
@@ -61,6 +62,7 @@ function CommentDraft({
         autoFocus
         onChange={(event) => setText(event.target.value)}
         onKeyDown={(event) => {
+          if (isImeComposingKey(event.nativeEvent)) return;
           if (event.key === 'Escape') onCancel();
           if (event.key === 'Enter' && (event.metaKey || event.ctrlKey) && text.trim() !== '') {
             event.preventDefault();

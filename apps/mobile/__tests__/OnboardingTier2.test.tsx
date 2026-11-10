@@ -342,6 +342,39 @@ describe('Onboarding → tier2 ExecuTorch download flow', () => {
     expect(mockReplace).not.toHaveBeenCalled();
   });
 
+  it('offers a retry after a failed download and finishes onboarding when it succeeds', async () => {
+    mockTier2LoadModel.mockRejectedValueOnce(new Error('connection reset'));
+    const { getByTestId, queryByTestId } = await renderAtDeviceTier();
+    await act(async () => {
+      fireEvent.press(getByTestId('device-tier-download-btn'));
+      await Promise.resolve();
+    });
+    await waitFor(() => getByTestId('download-error'));
+    expect(mockTier2LoadModel).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      fireEvent.press(getByTestId('download-retry-btn'));
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(mockTier2LoadModel).toHaveBeenCalledTimes(2);
+      expect(mockReplace).toHaveBeenCalledWith(expect.objectContaining({ pathname: '/(app)' }));
+    });
+    expect(queryByTestId('download-error')).toBeNull();
+  });
+
+  it('does not offer a retry while a download is running', async () => {
+    mockTier2LoadModel.mockImplementation(() => new Promise<void>(() => undefined));
+    const { getByTestId, queryByTestId } = await renderAtDeviceTier();
+    await act(async () => {
+      fireEvent.press(getByTestId('device-tier-download-btn'));
+      await Promise.resolve();
+    });
+    await waitFor(() => getByTestId('onboarding-download-screen'));
+    expect(queryByTestId('download-retry-btn')).toBeNull();
+  });
+
   it('does NOT silently fall through to finishOnboarding when no preset and no downloadUrl', async () => {
     const { getDefaultModel } = require('@agiworkforce/local-llm');
     const currentDefaultModel = (getDefaultModel as jest.Mock)();

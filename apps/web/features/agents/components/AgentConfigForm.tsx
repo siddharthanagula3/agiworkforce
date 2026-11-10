@@ -1,6 +1,7 @@
 'use client';
 
 import { useId, useMemo, useState } from 'react';
+import { isImeComposingKey } from '@agiworkforce/ui/ime-composition';
 import Link from 'next/link';
 import { X } from 'lucide-react';
 import {
@@ -238,7 +239,7 @@ export function AgentWebsitesField({
           className="min-w-0 flex-1 basis-48"
           onChange={(event) => setValue(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === 'Enter') {
+            if (event.key === 'Enter' && !isImeComposingKey(event.nativeEvent)) {
               event.preventDefault();
               if (!allowFull) allow();
             }

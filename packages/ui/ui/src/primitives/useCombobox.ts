@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useState, type KeyboardEvent } from 'react';
+import { isImeComposingKey } from '../lib/ime-composition';
 
 export interface UseComboboxOptions<T> {
   items: readonly T[];
@@ -51,6 +52,7 @@ export function useCombobox<T>({
 
   const onKeyDown = useCallback(
     (event: KeyboardEvent<HTMLInputElement>) => {
+      if (isImeComposingKey(event.nativeEvent)) return;
       if (event.key === 'ArrowDown') {
         event.preventDefault();
         setActiveIndex(Math.min(activeIndex + 1, lastIndex));

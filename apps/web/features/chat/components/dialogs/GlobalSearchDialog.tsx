@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { isImeComposingKey } from '@agiworkforce/ui/ime-composition';
 import { SEARCH_INPUT_DEBOUNCE_MS } from '@agiworkforce/utils';
 import {
   Badge,
@@ -393,7 +394,7 @@ function GlobalSearchDialogImpl({ open, onOpenChange }: GlobalSearchDialogProps)
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
+                    if (event.key === 'Enter' && !isImeComposingKey(event.nativeEvent)) {
                       event.preventDefault();
                       void handleSearch();
                     }

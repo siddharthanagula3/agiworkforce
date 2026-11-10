@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { isImeComposingKey } from '@agiworkforce/ui/ime-composition';
 import { Check, MessageSquare, RotateCcw, Send, Sparkles, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { MAX_ARTIFACT_COMMENT_CHARS } from '@agiworkforce/cloud-contracts';
@@ -82,6 +83,7 @@ function CommentComposer({
         value={body}
         onChange={(event) => setBody(event.target.value.slice(0, MAX_ARTIFACT_COMMENT_CHARS))}
         onKeyDown={(event) => {
+          if (isImeComposingKey(event.nativeEvent)) return;
           if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) void submit(event);
           if (event.key === 'Escape' && onCancel) {
             event.preventDefault();

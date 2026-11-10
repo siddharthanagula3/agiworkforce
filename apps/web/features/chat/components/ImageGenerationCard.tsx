@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { MANAGED_MEDIA_KEEP_PATH } from '@agiworkforce/cloud-contracts';
+import { isImeComposingKey } from '@agiworkforce/ui/ime-composition';
 import {
   X,
   Download,
@@ -850,7 +851,7 @@ function EditPanel({
               value={editText}
               onChange={(e) => setEditText(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
+                if (e.key === 'Enter' && !e.shiftKey && !isImeComposingKey(e.nativeEvent)) {
                   e.preventDefault();
                   void handleDescribeEdit();
                 }

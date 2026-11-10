@@ -17,6 +17,7 @@ import {
 } from '@agiworkforce/icons';
 import { cn } from '../cn';
 import { useUiTranslation } from '../i18n';
+import { isImeComposingKey } from '../lib/ime-composition';
 import { Menu, MenuItem, MenuSeparator, MenuSubmenu } from './Menu';
 import { INLINE_EDIT_ATTRIBUTE } from './escape-guard';
 import { resolveProjectIcon, resolveProjectAccentHex, hasKnownProjectIcon } from './project-icons';
@@ -209,6 +210,7 @@ function SessionItemBase({
           onChange={(e) => setRenameValue(e.target.value)}
           onBlur={submitRename}
           onKeyDown={(e) => {
+            if (isImeComposingKey(e.nativeEvent)) return;
             if (e.key === 'Enter') {
               returnFocusOnExitRef.current = true;
               submitRename();

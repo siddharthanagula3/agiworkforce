@@ -927,6 +927,7 @@ const ChatComposerNewComponent = ({
     refused: refusedAttachments,
     preparing: preparingAttachments,
     addFiles,
+    admitFiles,
     removeFile,
     clearAll: clearAttachmentDraft,
   } = useAttachments({
@@ -2201,8 +2202,8 @@ const ChatComposerNewComponent = ({
   }, [clearComposerState, clearSignal, suppressAutoFocus, takeIdleFocus]);
 
   const addChatAttachments = useCallback(
-    (files: File[]) => {
-      if (files.length === 0) return;
+    (files: File[]): Promise<File[]> => {
+      if (files.length === 0) return Promise.resolve([]);
       if (videoMode && videoInputLimit === 0) {
         setLocalNotice(
           plural('counts.videoModeAttachments', files.length, {
@@ -2211,7 +2212,7 @@ const ChatComposerNewComponent = ({
               'Video generation works from your prompt only. Attached files are not sent to the video model. Leave video mode first if you want to send these files to the chat model.',
           }),
         );
-        return;
+        return Promise.resolve([]);
       }
       if (videoMode) {
         const images = files.filter(isVideoInputImage);
@@ -2219,7 +2220,7 @@ const ChatComposerNewComponent = ({
           setLocalNotice(
             'Video takes PNG, JPEG or WebP images only. Leave video mode to send this file to the chat model.',
           );
-          return;
+          return Promise.resolve([]);
         }
         const accepted = images.slice(0, Math.max(0, videoInputLimit - attachments.length));
         setLocalNotice(
@@ -2227,8 +2228,7 @@ const ChatComposerNewComponent = ({
             ? `Video takes up to ${videoInputLimit} PNG, JPEG or WebP images, so only ${accepted.length} of ${files.length} were attached.`
             : null,
         );
-        if (accepted.length > 0) addFiles(accepted);
-        return;
+        return accepted.length > 0 ? admitFiles(accepted) : Promise.resolve([]);
       }
       if (imageMode) {
         const images = files.filter((file) => isChatImageMimeType(file.type));
@@ -2236,41 +2236,39 @@ const ChatComposerNewComponent = ({
           setLocalNotice(
             'Image mode takes images only. Attach a picture to edit it, or leave image mode to send this file to the chat model.',
           );
-          return;
+          return Promise.resolve([]);
         }
         setLocalNotice(
           images.length < files.length
             ? 'Only the images were attached. Image mode edits pictures, so the other files were left out.'
             : null,
         );
-        addFiles(images);
-        return;
+        return admitFiles(images);
       }
       if (restrictedFreeChat) {
         if (!promotionalVisionChat) {
           setLocalNotice('This free model accepts text only. Choose Free Auto to attach files.');
-          return;
+          return Promise.resolve([]);
         }
         const images = files.filter((file) => isChatImageMimeType(file.type));
         if (images.length === 0) {
           setLocalNotice(
             'This free model accepts images, but not this file type. Choose Free Auto for other files.',
           );
-          return;
+          return Promise.resolve([]);
         }
         setLocalNotice(
           images.length < files.length
             ? 'Only images were attached. This free model cannot read the other file types.'
             : null,
         );
-        addFiles(images);
-        return;
+        return admitFiles(images);
       }
       setLocalNotice(null);
-      addFiles(files);
+      return admitFiles(files);
     },
     [
-      addFiles,
+      admitFiles,
       attachments.length,
       imageMode,
       plural,
@@ -2282,9 +2280,7 @@ const ChatComposerNewComponent = ({
   );
 
   const handleFileDrop = useCallback(
-    (files: File[]) => {
-      addChatAttachments(files);
-    },
+    (files: File[]) => addChatAttachments(files),
     [addChatAttachments],
   );
 
@@ -4559,7 +4555,7 @@ const ChatComposerNewComponent = ({
       const composing = isImeComposingKey(e.nativeEvent);
 
       // Forward navigation keys to SlashCommandMenu when open
-      if (showSlashMenu) {
+      if (showSlashMenu && !composing) {
         const consumed = slashMenuRef.current?.handleKey(e.key);
         if (consumed) {
           e.preventDefault();
@@ -5988,7 +5984,9 @@ const ChatComposerNewComponent = ({
                       fileInputRef.current?.click();
                       closeMenu();
                     }}
-                    onAttachLibraryFile={(file) => handleFileDrop([file])}
+                    onAttachLibraryFile={(file) =>
+                      handleFileDrop([file]).then((taken) => taken.length > 0)
+                    }
                     showLocalFolderRow={desktopHost !== null}
                     onAttachFromLocalFolder={() => {
                       setLocalFolderPickerOpen(true);
