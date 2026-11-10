@@ -149,6 +149,10 @@ const ATTACH_SHORTCUT = findShortcut('composer-add-files');
 const ROW_LABEL_RECORD_SKILL = RECORD_SKILL_TITLE;
 const BADGE_RECORDING = 'Recording';
 const RECORDING_ATTACHED_TOAST = 'Screenshots attached. Say what the skill should do, then send.';
+const RECORDING_PARTLY_ATTACHED_TOAST =
+  'Some screenshots were not attached. They are still in your recording.';
+const RECORDING_NOT_ATTACHED_TOAST =
+  'No screenshots were attached. They are still in your recording.';
 const ATTACH_RETENTION_NOTE = `Files you attach are saved to your Library and kept until you delete them. A deleted file can be restored for ${RESOURCE_RECOVERY_WINDOW_DAYS} days.`;
 const TEMPORARY_ATTACH_RETENTION_NOTE =
   'Files you attach in a temporary chat stay out of your Library and are deleted along with the chat.';
@@ -602,7 +606,8 @@ export interface ComposerPlusMenuProps {
   workPalette: boolean;
 
   onAddFiles: () => void;
-  onAttachLibraryFile: (file: File) => void;
+  /** Resolves true when the draft took the file. */
+  onAttachLibraryFile: (file: File) => Promise<boolean>;
   mediaModeActive: boolean;
   mediaModeNoun: string;
   /**
@@ -713,12 +718,23 @@ export function ComposerPlusMenu(props: ComposerPlusMenuProps) {
   const { onAttachLibraryFile, onSelectSkill, skills } = props;
 
   const draftSkillFromRecording = useCallback(
-    (files: File[]) => {
-      for (const file of files) onAttachLibraryFile(file);
+    async (files: File[]): Promise<File[]> => {
+      const outcomes = files.map((file) => onAttachLibraryFile(file));
+      const taken = (await Promise.all(outcomes)).flatMap((attached, index) => {
+        const file = files[index];
+        return attached && file ? [file] : [];
+      });
+      if (taken.length === 0) {
+        toast.error(RECORDING_NOT_ATTACHED_TOAST);
+        return taken;
+      }
       if (skills.some((skill) => skill.name === SKILL_CREATOR_SKILL_NAME)) {
         onSelectSkill(SKILL_CREATOR_SKILL_NAME);
       }
-      toast.success(RECORDING_ATTACHED_TOAST);
+      toast.success(
+        taken.length === files.length ? RECORDING_ATTACHED_TOAST : RECORDING_PARTLY_ATTACHED_TOAST,
+      );
+      return taken;
     },
     [onAttachLibraryFile, onSelectSkill, skills],
   );

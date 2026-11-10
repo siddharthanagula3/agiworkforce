@@ -109,7 +109,7 @@ function baseProps(): Omit<ComposerPlusMenuProps, 'anchorRef' | 'contentRef'> {
     closeMenu: vi.fn(),
     workPalette: false,
     onAddFiles: vi.fn(),
-    onAttachLibraryFile: vi.fn(),
+    onAttachLibraryFile: vi.fn(async () => true),
     mediaModeActive: false,
     attachmentsUnavailable: false,
     mediaModeNoun: 'Image',
@@ -207,6 +207,7 @@ function renderMenu(overrides: Partial<ComposerPlusMenuProps> = {}) {
 beforeEach(() => {
   authoring.allowed = true;
   toasts.success.mockReset();
+  toasts.error.mockReset();
 });
 
 afterEach(() => {
@@ -433,6 +434,74 @@ describe('Record a skill in the composer menu', () => {
     await waitFor(() =>
       expect(screen.queryByRole('dialog', { name: 'Choose screenshots' })).not.toBeInTheDocument(),
     );
+  });
+
+  it('keeps the screenshots the composer refused and attaches them on a later try', async () => {
+    let status = STOPPED;
+    installHost({
+      skill_capture_status: () => ({ ok: true, value: status }),
+      skill_capture_save: () => {
+        status = IDLE;
+        return { ok: true, value: SAVED };
+      },
+    });
+    const attach = vi.fn(async () => false);
+    const { props } = renderMenu({ onAttachLibraryFile: attach });
+
+    const bar = await screen.findByRole('complementary', { name: 'Skill recording' });
+    await userEvent.click(within(bar).getByRole('button', { name: 'Review' }));
+    const summary = await screen.findByRole('dialog', { name: 'Your recording' });
+    await userEvent.click(within(summary).getByRole('button', { name: 'Choose screenshots' }));
+    const review = await screen.findByRole('dialog', { name: 'Choose screenshots' });
+
+    await userEvent.click(within(review).getByRole('button', { name: 'Draft a skill' }));
+
+    await waitFor(() => expect(toasts.error).toHaveBeenCalledTimes(1));
+    expect(attach).toHaveBeenCalledTimes(3);
+    expect(toasts.success).not.toHaveBeenCalled();
+    expect(props.onSelectSkill).not.toHaveBeenCalled();
+    const kept = screen.getByRole('dialog', { name: 'Choose screenshots' });
+    expect(within(kept).getAllByRole('button', { name: /^Screenshot \d at/ })).toHaveLength(3);
+
+    attach.mockImplementation(async () => true);
+    await userEvent.click(within(kept).getByRole('button', { name: 'Draft a skill' }));
+
+    await waitFor(() => expect(toasts.success).toHaveBeenCalledTimes(1));
+    expect(props.onSelectSkill).toHaveBeenCalledWith('skill-creator');
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Choose screenshots' })).not.toBeInTheDocument(),
+    );
+  });
+
+  it('retires only the screenshots the composer took', async () => {
+    let status = STOPPED;
+    installHost({
+      skill_capture_status: () => ({ ok: true, value: status }),
+      skill_capture_save: () => {
+        status = IDLE;
+        return { ok: true, value: SAVED };
+      },
+    });
+    const attach = vi.fn(async (file: File) => !file.name.endsWith('-3.jpg'));
+    renderMenu({ onAttachLibraryFile: attach });
+
+    const bar = await screen.findByRole('complementary', { name: 'Skill recording' });
+    await userEvent.click(within(bar).getByRole('button', { name: 'Review' }));
+    const summary = await screen.findByRole('dialog', { name: 'Your recording' });
+    await userEvent.click(within(summary).getByRole('button', { name: 'Choose screenshots' }));
+    const review = await screen.findByRole('dialog', { name: 'Choose screenshots' });
+
+    await userEvent.click(within(review).getByRole('button', { name: 'Draft a skill' }));
+
+    await waitFor(() => expect(toasts.success).toHaveBeenCalledTimes(1));
+    expect(toasts.success).toHaveBeenCalledWith(
+      'Some screenshots were not attached. They are still in your recording.',
+    );
+    const kept = await screen.findByRole('dialog', { name: 'Choose screenshots' });
+    await waitFor(() =>
+      expect(within(kept).getAllByRole('button', { name: /^Screenshot \d at/ })).toHaveLength(1),
+    );
+    expect(within(kept).getByRole('button', { name: 'Screenshot 1 at 0:06' })).toBeInTheDocument();
   });
 
   it('keeps Draft a skill off while the composer cannot take attachments', async () => {
