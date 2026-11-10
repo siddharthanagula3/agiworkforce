@@ -179,7 +179,7 @@ describe('/desktop separates what is built from what is published', () => {
       /fetch\('\/api\/releases\/desktop-cloud\/latest'/u,
     );
     const live = collapsed('app/download/DesktopDownloadAvailability.tsx');
-    expect(live).toMatch(/No signed AGI Desktop installer is available right now/u);
+    expect(live).toMatch(/No signed Desktop installer is available right now/u);
   });
 
   it('shows the registry label on the landing Desktop cards and types no publication state', () => {
@@ -324,7 +324,7 @@ describe('public Local and BYOK claims follow the shipping Electron enforcement'
     expect(pricing).toMatch(/\{\{surface\}\}: \{\{status\}\}/u);
     expect(pricing).not.toMatch(/released CLI|CLI today/u);
     expect(pricing).toMatch(/Local session files on disk/u);
-    expect(pricing).not.toMatch(/Desktop runs managed cloud/u);
+    expect(pricing).not.toMatch(/Desktop runs (?:managed )?cloud/iu);
     expect(pricing).not.toMatch(/SQLite|llama\.cpp|vLLM|Desktop, CLI & VS Code/u);
     const page = rendered('app/pricing/page.tsx');
     expect(page).toMatch(
@@ -360,7 +360,7 @@ describe('public Local and BYOK claims follow the shipping Electron enforcement'
 
     expect(publicContract).toMatch(/from the CLI to Ollama or LM Studio on loopback/iu);
     expect(publicContract).not.toMatch(/released CLI/iu);
-    expect(publicContract).toMatch(/Desktop and web use Managed Cloud/iu);
+    expect(publicContract).toMatch(/Desktop and web use Cloud/iu);
     expect(publicContract).toMatch(/operating system credential store/iu);
 
     for (const [label, pattern] of [
@@ -390,7 +390,7 @@ describe('public Local and BYOK claims follow the shipping Electron enforcement'
     expect(localRuntimeCopy).toMatch(/\. Desktop reports no local MCP capability/u);
     expect(localRuntimeCopy).toMatch(/The web app and Desktop neither list nor run them/u);
     expect(localRuntimeCopy).not.toMatch(/current public Desktop/iu);
-    expect(localRuntimeCopy).toMatch(/Panel chat remains Managed Cloud/u);
+    expect(localRuntimeCopy).toMatch(/Panel chat remains Cloud/u);
     expect(localRuntimeCopy).toMatch(/Connect it from the CLI instead/u);
     expect(localRuntimeCopy).not.toMatch(/released CLI/iu);
 
@@ -560,7 +560,7 @@ describe('unreleased surface pages take their status label from the registry', (
       /release\.state === 'published' \? RELEASE_PUBLISHED_LABEL : SURFACE_STATUS\.cli/u,
     );
     const page = collapsed('app/cli/page.tsx');
-    expect(page).toMatch(/AGI CLI · <CliReleaseStatus \/>/u);
+    expect(page).toMatch(/CLI · <CliReleaseStatus \/>/u);
     expect(page).not.toMatch(/eyebrow">\{SURFACE_STATUS\.cli\}|eyebrow=\{SURFACE_STATUS\.cli\}/u);
   });
 
@@ -645,9 +645,7 @@ describe('/get-started, a bare agi login is the managed-cloud sign-in, not a BYO
       'saved to the OS credential store except on Linux or when AGIWORKFORCE_NO_KEYRING disables the keyring',
     );
     expect(page).toContain('files in the CLI configuration directory');
-    expect(page).toMatch(
-      /bare(?:\{' '\})?\s+<code>agi login<\/code> signs into AGI managed cloud/iu,
-    );
+    expect(page).toMatch(/bare(?:\{' '\})?\s+<code>agi login<\/code> signs into Cloud/iu);
     expect(page).toMatch(/agi login anthropic/u);
   });
 
@@ -728,11 +726,11 @@ describe('/get-started leads with the surface a visitor can use now', () => {
 
   it('offers Try AGI Chat as the first hero action, on the shared web entry', () => {
     expect(nav).toMatch(/WEB_ENTRY_HREF = '\/login\?redirectTo=%2F'/u);
-    expect(page).toMatch(/ctas=\{\[\s*\{ href: WEB_ENTRY_HREF, label: 'Try AGI Chat' \}/u);
+    expect(page).toMatch(/ctas=\{\[\s*\{ href: WEB_ENTRY_HREF, label: 'Try chat' \}/u);
   });
 
   it('puts the Web action before any CLI link and before the CLI transcript', () => {
-    const webAction = page.indexOf("label: 'Try AGI Chat'");
+    const webAction = page.indexOf("label: 'Try chat'");
     const cliLinks = [...page.matchAll(/href[=:]\s*["']\/cli["']/gu)].map((m) => m.index ?? -1);
     const transcript = page.indexOf('lines={CLI_PREVIEW_TRANSCRIPT}');
 
@@ -772,13 +770,13 @@ describe('/get-started leads with the surface a visitor can use now', () => {
 describe('/docs, the Chrome card names the route the panel actually answers on', () => {
   it('agrees with /chrome-extension, which was corrected to name Managed Cloud', () => {
     const chrome = collapsed('app/chrome-extension/page.tsx');
-    expect(chrome).toMatch(/Chat answers come back from AGI Managed Cloud/iu);
+    expect(chrome).toMatch(/Chat answers come back from Cloud/iu);
     expect(chrome).toMatch(/the Desktop bridge is an optional local handoff/iu);
   });
 
   it('says the panel answers from Managed Cloud and pairing is optional', () => {
     const page = collapsed('app/docs/page.tsx');
-    expect(page).toMatch(/Answers come back from AGI Managed Cloud/iu);
+    expect(page).toMatch(/Answers come back from Cloud/iu);
     expect(page).toMatch(/pairing Desktop is an optional local road/iu);
   });
 
@@ -1057,7 +1055,7 @@ describe('/byok, custody names the store each runtime really writes to', () => {
     expect(managed).not.toMatch(/resolve_config_env_auth_key|auth_store_api_key/u);
     const page = collapsed('app/byok/page.tsx');
     expect(page).toContain(
-      'CLI Managed Cloud requests require an AGI account token rather than a saved provider API key',
+      'CLI Cloud requests require an AGI account token rather than a saved provider API key',
     );
     expect(page).not.toMatch(/You pay the provider at its own rates/u);
   });
@@ -1080,7 +1078,7 @@ describe('/web, the browser surface has one route and it is managed cloud', () =
     );
     for (const count of routeCounts) expect(count).toBe('1');
     expect(page).not.toMatch(/\b(?:two|three|four|[2-9]|\d{2,}) routes\b/iu);
-    expect(page).toMatch(/AGI Chat uses managed cloud/u);
+    expect(page).toMatch(/Chat uses cloud/u);
   });
 
   it('never offers Local or BYOK as a route of the browser surface', () => {

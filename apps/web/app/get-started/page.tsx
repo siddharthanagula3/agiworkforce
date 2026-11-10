@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { buildMetadata } from '@/lib/seo/metadata';
-import { formatPrivacyModeLabel } from '@agiworkforce/types';
+import { formatPrivacyModeLabel, PRODUCT_NAMES } from '@agiworkforce/types';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import {
@@ -82,7 +82,7 @@ export default function GetStartedPage() {
           eyebrow="Get started"
           title="Get started."
           em="started."
-          lede="Open chat Chat, sign in, and send your first message. It runs in your browser, with nothing to install."
+          lede={`Open ${PRODUCT_NAMES.chat}, sign in, and send your first message. It runs in your browser, with nothing to install.`}
           ctas={[
             { href: WEB_ENTRY_HREF, label: 'Try chat' },
             { href: '/download', label: 'Check availability', variant: 'secondary' },

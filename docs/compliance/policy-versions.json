@@ -31,6 +31,12 @@
       "served": "28260a8d5e6f37da432d21e6fe8edc37eb845e26",
       "main": "78990d6147176cbdb197d258389a0567516ce437",
       "note": "On 1 November 2026 fresh public reads of /api/version and /agent-permissions both returned 200. Production served 28260a8d5e6f37da432d21e6fe8edc37eb845e26, and the approvals page printed Last updated 2026-10-08 and said no connector could be connected yet. Main was at 78990d6147176cbdb197d258389a0567516ce437; that candidate was not promoted, and the targeted correction dated 2026-11-01 was not yet published. The Oct8 archive must retain the rendered source production actually served, including its then-current imported tool table."
+    },
+    {
+      "checkedOn": "2026-11-10",
+      "served": "4eb9c07140e18e5758c28bf47013002d4843e4fb",
+      "main": "167e4b019c23961c2c8801c42a153b0e05a38218",
+      "note": "No-cache production reads on 10 November 2026 returned application commit a8e278c62ec39ae410c070a190a63ac60507c10d from /api/version and 2026-10-15 as the visible /subprocessors Last updated date, with the Model providers (Managed Cloud) row. That native-session hotfix is on a separate branch; every canonical policy page and legal-constants blob is byte-identical at 4eb9c07140e18e5758c28bf47013002d4843e4fb, retained on main, so that commit is the policy-source representative used here. 167e4b019c23961c2c8801c42a153b0e05a38218 is the held candidate that records the repository's display-name edits and moves only the subprocessor recipient-group announcement date. No deployment, email notice or production mutation is asserted."
     }
   ],
   "documents": {
