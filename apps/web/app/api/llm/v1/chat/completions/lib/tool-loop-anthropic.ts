@@ -5,7 +5,7 @@ import {
   type ChatRequest,
   type StreamChunk,
   type StreamChunkErrorClassification,
-  type ThinkingBlock,
+  type ReasoningReplayBlock,
   type UpstreamFrameShape,
 } from '@agiworkforce/types';
 import { OpenAIWireAssembler } from '@agiworkforce/provider-protocol';
@@ -48,7 +48,7 @@ function applyWarmRouteProviderPinning(
 }
 
 export interface ToolLoopStepSink {
-  thinkingBlocks: ThinkingBlock[];
+  thinkingBlocks: ReasoningReplayBlock[];
   text: string;
   providerErrorClassification?: StreamChunkErrorClassification;
   usage?: ObservedProviderUsage;

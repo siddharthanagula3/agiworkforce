@@ -56,9 +56,13 @@ import type {
   ResearchRunConfig,
   ResearchSourceRequest,
   ResearchStep,
-  ThinkingBlock,
+  ReasoningReplayBlock,
 } from '@agiworkforce/types';
-import { DEFAULT_RESEARCH_DELIVERABLE, RESEARCH_PAUSED_REASON } from '@agiworkforce/types';
+import {
+  DEFAULT_RESEARCH_DELIVERABLE,
+  RESEARCH_PAUSED_REASON,
+  isReplayableReasoningBlock,
+} from '@agiworkforce/types';
 import { cloudAgentRunSteerProgressId } from '@agiworkforce/cloud-contracts';
 import { logger } from '@/lib/logger';
 import { classifyError } from '@agiworkforce/provider-runtime';
@@ -373,7 +377,7 @@ export interface ResearchTurnRecord {
   promptTokens: number;
   completionTokens: number;
   canonicalText: string;
-  thinkingBlocks: ThinkingBlock[];
+  thinkingBlocks: ReasoningReplayBlock[];
   sourceAdds: ResearchSourceEntry[];
   usage: ObservedProviderUsage;
 }
@@ -1040,7 +1044,7 @@ interface ResearchTurn extends TurnResult {
    * Signed thinking blocks this turn produced (Anthropic extended thinking).
    * Replayed on the assistant tool_use turn -- see `runFetchCalls`.
    */
-  thinkingBlocks: ThinkingBlock[];
+  thinkingBlocks: ReasoningReplayBlock[];
 }
 
 /**
@@ -2421,7 +2425,7 @@ export async function* runResearchLoop(
     // neither drops the signature nor double-represents reasoning as literal
     // `<thinking>` text. Strictly gated on signed blocks: every other provider
     // and every thinking-disabled turn pushes exactly what it pushed before.
-    const signedThinking = turn.thinkingBlocks.filter((block) => block.signature);
+    const signedThinking = turn.thinkingBlocks.filter(isReplayableReasoningBlock);
     const assistantMessage: ProcessedRequest['llmRequest']['messages'][number] = {
       role: 'assistant',
       content: signedThinking.length > 0 ? turn.canonicalText : turn.text,

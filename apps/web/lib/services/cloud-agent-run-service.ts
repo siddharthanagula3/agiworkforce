@@ -182,11 +182,17 @@ interface CloudAgentEventRow extends Record<string, unknown> {
   emitted_at: string | Date;
 }
 
-const CheckpointThinkingBlockSchema = z.object({
-  type: z.literal('thinking'),
-  thinking: z.string(),
-  signature: z.string().optional(),
-});
+const CheckpointThinkingBlockSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('thinking'),
+    thinking: z.string(),
+    signature: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal('redacted_thinking'),
+    data: z.string(),
+  }),
+]);
 
 const CheckpointMessageSchema = z
   .object({

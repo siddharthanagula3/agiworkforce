@@ -11,7 +11,7 @@ import {
   GENERATED_FIGURE_IDENTITY_PATTERN,
   parseInteractiveCardDelta,
 } from '@agiworkforce/cloud-contracts';
-import type { InteractiveCard, ThinkingBlock } from '@agiworkforce/types';
+import type { InteractiveCard, RedactedThinkingBlock, ThinkingBlock } from '@agiworkforce/types';
 import type { AgentTaskState } from '@agiworkforce/types/protocol';
 import { z } from 'zod';
 import { FatalError, RetryableError, getWritable } from 'workflow';
@@ -251,7 +251,7 @@ const collectedProviderLineSchemaCoversLine: SameKeys<
 > = true;
 void collectedProviderLineSchemaCoversLine;
 
-const ThinkingBlockSchema = z
+const SignedThinkingBlockSchema = z
   .object({
     type: z.literal('thinking'),
     thinking: z.string(),
@@ -259,10 +259,27 @@ const ThinkingBlockSchema = z
   })
   .strict();
 const thinkingBlockSchemaCoversThinkingBlock: SameKeys<
-  z.infer<typeof ThinkingBlockSchema>,
+  z.infer<typeof SignedThinkingBlockSchema>,
   ThinkingBlock
 > = true;
 void thinkingBlockSchemaCoversThinkingBlock;
+
+const RedactedThinkingBlockSchema = z
+  .object({
+    type: z.literal('redacted_thinking'),
+    data: z.string(),
+  })
+  .strict();
+const redactedThinkingBlockSchemaCoversBlock: SameKeys<
+  z.infer<typeof RedactedThinkingBlockSchema>,
+  RedactedThinkingBlock
+> = true;
+void redactedThinkingBlockSchemaCoversBlock;
+
+const ThinkingBlockSchema = z.discriminatedUnion('type', [
+  SignedThinkingBlockSchema,
+  RedactedThinkingBlockSchema,
+]);
 
 const ProviderStreamErrorSchema = z
   .object({

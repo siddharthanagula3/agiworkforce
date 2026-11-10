@@ -85,7 +85,7 @@ import type {
   AgentEventToolCategory,
   AgentTaskState,
 } from '@agiworkforce/types/protocol';
-import type { InteractiveCard, ThinkingBlock } from '@agiworkforce/types';
+import type { InteractiveCard, ReasoningReplayBlock } from '@agiworkforce/types';
 import {
   SECRET_HANDLING_MODE_DEFAULT,
   getModelMetadataById,
@@ -95,6 +95,7 @@ import {
   isBrowserCommand,
   isImageChatToolName,
   isPhoneWriteStep,
+  isReplayableReasoningBlock,
   resolveMaxOutputTokens,
   skillLoadActivitySummary,
 } from '@agiworkforce/types';
@@ -683,7 +684,7 @@ export interface ToolLoopProviderStepResult {
   textContent: string;
   publicTextTail: string;
   generatedFileRefs: GeneratedFileRef[];
-  thinkingBlocks: ThinkingBlock[];
+  thinkingBlocks: ReasoningReplayBlock[];
   canonicalText: string;
   usage: ObservedProviderUsage;
   providerTrace?: ProviderStreamShape;
@@ -6749,7 +6750,7 @@ export async function* runToolLoop(
             ? await options.takeSteerMessages()
             : [];
         if (lateSteers.length > 0) {
-          const answerThinking = providerStep.thinkingBlocks.filter((block) => block.signature);
+          const answerThinking = providerStep.thinkingBlocks.filter(isReplayableReasoningBlock);
           const answerMessage: (typeof messages)[number] = {
             role: 'assistant',
             content: answerThinking.length > 0 ? providerStep.canonicalText : textContent,
@@ -6768,7 +6769,7 @@ export async function* runToolLoop(
         type: 'function' as const,
         function: { name: tc.qualifiedName, arguments: JSON.stringify(tc.args) },
       }));
-      const signedThinking = providerStep.thinkingBlocks.filter((block) => block.signature);
+      const signedThinking = providerStep.thinkingBlocks.filter(isReplayableReasoningBlock);
       const assistantMessage: (typeof messages)[number] = {
         role: 'assistant',
         content: signedThinking.length > 0 ? providerStep.canonicalText : textContent,

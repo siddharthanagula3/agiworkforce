@@ -47,6 +47,7 @@ const KNOWN_BLOCK_START_TYPES: ReadonlySet<string> = new Set([
   'tool_use',
   'text',
   'thinking',
+  'redacted_thinking',
   'server_tool_use',
   'web_search_tool_result',
   'code_execution_tool_result',
@@ -97,6 +98,12 @@ export async function* translateAnthropicStream(
           blocksByIndex.set(idx, { type: 'text' });
         } else if (block.type === 'thinking') {
           blocksByIndex.set(idx, { type: 'thinking' });
+        } else if (block.type === 'redacted_thinking') {
+          yield {
+            type: 'vendor-raw',
+            payload: event,
+            replay: { type: 'redacted_thinking', data: block.data },
+          };
         } else if (block.type === 'server_tool_use') {
           blocksByIndex.set(idx, { type: 'server_tool_use', toolUseId: block.id });
           yield { type: 'server-tool-use', toolUseId: block.id, name: block.name };
