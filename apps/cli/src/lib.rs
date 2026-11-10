@@ -7606,7 +7606,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
                 results.len().to_string().bold(),
                 ts::accent(query)
             );
-            for s in &results {
+            for s in results.iter().take(crate::sessions::SEARCH_DISPLAY_LIMIT) {
                 let title = s.display_title();
                 let short_id = &s.id[..s.id.len().min(8)];
                 println!(
@@ -7655,6 +7655,9 @@ async fn run_cli(cli: Cli) -> Result<()> {
                     }
                 }
                 println!();
+            }
+            if let Some(notice) = crate::sessions::search_overflow_notice(results.len()) {
+                println!("{}\n", notice.dimmed());
             }
             println!("{}", "Resume with: agi --resume <ID>".dimmed());
         }
@@ -8910,6 +8913,7 @@ pub async fn run_oneshot(
         let spinner = output::create_spinner("Thinking...");
         let md = std::sync::Arc::new(std::sync::Mutex::new(markdown::MarkdownRenderer::new()));
         let md_cb = std::sync::Arc::clone(&md);
+        session.transcript_renderer = Some(std::sync::Arc::clone(&md));
 
         let result = session
             .send(
@@ -8922,6 +8926,7 @@ pub async fn run_oneshot(
                 }),
             )
             .await;
+        session.transcript_renderer = None;
 
         spinner.finish_and_clear();
 

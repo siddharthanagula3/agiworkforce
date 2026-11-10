@@ -281,11 +281,15 @@ export default function ArchivedChatsScreen() {
           }
         }
         if (!restored || !isCurrent(owner)) return;
+        let refreshFailed = false;
         try {
           await loadConversations();
+          refreshFailed = Boolean(useChatMessageStore.getState().conversationLoadError);
         } catch {
-          if (isCurrent(owner))
-            Alert.alert('Chat restored', 'Refresh your chats to see it in the list.');
+          refreshFailed = true;
+        }
+        if (refreshFailed && isCurrent(owner)) {
+          Alert.alert('Chat restored', 'Refresh your chats to see it in the list.');
         }
       })();
     },

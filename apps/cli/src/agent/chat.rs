@@ -437,6 +437,18 @@ impl AgentSession {
 
     /// Build a streaming chunk callback for the target above.
     pub(crate) fn continuation_sink(&self) -> StreamCallback {
+        if matches!(
+            self.continuation_target(),
+            ContinuationTarget::Transcript | ContinuationTarget::OffProtocolChannel
+        ) {
+            if let Some(renderer) = self.transcript_renderer.clone() {
+                return Box::new(move |chunk: &str| {
+                    if let Ok(mut renderer) = renderer.lock() {
+                        crate::output::print_assistant_chunk_formatted(&mut renderer, chunk);
+                    }
+                });
+            }
+        }
         match (
             self.continuation_target(),
             self.on_continuation_chunk.clone(),
@@ -464,6 +476,14 @@ impl AgentSession {
             // `output` is also what keeps it off a protocol stdout, so it is
             // the safe landing for any target whose channel went missing.
             _ => Box::new(|chunk: &str| crate::output::print_assistant_chunk(chunk)),
+        }
+    }
+
+    pub(crate) fn drain_transcript_renderer(&self) {
+        if let Some(renderer) = &self.transcript_renderer {
+            if let Ok(mut renderer) = renderer.lock() {
+                crate::output::flush_markdown(&mut renderer);
+            }
         }
     }
 
@@ -1745,6 +1765,18 @@ struct TurnHostAdapter<'a> {
 }
 
 impl TurnHostAdapter<'_> {
+    fn tool_search_catalog_for(
+        &self,
+        tool_name: &str,
+    ) -> Option<std::sync::Arc<Vec<models::ToolDefinition>>> {
+        if tool_name != "tool_search" {
+            return None;
+        }
+        let mut catalog = self.session.callable_tool_definitions(&self.tool_defs);
+        catalog.retain(|definition| self.available_tool_names.contains(&definition.name));
+        Some(std::sync::Arc::new(catalog))
+    }
+
     async fn spawn_teammate(
         &mut self,
         args: &std::collections::HashMap<String, String>,
@@ -2455,7 +2487,7 @@ impl TurnHostAdapter<'_> {
         } else {
             let opts = crate::tools::ToolExecOptions {
                 additional_workspace_roots: self.session.additional_context_dirs(),
-                mcp_tool_definitions: self.session.mcp_catalog_for(&call.name),
+                tool_search_catalog: self.tool_search_catalog_for(&call.name),
                 require_confirmation: !self.session.skips_approval(),
                 auto_approve_safe: self.session.auto_approve_safe,
                 auto_approve_edits: self
@@ -2544,6 +2576,7 @@ impl TurnHost for TurnHostAdapter<'_> {
                 models::routed(routing_profile, self.complete_continuation()).await
             }
         };
+        self.session.drain_transcript_renderer();
         if let Ok(completion) = &completion {
             self.record_completion_usage(completion);
         }
@@ -3013,7 +3046,7 @@ impl TurnHost for TurnHostAdapter<'_> {
     fn parallel_future(&self, prepared: PreparedCall) -> ExecFuture {
         let opts = crate::tools::ToolExecOptions {
             additional_workspace_roots: self.session.additional_context_dirs(),
-            mcp_tool_definitions: self.session.mcp_catalog_for(&prepared.name),
+            tool_search_catalog: self.tool_search_catalog_for(&prepared.name),
             require_confirmation: !self.session.skips_approval(),
             auto_approve_safe: self.session.auto_approve_safe,
             auto_approve_edits: self
@@ -3615,6 +3648,96 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
 
+    fn renderer_session() -> (
+        AgentSession,
+        std::sync::Arc<Mutex<crate::markdown::MarkdownRenderer>>,
+    ) {
+        let context = crate::context::SystemContext {
+            cwd: "/tmp".to_string(),
+            git_branch: None,
+            git_status_summary: None,
+            git_remote_url: None,
+            project_type: None,
+            project_language: None,
+            ci_providers: vec![],
+            monorepo_type: None,
+            package_manager: None,
+            containerization: vec![],
+            editor_configs: vec![],
+            os: "test".to_string(),
+            shell: "test".to_string(),
+        };
+        let model = crate::model_catalog::fast_completion_model("anthropic");
+        let mut session = AgentSession::new(&model, &context, None);
+        let renderer = std::sync::Arc::new(Mutex::new(crate::markdown::MarkdownRenderer::new()));
+        session.transcript_renderer = Some(std::sync::Arc::clone(&renderer));
+        (session, renderer)
+    }
+
+    #[test]
+    fn a_continuation_streams_through_the_renderer_that_owns_the_first_completion() {
+        let (session, renderer) = renderer_session();
+
+        (session.continuation_sink())("after the tool call");
+
+        let pending = renderer.lock().expect("lock").flush();
+        assert!(
+            pending.contains("after the tool call"),
+            "the continuation bypassed the turn's renderer and printed raw, so a partial line the renderer still held would surface after it: {pending:?}"
+        );
+    }
+
+    #[test]
+    fn a_completion_boundary_drains_the_partial_line_the_renderer_still_holds() {
+        let (session, renderer) = renderer_session();
+        renderer
+            .lock()
+            .expect("lock")
+            .process_chunk("before the tool call");
+
+        session.drain_transcript_renderer();
+
+        assert_eq!(
+            renderer.lock().expect("lock").flush(),
+            "",
+            "the first completion's partial line stayed buffered past the boundary"
+        );
+    }
+
+    #[test]
+    fn an_installed_sink_outranks_the_renderer() {
+        let (mut session, renderer) = renderer_session();
+        let captured = std::sync::Arc::new(Mutex::new(String::new()));
+        let sink_buf = std::sync::Arc::clone(&captured);
+        session.on_continuation_chunk = Some(crate::agent::ContinuationSink(std::sync::Arc::new(
+            move |chunk: &str| {
+                sink_buf.lock().expect("lock").push_str(chunk);
+            },
+        )));
+
+        (session.continuation_sink())("to the installed sink");
+
+        assert_eq!(
+            captured.lock().expect("lock").as_str(),
+            "to the installed sink"
+        );
+        assert_eq!(renderer.lock().expect("lock").flush(), "");
+    }
+
+    #[test]
+    fn a_protocol_stdout_keeps_the_renderer_and_its_off_protocol_writer() {
+        let (session, renderer) = renderer_session();
+        let _claim = crate::output::ProtocolStdoutTestClaim::hold();
+
+        (session.continuation_sink())("off the protocol channel");
+
+        assert!(renderer
+            .lock()
+            .expect("lock")
+            .flush()
+            .contains("off the protocol channel"));
+    }
+
     #[test]
     fn a_compaction_that_summarizes_twice_is_charged_for_both_calls() {
         let first = CompactionUsage {
@@ -4049,6 +4172,56 @@ mod tests {
             adapter.classify(&tool_call("agent", serde_json::json!({"action":"list"}))),
             ToolClass::Other
         );
+    }
+
+    #[test]
+    fn tool_search_searches_only_what_the_turn_can_call() {
+        let config = CliConfig::default();
+        let restrictions: [(&[&str], &[&str]); 2] =
+            [(&["tool_search", "read_file"], &[]), (&[], &["write_file"])];
+        for (allowed, disallowed) in restrictions {
+            let mut session = make_local_session();
+            let to_strings = |names: &[&str]| {
+                names
+                    .iter()
+                    .map(|name| name.to_string())
+                    .collect::<Vec<_>>()
+            };
+            session.apply_tool_filters(&to_strings(allowed), &to_strings(disallowed));
+            let tool_defs = session.effective_tool_definitions();
+            let available_tool_names = session
+                .callable_tool_definitions(&tool_defs)
+                .into_iter()
+                .map(|definition| definition.name)
+                .collect::<HashSet<_>>();
+            assert!(available_tool_names.contains("tool_search"));
+            assert!(!available_tool_names.contains("write_file"));
+            let adapter = TurnHostAdapter {
+                session: &mut session,
+                config: &config,
+                tool_defs,
+                available_tool_names,
+                concurrency_safe_names: HashSet::new(),
+                plan_mode_mutating_names: HashSet::new(),
+                max_tokens: 1_024,
+                first_on_chunk: None,
+                search_turn: false,
+                hook_additional_contexts: Vec::new(),
+                completion_usage: Vec::new(),
+                managed_request_ids: Vec::new(),
+                incomplete: None,
+            };
+
+            let catalog = adapter
+                .tool_search_catalog_for("tool_search")
+                .expect("tool_search gets the turn's catalog");
+            assert!(catalog.iter().any(|tool| tool.name == "read_file"));
+            assert!(
+                !catalog.iter().any(|tool| tool.name == "write_file"),
+                "allowed {allowed:?}, disallowed {disallowed:?}"
+            );
+            assert!(adapter.tool_search_catalog_for("read_file").is_none());
+        }
     }
 
     #[test]

@@ -11,6 +11,7 @@ use crate::terminal_text::sanitize_terminal_text;
 ///
 /// Designed for SSE streaming where text arrives in arbitrary fragments.
 /// Buffers incomplete lines and renders complete lines with terminal formatting.
+#[derive(Debug)]
 pub struct MarkdownRenderer {
     /// Buffered text waiting for a complete line
     buffer: String,

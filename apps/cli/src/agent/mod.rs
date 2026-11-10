@@ -308,6 +308,8 @@ pub struct AgentSession {
     pub on_tool_event: Option<ToolEventSink>,
     pub on_steer: Option<SteerSource>,
     pub on_continuation_chunk: Option<ContinuationSink>,
+    pub(crate) transcript_renderer:
+        Option<std::sync::Arc<std::sync::Mutex<crate::markdown::MarkdownRenderer>>>,
     /// Whether the desktop shell is running with a browser paired to it.
     ///
     /// `None` until the first turn resolves it. Resolved once per session
@@ -827,6 +829,7 @@ impl AgentSession {
             on_tool_event: None::<ToolEventSink>,
             on_steer: None::<SteerSource>,
             on_continuation_chunk: None::<ContinuationSink>,
+            transcript_renderer: None,
             browser_available: None,
             quiet: false,
             fast_mode: false,
@@ -922,21 +925,6 @@ impl AgentSession {
         };
         self.caller_allowed_tools = self.allowed_tools.clone();
         self.disallowed_tools = disallowed_tools.to_vec();
-    }
-
-    /// The MCP catalogue `tool_search` needs to hand over a schema the initial
-    /// list deferred. Built for that tool alone: any other call would clone
-    /// every connected schema and never read one.
-    pub(crate) fn mcp_catalog_for(
-        &self,
-        tool_name: &str,
-    ) -> Option<std::sync::Arc<Vec<ToolDefinition>>> {
-        if tool_name != "tool_search" {
-            return None;
-        }
-        self.mcp_manager
-            .as_ref()
-            .map(|manager| std::sync::Arc::new(self.permitted_mcp_definitions(manager)))
     }
 
     pub async fn expand_mcp_resource_mentions(
@@ -1151,6 +1139,42 @@ impl AgentSession {
             return Ok(());
         }
         self.switch_model(model)
+    }
+
+    /// A model the user typed that no catalog names can still be one the local
+    /// servers report, so a Local session asks them before giving up. Any other
+    /// session keeps the catalog as its only source: a local server's list never
+    /// moves a Managed or BYOK transcript across a trust boundary.
+    pub async fn switch_model_by_name_or_local(
+        &mut self,
+        config: &CliConfig,
+        model: &str,
+    ) -> Result<()> {
+        let Err(unknown) = self.switch_model_by_name(model) else {
+            return Ok(());
+        };
+        if self.privacy_mode != PrivacyMode::Local {
+            return Err(unknown);
+        }
+        let probes = crate::local_models::discover_all(config).await;
+        let installed = crate::local_models::discovered_models(&probes);
+        match crate::local_models::select_discovered_model(
+            &installed,
+            model,
+            models::provider_name(&self.provider),
+        )? {
+            Some(found) => self.switch_to_discovered_local_model(model, &found.provider),
+            None => Err(unknown),
+        }
+    }
+
+    fn switch_to_discovered_local_model(&mut self, model: &str, provider_name: &str) -> Result<()> {
+        let provider = models::provider_from_name(provider_name)
+            .filter(|provider| provider_privacy_mode(provider) == PrivacyMode::Local)
+            .with_context(|| format!("'{provider_name}' is not a local model provider"))?;
+        self.model = model.to_string();
+        self.provider = provider;
+        Ok(())
     }
 
     /// Switch to a model discovered from the AGI managed gateway while
@@ -2883,6 +2907,38 @@ mod tests {
         assert_eq!(&session.model, second);
         assert_eq!(session.provider, models::Provider::ManagedCloud);
         assert_eq!(session.privacy_mode, PrivacyMode::Managed);
+    }
+
+    #[test]
+    fn a_local_session_follows_a_discovered_model_to_its_local_provider() {
+        let lmstudio = models::provider_from_name("lmstudio").expect("lmstudio");
+        let mut session =
+            AgentSession::new_with_provider("local-fixture-a", &test_context(), None, lmstudio);
+        assert_eq!(session.privacy_mode, PrivacyMode::Local);
+        assert!(session.switch_model_by_name("local-fixture-b").is_err());
+
+        session
+            .switch_to_discovered_local_model("local-fixture-b", "ollama")
+            .expect("local provider");
+        assert_eq!(session.model, "local-fixture-b");
+        assert_eq!(
+            session.provider,
+            models::Provider::Ollama(models::OllamaMode::Local)
+        );
+        assert_eq!(session.privacy_mode, PrivacyMode::Local);
+    }
+
+    #[test]
+    fn a_discovered_model_never_switches_a_session_to_a_hosted_provider() {
+        let lmstudio = models::provider_from_name("lmstudio").expect("lmstudio");
+        let mut session =
+            AgentSession::new_with_provider("local-fixture-a", &test_context(), None, lmstudio);
+        for hosted in ["anthropic", "openai", "managed_cloud"] {
+            assert!(session
+                .switch_to_discovered_local_model("local-fixture-b", hosted)
+                .is_err());
+        }
+        assert_eq!(session.model, "local-fixture-a");
     }
 
     #[test]

@@ -15,6 +15,7 @@ function retainedPress(node: ReactTestInstance): () => void {
 const mockFetch = jest.fn();
 const mockRestore = jest.fn();
 const mockLoadConversations = jest.fn();
+let mockConversationLoadError: string | null = null;
 let mockFocused = true;
 let mockFocus: (() => void) | undefined;
 let mockBlur: (() => void) | undefined;
@@ -73,8 +74,11 @@ jest.mock('@/src/features/chat/store/appModeStore', () => {
   return { useChatAppModeStore: create(() => ({ appMode: 'cloud', setAppMode: jest.fn() })) };
 });
 jest.mock('@/stores/chat/chatMessageStore', () => ({
-  useChatMessageStore: (selector: (state: { loadConversations: () => Promise<void> }) => unknown) =>
-    selector({ loadConversations: mockLoadConversations }),
+  useChatMessageStore: Object.assign(
+    (selector: (state: { loadConversations: () => Promise<void> }) => unknown) =>
+      selector({ loadConversations: mockLoadConversations }),
+    { getState: () => ({ conversationLoadError: mockConversationLoadError }) },
+  ),
 }));
 jest.mock('@/src/features/settings/Common', () => ({
   CloudAccountRequired: () => null,
@@ -108,6 +112,7 @@ describe('Archived chats failure recovery', () => {
     mockFetch.mockReset();
     mockRestore.mockReset();
     mockLoadConversations.mockReset();
+    mockConversationLoadError = null;
     jest.mocked(deleteArchivedConversation).mockReset();
     jest.mocked(deleteAllArchivedConversations).mockReset();
     __resetCloudAccountSessionForTests();
@@ -165,6 +170,44 @@ describe('Archived chats failure recovery', () => {
     await waitFor(() => expect(alertSpy).toHaveBeenCalledWith('Chat restored', expect.any(String)));
     expect(alertSpy.mock.calls[0]?.[1]).toBe('Refresh your chats to see it in the list.');
     expect(screen.queryByText('Launch plan')).toBeNull();
+  });
+
+  it.each([
+    ['records a load error and resolves', true],
+    ['refreshes cleanly', false],
+  ])('restore alert when the chat-list refresh %s', async (_label, loadFailed) => {
+    mockFetch
+      .mockResolvedValueOnce({
+        conversations: [
+          { id: 'chat-1', title: 'Launch plan', updatedAt: '2026-09-27T00:00:00.000Z' },
+        ],
+        hasMore: false,
+        nextOffset: 1,
+      })
+      .mockResolvedValue({ conversations: [], hasMore: false, nextOffset: 0 });
+    mockRestore.mockResolvedValue(undefined);
+    mockLoadConversations.mockImplementation(async () => {
+      mockConversationLoadError = loadFailed
+        ? 'Chats could not be refreshed. Check your connection and try again.'
+        : null;
+    });
+
+    const screen = render(<ArchivedChatsScreen />);
+    await waitFor(() => expect(screen.getByLabelText('Restore Launch plan')).toBeTruthy());
+    fireEvent.press(screen.getByLabelText('Restore Launch plan'));
+
+    await waitFor(() => expect(mockLoadConversations).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByText('Launch plan')).toBeNull());
+    if (loadFailed) {
+      await waitFor(() =>
+        expect(alertSpy).toHaveBeenCalledWith(
+          'Chat restored',
+          'Refresh your chats to see it in the list.',
+        ),
+      );
+    } else {
+      expect(alertSpy).not.toHaveBeenCalled();
+    }
   });
 
   it('does not claim the chat remains archived after an uncertain restore response', async () => {
