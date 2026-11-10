@@ -2892,6 +2892,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       assertTokenOwner(getAuthToken);
       ctx.signal?.throwIfAborted();
       if (remainder) {
+        contentSplitter.discardPendingPublic();
         emitPublicText(remainder, true);
         coalescedAppends.flush();
       }
