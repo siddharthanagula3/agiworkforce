@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { CloudAgentRun, ManagedCloudAgentRunClient } from '@agiworkforce/cloud-contracts';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import { TasksPage } from '../TasksPage';
-import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
+import { AGENT_EVENT_SCHEMA_VERSION, PRODUCT_NAMES } from '@agiworkforce/types';
 
 const RUN_ID = '0190a000-0000-7000-8000-0000000000bb';
 
@@ -78,10 +78,14 @@ function client(overrides: Partial<ManagedCloudAgentRunClient> = {}): ManagedClo
 }
 
 async function openDetails() {
-  fireEvent.click(await screen.findByRole('button', { name: /^View details for AGI Work,/ }));
+  fireEvent.click(
+    await screen.findByRole('button', {
+      name: new RegExp(`^View details for ${PRODUCT_NAMES.work},`),
+    }),
+  );
 }
 
-describe('Tasks, AGI Work goal + plan', () => {
+describe('Tasks, Work goal + plan', () => {
   it('renders the goal and its scope, and the committed plan, as their own sections', async () => {
     render(
       <TasksPage

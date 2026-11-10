@@ -67,6 +67,7 @@ import {
 } from '../lib/slashCommands';
 import {
   ALLOWED_ATTACHMENT_ACCEPT,
+  PRODUCT_NAMES,
   getModelMetadataById,
   resolveModelEffort,
   validateAttachmentFile,
@@ -1383,7 +1384,7 @@ export function ChatInput({
                         disabled && 'cursor-not-allowed opacity-50',
                       )}
                     >
-                      {mode === 'chat' ? t('composer.modeChat', 'Chat') : 'Work'}
+                      {mode === 'chat' ? t('composer.modeChat', 'Chat') : PRODUCT_NAMES.work}
                     </button>
                   ))}
                 </div>

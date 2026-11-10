@@ -138,7 +138,7 @@ describe('sidebar behaviour', () => {
       (button) => button.getAttribute('aria-label') ?? button.textContent?.trim() ?? '',
     );
 
-    expect(labels.slice(0, 4)).toEqual(['Toggle sidebar', 'New chat', 'Home', 'AGI Code']);
+    expect(labels.slice(0, 4)).toEqual(['Toggle sidebar', 'New chat', 'Home', 'Code']);
     expect(labels[4]).toContain('Search');
   });
 

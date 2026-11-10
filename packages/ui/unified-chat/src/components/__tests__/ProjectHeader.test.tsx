@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { summarizeProjectHeader, type ProjectHeaderPresentation } from '@agiworkforce/types';
+import {
+  PRIVACY_MODE_DISPLAY,
+  summarizeProjectHeader,
+  type ProjectHeaderPresentation,
+} from '@agiworkforce/types';
 import { ProjectHeader } from '../ProjectHeader';
 import { resolveProjectAccentHex } from '@agiworkforce/ui';
 
@@ -95,7 +99,7 @@ describe('ProjectHeader', () => {
     const privacy = screen.getByTestId('project-header-privacy-chip');
     const provider = screen.getByTestId('project-header-provider-chip');
     expect(privacy.getAttribute('data-trust-boundary')).toBe('managed');
-    expect(privacy.textContent).toBe('Managed Cloud');
+    expect(privacy.textContent).toBe(PRIVACY_MODE_DISPLAY.managed.label);
     expect(provider.getAttribute('data-trust-boundary')).toBe('managed');
   });
 
@@ -111,7 +115,7 @@ describe('ProjectHeader', () => {
     const presentation = buildPresentation({ importedFrom: 'manual' });
     render(<ProjectHeader presentation={presentation} />);
     expect(screen.getByTestId('project-header-imported-from').textContent).toContain(
-      'Created in AGI',
+      'Created here',
     );
   });
 

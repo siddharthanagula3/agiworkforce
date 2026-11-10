@@ -196,7 +196,7 @@ exports[`shared-primitive DOM snapshots > locks the ProjectHeader rendered struc
           class="inline-flex items-center rounded-full border px-1.5 py-0.5 text-caption uppercase tracking-wide border-border bg-muted text-info-text"
           data-testid="project-header-imported-from"
         >
-          Created in AGI
+          Created here
         </span>
       </div>
       <p

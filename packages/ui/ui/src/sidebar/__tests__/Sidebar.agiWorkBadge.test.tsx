@@ -46,7 +46,7 @@ describe('Sidebar AGI Work marker', () => {
   it('names the mode in the row accessible name, not by colour alone', () => {
     renderSidebar();
 
-    expect(screen.getByRole('button', { name: 'Pricing research, AGI Work' })).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Pricing research, Work' })).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Weekend plans' })).not.toBeNull();
   });
 });

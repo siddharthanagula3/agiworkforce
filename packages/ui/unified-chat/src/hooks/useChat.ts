@@ -37,6 +37,7 @@ import { useAgentQuestionStore } from '../components/AgentQuestionCard';
 import { useTurnNoticeStore } from '../components/TurnNotices';
 import { CONTINUE_GENERATION_INSTRUCTION, isMessageContinuable } from '../lib/continue-generation';
 import {
+  PRODUCT_NAMES,
   classifyManagedQuotaErrorCode,
   getModelMetadataById,
   getNextUpgradeTier,
@@ -1152,7 +1153,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
                   agentActivity: startAgentActivityLocally({
                     sessionId: convId,
                     turnId: assistantMessageId,
-                    summary: 'Starting Work',
+                    summary: `Starting ${PRODUCT_NAMES.work}`,
                     startedAtMs,
                   }),
                 },
