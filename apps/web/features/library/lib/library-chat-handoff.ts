@@ -5,7 +5,7 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { libraryItemToFile } from '@features/chat/components/Composer/ComposerFilesMenu';
 import { readPersistedDraft } from '@features/chat/components/Composer/composer-draft-storage';
-import { composerTextWithIncoming } from '@features/chat/components/Composer/incoming-composer-text';
+import { composerTextWithIncoming } from '@agiworkforce/utils/composer-incoming';
 import { PENDING_CONVERSATION_KEY, useChatStore } from '@shared/stores/web-chat-store';
 
 export type LibraryHandoffMode = 'chat' | 'agiwork';

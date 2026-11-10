@@ -17,6 +17,7 @@ import {
   useChatSettingsStore,
   useChatStore as useSharedChatStore,
 } from '@agiworkforce/unified-chat';
+import { composerTextWithIncoming } from '@agiworkforce/utils/composer-incoming';
 import { resolveAccountDisplayName } from '@agiworkforce/utils/display-name';
 import { registerChatStoreStateReader } from './stores/chat/chatStoreRef';
 import {
@@ -1128,7 +1129,7 @@ const DesktopShell = () => {
 
       const trimmedDraft = draft?.trim();
       if (trimmedDraft) {
-        chatStore.setDraftContent(trimmedDraft);
+        chatStore.setDraftContent(composerTextWithIncoming(chatStore.draftContent, trimmedDraft));
       }
     },
     [actions],

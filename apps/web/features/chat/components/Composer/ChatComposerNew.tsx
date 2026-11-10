@@ -217,7 +217,7 @@ import {
   readPersistedDraft,
   writePersistedDraft,
 } from './composer-draft-storage';
-import { composerTextWithIncoming } from './incoming-composer-text';
+import { composerTextWithIncoming } from '@agiworkforce/utils/composer-incoming';
 import { useClipboardDraftLifetime } from './use-clipboard-draft-lifetime';
 import type { DraftReplacement } from '@features/chat/hooks/use-conversation-draft-sync';
 import { modelSupportsResearch } from '@features/chat/lib/research-capability-gate';
