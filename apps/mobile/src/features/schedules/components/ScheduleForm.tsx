@@ -284,6 +284,7 @@ export function ScheduleForm({
             dayOfMonth={dayOfMonth}
             timeOfDay={timeOfDay}
             scheduledDate={scheduledDate}
+            timezone={timezone}
             onChange={handleRecurrenceChange}
           />
           {errors.recurrence ? (

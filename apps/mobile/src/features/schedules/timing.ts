@@ -125,3 +125,16 @@ export function isoToZonedTimeInput(value: string | null | undefined, timezone: 
   const pad = (number: number) => String(number).padStart(2, '0');
   return `${pad(parts.hour)}:${pad(parts.minute)}`;
 }
+
+export function earliestPickerDateInZone(timezone: string, now: Date = new Date()): Date {
+  let zoned: string;
+  try {
+    zoned = isoToZonedDateInput(now.toISOString(), timezone);
+  } catch {
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  }
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(zoned);
+  return match
+    ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+    : new Date(now.getFullYear(), now.getMonth(), now.getDate());
+}

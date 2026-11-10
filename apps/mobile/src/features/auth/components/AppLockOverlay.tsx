@@ -1,4 +1,5 @@
-import { StyleSheet, View } from 'react-native';
+import type { ReactNode } from 'react';
+import { Modal, StyleSheet, View } from 'react-native';
 import { Fingerprint } from 'lucide-react-native';
 import { Pressable } from 'react-native';
 import { Text } from '@/components/ui/Text';
@@ -8,6 +9,9 @@ import { typeScale } from '@/src/ui/theme/tokens';
 // Renders ABOVE the mounted app instead of replacing it. Swapping the tree for
 // a lock screen unmounted the navigator, so every resume through the gate threw
 // away the open conversation and restarted routing at the root.
+// The surface lives in its own native window because every React Native Modal
+// already open (the message editor, sheets, viewers) is a separate window that
+// a view in the activity cannot cover; a window created later sits above them.
 export function AppLockOverlay({
   onUnlock,
   onReset,
@@ -26,52 +30,73 @@ export function AppLockOverlay({
   // user for, so the cover is the background and nothing else.
   if (variant === 'cover') {
     return (
-      <View
-        testID="app-screen-cover"
-        style={[StyleSheet.absoluteFill, styles.root, { backgroundColor: colors.background }]}
-        accessibilityElementsHidden
-        importantForAccessibility="no-hide-descendants"
-      />
+      <LockWindow>
+        <View
+          testID="app-screen-cover"
+          style={[StyleSheet.absoluteFill, styles.root, { backgroundColor: colors.background }]}
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+        />
+      </LockWindow>
     );
   }
 
   return (
-    <View
-      testID="app-lock-overlay"
-      style={[StyleSheet.absoluteFill, styles.root, { backgroundColor: colors.background }]}
-      accessibilityViewIsModal
-      accessibilityLabel="AGI Mobile is locked"
-    >
-      <Fingerprint size={48} color={colors.teal} />
-      <Text style={[styles.title, { color: colors.textPrimary }]} accessibilityRole="header">
-        Locked
-      </Text>
-      <Text style={[styles.subtitle, { color: colors.textMuted }]}>Authenticate to continue</Text>
-      <Pressable
-        testID="app-lock-unlock"
-        onPress={onUnlock}
-        accessibilityRole="button"
-        accessibilityLabel="Unlock"
-        style={[styles.button, { backgroundColor: colors.teal }]}
+    <LockWindow>
+      <View
+        testID="app-lock-overlay"
+        style={[StyleSheet.absoluteFill, styles.root, { backgroundColor: colors.background }]}
+        accessibilityViewIsModal
+        accessibilityLabel="AGI Mobile is locked"
       >
-        <Text style={[styles.buttonLabel, { color: colors.accentText }]}>Unlock</Text>
-      </Pressable>
-      {onReset ? (
+        <Fingerprint size={48} color={colors.teal} />
+        <Text style={[styles.title, { color: colors.textPrimary }]} accessibilityRole="header">
+          Locked
+        </Text>
+        <Text style={[styles.subtitle, { color: colors.textMuted }]}>Authenticate to continue</Text>
         <Pressable
-          testID="app-lock-reset"
-          onPress={onReset}
+          testID="app-lock-unlock"
+          onPress={onUnlock}
           accessibilityRole="button"
-          accessibilityLabel="Reset app lock and sign out"
-          style={styles.resetButton}
+          accessibilityLabel="Unlock"
+          style={[styles.button, { backgroundColor: colors.teal }]}
         >
-          <Text style={[styles.subtitle, { color: colors.textMuted }]}>
-            Can&apos;t unlock? Reset app lock and sign out
-          </Text>
+          <Text style={[styles.buttonLabel, { color: colors.accentText }]}>Unlock</Text>
         </Pressable>
-      ) : null}
-    </View>
+        {onReset ? (
+          <Pressable
+            testID="app-lock-reset"
+            onPress={onReset}
+            accessibilityRole="button"
+            accessibilityLabel="Reset app lock and sign out"
+            style={styles.resetButton}
+          >
+            <Text style={[styles.subtitle, { color: colors.textMuted }]}>
+              Can&apos;t unlock? Reset app lock and sign out
+            </Text>
+          </Pressable>
+        ) : null}
+      </View>
+    </LockWindow>
   );
 }
+
+function LockWindow({ children }: { children: ReactNode }) {
+  return (
+    <Modal
+      visible
+      transparent
+      animationType="none"
+      statusBarTranslucent
+      navigationBarTranslucent
+      onRequestClose={dismissNothing}
+    >
+      {children}
+    </Modal>
+  );
+}
+
+function dismissNothing() {}
 
 const styles = StyleSheet.create({
   root: { alignItems: 'center', justifyContent: 'center', gap: 16, zIndex: zIndex.fullscreen },

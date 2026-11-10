@@ -20,6 +20,7 @@ interface RecurrencePickerProps {
   dayOfMonth?: number;
   timeOfDay: string;
   scheduledDate?: string | null;
+  timezone?: string;
   onChange: (
     recurrence: RecurrenceType,
     options?: {
@@ -63,6 +64,7 @@ export function RecurrencePicker({
   dayOfMonth = 1,
   timeOfDay,
   scheduledDate,
+  timezone,
   onChange,
 }: RecurrencePickerProps) {
   const colors = useThemeColors();
@@ -247,6 +249,7 @@ export function RecurrencePicker({
           value={localDate}
           onChange={handleDateChange}
           error={dateError}
+          timezone={timezone}
         />
       )}
 

@@ -73,6 +73,7 @@ jest.mock('@/stores/dispatchTaskStore', () => ({
 }));
 
 import { QRScanner } from '../src/features/companion/components/QRScanner';
+import { PAIRING_SECRET_REQUIRED_MESSAGE } from '../services/manualPairing';
 
 const PAIRING_SECRET = '9f'.repeat(32);
 const DESKTOP_PAIRING_PAYLOAD = `agiw3:WXYZ1234ABCD:${PAIRING_SECRET}`;
@@ -88,7 +89,7 @@ describe('QRScanner manual pairing', () => {
     fireEvent.press(screen.getByLabelText('Enter code manually'));
 
     expect(screen.getByLabelText('Connect').props.accessibilityState.disabled).toBe(true);
-    fireEvent.changeText(screen.getByPlaceholderText('ABCD EFGH IJKL'), 'WXYZ 1234 ABCD');
+    fireEvent.changeText(screen.getByPlaceholderText('Paste the pairing link'), 'WXYZ 1234 ABCD');
     expect(screen.getByLabelText('Connect').props.accessibilityState.disabled).not.toBe(true);
   });
 
@@ -99,7 +100,7 @@ describe('QRScanner manual pairing', () => {
 
     fireEvent.press(screen.getByLabelText('Enter Code Manually'));
 
-    expect(screen.getByPlaceholderText('ABCD EFGH IJKL')).toBeTruthy();
+    expect(screen.getByPlaceholderText('Paste the pairing link')).toBeTruthy();
     fireEvent.press(screen.getByLabelText('Back to camera options'));
     fireEvent.press(screen.getByLabelText('Close'));
     expect(onClose).toHaveBeenCalledTimes(1);
@@ -111,9 +112,9 @@ describe('QRScanner manual pairing', () => {
     const screen = render(<QRScanner onScan={onScan} onClose={jest.fn()} />);
     fireEvent.press(screen.getByLabelText('Enter code manually'));
 
-    fireEvent.press(screen.getByLabelText('Paste code'));
+    fireEvent.press(screen.getByLabelText('Paste pairing link'));
     await waitFor(() =>
-      expect(screen.getByPlaceholderText('ABCD EFGH IJKL').props.value).toBe(
+      expect(screen.getByPlaceholderText('Paste the pairing link').props.value).toBe(
         DESKTOP_PAIRING_PAYLOAD,
       ),
     );
@@ -126,27 +127,38 @@ describe('QRScanner manual pairing', () => {
     mockClipboardRead.mockResolvedValue('');
     const screen = render(<QRScanner onScan={jest.fn()} onClose={jest.fn()} />);
     fireEvent.press(screen.getByLabelText('Enter code manually'));
-    fireEvent.changeText(screen.getByPlaceholderText('ABCD EFGH IJKL'), 'WXYZ 1234 ABCD');
+    fireEvent.changeText(screen.getByPlaceholderText('Paste the pairing link'), 'WXYZ 1234 ABCD');
 
-    fireEvent.press(screen.getByLabelText('Paste code'));
+    fireEvent.press(screen.getByLabelText('Paste pairing link'));
 
     await waitFor(() => expect(screen.getByText(/Clipboard is empty/)).toBeTruthy());
-    expect(screen.getByPlaceholderText('ABCD EFGH IJKL').props.value).toBe('WXYZ 1234 ABCD');
+    expect(screen.getByPlaceholderText('Paste the pairing link').props.value).toBe(
+      'WXYZ 1234 ABCD',
+    );
   });
 
-  it('shows the Desktop code format and submits a spaced 12-character code', () => {
+  it('asks for the pairing link and says the 12-character code cannot pair alone', () => {
+    const screen = render(<QRScanner onScan={jest.fn()} onClose={jest.fn()} />);
+
+    fireEvent.press(screen.getByLabelText('Enter code manually'));
+
+    expect(screen.getByText('Enter Pairing Link')).toBeTruthy();
+    expect(
+      screen.getByText(/choose Pair\s+a phone, then copy the pairing link and paste it here/),
+    ).toBeTruthy();
+    expect(screen.getByText(/cannot pair on its own/)).toBeTruthy();
+  });
+
+  it('refuses the bare 12-character code that a fresh pairing would reject', () => {
     const onScan = jest.fn();
     const screen = render(<QRScanner onScan={onScan} onClose={jest.fn()} />);
 
     fireEvent.press(screen.getByLabelText('Enter code manually'));
-    const input = screen.getByPlaceholderText('ABCD EFGH IJKL');
-    fireEvent.changeText(input, 'WXYZ 1234 ABCD');
+    fireEvent.changeText(screen.getByPlaceholderText('Paste the pairing link'), 'WXYZ 1234 ABCD');
     fireEvent.press(screen.getByLabelText('Connect'));
 
-    expect(onScan).toHaveBeenCalledWith('WXYZ 1234 ABCD');
-    expect(
-      screen.getByText(/Settings → Capabilities → Remote Control, choose Pair\s+a phone/),
-    ).toBeTruthy();
+    expect(onScan).not.toHaveBeenCalled();
+    expect(screen.getByText(PAIRING_SECRET_REQUIRED_MESSAGE)).toBeTruthy();
   });
 
   it('hands the scanned pairing link to the store instead of silently ignoring it', () => {
@@ -165,7 +177,7 @@ describe('QRScanner manual pairing', () => {
     const screen = render(<QRScanner onScan={onScan} onClose={jest.fn()} />);
 
     fireEvent.press(screen.getByLabelText('Enter code manually'));
-    const input = screen.getByPlaceholderText('ABCD EFGH IJKL');
+    const input = screen.getByPlaceholderText('Paste the pairing link');
     expect(DESKTOP_PAIRING_PAYLOAD.length).toBeLessThanOrEqual(input.props.maxLength as number);
 
     fireEvent.changeText(input, DESKTOP_PAIRING_PAYLOAD);
@@ -179,12 +191,14 @@ describe('QRScanner manual pairing', () => {
     const screen = render(<QRScanner onScan={onScan} onClose={jest.fn()} />);
 
     fireEvent.press(screen.getByLabelText('Enter code manually'));
-    fireEvent.changeText(screen.getByPlaceholderText('ABCD EFGH IJKL'), 'ABCD1234');
+    fireEvent.changeText(screen.getByPlaceholderText('Paste the pairing link'), 'ABCD1234');
     fireEvent.press(screen.getByLabelText('Connect'));
 
     expect(onScan).not.toHaveBeenCalled();
     expect(
-      screen.getByText('Enter the 12-character code shown on Desktop, or scan the QR code.'),
+      screen.getByText(
+        'That is not a pairing link from Desktop. Copy it again, or scan the QR code.',
+      ),
     ).toBeTruthy();
   });
 });
