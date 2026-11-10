@@ -169,6 +169,8 @@ import {
   __resetCloudAccountSessionForTests,
   activateCloudAccount,
 } from '../src/features/auth/services/cloudAccountSession';
+import { storage } from '../lib/mmkv';
+import { MINOR_SAFE_REFUSAL } from '../lib/contentFilter';
 
 const AUTO_MODEL_ID = requireAutoMode().id;
 const mockStreamChat = streamChat as jest.MockedFunction<typeof streamChat>;
@@ -2653,6 +2655,48 @@ describe('chatStore, streaming state', () => {
 
       alertSpy.mockRestore();
     });
+
+    it.each([
+      ['new-conversation', MODEL, false],
+      ['Cloud-conversation', CLOUD_MODEL, true],
+    ])(
+      'refuses a %s send in minor-safe mode with the adult preference off and points to Parental Controls',
+      async (_label, model, cloud) => {
+        if (cloud) seedCloudConversation();
+        const getString = storage.getString as jest.Mock;
+        getString.mockImplementation((key: string) =>
+          key === 'age-gate:v1'
+            ? JSON.stringify({
+                confirmed: true,
+                isMinor: true,
+                confirmedAt: '2026-11-01T00:00:00.000Z',
+                regionCode: 'US',
+                threshold: 13,
+              })
+            : undefined,
+        );
+        const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+
+        try {
+          let accepted: boolean | undefined;
+          await act(async () => {
+            accepted = await getState().sendMessage(CONV_ID, 'explain the term nsfw', model);
+          });
+
+          expect(useSettingsStore.getState().reduceSensitiveContent).toBe(false);
+          expect(accepted).toBe(false);
+          expect(alertSpy).toHaveBeenCalledWith('Content not available', MINOR_SAFE_REFUSAL);
+          const body = alertSpy.mock.calls[0]?.[1] ?? '';
+          expect(body).toContain('Settings > Parental Controls');
+          expect(body).not.toContain('Settings > Privacy');
+          expect(mockStreamChat).not.toHaveBeenCalled();
+          expect(mockLocalGenerate).not.toHaveBeenCalled();
+        } finally {
+          getString.mockReturnValue(undefined);
+          alertSpy.mockRestore();
+        }
+      },
+    );
 
     it('resolves false and never fires onAccepted when a pre-flight gate blocks the send', async () => {
       mockRemoteDisabledReason.mockReturnValue('Remote chat is disabled for this test');
