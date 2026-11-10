@@ -883,8 +883,10 @@ export async function readBankAccountOverview(
         fetched += page.transactions.length;
         transactions.push(...page.transactions.map(summarizeTransaction));
         if (page.transactions.length === 0 || fetched >= page.total_transactions) break;
-      } while (transactions.length < OVERVIEW_MAX_TRANSACTIONS);
+      } while (fetched < OVERVIEW_MAX_TRANSACTIONS);
     }
+    transactions.sort((left, right) => right.date.localeCompare(left.date));
+    transactions.length = Math.min(transactions.length, OVERVIEW_MAX_TRANSACTIONS);
     return { status: 'ready', accounts, transactions, totalTransactions };
   } catch (error) {
     if (error instanceof PlaidApiError && error.plaidCode === PLAID_PRODUCT_NOT_READY) {

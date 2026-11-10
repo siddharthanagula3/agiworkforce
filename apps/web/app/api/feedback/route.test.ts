@@ -31,6 +31,7 @@ const feedbackRouteMocks = vi.hoisted(() => {
     claimScope: vi.fn((..._args: unknown[]) => scopedDb),
     storageConfigured: vi.fn(() => true),
     putPrivateObject: vi.fn(async ({ key }: { key: string }) => ({ key })),
+    deletePrivateObject: vi.fn(async (_key: string) => undefined),
   };
 });
 
@@ -70,6 +71,7 @@ vi.mock('@/lib/server/object-storage', async (importOriginal) => ({
   ...(await importOriginal<ObjectStorageModule>()),
   isPrivateObjectStorageConfigured: feedbackRouteMocks.storageConfigured,
   putPrivateObject: feedbackRouteMocks.putPrivateObject,
+  deletePrivateObject: feedbackRouteMocks.deletePrivateObject,
 }));
 
 import { DELETE, POST } from './route';
@@ -390,6 +392,89 @@ describe('POST /api/feedback', () => {
     expect(response.status).toBe(429);
     expect(feedbackRouteMocks.putPrivateObject).not.toHaveBeenCalled();
     expect(feedbackRouteMocks.query).not.toHaveBeenCalled();
+  });
+
+  describe('a screenshot whose report was not stored', () => {
+    const withScreenshot = () =>
+      request({
+        subject: 'Desktop report',
+        message: 'Something happened.',
+        metadata: { platform: 'macos', version: '1.0.0', user_agent: 'AGI Desktop' },
+        screenshot: { data_url: `data:image/png;base64,${Buffer.from('png').toString('base64')}` },
+      });
+
+    it('keeps the screenshot when the report is stored', async () => {
+      const response = await POST(withScreenshot());
+
+      expect(response.status).toBe(200);
+      expect(feedbackRouteMocks.putPrivateObject).toHaveBeenCalledTimes(1);
+      expect(feedbackRouteMocks.deletePrivateObject).not.toHaveBeenCalled();
+    });
+
+    it('confirms the screenshot was stored', async () => {
+      const response = await POST(withScreenshot());
+
+      await expect(response.json()).resolves.toEqual({ success: true, screenshot_stored: true });
+    });
+
+    it('tells the sender the screenshot was not stored when private storage is unavailable', async () => {
+      feedbackRouteMocks.storageConfigured.mockReturnValueOnce(false);
+
+      const response = await POST(withScreenshot());
+
+      expect(response.status).toBe(200);
+      expect(feedbackRouteMocks.putPrivateObject).not.toHaveBeenCalled();
+      expect(feedbackRouteMocks.query).toHaveBeenCalledTimes(1);
+      await expect(response.json()).resolves.toEqual({ success: true, screenshot_stored: false });
+    });
+
+    it('says nothing about a screenshot when none was sent', async () => {
+      const response = await POST(
+        request({
+          subject: 'Desktop report',
+          message: 'Something happened.',
+          metadata: { platform: 'macos', version: '1.0.0', user_agent: 'AGI Desktop' },
+        }),
+      );
+
+      await expect(response.json()).resolves.toEqual({ success: true });
+    });
+
+    it('deletes the uploaded screenshot when the insert fails', async () => {
+      feedbackRouteMocks.query.mockRejectedValueOnce(new Error('connection refused'));
+
+      const response = await POST(withScreenshot());
+
+      expect(response.status).toBeGreaterThanOrEqual(500);
+      const uploaded = feedbackRouteMocks.putPrivateObject.mock.calls[0]?.[0]?.key;
+      expect(uploaded).toMatch(/^feedback\/user-web\/\d+_.+\.png$/u);
+      expect(feedbackRouteMocks.deletePrivateObject).toHaveBeenCalledWith(uploaded);
+    });
+
+    it('deletes the uploaded screenshot when the database cannot be reached', async () => {
+      const { getNeonDb } = await import('@/lib/server/neon-db');
+      vi.mocked(getNeonDb).mockImplementationOnce(() => {
+        throw new Error('database is not configured');
+      });
+
+      const response = await POST(withScreenshot());
+
+      expect(response.status).toBeGreaterThanOrEqual(500);
+      expect(feedbackRouteMocks.deletePrivateObject).toHaveBeenCalledTimes(1);
+    });
+
+    it('still reports the failed submission when the cleanup also fails', async () => {
+      feedbackRouteMocks.query.mockRejectedValueOnce(new Error('connection refused'));
+      feedbackRouteMocks.deletePrivateObject.mockRejectedValueOnce(new Error('storage down'));
+
+      const response = await POST(withScreenshot());
+
+      expect(response.status).toBeGreaterThanOrEqual(500);
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.objectContaining({ screenshotKey: expect.stringMatching(/^feedback\//u) }),
+        expect.stringContaining('Failed to discard the screenshot'),
+      );
+    });
   });
 });
 

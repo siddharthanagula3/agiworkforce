@@ -9,7 +9,11 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { redactTranscriptText } from '@/lib/support/handoff/transcript';
 import { getOptionalAuthUser } from '@/lib/api-auth';
-import { isPrivateObjectStorageConfigured, putPrivateObject } from '@/lib/server/object-storage';
+import {
+  deletePrivateObject,
+  isPrivateObjectStorageConfigured,
+  putPrivateObject,
+} from '@/lib/server/object-storage';
 import { secureFilenameSegment } from '@/lib/secure-random';
 import {
   RESPONSE_RATING_COMMENT_MAX_CHARS,
@@ -56,6 +60,17 @@ async function storeScreenshot(dataUrl: string, userId: string | null): Promise<
     contentLength: data.byteLength,
   });
   return key;
+}
+
+async function discardScreenshot(key: string, userId: string | null): Promise<void> {
+  try {
+    await deletePrivateObject(key);
+  } catch (error) {
+    logger.error(
+      { error, userId, screenshotKey: key },
+      'Failed to discard the screenshot of a feedback report that was not stored',
+    );
+  }
 }
 
 const ResponseRatingTarget = z.object({
@@ -286,13 +301,14 @@ async function submitReport(request: NextRequest, feedback: Feedback) {
     ? await storeScreenshot(feedback.screenshot.data_url, userId)
     : null;
 
-  const ownerDb = getNeonDb();
-  const db = userId
-    ? createClaimedUserScopedDb(ownerDb, { userId, organizationId: null })
-    : ownerDb;
   try {
+    const ownerDb = getNeonDb();
+    const db = userId
+      ? createClaimedUserScopedDb(ownerDb, { userId, organizationId: null })
+      : ownerDb;
     await db.query(INSERT_FEEDBACK_SQL, feedbackRow(userId, feedback, { logs, screenshotKey }));
   } catch (error) {
+    if (screenshotKey) await discardScreenshot(screenshotKey, userId);
     logger.error(
       {
         error,
@@ -305,7 +321,10 @@ async function submitReport(request: NextRequest, feedback: Feedback) {
     throw createError.internal('Failed to submit feedback');
   }
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({
+    success: true,
+    ...(feedback.screenshot ? { screenshot_stored: screenshotKey !== null } : {}),
+  });
 }
 
 async function handleSubmitFeedback(request: NextRequest) {
