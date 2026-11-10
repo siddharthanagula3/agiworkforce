@@ -9,7 +9,7 @@ import {
   readProductLink,
 } from '@/src/features/notifications/productLinks';
 import { storage, whenMmkvReady } from '@/lib/mmkv';
-import { notificationAllowed, vibrationAllowed } from './notificationGate';
+import { notificationAllowedOnceReadable, vibrationAllowed } from './notificationGate';
 import {
   androidChannelId,
   registerAndroidChannels,
@@ -45,7 +45,7 @@ Notifications.setNotificationHandler({
   handleNotification: async (notification) => {
     const data = notification.request.content.data as NotificationData | undefined;
 
-    if (data?.type && !notificationAllowed(data.type)) {
+    if (data?.type && !(await notificationAllowedOnceReadable(data.type))) {
       return {
         shouldShowBanner: false,
         shouldShowList: false,

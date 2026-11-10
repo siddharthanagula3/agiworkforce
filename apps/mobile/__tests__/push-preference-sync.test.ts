@@ -98,11 +98,12 @@ function makeContext(
 let appStateListener: ((state: string) => void) | undefined;
 
 describe('push delivery preference sync', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.clearAllMocks();
     jest.useFakeTimers();
     mockApiPost.mockResolvedValue(undefined);
     appStateListener = undefined;
+    await useNotificationPrefsStore.persist.rehydrate();
     jest
       .spyOn(AppState, 'addEventListener')
       .mockImplementation((_event: string, handler: (state: string) => void) => {
