@@ -199,23 +199,19 @@ function MemoryEditorContent({
       const current = capture();
       if (!current()) return;
       const revision = editRevision.current;
-      if (!isAccountScoped) {
-        setEditingId(null);
-        setEditDraft('');
-      }
       void runMutation(async () => {
         if (!next) {
           await remove(id);
         } else {
           await update(id, next);
         }
-        if (current() && isAccountScoped && editRevision.current === revision) {
+        if (current() && editRevision.current === revision) {
           setEditingId(null);
           setEditDraft('');
         }
       });
     },
-    [editDraft, remove, update, runMutation, capture, isAccountScoped],
+    [editDraft, remove, update, runMutation, capture],
   );
 
   const onCancelEdit = useCallback(() => {
@@ -287,7 +283,7 @@ function MemoryEditorContent({
               <button
                 type="button"
                 onClick={() => void onSaveEdit(fact.id)}
-                disabled={fact.pending || adapter.mutationBlocked || (isAccountScoped && mutating)}
+                disabled={fact.pending || adapter.mutationBlocked || mutating}
                 className="rounded-compact bg-[var(--chat-accent-primary)] px-2 py-1 text-xs font-medium text-[var(--chat-accent-on-primary)] hover:opacity-90"
               >
                 Save

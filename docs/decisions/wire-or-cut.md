@@ -13,8 +13,9 @@ Desktop entries dated before D-2026-09-15-04 describe the retained Tauri
 implementation unless they explicitly name Electron. Words such as “live,”
 “mounted,” and “shipped” in those historical decisions do not make a retained
 Tauri path a public Desktop capability. Electron is the only public Desktop;
-it is Managed Cloud only for inference, reports `localMcp: false`, accepts no
-provider key, and has no published installer.
+its chat is Managed Cloud only for inference, reports `localMcp: false`, and
+accepts no provider key, its local coding sessions run the CLI and can use a
+local model or a provider key set up there, and it has no published installer.
 
 ## 2026-07-29: Desktop IPC Baseline
 

@@ -5,9 +5,10 @@
  * `WEB_APP_URL` / `API_BASE_URL` (`src/api/config.ts`): the repo's eslint
  * egress rule pins raw `fetch()` of those identifiers to the renderer's
  * egress-guard chokepoint, which exists to protect the Local trust boundary.
- * This shell has no Local mode, every request it can make is Managed Cloud
- * by construction (our own API, allowlisted below), so the main process is its
- * own egress chokepoint.
+ * Desktop chat has no Local mode and every request this process can make is
+ * Managed Cloud by construction (our own API, allowlisted below), so the main
+ * process is its own egress chokepoint. Local coding sessions run in the
+ * bundled CLI, a separate process with its own egress policy.
  */
 
 import { DESKTOP_DEEP_LINK_SCHEME } from '@agiworkforce/local-runtime-contract';

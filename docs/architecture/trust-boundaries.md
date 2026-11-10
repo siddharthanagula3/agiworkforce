@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-10-23
+Last updated: 2026-11-10
 
 The authoritative per-surface definition of which **trust modes** (Local / BYOK / Managed Cloud) and **model sources** each surface exposes, and which surfaces **share cloud chats**. Founder-stated 2026-06-20. This refines the Local / BYOK / Managed Cloud boundaries in `AGENTS.md` section 6 into exact per-surface rules. When a surface's code disagrees with this table, the code is the bug.
 
@@ -35,7 +35,7 @@ unpublished extension available to users.
 | ----------- | :--------: | :------------: | :--------------------------: | -------------------------------------------------- |
 | **Mobile**  |     ✅     | ❌ **no BYOK** |              ✅              | ✅ shared with web + desktop                       |
 | **Web**     |     ❌     |       ❌       |      ✅ **cloud only**       | ✅ shared with desktop + mobile                    |
-| **Desktop** |     ❌     |       ❌       |      ✅ **cloud only**       | ✅ shared with web + mobile                        |
+| **Desktop** | Code only  |   Code only    |  ✅ **chat is cloud only**   | ✅ shared with web + mobile                        |
 | **CLI**     |     ✅     |       ✅       |  ✅ (subscription required)  | separate (coding sessions)                         |
 | **VS Code** |     ✅     |       ✅       |  ✅ (subscription required)  | separate (coding sessions)                         |
 | **Chrome**  |     ❌     |       ❌       |      ✅ **cloud only**       | ✅ eligible chats mirror to shared account history |
@@ -44,10 +44,13 @@ unpublished extension available to users.
 
 - **Mobile**: two modes only: **Local** (on-device) and **Cloud** (subscription). **BYOK is NOT offered on mobile** (no direct provider-key entry). Cloud chats sync with web + desktop.
 - **Web**: **Cloud only.** No local, no BYOK. Cloud chats sync with desktop + mobile.
-- **Desktop**: **Cloud only.** The public Electron application loads the managed
-  account surface and rejects local-inference commands. It accepts no provider
-  key. Approved folders, computer use, and other device tools do not change the
-  conversation's managed-cloud trust boundary. Cloud chats sync with web + mobile.
+- **Desktop**: **Chat is Cloud only.** The public Electron application loads the
+  managed account surface for chat and rejects local-inference commands there. It
+  accepts no provider key for chat. Its local coding sessions run the bundled CLI,
+  so they can use a local model or a provider key set up in the CLI, and they stay
+  separate from the Cloud chat store. Approved folders, computer use, and other
+  device tools do not change the conversation's managed-cloud trust boundary.
+  Cloud chats sync with web + mobile.
 - **CLI**: local-first coding agent. Model access via **subscription** (must be present to reach managed models), **BYOK**, and **local models**. Coding sessions are separate from the chat app's cloud history.
 - **VS Code**: **same as CLI** (subscription + BYOK + local; coding sessions separate).
 - **Chrome**: **Cloud only.** `chrome.storage.local` remains authoritative, but a signed-in conversation automatically mirrors into the shared account store when every turn was inferred in Managed Cloud. It then appears in Web, Mobile Cloud, and Desktop. Unknown-provenance or any Local/BYOK turn permanently disqualifies that conversation.

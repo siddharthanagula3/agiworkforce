@@ -2609,10 +2609,11 @@ function toFailure(error: unknown): DesktopRuntimeResponse<never> {
 }
 
 /**
- * AGI Desktop is the Electron shell, and D-2026-09-15-04 makes it Cloud-only, so
- * the shell refuses on-device inference rather than only hiding it: a hidden
- * control over a live backend still leaves the capability reachable by
- * anything that can reach the bridge.
+ * AGI Desktop is the Electron shell, and D-2026-09-15-04 makes its chat
+ * Cloud-only, so the shell refuses on-device inference rather than only hiding
+ * it: a hidden control over a live backend still leaves the capability
+ * reachable by anything that can reach the bridge. Local coding sessions reach
+ * local models through the bundled CLI, not through these commands.
  */
 const LOCAL_INFERENCE_UNSUPPORTED = `${PRODUCT_NAMES.desktop} answers every conversation in the cloud. Models running on this Mac are not one of its runtimes.`;
 

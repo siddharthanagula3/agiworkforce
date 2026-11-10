@@ -2,7 +2,7 @@
 
 Status: Current; mechanical restructure complete, website launch remediation active
 Owner: Founder + platform lead
-Last updated: 2026-09-22
+Last updated: 2026-11-10
 Detailed plan: retired. `docs/plans/monorepo-restructure-2026-07-08.md` was
 deleted once its phases landed; the mechanical restructure it described is
 complete (see the phase note below) and `docs/architecture/overview.md`
@@ -35,7 +35,9 @@ final success criterion is the full platform outcome.
 - Web is Managed Cloud only.
 - Public Desktop is the Electron product under `apps/desktop/electron`. It
   combines the hosted Account Cloud client with a permissioned local host for
-  files, computer use, voice, and developer-session projection. Retained Tauri
+  files, computer use, voice, and developer-session projection. Its chat uses
+  Cloud; its local coding sessions run the bundled CLI and can use a local model
+  or a provider key set up in the CLI. Retained Tauri
   code is internal implementation inventory, not a second public product and
   not evidence of a public capability.
 - Mobile supports isolated on-device Local and Managed Cloud; it has no BYOK.
