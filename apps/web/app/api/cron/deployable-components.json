@@ -493,7 +493,7 @@
         {
           "version": "1.1.0",
           "date": "2026-11-10",
-          "change": "Also purges deleted project knowledge files (object, then row) and deleted projects with no files or project memories left, 30 days after deletion and only once no legal hold covers them; every purge is audited as deleted_content_purged."
+          "change": "Also purges deleted project knowledge files (object, then row) 30 days after deletion and only once no legal hold covers them; every purge is audited as deleted_content_purged. Deleted project records are kept, because devices learn a deletion from their sync tombstone."
         },
         {
           "version": "1.0.0",

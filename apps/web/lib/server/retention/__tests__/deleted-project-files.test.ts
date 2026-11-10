@@ -13,7 +13,7 @@ vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: mocks.recordAuditEven
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { FakePostgres } from '@/lib/services/__tests__/fake-postgres';
-import { purgeDeletedProjectFiles, purgeEmptiedDeletedProjects } from '../deleted-project-files';
+import { purgeDeletedProjectFiles } from '../deleted-project-files';
 
 const ORG = '11111111-1111-4111-8111-111111111111';
 const LONG_AGO = '2026-01-01T00:00:00.000Z';
@@ -239,132 +239,28 @@ describe('purgeDeletedProjectFiles after a legal hold is released', () => {
     expect(lock).toBeGreaterThanOrEqual(0);
     expect(lock).toBeLessThan(destroy);
   });
-});
 
-/**
- * Every project but `p-live` was deleted. Dave is under an active hold; erin's
- * hold was released.
- */
-function projectWorld() {
-  const project = (id: string, user: string, deletedAt: string | null) => ({
-    id,
-    user_id: user,
-    organization_id: ORG,
-    deleted_at: deletedAt,
-  });
-  return new FakePostgres({
-    legal_holds: [
-      {
-        id: 'hold-dave',
-        organization_id: ORG,
-        scope: 'member',
-        subject_user_id: 'dave',
-        resource_types: ['project'],
-        released_at: null,
-      },
-      {
-        id: 'hold-erin',
-        organization_id: ORG,
-        scope: 'member',
-        subject_user_id: 'erin',
-        resource_types: null,
-        released_at: '2026-09-01T00:00:00.000Z',
-      },
-    ],
-    user_projects: [
-      project('p-emptied', 'erin', LONG_AGO),
-      project('p-held', 'dave', LONG_AGO),
-      project('p-live', 'erin', null),
-      project('p-files-left', 'erin', LONG_AGO),
-      project('p-memories', 'erin', LONG_AGO),
-      project('p-recent', 'erin', LAST_WEEK),
-      project('p-last-file', 'erin', LONG_AGO),
-    ],
-    project_knowledge_files: [
-      { id: 'f-left', project_id: 'p-files-left', deleted_at: LAST_WEEK, storage_uri: RECENT },
-      {
-        id: 'f-last',
-        project_id: 'p-last-file',
-        deleted_at: LONG_AGO,
-        storage_uri: 'knowledge-files/projects/p-last-file/last.pdf',
-      },
-    ],
-    user_memories: [{ id: 'mem-1', user_id: 'erin', project_id: 'p-memories' }],
-  });
-}
-
-function projectIds(db: FakePostgres): string[] {
-  return db
-    .rowsIn('user_projects')
-    .map((row) => String(row['id']))
-    .sort();
-}
-
-describe('purgeEmptiedDeletedProjects', () => {
-  it('purges a deleted project whose files are gone once its hold is released, and audits it', async () => {
-    const db = projectWorld();
-
-    const result = await purgeEmptiedDeletedProjects(db as unknown as DatabaseAdapter);
-
-    expect(projectIds(db)).not.toContain('p-emptied');
-    expect(result).toMatchObject({ rowsPurged: 1, heldFromPurge: 1 });
-    expect(mocks.recordAuditEvent).toHaveBeenCalledTimes(1);
-    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
-      expect.objectContaining({
-        eventType: 'deleted_content_purged',
-        organizationId: ORG,
-        detail: expect.objectContaining({
-          resourceType: 'project',
-          source: 'cron/purge-deleted-media',
-          deleted: 1,
-        }),
-      }),
-    );
-  });
-
-  it('keeps a held project, a live one, one with files left, one scoping memories and a recent one', async () => {
-    const db = projectWorld();
-
-    await purgeEmptiedDeletedProjects(db as unknown as DatabaseAdapter);
-
-    for (const kept of ['p-held', 'p-live', 'p-files-left', 'p-memories', 'p-recent']) {
-      expect(projectIds(db)).toContain(kept);
-    }
-    expect(db.rowsIn('project_knowledge_files').map((row) => row['id'])).toContain('f-left');
-  });
-
-  it('takes a project in the same run as the purge that removed its last file', async () => {
-    const db = projectWorld();
-
-    await purgeDeletedProjectFiles(db as unknown as DatabaseAdapter, {
-      deleteObject: async () => undefined,
+  // Mobile and the CLI learn a project's deletion only from its tombstone in
+  // the /api/projects/sync delta, so the record has to outlive every offline device.
+  it('never purges a deleted project record, even once its last file is gone', async () => {
+    const { db, deleteObject } = world();
+    db.tables.set('user_projects', [
+      ...db.rowsIn('user_projects'),
+      { id: 'p-gone', user_id: 'alice', organization_id: ORG, deleted_at: LONG_AGO },
+    ]);
+    db.rowsIn('project_knowledge_files').push({
+      id: 'f-gone',
+      project_id: 'p-gone',
+      deleted_at: LONG_AGO,
+      storage_uri: 'knowledge-files/projects/p-gone/last.pdf',
     });
-    await purgeEmptiedDeletedProjects(db as unknown as DatabaseAdapter);
 
-    expect(projectIds(db)).not.toContain('p-last-file');
-    expect(projectIds(db)).toContain('p-files-left');
-  });
+    await purgeDeletedProjectFiles(db as unknown as DatabaseAdapter, { deleteObject });
 
-  it('purges nothing when the hold state cannot be read', async () => {
-    const db = projectWorld();
-
-    await expect(purgeEmptiedDeletedProjects(failingHoldReads(db))).rejects.toThrow(
-      /legal_hold_preserves/,
+    expect(rowIds(db)).not.toContain('f-gone');
+    expect(db.rowsIn('user_projects').map((row) => row['id'])).toContain('p-gone');
+    expect(db.statements.some((sql) => /delete\s+from\s+public\.user_projects/i.test(sql))).toBe(
+      false,
     );
-
-    expect(projectIds(db)).toHaveLength(7);
-    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
-  });
-
-  it('repeats the hold check and takes the workspace lock in the statement that deletes', async () => {
-    const db = projectWorld();
-
-    await purgeEmptiedDeletedProjects(db as unknown as DatabaseAdapter);
-
-    const lock = db.statements.findIndex((sql) => /pg_advisory_xact_lock_shared/.test(sql));
-    const destroy = db.statements.find((sql) => /delete from public\.user_projects/.test(sql));
-    expect(lock).toBeGreaterThanOrEqual(0);
-    expect(destroy).toContain('public.legal_hold_preserves(');
-    expect(destroy).toContain('remaining.project_id = target.id');
   });
 });
