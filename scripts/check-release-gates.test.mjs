@@ -97,6 +97,24 @@ test('submitting to a store without the device matrix is caught', () => {
   assert.ok(failures.some((message) => message.includes('release-ios must not submit')));
 });
 
+test('a store job that re-resolves the release tag instead of the validated commit is caught', () => {
+  const broken = structuredClone(mobile);
+  const checkout = broken.jobs['release-android'].steps.find((step) =>
+    String(step.uses ?? '').startsWith('actions/checkout@'),
+  );
+  checkout.with.ref = '${{ needs.validate.outputs.tag }}';
+  assert.deepEqual(checkMobileReleaseGates(broken), [
+    'release-android must check out the commit validate validated, not a movable ref',
+  ]);
+});
+
+test('a validate job that does not export its commit is caught', () => {
+  const broken = structuredClone(mobile);
+  delete broken.jobs.validate.outputs.commit;
+  const failures = checkMobileReleaseGates(broken);
+  assert.ok(failures.some((message) => message.includes('export the commit it validated')));
+});
+
 test('dropping the privacy declaration check is caught', () => {
   const broken = structuredClone(mobile);
   broken.jobs.validate.steps = broken.jobs.validate.steps.map((step) => ({

@@ -1684,6 +1684,51 @@ describe('ChatStateManager local turn lifecycle', () => {
     });
   });
 
+  it('keeps a retired turn out of the cleared conversation while its interrupt settles', async () => {
+    let resolveInterrupt!: () => void;
+    const delayedInterrupt = new Promise<void>((resolve) => {
+      resolveInterrupt = resolve;
+    });
+    const harness = makeHarness({ interruptTurn: delayedInterrupt });
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Old conversation' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+
+    harness.manager.resetConversation();
+    await vi.waitFor(() => expect(harness.runtime.interruptTurn).toHaveBeenCalledOnce());
+    const clearedAt = harness.posted.length;
+
+    harness.emit({
+      type: 'output_delta',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      delta: 'stale fragment',
+    });
+    harness.emit({
+      type: 'tool_execution_start',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      toolCallId: 'tool-1',
+      name: 'read_file',
+      category: 'read',
+      summary: 'Read a file',
+      input: {},
+    } as LocalRuntimeEvent);
+    harness.emit({
+      type: 'turn_interrupted',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+    } as LocalRuntimeEvent);
+    resolveInterrupt();
+    await send;
+
+    const afterClear = harness.posted.slice(clearedAt);
+    expect(afterClear.some((message) => message.type === 'token')).toBe(false);
+    expect(afterClear.some((message) => message.type === 'toolCallStart')).toBe(false);
+  });
+
   it('fails closed when a Local session is aimed at catalog or Auto routing', async () => {
     const harness = makeHarness({
       localModels: [{ id: SYNTHETIC_LOCAL_MODEL_ID, provider: 'ollama' }],

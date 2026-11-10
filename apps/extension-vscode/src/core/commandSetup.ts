@@ -528,6 +528,7 @@ const CONTINUE_HANDOFF_HERE = 'Continue here';
 async function continueCliSessionHere(
   localRuntimes: LocalRuntimePool,
   accepted: Set<string>,
+  openHere: (threadId: string) => Promise<void>,
   threadId?: string,
 ): Promise<void> {
   const folder = getActiveWorkspaceFolderSync();
@@ -583,7 +584,7 @@ async function continueCliSessionHere(
   if (choice !== CONTINUE_HANDOFF_HERE) return;
   accepted.add(outcome.receipt);
   await runtime.acceptHandoff(handoff);
-  await vscode.commands.executeCommand('agi-workforce.sidebar.focus');
+  await openHere(newest.id);
 }
 
 async function runUnreachableOffer(unreachable: HostModelUnreachable): Promise<void> {
@@ -1405,6 +1406,10 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       await continueCliSessionHere(
         localRuntimes,
         acceptedHandoffs,
+        async (id) => {
+          await revealFirstPartyChat();
+          await sidebarProvider.resumeConversation(id);
+        },
         typeof argument === 'string' && argument !== '' ? argument : undefined,
       );
     }),

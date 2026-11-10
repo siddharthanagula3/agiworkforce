@@ -2473,7 +2473,7 @@ export class ChatStateManager {
       ) {
         return;
       }
-      void this._handleRuntimeEvent(runtime, event, complete);
+      this._deliverTurnEvent(runtime, event, epoch, complete);
     };
     const subscription = runtime.onEvent((event) => {
       if (event.type === 'runtime_disconnected') {
@@ -4067,7 +4067,7 @@ export class ChatStateManager {
         resolveCompletion = resolve;
       });
       const deliverTurnEvent = (event: LocalRuntimeEvent): void => {
-        void this._handleRuntimeEvent(runtime, event, () => {
+        this._deliverTurnEvent(runtime, event, conversationEpoch, () => {
           uiSettled = true;
           if (!terminal) {
             terminal = true;
@@ -4079,7 +4079,7 @@ export class ChatStateManager {
       const notificationSubscription = runtime.onNotification((notification) => {
         if (notification.method === 'mcp/authRequired') {
           const required = readMcpAuthRequired(notification.params);
-          if (required?.threadId === thread.id) {
+          if (required?.threadId === thread.id && conversationEpoch === this._conversationEpoch) {
             this._post({ type: 'mcpAuthRequired', payload: { server: required.server } });
           }
           return;
@@ -4102,7 +4102,7 @@ export class ChatStateManager {
         }
         if (event.threadId !== thread.id) return;
         if (event.type === 'mcp_status') {
-          void this._handleRuntimeEvent(runtime, event, () => undefined);
+          this._deliverTurnEvent(runtime, event, conversationEpoch, () => undefined);
           return;
         }
         if (activeTurnId === undefined) {
@@ -4823,6 +4823,40 @@ export class ChatStateManager {
           ? entry.toolCallId === id
           : entry.kind === 'progress' && entry.progressId === id),
     );
+  }
+
+  private _deliverTurnEvent(
+    runtime: LocalRuntimeClient,
+    event: LocalRuntimeEvent,
+    epoch: number,
+    complete: () => void,
+  ): void {
+    if (epoch === this._conversationEpoch) {
+      void this._handleRuntimeEvent(runtime, event, complete);
+      return;
+    }
+    if (
+      event.type !== 'turn_completed' &&
+      event.type !== 'turn_failed' &&
+      event.type !== 'turn_interrupted'
+    ) {
+      return;
+    }
+    this._expirePendingApprovals(event.turnId);
+    const servedModel = this._servedModelByTurn.get(event.turnId);
+    this._servedModelByTurn.delete(event.turnId);
+    this._clearTurnWrites(event.turnId);
+    if (event.type === 'turn_completed') {
+      recordCompletedTurnUsage(this._secrets, {
+        model: servedModel ?? Config.model(),
+        inputTokens: event.inputTokens,
+        outputTokens: event.outputTokens,
+        ...(event.managedRequestIds === undefined
+          ? {}
+          : { managedRequestIds: event.managedRequestIds }),
+      });
+    }
+    complete();
   }
 
   private async _handleRuntimeEvent(
