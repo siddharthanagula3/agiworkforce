@@ -64,6 +64,7 @@ export default function ScanScreen() {
 
   const cameraRef = useRef<CameraView>(null);
   const scannedUriRef = useRef<string | null>(null);
+  const scanGenerationRef = useRef(0);
   const createConversation = useChatMessageStore((s) => s.createConversation);
   const sendMessage = useChatExecutionStore((s) => s.sendMessage);
   const selectedModel = useModelStore((s) => s.selectedModel);
@@ -81,13 +82,17 @@ export default function ScanScreen() {
   const handleClose = useGoBack('/(app)/(tabs)/chat');
 
   const scanImage = useCallback(async (uri: string) => {
+    scanGenerationRef.current += 1;
+    const generation = scanGenerationRef.current;
     setCapturedUri(uri);
     setPhase('processing');
     setOcrError(null);
+    setIsSending(false);
 
     let recognized = false;
     try {
       const result = await recognizeText(uri);
+      if (scanGenerationRef.current !== generation) return;
       setExtractedText(result.text);
       setRegions(result.regions);
 
@@ -97,6 +102,7 @@ export default function ScanScreen() {
       setPromptText(prefill);
       recognized = true;
     } catch {
+      if (scanGenerationRef.current !== generation) return;
       setOcrError('Text could not be read from this image. Retake the scan or type your question.');
       setPromptText('');
     }
@@ -131,6 +137,8 @@ export default function ScanScreen() {
   }, [isCapturing, cameraReady, scanImage]);
 
   const handleRetake = useCallback(() => {
+    scanGenerationRef.current += 1;
+    setIsSending(false);
     setCapturedUri(null);
     setExtractedText('');
     setRegions([]);
@@ -180,9 +188,13 @@ export default function ScanScreen() {
       return;
     }
 
+    const generation = scanGenerationRef.current;
+    const isCurrentScan = () => scanGenerationRef.current === generation;
+
     setIsSending(true);
     try {
       const conversationId = await createConversation('Scan');
+      if (!isCurrentScan()) return;
 
       const now = Date.now();
       const attachment: Attachment = {
@@ -193,6 +205,7 @@ export default function ScanScreen() {
       };
 
       const accepted = await sendMessage(conversationId, content, selectedModel, [attachment]);
+      if (!isCurrentScan()) return;
       if (!accepted) {
         Alert.alert('Send failed', 'The scan could not be sent. Check your model and try again.');
         setIsSending(false);
@@ -200,6 +213,7 @@ export default function ScanScreen() {
       }
       router.replace(`/(app)/chat/${conversationId}` as Parameters<typeof router.replace>[0]);
     } catch {
+      if (!isCurrentScan()) return;
       Alert.alert(
         'Send failed',
         'The scan could not be sent. Check your connection and try again.',
