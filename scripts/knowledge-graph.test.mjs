@@ -115,7 +115,7 @@ test('graph indexes every tracked file, route, import, and migration', () => {
     'crates/demo/src/foo.rs': 'pub struct Bar {}\npub fn local_item() {}\n',
     'scripts/check-demo.mjs': 'export const guard = true;\n',
     'scripts/check-demo.test.mjs': 'export const notAGuard = true;\n',
-    '.agents/skills/demo/SKILL.md': '---\nname: demo\ndescription: A demo skill\n---\n',
+    '.agents/skills/demo/SKILL.md': `---\nname: demo\ndescription: A demo skill ${String.fromCharCode(0x2014)} with a clause\n---\n`,
     'docs/agent-context/lanes.json': JSON.stringify({
       lanes: [
         {
@@ -211,6 +211,7 @@ test('graph indexes every tracked file, route, import, and migration', () => {
     false,
   );
   assert.equal(graph.skills[0].name, 'demo');
+  assert.equal(graph.skills[0].description, 'A demo skill: with a clause');
 
   const rendered = renderKnowledgeGraph(graph);
   for (const [rel, content] of Object.entries(rendered)) {

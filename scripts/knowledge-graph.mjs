@@ -86,6 +86,8 @@ const LIMITS = [
   'Lane write paths, risk-map.json, commands.json, and the concept, feature, and domain registries stay the owners of those contracts. This graph points at their files.',
 ];
 
+const LONG_DASH_CLAUSE = new RegExp(`\\s*${String.fromCharCode(0x2014)}\\s*`, 'g');
+
 function serialize(value) {
   return `${JSON.stringify(value, null, 2)}\n`;
 }
@@ -1464,7 +1466,9 @@ function skillRecord(repoRoot, filePath) {
     const nameMatch = /^name:\s*(.+)$/m.exec(front);
     const descriptionMatch = /^description:\s*(.+)$/m.exec(front);
     if (nameMatch) name = nameMatch[1].trim().replace(/^['"]|['"]$/g, '');
-    if (descriptionMatch) description = descriptionMatch[1].trim();
+    if (descriptionMatch) {
+      description = descriptionMatch[1].trim().replace(LONG_DASH_CLAUSE, ': ');
+    }
   }
   return description ? { path: filePath, name, description } : { path: filePath, name };
 }
