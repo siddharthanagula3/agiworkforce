@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, StyleSheet, TextInput, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
-import { SettingsScreenShell } from '@/src/features/settings/Common';
+import { useAuthStore } from '@/src/features/auth/store';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { CloudAccountRequired, SettingsScreenShell } from '@/src/features/settings/Common';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import {
@@ -27,6 +30,27 @@ function formatDateTime(iso: string): string {
 }
 
 export function SupportTicketScreen({ ticketId }: { ticketId: string }) {
+  const router = useRouter();
+  const isClerkLoaded = useAuthStore((state) => state.isClerkLoaded);
+  const isClerkSignedIn = useAuthStore((state) => state.isClerkSignedIn);
+  const clerkUserId = useAuthStore((state) => state.clerkUserId);
+  const appMode = useChatAppModeStore((state) => state.appMode);
+
+  if (!isClerkLoaded || !isClerkSignedIn || appMode !== 'cloud') {
+    return (
+      <SettingsScreenShell title="Ticket" backHref="/(app)/support">
+        <CloudAccountRequired
+          isLoading={!isClerkLoaded}
+          onSignIn={() => router.push('/(auth)/login' as Parameters<typeof router.push>[0])}
+        />
+      </SettingsScreenShell>
+    );
+  }
+
+  return <SupportTicketThread key={`${clerkUserId ?? ''}:${ticketId}`} ticketId={ticketId} />;
+}
+
+function SupportTicketThread({ ticketId }: { ticketId: string }) {
   const colors = useThemeColors();
   const [thread, setThread] = useState<SupportTicketThreadView | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);

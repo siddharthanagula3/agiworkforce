@@ -242,6 +242,21 @@ fn moved_since_checked(path: &Path, approved: &Path) -> Option<String> {
     }
 }
 
+fn changed_during_approval(tool: &str, path: &Path, basis: Option<&str>) -> Option<ToolResult> {
+    let unchanged = match basis {
+        Some(basis) => std::fs::read_to_string(path).is_ok_and(|current| current == basis),
+        None => crate::file_state::ensure_previously_read_and_fresh(path).is_ok(),
+    };
+    (!unchanged).then(|| ToolResult {
+        tool_name: tool.to_string(),
+        success: false,
+        output: format!(
+            "{} changed while the approval was pending, so nothing was written. Read it again before writing it.",
+            path.display()
+        ),
+    })
+}
+
 /// Whether `file`, just opened, is the file at `approved`, with no link on
 /// the way there. Comparing the path again before the open leaves the
 /// moment between the two; this is asked of the open file, which no later
@@ -863,6 +878,11 @@ pub(super) async fn execute_write_file(
             output: moved,
         });
     }
+    let edited = crate::tools::take_approved_edit();
+    let content = edited.as_deref().unwrap_or(content.as_str());
+    if let Some(changed) = changed_during_approval("write_file", file_path, existing.as_deref()) {
+        return Ok(changed);
+    }
     if let Some(parent) = file_path.parent() {
         if !parent.exists() {
             if let Err(e) = tokio::fs::create_dir_all(parent).await {
@@ -875,8 +895,6 @@ pub(super) async fn execute_write_file(
         }
     }
 
-    let edited = crate::tools::take_approved_edit();
-    let content = edited.as_deref().unwrap_or(content.as_str());
     match write_without_following(file_path, &approved, content.as_bytes()).await {
         Ok(()) => {
             crate::file_state::record_file_write(file_path, content);
@@ -1122,6 +1140,9 @@ pub(super) async fn execute_edit_file(
 
     let edited = crate::tools::take_approved_edit();
     let new_contents = edited.clone().unwrap_or(new_contents);
+    if let Some(changed) = changed_during_approval("edit_file", file_path, Some(&contents)) {
+        return Ok(changed);
+    }
 
     match write_without_following(file_path, &approved, new_contents.as_bytes()).await {
         Ok(()) => {
@@ -1449,6 +1470,9 @@ pub(super) async fn execute_multiedit(
 
     let edited = crate::tools::take_approved_edit();
     let updated = edited.clone().unwrap_or(updated);
+    if let Some(changed) = changed_during_approval("multiedit", file_path, Some(&original)) {
+        return Ok(changed);
+    }
     if let Err(e) = write_without_following(file_path, &approved, updated.as_bytes()).await {
         return Ok(ToolResult {
             tool_name: "multiedit".into(),
@@ -1635,6 +1659,17 @@ mod conflict_tests {
     fn a_markdown_setext_heading_is_not_a_conflict_marker() {
         assert!(conflict_marker_refusal("README.md", "", "Title\n==========\n\nBody\n").is_none());
         assert!(conflict_view(Path::new("README.md"), "Title\n==========\n").is_none());
+    }
+
+    #[test]
+    fn a_seven_character_setext_underline_is_not_a_conflict_marker() {
+        assert!(conflict_marker_refusal("README.md", "", "Project\n=======\nNotes\n").is_none());
+        assert!(
+            conflict_marker_refusal("README.md", "# Project\n", "Project\n=======\nNotes\n")
+                .is_none()
+        );
+        assert!(conflict_view(Path::new("README.md"), "Project\n=======\nNotes\n").is_none());
+        assert!(conflict_marker_refusal("README.md", "", "<<<<<<< HEAD\nPlain\n").is_some());
     }
 }
 
@@ -2398,5 +2433,144 @@ mod tests {
         assert!(!result.success);
         assert!(result.output.contains("File has not been read yet"));
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "alpha\n");
+    }
+
+    fn saves_while_approving(path: &Path, saved: &'static str) -> ApprovalCallback {
+        let path = path.to_path_buf();
+        std::sync::Arc::new(move |_request| {
+            let path = path.clone();
+            Box::pin(async move {
+                std::fs::write(&path, saved).expect("save during approval");
+                ApprovalDecision::AllowOnce
+            })
+        })
+    }
+
+    async fn read_for_edit(path: &Path) {
+        let mut args = HashMap::new();
+        args.insert("path".to_string(), path.display().to_string());
+        assert!(execute_read_file(&args).await.unwrap().success);
+    }
+
+    #[tokio::test]
+    async fn write_file_refuses_a_file_saved_while_the_approval_was_pending() {
+        let tmp = tempfile::tempdir_in(".").expect("tempdir");
+        let path = tmp.path().join("file.txt");
+        std::fs::write(&path, "alpha\n").expect("write file");
+        read_for_edit(&path).await;
+        let callback = saves_while_approving(&path, "saved by the user\n");
+
+        let mut args = HashMap::new();
+        args.insert("path".to_string(), path.display().to_string());
+        args.insert("content".to_string(), "proposed\n".to_string());
+        let result = execute_write_file(&args, true, Some(&callback))
+            .await
+            .unwrap();
+
+        assert!(!result.success);
+        assert!(result
+            .output
+            .contains("changed while the approval was pending"));
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "saved by the user\n"
+        );
+    }
+
+    #[tokio::test]
+    async fn write_file_refuses_a_new_file_created_while_the_approval_was_pending() {
+        let tmp = tempfile::tempdir_in(".").expect("tempdir");
+        let path = tmp.path().join("new.txt");
+        let callback = saves_while_approving(&path, "created by the user\n");
+
+        let mut args = HashMap::new();
+        args.insert("path".to_string(), path.display().to_string());
+        args.insert("content".to_string(), "proposed\n".to_string());
+        let result = execute_write_file(&args, true, Some(&callback))
+            .await
+            .unwrap();
+
+        assert!(!result.success);
+        assert!(result
+            .output
+            .contains("changed while the approval was pending"));
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "created by the user\n"
+        );
+    }
+
+    #[tokio::test]
+    async fn edit_file_refuses_a_file_saved_while_the_approval_was_pending() {
+        let tmp = tempfile::tempdir_in(".").expect("tempdir");
+        let path = tmp.path().join("file.txt");
+        std::fs::write(&path, "alpha\n").expect("write file");
+        read_for_edit(&path).await;
+        let callback = saves_while_approving(&path, "alpha\nadded by the user\n");
+
+        let mut args = HashMap::new();
+        args.insert("path".to_string(), path.display().to_string());
+        args.insert("old_string".to_string(), "alpha".to_string());
+        args.insert("new_string".to_string(), "beta".to_string());
+        let result = execute_edit_file(&args, true, Some(&callback))
+            .await
+            .unwrap();
+
+        assert!(!result.success);
+        assert!(result
+            .output
+            .contains("changed while the approval was pending"));
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "alpha\nadded by the user\n"
+        );
+    }
+
+    #[tokio::test]
+    async fn multiedit_refuses_a_file_saved_while_the_approval_was_pending() {
+        let tmp = tempfile::tempdir_in(".").expect("tempdir");
+        let path = tmp.path().join("file.txt");
+        std::fs::write(&path, "alpha\n").expect("write file");
+        read_for_edit(&path).await;
+        let callback = saves_while_approving(&path, "alpha\nadded by the user\n");
+
+        let mut args = HashMap::new();
+        args.insert("path".to_string(), path.display().to_string());
+        args.insert(
+            "edits".to_string(),
+            serde_json::json!([{ "old_string": "alpha", "new_string": "beta" }]).to_string(),
+        );
+        let result = execute_multiedit(&args, true, Some(&callback))
+            .await
+            .unwrap();
+
+        assert!(!result.success);
+        assert!(result
+            .output
+            .contains("changed while the approval was pending"));
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "alpha\nadded by the user\n"
+        );
+    }
+
+    #[tokio::test]
+    async fn edit_file_still_writes_when_nothing_changed_during_approval() {
+        let tmp = tempfile::tempdir_in(".").expect("tempdir");
+        let path = tmp.path().join("file.txt");
+        std::fs::write(&path, "alpha\n").expect("write file");
+        read_for_edit(&path).await;
+        let callback = saves_while_approving(&path, "alpha\n");
+
+        let mut args = HashMap::new();
+        args.insert("path".to_string(), path.display().to_string());
+        args.insert("old_string".to_string(), "alpha".to_string());
+        args.insert("new_string".to_string(), "beta".to_string());
+        let result = execute_edit_file(&args, true, Some(&callback))
+            .await
+            .unwrap();
+
+        assert!(result.success, "{}", result.output);
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "beta\n");
     }
 }
