@@ -1462,12 +1462,20 @@ export async function getGitHubIssue(
   return toGitHubIssue(parsed.data);
 }
 
-export async function getPrDiff(
+const MAX_PR_DIFF_CHARS = 300_000;
+const PR_SNAPSHOT_ATTEMPTS = 3;
+
+interface FetchedPrDiff {
+  diff: string;
+  truncated: boolean;
+}
+
+async function fetchPrDiff(
   token: string,
   owner: string,
   repo: string,
   prNumber: number,
-): Promise<string> {
+): Promise<FetchedPrDiff> {
   validateGitHubPathSegment(owner, 'owner');
   validateGitHubPathSegment(repo, 'repo');
   const res = await fetch(
@@ -1489,15 +1497,59 @@ export async function getPrDiff(
     throw new Error(`Failed to fetch PR diff: ${res.status}`);
   }
 
-  let diff = await res.text();
-  // The reviewer chunks what it gets, so this is a memory bound rather than a
-  // review bound. At 50,000 it was the review bound, and everything past the
-  // first few files went unreviewed without anyone being told.
-  const MAX_CHARS = 300_000;
-  if (diff.length > MAX_CHARS) {
-    diff = diff.substring(0, MAX_CHARS) + `\n\n[... diff truncated at ${MAX_CHARS} characters ...]`;
+  const text = await res.text();
+  if (text.length <= MAX_PR_DIFF_CHARS) return { diff: text, truncated: false };
+  return {
+    diff:
+      text.substring(0, MAX_PR_DIFF_CHARS) +
+      `\n\n[... diff truncated at ${MAX_PR_DIFF_CHARS} characters ...]`,
+    truncated: true,
+  };
+}
+
+export async function getPrDiff(
+  token: string,
+  owner: string,
+  repo: string,
+  prNumber: number,
+): Promise<string> {
+  return (await fetchPrDiff(token, owner, repo, prNumber)).diff;
+}
+
+export interface GitHubPrReviewSnapshot {
+  diff: string;
+  truncated: boolean;
+  headSha: string;
+}
+
+export async function getPrHeadSha(
+  token: string,
+  owner: string,
+  repo: string,
+  prNumber: number,
+): Promise<string> {
+  return (await getGitHubPullRequestForTask(token, owner, repo, prNumber)).headSha;
+}
+
+/**
+ * The diff of one named head commit. The diff endpoint cannot be pinned to a
+ * commit, so the head is read on both sides of it and the bytes are accepted
+ * only when no push landed in between.
+ */
+export async function getPrReviewSnapshot(
+  token: string,
+  owner: string,
+  repo: string,
+  prNumber: number,
+): Promise<GitHubPrReviewSnapshot> {
+  for (let attempt = 0; attempt < PR_SNAPSHOT_ATTEMPTS; attempt += 1) {
+    const headSha = await getPrHeadSha(token, owner, repo, prNumber);
+    const { diff, truncated } = await fetchPrDiff(token, owner, repo, prNumber);
+    if ((await getPrHeadSha(token, owner, repo, prNumber)) === headSha) {
+      return { diff, truncated, headSha };
+    }
   }
-  return diff;
+  throw new Error('Pull request head kept changing while its diff was read');
 }
 
 export interface GitHubReviewLineComment {
@@ -1515,6 +1567,7 @@ export async function postPrReview(
   body: string,
   event: 'COMMENT' | 'APPROVE' | 'REQUEST_CHANGES' = 'COMMENT',
   comments: readonly GitHubReviewLineComment[] = [],
+  commitId?: string,
 ): Promise<void> {
   validateGitHubPathSegment(owner, 'owner');
   validateGitHubPathSegment(repo, 'repo');
@@ -1533,6 +1586,7 @@ export async function postPrReview(
       body: JSON.stringify({
         body,
         event,
+        ...(commitId ? { commit_id: commitId } : {}),
         ...(comments.length > 0
           ? {
               comments: comments.map((comment) => ({

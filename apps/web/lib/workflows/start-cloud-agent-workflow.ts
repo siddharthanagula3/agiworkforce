@@ -18,6 +18,7 @@ import {
   PLATFORM_ADMIN_ENV_VAR,
   isPlatformAdmin,
 } from '@/features/admin/lib/platform-admin-access';
+import { isAppError } from '@/lib/errors';
 import { assertCapabilityAvailable } from '@/lib/feature-flags/capability-gate';
 import type { FlagSubject } from '@/lib/feature-flags/evaluate-flags';
 import { WORK_CAPABILITY } from '@/lib/feature-flags/kill-switches';
@@ -50,6 +51,7 @@ import {
   type CloudAgentWorkflowInput,
 } from './cloud-agent-workflow-input';
 import { areDurableInitialTurnsEnabled } from './durable-initial-turns';
+import { CloudAgentCapabilityRefusedError } from './cloud-agent-capability-refusal';
 import type { ConnectorToolPermissions } from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
 import {
   connectorToolNames,
@@ -76,6 +78,16 @@ function workFlagSubject(input: StartCloudAgentWorkflowExecutionInput): FlagSubj
     clientVersion: null,
     internalStaff: isPlatformAdmin(input.userId, process.env[PLATFORM_ADMIN_ENV_VAR]),
   };
+}
+
+async function assertWorkAdmitted(input: StartCloudAgentWorkflowExecutionInput): Promise<void> {
+  if (input.processed.chatRequest.work_mode !== 'agiwork') return;
+  try {
+    await assertCapabilityAvailable(workFlagSubject(input), WORK_CAPABILITY, 'Work');
+  } catch (error) {
+    if (isAppError(error) && error.userSafe) throw new CloudAgentCapabilityRefusedError(error);
+    throw error;
+  }
 }
 
 export interface StartCloudAgentWorkflowExecutionInput {
@@ -107,7 +119,7 @@ export async function startCloudAgentWorkflowExecution(
   readable: WorkflowReadableStream<Uint8Array>;
   cancel: () => Promise<void>;
 }> {
-  await assertCapabilityAvailable(workFlagSubject(input), WORK_CAPABILITY, 'Work');
+  await assertWorkAdmitted(input);
   return withSpan(
     CLOUD_AGENT_ENQUEUE_SPAN,
     {
@@ -311,6 +323,7 @@ export async function runCloudAgentTurn(
   try {
     workflow = await startCloudAgentWorkflowExecution(input);
   } catch (error) {
+    if (error instanceof CloudAgentCapabilityRefusedError) throw error.refusal;
     if (error instanceof CloudAgentWorkflowUncertainStartError) {
       return handOffToAdmittedWorkflow(error.workflowRunId, 'workflow_start_failed', error);
     }

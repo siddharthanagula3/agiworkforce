@@ -11,6 +11,7 @@ import {
   type WorkPlanStatus,
 } from '@/lib/services/work-plan-service';
 import type { CloudAgentWorkflowInput } from '../cloud-agent-workflow-input';
+import type { WorkflowTerminalOutcome } from './settle-workflow-invocation';
 
 // Pins what the run is accountable to. A plan write must never end a turn, so a
 // failure is logged and the turn goes on.
@@ -39,14 +40,16 @@ export async function ensureWorkPlanForRun(input: CloudAgentWorkflowInput): Prom
 }
 
 // A plan whose steps already say how it went keeps their verdict; only one still
-// reading as open is closed by the run's outcome.
+// reading as open is closed by the run's outcome. A run waiting for approval,
+// input or a resume has not ended, so its plan stays open for the turn that does.
 export async function settleWorkPlanForRun(
   input: CloudAgentWorkflowInput,
-  outcome: 'completed' | 'failed',
+  outcome: WorkflowTerminalOutcome,
 ): Promise<void> {
   'use step';
 
   if (input.processed.chatRequest.work_mode !== 'agiwork') return;
+  if (outcome === 'paused' || outcome === 'awaiting_input') return;
 
   try {
     const db = getNeonDb();

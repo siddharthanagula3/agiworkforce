@@ -6,6 +6,7 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 import {
+  reviewCoverageIsPartial,
   reviewLineComments,
   reviewPullRequestDiff,
   reviewSummaryBody,
@@ -222,6 +223,13 @@ describe('the review body', () => {
     expect(
       reviewSummaryBody({
         status: 'no-findings',
+        coverage: {
+          diffTruncated: false,
+          omittedHunks: 0,
+          clippedLines: 0,
+          failedCalls: 0,
+          omittedFindings: 0,
+        },
         posted: [],
         duplicates: 0,
         fabricated: 0,
@@ -229,6 +237,143 @@ describe('the review body', () => {
         outputTokens: 0,
       }),
     ).toContain('No correctness or security defect found in 2 parts');
+  });
+});
+
+describe('a review that did not cover everything says so', () => {
+  const baseInput = {
+    prNumber: 7,
+    planTier: 'pro',
+    ownerUserId: 'user-1',
+    noTrainingOnly: false,
+    billingDb: {} as never,
+    reviewRef: 'attempt-1',
+    postedCommentBodies: [] as string[],
+  };
+
+  it('reports a pass whose answer could not be read next to the findings that were', async () => {
+    const outcome = await reviewPullRequestDiff({
+      ...baseInput,
+      diff: DIFF,
+      callModel: async (call) =>
+        call.pass === 'correctness'
+          ? answering([REAL_FINDING])(call)
+          : { text: 'no schema here', outputTokens: 3 },
+    });
+
+    expect(outcome.status).toBe('posted');
+    expect(outcome.coverage.failedCalls).toBe(1);
+    expect(reviewCoverageIsPartial(outcome.coverage)).toBe(true);
+    expect(reviewSummaryBody(outcome)).toContain('could not be read');
+  });
+
+  it('does not call a clean review complete when a pass failed and the finding was already posted', async () => {
+    const alreadyPosted = renderFindingComment({
+      ...REAL_FINDING,
+      pass: 'correctness',
+      fingerprint: fingerprintFinding(REAL_FINDING),
+    });
+
+    const outcome = await reviewPullRequestDiff({
+      ...baseInput,
+      diff: DIFF,
+      postedCommentBodies: [alreadyPosted],
+      callModel: async (call) =>
+        call.pass === 'correctness'
+          ? answering([REAL_FINDING])(call)
+          : { text: 'no schema here', outputTokens: 3 },
+    });
+
+    expect(outcome.status).toBe('no-findings');
+    expect(reviewCoverageIsPartial(outcome.coverage)).toBe(true);
+    const body = reviewSummaryBody(outcome);
+    expect(body).toContain('Partial review');
+    expect(body).toContain('it reviewed');
+  });
+
+  it('reports findings past the posting limit apart from duplicates', async () => {
+    const claims = (prefix: string, count: number) =>
+      Array.from({ length: count }, (_, index) => ({
+        ...REAL_FINDING,
+        title: `${prefix} distinct claim ${String.fromCharCode(97 + index)}`,
+      }));
+
+    const outcome = await reviewPullRequestDiff({
+      ...baseInput,
+      diff: DIFF,
+      callModel: async (call) =>
+        call.pass === 'correctness'
+          ? answering(claims('first', 20))(call)
+          : answering(claims('second', 15))(call),
+    });
+
+    expect(outcome.posted).toHaveLength(30);
+    expect(outcome.coverage.omittedFindings).toBe(5);
+    expect(outcome.duplicates).toBe(0);
+    expect(reviewSummaryBody(outcome)).toContain('5 more finding(s) were not posted');
+  });
+
+  it('reports that the fetched diff was cut before review', async () => {
+    const outcome = await reviewPullRequestDiff({
+      ...baseInput,
+      diff: DIFF,
+      diffTruncated: true,
+      callModel: answering([]),
+    });
+
+    expect(outcome.status).toBe('no-findings');
+    expect(outcome.coverage.diffTruncated).toBe(true);
+    expect(reviewSummaryBody(outcome)).toContain('its end was not reviewed');
+  });
+
+  it('reports hunks the chunk ceiling left out', async () => {
+    const sections = Array.from({ length: 12 }, (_, index) =>
+      [
+        `diff --git a/src/f${index}.ts b/src/f${index}.ts`,
+        '@@ -1,1 +1,2 @@',
+        ' const a = 1;',
+        `+${'x'.repeat(30_000)}${index}`,
+      ].join('\n'),
+    );
+
+    const outcome = await reviewPullRequestDiff({
+      ...baseInput,
+      diff: sections.join('\n'),
+      callModel: answering([]),
+    });
+
+    expect(outcome.chunks).toBe(8);
+    expect(outcome.coverage.omittedHunks).toBeGreaterThan(0);
+    expect(reviewSummaryBody(outcome)).toContain('not reviewed in full');
+  });
+
+  it('keeps a complete review free of the partial notice', async () => {
+    const outcome = await reviewPullRequestDiff({
+      ...baseInput,
+      diff: DIFF,
+      callModel: answering([]),
+    });
+
+    expect(reviewCoverageIsPartial(outcome.coverage)).toBe(false);
+    expect(reviewSummaryBody(outcome)).not.toContain('Partial review');
+  });
+
+  it('names the commit it reviewed and the one the pull request has moved to', async () => {
+    const outcome = await reviewPullRequestDiff({
+      ...baseInput,
+      diff: DIFF,
+      callModel: answering([]),
+    });
+
+    const moved = reviewSummaryBody(outcome, {
+      reviewedSha: 'aaaaaaa1111111',
+      currentSha: 'bbbbbbb2222222',
+    });
+    expect(moved).toContain('Reviewed commit `aaaaaaa`');
+    expect(moved).toContain('moved to `bbbbbbb`');
+    expect(
+      reviewSummaryBody(outcome, { reviewedSha: 'aaaaaaa1111111', currentSha: null }),
+    ).not.toContain('moved to');
   });
 });
 

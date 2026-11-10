@@ -74,7 +74,12 @@ vi.mock('@/lib/github-app', () => ({
     return sig === expected;
   },
   getInstallationAccessToken: async () => 'ghs_token_abc',
-  getPrDiff: async () => '+ added line',
+  getPrReviewSnapshot: async () => ({
+    diff: '+ added line',
+    truncated: false,
+    headSha: 'a'.repeat(40),
+  }),
+  getPrHeadSha: async () => 'a'.repeat(40),
   postIssueComment: vi.fn(async () => undefined),
   getGitHubIssue: vi.fn(async () => null),
   getGitHubPullRequestForTask: vi.fn(async () => null),
@@ -93,6 +98,7 @@ vi.mock('@/lib/services/subscription-service', () => ({
 
 vi.mock('@/lib/code-review/pipeline', () => ({
   reviewPullRequestDiff: (...args: unknown[]) => mockReviewPullRequestDiff(...args),
+  reviewCoverageIsPartial: () => false,
   reviewLineComments: () => [],
   reviewSummaryBody: () => '## AGI Code Review\n\nNo correctness or security defect found.',
 }));

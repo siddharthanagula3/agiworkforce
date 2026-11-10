@@ -2,6 +2,8 @@ import { afterEach, describe, it, expect, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { listCanonicalModels, requireProviderDefaultModel } from '@agiworkforce/types';
 import { resolveWebCloudModelRoute } from '../lib/request-processor';
+import { createError } from '@/lib/errors';
+import { CloudAgentCapabilityRefusedError } from '@/lib/workflows/cloud-agent-capability-refusal';
 type ScanModule0 = typeof import('@/lib/server/terms');
 type ScanModule1 = typeof import('@/lib/server/neon-db');
 type ScanModule2 = typeof import('@/lib/services/free-trial-service');
@@ -235,6 +237,7 @@ const rlsMocks = vi.hoisted(() => ({
 
 const workflowRouteMocks = vi.hoisted(() => ({
   start: vi.fn(),
+  transition: vi.fn(async () => undefined),
   createRun: vi.fn(),
   findActive: vi.fn(),
   loadMcpTools: vi.fn(),
@@ -272,6 +275,7 @@ vi.mock('@/lib/services/cloud-agent-run-service', async (importOriginal) => ({
   ...(await importOriginal<ScanModule3>()),
   createCloudAgentRun: workflowRouteMocks.createRun,
   findActiveCloudAgentRunForConversation: workflowRouteMocks.findActive,
+  transitionCloudAgentRun: workflowRouteMocks.transition,
 }));
 
 vi.mock('@/lib/user-connector-tools', () => ({
@@ -740,6 +744,33 @@ describe('Managed Web AGI Work dispatch', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('X-AGI-Tool-Loop')).toBe('active');
     expect(response.headers.get('X-AGI-Workflow-Run-Id')).toBeNull();
+  });
+
+  it('refuses a Work turn the switch closed after admission instead of serving it request-scoped', async () => {
+    arrangePaidAgenticTurn();
+    vi.stubEnv('AGI_DURABLE_INITIAL_TURNS', '1');
+    workflowRouteMocks.start.mockRejectedValue(
+      new CloudAgentCapabilityRefusedError(
+        createError
+          .serviceUnavailable('Work is temporarily switched off while we investigate a problem.')
+          .asUserSafe(),
+      ),
+    );
+
+    await expect(POST(makeAgiWorkRequest(ZHIPU_MODEL_ID))).rejects.toMatchObject({
+      statusCode: 503,
+      userSafe: true,
+      message: expect.stringContaining('temporarily switched off'),
+    });
+
+    expect(workflowRouteMocks.transition).toHaveBeenCalledWith(expect.anything(), {
+      userId: 'user-1',
+      runId: 'run-durable-1',
+      state: 'failed',
+    });
+    expect(managedUsageMocks.finalize).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: 'failed' }),
+    );
   });
 
   /**

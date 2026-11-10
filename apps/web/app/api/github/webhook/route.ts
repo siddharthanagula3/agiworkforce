@@ -8,7 +8,8 @@ import { sideCallTrainingOptOut } from '@/lib/server/side-call-training-policy';
 import {
   verifyGitHubWebhookSignature,
   getInstallationAccessToken,
-  getPrDiff,
+  getPrHeadSha,
+  getPrReviewSnapshot,
   listPrReviewCommentBodies,
   postIssueComment,
   postPrReview,
@@ -22,6 +23,7 @@ import { isManagedComputePrivateBetaEnabled } from '@/lib/managed-compute-gate';
 import { normalizeBillingPlanTier } from '@agiworkforce/types';
 import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
 import {
+  reviewCoverageIsPartial,
   reviewLineComments,
   reviewPullRequestDiff,
   reviewSummaryBody,
@@ -277,6 +279,7 @@ interface ReviewTarget {
   repo: string;
   prNumber: number;
   trigger: 'mention' | 'pull-request';
+  followsMovedHead?: boolean;
 }
 
 /**
@@ -438,6 +441,13 @@ async function runAutomatedReview(target: ReviewTarget): Promise<void> {
   const { installationId, owner, repo, prNumber } = target;
   const db = getNeonDb();
   let attemptId: string | null = null;
+  let attemptSettled = false;
+  const settle = async (status: 'completed' | 'failed', tokensUsed: number): Promise<void> => {
+    if (!attemptId) return;
+    attemptSettled = true;
+    await settleAttempt(db, attemptId, status, tokensUsed);
+  };
+  let supersededByNewerHead = false;
 
   try {
     const installation = await readReviewInstallation(db, installationId);
@@ -481,7 +491,8 @@ async function runAutomatedReview(target: ReviewTarget): Promise<void> {
       );
     }
 
-    const rawDiff = await getPrDiff(token, owner, repo, prNumber);
+    const snapshot = await getPrReviewSnapshot(token, owner, repo, prNumber);
+    const rawDiff = snapshot.diff;
     if (rawDiff.includes('\x00')) {
       logger.warn({ owner, repo, prNumber }, 'Binary diff rejected');
       if (target.trigger === 'mention') {
@@ -543,6 +554,7 @@ async function runAutomatedReview(target: ReviewTarget): Promise<void> {
 
     const outcome = await reviewPullRequestDiff({
       diff: rawDiff,
+      diffTruncated: snapshot.truncated,
       prNumber,
       planTier,
       postedCommentBodies,
@@ -568,22 +580,30 @@ async function runAutomatedReview(target: ReviewTarget): Promise<void> {
         { owner, repo, prNumber, status: outcome.status, reason: outcome.reason },
         '[code-review] no review posted',
       );
-      if (attemptId) await settleAttempt(db, attemptId, 'failed', outcome.outputTokens);
+      await settle('failed', outcome.outputTokens);
       return;
     }
 
-    // A re-review that found nothing new says nothing: the findings it would
-    // have repeated are already on the pull request as line comments.
-    const silent = outcome.status === 'no-findings' && target.trigger !== 'mention';
+    const currentHeadSha = await getPrHeadSha(token, owner, repo, prNumber).catch(() => null);
+    supersededByNewerHead = currentHeadSha !== null && currentHeadSha !== snapshot.headSha;
+
+    // A re-review that found nothing new, and covered everything, says nothing:
+    // the findings it would have repeated are already on the pull request as
+    // line comments.
+    const silent =
+      outcome.status === 'no-findings' &&
+      target.trigger !== 'mention' &&
+      !reviewCoverageIsPartial(outcome.coverage);
     if (!silent) {
       await postPrReview(
         token,
         owner,
         repo,
         prNumber,
-        reviewSummaryBody(outcome),
+        reviewSummaryBody(outcome, { reviewedSha: snapshot.headSha, currentSha: currentHeadSha }),
         'COMMENT',
         reviewLineComments(outcome.posted),
+        snapshot.headSha,
       );
     }
 
@@ -600,10 +620,16 @@ async function runAutomatedReview(target: ReviewTarget): Promise<void> {
       },
       '[code-review] review settled',
     );
-    if (attemptId) await settleAttempt(db, attemptId, 'completed', outcome.outputTokens);
+    await settle('completed', outcome.outputTokens);
   } catch (error) {
     logger.error({ error, owner, repo, prNumber }, 'PR review processing error');
-    if (attemptId) await settleAttempt(db, attemptId, 'failed', 0);
+    await settle('failed', 0);
+  } finally {
+    if (attemptId && !attemptSettled) await settleAttempt(db, attemptId, 'failed', 0);
+  }
+
+  if (supersededByNewerHead && target.trigger === 'pull-request' && !target.followsMovedHead) {
+    await runAutomatedReview({ ...target, followsMovedHead: true });
   }
 }
 

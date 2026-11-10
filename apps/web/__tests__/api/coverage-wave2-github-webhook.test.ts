@@ -66,7 +66,12 @@ vi.mock('@/lib/github-app', () => ({
   postPrReview: vi.fn(async () => undefined),
   verifyGitHubWebhookSignature: (...args: unknown[]) => mockVerifySignature(...args),
   getInstallationAccessToken: (...args: unknown[]) => mockGetInstallationAccessToken(...args),
-  getPrDiff: (...args: unknown[]) => mockGetPrDiff(...args),
+  getPrReviewSnapshot: async (...args: unknown[]) => ({
+    diff: (await mockGetPrDiff(...args)) as string,
+    truncated: false,
+    headSha: 'a'.repeat(40),
+  }),
+  getPrHeadSha: vi.fn(async () => 'a'.repeat(40)),
   postIssueComment: (...args: unknown[]) => mockPostIssueComment(...args),
   GITHUB_WEBHOOK_SECRET: 'test-webhook-secret-abc123',
   getGitHubIssue: vi.fn(async () => null),
