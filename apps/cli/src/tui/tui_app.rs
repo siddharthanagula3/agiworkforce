@@ -521,7 +521,8 @@ struct TuiApp {
     ),
     team_seen: u64,
     remote: Option<RemoteLink>,
-    remote_prompts: Vec<String>,
+    remote_prompts: Vec<crate::tui::remote_host::RemotePrompt>,
+    remote_turn_ids: Vec<String>,
     remote_label: Option<String>,
     browser: Arc<std::sync::Mutex<crate::browser_bridge::BrowserAvailability>>,
     start_panel: StartPanel,
@@ -713,6 +714,7 @@ impl TuiApp {
             team_seen: 0,
             remote: None,
             remote_prompts: Vec::new(),
+            remote_turn_ids: Vec::new(),
             remote_label: None,
             browser: Arc::new(std::sync::Mutex::new(
                 crate::browser_bridge::BrowserAvailability::ShellNotRunning,
@@ -4533,9 +4535,7 @@ fn drain_remote_control(app: &mut TuiApp) {
         return;
     }
     while let Ok(input) = link.inbox.try_recv() {
-        if let crate::tui::remote_host::RemoteInput::Message(text) = input {
-            app.remote_prompts.push(text);
-        }
+        link.host.receive(&mut app.remote_prompts, input);
     }
     if let Some(label) = link
         .status
@@ -5236,11 +5236,27 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             },
         ),
 
+        "/plan" if arg == "todos" => {
+            let workspace = app.workspace_root();
+            SlashResult::SystemMessage(
+                sanitize_terminal_text(
+                    &crate::plan_mode::TodoList::load_for_workspace(&workspace).render(),
+                )
+                .into_owned(),
+            )
+        }
+
         "/plan" => {
-            let new_mode = if app.mode == InteractionMode::Plan {
-                InteractionMode::Chat
-            } else {
-                InteractionMode::Plan
+            let new_mode = match arg {
+                "" if app.mode == InteractionMode::Plan => InteractionMode::Chat,
+                "" | "on" => InteractionMode::Plan,
+                "off" => InteractionMode::Chat,
+                unknown => {
+                    return SlashResult::SystemMessage(sanitize_terminal_text(&format!(
+                        "Unknown /plan subcommand: {unknown}. Use one of: on | off | accept | reject <feedback> | show | todos"
+                    ))
+                    .into_owned());
+                }
             };
             if !apply_mode(app, new_mode) {
                 return SlashResult::SystemMessage(pinned_mode_notice(app));
@@ -6244,19 +6260,15 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         )),
 
         _ => {
-            if let Some(prompt) = crate::custom_commands::expand_custom_slash_invocation(input) {
-                return SlashResult::SendPrompt(prompt);
-            }
-            if let Some(loaded) =
-                crate::skills::skill_command_prompt(cmd.trim_start_matches('/'), arg)
-            {
+            if let Some(loaded) = crate::command_registry::expand_dynamic_slash_invocation(
+                input,
+                cmd.trim_start_matches('/'),
+                arg,
+            ) {
                 return match loaded {
                     Ok(prompt) => SlashResult::SendPrompt(prompt),
                     Err(reason) => SlashResult::SystemMessage(reason),
                 };
-            }
-            if let Some(prompt) = crate::command_registry::expand_plugin_command_invocation(input) {
-                return SlashResult::SendPrompt(prompt);
             }
             if input.trim_start().starts_with("/mcp:") {
                 return SlashResult::SendMcpPrompt(input.to_string());
@@ -6764,7 +6776,16 @@ async fn run_event_loop(
         drain_side_answers(app);
         drain_remote_control(app);
         if !app.is_loading && !app.remote_prompts.is_empty() {
-            let text = std::mem::take(&mut app.remote_prompts).join("\n\n");
+            let prompts = std::mem::take(&mut app.remote_prompts);
+            app.remote_turn_ids = prompts
+                .iter()
+                .map(|prompt| prompt.turn_id.clone())
+                .collect();
+            let text = prompts
+                .into_iter()
+                .map(|prompt| prompt.text)
+                .collect::<Vec<_>>()
+                .join("\n\n");
             app.chat_messages.push(ChatMessage {
                 role: ChatRole::System,
                 text: "From your phone:".to_string(),
@@ -7662,8 +7683,9 @@ async fn send_message_with_prompt(
         app.session.on_tool_approval = Some(crate::agent::ToolApprovalSink(callback));
     }
     let remote_host = app.remote.as_ref().map(|link| Arc::clone(&link.host));
+    let claimed_remote_turns = std::mem::take(&mut app.remote_turn_ids);
     if let Some(host) = &remote_host {
-        host.begin_turn(broker.clone());
+        host.begin_turn(broker.clone(), claimed_remote_turns);
     }
 
     // Tool lifecycle events are drained in the select! loop below into a local
@@ -7909,13 +7931,10 @@ async fn send_message_with_prompt(
                             _ => {}
                         }
                     }
-                    if let Some(link) = app.remote.as_mut() {
+                    if let (Some(link), Some(host)) = (app.remote.as_mut(), &remote_host) {
                         while let Ok(input) = link.inbox.try_recv() {
-                            match input {
-                                crate::tui::remote_host::RemoteInput::Interrupt => cancelled = true,
-                                crate::tui::remote_host::RemoteInput::Message(text) => {
-                                    app.remote_prompts.push(text)
-                                }
+                            if host.receive(&mut app.remote_prompts, input) {
+                                cancelled = true;
                             }
                         }
                     }
@@ -8560,6 +8579,36 @@ mod tests {
             receipt.starts_with(InteractionMode::Plan.label()),
             "{receipt}"
         );
+    }
+
+    #[test]
+    fn plan_on_and_off_set_the_mode_instead_of_toggling_it() {
+        let mut app = minimal_app();
+
+        handle_slash("/plan on", &mut app);
+        assert_eq!(app.mode, InteractionMode::Plan);
+        handle_slash("/plan on", &mut app);
+        assert_eq!(app.mode, InteractionMode::Plan);
+        assert!(app.session.plan_mode);
+
+        handle_slash("/plan off", &mut app);
+        assert_eq!(app.mode, InteractionMode::Chat);
+        handle_slash("/plan off", &mut app);
+        assert_eq!(app.mode, InteractionMode::Chat);
+        assert!(!app.session.plan_mode);
+    }
+
+    #[test]
+    fn an_unknown_plan_subcommand_leaves_the_mode_alone() {
+        let mut app = minimal_app();
+        let before = app.mode;
+
+        let SlashResult::SystemMessage(notice) = handle_slash("/plan sideways", &mut app) else {
+            panic!("/plan answers with a system message");
+        };
+
+        assert_eq!(app.mode, before);
+        assert!(notice.starts_with("Unknown /plan subcommand: sideways"), "{notice}");
     }
 
     #[test]
