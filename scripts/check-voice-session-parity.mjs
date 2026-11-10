@@ -74,11 +74,26 @@ export function repliesPendingMute(source) {
   return /this\.pendingMuted\s*=\s*muted/.test(setMuted) && /pendingMuted/.test(started);
 }
 
+/** Whether a body calls dispose() itself or hands off to a sibling method that does. */
+function reachesDispose(source, body) {
+  if (/this\.dispose\(\)/.test(body)) return true;
+  const delegates = new Set(
+    [...body.matchAll(/this\.(\w+)\(/g)]
+      .map((call) => call[1])
+      .filter((name) => name !== 'dispose'),
+  );
+  for (const name of delegates) {
+    const delegate = methodBody(source, name);
+    if (delegate !== null && /this\.dispose\(\)/.test(delegate)) return true;
+  }
+  return false;
+}
+
 export function readDisposingEndings(source) {
   const disposing = [];
   for (const name of ENDING_METHODS) {
     const body = methodBody(source, name);
-    if (body !== null && /this\.dispose\(\)/.test(body)) disposing.push(name);
+    if (body !== null && reachesDispose(source, body)) disposing.push(name);
   }
   const handler = methodBody(source, 'handleMessage');
   if (handler !== null) {
