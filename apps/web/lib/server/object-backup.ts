@@ -203,6 +203,17 @@ export async function replicateObject(
   return { outcome: 'replicated', bytes: stored.data.byteLength };
 }
 
+export async function replicateObjectWithLegacyFallback(
+  key: string,
+  options: { source?: ObjectStore; target?: BackupTarget | null } = {},
+): Promise<ReplicationResult> {
+  const result = await replicateObject(key, options);
+  if (result.outcome !== 'missing-source') return result;
+  const { publicBucket } = objectStorageConfig();
+  if (!publicBucket) return result;
+  return replicateObject(key, { ...options, sourceBucket: publicBucket });
+}
+
 export type BackupDeletionOutcome = 'unconfigured' | 'deleted' | 'absent';
 
 export async function deleteBackupObject(

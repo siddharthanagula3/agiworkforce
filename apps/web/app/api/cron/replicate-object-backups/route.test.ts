@@ -7,12 +7,12 @@ const mocks = vi.hoisted(() => ({
   objectBackupReadiness: vi.fn(),
   isCrossRegionBackup: vi.fn(),
   replicateObject: vi.fn(),
+  legacyFallback: vi.fn(),
   resolveObjectBackupTarget: vi.fn(),
   recordBackupReplica: vi.fn(),
   reconcileBackupDeletions: vi.fn(),
   backupReplicaSummary: vi.fn(),
   objectKeyFromStorageUri: vi.fn(),
-  publicBucket: vi.fn(),
   error: vi.fn(),
 }));
 
@@ -24,6 +24,10 @@ vi.mock('@/lib/server/object-backup', () => ({
   objectBackupReadiness: mocks.objectBackupReadiness,
   isCrossRegionBackup: mocks.isCrossRegionBackup,
   replicateObject: mocks.replicateObject,
+  replicateObjectWithLegacyFallback: (key: string) => {
+    mocks.legacyFallback(key);
+    return mocks.replicateObject(key);
+  },
   resolveObjectBackupTarget: mocks.resolveObjectBackupTarget,
   recordBackupReplica: mocks.recordBackupReplica,
   reconcileBackupDeletions: mocks.reconcileBackupDeletions,
@@ -31,9 +35,6 @@ vi.mock('@/lib/server/object-backup', () => ({
 }));
 vi.mock('@/lib/server/object-storage', () => ({
   objectKeyFromStorageUri: mocks.objectKeyFromStorageUri,
-}));
-vi.mock('@/lib/server/object-storage-runtime', () => ({
-  objectStorageConfig: () => ({ publicBucket: mocks.publicBucket() }),
 }));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: mocks.error, debug: vi.fn() },
@@ -105,7 +106,6 @@ beforeEach(() => {
     oldestVerifiedAt: '2026-09-16T10:00:00.000Z',
   });
   mocks.getKeyValueStore.mockReturnValue(null);
-  mocks.publicBucket.mockReturnValue('agi-public');
 });
 
 describe(`GET ${ROUTE}`, () => {
@@ -200,7 +200,6 @@ describe(`GET ${ROUTE}`, () => {
   });
 
   it('does not record a key it failed to copy', async () => {
-    mocks.publicBucket.mockReturnValue(undefined);
     mocks.replicateObject
       .mockResolvedValueOnce({ outcome: 'missing-source', bytes: 0 })
       .mockResolvedValueOnce({ outcome: 'too-large', bytes: 0 })
@@ -335,29 +334,11 @@ describe(`GET ${ROUTE}`, () => {
     expect(mocks.query).toHaveBeenCalledTimes(2);
   });
 
-  it('copies a knowledge object that only the public bucket holds', async () => {
-    mocks.replicateObject.mockImplementation(async (_key: string, options?: unknown) => {
-      const sourceBucket = (options as { sourceBucket?: string } | undefined)?.sourceBucket;
-      return sourceBucket === 'agi-public'
-        ? { outcome: 'replicated', bytes: 7 }
-        : { outcome: 'missing-source', bytes: 0 };
-    });
+  it('lets only the knowledge source fall back to the legacy public bucket', async () => {
+    await GET(request());
 
-    const response = await GET(request());
-
-    expect(mocks.replicateObject).toHaveBeenCalledWith(KNOWLEDGE[0]?.object_reference, {
-      sourceBucket: 'agi-public',
-    });
-    expect(mocks.replicateObject).not.toHaveBeenCalledWith(ASSETS[0]?.object_reference, {
-      sourceBucket: 'agi-public',
-    });
-    expect(mocks.recordBackupReplica).toHaveBeenCalledTimes(1);
-    expect(mocks.recordBackupReplica).toHaveBeenCalledWith(
-      KNOWLEDGE[0]?.object_reference,
-      7,
-      TARGET.bucket,
-    );
-    await expect(response.json()).resolves.toMatchObject({ replicated: 1, missingSource: 2 });
+    expect(mocks.legacyFallback).toHaveBeenCalledTimes(1);
+    expect(mocks.legacyFallback).toHaveBeenCalledWith(KNOWLEDGE[0]?.object_reference);
   });
 
   it('answers 500 without leaking the failure to the scheduler body', async () => {

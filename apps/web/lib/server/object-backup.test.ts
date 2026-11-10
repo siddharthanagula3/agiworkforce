@@ -31,6 +31,7 @@ import {
   missingBackupEnv,
   objectBackupReadiness,
   reconcileBackupDeletions,
+  replicateObjectWithLegacyFallback,
   requeueReplicasAfterRestore,
   recordBackupReplica,
 } from './object-backup';
@@ -137,6 +138,66 @@ describe('recordBackupReplica', () => {
     expect(sql).toContain('insert into public.object_backup_replicas');
     expect(sql).toContain('on conflict (object_key) do update');
     expect(params).toEqual(['private-media/a.png', 'agi-backup', 2_048]);
+  });
+});
+
+describe('replicateObjectWithLegacyFallback', () => {
+  function sourceHolding(bucket: string | null) {
+    return {
+      head: vi.fn(async (name: string) => (name === bucket ? { contentLength: 3 } : null)),
+      get: vi.fn(async () => ({ data: new Uint8Array([1, 2, 3]), contentType: 'text/plain' })),
+    };
+  }
+
+  it('copies from the private bucket and never looks at the public one when it holds the object', async () => {
+    mocks.objectStorageConfig.mockReturnValue({
+      privateBucket: 'agi-primary',
+      publicBucket: 'agi-public',
+    });
+    const store = backupStore();
+    store.head.mockResolvedValue(null);
+    const source = sourceHolding('agi-primary');
+
+    const result = await replicateObjectWithLegacyFallback('a.png', {
+      source: source as never,
+      target: target(store),
+    });
+
+    expect(result).toEqual({ outcome: 'replicated', bytes: 3 });
+    expect(source.head).toHaveBeenCalledTimes(1);
+    expect(source.head).toHaveBeenCalledWith('agi-primary', 'a.png');
+  });
+
+  it('copies an object only the legacy public bucket holds', async () => {
+    mocks.objectStorageConfig.mockReturnValue({
+      privateBucket: 'agi-primary',
+      publicBucket: 'agi-public',
+    });
+    const store = backupStore();
+    store.head.mockResolvedValue(null);
+    const source = sourceHolding('agi-public');
+
+    const result = await replicateObjectWithLegacyFallback('legacy.pdf', {
+      source: source as never,
+      target: target(store),
+    });
+
+    expect(result).toEqual({ outcome: 'replicated', bytes: 3 });
+    expect(source.get).toHaveBeenCalledWith('agi-public', 'legacy.pdf');
+    expect(store.put).toHaveBeenCalledWith(expect.objectContaining({ key: 'legacy.pdf' }));
+  });
+
+  it('reports a missing source when no public bucket is configured', async () => {
+    const store = backupStore();
+    const source = sourceHolding(null);
+
+    const result = await replicateObjectWithLegacyFallback('gone.pdf', {
+      source: source as never,
+      target: target(store),
+    });
+
+    expect(result).toEqual({ outcome: 'missing-source', bytes: 0 });
+    expect(store.put).not.toHaveBeenCalled();
   });
 });
 

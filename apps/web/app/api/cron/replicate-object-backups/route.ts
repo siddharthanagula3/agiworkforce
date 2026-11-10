@@ -7,7 +7,6 @@ import { verifyCronRequest } from '@/lib/server/cron-auth';
 import { getKeyValueStore } from '@/lib/server/key-value';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { objectKeyFromStorageUri } from '@/lib/server/object-storage';
-import { objectStorageConfig } from '@/lib/server/object-storage-runtime';
 import {
   backupReplicaSummary,
   isCrossRegionBackup,
@@ -15,6 +14,7 @@ import {
   recordBackupReplica,
   reconcileBackupDeletions,
   replicateObject,
+  replicateObjectWithLegacyFallback,
   resolveObjectBackupTarget,
   type ReplicationOutcome,
 } from '@/lib/server/object-backup';
@@ -59,7 +59,7 @@ interface BackupSource {
   cursorKey: string;
   sql: string;
   toKey: (reference: string) => string | null;
-  readsPublicBucket: boolean;
+  readsLegacyPublicBucket: boolean;
 }
 
 /**
@@ -80,7 +80,7 @@ const BACKUP_SOURCES: readonly BackupSource[] = [
            order by created_at asc, id asc
            limit ${MAX_ASSETS_PER_RUN}`,
     toKey: (reference) => reference,
-    readsPublicBucket: false,
+    readsLegacyPublicBucket: false,
   },
   {
     id: 'project-knowledge',
@@ -93,7 +93,7 @@ const BACKUP_SOURCES: readonly BackupSource[] = [
            order by created_at asc, id asc
            limit ${MAX_ASSETS_PER_RUN}`,
     toKey: objectKeyFromStorageUri,
-    readsPublicBucket: true,
+    readsLegacyPublicBucket: true,
   },
 ];
 
@@ -184,11 +184,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           unreadable += 1;
           continue;
         }
-        let result = await replicateObject(key);
-        if (result.outcome === 'missing-source' && source.readsPublicBucket) {
-          const { publicBucket } = objectStorageConfig();
-          if (publicBucket) result = await replicateObject(key, { sourceBucket: publicBucket });
-        }
+        const result = source.readsLegacyPublicBucket
+          ? await replicateObjectWithLegacyFallback(key)
+          : await replicateObject(key);
         counts[result.outcome] += 1;
         bytes += result.bytes;
         if (target && (result.outcome === 'replicated' || result.outcome === 'already-present')) {

@@ -28,6 +28,8 @@ export const CORS_RULES = [
         'x-amz-sdk-checksum-algorithm',
         'x-amz-server-side-encryption',
         'x-amz-server-side-encryption-aws-kms-key-id',
+        'x-amz-meta-agi-region',
+        'x-amz-meta-agi-encryption',
       ],
     },
     exposeHeaders: ['ETag'],

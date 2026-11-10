@@ -75,6 +75,21 @@ describe('s3 object store', () => {
     expect(url.searchParams.get('X-Amz-Signature')).toBeTruthy();
   });
 
+  it('adds no signed header and no upload header when no encryption is configured', async () => {
+    const store = createS3ObjectStore({
+      client: createFakeS3Endpoint(CONFIG).client,
+      requestTimeoutMs: REQUEST_TIMEOUT_MS,
+      region: 'us-east-1',
+    });
+
+    const presigned = await store.presignPut(PRESIGN_INPUT);
+    const signedHeaders =
+      new URL(presigned.url).searchParams.get('X-Amz-SignedHeaders')?.split(';') ?? [];
+
+    expect(presigned.headers).toEqual({});
+    expect([...signedHeaders].sort()).toEqual(['content-length', 'content-type', 'host']);
+  });
+
   it('asks for no encryption on a presigned upload when none is configured', async () => {
     const store = createS3ObjectStore({
       client: createFakeS3Endpoint(CONFIG).client,

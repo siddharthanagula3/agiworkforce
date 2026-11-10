@@ -8416,20 +8416,6 @@ Acceptance target: Record acquisition independently of directory presence and re
 
 Limits: Individual source reading and scoped inert predicates/static traces only. Original operational modules, authored suites, application/fixtures, network/browser/native/SQL, production and whole-product acceptance remain unverified.
 
-## AUDIT-R2-CORS-READBACK-POLICY-01
-
-Severity: Low. Status: open conditional source finding, October 11, 2026; current named source identity qualified.
-
-The exact matchesExpected predicate accepts its first rule when origins/count and required methods match, even with missing declared allowed headers or altered exposed ETag/max age. Fourteen inert exact-predicate controls preserve seven counterguards and demonstrate seven accepted policy drifts. Bounded current presign/upload consumer reads establish that method/header contracts exist; they do not establish a deployed policy or browser failure.
-
-Source: `scripts/r2-apply-cors.mjs:9-34,75-85,134-143`. Exact predicate controls (`audit/checklist/evidence/coverage-r2-cors-exact-predicate-controls-2026-10-11.json`, untracked), independent review (`audit/checklist/evidence/coverage-root053-independent-premise-review-2026-10-11.json`, untracked) and frozen source report (`audit/checklist/reviews/coverage-release-dev-operations-source-2026-10-10-053.json`, untracked).
-
-Counterguards and ownership: Missing first rule, missing/extra origins, a wrong origin and missing required methods refuse. PUT failures record failure. The wildcard response-header setter census owner checks a different producer/mechanism and is not duplicated.
-
-Acceptance target: Compare the intended policy fields and successful GET result before verified output; retain existing origin/method guards.
-
-Limits: Individual source reading and scoped inert predicates/static traces only. Original operational modules, authored suites, application/fixtures, network/browser/native/SQL, production and whole-product acceptance remain unverified.
-
 ## AUDIT-SKILL-VETTING-SELFTEST-NULL-VERDICT-01
 
 Severity: Low. Status: open conditional source finding, October 11, 2026; current named source identity qualified.
