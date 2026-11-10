@@ -118,7 +118,9 @@ function digitLed(key: string): number {
   return DIGIT_LED.test(key) ? 1 : 0;
 }
 
-function compareIds(left: DirectoryRecord, right: DirectoryRecord): number {
+type NamedDirectoryItem = Pick<DirectoryRecord, 'id' | 'name'>;
+
+function compareIds(left: NamedDirectoryItem, right: NamedDirectoryItem): number {
   if (left.id === right.id) return 0;
   return left.id < right.id ? -1 : 1;
 }
@@ -140,8 +142,8 @@ function notFeatured(record: DirectoryRecord): number {
 }
 
 export function compareDirectoryRecordsByName(
-  left: DirectoryRecord,
-  right: DirectoryRecord,
+  left: NamedDirectoryItem,
+  right: NamedDirectoryItem,
 ): number {
   const leftKey = nameSortKey(left.name);
   const rightKey = nameSortKey(right.name);

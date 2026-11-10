@@ -1,4 +1,4 @@
-import type { SettingsConnector } from '@agiworkforce/ui';
+import { toggleFilterValue, type SettingsConnector } from '@agiworkforce/ui';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { NEW_ENTRY_WINDOW_DAYS } from '../constants';
@@ -396,6 +396,20 @@ describe('toConnectorSection', () => {
       'Data',
       'Productivity',
     ]);
+  });
+
+  it('lets a second category choice replace the first, since the request carries one', () => {
+    const built = section([record()], new Set(), [], {
+      categories: ['Productivity', 'Code'],
+    });
+    const group = built.filterGroups?.[2];
+    expect(group?.exclusive).toBe(true);
+    const first = toggleFilterValue({}, 'category', 'Productivity', group?.exclusive);
+    const second = toggleFilterValue(first, 'category', 'Code', group?.exclusive);
+    expect(second).toEqual({ category: ['Code'] });
+    expect(toDirectoryRequest({ ...DEFAULT_DIRECTORY_QUERY, selection: second }).category).toBe(
+      'Code',
+    );
   });
 
   it('hides the category filter when only one category exists', () => {
@@ -1043,6 +1057,34 @@ describe('measured connector popularity', () => {
     expect(byName.entries[1]?.popularRank).toBe(1);
     const unmeasured = section(records, new Set());
     expect(unmeasured.entries.every((entry) => entry.popularRank === undefined)).toBe(true);
+  });
+
+  it('orders curated and registry entries together when sorting by name', () => {
+    const built = section(
+      [record({ id: 'airtable-x', name: 'Atlas' }), record({ id: 'zeta-x', name: 'Zeta' })],
+      new Set(),
+      [
+        curated({ id: 'linear', name: 'Linear' }),
+        curated({ id: 'jira', name: 'Jira' }),
+        curated({ id: 'notion', name: 'Notion' }),
+      ],
+      { request: request({ sort: 'name' }) },
+    );
+    expect(built.entries.map((entry) => entry.name)).toEqual([
+      'Atlas',
+      'Jira',
+      'Linear',
+      'Notion',
+      'Zeta',
+    ]);
+  });
+
+  it('keeps curated seed order under the popular sort', () => {
+    const built = section([record({ id: 'airtable-x', name: 'Atlas' })], new Set(), [
+      curated({ id: 'linear', name: 'Linear' }),
+      curated({ id: 'jira', name: 'Jira' }),
+    ]);
+    expect(built.entries.map((entry) => entry.name)).toEqual(['Linear', 'Jira', 'Atlas']);
   });
 
   it('reads the ranking and treats a failed or malformed response as no ranking', async () => {
