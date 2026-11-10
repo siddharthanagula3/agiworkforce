@@ -71,7 +71,10 @@ describe('the website rules of an agent in a scheduled run', () => {
 
     const result = await plan({ name: 'Notes', allow: [], deny: ['example.com'] });
 
-    expect(result.webDomainPolicy?.deny.sort()).toEqual(['ads.example.net', 'example.com']);
+    expect([...(result.webDomainPolicy?.deny ?? [])].sort()).toEqual([
+      'ads.example.net',
+      'example.com',
+    ]);
   });
 
   it('offers no web tools when the agent sites sit outside the workspace allowlist', async () => {

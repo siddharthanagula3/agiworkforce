@@ -522,7 +522,7 @@ function listsOf(source: ConnectorPolicyLists): ConnectorPolicyLists {
     allowedMcpHosts: [...source.allowedMcpHosts],
     allowedWebDomains: [...source.allowedWebDomains],
     blockedWebDomains: [...source.blockedWebDomains],
-    toolRules: [...source.toolRules],
+    toolRules: [...(source.toolRules ?? [])],
   };
 }
 

@@ -13,8 +13,8 @@ function normalized(sql: string): string {
 
 // Adapter fixtures check SQL text and transaction ownership, not PostgreSQL behavior.
 function adapter(queryRows: unknown[][] = [], executeCount = 1) {
-  const query = vi.fn(async () => queryRows.shift() ?? []);
-  const execute = vi.fn(async () => executeCount);
+  const query = vi.fn(async (_sql: string, _params?: unknown[]) => queryRows.shift() ?? []);
+  const execute = vi.fn(async (_sql: string, _params?: unknown[]) => executeCount);
   const db = { query, execute } as unknown as DatabaseAdapter;
   return { db, query, execute };
 }

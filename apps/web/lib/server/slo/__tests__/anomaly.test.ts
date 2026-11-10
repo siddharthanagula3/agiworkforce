@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({ query: vi.fn() }) }));
@@ -35,22 +35,22 @@ interface Window {
  */
 function windowedDb(answers: Readonly<Record<string, { recent: Window; baseline: Window }>>): {
   db: DatabaseAdapter;
+  query: Mock<(sql: string, params?: unknown[]) => Promise<Window[]>>;
   queries: string[];
 } {
   const recentFromIso = new Date(NOW.getTime() - ANOMALY_RECENT_HOURS * 3_600_000).toISOString();
   const queries: string[] = [];
-  const db = {
-    query: vi.fn(async (sql: string, params: unknown[] = []) => {
-      queries.push(sql);
-      const series = ANOMALY_SERIES.find((candidate) => sql.includes(candidate.value));
-      if (!series) throw new Error(`no series matches ${sql}`);
-      const answer = answers[series.id];
-      if (!answer) return [{ samples: 0, measured: null }];
-      const side = params[0] === recentFromIso ? answer.recent : answer.baseline;
-      return [{ samples: side.samples, measured: side.measured }];
-    }),
-  } as unknown as DatabaseAdapter;
-  return { db, queries };
+  const query = vi.fn(async (sql: string, params: unknown[] = []): Promise<Window[]> => {
+    queries.push(sql);
+    const series = ANOMALY_SERIES.find((candidate) => sql.includes(candidate.value));
+    if (!series) throw new Error(`no series matches ${sql}`);
+    const answer = answers[series.id];
+    if (!answer) return [{ samples: 0, measured: null }];
+    const side = params[0] === recentFromIso ? answer.recent : answer.baseline;
+    return [{ samples: side.samples, measured: side.measured }];
+  });
+  const db = { query } as unknown as DatabaseAdapter;
+  return { db, query, queries };
 }
 
 const NORMAL: Window = { samples: 500, measured: 1_000 };
@@ -191,9 +191,8 @@ describe('a series against its own baseline', () => {
     const answers = windowedDb({
       'turn-cost': { recent: { samples: 500, measured: 2_400 }, baseline: NORMAL },
     });
-    const query = answers.db.query as unknown as ReturnType<typeof vi.fn>;
-    const answer = query.getMockImplementation()!;
-    query.mockImplementation(async (sql: string, params: unknown[] = []) => {
+    const answer = answers.query.getMockImplementation()!;
+    answers.query.mockImplementation(async (sql: string, params: unknown[] = []) => {
       if (sql.includes('duration_ms')) throw new Error('connection terminated');
       return answer(sql, params);
     });

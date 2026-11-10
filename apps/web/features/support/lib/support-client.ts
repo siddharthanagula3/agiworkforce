@@ -926,10 +926,12 @@ function toClaimedView(
     attemptedActions: listOf(value['attemptedActions'])
       .map(toAttemptedAction)
       .filter((action): action is HandoffAttemptedAction => action !== null),
-    citations: listOf(value['citations'])
-      .map((citation) => (isRecord(citation) ? str(citation['title']) : null))
-      .filter((title): title is string => title !== null)
-      .map((title) => ({ title })),
+    citations: listOf(value['citations']).flatMap((citation) => {
+      if (!isRecord(citation)) return [];
+      const title = str(citation['title']);
+      const url = str(citation['url']);
+      return title !== null && url !== null ? [{ title, url }] : [];
+    }),
     accountContext: toAccountContext(value['accountContext']),
   };
 }

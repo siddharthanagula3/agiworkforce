@@ -13,7 +13,11 @@ type MediaStorageModule = typeof import('@/lib/server/media-storage');
 const mocks = vi.hoisted(() => ({
   emailConfigured: vi.fn(() => true),
   getIdentityUser: vi.fn(),
-  enqueueJob: vi.fn(async () => ({ id: 'job-1' })),
+  enqueueJob: vi.fn(async (): Promise<Awaited<ReturnType<JobServiceModule['enqueueJob']>>> => ({
+    id: 'job-1',
+    status: 'queued',
+    created: false,
+  })),
   putPrivateObject: vi.fn(async () => undefined),
   deletePrivateObject: vi.fn(async () => undefined),
   getPrivateObjectStream: vi.fn(),
@@ -208,7 +212,7 @@ describe('requestDataExportArchive staging order', () => {
     });
     mocks.enqueueJob.mockImplementationOnce(async () => {
       order.push('enqueue');
-      return { id: 'job-1' };
+      return { id: 'job-1', status: 'queued', created: true };
     });
 
     const { archive, created } = await requestDataExportArchive({
@@ -295,7 +299,7 @@ describe('requestDataExportArchive concurrent admission', () => {
     } as unknown as DatabaseAdapter;
     mocks.enqueueJob.mockImplementationOnce(async () => {
       statements.push('enqueue');
-      return { id: 'job-1' };
+      return { id: 'job-1', status: 'queued', created: true };
     });
 
     await requestWith(db);
@@ -471,7 +475,7 @@ describe('final volume expiry', () => {
   });
 
   it('publishes the deadline of the expiry job a prior attempt already queued', async () => {
-    mocks.enqueueJob.mockResolvedValueOnce({ id: 'expiry-job', created: false });
+    mocks.enqueueJob.mockResolvedValueOnce({ id: 'expiry-job', status: 'queued', created: false });
 
     const result = await buildDataExportArchiveVolume(finalVolumeContext());
 
@@ -481,7 +485,7 @@ describe('final volume expiry', () => {
   });
 
   it('computes the deadline from now when it queues the expiry job itself', async () => {
-    mocks.enqueueJob.mockResolvedValueOnce({ id: 'expiry-job', created: true });
+    mocks.enqueueJob.mockResolvedValueOnce({ id: 'expiry-job', status: 'queued', created: true });
     const before = Date.now();
 
     const result = await buildDataExportArchiveVolume(finalVolumeContext());

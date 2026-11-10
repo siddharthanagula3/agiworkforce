@@ -58,7 +58,7 @@ class FakePeer extends EventTarget {
     expect(label).toBe('oai-events');
     return this.channel as unknown as RTCDataChannel;
   }
-  addTrack() {
+  addTrack(_track: MediaStreamTrack) {
     return {} as RTCRtpSender;
   }
   async createOffer() {

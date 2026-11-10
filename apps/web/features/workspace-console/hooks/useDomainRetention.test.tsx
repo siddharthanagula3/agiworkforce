@@ -27,7 +27,7 @@ describe('saving domain retention', () => {
     'sends only the fields the PUT schema accepts when updatedAt is %s',
     async (updatedAt) => {
       const fetchMock = vi.fn(
-        async () =>
+        async (_input: RequestInfo | URL, _init?: RequestInit) =>
           new Response(
             JSON.stringify({ organizationId: 'org', canManageRetention: true, policies: [] }),
             { status: 200 },
@@ -45,8 +45,8 @@ describe('saving domain retention', () => {
         await result.current.mutateAsync([policy]);
       });
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
-      const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
-      expect(JSON.parse(init.body as string)).toEqual({
+      const init = fetchMock.mock.calls[0]?.[1];
+      expect(JSON.parse(String(init?.body))).toEqual({
         policies: [{ domain: 'notifications', retentionDays: 30, enforced: true }],
       });
       client.clear();

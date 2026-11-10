@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { hashSkillContent } from '@agiworkforce/skills';
 
 import { directoryEntry, SHA } from './fixtures';
@@ -58,8 +58,8 @@ const INSTALLATION = {
 };
 
 interface FakeDb {
-  query: ReturnType<typeof vi.fn>;
-  execute: ReturnType<typeof vi.fn>;
+  query: Mock<(text: string, params?: unknown[]) => Promise<unknown[]>>;
+  execute: Mock<(text: string) => Promise<number>>;
   transaction: <T>(work: (tx: DatabaseAdapter) => Promise<T>) => Promise<T>;
   sql: string[];
 }

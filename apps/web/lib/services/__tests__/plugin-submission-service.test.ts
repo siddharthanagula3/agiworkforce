@@ -28,8 +28,8 @@ function entryRow(overrides: Record<string, unknown> = {}) {
 
 function fakeDb(entry: Record<string, unknown> | null) {
   const tx = {
-    execute: vi.fn(async () => 1),
-    query: vi.fn(async () => [{ id: 'submission-1' }]),
+    execute: vi.fn(async (_sql: string, _params?: unknown[]) => 1),
+    query: vi.fn(async (_sql: string, _params?: unknown[]) => [{ id: 'submission-1' }]),
   };
   const db = {
     query: vi.fn(async (sql: string) => {

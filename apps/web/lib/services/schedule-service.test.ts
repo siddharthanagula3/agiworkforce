@@ -1236,7 +1236,7 @@ describe('due-schedule batch isolation', () => {
     }
 
     it('finalizes only a lease that is still expired when the write lands', async () => {
-      const query = vi.fn(async (sql: string) => {
+      const query = vi.fn(async (sql: string, _params?: unknown[]) => {
         if (sql.includes('lease_expires_at < now()')) return [expiredClaimRow];
         if (sql.includes('for update of task')) return [taskRow];
         if (sql.includes('update scheduled_task_runs')) return [runRow('timeout')];
@@ -1247,9 +1247,9 @@ describe('due-schedule batch isolation', () => {
 
       const finalize = query.mock.calls.find(([sql]) =>
         String(sql).includes('update scheduled_task_runs'),
-      ) as [string, unknown[]];
-      expect(finalize[0]).toContain('now() > lease_expires_at');
-      expect(finalize[1].at(-1)).toBe(true);
+      );
+      expect(finalize?.[0]).toContain('now() > lease_expires_at');
+      expect(finalize?.[1]?.at(-1)).toBe(true);
     });
 
     it('does not require an expired lease for a worker finishing its own run', async () => {

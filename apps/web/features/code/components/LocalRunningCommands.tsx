@@ -32,7 +32,8 @@ async function previewErrorsOf(runs: BackgroundCommandRun[]): Promise<PreviewErr
     const report = await readPreviewConsoleErrors(false);
     const count = report.errors.length + report.dropped;
     if (report.url === null || count === 0) return null;
-    return served.has(localPreviewOrigin(report.url)) ? { url: report.url, count } : null;
+    const origin = localPreviewOrigin(report.url);
+    return origin !== null && served.has(origin) ? { url: report.url, count } : null;
   } catch {
     return null;
   }

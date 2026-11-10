@@ -84,7 +84,7 @@ function harness(
     refundStateSignedAt?: string | null;
   } = {},
 ) {
-  const execute = vi.fn(async () => undefined);
+  const execute = vi.fn(async (_sql: string, _params?: readonly unknown[]) => undefined);
   const query = vi.fn(
     async (sql: string, _params?: readonly unknown[]): Promise<Record<string, unknown>[]> => {
       if (sql.includes('insert into public.mobile_iap_notification_receipts')) {

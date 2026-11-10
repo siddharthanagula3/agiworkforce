@@ -170,7 +170,7 @@ function world(state: WorldState): { db: DatabaseAdapter; state: WorldState } {
     withUser: vi.fn(),
     dispose: vi.fn(),
   };
-  db.transaction = vi.fn(async (fn: (tx: DatabaseAdapter) => Promise<unknown>) =>
+  db['transaction'] = vi.fn(async (fn: (tx: DatabaseAdapter) => Promise<unknown>) =>
     fn(db as unknown as DatabaseAdapter),
   );
   return { db: db as unknown as DatabaseAdapter, state };

@@ -33,8 +33,8 @@ import { executeRevokeConnector } from '../executors/revoke-connector';
 const USER = 'user_a';
 
 function dbWith(installations: Array<{ installation_id: number }> = []) {
-  const execute = vi.fn(async () => 1);
-  const query = vi.fn(async () => installations);
+  const execute = vi.fn(async (_sql: string, _params?: unknown[]) => 1);
+  const query = vi.fn(async (_sql: string, _params?: unknown[]) => installations);
   return { db: { execute, query } as unknown as DatabaseAdapter, execute };
 }
 

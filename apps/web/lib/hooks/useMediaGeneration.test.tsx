@@ -44,8 +44,11 @@ import {
   MediaGenerationApiError,
 } from './useMediaGeneration';
 
-const GOOGLE_IMAGE_MODEL = IMAGE_MODELS.find((model) => model.provider === 'google');
-if (!GOOGLE_IMAGE_MODEL) throw new Error('Catalog has no Google image model fixture');
+const GOOGLE_IMAGE_MODEL = (() => {
+  const model = IMAGE_MODELS.find((candidate) => candidate.provider === 'google');
+  if (!model) throw new Error('Catalog has no Google image model fixture');
+  return model;
+})();
 const VIDEO_MODEL = Object.values(modelsCatalog.models).find(isExecutableVideoModel);
 if (!VIDEO_MODEL) throw new Error('Catalog has no executable video model fixture');
 const VIDEO_PROVIDER = VIDEO_MODEL.provider === 'open_router' ? 'openrouter' : VIDEO_MODEL.provider;

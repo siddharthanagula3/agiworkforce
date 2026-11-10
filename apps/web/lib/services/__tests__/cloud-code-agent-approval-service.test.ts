@@ -315,7 +315,7 @@ describe('approvals are owner-scoped', () => {
 
 describe('findPendingCloudCodeApprovalRequest', () => {
   function dbReturning(rows: unknown[]) {
-    const query = vi.fn(async (sql: string) =>
+    const query = vi.fn(async (sql: string, _params?: unknown[]) =>
       sql.replace(/\s+/g, ' ').trim().startsWith('select a.step_index') ? rows : [],
     );
     return { db: { query } as never, query };

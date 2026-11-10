@@ -79,7 +79,7 @@ describe('readSpendState', () => {
   it('reports an unconfigured workspace rather than a zero cap', async () => {
     // A zero cap would refuse every turn. "No limit" and "a limit of nothing"
     // must never collapse into the same value.
-    const h = harness({ cap: null });
+    harness({ cap: null });
     const state = await readSpendState(ORG);
 
     expect(state.configured).toBe(false);
@@ -99,17 +99,17 @@ describe('readSpendState', () => {
   });
 
   it('computes the used percentage against the cap', async () => {
-    const h = harness({ cap: 10_000, spent: 2_500 });
+    harness({ cap: 10_000, spent: 2_500 });
     expect((await readSpendState(ORG)).usedPct).toBe(25);
   });
 
   it('sums a numeric string rather than concatenating it', async () => {
-    const h = harness({ spent: '75000000' });
+    harness({ spent: '75000000' });
     expect((await readSpendState(ORG)).spentCredits).toBe(creditsFromMicrousd(75_000_000));
   });
 
   it('flags the alert threshold separately from the cap', async () => {
-    const h = harness({ cap: 10_000, threshold: 80, spent: 8_500 });
+    harness({ cap: 10_000, threshold: 80, spent: 8_500 });
     const state = await readSpendState(ORG);
 
     expect(state.overThreshold).toBe(true);
@@ -142,12 +142,12 @@ describe('evaluateSpendLimit', () => {
   });
 
   it('allows a workspace with no limit', async () => {
-    const h = harness({ cap: null });
+    harness({ cap: null });
     expect((await evaluateSpendLimit(ORG)).allowed).toBe(true);
   });
 
   it('refuses a blocking workspace that is over its cap', async () => {
-    const h = harness({ enforcement: 'block', cap: 10_000, spent: 10_000 });
+    harness({ enforcement: 'block', cap: 10_000, spent: 10_000 });
     const decision = await evaluateSpendLimit(ORG);
 
     expect(decision.allowed).toBe(false);
@@ -158,24 +158,24 @@ describe('evaluateSpendLimit', () => {
   it('NOTIFY never refuses, however far over the cap', async () => {
     // notify exists so a finance owner can watch a budget before deciding to
     // enforce it. Turning it into a refusal is the opposite of what they asked.
-    const h = harness({ enforcement: 'notify', cap: 10_000, spent: 90_000 });
+    harness({ enforcement: 'notify', cap: 10_000, spent: 90_000 });
     expect((await evaluateSpendLimit(ORG)).allowed).toBe(true);
   });
 
   it('OFF never refuses', async () => {
-    const h = harness({ enforcement: 'off', cap: 10_000, spent: 90_000 });
+    harness({ enforcement: 'off', cap: 10_000, spent: 90_000 });
     expect((await evaluateSpendLimit(ORG)).allowed).toBe(true);
   });
 
   it('allows a blocking workspace still under its cap', async () => {
-    const h = harness({ enforcement: 'block', cap: 10_000, spent: 9_999 });
+    harness({ enforcement: 'block', cap: 10_000, spent: 9_999 });
     expect((await evaluateSpendLimit(ORG)).allowed).toBe(true);
   });
 
   it('does not refuse work when the billing lookup fails', async () => {
     // Refusing every member's work because the spend table blipped is worse
     // than briefly overshooting a cap.
-    const h = harness({ throws: true });
+    harness({ throws: true });
     const decision = await evaluateSpendLimit(ORG);
 
     expect(decision.allowed).toBe(true);
@@ -199,27 +199,27 @@ describe('evaluateSpendLimit', () => {
   it('frees a workspace at once when its cap is raised', async () => {
     // Otherwise an admin raising the cap watches their team stay blocked for a
     // window with no explanation.
-    const h = harness({ enforcement: 'block', cap: 10_000, spent: 10_000 });
+    harness({ enforcement: 'block', cap: 10_000, spent: 10_000 });
     expect((await evaluateSpendLimit(ORG, { now: 1_000 })).allowed).toBe(false);
 
     invalidateSpendDecision(ORG);
-    const raised = harness({ enforcement: 'block', cap: 50_000, spent: 10_000 });
+    harness({ enforcement: 'block', cap: 50_000, spent: 10_000 });
     expect((await evaluateSpendLimit(ORG, { now: 1_000 })).allowed).toBe(true);
   });
 
   it('caches per organization, never across them', async () => {
     const other = '22222222-2222-4222-8222-222222222222';
-    const h = harness({ enforcement: 'block', cap: 10_000, spent: 10_000 });
+    harness({ enforcement: 'block', cap: 10_000, spent: 10_000 });
 
     expect((await evaluateSpendLimit(ORG, { now: 1_000 })).allowed).toBe(false);
-    const permissive = harness({ cap: null });
+    harness({ cap: null });
     expect((await evaluateSpendLimit(other, { now: 1_000 })).allowed).toBe(true);
   });
 });
 
 describe('evaluateSpendLimit admin alerts', () => {
   it('offers every recomputed state to the alert dispatcher', async () => {
-    const h = harness({ enforcement: 'notify', spent: 9_000 });
+    harness({ enforcement: 'notify', spent: 9_000 });
     await evaluateSpendLimit(ORG, { now: 1_000 });
 
     expect(alertMocks.dispatchSpendAlertIfDue).toHaveBeenCalledTimes(1);
@@ -232,7 +232,7 @@ describe('evaluateSpendLimit admin alerts', () => {
   });
 
   it('does not re-offer a cached decision', async () => {
-    const h = harness({ enforcement: 'notify', spent: 9_000 });
+    harness({ enforcement: 'notify', spent: 9_000 });
     await evaluateSpendLimit(ORG, { now: 1_000 });
     await evaluateSpendLimit(ORG, { now: 2_000 });
 
@@ -241,7 +241,7 @@ describe('evaluateSpendLimit admin alerts', () => {
 
   it('still returns the decision when the announcement fails', async () => {
     alertMocks.dispatchSpendAlertIfDue.mockRejectedValueOnce(new Error('mail down'));
-    const h = harness({ enforcement: 'block', spent: 20_000 });
+    harness({ enforcement: 'block', spent: 20_000 });
 
     const decision = await evaluateSpendLimit(ORG, { now: 1_000 });
 

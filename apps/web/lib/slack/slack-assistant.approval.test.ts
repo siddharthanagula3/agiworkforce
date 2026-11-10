@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ManagedCloudScheduleRunApproval } from '@agiworkforce/cloud-contracts';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 const mocks = vi.hoisted(() => ({
@@ -87,7 +88,7 @@ function policyDb(row: { mode: string; allowed_tools: unknown } | null) {
   } as unknown as DatabaseAdapter;
 }
 
-const approval = { decision: 'approved', toolCallIds: ['call_1'] } as const;
+const approval: ManagedCloudScheduleRunApproval = { decision: 'approved', toolCallIds: ['call_1'] };
 const checkpoint = { completedSteps: 1 };
 
 async function claim(db: DatabaseAdapter) {

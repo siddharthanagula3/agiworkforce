@@ -198,10 +198,13 @@ describe('continuing a shared conversation', () => {
     render(<ContinueSharedSessionPage />);
 
     await waitFor(() => expect(replace).toHaveBeenCalledWith(`/chat/${CREATED}`));
-    const [[, init]] = calls('/api/chat/conversations', 'POST');
-    expect(new Headers((init as RequestInit).headers).get('x-agi-organization-id')).toBe(
-      'personal',
-    );
+    const created = calls('/api/chat/conversations', 'POST');
+    expect(created).toHaveLength(1);
+    expect(
+      new Headers((created[0]?.[1] as RequestInit | undefined)?.headers).get(
+        'x-agi-organization-id',
+      ),
+    ).toBe('personal');
   });
 
   it('creates nothing when the active workspace cannot be confirmed', async () => {

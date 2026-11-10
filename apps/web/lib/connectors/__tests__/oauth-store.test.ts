@@ -475,7 +475,9 @@ describe('a callback that was replaced or cancelled before it saved', () => {
     await cancelPendingConnectorAuthorizations('user-1', 'gmail');
     await cancelPendingConnectorAuthorizations('user-1', 'gmail', ' work ');
 
-    const [all, one] = mockExecute.mock.calls as Array<[string, unknown[]]>;
+    const calls = mockExecute.mock.calls as Array<[string, unknown[]]>;
+    expect(calls).toHaveLength(2);
+    const [all, one] = [calls[0]!, calls[1]!];
     expect(all[0]).toMatch(/delete from public\.connector_oauth_authorizations/);
     expect(all[0]).not.toContain('account_key');
     expect(all[1]).toEqual(['user-1', 'gmail']);

@@ -5,6 +5,7 @@ vi.mock('@/lib/services/cloud-agent-run-service', () => ({ transitionCloudAgentR
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
+import type { ScheduledRunApprovalCheckpoint } from '@/lib/services/schedule-service';
 import {
   SlackRunApprovalError,
   claimSlackRunApproval,
@@ -13,15 +14,26 @@ import {
 
 const RUN_ID = '0190a000-0000-7000-8000-0000000000e1';
 
-function checkpoint(patch: Record<string, unknown> = {}) {
+function pendingCall(id: string): ScheduledRunApprovalCheckpoint['pendingToolCalls'][number] {
+  return { id, qualifiedName: 'send_email', args: {}, approvalScopes: [] };
+}
+
+function checkpoint(
+  patch: Partial<ScheduledRunApprovalCheckpoint> = {},
+): ScheduledRunApprovalCheckpoint {
   return {
     sessionId: 'session-1',
     turnId: 'turn-1',
     nextEventSequence: 4,
     completedSteps: 1,
     messages: [],
-    pendingToolCalls: [{ id: 'call_a', name: 'send_email', input: {} }],
-    route: { modelKey: 'model-key' },
+    pendingToolCalls: [pendingCall('call_a')],
+    route: {
+      provider: 'provider-1',
+      providerModelId: 'provider-model-1',
+      modelKey: 'model-key',
+      routeId: 'route-1',
+    },
     sensitiveContextPresent: false,
     ...patch,
   };
@@ -67,9 +79,7 @@ describe('Slack approval generation', () => {
     expect(slackApprovalGeneration(checkpoint({ completedSteps: 2 }))).not.toBe(first);
     expect(slackApprovalGeneration(checkpoint({ nextEventSequence: 9 }))).not.toBe(first);
     expect(
-      slackApprovalGeneration(
-        checkpoint({ pendingToolCalls: [{ id: 'call_b', name: 'send_email', input: {} }] }),
-      ),
+      slackApprovalGeneration(checkpoint({ pendingToolCalls: [pendingCall('call_b')] })),
     ).not.toBe(first);
   });
 

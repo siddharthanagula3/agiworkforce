@@ -84,14 +84,13 @@ function listsOf(source: ModelPolicyLists): ModelPolicyLists {
 }
 
 function normalizedLists(lists: ModelPolicyLists): string {
-  return JSON.stringify(
-    Object.fromEntries(
-      Object.entries(listsOf(lists)).map(([key, value]) => [
-        key,
-        value.map((entry) => entry.toLowerCase()).sort(),
-      ]),
-    ),
-  );
+  const sorted = (list: string[]) => list.map((entry) => entry.toLowerCase()).sort();
+  return JSON.stringify({
+    allowedProviders: sorted(lists.allowedProviders),
+    blockedProviders: sorted(lists.blockedProviders),
+    allowedModels: sorted(lists.allowedModels),
+    blockedModels: sorted(lists.blockedModels),
+  });
 }
 
 function sameLists(a: ModelPolicyLists, b: ModelPolicyLists): boolean {

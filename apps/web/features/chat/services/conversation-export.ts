@@ -48,7 +48,10 @@ function exportedSources(message: ChatMessage): ExportedSource[] {
   const { searchSources, citationsByMarker } = collectMessageResearchSources(
     message.metadata as MessageResearchSourceMetadata | undefined,
   );
-  const numbered = citationsByMarker.map((source) => ({ source, marker: source.citationIndex }));
+  const numbered = citationsByMarker.map((source) => ({
+    source,
+    marker: source.citationIndex ?? null,
+  }));
   const unnumbered = searchSources
     .filter((source) => !citationsByMarker.some((cited) => sameSourceUrl(cited.url, source.url)))
     .map((source) => ({ source, marker: null }));
