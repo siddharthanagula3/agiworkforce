@@ -47,6 +47,39 @@ describe('ComposerFeedbackDialog', () => {
     expect(JSON.stringify(body)).not.toContain('prompt');
   });
 
+  describe('a screenshot attached to the report', () => {
+    const attachAndSend = async (receipt: Record<string, unknown>) => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => new Response(JSON.stringify(receipt), { status: 200 })),
+      );
+      const { container } = render(<ComposerFeedbackDialog />);
+      fireEvent.click(screen.getByRole('button', { name: 'Feedback' }));
+      const input = container.ownerDocument.querySelector('input[type="file"]') as HTMLInputElement;
+      fireEvent.change(input, {
+        target: { files: [new File(['png'], 'shot.png', { type: 'image/png' })] },
+      });
+      await screen.findByAltText('Screenshot attached to this feedback');
+      fireEvent.change(screen.getByLabelText('Details'), { target: { value: 'Layout broke.' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Send feedback' }));
+      await waitFor(() => expect(screen.getByText(/your feedback was sent/i)).toBeDefined());
+    };
+
+    it('says so when the server could not store the screenshot', async () => {
+      await attachAndSend({ success: true, screenshot_stored: false });
+
+      expect(
+        screen.getByText(/screenshot could not be stored and was not attached/i),
+      ).toBeDefined();
+    });
+
+    it('stays quiet when the screenshot was stored', async () => {
+      await attachAndSend({ success: true, screenshot_stored: true });
+
+      expect(screen.queryByText(/could not be stored/i)).toBeNull();
+    });
+  });
+
   it('shows a retryable error when the server rejects feedback', async () => {
     vi.stubGlobal(
       'fetch',

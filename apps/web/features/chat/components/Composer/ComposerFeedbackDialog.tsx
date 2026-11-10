@@ -98,6 +98,7 @@ export function ComposerFeedbackDialog({
   const [message, setMessage] = useState('');
   const [submitState, setSubmitState] = useState<SubmitState>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [screenshotDropped, setScreenshotDropped] = useState(false);
   const isSafetyAppeal = variant === 'safety-appeal';
   const isTaskFeedback = variant === 'task';
 
@@ -107,6 +108,7 @@ export function ComposerFeedbackDialog({
     if (open) {
       setSubmitState('idle');
       setErrorMessage(null);
+      setScreenshotDropped(false);
     }
   }
 
@@ -202,6 +204,10 @@ export function ComposerFeedbackDialog({
         throw new Error(serverMessage || 'Could not send feedback. Please try again.');
       }
 
+      const receipt = (await response.json().catch(() => null)) as {
+        screenshot_stored?: boolean;
+      } | null;
+      setScreenshotDropped(Boolean(submittedScreenshot) && receipt?.screenshot_stored === false);
       setSubmitState('success');
       setMessage((current) => (current.trim() === trimmedMessage ? '' : current));
       setScreenshot((current) => (current === submittedScreenshot ? null : current));
@@ -263,6 +269,11 @@ export function ComposerFeedbackDialog({
                   ? 'Thanks, your report was recorded.'
                   : 'Thanks, your feedback was sent.'}
               </p>
+              {screenshotDropped ? (
+                <p role="status" className="text-sm text-muted-foreground">
+                  Your note was sent, but your screenshot could not be stored and was not attached.
+                </p>
+              ) : null}
               <div className="flex justify-end">
                 <Button type="button" onClick={() => setOpen(false)}>
                   Done
