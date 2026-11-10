@@ -2,7 +2,11 @@
 import React from 'react';
 import { Alert } from 'react-native';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
-import { MOBILE_IAP_PRODUCT_DEFINITIONS, type MobileIapCatalogResponse } from '@agiworkforce/types';
+import {
+  MOBILE_IAP_PRODUCT_DEFINITIONS,
+  getBillingPlanPricing,
+  type MobileIapCatalogResponse,
+} from '@agiworkforce/types';
 
 const mockPush = jest.fn();
 const mockAuthState = {
@@ -351,7 +355,7 @@ describe('Cloud Billing screen, Local-mode-blocked tier refresh (2026-07-05)', (
 
     const { getAllByText, getByText } = render(<CloudBillingScreen />);
 
-    expect(getByText('Pro plan')).toBeTruthy();
+    expect(getByText(`${getBillingPlanPricing('pro').label} plan`)).toBeTruthy();
     expect(getAllByText(/Canceled/i).length).toBeGreaterThan(0);
   });
 
@@ -672,11 +676,13 @@ describe('buying and changing plans in the app', () => {
     const state = iapState();
     const screen = renderWith(state);
 
-    for (const label of ['Basic', 'Pro', 'Max 5x', 'Max 20x']) {
+    for (const label of (['basic', 'pro', 'max', 'max_15x'] as const).map(
+      (tier) => getBillingPlanPricing(tier).label,
+    )) {
       expect(screen.getByLabelText(`${label} · monthly`)).toBeTruthy();
     }
     expect(screen.getByText('price:subscription_pro_monthly')).toBeTruthy();
-    fireEvent.press(screen.getByLabelText('Pro · monthly'));
+    fireEvent.press(screen.getByLabelText(`${getBillingPlanPricing('pro').label} · monthly`));
     expect(state.purchase).toHaveBeenCalledWith('subscription_pro_monthly');
   });
 
@@ -709,7 +715,7 @@ describe('buying and changing plans in the app', () => {
       iapState({ priceFor: () => ({ label: null, currency: null, offerToken: null }) }),
     );
 
-    const row = screen.getByLabelText('Pro · monthly');
+    const row = screen.getByLabelText(`${getBillingPlanPricing('pro').label} · monthly`);
     expect(row.props.accessibilityState.disabled).toBe(true);
     expect(screen.queryByText(/\$\s?\d/)).toBeNull();
   });
@@ -719,14 +725,17 @@ describe('buying and changing plans in the app', () => {
     const state = iapState();
     const screen = renderWith(state);
 
-    expect(screen.getByLabelText('Pro · monthly').props.accessibilityState.disabled).toBe(true);
+    expect(
+      screen.getByLabelText(`${getBillingPlanPricing('pro').label} · monthly`).props
+        .accessibilityState.disabled,
+    ).toBe(true);
     expect(screen.getByText('Current plan')).toBeTruthy();
     expect(screen.getByText('Downgrade · price:subscription_basic_monthly')).toBeTruthy();
     expect(screen.getByText('Upgrade · price:subscription_max_monthly')).toBeTruthy();
     expect(screen.getByText('Upgrade · price:subscription_max_15x_monthly')).toBeTruthy();
     expect(
       screen.getByText(
-        'Upgrades start right away; downgrades start at renewal, and you keep Pro until then.',
+        `Upgrades start right away; downgrades start at renewal, and you keep ${getBillingPlanPricing('pro').label} until then.`,
       ),
     ).toBeTruthy();
 
@@ -837,7 +846,7 @@ describe('buying and changing plans in the app', () => {
 
     expect(screen.getByText('Waiting for the store')).toBeTruthy();
     expect(screen.getByText('Waiting for approval')).toBeTruthy();
-    fireEvent.press(screen.getByLabelText('Pro · monthly'));
+    fireEvent.press(screen.getByLabelText(`${getBillingPlanPricing('pro').label} · monthly`));
 
     expect(state.purchase).not.toHaveBeenCalled();
     expect(alertSpy).toHaveBeenCalledWith(
@@ -857,7 +866,7 @@ describe('buying and changing plans in the app', () => {
     });
     const screen = renderWith(iapState());
 
-    expect(screen.queryByLabelText('Max 5x · monthly')).toBeNull();
+    expect(screen.queryByLabelText(`${getBillingPlanPricing('max').label} · monthly`)).toBeNull();
     expect(screen.getByText('Subscription managed elsewhere')).toBeTruthy();
     expect(screen.getByLabelText('500 credits')).toBeTruthy();
   });
@@ -875,7 +884,7 @@ describe('buying and changing plans in the app', () => {
       }),
     );
 
-    expect(screen.queryByLabelText('Max 5x · monthly')).toBeNull();
+    expect(screen.queryByLabelText(`${getBillingPlanPricing('max').label} · monthly`)).toBeNull();
     expect(screen.getByText('Subscription managed elsewhere')).toBeTruthy();
     expect(screen.getByText(withheld)).toBeTruthy();
   });

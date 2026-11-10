@@ -73,6 +73,7 @@ jest.mock('@/src/ui/theme', () => {
   };
 });
 
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { ContinuityOnboardingGate } from '../src/features/continuity/ContinuityOnboardingGate';
 import ContinuityOnboardingScreen from '../src/features/continuity/ContinuityOnboardingScreen';
 import {
@@ -142,7 +143,7 @@ describe('Mobile cross-device continuity onboarding', () => {
     useChatAppModeStore.setState({ appMode: 'local' });
     const { getByText, getByLabelText } = render(<ContinuityOnboardingScreen />);
 
-    expect(getByText('AGI Work')).toBeTruthy();
+    expect(getByText(PRODUCT_NAMES.work)).toBeTruthy();
     expect(getByText('Beta')).toBeTruthy();
     expect(getByText("Keep Cloud work going when you're on the go")).toBeTruthy();
     expect(getByText('Start and steer tasks from your phone')).toBeTruthy();

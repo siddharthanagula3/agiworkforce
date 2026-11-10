@@ -36,6 +36,7 @@ jest.mock('@/services/notificationChannels', () => ({
 jest.mock('@/services/preferences', () => ({
   fetchPreferenceNamespace: jest.fn().mockResolvedValue({}),
   savePreferenceNamespace: jest.fn().mockResolvedValue(undefined),
+  patchPreferenceNamespace: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock('expo-status-bar', () => ({ StatusBar: () => null }));
@@ -73,10 +74,15 @@ import NotificationCategoryDetailScreen from '../src/features/settings/notificat
 import { useNotificationPrefsStore } from '../stores/notificationPrefsStore';
 import { useAuthStore } from '../src/features/auth/store';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
+import {
+  __resetCloudAccountSessionForTests,
+  activateCloudAccount,
+} from '../src/features/auth/services/cloudAccountSession';
 
 describe('notification category settings', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    __resetCloudAccountSessionForTests();
     act(() => {
       useChatAppModeStore.setState({ appMode: 'local' });
       useAuthStore.setState({ isClerkSignedIn: false });
@@ -141,9 +147,14 @@ describe('notification category settings', () => {
   it('blocks the per-device category rows while the device denies notifications', async () => {
     const { getPushDeliveryStatus } = require('@/services/notifications');
     (getPushDeliveryStatus as jest.Mock).mockResolvedValueOnce('denied');
+    activateCloudAccount('notification-owner');
     act(() => {
       useChatAppModeStore.setState({ appMode: 'cloud' });
-      useAuthStore.setState({ isClerkSignedIn: true });
+      useAuthStore.setState({
+        isClerkLoaded: true,
+        isClerkSignedIn: true,
+        clerkUserId: 'notification-owner',
+      });
     });
     const screen = render(<NotificationPreferencesScreen />);
     await screen.findByText('Your device is blocking notifications');

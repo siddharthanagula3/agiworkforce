@@ -26,9 +26,9 @@ own localized price in each storefront; the app shows only the store's string.
 | Logical key                    | Buyer-facing name | Price (USD) | Kind                       |
 | ------------------------------ | ----------------- | ----------- | -------------------------- |
 | `subscription_basic_monthly`   | AGI Basic         | 7.00 / mo   | auto-renewing subscription |
-| `subscription_pro_monthly`     | AGI Pro           | 20.00 / mo  | auto-renewing subscription |
-| `subscription_max_monthly`     | AGI Max 5x        | 100.00 / mo | auto-renewing subscription |
-| `subscription_max_15x_monthly` | AGI Max 20x       | 200.00 / mo | auto-renewing subscription |
+| `subscription_pro_monthly`     | AGI Premium       | 20.00 / mo  | auto-renewing subscription |
+| `subscription_max_monthly`     | AGI Max           | 100.00 / mo | auto-renewing subscription |
+| `subscription_max_15x_monthly` | AGI Ultra         | 200.00 / mo | auto-renewing subscription |
 | `top_up_10`                    | 500 credits       | 10.00       | consumable                 |
 | `top_up_20`                    | 1,000 credits     | 20.00       | consumable                 |
 | `top_up_50`                    | 2,500 credits     | 50.00       | consumable                 |
@@ -57,9 +57,9 @@ Order the levels from most to least:
 
 | Level | Product id                                | Reference name      | Duration | Price (USD) |
 | ----- | ----------------------------------------- | ------------------- | -------- | ----------- |
-| 1     | `com.agiworkforce.app.sub.max20x.monthly` | AGI Max 20x Monthly | 1 month  | 200.00      |
-| 2     | `com.agiworkforce.app.sub.max.monthly`    | AGI Max 5x Monthly  | 1 month  | 100.00      |
-| 3     | `com.agiworkforce.app.sub.pro.monthly`    | AGI Pro Monthly     | 1 month  | 20.00       |
+| 1     | `com.agiworkforce.app.sub.max20x.monthly` | AGI Ultra Monthly   | 1 month  | 200.00      |
+| 2     | `com.agiworkforce.app.sub.max.monthly`    | AGI Max Monthly     | 1 month  | 100.00      |
+| 3     | `com.agiworkforce.app.sub.pro.monthly`    | AGI Premium Monthly | 1 month  | 20.00       |
 | 4     | `com.agiworkforce.app.sub.basic.monthly`  | AGI Basic Monthly   | 1 month  | 7.00        |
 
 For each: Family Sharing off (the server refuses a family-shared transaction),
@@ -129,9 +129,9 @@ deferred for a downgrade.
 | Product id    | Base plan id | Name        | Price (USD) |
 | ------------- | ------------ | ----------- | ----------- |
 | `agi_basic`   | `monthly`    | AGI Basic   | 7.00        |
-| `agi_pro`     | `monthly`    | AGI Pro     | 20.00       |
-| `agi_max`     | `monthly`    | AGI Max 5x  | 100.00      |
-| `agi_max_20x` | `monthly`    | AGI Max 20x | 200.00      |
+| `agi_pro`     | `monthly`    | AGI Premium | 20.00       |
+| `agi_max`     | `monthly`    | AGI Max     | 100.00      |
+| `agi_max_20x` | `monthly`    | AGI Ultra   | 200.00      |
 
 Product ids cannot be changed or reused once created, and a base plan id cannot
 be changed once the base plan is activated. On each base plan set a grace

@@ -73,6 +73,7 @@ jest.mock('../services/authSession', () => ({
 import PersonalizationScreen from '../app/(app)/settings/personalization';
 import { useLocalSettingsStore } from '../stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '../stores/settings/cloudSettingsStore';
+import { PRODUCT_BRAND } from '@agiworkforce/types';
 import { useAuthStore } from '../src/features/auth/store';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { API_URL } from '../lib/constants';
@@ -292,7 +293,7 @@ describe('Personalization page', () => {
   it('explains the nickname and links the instructions helper to the acceptable use policy', () => {
     const { getByText } = render(<PersonalizationScreen />);
 
-    expect(getByText('AGI uses your nickname in chat.')).toBeTruthy();
+    expect(getByText(`${PRODUCT_BRAND} uses your nickname in chat.`)).toBeTruthy();
     fireEvent.press(getByText('acceptable use policy'));
 
     expect(mockOpenExternalUrl).toHaveBeenCalledWith(

@@ -104,6 +104,7 @@ import {
   activateCloudAccount,
 } from '@/src/features/auth/services/cloudAccountSession';
 import { useAuthStore } from '@/src/features/auth/store';
+import { PRODUCT_BRAND } from '@agiworkforce/types';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { PluginDetailScreen } from '../PluginDetailScreen';
@@ -192,7 +193,7 @@ describe('mobile plugins', () => {
       useSettingsStore.getState().setToolApprovalPolicy('ask_every_time');
       const { findByRole, getByText } = render(<PluginsScreen />);
       const row = await findByRole('button', { name: 'Permissions. Ask' });
-      expect(getByText('Choose when AGI asks before a plugin acts.')).toBeTruthy();
+      expect(getByText(`Choose when ${PRODUCT_BRAND} asks before a plugin acts.`)).toBeTruthy();
       fireEvent.press(row);
       expect(mockPush).toHaveBeenCalledWith('/(app)/settings/auto-approve');
     } finally {

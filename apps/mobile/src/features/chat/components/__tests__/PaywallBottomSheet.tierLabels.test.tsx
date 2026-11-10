@@ -1,4 +1,5 @@
 import { fireEvent, render } from '@testing-library/react-native';
+import { getBillingPlanPricing } from '@agiworkforce/types';
 
 const mockPush = jest.fn();
 jest.mock('expo-router', () => ({
@@ -51,14 +52,16 @@ describe('PaywallBottomSheet tier labels', () => {
   it('names the top Max tier when the server gates a feature to it', () => {
     const { getByText } = renderSheet('max_15x');
 
-    expect(getByText('Upgrade to Max 20x')).toBeTruthy();
-    expect(getByText('Video generation requires the Max 20x plan.')).toBeTruthy();
+    expect(getByText(`Upgrade to ${getBillingPlanPricing('max_15x').label}`)).toBeTruthy();
+    expect(
+      getByText(`Video generation requires the ${getBillingPlanPricing('max_15x').label} plan.`),
+    ).toBeTruthy();
   });
 
   it('uses the plan name checkout sells for max', () => {
     const { getByText } = renderSheet('max');
 
-    expect(getByText('Upgrade to Max 5x')).toBeTruthy();
+    expect(getByText(`Upgrade to ${getBillingPlanPricing('max').label}`)).toBeTruthy();
   });
 
   it('still falls back to the vague label for a tier we do not sell', () => {
@@ -80,8 +83,10 @@ describe('PaywallBottomSheet tier labels', () => {
       getByText('AI image generation is unavailable until your subscription is active.'),
     ).toBeTruthy();
     expect(getByText('Manage billing')).toBeTruthy();
-    expect(queryByText('Upgrade to Pro')).toBeNull();
-    expect(queryByText('AI image generation requires the Pro plan.')).toBeNull();
+    expect(queryByText(`Upgrade to ${getBillingPlanPricing('pro').label}`)).toBeNull();
+    expect(
+      queryByText(`AI image generation requires the ${getBillingPlanPricing('pro').label} plan.`),
+    ).toBeNull();
 
     fireEvent.press(getByText('Manage billing'));
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/cloud-billing');
