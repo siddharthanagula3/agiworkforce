@@ -69,6 +69,21 @@ export function pluginSignaturePayload(claim: {
   return `agiworkforce-plugin:v1\n${claim.pluginId}\n${claim.version}\n${claim.sha256}`;
 }
 
+/**
+ * The payload separates its fields with newlines, so it names one claim only
+ * while no field holds a newline. A claim that does could share its signed
+ * bytes with another claim, and is refused rather than verified.
+ */
+export function isUnambiguousPluginSignatureClaim(claim: {
+  pluginId: string;
+  version: string;
+  sha256: string;
+}): boolean {
+  return (
+    !claim.pluginId.includes('\n') && !claim.version.includes('\n') && isPluginSha256(claim.sha256)
+  );
+}
+
 export function pluginIntegrityVerdict(
   code: PluginIntegrityCode,
   pluginId: string,

@@ -9,6 +9,7 @@ import {
   isPluginSha256,
   isPluginShippedWithProduct,
   isPluginSignatureAlgorithm,
+  isUnambiguousPluginSignatureClaim,
   pluginIntegrityVerdict,
   pluginSignaturePayload,
   scanPluginPackage,
@@ -118,6 +119,21 @@ describe('the signed payload', () => {
     expect(pluginSignaturePayload({ pluginId: 'a', version: '1.0.0', sha256 })).not.toBe(
       pluginSignaturePayload({ pluginId: 'a', version: '1.0.1', sha256 }),
     );
+  });
+
+  it('treats a claim whose fields hold the separator as ambiguous', () => {
+    const sha256 = 'a'.repeat(64);
+    const first = { pluginId: 'acme-pack\n1.0.0', version: '2.0.0', sha256 };
+    const second = { pluginId: 'acme-pack', version: '1.0.0\n2.0.0', sha256 };
+    expect(pluginSignaturePayload(first)).toBe(pluginSignaturePayload(second));
+    expect(isUnambiguousPluginSignatureClaim(first)).toBe(false);
+    expect(isUnambiguousPluginSignatureClaim(second)).toBe(false);
+    expect(
+      isUnambiguousPluginSignatureClaim({ pluginId: 'acme-pack', version: '1.0.0', sha256 }),
+    ).toBe(true);
+    expect(
+      isUnambiguousPluginSignatureClaim({ pluginId: 'acme-pack', version: '1.0.0', sha256: 'x' }),
+    ).toBe(false);
   });
 
   it('accepts only a lowercase hex digest and a known algorithm', () => {
