@@ -17,8 +17,33 @@ import ContinueSharedSessionPage from '../page';
 const TOKEN = 'AbCdEfGhIjKlMnOpQrStUvWx';
 const CREATED = 'conv-created';
 
+const ORG = '11111111-1111-4111-8111-111111111111';
+const PERSONAL_WORKSPACE = {
+  workspaces: [],
+  activeWorkspaceId: null,
+  activeOrganizationId: null,
+  scope: 'personal',
+};
+const ORG_WORKSPACE = {
+  workspaces: [
+    {
+      id: 'workspace-a',
+      kind: 'organization',
+      organizationId: ORG,
+      name: 'Team A',
+      slug: 'team-a',
+      isPrimary: false,
+      role: 'member',
+    },
+  ],
+  activeWorkspaceId: 'workspace-a',
+  activeOrganizationId: ORG,
+  scope: 'organization',
+};
+
 interface Server {
   share: Response | (() => Response);
+  workspace?: Response | typeof ORG_WORKSPACE;
   bulk?: (call: number) => Response;
   discard?: () => Response;
 }
@@ -36,6 +61,10 @@ function serve(server: Server): void {
     const url = String(input);
     const method = init?.method ?? 'GET';
     if (url === '/api/csrf') return Response.json({ token: 'csrf', expiresIn: 3_600_000 });
+    if (url === '/api/settings/workspaces') {
+      if (server.workspace instanceof Response) return server.workspace.clone();
+      return Response.json(server.workspace ?? PERSONAL_WORKSPACE);
+    }
     if (url === `/api/share/${TOKEN}`) {
       return typeof server.share === 'function' ? server.share() : server.share.clone();
     }
@@ -142,6 +171,48 @@ describe('continuing a shared conversation', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'The shared messages could not all be copied. A partial copy may be in your chat list.',
     );
+  });
+
+  it('keeps every request, including the cleanup, on the workspace selected when the copy began', async () => {
+    serve({
+      share: Response.json({ title: 'Shared plan', messages: sharedMessages(3) }),
+      workspace: ORG_WORKSPACE,
+      bulk: () => new Response(null, { status: 503 }),
+    });
+    render(<ContinueSharedSessionPage />);
+
+    await screen.findByRole('alert');
+    const scoped = [
+      ...calls('/api/chat/conversations', 'POST'),
+      ...calls(`/api/chat/conversations/${CREATED}/messages/bulk`, 'POST'),
+      ...calls(`/api/chat/conversations/${CREATED}`, 'DELETE'),
+    ];
+    expect(scoped).toHaveLength(3);
+    for (const [, init] of scoped) {
+      expect(new Headers((init as RequestInit).headers).get('x-agi-organization-id')).toBe(ORG);
+    }
+  });
+
+  it('targets the personal workspace explicitly when none is selected', async () => {
+    serve({ share: Response.json({ title: 'Shared plan', messages: sharedMessages(1) }) });
+    render(<ContinueSharedSessionPage />);
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(`/chat/${CREATED}`));
+    const [[, init]] = calls('/api/chat/conversations', 'POST');
+    expect(new Headers((init as RequestInit).headers).get('x-agi-organization-id')).toBe(
+      'personal',
+    );
+  });
+
+  it('creates nothing when the active workspace cannot be confirmed', async () => {
+    serve({
+      share: Response.json({ title: 'Shared plan', messages: sharedMessages(1) }),
+      workspace: new Response(null, { status: 500 }),
+    });
+    render(<ContinueSharedSessionPage />);
+
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(calls('/api/chat/conversations', 'POST')).toHaveLength(0);
   });
 
   it('keeps server text out of the failure it shows', async () => {

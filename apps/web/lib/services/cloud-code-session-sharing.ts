@@ -11,6 +11,7 @@ import {
   type CloudCodeSharedSession,
   type CloudCodeSharedVisibility,
 } from '@agiworkforce/types';
+import { assertTenantNotLockedDown } from '@/lib/feature-flags/tenant-lockdown';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { getUserGithubInstallations } from '@/lib/user-connector-tools';
 import {
@@ -133,6 +134,7 @@ export async function openSharedCloudCodeSession(
     [token],
   );
   if (!grant) return null;
+  await assertTenantNotLockedDown(grant.organization_id);
 
   const ownerDb = getNeonDb();
   const owner: CloudCodeOwner = {

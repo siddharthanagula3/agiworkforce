@@ -465,6 +465,7 @@ import {
   memoizeAsync,
   selectedSkillRequirementFailure,
   SkillCatalogUnavailableError,
+  type SkillInstallOverrides,
 } from '@/lib/services/skill-catalog-service';
 import { getSkillInstallOverrides } from '@/lib/services/skill-install-service';
 import { listEnabledPluginIds } from '@/lib/services/plugin-installation-service';
@@ -3721,11 +3722,11 @@ async function processAdmittedRequest(
       ),
     };
   }
-  const skillInstallOverridesPromise: Promise<ReadonlyMap<string, boolean>> = scopedDbPromise
+  const skillInstallOverridesPromise: Promise<SkillInstallOverrides> = scopedDbPromise
     .then((scoped) => getSkillInstallOverrides(scoped.db, userId))
     .catch((error: unknown) => {
-      logger.warn({ error, userId }, 'Skill install overrides read failed; assuming none');
-      return new Map<string, boolean>();
+      logger.warn({ error, userId }, 'Skill install overrides read failed; withholding skills');
+      return null;
     });
   skillInstallOverridesPromise.catch(() => {});
   const pluginsAllowed = !workspaceControls || workspaceControls.featureAccess.plugins;
@@ -5321,7 +5322,7 @@ async function processAdmittedRequest(
 
   const preSkillMessageCount = chatRequest.messages.length;
   let selectedSkill: Skill | null = null;
-  const loadSkillInstallOverrides = (): Promise<ReadonlyMap<string, boolean>> =>
+  const loadSkillInstallOverrides = (): Promise<SkillInstallOverrides> =>
     skillInstallOverridesPromise;
   const loadSkillCatalog = async (
     options: { includeNetworkBackedDirectorySkills?: boolean } = {},

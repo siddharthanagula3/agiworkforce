@@ -389,6 +389,7 @@ import {
   executeManagedSkillTool,
   executeManagedSkillToolForPlugins,
   findManagedSkillWithFiles,
+  type SkillInstallOverrides,
 } from '@/lib/services/skill-catalog-service';
 import { getSkillInstallOverrides } from '@/lib/services/skill-install-service';
 import {
@@ -2136,10 +2137,10 @@ async function withSkillSandboxNote(
   return { content: note ? `${result.content}\n${note}` : result.content, isError: result.isError };
 }
 
-function readSkillInstallOverrides(userId: string): Promise<ReadonlyMap<string, boolean>> {
+function readSkillInstallOverrides(userId: string): Promise<SkillInstallOverrides> {
   return getSkillInstallOverrides(getNeonDb(), userId).catch((error: unknown) => {
-    logger.warn({ error, userId }, 'Skill install overrides read failed; assuming none');
-    return EMPTY_SKILL_INSTALL_OVERRIDES;
+    logger.warn({ error, userId }, 'Skill install overrides read failed; withholding skills');
+    return null;
   });
 }
 
@@ -2248,7 +2249,7 @@ async function runMcpTool(
     allowInputRequired?: boolean;
     inputResponses?: Record<string, unknown>;
     requestState?: string;
-    loadSkillInstallOverrides?: () => Promise<ReadonlyMap<string, boolean>>;
+    loadSkillInstallOverrides?: () => Promise<SkillInstallOverrides>;
     allowSkill?: (skillName: string) => boolean;
     temporaryChat?: boolean;
     queueSandboxFiles?: SandboxSeedQueue;
@@ -3640,10 +3641,15 @@ export async function* runToolLoop(
     options.unattendedEscalationPauses === true &&
     options.onApprovalCheckpoint !== undefined;
   const skillInstallOverridesUserId = options.userId;
-  let skillInstallOverridesPromise: Promise<ReadonlyMap<string, boolean>> | undefined;
-  const loadSkillInstallOverrides = (): Promise<ReadonlyMap<string, boolean>> => {
+  let skillInstallOverridesPromise: Promise<SkillInstallOverrides> | undefined;
+  const loadSkillInstallOverrides = (): Promise<SkillInstallOverrides> => {
     if (!skillInstallOverridesUserId) return Promise.resolve(EMPTY_SKILL_INSTALL_OVERRIDES);
-    skillInstallOverridesPromise ??= readSkillInstallOverrides(skillInstallOverridesUserId);
+    skillInstallOverridesPromise ??= readSkillInstallOverrides(skillInstallOverridesUserId).then(
+      (overrides) => {
+        if (overrides === null) skillInstallOverridesPromise = undefined;
+        return overrides;
+      },
+    );
     return skillInstallOverridesPromise;
   };
   let sensitiveDataRead = false;

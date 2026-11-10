@@ -17,6 +17,7 @@ import { useCloudSettingsSyncStatusStore } from '@/features/settings/lib/cloud-s
 import {
   APPEARANCE_NAMESPACE,
   LANGUAGE_NAMESPACE,
+  acknowledgedAppearance,
   appearanceDelta,
   fromAppearanceNamespace,
   readStoredLocale,
@@ -90,6 +91,26 @@ export function CloudSettingsSync() {
 
   const i18nRef = useRef(i18n);
   i18nRef.current = i18n;
+
+  const projectedAppearance = toAppearanceNamespace({
+    theme: isSyncedTheme(theme) ? theme : 'system',
+    accentColor,
+    chatFont: chatFont ?? 'default',
+    chatTextSize,
+    motion,
+    highContrast,
+    codeBlockWrap,
+    codeTheme,
+    sendWithEnter,
+    defaultWorkMode,
+    followUpSuggestionsEnabled,
+    followUpBehavior,
+    dictationEnabled,
+    voiceSpeed: voiceSpeed ?? 'normal',
+    hiddenNavIds: hiddenNavIds ?? [],
+  });
+  const localAppearance = useRef(projectedAppearance);
+  localAppearance.current = projectedAppearance;
 
   const language = i18n.language;
   const currentLocale = language.split('-')[0] ?? language;
@@ -181,6 +202,7 @@ export function CloudSettingsSync() {
 
     let cancelled = false;
     const revisionsAtRead = { ...appearanceRevisions.current };
+    const appearanceAtRead = localAppearance.current;
     void getCsrfToken().catch(() => {});
     void Promise.all([
       fetchStoredPreferenceNamespace<AppearanceNamespace>(APPEARANCE_NAMESPACE),
@@ -216,7 +238,7 @@ export function CloudSettingsSync() {
         if (cancelled) return;
         acknowledgedLocale.current = storedLocale;
 
-        acknowledged.current = storedAppearance;
+        acknowledged.current = acknowledgedAppearance(storedAppearance, appearanceAtRead);
         setHydratedAt(Date.now());
         setStatus(null, null);
       })
@@ -236,24 +258,7 @@ export function CloudSettingsSync() {
 
   useEffect(() => {
     if (hydratedAt === null || !isSignedIn) return;
-    const next = toAppearanceNamespace({
-      theme: isSyncedTheme(theme) ? theme : 'system',
-      accentColor,
-      chatFont: chatFont ?? 'default',
-      chatTextSize,
-      motion,
-      highContrast,
-      codeBlockWrap,
-      codeTheme,
-      sendWithEnter,
-      defaultWorkMode,
-      followUpSuggestionsEnabled,
-      followUpBehavior,
-      dictationEnabled,
-      voiceSpeed: voiceSpeed ?? 'normal',
-      hiddenNavIds: hiddenNavIds ?? [],
-    });
-    const delta = appearanceDelta(acknowledged.current, next);
+    const delta = appearanceDelta(acknowledged.current, localAppearance.current);
     if (!delta) {
       pendingAppearanceWrite.current = null;
       return;

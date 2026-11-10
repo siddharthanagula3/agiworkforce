@@ -6,7 +6,13 @@ import Link from 'next/link';
 import { Button, Spinner } from '@agiworkforce/ui';
 import { z } from 'zod';
 import { computeDerivedArtifactId } from '@agiworkforce/artifacts';
-import { ManagedCloudMessageWireSchema } from '@agiworkforce/cloud-contracts';
+import {
+  MANAGED_CLOUD_ORGANIZATION_HEADER,
+  MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
+  MANAGED_CLOUD_WORKSPACES_PATH,
+  ManagedCloudAccountWorkspacesSchema,
+  ManagedCloudMessageWireSchema,
+} from '@agiworkforce/cloud-contracts';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
 import { useArtifactsStore } from '@features/chat/stores/artifacts-store';
@@ -70,20 +76,37 @@ function readSavedIds(body: unknown): string[] {
   return parsed.success ? parsed.data.messages.map((message) => message.id) : [];
 }
 
-async function createConversation(title: string, model?: string): Promise<Response> {
+async function readDestination(): Promise<string> {
+  const response = await fetch(MANAGED_CLOUD_WORKSPACES_PATH, {
+    credentials: 'include',
+    cache: 'no-store',
+  });
+  if (!response.ok) throw new Error('Your workspace could not be confirmed.');
+  const workspaces = ManagedCloudAccountWorkspacesSchema.parse(await response.json());
+  return workspaces.activeOrganizationId ?? MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE;
+}
+
+async function createConversation(
+  destination: string,
+  title: string,
+  model?: string,
+): Promise<Response> {
   return fetch('/api/chat/conversations', {
     method: 'POST',
-    headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
+    headers: await addCsrfHeaders({
+      'Content-Type': 'application/json',
+      [MANAGED_CLOUD_ORGANIZATION_HEADER]: destination,
+    }),
     credentials: 'include',
     body: JSON.stringify(model ? { title, model } : { title }),
   });
 }
 
-async function discardConversation(id: string): Promise<boolean> {
+async function discardConversation(destination: string, id: string): Promise<boolean> {
   try {
     const response = await fetch(`/api/chat/conversations/${encodeURIComponent(id)}`, {
       method: 'DELETE',
-      headers: await addCsrfHeaders(),
+      headers: await addCsrfHeaders({ [MANAGED_CLOUD_ORGANIZATION_HEADER]: destination }),
       credentials: 'include',
     });
     return response.ok;
@@ -118,7 +141,9 @@ export function ContinueSharedSession() {
 
     (async () => {
       let createdId: string | null = null;
+      let destination = MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE;
       try {
+        destination = await readDestination();
         const shareRes = await fetch(`/api/share/${token}`, { credentials: 'include' });
         if (shareRes.status === 410) {
           setStatus('expired');
@@ -144,9 +169,9 @@ export function ContinueSharedSession() {
           return;
         }
 
-        let conversationRes = await createConversation(title, modelId);
+        let conversationRes = await createConversation(destination, title, modelId);
         if (!conversationRes.ok && modelId) {
-          conversationRes = await createConversation(title);
+          conversationRes = await createConversation(destination, title);
         }
         if (!conversationRes.ok) {
           throw new Error('Could not start a new conversation from this share.');
@@ -160,7 +185,10 @@ export function ContinueSharedSession() {
           const batch = messages.slice(i, i + MESSAGE_BATCH_SIZE);
           const bulkRes = await fetch(`/api/chat/conversations/${conversation.id}/messages/bulk`, {
             method: 'POST',
-            headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
+            headers: await addCsrfHeaders({
+              'Content-Type': 'application/json',
+              [MANAGED_CLOUD_ORGANIZATION_HEADER]: destination,
+            }),
             credentials: 'include',
             body: JSON.stringify({ messages: batch.map(forkedMessage) }),
           });
@@ -170,7 +198,7 @@ export function ContinueSharedSession() {
 
         router.replace(`/chat/${conversation.id}`);
       } catch (err) {
-        const discarded = createdId !== null && (await discardConversation(createdId));
+        const discarded = createdId !== null && (await discardConversation(destination, createdId));
         setStatus('error');
         setError(
           createdId !== null

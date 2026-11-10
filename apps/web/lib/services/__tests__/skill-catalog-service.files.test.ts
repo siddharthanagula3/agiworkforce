@@ -58,6 +58,15 @@ describe('filterSkillsByInstallOverrides', () => {
     expect(result).toHaveLength(1);
   });
 
+  it('drops every non-plugin skill, but keeps plugin-owned ones, when preferences are unreadable', () => {
+    const pluginSkill = skill({
+      name: 'literature-review',
+      frontmatter: { plugin: 'research-pack' },
+    });
+    const result = filterSkillsByInstallOverrides([skill(), pluginSkill], null);
+    expect(result.map((entry) => entry.name)).toEqual(['literature-review']);
+  });
+
   it('keeps a skill explicitly re-installed after an earlier uninstall', () => {
     const overrides = new Map([['design-review', true]]);
     const result = filterSkillsByInstallOverrides([skill()], overrides);

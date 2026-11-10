@@ -329,6 +329,49 @@ describe('changing a control on web', () => {
     );
   });
 
+  it('leaves a value the phone holds and web cannot render untouched until web edits it', async () => {
+    session.isSignedIn = true;
+    preferences.fetchStoredPreferenceNamespace.mockImplementation(async (namespace: string) =>
+      namespace === 'appearance'
+        ? {
+            theme: 'system',
+            accentColor: 'neutral',
+            font: 'default',
+            textSize: 'default',
+            motion: 'system',
+            highContrast: false,
+            codeBlockWrap: false,
+            codeTheme: 'github',
+            sendWithEnter: true,
+            defaultWorkMode: 'chat',
+            followUpSuggestions: true,
+            followUpBehavior: 'queue',
+            dictationEnabled: true,
+            voiceSpeed: 'normal',
+            hiddenNavIds: [],
+          }
+        : { locale: 'en' },
+    );
+
+    render(<CloudSettingsSync />);
+    await settle();
+    await flushDebounce();
+
+    expect(preferences.savePreferenceNamespace).not.toHaveBeenCalled();
+    expect(useSettingsStore.getState().accentColor).toBe('default');
+
+    act(() => {
+      useSettingsStore.getState().setAccentColor('blue');
+    });
+    await flushDebounce();
+
+    expect(preferences.savePreferenceNamespace).toHaveBeenCalledWith(
+      'appearance',
+      { accentColor: 'blue' },
+      { merge: true, keepalive: true },
+    );
+  });
+
   it('keeps the local value and offers a retry when the save fails', async () => {
     session.isSignedIn = true;
     preferences.fetchStoredPreferenceNamespace.mockImplementation(async (namespace: string) =>

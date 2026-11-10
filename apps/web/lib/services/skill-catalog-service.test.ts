@@ -366,6 +366,29 @@ describe('managed Skill catalog service', () => {
     expect(loaded.isError).toBe(false);
   });
 
+  it('refuses to load a managed skill when the install preferences could not be read', async () => {
+    const args = { action: 'load', name: 'code-review' };
+    const options = { availableTools: new Set(['skill']) };
+
+    const unreadable = await executeManagedSkillToolForPlugins(new Set(), args, {
+      ...options,
+      installOverrides: null,
+    });
+    expect(unreadable.isError).toBe(true);
+
+    const uninstalled = await executeManagedSkillToolForPlugins(new Set(), args, {
+      ...options,
+      installOverrides: new Map([['code-review', false]]),
+    });
+    expect(uninstalled.isError).toBe(true);
+
+    const healthyEmpty = await executeManagedSkillToolForPlugins(new Set(), args, {
+      ...options,
+      installOverrides: new Map(),
+    });
+    expect(healthyEmpty.isError).toBe(false);
+  });
+
   it('never gates an engineering-pack skill behind install, since it owns no skill', async () => {
     const withoutPlugin = await getManagedSkillDirectoryForPlugins(new Set());
     const withPlugin = await getManagedSkillDirectoryForPlugins(new Set(['engineering-pack']));
@@ -562,7 +585,15 @@ describe('loadSelectableSkillCatalog directory cost', () => {
     expect(skills.map((skill) => skill.name)).toContain('code-review');
   });
 
-  it('still serves the bundled catalogue when the install-override read throws', async () => {
+  it('withholds managed skills, not the member’s own, when the install-override read throws', async () => {
+    userSkills.listUserSkillsAsManagedSkills.mockResolvedValueOnce([
+      {
+        name: 'my-own-skill',
+        description: 'Authored by the member.',
+        body: 'Body',
+        contentHash: 'sha256:'.padEnd(7 + 64, '2'),
+      } as never,
+    ]);
     const skills = await loadSelectableSkillCatalog({
       ...params,
       loadInstallOverrides: async () => {
@@ -570,7 +601,18 @@ describe('loadSelectableSkillCatalog directory cost', () => {
       },
     });
 
-    expect(skills.map((skill) => skill.name)).toContain('code-review');
+    const names = skills.map((skill) => skill.name);
+    expect(names).not.toContain('code-review');
+    expect(names).toContain('my-own-skill');
+  });
+
+  it('withholds managed skills when the install preferences are reported unreadable', async () => {
+    const skills = await loadSelectableSkillCatalog({
+      ...params,
+      loadInstallOverrides: async () => null,
+    });
+
+    expect(skills.map((skill) => skill.name)).not.toContain('code-review');
   });
 
   it('still serves the bundled catalogue when the directory read throws', async () => {
