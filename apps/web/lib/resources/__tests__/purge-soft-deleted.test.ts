@@ -77,7 +77,7 @@ describe('purgeSoftDeletedResources', () => {
     expect(media?.skippedReason).toContain('cron/purge-deleted-media');
 
     const knowledge = result.tables.find((entry) => entry.table === 'project_knowledge_files');
-    expect(knowledge?.skippedReason).toContain('no sweep deletes those objects yet');
+    expect(knowledge?.skippedReason).toContain('cron/purge-deleted-media');
 
     const project = result.tables.find((entry) => entry.table === 'user_projects');
     expect(project?.skippedReason).toContain('project_knowledge_files');

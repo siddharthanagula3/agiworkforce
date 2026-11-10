@@ -239,6 +239,12 @@ export type AuditEventType =
   | 'legal_hold_created'
   | 'legal_hold_released'
   | 'deletion_blocked_by_legal_hold'
+  /**
+   * A deletion somebody already asked for reached its end: the recovery window
+   * ran out and no hold still covered the content, so the bytes and the row
+   * went. Written per workspace and store, counted rather than named.
+   */
+  | 'deleted_content_purged'
   | 'secret_detected'
   | 'spend_cap_exceeded'
   | 'ip_not_allowed'
@@ -472,6 +478,7 @@ const COMPLIANCE_AUDIT_EVENT_TYPES: ReadonlySet<AuditEventType> = new Set<AuditE
   'legal_hold_created',
   'legal_hold_released',
   'deletion_blocked_by_legal_hold',
+  'deleted_content_purged',
   'retention_sweep_completed',
   'domain_retention_sweep_completed',
   'retention_policy_changed',

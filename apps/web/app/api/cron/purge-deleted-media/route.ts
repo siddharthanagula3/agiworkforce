@@ -19,6 +19,11 @@ import {
   sweepAbandonedFeedbackScreenshots,
   type FeedbackScreenshotSweep,
 } from '@/lib/server/feedback-screenshot-cleanup';
+import {
+  purgeDeletedProjectFiles,
+  recordDeletedContentPurge,
+  type DeletedProjectFilesPurge,
+} from '@/lib/server/retention/deleted-project-files';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -73,6 +78,20 @@ async function sweepFeedbackScreenshots(
   }
 }
 
+async function sweepDeletedProjectFiles(
+  db: DatabaseAdapter,
+): Promise<DeletedProjectFilesPurge | null> {
+  try {
+    return await purgeDeletedProjectFiles(db);
+  } catch (error) {
+    logger.error(
+      { error: error instanceof Error ? error.message : String(error) },
+      'Deleted project file purge failed; nothing past the failure was removed',
+    );
+    return null;
+  }
+}
+
 const BATCH_SIZE = 50;
 
 const DUE_FOR_PURGE = `candidate.deleted_at is not null
@@ -116,6 +135,7 @@ async function purgeBatch(
   ids: readonly string[],
   tally: PurgeTally,
 ): Promise<void> {
+  const objectsBefore = tally.objectsDeleted;
   const purged = await db.transaction(async (tx) => {
     await serializeDestructionWithHolds(tx, organizationId);
     const confirmedExclusion = legalHoldExclusion('file', {
@@ -157,6 +177,13 @@ async function purgeBatch(
     );
   });
   tally.rowsPurged += purged.length;
+  await recordDeletedContentPurge({
+    organizationId,
+    resourceType: 'file',
+    table: 'media_assets',
+    rowsPurged: purged.length,
+    objectsDeleted: tally.objectsDeleted - objectsBefore,
+  });
   tally.derivedRecordsPurged += await purgeDerivedRecords(
     db,
     'media_assets',
@@ -181,6 +208,7 @@ export async function GET(request: NextRequest) {
     const db = getNeonDb();
     const multipart = await sweepOrphanedMultipartUploads();
     const feedbackScreenshots = await sweepFeedbackScreenshots(db);
+    const projectFiles = await sweepDeletedProjectFiles(db);
 
     // The hold decides candidacy before any byte is touched: one that only
     // reached the DELETE would still have lost the file it preserved.
@@ -214,6 +242,7 @@ export async function GET(request: NextRequest) {
         heldFromPurge,
         multipart,
         feedbackScreenshots,
+        projectFiles,
       });
     }
 
@@ -229,6 +258,7 @@ export async function GET(request: NextRequest) {
         heldFromPurge,
         multipart,
         feedbackScreenshots,
+        projectFiles,
       },
       heldFromPurge > 0
         ? 'Purged expired soft-deleted media assets; some were preserved by an active legal hold and will be purged once it is released'
@@ -245,6 +275,7 @@ export async function GET(request: NextRequest) {
       heldFromPurge,
       multipart,
       feedbackScreenshots,
+      projectFiles,
     });
   } catch (error) {
     logger.error(

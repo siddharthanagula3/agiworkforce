@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   deleteStoredMediaObjects: vi.fn(),
   purgeDerivedRecords: vi.fn(),
   sweepFeedbackScreenshots: vi.fn(),
+  recordAuditEvent: vi.fn(async () => undefined),
   store: {
     current: null as ReturnType<typeof createMemoryObjectStore> | null,
     clock: { now: 0 },
@@ -32,6 +33,7 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/server/cron-auth', () => ({ verifyCronRequest: mocks.verifyCronRequest }));
+vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: mocks.recordAuditEvent }));
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: () => {
     const db = {
@@ -206,6 +208,25 @@ describe('purge-deleted-media against a hold placed during the run', () => {
       mocks.deleteStoredMediaObjects.mock.invocationCallOrder[0] as number,
     );
     expect(body).toMatchObject({ candidates: 1, objectsDeleted: 1, purged: 1 });
+  });
+
+  it('writes one audit entry for what a workspace batch purged', async () => {
+    primePurge({
+      candidates: [{ id: 'asset-1', storage_pathname: 'users/owner/a.bin', organization_id: ORG }],
+      confirmed: [{ id: 'asset-1', storage_pathname: 'users/owner/a.bin' }],
+    });
+    mocks.deleteStoredMediaObjects.mockResolvedValue({ deleted: 1, failedPathnames: [] });
+
+    await GET(request());
+
+    expect(mocks.recordAuditEvent).toHaveBeenCalledTimes(1);
+    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'deleted_content_purged',
+        organizationId: ORG,
+        detail: expect.objectContaining({ resourceType: 'file', deleted: 1, count: 1 }),
+      }),
+    );
   });
 
   it('deletes no object for a candidate that a hold covers once the lock is held', async () => {
