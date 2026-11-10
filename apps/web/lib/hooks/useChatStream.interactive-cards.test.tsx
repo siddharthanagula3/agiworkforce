@@ -551,6 +551,105 @@ describe('useChatStream, interactive cards', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  describe('continuing an answered card', () => {
+    const ANSWERED_CONVERSATION = '0190a000-0000-7000-8000-0000000000a1';
+    const OTHER_CONVERSATION = '0190a000-0000-7000-8000-0000000000a2';
+    const ANSWERED_MESSAGE = '0190a000-0000-7000-8000-0000000000a3';
+
+    function seedAnsweredCard() {
+      const card = parseInteractiveCardDelta({ card: answeredCardResponse().card });
+      if (!card) throw new Error('expected a valid card');
+      const savedConversation = (id: string) => ({
+        id,
+        title: 'Saved chat',
+        createdAt: '2026-08-05T00:00:00.000Z',
+        updatedAt: '2026-08-05T00:00:00.000Z',
+      });
+      useChatStore.setState({
+        conversations: [
+          savedConversation(ANSWERED_CONVERSATION),
+          savedConversation(OTHER_CONVERSATION),
+        ],
+      });
+      useChatStore.getState().setActiveConversationWithMessages(OTHER_CONVERSATION, [
+        {
+          id: '0190a000-0000-7000-8000-0000000000a4',
+          role: 'user',
+          content: 'An unrelated chat',
+          createdAt: '2026-08-05T09:00:00.000Z',
+        },
+      ]);
+      useChatStore.getState().setActiveConversationWithMessages(ANSWERED_CONVERSATION, [
+        {
+          id: '0190a000-0000-7000-8000-0000000000a5',
+          role: 'user',
+          content: 'plan me a day',
+          createdAt: '2026-08-05T09:59:00.000Z',
+        },
+        {
+          id: ANSWERED_MESSAGE,
+          role: 'assistant',
+          content: 'A few questions',
+          createdAt: '2026-08-05T10:00:00.000Z',
+          metadata: { interactiveCards: [card] },
+        },
+      ]);
+    }
+
+    function chatRequestBodies(): Array<Record<string, unknown>> {
+      return vi
+        .mocked(fetch)
+        .mock.calls.filter(([url]) => String(url).includes('/chat/completions'))
+        .map(([, init]) => JSON.parse(String(init?.body)) as Record<string, unknown>);
+    }
+
+    it('continues the conversation the card was answered in after the user switches away', async () => {
+      seedAnsweredCard();
+      const saved = deferred<Response>();
+      vi.mocked(fetch).mockImplementationOnce(() => saved.promise);
+      mockSseStream([textEvent('Here is your day')]);
+      const { result } = renderHook(() => useChatStream({ followActiveConversation: false }));
+
+      let resumed!: Promise<void>;
+      act(() => {
+        resumed = result.current.resumeInteractiveCardTurn(ANSWERED_MESSAGE);
+      });
+      await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+      act(() => {
+        useChatStore.getState().setActiveConversation(OTHER_CONVERSATION);
+      });
+      saved.resolve(
+        new Response(JSON.stringify({ message: { id: ANSWERED_MESSAGE } }), { status: 200 }),
+      );
+      await act(async () => {
+        await resumed;
+      });
+
+      const bodies = chatRequestBodies();
+      expect(bodies).toHaveLength(1);
+      expect(bodies[0]).toMatchObject({
+        conversation_id: ANSWERED_CONVERSATION,
+        assistant_message_id: ANSWERED_MESSAGE,
+      });
+    });
+
+    it('continues a named conversation even when another one is displayed', async () => {
+      seedAnsweredCard();
+      useChatStore.getState().setActiveConversation(OTHER_CONVERSATION);
+      mockSseStream([textEvent('Here is your day')]);
+      const { result } = renderHook(() => useChatStream({ followActiveConversation: false }));
+
+      await act(async () => {
+        await result.current.continueGeneration(ANSWERED_MESSAGE, {
+          conversationId: ANSWERED_CONVERSATION,
+        });
+      });
+
+      expect(chatRequestBodies()).toHaveLength(1);
+      expect(chatRequestBodies()[0]).toMatchObject({ conversation_id: ANSWERED_CONVERSATION });
+    });
+  });
+
   it('keeps the original binding and payload while CSRF is pending', async () => {
     const binding = seedResponseCard();
     const headers = deferred<HeadersInit>();

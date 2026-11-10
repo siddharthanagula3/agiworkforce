@@ -14,8 +14,10 @@ import {
   imageJobDeliveredImages,
   isImageJobAttemptDue,
   isImageJobCancellationPending,
+  isImageJobExhaustedAndAbandoned,
   publicImageJobSnapshot,
   reconcileCancelledImageGenerationJob,
+  reconcileExhaustedImageGenerationJob,
   reservationForImageJob,
   runImageGenerationJobAttempt,
 } from '../lib/image-job-executor';
@@ -67,9 +69,13 @@ async function handleImageStatus(request: NextRequest): Promise<NextResponse> {
   // A cancellation whose attempt never came back leaves the job open with
   // nothing running it. This poll is one of the two places that can still see
   // that and finish it; the other is the queued drive.
-  const job = isImageJobCancellationPending(found, Date.now())
+  const afterCancellation = isImageJobCancellationPending(found, Date.now())
     ? ((await reconcileCancelledImageGenerationJob({ db: scoped.db, job: found })) ?? found)
     : found;
+  const job = isImageJobExhaustedAndAbandoned(afterCancellation, Date.now())
+    ? ((await reconcileExhaustedImageGenerationJob({ db: scoped.db, job: afterCancellation })) ??
+      afterCancellation)
+    : afterCancellation;
 
   if (isImageGenerationJobDrivable(job) && isImageJobAttemptDue(job, Date.now())) {
     after(async () => {

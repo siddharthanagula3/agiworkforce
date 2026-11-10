@@ -452,6 +452,8 @@ export interface MessageMetadata {
   imageGenModel?: string;
   /** Bounded ISO instant before which provider-directed image retry should stay disabled. */
   imageRetryAt?: string;
+  /** Durable server job that Try again resumes on its existing reservation instead of starting a new generation. */
+  imageJobId?: string;
   imageVersions?: ImageVersion[];
   /**
    * Generated video URL. Displayed inline when toolType === 'video-generation';

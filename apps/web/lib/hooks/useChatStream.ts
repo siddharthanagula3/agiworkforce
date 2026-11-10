@@ -357,7 +357,10 @@ export type ToolApprovalDecision = ToolApprovalDecisionValue;
 export interface UseChatStreamReturn {
   sendMessage: (content: string, options?: SendMessageOptions) => Promise<boolean>;
   stopGeneration: (conversationId?: string) => void;
-  continueGeneration: (assistantMessageId: string) => Promise<void>;
+  continueGeneration: (
+    assistantMessageId: string,
+    options?: { conversationId?: string },
+  ) => Promise<void>;
   resumeInteractiveCardTurn: (
     assistantMessageId: string,
     options?: { force?: boolean },
@@ -4743,9 +4746,9 @@ export function useChatStream(
   );
 
   const continueGeneration = useCallback(
-    async (assistantMessageId: string) => {
+    async (assistantMessageId: string, options: { conversationId?: string } = {}) => {
       const store = useChatStore.getState();
-      const conversationId = store.activeConversationId;
+      const conversationId = options.conversationId ?? store.activeConversationId;
       const existingAuthority =
         turnAuthoritiesRef.current.get(assistantMessageId) ??
         (conversationId ? requestAuthoritiesRef.current.get(conversationId) : undefined);
@@ -5161,7 +5164,7 @@ export function useChatStream(
         }
 
         if (tokenOwnerCurrent(getAuthToken) && !request.controller.signal.aborted) {
-          await continueGeneration(assistantMessageId);
+          await continueGeneration(assistantMessageId, { conversationId });
         }
       } finally {
         request.finish();

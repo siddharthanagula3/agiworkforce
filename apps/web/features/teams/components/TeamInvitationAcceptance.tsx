@@ -1,7 +1,7 @@
 'use client';
 
 import { settingsSectionPath } from '@/features/settings/lib/web-settings-sections';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSession } from '@/lib/identity/client';
 import { CheckCircle2, MailCheck, ShieldCheck, XCircle } from 'lucide-react';
 import { z } from 'zod';
@@ -14,7 +14,11 @@ import { toUserMessage } from '@/lib/user-error-message';
 
 const INVITATION_TOKEN_STORAGE_KEY = 'agi.team.invitation-token';
 
-type Completion = { action: 'accept' | 'decline'; role?: string } | null;
+interface Owned {
+  owner: string;
+}
+
+type Completion = (Owned & { action: 'accept' | 'decline'; role?: string }) | null;
 
 const InvitationResponseSchema = z.object({
   membership: z.object({ role: z.enum(['owner', 'admin', 'member', 'viewer']) }).optional(),
@@ -32,12 +36,21 @@ function readErrorMessage(value: unknown, fallback: string): string {
 }
 
 export function TeamInvitationAcceptance() {
-  const { isLoaded, isSignedIn } = useSession();
+  const { isLoaded, isSignedIn, userId, sessionId } = useSession();
+  const identityKey = isSignedIn ? `${userId}:${sessionId}` : 'signed-out';
+  const identityKeyRef = useRef(identityKey);
   const [token, setToken] = useState<string | null>(null);
   const [tokenReady, setTokenReady] = useState(false);
-  const [pendingAction, setPendingAction] = useState<'accept' | 'decline' | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [completion, setCompletion] = useState<Completion>(null);
+  const [pending, setPending] = useState<(Owned & { action: 'accept' | 'decline' }) | null>(null);
+  const [failure, setFailure] = useState<(Owned & { message: string }) | null>(null);
+  const [recorded, setCompletion] = useState<Completion>(null);
+  const pendingAction = pending?.owner === identityKey ? pending.action : null;
+  const error = failure?.owner === identityKey ? failure.message : null;
+  const completion = recorded?.owner === identityKey ? recorded : null;
+
+  useEffect(() => {
+    identityKeyRef.current = identityKey;
+  }, [identityKey]);
 
   useEffect(() => {
     const fragment = new URLSearchParams(window.location.hash.slice(1));
@@ -53,13 +66,17 @@ export function TeamInvitationAcceptance() {
 
   async function respond(action: 'accept' | 'decline') {
     if (!token) return;
-    setPendingAction(action);
-    setError(null);
+    const owner = identityKey;
+    const stillOwner = () => identityKeyRef.current === owner;
+    setPending({ action, owner });
+    setFailure(null);
 
     try {
       const authToken = await getAuthToken();
+      if (!stillOwner()) return;
       if (!authToken) throw new Error('Sign in with the invited email address to continue.');
       const csrfToken = await getCsrfToken();
+      if (!stillOwner()) return;
       const response = await fetch('/api/settings/team/invitations/accept', {
         method: 'POST',
         headers: {
@@ -81,11 +98,17 @@ export function TeamInvitationAcceptance() {
 
       window.sessionStorage.removeItem(INVITATION_TOKEN_STORAGE_KEY);
       setToken(null);
-      setCompletion({ action, role: parsedBody.data.membership?.role });
+      if (!stillOwner()) return;
+      setCompletion({ action, owner, role: parsedBody.data.membership?.role });
     } catch (caught) {
-      setError(toUserMessage(caught, 'The invitation could not be updated.'));
+      if (stillOwner()) {
+        setFailure({
+          message: toUserMessage(caught, 'The invitation could not be updated.'),
+          owner,
+        });
+      }
     } finally {
-      setPendingAction(null);
+      setPending((current) => (current?.owner === owner ? null : current));
     }
   }
 

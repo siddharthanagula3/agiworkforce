@@ -1366,6 +1366,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   // re-runs on every `conversations` change, including the one its own adoption
   // causes, so without this it would start a second read pass mid-flight.
   const autoTitledConversationsRef = useRef<Set<string>>(new Set());
+  const manualTitleEditsRef = useRef<Map<string, number>>(new Map());
 
   const [composerClearSignal, setComposerClearSignal] = useState(0);
   const [restoredAttachments, setRestoredAttachments] = useState<File[] | null>(null);
@@ -2870,6 +2871,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         ...imageGenerationFailureMetadata(readMessageMetadata(conversationId, msgId), {
           ...(paywall ? { paywall } : {}),
           ...(apiError?.resetAt ? { retryAt: apiError.resetAt } : {}),
+          ...(apiError?.jobId ? { jobId: apiError.jobId } : {}),
         }),
         errorCode: paywall || cancelled ? undefined : IMAGE_GENERATION_FAILED_CODE,
       };
@@ -3214,6 +3216,14 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       );
 
       const previousMetadata = readMessageMetadata(ownerConversationId, messageId);
+      const resumeJobId =
+        previousMetadata?.imageJobId &&
+        !opts.edit &&
+        previousMetadata.imageGenPrompt === opts.prompt &&
+        previousMetadata.imageGenAspect === requestedAspect &&
+        (requestedModel === undefined || previousMetadata.imageGenModel === requestedModel)
+          ? previousMetadata.imageJobId
+          : undefined;
       if (!tryAcquireImageTranscriptMutation([messageId])) {
         throw new Error(
           'Wait for this image card to finish saving before generating a new version.',
@@ -3242,6 +3252,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             imageGenPrompt: opts.prompt,
             imageGenAspect: requestedAspect,
             imageRetryAt: undefined,
+            imageJobId: undefined,
             errorCode: undefined,
             ...((generatedImage?.model ?? requestedModel)
               ? { imageGenModel: generatedImage?.model ?? requestedModel }
@@ -3277,6 +3288,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
               authority,
               cancelScope: ownerConversationId,
               conversationId: ownerConversationId,
+              ...(resumeJobId ? { resumeJobId } : {}),
             });
             return generatedImage.imageUrl;
           },
@@ -4575,8 +4587,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   );
 
   const handleRenameSession = useCallback(
-    (id: string, title: string) =>
-      runSessionRowAction('rename', () => updateConversation(id, { title })),
+    (id: string, title: string) => {
+      manualTitleEditsRef.current.set(id, (manualTitleEditsRef.current.get(id) ?? 0) + 1);
+      return runSessionRowAction('rename', () => updateConversation(id, { title }));
+    },
     [updateConversation],
   );
 
@@ -4767,6 +4781,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       localModelSelection !== null ||
       conversationHoldsLocalTurns(displayedMessages);
     autoTitledConversationsRef.current.add(conversationId);
+    const manualEditsAtStart = manualTitleEditsRef.current.get(conversationId) ?? 0;
+    const ownerRenamed = () =>
+      (manualTitleEditsRef.current.get(conversationId) ?? 0) !== manualEditsAtStart;
 
     void (async () => {
       let adopted: string | null = null;
@@ -4783,6 +4800,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           }
           if (!serverTitle || AUTO_TITLE_PLACEHOLDERS.has(serverTitle)) continue;
           if (serverTitle === adopted) continue;
+          if (ownerRenamed()) return;
           useChatStore.getState().updateConversation(conversationId, { title: serverTitle });
           // The first non-placeholder read is the stage-1 truncation; the next distinct
           // one is the generated title, and nothing follows it.
@@ -4792,12 +4810,12 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         if (adopted) return;
       }
       const fallback = clientFallbackTitle(firstUser.content);
-      if (!fallback || fallback === placeholderTitle) return;
+      if (!fallback || fallback === placeholderTitle || ownerRenamed()) return;
       if (titleStaysOnDevice) {
         useChatStore.getState().updateConversation(conversationId, { title: fallback });
         return;
       }
-      void updateConversation(conversationId, { title: fallback });
+      void updateConversation(conversationId, { title: fallback, expectedTitle: placeholderTitle });
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [

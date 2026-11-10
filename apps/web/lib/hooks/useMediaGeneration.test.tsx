@@ -39,6 +39,7 @@ import { getAuthToken } from '@shared/lib/get-auth-token';
 import {
   cancelImageGenerations,
   IMAGE_GENERATION_CANCELLED_CODE,
+  IMAGE_JOB_IN_PROGRESS_CODE,
   useMediaGeneration,
   MediaGenerationApiError,
 } from './useMediaGeneration';
@@ -357,6 +358,183 @@ describe('useMediaGeneration', () => {
     });
 
     expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  describe('generateImage durable job identity', () => {
+    const JOB_ID = '22222222-2222-4222-8222-222222222222';
+    const IMAGE_URL = 'https://cdn.example/resumed.png';
+
+    function jsonResponse(status: number, body: unknown): Response {
+      return { ok: status >= 200 && status < 300, status, json: async () => body } as Response;
+    }
+
+    function snapshot(overrides: Record<string, unknown>) {
+      return {
+        job_id: JOB_ID,
+        provider: GOOGLE_IMAGE_MODEL.provider,
+        model: GOOGLE_IMAGE_MODEL.id,
+        images: [],
+        ...overrides,
+      };
+    }
+
+    function routeFetch(handlers: Record<string, () => Response>) {
+      return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+        const url = String(input);
+        const path = Object.keys(handlers).find((candidate) => url.includes(candidate));
+        if (!path) throw new Error(`unexpected request ${url}`);
+        return handlers[path]!();
+      });
+    }
+
+    function requestedPaths(fetchMock: ReturnType<typeof routeFetch>): string[] {
+      return fetchMock.mock.calls.map(
+        ([input]) => new URL(String(input), 'http://app.test').pathname,
+      );
+    }
+
+    it('keeps the server job id of a retryable failure on the error', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        jsonResponse(422, {
+          success: false,
+          error: 'The provider was busy.',
+          job_id: JOB_ID,
+          retryable: true,
+        }),
+      );
+      const { result } = renderHook(() => useMediaGeneration());
+
+      await act(async () => {
+        await expect(result.current.generateImage('draw a retryable fixture')).rejects.toSatisfy(
+          (error: unknown) => error instanceof MediaGenerationApiError && error.jobId === JOB_ID,
+        );
+      });
+    });
+
+    it('does not keep a job id the server says cannot be retried', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        jsonResponse(422, {
+          success: false,
+          error: 'The prompt was refused.',
+          job_id: JOB_ID,
+          retryable: false,
+        }),
+      );
+      const { result } = renderHook(() => useMediaGeneration());
+
+      await act(async () => {
+        await expect(result.current.generateImage('draw a refused fixture')).rejects.toSatisfy(
+          (error: unknown) => error instanceof MediaGenerationApiError && error.jobId === undefined,
+        );
+      });
+    });
+
+    it('retries the existing job on its own reservation instead of submitting a new generation', async () => {
+      const fetchMock = routeFetch({
+        '/api/media/image/status': () =>
+          jsonResponse(200, snapshot({ status: 'failed', retryable: true })),
+        '/api/media/image/retry': () =>
+          jsonResponse(200, snapshot({ status: 'completed', images: [{ url: IMAGE_URL }] })),
+      });
+      const { result } = renderHook(() => useMediaGeneration());
+
+      await act(async () => {
+        await expect(
+          result.current.generateImage('draw a retryable fixture', { resumeJobId: JOB_ID }),
+        ).resolves.toEqual({
+          imageUrl: IMAGE_URL,
+          provider: GOOGLE_IMAGE_MODEL.provider,
+          model: GOOGLE_IMAGE_MODEL.id,
+        });
+      });
+
+      expect(requestedPaths(fetchMock)).toEqual([
+        '/api/media/image/status',
+        '/api/media/image/retry',
+      ]);
+      const retry = fetchMock.mock.calls[1]?.[1];
+      expect(JSON.parse(String(retry?.body))).toEqual({ job_id: JOB_ID });
+    });
+
+    it('adopts the image the original job already delivered without charging again', async () => {
+      const fetchMock = routeFetch({
+        '/api/media/image/status': () =>
+          jsonResponse(200, snapshot({ status: 'completed', images: [{ url: IMAGE_URL }] })),
+      });
+      const { result } = renderHook(() => useMediaGeneration());
+
+      await act(async () => {
+        await expect(
+          result.current.generateImage('draw a delivered fixture', { resumeJobId: JOB_ID }),
+        ).resolves.toMatchObject({ imageUrl: IMAGE_URL });
+      });
+
+      expect(requestedPaths(fetchMock)).toEqual(['/api/media/image/status']);
+    });
+
+    it('waits for a job that is still running rather than starting a second one', async () => {
+      const fetchMock = routeFetch({
+        '/api/media/image/status': () => jsonResponse(200, snapshot({ status: 'processing' })),
+      });
+      const { result } = renderHook(() => useMediaGeneration());
+
+      await act(async () => {
+        await expect(
+          result.current.generateImage('draw a running fixture', { resumeJobId: JOB_ID }),
+        ).rejects.toSatisfy(
+          (error: unknown) =>
+            error instanceof MediaGenerationApiError &&
+            error.code === IMAGE_JOB_IN_PROGRESS_CODE &&
+            error.jobId === JOB_ID,
+        );
+      });
+
+      expect(requestedPaths(fetchMock)).toEqual(['/api/media/image/status']);
+    });
+
+    it('treats a retry that finds the job already running as still in progress', async () => {
+      routeFetch({
+        '/api/media/image/status': () =>
+          jsonResponse(200, snapshot({ status: 'failed', retryable: true })),
+        '/api/media/image/retry': () =>
+          jsonResponse(409, { error: { message: 'This image job is already running.' } }),
+      });
+      const { result } = renderHook(() => useMediaGeneration());
+
+      await act(async () => {
+        await expect(
+          result.current.generateImage('draw a raced fixture', { resumeJobId: JOB_ID }),
+        ).rejects.toSatisfy(
+          (error: unknown) =>
+            error instanceof MediaGenerationApiError && error.code === IMAGE_JOB_IN_PROGRESS_CODE,
+        );
+      });
+    });
+
+    it('starts a new generation once the original job is settled and cannot be retried', async () => {
+      const fetchMock = routeFetch({
+        '/api/media/image/status': () =>
+          jsonResponse(200, snapshot({ status: 'failed', retryable: false })),
+        '/api/media/image/generate': () =>
+          jsonResponse(200, {
+            images: [{ url: IMAGE_URL }],
+            provider: GOOGLE_IMAGE_MODEL.provider,
+            catalog_model: GOOGLE_IMAGE_MODEL.id,
+          }),
+      });
+      const { result } = renderHook(() => useMediaGeneration());
+
+      await act(async () => {
+        await expect(
+          result.current.generateImage('draw a settled fixture', { resumeJobId: JOB_ID }),
+        ).resolves.toMatchObject({ imageUrl: IMAGE_URL });
+      });
+
+      expect(requestedPaths(fetchMock)).toEqual([
+        '/api/media/image/status',
+        '/api/media/image/generate',
+      ]);
+    });
   });
 
   describe('generateImage cancellation admission', () => {

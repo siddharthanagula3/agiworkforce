@@ -27,6 +27,7 @@ import { insertMediaAssetsAtomically } from '@/lib/server/media-assets';
 import {
   claimImageGenerationJobAttempt,
   closeCancelledImageGenerationJob,
+  closeExhaustedImageGenerationJob,
   completeImageGenerationJob,
   deferImageGenerationJobFailure,
   failImageGenerationJob,
@@ -227,6 +228,41 @@ export async function reconcileCancelledImageGenerationJob(input: {
     db: input.db,
     jobId: input.job.id,
     userId: input.job.userId,
+    billingOutcome: settlement.billingOutcome,
+    billingSettlementStatus: settlement.billingSettlementStatus,
+  });
+}
+
+const EXHAUSTED_ATTEMPTS_PUBLIC_ERROR =
+  'This image did not finish after every allowed attempt. Start a new generation.';
+
+/**
+ * Whether a job used its last attempt and nothing holds it any more: no claim
+ * can run another attempt, so only a close can end it.
+ */
+export function isImageJobExhaustedAndAbandoned(job: ImageGenerationJob, now: number): boolean {
+  if (job.terminalAt !== null || job.cancelRequestedAt !== null) return false;
+  if (job.attempts < job.maxAttempts) return false;
+  return job.claimExpiresAt === null || Date.parse(job.claimExpiresAt) <= now;
+}
+
+/**
+ * Release the reservation of a job whose final attempt was abandoned and close
+ * it. Starts no provider call. The close requires the exhausted counters and a
+ * lapsed claim, so two callers racing settle once.
+ */
+export async function reconcileExhaustedImageGenerationJob(input: {
+  db: DatabaseAdapter;
+  job: ImageGenerationJob;
+  now?: number;
+}): Promise<ImageGenerationJob | null> {
+  if (!isImageJobExhaustedAndAbandoned(input.job, input.now ?? Date.now())) return null;
+  const settlement = await settleFailure(input.db, input.job, 'attempts_exhausted');
+  return closeExhaustedImageGenerationJob({
+    db: input.db,
+    jobId: input.job.id,
+    userId: input.job.userId,
+    publicError: EXHAUSTED_ATTEMPTS_PUBLIC_ERROR,
     billingOutcome: settlement.billingOutcome,
     billingSettlementStatus: settlement.billingSettlementStatus,
   });

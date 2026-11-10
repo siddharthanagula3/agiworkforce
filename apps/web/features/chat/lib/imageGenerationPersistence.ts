@@ -54,12 +54,13 @@ export function imageRegenerationPendingMetadata(
 
 export function imageGenerationFailureMetadata(
   previous: MessageMetadata | undefined,
-  options: { paywall?: MessageMetadata['paywall']; retryAt?: string } = {},
+  options: { paywall?: MessageMetadata['paywall']; retryAt?: string; jobId?: string } = {},
 ): MessageMetadata {
   return mergeImageGenerationMetadata(previous, {
     toolType: 'image-generation',
     ...(options.paywall ? { paywall: options.paywall } : {}),
     imageRetryAt: options.retryAt,
+    imageJobId: options.jobId,
   });
 }
 
