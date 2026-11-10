@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-09-21
+Last updated: 2026-11-10
 
 Until 2026-09-18 the only rollback in this repository was a step inside the job
 that deployed. It fired on `failure()` of the same run, which covers exactly one
@@ -26,6 +26,26 @@ not from configuration:
 - whether the audit trail's hash chain is intact.
 
 The same data is available at `GET /api/admin/releases`.
+
+## Deploying by hand: migrations first
+
+`deploy-production.yml` verifies the schema ledger (`pnpm db:migrate -- verify`)
+and records the migration state a deployment serves, but it never applies a
+migration to production. A manual production deploy therefore starts with the
+migrations:
+
+1. Take a Neon backup branch of production, then apply every pending migration
+   with `pnpm db:migrate -- apply --target production --confirm-production`.
+   Record the new applied-through number in
+   `scripts/config/production-migrations-applied.json`.
+2. Only then build, probe and promote the new code.
+
+Code that reads a table or column from a migration production has not yet applied
+is written for this order. `pnpm check:migration-dependencies` fails any such
+reference that `scripts/config/migration-dependency-allowlist.json` does not name
+by file and migration number. Promoting that code before step 1 breaks the routes
+that read the new schema until the migration is applied, and a rollback does not
+undo the migration (see "What the rollback does not do").
 
 ## Rolling production back
 

@@ -14,6 +14,13 @@ export const PRODUCT_NAMES = {
   work: 'Work',
 } as const;
 
+export const PRODUCT_INSTALLED_NAMES = {
+  mobile: 'AGI Mobile',
+  desktop: 'AGI Desktop',
+  extension: 'AGI Extension',
+  code: 'AGI Code',
+} as const;
+
 export type ProductKey = keyof typeof PRODUCT_NAMES;
 
 export type ProductName = (typeof PRODUCT_NAMES)[ProductKey];

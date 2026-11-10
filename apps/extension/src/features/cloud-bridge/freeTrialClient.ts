@@ -38,6 +38,7 @@ import {
   IMAGE_CARD_KIND,
   INTERACTIVE_CARD_REQUEST_KEY,
   MAX_ATTACHMENT_BYTES,
+  messageKindForAgentEvent,
   normalizeBillingPlanTier,
   parseManagedUsageSummaryResponse,
   WEB_SEARCH_CITATION_DELTA_KEY,
@@ -1561,17 +1562,19 @@ export async function* streamFreeChat(
         }
         if (frame.agentEvent) {
           sawAgentActivity = true;
-          if (frame.agentEvent.event.type === 'text-delta') {
+          const liveEvent = frame.agentEvent.event;
+          const liveKind = messageKindForAgentEvent(liveEvent.type);
+          if (liveKind === 'text' && liveEvent.type === 'text-delta') {
             unacknowledgedPublicText = reconcileManagedCloudPublicText(
               unacknowledgedPublicText,
-              frame.agentEvent.event.delta,
+              liveEvent.delta,
             ).pending;
           }
           chunks.push({ type: 'agent-event', envelope: frame.agentEvent });
           const runChunk = publishRunReference({
             lastSequence: frame.agentEvent.sequence,
-            ...(frame.agentEvent.event.type === 'task-state-changed'
-              ? { state: frame.agentEvent.event.state }
+            ...(liveKind === 'status' && liveEvent.type === 'task-state-changed'
+              ? { state: liveEvent.state }
               : {}),
           });
           if (runChunk) chunks.push(runChunk);
@@ -1655,7 +1658,10 @@ export async function* streamFreeChat(
           signal: controller.signal,
           onEvent: (envelope) => {
             armInactivityWatchdog();
-            if (envelope.event.type === 'text-delta') {
+            if (
+              messageKindForAgentEvent(envelope.event.type) === 'text' &&
+              envelope.event.type === 'text-delta'
+            ) {
               const reconciled = reconcileManagedCloudPublicText(
                 unacknowledgedPublicText,
                 envelope.event.delta,

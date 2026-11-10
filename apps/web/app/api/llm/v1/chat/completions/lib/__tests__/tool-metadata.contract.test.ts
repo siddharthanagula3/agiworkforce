@@ -34,6 +34,21 @@ describe('web tool metadata declares through the shared contract', () => {
     expect(isParallelSafeTool('mcp__acme__anything')).toBe(false);
   });
 
+  it('declares the sandbox file delete and the browser stop instead of leaving them unknown', () => {
+    const deleteFile = resolveToolMetadata('delete_file');
+    expect(deleteFile).toMatchObject({ actionClass: 'delete', reversible: false, declared: true });
+    expect(isDestructiveToolMetadata(deleteFile)).toBe(true);
+    expect(isParallelSafeTool('delete_file')).toBe(false);
+    expect(resolveToolMetadata('browser_stop')).toMatchObject({
+      actionClass: 'write',
+      reversible: false,
+      acceptsUntrustedContent: false,
+      createsEgressPath: true,
+      declared: true,
+    });
+    expect(resolveToolMetadata('browser_stop')).not.toBe(UNKNOWN_TOOL_METADATA);
+  });
+
   it('renders a platform tool as a declared contract definition', () => {
     const definition = toContractToolDefinition(
       {

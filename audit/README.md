@@ -83,7 +83,7 @@ reads them where they are, or because a feature spec owns its own checklist.
 
 | File                                                                                        | What is open in it                                                                                          | Why it stays there                                                                                              |
 | ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `docs/launch/QA_LEDGER.md`                                                                  | Ordered six-application launch acceptance, environment defects and deferred runtime checks                  | The founder explicitly requires this persistent ledger at this path                                             |
+| `docs/work/QA_LEDGER.md`                                                                    | Ordered six-application launch acceptance, environment defects and deferred runtime checks                  | The founder requires this persistent ledger; it is temporary operational work (AGENTS.md §11)                   |
 | `docs/specs/jev-auto-routing/tasks.md`                                                      | The unchecked tasks of the Jev Auto routing feature                                                         | A spec owns its own `tasks.md` (`docs/specs/README.md`)                                                         |
 | `docs/specs/web-ui-parity/tasks.md`                                                         | Rendering, prompt release and conversation acceptance for the owner QA                                      | The existing feature spec owns the checklist; live evidence is indexed above                                    |
 | `docs/specs/guardian-phase-3/tasks.md` and the "Known limitations / risks" of its `spec.md` | Guardian phase 3 tasks and limitations                                                                      | Spec-owned; `.agi-guardian.yml` cites task 4. Its external blockers are in `decisions/open-questions.md`        |
@@ -98,7 +98,8 @@ reads them where they are, or because a feature spec owns its own checklist.
 
 `PLAN.md` (strategy and phase structure), `DPDP_PROGRESS.md` (a pointer kept
 because applied migrations 0114 and 0116 cite it) and `docs/work/` (a store
-listing draft that a billing-copy test reads) hold no open items; each points
+listing draft that a billing-copy test reads, and the launch QA ledger indexed
+above) hold no open items beyond that ledger; each points
 here for open work.
 
 ## Not indexed: local-only files

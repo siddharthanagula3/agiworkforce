@@ -98,6 +98,7 @@ Every declared platform tool, and what each policy does with it. The rows are
 | `list_files`                   | asks                   | runs                           | read, reversible                                                                 |
 | `read_file`                    | asks                   | runs                           | read, reversible, acceptsUntrustedContent                                        |
 | `edit_file`                    | asks                   | asks                           | write, not reversible                                                            |
+| `delete_file`                  | asks                   | asks                           | delete, not reversible                                                           |
 | `create_office_file`           | asks                   | asks                           | write, reversible                                                                |
 | `generate_image`               | asks                   | asks                           | write, reversible                                                                |
 | `edit_image`                   | asks                   | asks                           | write, reversible                                                                |
@@ -152,6 +153,7 @@ Every declared platform tool, and what each policy does with it. The rows are
 | `browser_find`                 | asks                   | asks                           | read, reversible, acceptsUntrustedContent                                        |
 | `browser_fill_form`            | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |
 | `browser_history`              | asks                   | asks                           | external_send, not reversible, createsEgressPath                                 |
+| `browser_stop`                 | asks                   | asks                           | write, not reversible, createsEgressPath                                         |
 | `browser_list_tabs`            | asks                   | asks                           | read, reversible, acceptsUntrustedContent                                        |
 | `agi_reconnect`                | asks                   | runs                           | read, reversible                                                                 |
 | `device_calendar_events`       | asks                   | asks                           | read, reversible, acceptsUntrustedContent                                        |

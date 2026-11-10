@@ -1835,6 +1835,90 @@ describe('streamFreeChat, model routing', () => {
     expect(fetchMock.mock.calls[1]?.[0]).toBe(`${FREE_TRIAL_GATEWAY}${runPath}?after=-1&limit=100`);
   });
 
+  it('reads text deltas by message kind so a live acknowledgement shortens the replay', async () => {
+    const runId = '11111111-1111-4111-8111-111111111111';
+    const runPath = `/api/llm/v1/chat/completions/runs/${runId}`;
+    const liveDelta = {
+      schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+      sessionId: 'conversation-1',
+      turnId: 'turn-1',
+      sequence: 0,
+      emittedAtMs: 1_752_000_000_123,
+      event: { type: 'text-delta', delta: 'Hel' },
+    } as const;
+    fetchMock
+      .mockResolvedValueOnce(
+        makeStreamResponse(
+          [
+            JSON.stringify({ choices: [{ delta: { content: 'Hello ' }, finish_reason: null }] }),
+            JSON.stringify({
+              choices: [{ delta: { x_agent_event: liveDelta }, finish_reason: null }],
+            }),
+          ],
+          200,
+          {
+            'X-AGI-Agent-Run-Id': runId,
+            'X-AGI-Agent-Run-URL': runPath,
+          },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            run: {
+              id: runId,
+              userId: 'user-1',
+              requestId: 'request-1',
+              conversationId: 'conversation-1',
+              originSurface: 'chrome',
+              workMode: 'agiwork',
+              state: 'completed',
+              provider: 'openai',
+              model: FREE_TRIAL_MODEL,
+              lastEventSequence: 2,
+              cancellationRequestedAt: null,
+              completedAt: '2026-07-17T20:00:00.000Z',
+              createdAt: '2026-07-17T19:00:00.000Z',
+              updatedAt: '2026-07-17T20:00:00.000Z',
+            },
+            events: [
+              {
+                schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+                sessionId: 'conversation-1',
+                turnId: 'turn-1',
+                sequence: 1,
+                emittedAtMs: 1_752_000_000_124,
+                event: { type: 'text-delta', delta: 'lo world' },
+              },
+              {
+                schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+                sessionId: 'conversation-1',
+                turnId: 'turn-1',
+                sequence: 2,
+                emittedAtMs: 1_752_000_000_125,
+                event: { type: 'stop', reason: 'end-turn' },
+              },
+            ],
+            nextAfterSequence: 2,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      );
+
+    const chunks = await collectChunks(
+      streamFreeChat(SAMPLE_MESSAGES, 'token', {
+        model: FREE_TRIAL_MODEL,
+        workMode: 'agiwork',
+      }),
+    );
+
+    expect(chunks.filter((chunk) => chunk.type === 'text')).toEqual([
+      { type: 'text', text: 'Hello ' },
+      { type: 'text', text: 'world' },
+    ]);
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(`${FREE_TRIAL_GATEWAY}${runPath}?after=0&limit=100`);
+  });
+
   it('rejects a runtime-invalid role without calling the gateway', async () => {
     const chunks = await collectChunks(
       streamFreeChat([{ role: 'tool' as 'user', content: 'untrusted' }], 'token', {
