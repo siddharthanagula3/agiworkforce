@@ -33,15 +33,13 @@ import {
 import {
   CLAUDE_PLUGIN_METADATA_PATH,
   GITHUB_API_USER_AGENT,
-  PLUGIN_DIRECTORY_FALLBACK_VERSION,
   PLUGIN_DIRECTORY_FETCH_TIMEOUT_MS,
-  PLUGIN_DIRECTORY_SHA_VERSION_PREFIX,
   RUNTIME_NOTE_NOT_INSPECTED,
   RUNTIME_NOTE_SOURCE_UNKNOWN,
   SOURCE_FACET_BUILTIN,
   shadowSourceName,
 } from './constants';
-import { displayVersion, shaFromInstalledVersion } from './entries';
+import { declaredVersion, displayVersion, shaFromInstalledVersion } from './entries';
 import { rawFileUrl } from './inspection';
 import { DIRECTORY_MARKETPLACES, type DirectoryFetch } from './official-marketplace';
 import { releaseTagSatisfying } from './release-tags';
@@ -49,7 +47,6 @@ import { fetchPluginSkillFiles, pluginContentPaths } from './skill-files';
 import type { InstalledDirectorySkill, PluginDirectoryEntry, PluginSourceLocation } from './types';
 
 const HTTP_NOT_FOUND = 404;
-const UNDECLARED_VERSION_PREFIX = `${PLUGIN_DIRECTORY_FALLBACK_VERSION}+${PLUGIN_DIRECTORY_SHA_VERSION_PREFIX}`;
 const UNVERSIONED_COPY = 'a copy with no version';
 
 export interface InstallableSource {
@@ -218,10 +215,6 @@ async function enabledVersionInMarketplace(
     [userId, pluginKey, [marketplace, shadowSourceName(marketplace)]],
   );
   return rows[0]?.installed_version ?? null;
-}
-
-function declaredVersion(version: string): string | null {
-  return version.startsWith(UNDECLARED_VERSION_PREFIX) ? null : version;
 }
 
 function shownVersion(version: string): string {

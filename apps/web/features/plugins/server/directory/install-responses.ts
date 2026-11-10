@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import type { DirectoryInstallRefusal } from './install';
-import type { PluginDependent } from './installed-dependents';
+import type { PluginDependent, UnmetDependency } from './installed-dependents';
 
 const PLUGIN_HAS_DEPENDENTS_CODE = 'PLUGIN_HAS_DEPENDENTS';
 const PLUGIN_HAS_DEPENDENTS_STATUS = 409;
@@ -19,6 +19,25 @@ export function pluginHasDependentsResponse(
       },
     },
     { status: PLUGIN_HAS_DEPENDENTS_STATUS },
+  );
+}
+
+const PLUGIN_DEPENDENCIES_UNAVAILABLE_CODE = 'PLUGIN_DEPENDENCIES_UNAVAILABLE';
+const PLUGIN_DEPENDENCIES_UNAVAILABLE_STATUS = 409;
+
+export function pluginDependenciesUnavailableResponse(
+  message: string,
+  unmet: readonly UnmetDependency[],
+): NextResponse {
+  return NextResponse.json(
+    {
+      error: {
+        code: PLUGIN_DEPENDENCIES_UNAVAILABLE_CODE,
+        message,
+        dependencies: unmet.map(({ name, problem }) => ({ name, problem })),
+      },
+    },
+    { status: PLUGIN_DEPENDENCIES_UNAVAILABLE_STATUS },
   );
 }
 
