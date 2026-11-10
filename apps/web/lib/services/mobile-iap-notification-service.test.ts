@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { MOBILE_IAP_PRODUCT_DEFINITIONS } from '@agiworkforce/types';
+import { MOBILE_IAP_PRODUCT_DEFINITIONS, topUpBudgetCentsForCredits } from '@agiworkforce/types';
 import {
   grantMobileIapPurchaseFromStore,
   processMobileIapLifecycleEvent,
@@ -15,6 +15,7 @@ import {
   storeChargeId,
 } from './mobile-iap-ledger-service';
 import { createError } from '@/lib/errors';
+import { MICROUSD_PER_LEDGER_CENT } from '@/lib/server/managed-usage-policy';
 import { readStoreTestPurchasesAllowed } from '@/lib/feature-flags/store-test-purchase-gate';
 import {
   hashMobileIapPurchaseToken,
@@ -67,12 +68,20 @@ function ownerRow(overrides: Partial<OwnerRow> = {}): OwnerRow {
   };
 }
 
+function grantedMicrousd(fractionOfPrice: number): number {
+  return Math.round(
+    topUpBudgetCentsForCredits(topUp.units) * MICROUSD_PER_LEDGER_CENT * fractionOfPrice,
+  );
+}
+
 function harness(
   options: {
     duplicate?: boolean;
     owner?: OwnerRow | null;
     receiptEnvironment?: string | null;
     renewalStateClaimed?: boolean;
+    refundedAmountCents?: number;
+    refundStateSignedAt?: string | null;
   } = {},
 ) {
   const execute = vi.fn(async () => undefined);
@@ -87,8 +96,10 @@ function harness(
             id: 'receipt-1',
             user_id: 'user-1',
             app_account_token: '00000000-0000-4000-8000-000000000001',
+            units_granted: topUp.units,
             intended_amount_cents: 1_000,
-            refunded_amount_cents: 0,
+            refunded_amount_cents: options.refundedAmountCents ?? 0,
+            refund_state_signed_at: options.refundStateSignedAt ?? null,
             environment: options.receiptEnvironment ?? 'production',
           },
         ];
@@ -154,11 +165,77 @@ describe('mobile IAP lifecycle ledger', () => {
         event: event({ entitlementStatus: 'refunded', refundFraction: 0.5 }),
       }),
     ).resolves.toBe('processed');
-    expect(h.execute).toHaveBeenCalledWith('select public.handle_top_up_refund($1, $2, $3)', [
-      'user-1',
-      500,
-      expect.stringContaining('transaction-1'),
-    ]);
+    expect(h.execute).toHaveBeenCalledWith(
+      'select public.handle_top_up_refund_microusd($1, $2, $3)',
+      ['user-1', grantedMicrousd(0.5), expect.stringContaining('transaction-1')],
+    );
+  });
+
+  it('revokes the credit budget the pack granted, not its retail price, on a full refund', async () => {
+    const h = harness();
+    await processMobileIapLifecycleEvent({
+      db: h.db,
+      event: event({ entitlementStatus: 'refunded' }),
+    });
+    expect(grantedMicrousd(1)).toBeLessThan(1_000 * MICROUSD_PER_LEDGER_CENT);
+    expect(h.execute).toHaveBeenCalledWith(
+      'select public.handle_top_up_refund_microusd($1, $2, $3)',
+      ['user-1', grantedMicrousd(1), expect.stringContaining('transaction-1')],
+    );
+  });
+
+  it('revokes only the part of the grant not already revoked by an earlier partial refund', async () => {
+    const h = harness({ refundedAmountCents: 500 });
+    await processMobileIapLifecycleEvent({
+      db: h.db,
+      event: event({ entitlementStatus: 'refunded' }),
+    });
+    expect(h.execute).toHaveBeenCalledWith(
+      'select public.handle_top_up_refund_microusd($1, $2, $3)',
+      [
+        'user-1',
+        grantedMicrousd(1) - grantedMicrousd(0.5),
+        expect.stringContaining('transaction-1'),
+      ],
+    );
+  });
+
+  it('settles the commission of a renewal inside the notification transaction', async () => {
+    vi.mocked(recordMobileIapStoreCommission).mockClear();
+    const h = harness();
+    await processMobileIapLifecycleEvent({
+      db: h.db,
+      event: event({
+        product: subscription,
+        entitlementStatus: 'active',
+        expiresAt: new Date('2026-09-01T00:00:00.000Z'),
+      }),
+    });
+    expect(recordMobileIapStoreCommission).toHaveBeenCalledTimes(1);
+    expect(recordMobileIapStoreCommission).toHaveBeenCalledWith(
+      h.db,
+      expect.objectContaining({ userId: 'user-1', storeTransactionId: 'transaction-1' }),
+    );
+  });
+
+  it('settles the commission of a top-up charge notice so a missed posting is repaired', async () => {
+    vi.mocked(recordMobileIapStoreCommission).mockClear();
+    const h = harness();
+    await expect(
+      processMobileIapLifecycleEvent({ db: h.db, event: event({ entitlementStatus: 'active' }) }),
+    ).resolves.toBe('processed');
+    expect(recordMobileIapStoreCommission).toHaveBeenCalledWith(
+      h.db,
+      expect.objectContaining({ userId: 'user-1', product: topUp }),
+    );
+  });
+
+  it('fails the notice, so the store redelivers it, when the commission cannot be posted', async () => {
+    vi.mocked(recordMobileIapStoreCommission).mockRejectedValueOnce(new Error('cogs unavailable'));
+    const h = harness();
+    await expect(
+      processMobileIapLifecycleEvent({ db: h.db, event: event({ entitlementStatus: 'active' }) }),
+    ).rejects.toThrow('cogs unavailable');
   });
 
   it('renews a subscription in the same store scope and allocates only that period', async () => {
@@ -200,6 +277,7 @@ describe('mobile IAP lifecycle ledger', () => {
             id: 'receipt-1',
             user_id: 'user-1',
             app_account_token: '00000000-0000-4000-8000-000000000001',
+            units_granted: topUp.units,
             intended_amount_cents: 1_000,
             refunded_amount_cents: 500,
             environment: 'production',
@@ -215,13 +293,16 @@ describe('mobile IAP lifecycle ledger', () => {
         event: event({ entitlementStatus: 'restored' }),
       }),
     ).resolves.toBe('processed');
-    expect(h.execute).toHaveBeenCalledWith('select public.add_credits($1, $2, $3, $4, $5)', [
-      'user-1',
-      'account-1',
-      500,
-      expect.stringContaining('refund reversed'),
-      'purchase',
-    ]);
+    expect(h.execute).toHaveBeenCalledWith(
+      'select public.add_credits_microusd($1, $2, $3, $4, $5)',
+      [
+        'user-1',
+        'account-1',
+        grantedMicrousd(0.5),
+        expect.stringContaining('refund reversed'),
+        'purchase',
+      ],
+    );
   });
 
   it('rejects a verified event whose account token differs from the receipt owner', async () => {
@@ -499,6 +580,152 @@ describe('mobile IAP lifecycle ledger', () => {
     });
 
     expect(subscriptionWrite(h).params?.[9]).toBe(true);
+  });
+
+  describe('a Play snapshot read before a newer one was committed', () => {
+    const readAt = new Date('2026-08-02T00:00:00.000Z');
+
+    it.each(['on_hold', 'paused', 'grace', 'expired'] as const)(
+      'does not let an older %s snapshot overwrite the newer state',
+      async (state) => {
+        const h = harness({ owner: googleOwner, renewalStateClaimed: false });
+
+        await expect(
+          processMobileIapLifecycleEvent({
+            db: h.db,
+            event: subscriptionEvent({
+              platform: 'android',
+              entitlementStatus: state,
+              accessUntil: new Date('2026-09-04T00:00:00.000Z'),
+              rawGooglePurchaseToken: 'live-token',
+              signedAt: readAt,
+            }),
+          }),
+        ).resolves.toBe('stale');
+
+        expect(subscriptionWrites(h)).toEqual([]);
+        expect(receiptWrites(h)).toEqual([]);
+      },
+    );
+
+    it('does not let an older active snapshot overwrite a newer suspension', async () => {
+      const h = harness({ owner: googleOwner, renewalStateClaimed: false });
+
+      await expect(
+        processMobileIapLifecycleEvent({
+          db: h.db,
+          event: subscriptionEvent({
+            platform: 'android',
+            entitlementStatus: 'active',
+            rawGooglePurchaseToken: 'live-token',
+            signedAt: readAt,
+          }),
+        }),
+      ).resolves.toBe('stale');
+
+      expect(subscriptionWrites(h)).toEqual([]);
+    });
+
+    it('applies the newest snapshot and advances the watermark it read', async () => {
+      const h = harness({ owner: googleOwner });
+
+      await expect(
+        processMobileIapLifecycleEvent({
+          db: h.db,
+          event: subscriptionEvent({
+            platform: 'android',
+            entitlementStatus: 'on_hold',
+            rawGooglePurchaseToken: 'live-token',
+            signedAt: readAt,
+          }),
+        }),
+      ).resolves.toBe('processed');
+
+      const claim = h.query.mock.calls.find(([sql]) =>
+        String(sql).includes('update public.mobile_iap_accounts'),
+      );
+      expect(claim?.[1]).toEqual(['user-1', readAt.toISOString()]);
+      expect(subscriptionWrites(h)).toHaveLength(1);
+    });
+  });
+
+  describe('a refund and its reversal delivered out of order', () => {
+    const refundSignedAt = new Date('2026-08-02T00:00:00.000Z');
+    const reversalSignedAt = new Date('2026-08-03T00:00:00.000Z');
+
+    function refundStateWrite(h: ReturnType<typeof harness>) {
+      return h.execute.mock.calls.find((call: unknown[]) =>
+        String(call[0]).includes('refund_state_signed_at = $2'),
+      );
+    }
+
+    function creditMovements(
+      h: ReturnType<typeof harness>,
+      fn: 'handle_top_up_refund' | 'add_credits',
+    ) {
+      return h.execute.mock.calls.filter((call: unknown[]) => String(call[0]).includes(fn));
+    }
+
+    it('records a reversal that has nothing to restore yet, so the older refund is not applied later', async () => {
+      const h = harness();
+
+      await expect(
+        processMobileIapLifecycleEvent({
+          db: h.db,
+          event: event({ entitlementStatus: 'restored', signedAt: reversalSignedAt }),
+        }),
+      ).resolves.toBe('processed');
+
+      expect(refundStateWrite(h)?.[1]).toEqual(['receipt-1', reversalSignedAt.toISOString()]);
+      expect(creditMovements(h, 'add_credits')).toEqual([]);
+    });
+
+    it.each(['refunded', 'revoked'] as const)(
+      'ignores an older %s notice once a newer reversal was recorded',
+      async (state) => {
+        const h = harness({ refundStateSignedAt: reversalSignedAt.toISOString() });
+
+        await expect(
+          processMobileIapLifecycleEvent({
+            db: h.db,
+            event: event({ entitlementStatus: state, signedAt: refundSignedAt }),
+          }),
+        ).resolves.toBe('stale');
+
+        expect(creditMovements(h, 'handle_top_up_refund')).toEqual([]);
+        expect(refundStateWrite(h)).toBeUndefined();
+      },
+    );
+
+    it('applies a refund signed after the last recorded refund state and records its time', async () => {
+      const h = harness({ refundStateSignedAt: refundSignedAt.toISOString() });
+
+      await expect(
+        processMobileIapLifecycleEvent({
+          db: h.db,
+          event: event({ entitlementStatus: 'refunded', signedAt: reversalSignedAt }),
+        }),
+      ).resolves.toBe('processed');
+
+      expect(creditMovements(h, 'handle_top_up_refund')).toHaveLength(1);
+      expect(refundStateWrite(h)?.[1]).toEqual(['receipt-1', reversalSignedAt.toISOString()]);
+    });
+
+    it('ignores an older reversal once a newer refund was recorded', async () => {
+      const h = harness({
+        refundedAmountCents: 1_000,
+        refundStateSignedAt: reversalSignedAt.toISOString(),
+      });
+
+      await expect(
+        processMobileIapLifecycleEvent({
+          db: h.db,
+          event: event({ entitlementStatus: 'restored', signedAt: refundSignedAt }),
+        }),
+      ).resolves.toBe('stale');
+
+      expect(creditMovements(h, 'add_credits')).toEqual([]);
+    });
   });
 
   it('never lets a sandbox notice move a receipt that was paid for', async () => {

@@ -41,7 +41,6 @@ const PubSubEnvelopeSchema = z
 const DeveloperNotificationSchema = z
   .object({
     packageName: z.string().min(1),
-    eventTimeMillis: z.coerce.number().int().positive().optional(),
     subscriptionNotification: z
       .object({ notificationType: z.number().int(), purchaseToken: z.string().min(20) })
       .optional(),
@@ -204,6 +203,7 @@ async function handleGoogleNotification(request: NextRequest): Promise<NextRespo
   }
 
   const subscriptionType = subscriptionNotification?.notificationType;
+  const snapshotReadAt = new Date();
   const verified = await verifyGooglePlayLifecyclePurchase({
     product: binding.product,
     purchaseToken,
@@ -265,10 +265,7 @@ async function handleGoogleNotification(request: NextRequest): Promise<NextRespo
       accessUntil: state === 'grace' ? verified.expiresAt : null,
       rawGooglePurchaseToken: purchaseToken,
       environment: verified.environment,
-      signedAt:
-        notification.data.eventTimeMillis === undefined
-          ? null
-          : new Date(notification.data.eventTimeMillis),
+      signedAt: snapshotReadAt,
     },
   });
 

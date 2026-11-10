@@ -5,6 +5,7 @@ import {
   BILLING_PLAN_CATALOG_VERSION,
   SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
   isEntitledSubscriptionStatus,
+  topUpBudgetCentsForCredits,
   type MobileIapCatalogProduct,
   type MobileIapPlatform,
 } from '@agiworkforce/types';
@@ -12,6 +13,7 @@ import { createError, isAppError } from '@/lib/errors';
 import { readStoreTestPurchasesAllowed } from '@/lib/feature-flags/store-test-purchase-gate';
 import { logger } from '@/lib/logger';
 import { logSecurityEvent } from '@/lib/security-audit';
+import { MICROUSD_PER_LEDGER_CENT } from '@/lib/server/managed-usage-policy';
 import { grantsAccess, type MobileIapEntitlementState } from '@/lib/server/mobile-iap-lifecycle';
 import {
   hashMobileIapPurchaseToken,
@@ -51,8 +53,8 @@ export interface MobileIapLifecycleEvent {
   rawGooglePurchaseToken?: string;
   environment: NormalizedEnvironment;
   /**
-   * When the store says the event happened: Apple's signature time, or the
-   * event time on a Play notification. It orders the auto-renew choice.
+   * When the store state this event carries was captured: Apple's signature
+   * time, or the moment the Play API was read. It orders store state changes.
    */
   signedAt?: Date | null;
 }
@@ -61,8 +63,10 @@ interface ReceiptAnchor {
   id: string;
   user_id: string;
   app_account_token: string;
+  units_granted: number;
   intended_amount_cents: number;
   refunded_amount_cents: number;
+  refund_state_signed_at: string | Date | null;
   environment: string | null;
 }
 
@@ -138,11 +142,12 @@ async function readStoreOwnership(
   };
 }
 
-// Both stores deliver notices out of order. Apple's carries the auto-renew choice
-// as it stood when it was signed; Play's is read from the API while the notice is
+// Both stores deliver notices out of order. Apple's carries the subscription as it
+// stood when it was signed; Play's is read from the API while the notice is
 // handled, and two handlers can commit in the opposite order to their reads. Only
-// the newest event may set that choice.
-async function claimsRenewalState(
+// the newest snapshot may set the auto-renew choice, and a Play snapshot or a
+// suspension, grace or end notice that is not the newest changes nothing.
+async function claimsNewestStoreState(
   tx: DatabaseAdapter,
   userId: string,
   event: MobileIapLifecycleEvent,
@@ -157,6 +162,18 @@ async function claimsRenewalState(
     [userId, event.signedAt.toISOString()],
   );
   return claimed.length > 0;
+}
+
+function isOlderRefundNotice(anchor: ReceiptAnchor, event: MobileIapLifecycleEvent): boolean {
+  if (!event.signedAt || !anchor.refund_state_signed_at) return false;
+  return new Date(anchor.refund_state_signed_at).getTime() > event.signedAt.getTime();
+}
+
+function grantedBudgetMicrousd(anchor: ReceiptAnchor, retailCents: number): number {
+  if (anchor.intended_amount_cents <= 0) return 0;
+  const grantedMicrousd =
+    topUpBudgetCentsForCredits(anchor.units_granted) * MICROUSD_PER_LEDGER_CENT;
+  return Math.round((grantedMicrousd * retailCents) / anchor.intended_amount_cents);
 }
 
 type LifecycleOutcome = 'processed' | 'duplicate' | 'unknown_purchase' | 'stale';
@@ -298,36 +315,14 @@ export async function processMobileIapLifecycleEvent(input: {
   db: DatabaseAdapter;
   event: MobileIapLifecycleEvent;
 }): Promise<LifecycleOutcome> {
-  const { outcome, renewedUserId } = await applyMobileIapLifecycleEvent(input);
-  if (renewedUserId && input.event.environment !== 'sandbox') {
-    try {
-      await recordMobileIapStoreCommission(input.db, {
-        userId: renewedUserId,
-        platform: input.event.platform,
-        product: input.event.product,
-        storeTransactionId: input.event.storeTransactionId,
-        originalTransactionId: input.event.originalTransactionId,
-        purchasedAt: input.event.purchasedAt,
-      });
-    } catch (error) {
-      logger.error(
-        {
-          event: 'store_commission_not_recorded',
-          error: error instanceof Error ? error.message : String(error),
-          platform: input.event.platform,
-          storeTransactionId: input.event.storeTransactionId,
-        },
-        'The store commission on a renewal is missing from the COGS ledger',
-      );
-    }
-  }
+  const { outcome } = await applyMobileIapLifecycleEvent(input);
   return outcome;
 }
 
 async function applyMobileIapLifecycleEvent(input: {
   db: DatabaseAdapter;
   event: MobileIapLifecycleEvent;
-}): Promise<{ outcome: LifecycleOutcome; renewedUserId: string | null }> {
+}): Promise<{ outcome: LifecycleOutcome }> {
   return input.db.transaction(async (tx) => {
     const [notification] = await tx.query<{ notification_id: string }>(
       `insert into public.mobile_iap_notification_receipts (platform, notification_id)
@@ -336,12 +331,12 @@ async function applyMobileIapLifecycleEvent(input: {
        returning notification_id`,
       [input.event.platform, input.event.notificationId],
     );
-    if (!notification) return { outcome: 'duplicate', renewedUserId: null };
+    if (!notification) return { outcome: 'duplicate' };
 
     const [anchor] = await tx.query<ReceiptAnchor>(
       `select receipt.id, receipt.user_id, account.app_account_token,
-              receipt.intended_amount_cents, receipt.refunded_amount_cents,
-              receipt.environment
+              receipt.units_granted, receipt.intended_amount_cents,
+              receipt.refunded_amount_cents, receipt.refund_state_signed_at, receipt.environment
          from public.mobile_iap_transactions receipt
          join public.mobile_iap_accounts account on account.user_id = receipt.user_id
         where receipt.platform = $1
@@ -369,7 +364,7 @@ async function applyMobileIapLifecycleEvent(input: {
           where platform = $1 and notification_id = $2`,
         [input.event.platform, input.event.notificationId],
       );
-      return { outcome: 'unknown_purchase', renewedUserId: null };
+      return { outcome: 'unknown_purchase' };
     }
     if (anchor.app_account_token !== input.event.appAccountToken) {
       throw createError.forbidden('Store notification account binding does not match.');
@@ -391,8 +386,9 @@ async function applyMobileIapLifecycleEvent(input: {
 
     // Apple signs each notice with the transaction it was sent about, so one that
     // arrives late describes a period that may already be over. Google's state is
-    // read from the Play API at processing time and is never behind for its own
-    // token, though that token may no longer be the one the subscription is on.
+    // read from the Play API, so it names no period; a handler delayed after its
+    // read is ordered by claimsNewestStoreState, and its token may no longer be
+    // the one the subscription is on.
     const supersededBefore =
       input.event.platform === 'ios' ? input.event.purchasedAt.toISOString() : null;
     const sellsSubscription = input.event.product.kind === 'subscription';
@@ -411,17 +407,28 @@ async function applyMobileIapLifecycleEvent(input: {
     }
 
     if (input.event.product.kind === 'top_up') {
+      const changesRefundState =
+        input.event.entitlementStatus === 'refunded' ||
+        input.event.entitlementStatus === 'revoked' ||
+        input.event.entitlementStatus === 'restored';
+      if (changesRefundState && isOlderRefundNotice(anchor, input.event)) {
+        return markStale(tx, input.event);
+      }
       if (
         input.event.entitlementStatus === 'refunded' ||
         input.event.entitlementStatus === 'revoked'
       ) {
         const fraction = Math.min(1, Math.max(0, input.event.refundFraction ?? 1));
         const refundTargetCents = Math.round(anchor.intended_amount_cents * fraction);
-        const refundCents = Math.max(0, refundTargetCents - anchor.refunded_amount_cents);
-        if (refundCents > 0) {
-          await tx.execute('select public.handle_top_up_refund($1, $2, $3)', [
+        const revokeMicrousd = Math.max(
+          0,
+          grantedBudgetMicrousd(anchor, refundTargetCents) -
+            grantedBudgetMicrousd(anchor, anchor.refunded_amount_cents),
+        );
+        if (revokeMicrousd > 0) {
+          await tx.execute('select public.handle_top_up_refund_microusd($1, $2, $3)', [
             anchor.user_id,
-            refundCents,
+            revokeMicrousd,
             `Mobile ${input.event.platform} refund ${input.event.storeTransactionId}`,
           ]);
         }
@@ -433,16 +440,16 @@ async function applyMobileIapLifecycleEvent(input: {
         );
       } else if (input.event.entitlementStatus === 'restored' && anchor.refunded_amount_cents > 0) {
         const [balance] = await tx.query<{ account_id: string }>(
-          `select account_id from public.get_credit_balance($1) limit 1`,
+          `select account_id from public.get_credit_balance_microusd($1) limit 1`,
           [anchor.user_id],
         );
         if (!balance?.account_id) {
           throw createError.conflict('No active credit account is available for this reversal.');
         }
-        await tx.execute('select public.add_credits($1, $2, $3, $4, $5)', [
+        await tx.execute('select public.add_credits_microusd($1, $2, $3, $4, $5)', [
           anchor.user_id,
           balance.account_id,
-          anchor.refunded_amount_cents,
+          grantedBudgetMicrousd(anchor, anchor.refunded_amount_cents),
           `Mobile ${input.event.platform} refund reversed ${input.event.storeTransactionId}`,
           'purchase',
         ]);
@@ -451,6 +458,14 @@ async function applyMobileIapLifecycleEvent(input: {
               set status = 'granted', refunded_amount_cents = 0, updated_at = now()
             where id = $1`,
           [anchor.id],
+        );
+      }
+      if (changesRefundState && input.event.signedAt) {
+        await tx.execute(
+          `update public.mobile_iap_transactions
+              set refund_state_signed_at = $2
+            where id = $1`,
+          [anchor.id, input.event.signedAt.toISOString()],
         );
       }
     } else if (input.event.entitlementStatus === 'active') {
@@ -490,7 +505,10 @@ async function applyMobileIapLifecycleEvent(input: {
         purchasedAt: input.event.purchasedAt,
         expiresAt: input.event.expiresAt,
       });
-      const setsRenewalState = await claimsRenewalState(tx, anchor.user_id, input.event);
+      const setsRenewalState = await claimsNewestStoreState(tx, anchor.user_id, input.event);
+      if (!setsRenewalState && input.event.platform === 'android') {
+        return markStale(tx, input.event);
+      }
       const [subscription] = await tx.query<{
         id: string;
         plan_catalog_version: number | null;
@@ -588,6 +606,9 @@ async function applyMobileIapLifecycleEvent(input: {
         throw createError.badRequest('Grace period notification has no end date.');
       }
       if (ownership !== 'owner' || consentWithdrawn) return markStale(tx, input.event);
+      if (!(await claimsNewestStoreState(tx, anchor.user_id, input.event))) {
+        return markStale(tx, input.event);
+      }
       const kept = await tx.query<{ id: string }>(
         `update public.subscriptions
             set status = 'active',
@@ -605,6 +626,9 @@ async function applyMobileIapLifecycleEvent(input: {
       input.event.entitlementStatus === 'paused'
     ) {
       if (ownership !== 'owner') return markStale(tx, input.event);
+      if (!(await claimsNewestStoreState(tx, anchor.user_id, input.event))) {
+        return markStale(tx, input.event);
+      }
       const suspended = await tx.query<{ id: string }>(
         `update public.subscriptions
             set status = $2, updated_at = now()
@@ -626,6 +650,9 @@ async function applyMobileIapLifecycleEvent(input: {
         await markReceiptEnded(tx, anchor.id, input.event);
         return markStale(tx, input.event);
       }
+      if (!(await claimsNewestStoreState(tx, anchor.user_id, input.event))) {
+        return markStale(tx, input.event);
+      }
       const ended = await endStoreSubscription(tx, anchor.user_id, supersededBefore);
       if (!ended) return markStale(tx, input.event);
       await markReceiptEnded(tx, anchor.id, input.event);
@@ -637,9 +664,17 @@ async function applyMobileIapLifecycleEvent(input: {
         where platform = $1 and notification_id = $2`,
       [input.event.platform, input.event.notificationId],
     );
-    const renewed =
-      input.event.product.kind === 'subscription' && input.event.entitlementStatus === 'active';
-    return { outcome: 'processed', renewedUserId: renewed ? anchor.user_id : null };
+    if (input.event.entitlementStatus === 'active' && input.event.environment !== 'sandbox') {
+      await recordMobileIapStoreCommission(tx, {
+        userId: anchor.user_id,
+        platform: input.event.platform,
+        product: input.event.product,
+        storeTransactionId: input.event.storeTransactionId,
+        originalTransactionId: input.event.originalTransactionId,
+        purchasedAt: input.event.purchasedAt,
+      });
+    }
+    return { outcome: 'processed' };
   });
 }
 
@@ -692,14 +727,14 @@ async function ownsStoreSubscription(tx: DatabaseAdapter, userId: string): Promi
 async function markStale(
   tx: DatabaseAdapter,
   event: MobileIapLifecycleEvent,
-): Promise<{ outcome: LifecycleOutcome; renewedUserId: null }> {
+): Promise<{ outcome: LifecycleOutcome }> {
   await tx.execute(
     `update public.mobile_iap_notification_receipts
         set processed_at = now()
       where platform = $1 and notification_id = $2`,
     [event.platform, event.notificationId],
   );
-  return { outcome: 'stale', renewedUserId: null };
+  return { outcome: 'stale' };
 }
 
 async function endAppleEntitlementForWithdrawnConsent(
