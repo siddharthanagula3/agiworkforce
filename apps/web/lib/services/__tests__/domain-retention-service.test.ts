@@ -163,6 +163,61 @@ describe('per-domain retention sweep', () => {
     expect(result.recordsDeleted).toBe(1);
   });
 
+  it('keeps bytes a project outside the sweep still lists, such as a recent duplicate', async () => {
+    const { db, calls } = fakeDb(() => []);
+    await createDomainSweepers().projects.sweepBatch(db, {
+      organizationId: ORG,
+      cutoff: NOW.toISOString(),
+      resourceType: 'project',
+      limit: 1,
+    });
+
+    const candidates = calls.find((call) => /from public\.user_projects p/.test(call.sql))?.sql;
+    expect(candidates).toMatch(
+      /filter \(\s*where k\.storage_uri is not null\s+and not exists \(\s*select 1 from public\.project_knowledge_files shared\s+join public\.user_projects sharer on sharer\.id = shared\.project_id\s+where shared\.storage_uri = k\.storage_uri\s+and shared\.project_id <> p\.id\s+and shared\.deleted_at is null\s+and \(sharer\.updated_at >= \$2 or exists/,
+    );
+  });
+
+  it('keeps a project whose knowledge file a project_file-only hold preserves, before any byte is deleted', async () => {
+    const { db, calls } = fakeDb(() => []);
+    await createDomainSweepers().projects.sweepBatch(db, {
+      organizationId: ORG,
+      cutoff: NOW.toISOString(),
+      resourceType: 'project',
+      limit: 1,
+    });
+
+    const candidates = calls.find((call) => /from public\.user_projects p/.test(call.sql))?.sql;
+    const heldFile =
+      /not exists \(\s*select 1 from public\.project_knowledge_files held_file\s+where held_file\.project_id = p\.id[\s\S]*'project_file'::text is null or h\.resource_types is null\s+or 'project_file' = any\(h\.resource_types\)/;
+    expect(candidates).toMatch(heldFile);
+  });
+
+  it('carries the project_file hold into the parent delete and the held count', async () => {
+    const { db, calls } = fakeDb((sql) => {
+      if (/from public\.user_projects p/.test(sql)) return [{ id: 'p1', object_keys: [] }];
+      if (/delete from public\.user_projects/.test(sql)) return [{ id: 'p1' }];
+      return [{ count: 0 }];
+    });
+    const sweeper = createDomainSweepers().projects;
+    const context = {
+      organizationId: ORG,
+      cutoff: NOW.toISOString(),
+      resourceType: 'project' as const,
+      limit: 1,
+    };
+    await sweeper.countHeld(db, context);
+    await sweeper.sweepBatch(db, context);
+
+    const held = calls.find((call) => /select count\(\*\)::int as count/.test(call.sql))?.sql;
+    const deletion = calls.find((call) => /delete from public\.user_projects/.test(call.sql))?.sql;
+    expect(held).toMatch(/or exists \(\s*select 1 from public\.project_knowledge_files held_file/);
+    expect(deletion).toMatch(
+      /and not exists \(\s*select 1 from public\.project_knowledge_files held_file/,
+    );
+    expect(deletion).toMatch(/h\.organization_id = \$2/);
+  });
+
   it('deletes nothing while an organization-wide legal hold is active', async () => {
     const { db, calls } = fakeDb(() => []);
 
@@ -193,7 +248,7 @@ describe('per-domain retention sweep', () => {
     const deletion = calls.find((call) => /delete from public\.notifications/.test(call.sql));
     expect(deletion?.sql).toMatch(/not exists/);
     expect(deletion?.sql).toMatch(/legal_hold_custodians/);
-    expect(deletion?.sql).toMatch(/organization_members/);
+    expect(deletion?.sql).toMatch(/target_kind = 'chat'/);
     // A store no hold vocabulary names, so any hold over the person suspends it.
     expect(deletion?.params[2]).toBeNull();
     expect(result).toMatchObject({ outcome: 'deleted', recordsDeleted: 1, recordsHeld: 3 });
@@ -236,7 +291,7 @@ describe('per-domain retention sweep', () => {
     });
   });
 
-  it('sweeps research reports by the workspace member who owns them, never a legal hold', async () => {
+  it('sweeps only research reports whose conversation belongs to the workspace, never a legal hold', async () => {
     const { db, calls } = fakeDb(() => []);
     await createDomainSweepers().research.sweepBatch(db, {
       organizationId: ORG,
@@ -247,9 +302,37 @@ describe('per-domain retention sweep', () => {
 
     const sql = calls.map((call) => call.sql).join('\n');
     expect(sql).toMatch(/delete from public\.research_reports/);
-    expect(sql).toMatch(/organization_members/);
+    expect(sql).toMatch(
+      /from public\.web_conversations c\s+where c\.id = t\.conversation_id\s+and c\.user_id = t\.user_id\s+and c\.organization_id = \$1/,
+    );
+    expect(sql).not.toMatch(/organization_members/);
     expect(sql).toMatch(/not exists/);
     expect(sql).toMatch(/legal_hold_custodians/);
+  });
+
+  it('sweeps only notifications that point at a resource of the workspace', async () => {
+    const { db, calls } = fakeDb(() => []);
+    await createDomainSweepers().notifications.sweepBatch(db, {
+      organizationId: ORG,
+      cutoff: NOW.toISOString(),
+      resourceType: null,
+      limit: 1,
+    });
+
+    const sql = calls.map((call) => call.sql).join('\n');
+    expect(sql).toMatch(/delete from public\.notifications/);
+    expect(sql).not.toMatch(/organization_members/);
+    for (const [kind, table] of [
+      ['chat', 'web_conversations'],
+      ['work', 'cloud_agent_runs'],
+      ['code-session', 'cloud_code_sessions'],
+      ['research', 'research_reports'],
+    ]) {
+      expect(sql).toMatch(new RegExp(`target_kind = '${kind}' and exists`));
+      expect(sql).toMatch(new RegExp(`public\\.${table} `));
+    }
+    expect(sql).not.toMatch(/target_kind = '(settings|schedule)'/);
+    expect(sql.match(/organization_id = \$1/g)?.length).toBeGreaterThanOrEqual(4);
   });
 
   it('stops after a short batch instead of looping to the ceiling', async () => {
