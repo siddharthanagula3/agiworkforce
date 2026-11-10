@@ -82,6 +82,11 @@ jest.mock('../storage/installedModels', () => ({
   markInstalledModelUsed: jest.fn().mockResolvedValue(undefined),
 }));
 
+jest.mock('../services/docParser', () => {
+  const actual = jest.requireActual('../services/docParser');
+  return { ...actual, parseDocument: jest.fn(actual.parseDocument) };
+});
+
 jest.mock('../src/features/memory/store', () => ({
   retrieveMemoryContext: jest.fn(async () => []),
 }));
@@ -132,6 +137,7 @@ import { useChatCloudMessageStore } from '../stores/chat/chatCloudMessageStore';
 import { cancelMobileCloudAgentRun, streamChat } from '../services/streaming';
 import { getRemoteChatDisabledReason } from '../services/remoteChatGate';
 import { localGenerate } from '@agiworkforce/local-llm';
+import { parseDocument } from '../services/docParser';
 import { getModelMetadataById, AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
 import {
   SYNTHETIC_IMAGE_MODEL_ID,
@@ -176,6 +182,7 @@ const mockRemoteDisabledReason = getRemoteChatDisabledReason as jest.MockedFunct
   typeof getRemoteChatDisabledReason
 >;
 const mockLocalGenerate = localGenerate as jest.MockedFunction<typeof localGenerate>;
+const mockParseDocument = parseDocument as jest.MockedFunction<typeof parseDocument>;
 const mockListInstalledModels = listInstalledModels as jest.MockedFunction<
   typeof listInstalledModels
 >;
@@ -1949,6 +1956,211 @@ describe('chatStore, streaming state', () => {
           expect.objectContaining({ content: 'Use Project B instructions.' }),
         ]),
       );
+    });
+
+    describe('Local project sources', () => {
+      const projectSource = (id: string, name: string) => ({
+        id,
+        name,
+        mimeType: 'text/plain',
+        size: 40,
+        uri: `file:///cache/${name}`,
+        addedAt: '2026-06-11T00:00:00.000Z',
+      });
+
+      afterEach(() => {
+        mockParseDocument.mockReset();
+      });
+
+      async function sendInLocalProject(sources: ReturnType<typeof projectSource>[]) {
+        useChatStore.setState({
+          conversations: [
+            {
+              id: CONV_ID,
+              title: 'Project A chat',
+              updatedAt: new Date().toISOString(),
+              createdAt: new Date().toISOString(),
+              messageCount: 0,
+              pinned: false,
+              model: LOCAL_MODEL,
+              provider: 'local',
+              executionMode: 'local',
+              projectId: 'project-a',
+            },
+          ],
+          messages: { [CONV_ID]: [] },
+        });
+        useProjectStore.setState({
+          projects: [
+            {
+              id: 'project-a',
+              name: 'Project A',
+              description: '',
+              instructions: '',
+              sources,
+              createdAt: '2026-06-11T00:00:00.000Z',
+              updatedAt: '2026-06-11T00:00:00.000Z',
+            },
+            {
+              id: 'project-b',
+              name: 'Project B',
+              description: '',
+              instructions: '',
+              sources: [projectSource('src-b', 'other.txt')],
+              createdAt: '2026-06-11T00:00:00.000Z',
+              updatedAt: '2026-06-11T00:00:00.000Z',
+            },
+          ],
+          activeProjectId: 'project-b',
+        });
+        mockListInstalledModels.mockResolvedValue([
+          {
+            id: LOCAL_MODEL,
+            display_name: 'AGI Lite',
+            runtime: 'local',
+            format: 'pte',
+            size_bytes: 1_181_116_006,
+            sha256: null,
+            local_path: null,
+            installed_at: 1,
+            last_used_at: null,
+            capabilities: null,
+          },
+        ]);
+        mockLocalGenerate.mockImplementation(async (_modelPath, opts) => {
+          capturedLocalGenerateOptions = opts;
+          return { text: 'Answer', runtime: 'executorch', aborted: false };
+        });
+        await act(async () => {
+          await getState().sendMessage(
+            CONV_ID,
+            'What shipment label is in my project source?',
+            LOCAL_MODEL,
+          );
+        });
+        return (capturedLocalGenerateOptions?.messages ?? [])
+          .filter((message) => message.role === 'system')
+          .map((message) => String(message.content));
+      }
+
+      it('puts the conversation project sources in the first Local request', async () => {
+        mockParseDocument.mockImplementation(async (uri) => ({
+          text: uri.endsWith('label.txt') ? 'The shipment label is violet-742.' : 'wrong project',
+          metadata: { docType: 'txt' },
+        }));
+
+        const systemMessages = await sendInLocalProject([projectSource('src-a', 'label.txt')]);
+
+        expect(mockParseDocument).toHaveBeenCalledTimes(1);
+        expect(mockParseDocument).toHaveBeenCalledWith('file:///cache/label.txt', 'text/plain');
+        const sourceMessage = systemMessages.find((content) => content.includes('violet-742'));
+        expect(sourceMessage).toContain('[Project source: label.txt (text/plain)]');
+        expect(systemMessages.join('\n')).not.toContain('wrong project');
+      });
+
+      it('names a source whose file cannot be read instead of dropping it silently', async () => {
+        mockParseDocument.mockRejectedValue(new Error('gone'));
+
+        const systemMessages = await sendInLocalProject([projectSource('src-a', 'label.txt')]);
+
+        expect(systemMessages.join('\n')).toContain(
+          '[Project source: label.txt (text/plain), content could not be extracted on-device]',
+        );
+      });
+
+      it('adds nothing once the project has no sources', async () => {
+        const systemMessages = await sendInLocalProject([]);
+
+        expect(mockParseDocument).not.toHaveBeenCalled();
+        expect(systemMessages.join('\n')).not.toContain('Project source');
+      });
+    });
+
+    describe('Local attached documents across turns', () => {
+      const attachment = {
+        id: 'doc-1',
+        uri: 'file:///cache/allocations.txt',
+        mimeType: 'text/plain',
+        fileName: 'allocations.txt',
+        fileSize: 64,
+      };
+
+      async function sendLocalTurn(content: string, attachments?: (typeof attachment)[]) {
+        mockLocalGenerate.mockImplementation(async (_modelPath, opts) => {
+          capturedLocalGenerateOptions = opts;
+          return { text: 'Answer', runtime: 'executorch', aborted: false };
+        });
+        await act(async () => {
+          await getState().sendMessage(CONV_ID, content, LOCAL_MODEL, attachments);
+        });
+        return (capturedLocalGenerateOptions?.messages ?? [])
+          .filter((message) => message.role === 'user')
+          .map((message) => String(message.content));
+      }
+
+      beforeEach(() => {
+        useChatStore.setState({
+          conversations: [
+            {
+              id: CONV_ID,
+              title: 'Local document chat',
+              updatedAt: new Date().toISOString(),
+              createdAt: new Date().toISOString(),
+              messageCount: 0,
+              pinned: false,
+              model: LOCAL_MODEL,
+              provider: 'local',
+              executionMode: 'local',
+            },
+          ],
+          messages: { [CONV_ID]: [] },
+        });
+        mockListInstalledModels.mockResolvedValue([
+          {
+            id: LOCAL_MODEL,
+            display_name: 'AGI Lite',
+            runtime: 'local',
+            format: 'pte',
+            size_bytes: 1_181_116_006,
+            sha256: null,
+            local_path: null,
+            installed_at: 1,
+            last_used_at: null,
+            capabilities: null,
+          },
+        ]);
+        mockParseDocument.mockImplementation(async () => ({
+          text: 'Alpha allocation: 10\nBeta allocation: 20',
+          metadata: { docType: 'txt' },
+        }));
+      });
+
+      it('keeps an earlier turn document text in the history of a follow-up question', async () => {
+        await sendLocalTurn('What is the Alpha allocation?', [attachment]);
+        mockParseDocument.mockClear();
+
+        const userTurns = await sendLocalTurn('And the Beta allocation?');
+
+        expect(mockParseDocument).toHaveBeenCalledTimes(1);
+        expect(mockParseDocument).toHaveBeenCalledWith(
+          'file:///cache/allocations.txt',
+          'text/plain',
+        );
+        expect(userTurns).toHaveLength(1);
+        expect(userTurns[0]).toContain('Beta allocation: 20');
+        expect(userTurns[0]).toContain('What is the Alpha allocation?');
+      });
+
+      it('names a document that can no longer be read instead of dropping it from the history', async () => {
+        await sendLocalTurn('What is the Alpha allocation?', [attachment]);
+        mockParseDocument.mockRejectedValue(new Error('gone'));
+
+        const userTurns = await sendLocalTurn('And the Beta allocation?');
+
+        expect(userTurns.join('\n')).toContain(
+          '[Attached file: allocations.txt (text/plain), content could not be extracted on-device]',
+        );
+      });
     });
 
     it('leaves Cloud project instructions to the server, which loads them from the conversation', async () => {

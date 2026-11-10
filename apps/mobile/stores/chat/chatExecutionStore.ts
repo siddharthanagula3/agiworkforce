@@ -13,7 +13,10 @@ import { getMobileSendQueue } from '@/lib/sendQueue';
 import { api, ApiPaywallError } from '@/services/api';
 import { ApiFreeCapacityError, ApiHttpError } from '@/services/apiErrors';
 import { withFailureReference } from '@/services/failureCopy';
-import { buildAttachedDocumentContext } from '@/services/attachmentContext';
+import {
+  buildAttachedDocumentContext,
+  buildProjectSourceContext,
+} from '@/services/attachmentContext';
 import { getThermalState, recordPerfEvent } from '@/services/performanceMonitor';
 import { startPeakMemorySampler } from '@/services/processFootprint';
 import { resolveTurnEffort } from '@/src/features/chat/utils/turnEffort';
@@ -1777,6 +1780,20 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         ? historyMessagesForConversation(conversationId, executionMode)
         : pathEndingAt(conversationId, branchFromId);
 
+    const earlierDocumentContext = new Map<string, string[]>();
+    if (executionMode !== 'cloud') {
+      for (const earlier of existingMessages) {
+        if (earlier.isStreaming || earlier.role !== 'user') continue;
+        const earlierDocuments = earlier.attachments?.filter(
+          (a) => !a.assetId && !a.mimeType.startsWith('image/'),
+        );
+        if (!earlierDocuments || earlierDocuments.length === 0) continue;
+        const documentContext = await buildAttachedDocumentContext(earlierDocuments);
+        if (!isTurnAccountCurrent()) return false;
+        earlierDocumentContext.set(earlier.id, documentContext);
+      }
+    }
+
     const historyMessages: Array<{
       role: string;
       content:
@@ -1796,6 +1813,10 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               ? settledClarifyTurn(m.interactiveCards ?? readPersistedInteractiveCards(m.metadata))
               : null;
           const settledTurn = settled ? [{ role: 'user', content: settled }] : [];
+          const documentContext = earlierDocumentContext.get(m.id);
+          const turnText = documentContext
+            ? [...documentContext, m.content].filter(Boolean).join('\n\n')
+            : m.content;
           const replayedAttachments = m.attachments?.filter((a) =>
             executionMode === 'cloud'
               ? Boolean(a.assetId) ||
@@ -1807,7 +1828,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               {
                 role: m.role,
                 content: [
-                  ...(m.content ? [{ type: 'text' as const, text: m.content }] : []),
+                  ...(turnText ? [{ type: 'text' as const, text: turnText }] : []),
                   ...replayedAttachments.map((a) =>
                     a.assetId
                       ? { type: 'file' as const, file: { asset_id: a.assetId } }
@@ -1818,7 +1839,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               ...settledTurn,
             ];
           }
-          return [{ role: m.role, content: m.content }, ...settledTurn];
+          return [{ role: m.role, content: turnText }, ...settledTurn];
         }),
     ];
 
@@ -1880,6 +1901,16 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       const activeProject = useProjectStore
         .getState()
         .projects.find((p) => p.id === activeProjectId);
+      if (activeProject?.sources?.length) {
+        const sourceContext = await buildProjectSourceContext(activeProject.sources);
+        if (!isTurnAccountCurrent()) return false;
+        historyMessages.unshift({
+          role: 'system',
+          content: ['Project sources the user added to this project:', ...sourceContext].join(
+            '\n\n',
+          ),
+        });
+      }
       if (activeProject?.instructions?.trim()) {
         historyMessages.unshift({ role: 'system', content: activeProject.instructions.trim() });
       }
