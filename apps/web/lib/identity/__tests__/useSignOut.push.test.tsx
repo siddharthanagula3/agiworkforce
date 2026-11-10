@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@clerk/nextjs', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@clerk/nextjs')>()),
+  ...(await importOriginal()),
   useClerk: () => ({ signOut: mocks.signOut }),
 }));
 vi.mock('@agiworkforce/local-runtime-contract', async (importOriginal) => ({
