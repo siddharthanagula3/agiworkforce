@@ -433,7 +433,7 @@ export async function buildSpendLimitGateResponse(
   try {
     const db = getNeonDb();
     const organizationId = await resolveEnterpriseFundingOrganizationId(db, userId);
-    decision = await evaluateSpendLimit(db, organizationId);
+    decision = await evaluateSpendLimit(organizationId);
   } catch (error) {
     logger.error({ error, userId }, '[spend-limit] unavailable; request treated as ungoverned');
     return null;

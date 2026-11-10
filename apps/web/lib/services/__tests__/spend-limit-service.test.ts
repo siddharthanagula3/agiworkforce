@@ -10,6 +10,8 @@ const alertMocks = vi.hoisted(() => ({
 vi.mock('@/lib/services/spend-alert-service', () => ({
   dispatchSpendAlertIfDue: alertMocks.dispatchSpendAlertIfDue,
 }));
+const neon = vi.hoisted(() => ({ db: null as unknown }));
+vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => neon.db }));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { creditsFromCents, creditsFromMicrousd, microusdFromCredits } from '@agiworkforce/types';
@@ -46,7 +48,9 @@ function harness({
       },
     ];
   });
-  return { db: { query, execute: vi.fn() } as unknown as DatabaseAdapter, query };
+  const db = { query, execute: vi.fn() } as unknown as DatabaseAdapter;
+  neon.db = db;
+  return { db, query };
 }
 
 beforeEach(() => {
@@ -59,13 +63,13 @@ describe('readSpendState', () => {
     // Two queries would double the latency this adds to every governed turn,
     // and could disagree if a write landed between them.
     const h = harness();
-    await readSpendState(h.db, ORG);
+    await readSpendState(ORG);
     expect(h.query).toHaveBeenCalledTimes(1);
   });
 
   it('sums only settled turns, within the calendar month', async () => {
     const h = harness();
-    await readSpendState(h.db, ORG);
+    await readSpendState(ORG);
     const sql = String(h.query.mock.calls[0]?.[0]);
 
     expect(sql).toContain("status = 'completed'");
@@ -76,7 +80,7 @@ describe('readSpendState', () => {
     // A zero cap would refuse every turn. "No limit" and "a limit of nothing"
     // must never collapse into the same value.
     const h = harness({ cap: null });
-    const state = await readSpendState(h.db, ORG);
+    const state = await readSpendState(ORG);
 
     expect(state.configured).toBe(false);
     expect(state.monthlyCapCredits).toBeNull();
@@ -85,7 +89,7 @@ describe('readSpendState', () => {
 
   it('states the cap and the month-to-date spend in credits, never in money', async () => {
     const h = harness({ cap: 10_000, spent: 5_000 });
-    const state = await readSpendState(h.db, ORG);
+    const state = await readSpendState(ORG);
 
     expect(state.monthlyCapCredits).toBe(creditsFromCents(10_000));
     expect(state.spentCredits).toBe(creditsFromCents(5_000));
@@ -96,38 +100,55 @@ describe('readSpendState', () => {
 
   it('computes the used percentage against the cap', async () => {
     const h = harness({ cap: 10_000, spent: 2_500 });
-    expect((await readSpendState(h.db, ORG)).usedPct).toBe(25);
+    expect((await readSpendState(ORG)).usedPct).toBe(25);
   });
 
   it('sums a numeric string rather than concatenating it', async () => {
     const h = harness({ spent: '75000000' });
-    expect((await readSpendState(h.db, ORG)).spentCredits).toBe(creditsFromMicrousd(75_000_000));
+    expect((await readSpendState(ORG)).spentCredits).toBe(creditsFromMicrousd(75_000_000));
   });
 
   it('flags the alert threshold separately from the cap', async () => {
     const h = harness({ cap: 10_000, threshold: 80, spent: 8_500 });
-    const state = await readSpendState(h.db, ORG);
+    const state = await readSpendState(ORG);
 
     expect(state.overThreshold).toBe(true);
     expect(state.overCap).toBe(false);
   });
 });
 
+describe('workspace-wide aggregation', () => {
+  it('reads the cap and the total through the privileged adapter by default', async () => {
+    const h = harness({ enforcement: 'block', cap: 10_000, spent: 10_000 });
+    const decision = await evaluateSpendLimit(ORG);
+
+    expect(h.query).toHaveBeenCalledTimes(1);
+    expect(decision.code).toBe('over_cap');
+  });
+
+  it('reports the same total from the settings read as from enforcement', async () => {
+    harness({ enforcement: 'block', cap: 10_000, spent: 10_000 });
+
+    expect((await readSpendState(ORG)).overCap).toBe(true);
+    expect((await evaluateSpendLimit(ORG)).state?.overCap).toBe(true);
+  });
+});
+
 describe('evaluateSpendLimit', () => {
   it('allows a personal-scope caller', async () => {
     const h = harness();
-    expect((await evaluateSpendLimit(h.db, null)).code).toBe('ungoverned');
+    expect((await evaluateSpendLimit(null)).code).toBe('ungoverned');
     expect(h.query).not.toHaveBeenCalled();
   });
 
   it('allows a workspace with no limit', async () => {
     const h = harness({ cap: null });
-    expect((await evaluateSpendLimit(h.db, ORG)).allowed).toBe(true);
+    expect((await evaluateSpendLimit(ORG)).allowed).toBe(true);
   });
 
   it('refuses a blocking workspace that is over its cap', async () => {
     const h = harness({ enforcement: 'block', cap: 10_000, spent: 10_000 });
-    const decision = await evaluateSpendLimit(h.db, ORG);
+    const decision = await evaluateSpendLimit(ORG);
 
     expect(decision.allowed).toBe(false);
     expect(decision.code).toBe('over_cap');
@@ -138,24 +159,24 @@ describe('evaluateSpendLimit', () => {
     // notify exists so a finance owner can watch a budget before deciding to
     // enforce it. Turning it into a refusal is the opposite of what they asked.
     const h = harness({ enforcement: 'notify', cap: 10_000, spent: 90_000 });
-    expect((await evaluateSpendLimit(h.db, ORG)).allowed).toBe(true);
+    expect((await evaluateSpendLimit(ORG)).allowed).toBe(true);
   });
 
   it('OFF never refuses', async () => {
     const h = harness({ enforcement: 'off', cap: 10_000, spent: 90_000 });
-    expect((await evaluateSpendLimit(h.db, ORG)).allowed).toBe(true);
+    expect((await evaluateSpendLimit(ORG)).allowed).toBe(true);
   });
 
   it('allows a blocking workspace still under its cap', async () => {
     const h = harness({ enforcement: 'block', cap: 10_000, spent: 9_999 });
-    expect((await evaluateSpendLimit(h.db, ORG)).allowed).toBe(true);
+    expect((await evaluateSpendLimit(ORG)).allowed).toBe(true);
   });
 
   it('does not refuse work when the billing lookup fails', async () => {
     // Refusing every member's work because the spend table blipped is worse
     // than briefly overshooting a cap.
     const h = harness({ throws: true });
-    const decision = await evaluateSpendLimit(h.db, ORG);
+    const decision = await evaluateSpendLimit(ORG);
 
     expect(decision.allowed).toBe(true);
     expect(decision.code).toBe('ungoverned');
@@ -163,15 +184,15 @@ describe('evaluateSpendLimit', () => {
 
   it('reuses a decision within the cache window rather than re-summing', async () => {
     const h = harness();
-    await evaluateSpendLimit(h.db, ORG, { now: 1_000 });
-    await evaluateSpendLimit(h.db, ORG, { now: 1_000 + SPEND_CACHE_TTL_MS - 1 });
+    await evaluateSpendLimit(ORG, { now: 1_000 });
+    await evaluateSpendLimit(ORG, { now: 1_000 + SPEND_CACHE_TTL_MS - 1 });
     expect(h.query).toHaveBeenCalledTimes(1);
   });
 
   it('recomputes once the cache window has passed', async () => {
     const h = harness();
-    await evaluateSpendLimit(h.db, ORG, { now: 1_000 });
-    await evaluateSpendLimit(h.db, ORG, { now: 1_000 + SPEND_CACHE_TTL_MS + 1 });
+    await evaluateSpendLimit(ORG, { now: 1_000 });
+    await evaluateSpendLimit(ORG, { now: 1_000 + SPEND_CACHE_TTL_MS + 1 });
     expect(h.query).toHaveBeenCalledTimes(2);
   });
 
@@ -179,27 +200,27 @@ describe('evaluateSpendLimit', () => {
     // Otherwise an admin raising the cap watches their team stay blocked for a
     // window with no explanation.
     const h = harness({ enforcement: 'block', cap: 10_000, spent: 10_000 });
-    expect((await evaluateSpendLimit(h.db, ORG, { now: 1_000 })).allowed).toBe(false);
+    expect((await evaluateSpendLimit(ORG, { now: 1_000 })).allowed).toBe(false);
 
     invalidateSpendDecision(ORG);
     const raised = harness({ enforcement: 'block', cap: 50_000, spent: 10_000 });
-    expect((await evaluateSpendLimit(raised.db, ORG, { now: 1_000 })).allowed).toBe(true);
+    expect((await evaluateSpendLimit(ORG, { now: 1_000 })).allowed).toBe(true);
   });
 
   it('caches per organization, never across them', async () => {
     const other = '22222222-2222-4222-8222-222222222222';
     const h = harness({ enforcement: 'block', cap: 10_000, spent: 10_000 });
 
-    expect((await evaluateSpendLimit(h.db, ORG, { now: 1_000 })).allowed).toBe(false);
+    expect((await evaluateSpendLimit(ORG, { now: 1_000 })).allowed).toBe(false);
     const permissive = harness({ cap: null });
-    expect((await evaluateSpendLimit(permissive.db, other, { now: 1_000 })).allowed).toBe(true);
+    expect((await evaluateSpendLimit(other, { now: 1_000 })).allowed).toBe(true);
   });
 });
 
 describe('evaluateSpendLimit admin alerts', () => {
   it('offers every recomputed state to the alert dispatcher', async () => {
     const h = harness({ enforcement: 'notify', spent: 9_000 });
-    await evaluateSpendLimit(h.db, ORG, { now: 1_000 });
+    await evaluateSpendLimit(ORG, { now: 1_000 });
 
     expect(alertMocks.dispatchSpendAlertIfDue).toHaveBeenCalledTimes(1);
     const [organizationId, state] = alertMocks.dispatchSpendAlertIfDue.mock.calls[0] as unknown as [
@@ -212,8 +233,8 @@ describe('evaluateSpendLimit admin alerts', () => {
 
   it('does not re-offer a cached decision', async () => {
     const h = harness({ enforcement: 'notify', spent: 9_000 });
-    await evaluateSpendLimit(h.db, ORG, { now: 1_000 });
-    await evaluateSpendLimit(h.db, ORG, { now: 2_000 });
+    await evaluateSpendLimit(ORG, { now: 1_000 });
+    await evaluateSpendLimit(ORG, { now: 2_000 });
 
     expect(alertMocks.dispatchSpendAlertIfDue).toHaveBeenCalledTimes(1);
   });
@@ -222,7 +243,7 @@ describe('evaluateSpendLimit admin alerts', () => {
     alertMocks.dispatchSpendAlertIfDue.mockRejectedValueOnce(new Error('mail down'));
     const h = harness({ enforcement: 'block', spent: 20_000 });
 
-    const decision = await evaluateSpendLimit(h.db, ORG, { now: 1_000 });
+    const decision = await evaluateSpendLimit(ORG, { now: 1_000 });
 
     expect(decision.allowed).toBe(false);
     expect(decision.code).toBe('over_cap');
