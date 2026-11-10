@@ -6,9 +6,10 @@ import { Spinner } from '@agiworkforce/ui';
 import type { LocalBranches } from '@agiworkforce/local-runtime-contract';
 import { listLocalBranches, pushLocalBranch } from '@/features/desktop-host';
 import { toUserMessage } from '@/lib/user-error-message';
-import { CODE_COPY } from '../code-surface';
+import { CODE_COPY, githubInstallHref } from '../code-surface';
 import { LOCAL_CODE_COPY, localPullRequestLabel } from '../local-code';
 import {
+  LocalPullRequestRequestError,
   openLocalPullRequest,
   readLocalPullRequest,
   type LocalPullRequestLookup,
@@ -31,6 +32,7 @@ export function LocalPullRequest({ rootId, title, refreshKey }: LocalPullRequest
   const [opened, setOpened] = useState<LocalPullRequestState | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reconnectGitHub, setReconnectGitHub] = useState(false);
 
   const loadSequence = useRef(0);
 
@@ -68,6 +70,7 @@ export function LocalPullRequest({ rootId, title, refreshKey }: LocalPullRequest
   const open = async () => {
     setBusy(true);
     setError(null);
+    setReconnectGitHub(false);
     try {
       const pushed = await pushLocalBranch(rootId);
       if (!pushed.baseBranch) throw new Error(LOCAL_CODE_COPY.pullRequestNoBase);
@@ -81,6 +84,7 @@ export function LocalPullRequest({ rootId, title, refreshKey }: LocalPullRequest
       );
     } catch (cause: unknown) {
       setError(toUserMessage(cause, LOCAL_CODE_COPY.pullRequestOpenFailed));
+      setReconnectGitHub(cause instanceof LocalPullRequestRequestError && cause.reconnectGitHub);
     } finally {
       setBusy(false);
     }
@@ -158,6 +162,11 @@ export function LocalPullRequest({ rootId, title, refreshKey }: LocalPullRequest
         <span className={styles['formHelp']} role="alert">
           {error}
         </span>
+      )}
+      {error !== null && reconnectGitHub && (
+        <a className={styles['secondaryButton']} href={githubInstallHref()}>
+          {CODE_COPY.githubReauthorizeAction}
+        </a>
       )}
     </div>
   );

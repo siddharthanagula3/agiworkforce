@@ -2392,6 +2392,8 @@ export const UNEXPORTED_USER_TABLES: Readonly<Record<string, string>> = {
     'The pairing secret a device redeems. The device it belongs to is exported as desktop_devices, mobile_devices or device_authorizations.',
   device_refresh_tokens:
     'Live refresh credentials. What the subject would want, which device and when it was registered, is exported as desktop_devices and mobile_devices.',
+  device_refresh_token_families:
+    'Which refresh credential families have been ended; token state, not subject content. The devices themselves are exported as desktop_devices and mobile_devices.',
   revoked_jwts:
     'The deny list a signed-out token is checked against; token state, not subject content.',
   mcp_app_payloads:

@@ -1301,7 +1301,12 @@ describe('commitAndPushCloudCodeSession', () => {
     const db = createFakeDb();
     const executor = gitExecutor();
     vi.mocked(getUserGithubInstallations).mockResolvedValue([
-      { installationId: 7, login: 'acme', verifiedRepositories: ['acme/widgets'] },
+      {
+        installationId: 7,
+        login: 'acme',
+        verifiedRepositories: ['acme/widgets'],
+        writableRepositories: ['acme/widgets'],
+      },
     ]);
     vi.mocked(getInstallationAccessToken).mockResolvedValue('push-token');
     const sessionId = await readySession(db, executor);
@@ -1312,6 +1317,69 @@ describe('commitAndPushCloudCodeSession', () => {
       repositories: ['widgets'],
       permissions: { contents: 'write' },
     });
+  });
+
+  it('asks to reconnect GitHub, minting and pushing nothing, for a link that never recorded what it can push to', async () => {
+    const db = createFakeDb();
+    const executor = gitExecutor();
+    vi.mocked(getUserGithubInstallations).mockResolvedValue([
+      {
+        installationId: 7,
+        login: 'acme',
+        verifiedRepositories: ['acme/widgets'],
+        writableRepositories: ['acme/widgets'],
+      },
+    ]);
+    vi.mocked(getInstallationAccessToken).mockResolvedValue('clone-token');
+    const sessionId = await readySession(db, executor);
+    vi.mocked(getInstallationAccessToken).mockClear();
+    vi.mocked(getUserGithubInstallations).mockResolvedValue([
+      {
+        installationId: 7,
+        login: 'acme',
+        verifiedRepositories: ['acme/widgets'],
+        writableRepositories: null,
+      },
+    ]);
+
+    const failure = await commitAndPushCloudCodeSession(
+      db,
+      OWNER,
+      sessionId,
+      PLAN_TIER,
+      'fix things',
+    ).catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(CloudCodeValidationError);
+    expect(failure).toMatchObject({
+      reason: 'github_reconnect_required',
+      message: expect.stringMatching(/^Reconnect GitHub to push or open pull requests/),
+    });
+    expect(getInstallationAccessToken).not.toHaveBeenCalled();
+    expect(executor.git.commit).not.toHaveBeenCalled();
+    expect(executor.git.push).not.toHaveBeenCalled();
+  });
+
+  it('refuses to push a repository the linking account can see but not push to', async () => {
+    const db = createFakeDb();
+    const executor = gitExecutor();
+    vi.mocked(getUserGithubInstallations).mockResolvedValue([
+      {
+        installationId: 7,
+        login: 'acme',
+        verifiedRepositories: ['acme/widgets'],
+        writableRepositories: [],
+      },
+    ]);
+    vi.mocked(getInstallationAccessToken).mockResolvedValue('clone-token');
+    const sessionId = await readySession(db, executor);
+    vi.mocked(getInstallationAccessToken).mockClear();
+
+    await expect(
+      commitAndPushCloudCodeSession(db, OWNER, sessionId, PLAN_TIER, 'fix things'),
+    ).rejects.toThrow(/Your GitHub account cannot push to acme\/widgets/);
+    expect(getInstallationAccessToken).not.toHaveBeenCalled();
+    expect(executor.git.push).not.toHaveBeenCalled();
   });
 
   it('stages, commits and pushes through the authenticated remote', async () => {
@@ -1325,7 +1393,12 @@ describe('commitAndPushCloudCodeSession', () => {
       exitCode: 0,
     });
     vi.mocked(getUserGithubInstallations).mockResolvedValue([
-      { installationId: 7, login: 'acme', verifiedRepositories: ['acme/widgets'] },
+      {
+        installationId: 7,
+        login: 'acme',
+        verifiedRepositories: ['acme/widgets'],
+        writableRepositories: ['acme/widgets'],
+      },
     ]);
     vi.mocked(getInstallationAccessToken).mockResolvedValue('push-token');
     const sessionId = await readySession(db, executor);
@@ -1360,7 +1433,12 @@ describe('commitAndPushCloudCodeSession', () => {
       exitCode: 0,
     });
     vi.mocked(getUserGithubInstallations).mockResolvedValue([
-      { installationId: 7, login: 'acme', verifiedRepositories: ['acme/widgets'] },
+      {
+        installationId: 7,
+        login: 'acme',
+        verifiedRepositories: ['acme/widgets'],
+        writableRepositories: ['acme/widgets'],
+      },
     ]);
     vi.mocked(getInstallationAccessToken).mockResolvedValue('push-token');
     const sessionId = await readySession(db, executor);
@@ -1391,7 +1469,12 @@ describe('commitAndPushCloudCodeSession', () => {
       exitCode: 0,
     });
     vi.mocked(getUserGithubInstallations).mockResolvedValue([
-      { installationId: 7, login: 'acme', verifiedRepositories: ['acme/widgets'] },
+      {
+        installationId: 7,
+        login: 'acme',
+        verifiedRepositories: ['acme/widgets'],
+        writableRepositories: ['acme/widgets'],
+      },
     ]);
     vi.mocked(getInstallationAccessToken).mockResolvedValue('push-token');
     const sessionId = await readySession(db, executor);
@@ -1440,7 +1523,12 @@ describe('commitAndPushCloudCodeSession', () => {
     const db = createFakeDb();
     const executor = gitExecutor();
     vi.mocked(getUserGithubInstallations).mockResolvedValue([
-      { installationId: 7, login: 'acme', verifiedRepositories: ['acme/widgets'] },
+      {
+        installationId: 7,
+        login: 'acme',
+        verifiedRepositories: ['acme/widgets'],
+        writableRepositories: ['acme/widgets'],
+      },
     ]);
     vi.mocked(getInstallationAccessToken).mockResolvedValue('push-token');
     const sessionId = await readySession(db, executor);
@@ -1466,7 +1554,12 @@ describe('commitAndPushCloudCodeSession', () => {
     const db = createFakeDb();
     const executor = gitExecutor();
     vi.mocked(getUserGithubInstallations).mockResolvedValue([
-      { installationId: 7, login: 'acme', verifiedRepositories: ['acme/widgets'] },
+      {
+        installationId: 7,
+        login: 'acme',
+        verifiedRepositories: ['acme/widgets'],
+        writableRepositories: ['acme/widgets'],
+      },
     ]);
     vi.mocked(getInstallationAccessToken).mockResolvedValue('push-token');
     const sessionId = await readySession(db, executor);
@@ -1487,7 +1580,12 @@ describe('commitFileAndPushCloudCodeSession', () => {
       executor as unknown as Awaited<ReturnType<typeof getE2BExecutor>>,
     );
     vi.mocked(getUserGithubInstallations).mockResolvedValue([
-      { installationId: 7, login: 'acme', verifiedRepositories: ['acme/widgets'] },
+      {
+        installationId: 7,
+        login: 'acme',
+        verifiedRepositories: ['acme/widgets'],
+        writableRepositories: ['acme/widgets'],
+      },
     ]);
     vi.mocked(getInstallationAccessToken).mockResolvedValue('push-token');
     const { session } = await createCloudCodeSession(db, OWNER, repoInput(0), PLAN_TIER);
@@ -1570,7 +1668,12 @@ describe('commitAndPushCloudCodeSession after the shared push checks moved out',
       executor as unknown as Awaited<ReturnType<typeof getE2BExecutor>>,
     );
     vi.mocked(getUserGithubInstallations).mockResolvedValue([
-      { installationId: 7, login: 'acme', verifiedRepositories: ['acme/widgets'] },
+      {
+        installationId: 7,
+        login: 'acme',
+        verifiedRepositories: ['acme/widgets'],
+        writableRepositories: ['acme/widgets'],
+      },
     ]);
     vi.mocked(getInstallationAccessToken).mockResolvedValue('push-token');
     const { session } = await createCloudCodeSession(db, OWNER, repoInput(0), PLAN_TIER);

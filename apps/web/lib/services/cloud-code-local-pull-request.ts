@@ -8,6 +8,7 @@ import {
   getInstallationAccessToken,
   type GitHubChecksState,
 } from '@/lib/github-app';
+import { GitHubWriteAccessError, assertRepositoryIsWritable } from '@/lib/github-write-access';
 import { logger } from '@/lib/logger';
 import { getUserGithubInstallations } from '@/lib/user-connector-tools';
 
@@ -19,9 +20,13 @@ const UNPROCESSABLE_STATUS = 422;
 const ALREADY_EXISTS_MARKER = 'a pull request already exists';
 const NO_COMMITS_MARKER = 'no commits between';
 const PULL_REQUEST_PERMISSIONS = { contents: 'read', pull_requests: 'write' } as const;
+const PULL_REQUEST_LOOKUP_PERMISSIONS = { pull_requests: 'read' } as const;
 
 export class LocalPullRequestError extends Error {
-  constructor(message: string) {
+  constructor(
+    message: string,
+    readonly reason?: string,
+  ) {
     super(message);
     this.name = 'LocalPullRequestError';
   }
@@ -62,16 +67,34 @@ function requireBranch(value: unknown, label: string): string {
   return value;
 }
 
-async function repositoryAccess(userId: string, remoteUrl: unknown): Promise<RepositoryAccess> {
+async function repositoryAccess(
+  userId: string,
+  remoteUrl: unknown,
+  intent: 'lookup' | 'open',
+): Promise<RepositoryAccess> {
   const { owner, repo } = parseRemote(remoteUrl);
   const fullName = `${owner}/${repo}`.toLowerCase();
   const installation = (await getUserGithubInstallations(userId)).find((candidate) =>
     candidate.verifiedRepositories?.includes(fullName),
   );
   if (!installation) return { owner, repo, installationId: null, token: null };
+  if (intent === 'open') {
+    try {
+      assertRepositoryIsWritable(
+        installation.installationId,
+        installation.writableRepositories,
+        `${owner}/${repo}`,
+      );
+    } catch (error) {
+      if (error instanceof GitHubWriteAccessError) {
+        throw new LocalPullRequestError(error.message, error.reason);
+      }
+      throw error;
+    }
+  }
   const token = await getInstallationAccessToken(installation.installationId, {
     repositories: [repo],
-    permissions: PULL_REQUEST_PERMISSIONS,
+    permissions: intent === 'open' ? PULL_REQUEST_PERMISSIONS : PULL_REQUEST_LOOKUP_PERMISSIONS,
   });
   return { owner, repo, installationId: installation.installationId, token };
 }
@@ -135,7 +158,11 @@ export async function readLocalPullRequest(
   const head = requireBranch(headValue, 'head');
   const base =
     baseValue === null || baseValue === undefined ? null : requireBranch(baseValue, 'base');
-  const { owner, repo, installationId, token } = await repositoryAccess(userId, remoteUrl);
+  const { owner, repo, installationId, token } = await repositoryAccess(
+    userId,
+    remoteUrl,
+    'lookup',
+  );
   const link = compareUrl(owner, repo, head, base);
   if (!token || installationId === null) {
     return { connected: false, compareUrl: link, pullRequest: null };
@@ -160,7 +187,11 @@ export async function openLocalPullRequest(
   const title =
     typeof input.title === 'string' ? input.title.trim().slice(0, MAX_TITLE_LENGTH) : '';
   if (!title) throw new LocalPullRequestError('A pull request needs a title.');
-  const { owner, repo, installationId, token } = await repositoryAccess(userId, input.remoteUrl);
+  const { owner, repo, installationId, token } = await repositoryAccess(
+    userId,
+    input.remoteUrl,
+    'open',
+  );
   if (!token || installationId === null) {
     throw new LocalPullRequestError(
       'The AGI GitHub App cannot reach this repository. Install it on the repository, or open the pull request on GitHub.',

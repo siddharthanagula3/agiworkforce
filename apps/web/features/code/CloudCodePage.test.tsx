@@ -1486,6 +1486,75 @@ describe('CloudCodePage', () => {
     expect(await screen.findByText('Pushed to the repository.')).toBeInTheDocument();
   });
 
+  it('names the missing GitHub write record on a refused push and offers the reconnect action', async () => {
+    const user = userEvent.setup();
+    const repoSession: CloudCodeSession = {
+      ...session,
+      repositoryUrl: 'https://github.com/owner/repository',
+    };
+    const reconnectMessage =
+      'Reconnect GitHub to push or open pull requests. This connection was made before AGI recorded which repositories your GitHub account can write to.';
+    const api = createApi({
+      list: vi.fn(async () => ({ availability, sessions: [repoSession], runtimes: [] })),
+      get: vi.fn(async () => ({ session: repoSession, terminalEntries: [], turns: [] })),
+      commit: vi.fn(async () => {
+        throw new CloudCodeApiError(reconnectMessage, 400, 'github_reconnect_required');
+      }),
+      changes: vi.fn(async () => ({
+        session: repoSession,
+        base: null,
+        workingBranch: null,
+        files: [],
+        diff: '',
+        diffTruncated: false,
+      })),
+    });
+    render(<CloudCodePage api={api} />);
+
+    await openSession(user, repoSession.title);
+    await user.click(screen.getByRole('button', { name: 'Changes' }));
+    await user.type(await screen.findByRole('textbox', { name: 'Commit message' }), 'wire it');
+    await user.click(screen.getByRole('button', { name: 'Commit and push' }));
+
+    expect(await screen.findByText(reconnectMessage)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Reconnect GitHub' })).toHaveAttribute(
+      'href',
+      '/api/github/install/start?returnPath=%2Fcode',
+    );
+  });
+
+  it('offers no reconnect action when a push fails for another reason', async () => {
+    const user = userEvent.setup();
+    const repoSession: CloudCodeSession = {
+      ...session,
+      repositoryUrl: 'https://github.com/owner/repository',
+    };
+    const api = createApi({
+      list: vi.fn(async () => ({ availability, sessions: [repoSession], runtimes: [] })),
+      get: vi.fn(async () => ({ session: repoSession, terminalEntries: [], turns: [] })),
+      commit: vi.fn(async () => {
+        throw new CloudCodeApiError('Code session is busy; wait and try again', 409);
+      }),
+      changes: vi.fn(async () => ({
+        session: repoSession,
+        base: null,
+        workingBranch: null,
+        files: [],
+        diff: '',
+        diffTruncated: false,
+      })),
+    });
+    render(<CloudCodePage api={api} />);
+
+    await openSession(user, repoSession.title);
+    await user.click(screen.getByRole('button', { name: 'Changes' }));
+    await user.type(await screen.findByRole('textbox', { name: 'Commit message' }), 'wire it');
+    await user.click(screen.getByRole('button', { name: 'Commit and push' }));
+
+    expect(await screen.findByText('Code session is busy; wait and try again')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Reconnect GitHub' })).not.toBeInTheDocument();
+  });
+
   it('does not offer commit and push for a session with no repository', async () => {
     const user = userEvent.setup();
     const api = createApi({

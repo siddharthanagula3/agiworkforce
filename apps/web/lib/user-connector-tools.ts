@@ -293,6 +293,7 @@ interface GithubInstallationRow {
   installation_id: string | number;
   account_login: string;
   verified_repositories: string[] | null;
+  writable_repositories: string[] | null;
 }
 
 const GITHUB_TOOL_DEFS: WebMcpToolDef[] = [
@@ -357,12 +358,17 @@ const GITHUB_TOOL_DEFS: WebMcpToolDef[] = [
   },
 ];
 
-export async function getUserGithubInstallations(
-  userId: string,
-): Promise<{ installationId: number; login: string; verifiedRepositories: string[] | null }[]> {
+export async function getUserGithubInstallations(userId: string): Promise<
+  {
+    installationId: number;
+    login: string;
+    verifiedRepositories: string[] | null;
+    writableRepositories: string[] | null;
+  }[]
+> {
   if (!isGitHubInstallationLinkingAvailable() || !isGitHubAppConfigured()) return [];
   const rows = await getNeonDb().query<GithubInstallationRow>(
-    `select installation_id, account_login, verified_repositories
+    `select installation_id, account_login, verified_repositories, writable_repositories
        from github_installations
       where user_id = $1
         and ownership_verified_at is not null
@@ -374,6 +380,7 @@ export async function getUserGithubInstallations(
       installationId: Number(r.installation_id),
       login: r.account_login,
       verifiedRepositories: r.verified_repositories,
+      writableRepositories: r.writable_repositories ?? null,
     }))
     .filter((r) => Number.isFinite(r.installationId));
 }

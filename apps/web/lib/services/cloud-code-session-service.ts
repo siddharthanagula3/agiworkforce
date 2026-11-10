@@ -71,6 +71,7 @@ import {
   type CloudCodePullRequestStatus,
 } from '@agiworkforce/cloud-contracts';
 import { getUserGithubInstallations } from '@/lib/user-connector-tools';
+import { GitHubWriteAccessError, assertRepositoryIsWritable } from '@/lib/github-write-access';
 import {
   buildCloudCodePullRequestBody,
   buildValidationSummary,
@@ -166,7 +167,10 @@ export interface CloudCodeOwner {
 }
 
 export class CloudCodeValidationError extends Error {
-  constructor(message: string) {
+  constructor(
+    message: string,
+    readonly reason?: string,
+  ) {
     super(message);
     this.name = 'CloudCodeValidationError';
   }
@@ -982,6 +986,7 @@ interface GithubRepositoryInstallation {
   repo: string;
   fullName: string;
   verifiedRepositories: string[] | null;
+  writableRepositories: string[] | null;
 }
 
 async function resolveGithubInstallationForRepository(
@@ -1010,6 +1015,7 @@ async function resolveGithubInstallationForRepository(
     repo: parsed.repo,
     fullName: `${parsed.owner}/${parsed.repo}`,
     verifiedRepositories: match.verifiedRepositories,
+    writableRepositories: match.writableRepositories ?? null,
   };
 }
 
@@ -1051,6 +1057,16 @@ async function resolveGithubCloneCredential(
   );
   if (!match) return null;
   assertRepositoryIsVerified(match.installationId, match.verifiedRepositories, match.fullName);
+  if (Object.values(permissions).includes('write')) {
+    try {
+      assertRepositoryIsWritable(match.installationId, match.writableRepositories, match.fullName);
+    } catch (error) {
+      if (error instanceof GitHubWriteAccessError) {
+        throw new CloudCodeValidationError(error.message, error.reason);
+      }
+      throw error;
+    }
+  }
   const password = await getInstallationAccessToken(match.installationId, {
     repositories: [match.repo],
     permissions,

@@ -68,7 +68,18 @@ const gitHubUserInstallationsResponseSchema = z.object({
 
 const gitHubUserInstallationRepositoriesResponseSchema = z.object({
   total_count: z.number().int().nonnegative(),
-  repositories: z.array(z.object({ full_name: z.string().min(1).max(512) })),
+  repositories: z.array(
+    z.object({
+      full_name: z.string().min(1).max(512),
+      permissions: z
+        .object({
+          admin: z.boolean().optional(),
+          maintain: z.boolean().optional(),
+          push: z.boolean().optional(),
+        })
+        .optional(),
+    }),
+  ),
 });
 
 export interface VerifiedGitHubInstallation {
@@ -82,6 +93,13 @@ export interface VerifiedGitHubInstallation {
    * not the installation, is the caller's authorization.
    */
   verifiedRepositories: string[];
+  /**
+   * The subset of {@link verifiedRepositories} the account can push to, from the
+   * `permissions` GitHub returns per repository. An installation token with
+   * write scope acts with the App's rights, not the account's, so visibility
+   * alone must never be enough to mint one.
+   */
+  writableRepositories: string[];
 }
 
 export function isGitHubAppConfigured(): boolean {
@@ -250,14 +268,13 @@ export async function findGitHubInstallationForUser(
 
   if (!match) return null;
 
+  const reachable = await listUserAccessibleInstallationRepositories(userAccessToken, match.id);
   return {
     installationId: match.id,
     accountLogin: match.account.login,
     accountType: match.account.type,
-    verifiedRepositories: await listUserAccessibleInstallationRepositories(
-      userAccessToken,
-      match.id,
-    ),
+    verifiedRepositories: reachable.verified,
+    writableRepositories: reachable.writable,
   };
 }
 
@@ -274,7 +291,7 @@ export async function findGitHubInstallationForUser(
 async function listUserAccessibleInstallationRepositories(
   userAccessToken: string,
   installationId: number,
-): Promise<string[]> {
+): Promise<{ verified: string[]; writable: string[] }> {
   const collected = await collectGitHubRestPages({
     perPage: GITHUB_REPOSITORIES_PER_PAGE,
     maxPages: MAX_GITHUB_VERIFIED_REPOSITORY_PAGES,
@@ -318,7 +335,15 @@ async function listUserAccessibleInstallationRepositories(
       `This account reaches more than ${MAX_VERIFIED_REPOSITORIES} repositories through that installation`,
     );
   }
-  return [...new Set(collected.items.map((repository) => repository.full_name.toLowerCase()))];
+  const verified = new Set<string>();
+  const writable = new Set<string>();
+  for (const repository of collected.items) {
+    const fullName = repository.full_name.toLowerCase();
+    verified.add(fullName);
+    const permissions = repository.permissions;
+    if (permissions?.admin || permissions?.maintain || permissions?.push) writable.add(fullName);
+  }
+  return { verified: [...verified], writable: [...writable] };
 }
 
 export function verifyGitHubWebhookSignature(

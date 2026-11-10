@@ -32,7 +32,8 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: mocks.warn, error: vi.fn(), debug: vi.fn() },
 }));
 
-const { openLocalPullRequest } = await import('../cloud-code-local-pull-request');
+const { LocalPullRequestError, openLocalPullRequest, readLocalPullRequest } =
+  await import('../cloud-code-local-pull-request');
 
 const input = {
   remoteUrl: 'https://github.com/acme/app.git',
@@ -44,7 +45,7 @@ const input = {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.getUserGithubInstallations.mockResolvedValue([
-    { installationId: 7, verifiedRepositories: ['acme/app'] },
+    { installationId: 7, verifiedRepositories: ['acme/app'], writableRepositories: ['acme/app'] },
   ]);
   mocks.getInstallationAccessToken.mockResolvedValue('token');
   mocks.createGitHubPullRequest.mockResolvedValue({
@@ -93,5 +94,67 @@ describe('opening a local session pull request', () => {
   it('keeps a failed creation a failure', async () => {
     mocks.createGitHubPullRequest.mockRejectedValue(new Error('GitHub is down'));
     await expect(openLocalPullRequest('user-1', input)).rejects.toThrow('GitHub is down');
+  });
+
+  it('asks the reader to reconnect GitHub when the link never recorded what it can push to', async () => {
+    mocks.getUserGithubInstallations.mockResolvedValue([
+      { installationId: 7, verifiedRepositories: ['acme/app'], writableRepositories: null },
+    ]);
+
+    const failure = await openLocalPullRequest('user-1', input).catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(LocalPullRequestError);
+    expect(failure).toMatchObject({
+      reason: 'github_reconnect_required',
+      message: expect.stringMatching(/^Reconnect GitHub to push or open pull requests/),
+    });
+    expect(mocks.getInstallationAccessToken).not.toHaveBeenCalled();
+    expect(mocks.createGitHubPullRequest).not.toHaveBeenCalled();
+  });
+
+  it('refuses a repository the account can see but not push to', async () => {
+    mocks.getUserGithubInstallations.mockResolvedValue([
+      { installationId: 7, verifiedRepositories: ['acme/app'], writableRepositories: [] },
+    ]);
+
+    await expect(openLocalPullRequest('user-1', input)).rejects.toThrow(
+      /Your GitHub account cannot push to acme\/app/,
+    );
+    expect(mocks.getInstallationAccessToken).not.toHaveBeenCalled();
+    expect(mocks.createGitHubPullRequest).not.toHaveBeenCalled();
+  });
+
+  it('mints a write token only for a repository the account can push to', async () => {
+    mocks.getGitHubPullRequestStatus.mockResolvedValue({
+      merged: false,
+      state: 'open',
+      draft: false,
+      checksState: 'none',
+    });
+
+    await openLocalPullRequest('user-1', input);
+
+    expect(mocks.getInstallationAccessToken).toHaveBeenNthCalledWith(1, 7, {
+      repositories: ['app'],
+      permissions: { contents: 'read', pull_requests: 'write' },
+    });
+  });
+});
+
+describe('looking up a local session pull request', () => {
+  it('still reads with a read-only token for a link that cannot push', async () => {
+    mocks.getUserGithubInstallations.mockResolvedValue([
+      { installationId: 7, verifiedRepositories: ['acme/app'], writableRepositories: null },
+    ]);
+    mocks.findOpenGitHubPullRequest.mockResolvedValue(null);
+
+    await expect(
+      readLocalPullRequest('user-1', input.remoteUrl, 'fix', 'main'),
+    ).resolves.toMatchObject({ connected: true, pullRequest: null });
+
+    expect(mocks.getInstallationAccessToken).toHaveBeenCalledWith(7, {
+      repositories: ['app'],
+      permissions: { pull_requests: 'read' },
+    });
   });
 });

@@ -51,6 +51,7 @@ import { useGreeting } from '@features/chat/components/GreetingBanner/useGreetin
 import { useModelStore } from '@shared/stores/model-store';
 import { getModelMetadata } from '@shared/config/llm';
 import { toUserMessage } from '@/lib/user-error-message';
+import { GITHUB_RECONNECT_REQUIRED_REASON } from '@/lib/github-installation-access';
 import { NotebookPanel } from '@/features/notebook/NotebookPanel';
 import { useNotebookWorkspace } from '@/features/notebook/hooks/useNotebookWorkspace';
 import { useCloudCodeAuthority } from './hooks/use-cloud-code-authority';
@@ -72,6 +73,7 @@ import {
   DEFAULT_RUNTIME_ID,
   type CodeStatusFilter,
   filterAndSortSessions,
+  githubInstallHref,
   parseExtraHosts,
   REPOSITORY_MINIMUM_NETWORK_ACCESS,
   sessionContextChip,
@@ -152,6 +154,10 @@ function friendlyError(error: unknown): string {
   return toUserMessage(error, CODE_COPY.loadFailed);
 }
 
+function requiresGitHubReconnect(error: unknown): boolean {
+  return error instanceof CloudCodeApiError && error.code === GITHUB_RECONNECT_REQUIRED_REASON;
+}
+
 const READY_POLLS = 20;
 const READY_POLL_MS = 1000;
 
@@ -212,6 +218,7 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
   const [pageLoading, setPageLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reconnectError, setReconnectError] = useState<string | null>(null);
   const [routeNotice, setRouteNotice] = useState<string | null>(null);
   const [draft, setDraft] = useState<CodeDraft>(EMPTY_CODE_DRAFT);
   const [task, setTask] = useState('');
@@ -1184,7 +1191,9 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
         void loadChanges(selectedSession.id);
       } catch (commitError) {
         if (!owner.isCurrent()) return;
-        setError(friendlyError(commitError));
+        const message = friendlyError(commitError);
+        setError(message);
+        setReconnectError(requiresGitHubReconnect(commitError) ? message : null);
       } finally {
         if (owner.isCurrent()) setCommitting(false);
       }
@@ -1338,7 +1347,9 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
       replaceSession(body.session, owner);
     } catch (pullRequestError) {
       if (!owner.isCurrent()) return;
-      setError(friendlyError(pullRequestError));
+      const message = friendlyError(pullRequestError);
+      setError(message);
+      setReconnectError(requiresGitHubReconnect(pullRequestError) ? message : null);
     } finally {
       if (owner.isCurrent()) setPullRequestBusy(false);
     }
@@ -1589,6 +1600,11 @@ function OwnedCloudCodePage({ api: injectedApi, sessionId, pane }: CloudCodePage
           <TriangleAlert size={NOTICE_GLYPH_SIZE} aria-hidden="true" />
           <span>{error}</span>
           <span className={styles['noticeActions']}>
+            {error === reconnectError && (
+              <a className={styles['primaryButton']} href={githubInstallHref()}>
+                {CODE_COPY.githubReauthorizeAction}
+              </a>
+            )}
             <button
               type="button"
               className={styles['secondaryButton']}

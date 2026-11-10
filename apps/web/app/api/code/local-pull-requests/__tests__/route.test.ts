@@ -224,6 +224,24 @@ describe('POST /api/code/local-pull-requests', () => {
     expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
   });
 
+  it('carries the reconnect reason so the caller can offer the reconnect action', async () => {
+    mocks.openLocalPullRequest.mockRejectedValue(
+      Object.assign(new LocalPullRequestError('Reconnect GitHub to push or open pull requests.'), {
+        reason: 'github_reconnect_required',
+      }),
+    );
+
+    const response = await POST(postRequest(body));
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      error: {
+        message: 'Reconnect GitHub to push or open pull requests.',
+        details: { reason: 'github_reconnect_required' },
+      },
+    });
+  });
+
   it('opens the pull request as the caller and audits it', async () => {
     const response = await POST(postRequest(body));
 
