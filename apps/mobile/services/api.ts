@@ -223,6 +223,12 @@ export async function recoverStreamSession(account: CloudAccountEpoch): Promise<
   return refreshed;
 }
 
+function carriesCredential(headers: Record<string, string>): boolean {
+  return Object.entries(headers).some(
+    ([name, value]) => name.toLowerCase() === 'authorization' && Boolean(value),
+  );
+}
+
 function handleUnrecoverableAuth(): void {
   invalidateCloudAccount();
   clearLocalCloudAccountState();
@@ -327,6 +333,11 @@ async function sendRequest(
   ) {
     throw new CloudCredentialUnavailableError();
   }
+  const requestHeaders: Record<string, string> = {
+    ...headers,
+    ...(options.headers ?? {}),
+    ...(init.headers as Record<string, string>),
+  };
   const controller = new AbortController();
   const timeout = options.timeout ?? TIMEOUTS.DEFAULT;
 
@@ -342,11 +353,7 @@ async function sendRequest(
       `${options.baseUrl ?? API_URL}${path}`,
       {
         ...init,
-        headers: {
-          ...headers,
-          ...(options.headers ?? {}),
-          ...(init.headers as Record<string, string>),
-        },
+        headers: requestHeaders,
         signal:
           callerSignals.length > 0
             ? combineAbortSignals([...callerSignals, controller.signal])
@@ -373,6 +380,7 @@ async function sendRequest(
         }
       }
       release();
+      if (!carriesCredential(requestHeaders)) throw new CloudCredentialUnavailableError();
       handleUnrecoverableAuth();
       throw new Error('HTTP 401: Session expired. Please sign in again.');
     }
