@@ -1089,11 +1089,9 @@ pub async fn handle_compact(arg: &str, session: &mut AgentSession, config: &CliC
     let focus = if arg.is_empty() { None } else { Some(arg) };
     let result = session.compact_now(config, focus).await;
     output::print_info(&format!(
-        "Compacted: ~{} -> ~{} tokens ({}% of limit){}",
-        before_tokens,
-        result.after.used_tokens,
-        (result.after.used_fraction * 100.0) as u32,
-        if focus.is_some() {
+        "{}{}",
+        crate::compaction::compaction_receipt(&result),
+        if focus.is_some() && result.compacted {
             format!(" [focus: {}]", arg)
         } else {
             String::new()

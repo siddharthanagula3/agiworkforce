@@ -8622,7 +8622,10 @@ mod tests {
         };
 
         assert_eq!(app.mode, before);
-        assert!(notice.starts_with("Unknown /plan subcommand: sideways"), "{notice}");
+        assert!(
+            notice.starts_with("Unknown /plan subcommand: sideways"),
+            "{notice}"
+        );
     }
 
     #[test]

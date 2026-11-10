@@ -1631,7 +1631,15 @@ message -- revise and call `update_plan` again.\n\n",
         if std::time::Instant::now() < self.memory_window_due_at {
             return;
         }
-        let start = self.memory_extracted_through.min(self.messages.len());
+        let unsaved_from = self.memory_unsaved_from.clone();
+        let mut unsaved = unsaved_from
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let start = unsaved
+            .map_or(self.memory_extracted_through, |failed| {
+                failed.min(self.memory_extracted_through)
+            })
+            .min(self.messages.len());
         let window = self.messages[start..].to_vec();
         if !window
             .iter()
@@ -1639,6 +1647,8 @@ message -- revise and call `update_plan` again.\n\n",
         {
             return;
         }
+        *unsaved = None;
+        drop(unsaved);
         let window_id = format!("{}.{start}", self.runtime_session_id);
         self.memory_extracted_through = self.messages.len();
         self.memory_window_due_at =
@@ -1657,6 +1667,11 @@ message -- revise and call `update_plan` again.\n\n",
             .await
             {
                 narrate!("[memory_pipeline] extraction error: {}", error);
+                let mut unsaved = unsaved_from
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                let retry_from = unsaved.map_or(start, |earlier| earlier.min(start));
+                *unsaved = Some(retry_from);
             }
         });
         self.track_memory_consolidation(task);
@@ -2540,7 +2555,12 @@ impl TurnHostAdapter<'_> {
                 privacy_mode: self.session.privacy_mode,
                 workspace_root: self.session.workspace_root(),
             };
-            match crate::tools::execute_tool_with_opts(&legacy, &opts).await {
+            match crate::terminals::scope_owner(
+                self.session.runtime_session_id.clone(),
+                crate::tools::execute_tool_with_opts(&legacy, &opts),
+            )
+            .await
+            {
                 Ok(r) => r,
                 Err(e) => crate::tools::ToolResult {
                     tool_name: call.name.clone(),
@@ -3092,11 +3112,14 @@ impl TurnHost for TurnHostAdapter<'_> {
             name: prepared.name.clone(),
             args: value_to_legacy_args(&prepared.args),
         };
+        let command_owner = self.session.runtime_session_id.clone();
         Box::pin(async move {
-            let (result, notes) = crate::tools::collect_approval_notes(
-                crate::tools::execute_tool_with_opts(&legacy, &opts),
-            )
-            .await;
+            let (result, notes) =
+                crate::tools::collect_approval_notes(crate::terminals::scope_owner(
+                    command_owner,
+                    crate::tools::execute_tool_with_opts(&legacy, &opts),
+                ))
+                .await;
             match result {
                 Ok(r) => ExecResult {
                     ok: r.success,
@@ -5632,6 +5655,62 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(written.len(), 1);
         assert!(written[0].contains("origin: local"), "{}", written[0]);
+    }
+
+    #[tokio::test]
+    async fn a_memory_window_whose_summary_failed_to_save_is_retried_not_skipped() {
+        let home = tempfile::tempdir().expect("memory home");
+        let blocked = home.path().join("memories");
+        std::fs::write(&blocked, "a file where the memory directory belongs").unwrap();
+
+        let mut session = make_local_session();
+        session
+            .messages
+            .push(Message::text("user", "I always prefer tabs for indentation."));
+        session
+            .messages
+            .push(Message::text("assistant", "Noted, tabs it is."));
+        session.memory_window_due_at = std::time::Instant::now();
+
+        session.extract_memory_window(home.path(), &CliConfig::default());
+        for task in session.take_memory_consolidation_tasks() {
+            task.await.expect("extraction task");
+        }
+        assert!(
+            session
+                .unsummarized_messages()
+                .iter()
+                .any(|message| message.text_content().contains("prefer tabs")),
+            "a window whose summary was never written must stay pending for session end"
+        );
+
+        std::fs::remove_file(&blocked).unwrap();
+        session.messages.push(Message::text(
+            "user",
+            "We decided the rule is to never skip rustfmt.",
+        ));
+        session
+            .messages
+            .push(Message::text("assistant", "Understood."));
+        session.memory_window_due_at = std::time::Instant::now();
+
+        session.extract_memory_window(home.path(), &CliConfig::default());
+        for task in session.take_memory_consolidation_tasks() {
+            task.await.expect("extraction task");
+        }
+
+        let summaries = home.path().join("memories").join("session_summaries");
+        let written = std::fs::read_dir(&summaries)
+            .expect("summary dir")
+            .map(|entry| std::fs::read_to_string(entry.expect("entry").path()).expect("summary"))
+            .collect::<Vec<_>>();
+        assert_eq!(written.len(), 1, "{written:?}");
+        assert!(
+            written[0].contains("prefer tabs") && written[0].contains("rustfmt"),
+            "the retried window must cover the failed interval and the new one: {}",
+            written[0]
+        );
+        assert!(session.unsummarized_messages().is_empty());
     }
 
     fn fixture_config(base_url: &str) -> CliConfig {
