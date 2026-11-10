@@ -19,7 +19,7 @@ import {
 } from '@/lib/services/organization-policy-override-service';
 import { policyScopeSubjectExists } from '../policy-subject';
 import { requireWorkspaceConsolePermission } from '../../workspace-access';
-import { ControlsPatchSchema } from '../controls-schema';
+import { OverrideLayerPatchSchema } from '../controls-schema';
 import { assertOwnerTurnsOnFastMode } from '@/lib/services/organization-membership-service';
 
 export const runtime = 'nodejs';
@@ -28,7 +28,7 @@ const OverrideSchema = z
   .object({
     subjectType: z.enum(WORKSPACE_POLICY_OVERRIDE_SUBJECTS),
     subjectId: z.string().trim().min(1).max(255),
-    layer: ControlsPatchSchema,
+    layer: OverrideLayerPatchSchema,
   })
   .strict();
 

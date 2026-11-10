@@ -292,7 +292,7 @@ the deployment that now serves traffic, and read what each one reports:
 | `/api/cron/reconcile-credits`        | Stored subscription state against the payment provider; settles the durable credit settlement queue | Settlements; a divergence is reported to a human, not healed    |
 | `/api/cron/reconcile-billed-plans`   | The plan each subscription is stored on against the price the payment provider is charging          | Nothing: a price difference is a decision, not a fault          |
 | `/api/cron/recover-reservations`     | Usage reservations whose turn is gone against the quota they still hold                             | Returns the held quota                                          |
-| `/api/cron/reconcile-provider-costs` | The settled usage ledger against what each provider reports it charged for the same day             | Nothing: each disagreement is named in the run's report         |
+| `/api/cron/reconcile-provider-costs` | The settled usage ledger against what each provider reports it charged for the same day             | Fetches a recent day a provider has no report for               |
 | `/api/cron/purge-deleted-accounts`   | The erasure tombstones in the database against the erasure ledger kept outside it                   | Re-arms a tombstone a restore rolled back, then erases          |
 | `/api/cron/replicate-object-backups` | Tracked backup copies against the primary bucket                                                    | Deletes a backup copy whose primary object is gone              |
 | `/api/cron/drain-background-jobs`    | Job leases against the clock                                                                        | Re-queues a job whose worker died, or dead-letters its last try |

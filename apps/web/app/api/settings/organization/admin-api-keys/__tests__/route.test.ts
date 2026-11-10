@@ -11,9 +11,13 @@ vi.mock('@/lib/services/organization-permission-service', async () =>
   ).organizationPermissionServiceMock(permissionRole),
 );
 
-const { mockQuery, mockRecordAuditEvent } = vi.hoisted(() => ({
+const { mockQuery, mockRecordAuditEvent, transactions } = vi.hoisted(() => ({
   mockQuery: vi.fn(),
   mockRecordAuditEvent: vi.fn(async (_event: unknown) => undefined),
+  transactions: [] as Array<{
+    statements: string[];
+    outcome: 'open' | 'committed' | 'rolled_back';
+  }>,
 }));
 
 vi.mock('@/lib/observability/error-capture', () => ({ captureServerError: vi.fn() }));
@@ -31,7 +35,29 @@ vi.mock('@/lib/server/rls-db', () => ({
   })),
 }));
 vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: () => ({ query: (...args: unknown[]) => mockQuery(...args) }),
+  getNeonDb: () => ({
+    query: (...args: unknown[]) => mockQuery(...args),
+    transaction: async (fn: (tx: unknown) => Promise<unknown>) => {
+      const record: { statements: string[]; outcome: 'open' | 'committed' | 'rolled_back' } = {
+        statements: [],
+        outcome: 'open',
+      };
+      transactions.push(record);
+      try {
+        const result = await fn({
+          query: (sql: string, params?: unknown[]) => {
+            record.statements.push(sql);
+            return mockQuery(sql, params);
+          },
+        });
+        record.outcome = 'committed';
+        return result;
+      } catch (error) {
+        record.outcome = 'rolled_back';
+        throw error;
+      }
+    },
+  }),
 }));
 vi.mock('@/lib/security-audit', () => ({
   recordAuditEvent: mockRecordAuditEvent,
@@ -203,6 +229,7 @@ beforeEach(() => {
     }),
   );
   idempotency.clear();
+  transactions.length = 0;
   capturedScope.organizationId = ORG;
   vi.mocked(requireCsrfToken).mockResolvedValue(null);
   vi.mocked(withRateLimit).mockResolvedValue(null);
@@ -362,6 +389,90 @@ describe('/api/settings/organization/admin-api-keys', () => {
       ([event]) => (event as { eventType?: string }).eventType === 'admin_api_key_created',
     );
     expect(created).toHaveLength(1);
+  });
+
+  it('writes the principal, the key and the replay receipt in one transaction', async () => {
+    bind('owner');
+
+    const res = await POST(
+      send(
+        'POST',
+        { name: 'SIEM', scopes: ['audit.read'], expiresInDays: null },
+        { 'Idempotency-Key': 'retry-key-0001' },
+      ) as never,
+    );
+
+    expect(res.status).toBe(201);
+    expect(transactions).toHaveLength(1);
+    expect(transactions[0]?.outcome).toBe('committed');
+    const inside = transactions[0]?.statements.join('\n') ?? '';
+    expect(inside).toMatch(/insert into public\.admin_request_idempotency/i);
+    expect(inside).toMatch(/insert into public\.organization_service_principals/i);
+    expect(inside).toMatch(/insert into public\.organization_admin_api_keys/i);
+    expect(inside).toMatch(/update public\.admin_request_idempotency/i);
+  });
+
+  it('leaves no key and no principal behind when the replay receipt cannot be completed', async () => {
+    bind('owner');
+    const answer = mockQuery.getMockImplementation();
+    mockQuery.mockImplementation(async (sql: string, params: unknown[] = []) => {
+      if (/update public\.admin_request_idempotency/i.test(sql)) {
+        throw new Error('completion update failed');
+      }
+      return answer?.(sql, params);
+    });
+
+    const res = await POST(
+      send(
+        'POST',
+        { name: 'SIEM', scopes: ['audit.read'], expiresInDays: null },
+        { 'Idempotency-Key': 'retry-key-0001' },
+      ) as never,
+    );
+
+    expect(res.status).toBe(500);
+    expect(transactions).toHaveLength(1);
+    expect(transactions[0]?.outcome).toBe('rolled_back');
+    for (const table of ['organization_service_principals', 'organization_admin_api_keys']) {
+      const pattern = new RegExp(`insert into public\\.${table}`, 'i');
+      const issued = mockQuery.mock.calls.filter(([sql]) => pattern.test(String(sql)));
+      const inside = transactions[0]?.statements.filter((sql) => pattern.test(sql)) ?? [];
+      expect(issued.length).toBeGreaterThan(0);
+      expect(inside).toHaveLength(issued.length);
+    }
+    expect(mockRecordAuditEvent).not.toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: 'admin_api_key_created' }),
+    );
+  });
+
+  it('leaves no principal behind when the key insert fails without an Idempotency-Key', async () => {
+    bind('owner');
+    const answer = mockQuery.getMockImplementation();
+    mockQuery.mockImplementation(async (sql: string, params: unknown[] = []) => {
+      if (/insert into public\.organization_admin_api_keys/i.test(sql)) {
+        throw new Error('key insert failed');
+      }
+      return answer?.(sql, params);
+    });
+
+    const res = await POST(
+      send('POST', { name: 'SIEM', scopes: ['audit.read'], expiresInDays: null }) as never,
+    );
+
+    expect(res.status).toBe(500);
+    expect(transactions).toHaveLength(1);
+    expect(transactions[0]?.outcome).toBe('rolled_back');
+    expect(transactions[0]?.statements.join('\n')).toMatch(
+      /insert into public\.organization_service_principals/i,
+    );
+    expect(
+      mockQuery.mock.calls.filter(([sql]) =>
+        /insert into public\.organization_service_principals/i.test(String(sql)),
+      ),
+    ).toHaveLength(1);
+    expect(mockRecordAuditEvent).not.toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: 'admin_api_key_created' }),
+    );
   });
 
   it('refuses the same Idempotency-Key used for a different key request', async () => {
