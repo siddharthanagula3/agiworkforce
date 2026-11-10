@@ -26,6 +26,7 @@ let mockChatInputOnOpenCompare: (() => void) | undefined;
 let mockChatInputSelectedSkillName: string | undefined;
 let mockChatInputExhaustedUsageRecovery: string | null | undefined;
 let mockChatInputOnStackedChange: ((stacked: boolean) => void) | undefined;
+let mockChatInputSendPreview: { providerMode?: string } | undefined;
 let mockUsageSnapshot: Record<string, unknown> | null = null;
 
 jest.mock('@/services/usage', () => ({
@@ -102,6 +103,7 @@ jest.mock('@/src/features/chat/components/ChatInput', () => {
         selectedSkillName?: string;
         exhaustedUsageRecovery?: string | null;
         onStackedChange?: (stacked: boolean) => void;
+        sendPreview?: { providerMode?: string };
       },
       ref: React.Ref<unknown>,
     ) {
@@ -112,6 +114,7 @@ jest.mock('@/src/features/chat/components/ChatInput', () => {
       mockChatInputSelectedSkillName = props.selectedSkillName;
       mockChatInputExhaustedUsageRecovery = props.exhaustedUsageRecovery;
       mockChatInputOnStackedChange = props.onStackedChange;
+      mockChatInputSendPreview = props.sendPreview;
       return <View testID="chat-input" />;
     }),
   };
@@ -169,6 +172,7 @@ jest.mock('@/src/features/model-picker/installStore', () => ({
   useModelInstallStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({ installedModelIds: [], readySystemModelIds: [], jobs: {} }),
   readyLocalModelIdOr: (fallback: string) => fallback,
+  pickReadyLocalModelId: () => null,
 }));
 
 jest.mock('@/lib/mmkv', () => ({
@@ -220,7 +224,7 @@ import {
 const mockGenerateImage = generateImage as jest.Mock;
 const mockGetGeneratedImageUri = getGeneratedImageUri as jest.Mock;
 
-describe('Chat tab mode toggle', () => {
+describe('Chat tab new chat', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockCloudAccountStorage.clear();
@@ -233,6 +237,7 @@ describe('Chat tab mode toggle', () => {
     mockChatInputSelectedSkillName = undefined;
     mockChatInputExhaustedUsageRecovery = undefined;
     mockChatInputOnStackedChange = undefined;
+    mockChatInputSendPreview = undefined;
     mockUsageSnapshot = null;
     __resetStartWithVoiceLaunchForTests();
     useLocalSettingsStore.setState({ startWithVoice: false });
@@ -258,70 +263,83 @@ describe('Chat tab mode toggle', () => {
     });
   });
 
-  it('shows the Local/Cloud toggle in the new-chat header in Local and in Cloud', () => {
+  it('leaves the Local/Cloud switch to the sidebar and names the active mode at the composer', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
     const local = render(<ChatTabScreen />);
-    expect(local.getByTestId('chat.mode-toggle.local').props.accessibilityState.selected).toBe(
-      true,
-    );
-    expect(local.getByTestId('chat.mode-toggle.cloud').props.accessibilityState.selected).toBe(
-      false,
-    );
+    expect(local.queryByTestId('chat.mode-toggle')).toBeNull();
+    expect(local.getByLabelText('New local chat')).toBeTruthy();
+    expect(mockChatInputSendPreview?.providerMode).toBe('Local');
     local.unmount();
 
     useChatAppModeStore.setState({ appMode: 'cloud' });
     const cloud = render(<ChatTabScreen />);
-    expect(cloud.getByTestId('chat.mode-toggle.cloud').props.accessibilityState.selected).toBe(
-      true,
-    );
+    expect(cloud.queryByTestId('chat.mode-toggle')).toBeNull();
+    expect(cloud.getByLabelText('New AGI Cloud chat')).toBeTruthy();
+    expect(mockChatInputSendPreview?.providerMode).toBe('ManagedGateway');
   });
 
-  it('starts the new chat in Cloud and rebinds the draft to the Cloud owner', async () => {
+  it('follows a switch to Cloud made in the sidebar and rebinds the draft to the Cloud owner', async () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
-    const screen = render(<ChatTabScreen />);
+    render(<ChatTabScreen />);
     expect(mockChatInputDraftProvenance).toEqual({ scope: 'local' });
 
-    fireEvent.press(screen.getByTestId('chat.mode-toggle.cloud'));
+    act(() => useChatAppModeStore.getState().setAppMode('cloud'));
 
     await waitFor(() => {
-      expect(useChatAppModeStore.getState().appMode).toBe('cloud');
+      expect(mockChatInputDraftProvenance).toEqual({
+        scope: 'cloud',
+        ownerId: 'mobile-image-test-user',
+      });
     });
-    expect(mockChatInputDraftProvenance).toEqual({
-      scope: 'cloud',
-      ownerId: 'mobile-image-test-user',
+    await waitFor(() => {
+      expect(useModelStore.getState().selectedModel).not.toBe(DEFAULT_LOCAL_MODEL_ID);
     });
-    expect(useModelStore.getState().selectedModel).not.toBe(DEFAULT_LOCAL_MODEL_ID);
     expect(mockCreateConversation).not.toHaveBeenCalled();
     expect(mockSendMessage).not.toHaveBeenCalled();
   });
 
-  it('stays in Local and asks for Cloud access when Cloud is locked', () => {
-    useWaitlistStore.setState({ cloudUnlocked: false });
-    const screen = render(<ChatTabScreen />);
+  it('follows a switch back to Local made in the sidebar and leaves Work', async () => {
+    mockWorkMode = 'agiwork';
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    render(<ChatTabScreen />);
 
-    fireEvent.press(screen.getByTestId('chat.mode-toggle.cloud'));
+    act(() => useChatAppModeStore.getState().setAppMode('local'));
 
-    expect(useChatAppModeStore.getState().appMode).toBe('local');
-    expect(mockChatInputDraftProvenance).toEqual({ scope: 'local' });
-    expect(mockPush).toHaveBeenCalledWith({
-      pathname: '/(auth)/login',
-      params: { [POST_AUTH_INTENT_PARAM]: CLOUD_CHAT_POST_AUTH_INTENT },
+    await waitFor(() => {
+      expect(mockChatInputDraftProvenance).toEqual({ scope: 'local' });
+    });
+    expect(mockSetWorkMode).toHaveBeenCalledWith('chat');
+    await waitFor(() => {
+      expect(useModelStore.getState().selectedModel).toBe(DEFAULT_LOCAL_MODEL_ID);
     });
   });
 
-  it('switches a new Cloud chat back to Local and leaves Work', async () => {
-    useChatAppModeStore.setState({ appMode: 'cloud' });
+  it('keeps the empty new chat to the symbol and the greeting in Chat, in Work and in Local', () => {
+    const expectOnlyGreeting = (screen: ReturnType<typeof render>) => {
+      expect(screen.getByTestId('chat.new-chat.symbol')).toBeTruthy();
+      expect(screen.getByTestId('chat.new-chat.greeting')).toBeTruthy();
+      expect(screen.queryByLabelText('Work mode connected-source privacy')).toBeNull();
+      expect(screen.queryByLabelText('Manage connected services')).toBeNull();
+      expect(screen.queryByText('Example tasks')).toBeNull();
+      expect(screen.queryByText('Continue with AGI Cloud.')).toBeNull();
+      expect(screen.queryByText('AGI')).toBeNull();
+    };
+
     useWaitlistStore.setState({ cloudUnlocked: true });
-    const screen = render(<ChatTabScreen />);
+    const local = render(<ChatTabScreen />);
+    expectOnlyGreeting(local);
+    local.unmount();
 
-    fireEvent.press(screen.getByTestId('chat.mode-toggle.local'));
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    const chat = render(<ChatTabScreen />);
+    expectOnlyGreeting(chat);
+    chat.unmount();
 
-    await waitFor(() => {
-      expect(useChatAppModeStore.getState().appMode).toBe('local');
-    });
-    expect(mockSetWorkMode).toHaveBeenCalledWith('chat');
-    expect(mockChatInputDraftProvenance).toEqual({ scope: 'local' });
-    expect(useModelStore.getState().selectedModel).toBe(DEFAULT_LOCAL_MODEL_ID);
+    mockWorkMode = 'agiwork';
+    const work = render(<ChatTabScreen />);
+    expectOnlyGreeting(work);
+    expect(work.getByTestId('chat.work-mode.agiwork').props.accessibilityState.selected).toBe(true);
   });
 
   it('opens voice with an exit when Start with Voice is on, once per launch', async () => {

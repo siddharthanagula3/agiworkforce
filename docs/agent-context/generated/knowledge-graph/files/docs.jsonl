@@ -91,6 +91,7 @@
 {"path":"docs/decisions/2026-09-10-managed-gateway-routes.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/decisions/2026-09-15-founder-decisions.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/decisions/2026-09-27-founder-decisions.md","unit":"docs","role":"doc","unparsed":"notCode"}
+{"path":"docs/decisions/2026-11-10-founder-decisions.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/decisions/README.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/decisions/wire-or-cut.md","unit":"docs","role":"doc","unparsed":"oversize"}
 {"path":"docs/development/add-a-gateway.md","unit":"docs","role":"doc","lanes":["repo-operability"],"unparsed":"notCode"}

@@ -8,7 +8,6 @@ import { useRouter, useNavigation } from 'expo-router';
 import { useFocusEffect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Building2, UserRound } from 'lucide-react-native';
-import { AgiWorkExamples } from '@/src/features/chat/components/AgiWorkExamples';
 import { useNewChatWorkspace } from '@/src/features/team/useNewChatWorkspace';
 import { Download } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
@@ -22,10 +21,7 @@ import {
 } from '@agiworkforce/types';
 import { ChatInput } from '@/src/features/chat/components/ChatInput';
 import { TemporaryChatToggle } from '@/src/features/chat/components/TemporaryChatToggle';
-import { AgiMark } from '@/components/ui/AgiMark';
-import { ModeToggle } from '@/src/features/chat/components/ModeToggle';
 import { UsageLimitBanner } from '@/src/features/chat/components/UsageLimitBanner';
-import { useAppModeSwitch } from '@/src/features/chat/hooks/useAppModeSwitch';
 import { useWorkUsageLimit } from '@/src/features/chat/hooks/useWorkUsageLimit';
 import { AddToChatSheet } from '@/src/features/chat/components/AddToChatSheet';
 import { useComposerAttachmentHandoff } from '@/src/features/chat/useComposerAttachmentHandoff';
@@ -56,6 +52,7 @@ import {
 import { NEW_CHAT_STYLE_KEY, useChatViewStore } from '@/stores/chat/chatViewStore';
 import { findNewAssistantResponse } from '@/src/features/voice/utils/assistantResponse';
 import { Text } from '@/components/ui/Text';
+import { AgiMark } from '@/components/ui/AgiMark';
 import { paywallErrorStateFromApiError, useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@/src/features/model-picker/store';
 import {
@@ -109,7 +106,6 @@ import {
   isCloudAccountEpochCurrent,
 } from '@/src/features/auth/services/cloudAccountSession';
 import { ComposerApprovalModeControl } from '@/src/features/chat/components/ComposerApprovalModeControl';
-import { WorkModeSourceNotice } from '@/src/features/chat/components/WorkModeSourceNotice';
 import { pickableDocumentMimeTypes } from '@/services/docParser';
 import { useMobileSkillSelectionStore } from '@/src/features/skills/selectionStore';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
@@ -123,6 +119,9 @@ function getTimeOfDayGreeting(): string {
 }
 
 const STYLE_SHEET_HANDOFF_DELAY_MS = 450;
+const HEADER_SIDE_SLOT = 44;
+const WORK_SWITCH_HIT_SLOP = { top: 4, bottom: 4 };
+const NEW_CHAT_SYMBOL_SIZE = 40;
 
 export default function ChatTabScreen() {
   const router = useRouter();
@@ -264,27 +263,15 @@ export default function ChatTabScreen() {
     t('navPersonalWorkspace'),
   );
   const cloudChatAvailable = FEATURES.cloudChat && Boolean(DEFAULT_CLOUD_MODEL_ID);
-  const modeDescription =
-    activeMode === 'cloud' ? 'Continue with AGI Cloud.' : 'Start privately on this device.';
 
   const workSwitchVisible =
     activeMode === 'cloud' && canUseBillingPlanCapability(subscriptionTier, 'agi_work');
-  const { switchToLocal, switchToCloud } = useAppModeSwitch();
   const [composerStacked, setComposerStacked] = useState(false);
   const usageLimit = useWorkUsageLimit({
     metered: activeMode === 'cloud' && isClerkSignedIn,
   });
   const workUsageCardShown =
     workSwitchVisible && workMode === 'agiwork' && usageLimit.exhaustedRecovery !== null;
-
-  const handleSelectMode = useCallback(
-    (mode: 'local' | 'cloud') => {
-      if (mode === activeMode) return;
-      if (mode === 'cloud') switchToCloud();
-      else switchToLocal();
-    },
-    [activeMode, switchToCloud, switchToLocal],
-  );
 
   useEffect(() => {
     if (workMode === 'agiwork' && (!workSwitchVisible || !cloudUnlocked || !isClerkSignedIn)) {
@@ -672,14 +659,6 @@ export default function ChatTabScreen() {
     setWorkMode('agiwork');
   }, [cloudUnlocked, isClerkSignedIn, router, setWorkMode]);
 
-  const handleOpenConnectors = useCallback(() => {
-    if (!FEATURES.connectors) {
-      handleOpenCloudAccess();
-      return;
-    }
-    router.push('/(app)/connectors' as Parameters<typeof router.push>[0]);
-  }, [handleOpenCloudAccess, router]);
-
   const handleSheetCamera = useCallback(async () => {
     const operation = chatInputAttachRef.current?.captureAttachmentOperation(activeMode);
     await runComposerAttachmentPick(
@@ -926,17 +905,7 @@ export default function ChatTabScreen() {
     <SafeAreaView className="flex-1" style={{ backgroundColor: pageBackground }} edges={['top']}>
       <View className="flex-row items-center justify-between px-4 h-12">
         <DrawerButton onPress={handleOpenDrawer} />
-        <ModeToggle
-          mode={activeMode}
-          cloudUnlocked={cloudUnlocked}
-          compact
-          onTapLocal={() => handleSelectMode('local')}
-          onTapCloud={() => handleSelectMode('cloud')}
-        />
-        <TemporaryChatToggle />
-      </View>
-      {workSwitchVisible ? (
-        <View style={{ alignItems: 'center', paddingBottom: 4 }}>
+        {workSwitchVisible ? (
           <View
             accessibilityRole="tablist"
             accessibilityLabel="Chat or Work"
@@ -957,6 +926,7 @@ export default function ChatTabScreen() {
                   accessibilityLabel={mode === 'chat' ? 'Chat' : 'Work'}
                   accessibilityState={{ selected }}
                   onPress={mode === 'chat' ? () => setWorkMode('chat') : handleTapWorkMode}
+                  hitSlop={WORK_SWITCH_HIT_SLOP}
                   style={{
                     minWidth: 72,
                     minHeight: 36,
@@ -975,8 +945,11 @@ export default function ChatTabScreen() {
               );
             })}
           </View>
+        ) : null}
+        <View style={{ minWidth: HEADER_SIDE_SLOT, alignItems: 'flex-end' }}>
+          <TemporaryChatToggle />
         </View>
-      ) : null}
+      </View>
 
       {/* Android: adjustResize already resizes the window; stacking
           behavior="height" double-handles the keyboard and causes resize
@@ -1002,21 +975,8 @@ export default function ChatTabScreen() {
         >
           {composerStacked ? null : (
             <>
-              <View
-                style={{ marginBottom: 14, flexDirection: 'row', alignItems: 'center', gap: 10 }}
-              >
-                <AgiMark size={30} />
-                <Text
-                  style={{
-                    fontSize: typeScale.title1,
-                    lineHeight: 30,
-                    fontFamily: 'Newsreader_600SemiBold',
-                    letterSpacing: 0.5,
-                    color: c.textPrimary,
-                  }}
-                >
-                  AGI
-                </Text>
+              <View style={{ marginBottom: 16 }}>
+                <AgiMark size={NEW_CHAT_SYMBOL_SIZE} testID="chat.new-chat.symbol" />
               </View>
               <Text
                 testID="chat.new-chat.greeting"
@@ -1026,69 +986,39 @@ export default function ChatTabScreen() {
                   fontWeight: '500',
                   color: c.textPrimary,
                   textAlign: 'center',
-                  marginBottom: 10,
                 }}
               >
                 {getTimeOfDayGreeting()}
               </Text>
             </>
           )}
-          {activeMode === 'cloud' ? (
-            <>
-              <Text
-                style={{
-                  fontSize: typeScale.subhead,
-                  lineHeight: 20,
-                  color: c.textMuted,
-                  textAlign: 'center',
-                  maxWidth: 300,
-                }}
-              >
-                {modeDescription}
-              </Text>
-              {newChatWorkspace ? (
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 6,
-                    marginTop: 8,
-                    maxWidth: 300,
-                  }}
-                >
-                  {newChatWorkspace.organization ? (
-                    <Building2 size={14} color={c.textMuted} />
-                  ) : (
-                    <UserRound size={14} color={c.textMuted} />
-                  )}
-                  <Text
-                    numberOfLines={1}
-                    style={{ fontSize: typeScale.footnote, color: c.textMuted }}
-                  >
-                    {t('newChat.workspace', { name: newChatWorkspace.name })}
-                  </Text>
-                </View>
-              ) : null}
-              {workMode === 'agiwork' ? (
-                <>
-                  <WorkModeSourceNotice onOpenConnectors={handleOpenConnectors} />
-                  {composerStacked ? null : (
-                    <AgiWorkExamples
-                      onChoose={(prompt) => chatInputAttachRef.current?.prefillText?.(prompt)}
-                    />
-                  )}
-                </>
-              ) : null}
-            </>
-          ) : (
-            <View style={{ width: '100%', marginTop: 8 }}>
-              {!hasReadyLocalModel && (
-                <DownloadModelBanner
-                  onPress={() => router.push('/(app)/models' as Parameters<typeof router.push>[0])}
-                />
+          {activeMode === 'cloud' && newChatWorkspace ? (
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+                marginTop: 12,
+                maxWidth: 300,
+              }}
+            >
+              {newChatWorkspace.organization ? (
+                <Building2 size={14} color={c.textMuted} />
+              ) : (
+                <UserRound size={14} color={c.textMuted} />
               )}
+              <Text numberOfLines={1} style={{ fontSize: typeScale.footnote, color: c.textMuted }}>
+                {t('newChat.workspace', { name: newChatWorkspace.name })}
+              </Text>
             </View>
-          )}
+          ) : null}
+          {activeMode === 'local' && !hasReadyLocalModel ? (
+            <View style={{ width: '100%', marginTop: 16 }}>
+              <DownloadModelBanner
+                onPress={() => router.push('/(app)/models' as Parameters<typeof router.push>[0])}
+              />
+            </View>
+          ) : null}
         </ScrollView>
 
         {/* Mode-aware: shows local projects in Local, cloud projects in Cloud.

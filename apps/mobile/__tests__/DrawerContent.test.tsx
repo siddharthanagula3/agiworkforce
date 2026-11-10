@@ -248,9 +248,10 @@ describe('DrawerContent', () => {
   });
 
   it('renders the AGI mobile drawer structure', () => {
-    const { getByText, getAllByText, getAllByLabelText, queryByText } = renderDrawer();
+    const { getByText, getByTestId, getAllByText, getAllByLabelText, queryByText } = renderDrawer();
 
-    expect(getByText('AGI')).toBeTruthy();
+    expect(getByTestId('drawer.brand-symbol')).toBeTruthy();
+    expect(queryByText('AGI')).toBeNull();
     expect(getAllByText('Projects').length).toBeGreaterThan(0);
     expect(getByText('Chats')).toBeTruthy();
     expect(getByText('Library')).toBeTruthy();

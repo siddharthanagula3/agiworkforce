@@ -21,8 +21,6 @@ import {
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
-import { useFonts } from 'expo-font';
-import { Newsreader_500Medium, Newsreader_600SemiBold } from '@expo-google-fonts/newsreader';
 import { useAuthStore } from '@/src/features/auth/store';
 import {
   isTermsAnswerPending,
@@ -239,16 +237,12 @@ function ClerkTokenBridge() {
 }
 
 export default function RootLayout() {
-  const [fontsLoaded, fontError] = useFonts({
-    Newsreader_500Medium,
-    Newsreader_600SemiBold,
-  });
   const [storageStatus, setStorageStatus] = useState<'pending' | 'ready' | 'unavailable'>(
     'pending',
   );
   const isMmkvReady = storageStatus === 'ready';
 
-  useLaunchSplashRelease(storageStatus !== 'pending' && (fontsLoaded || fontError !== null));
+  useLaunchSplashRelease(storageStatus !== 'pending');
   const isLoading = useAuthStore((s) => s.isLoading);
   const isInitialized = useAuthStore((s) => s.isInitialized);
   const initialize = useAuthStore((s) => s.initialize);

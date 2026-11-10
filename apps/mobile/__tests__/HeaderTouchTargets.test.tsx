@@ -41,10 +41,10 @@ function expectMeetsMinimum(node: ReactTestInstance, name: string) {
   expect(`${name} height ${height}`).toBe(`${name} height ${Math.max(height, MINIMUM_TARGET)}`);
 }
 
-describe('chat header touch targets', () => {
-  it('gives the execution-mode toggle the same reachable target on both halves', () => {
+describe('chat header and sidebar touch targets', () => {
+  it('gives the sidebar execution-mode toggle the same reachable target on both halves', () => {
     const { getByTestId } = render(
-      <ModeToggle mode="local" compact onTapLocal={jest.fn()} onTapCloud={jest.fn()} />,
+      <ModeToggle mode="local" onTapLocal={jest.fn()} onTapCloud={jest.fn()} />,
     );
 
     expectMeetsMinimum(getByTestId('chat.mode-toggle.local'), 'Local segment');

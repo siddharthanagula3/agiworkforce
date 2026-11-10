@@ -44,10 +44,12 @@ import {
   type DeviceCapabilities,
   type LocalRuntimeTier,
 } from '@agiworkforce/local-llm';
-import { getAutoRoutingProfiles, type OnDeviceModel } from '@agiworkforce/types';
+import { PRODUCT_BRAND, getAutoRoutingProfiles, type OnDeviceModel } from '@agiworkforce/types';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useModelInstallStore } from '@/src/features/model-picker/installStore';
+
+const HERO_SYMBOL_SIZE = 72;
 
 type DeviceTierInfo = {
   tier: LocalRuntimeTier;
@@ -475,18 +477,20 @@ function HeroScreen({
       testID="onboarding-hero-screen"
       style={[styles.heroRoot, { backgroundColor: colors.background }]}
     >
-      <View style={styles.brandLockup}>
-        <AgiMark size={50} testID="hero-brand-mark" />
-        <Text
-          testID="hero-wordmark"
-          style={[styles.wordmark, { color: colors.textPrimary }]}
-          accessibilityRole="header"
-        >
-          AGI
-        </Text>
+      <View
+        style={styles.heroSymbol}
+        accessible
+        accessibilityRole="image"
+        accessibilityLabel={PRODUCT_BRAND}
+      >
+        <AgiMark size={HERO_SYMBOL_SIZE} testID="hero-brand-mark" />
       </View>
 
-      <Text testID="hero-tagline" style={[styles.tagline, { color: colors.textSecondary }]}>
+      <Text
+        testID="hero-tagline"
+        accessibilityRole="header"
+        style={[styles.tagline, { color: colors.textPrimary }]}
+      >
         Your AI workspace for everyday work.
       </Text>
 
@@ -885,20 +889,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 32,
   },
-  brandLockup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 16,
-    marginBottom: 22,
-  },
-  wordmark: {
-    fontSize: typeScale.display,
-    // Same face as the launch lockup and the chat empty state. A bold sans here
-    // made the brand change typeface between the splash and the first screen.
-    fontFamily: 'Newsreader_600SemiBold',
-    letterSpacing: 1,
-    lineHeight: 108,
+  heroSymbol: {
+    marginBottom: 24,
   },
   tagline: {
     fontSize: typeScale.title3,

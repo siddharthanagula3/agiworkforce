@@ -3831,12 +3831,6 @@
     "AGI_WORK_DONE_TITLE": [
       "apps/web/features/chat/lib/completion-notification.ts"
     ],
-    "AGI_WORK_EXAMPLE_KEYS": [
-      "apps/mobile/src/features/chat/components/AgiWorkExamples.tsx"
-    ],
-    "AGI_WORK_EXAMPLE_PROMPT_KEYS": [
-      "apps/mobile/src/features/chat/components/AgiWorkExamples.tsx"
-    ],
     "AGI_WORK_FEEDBACK_LABEL": [
       "apps/web/features/chat/lib/agi-work.ts"
     ],
@@ -4048,9 +4042,6 @@
     ],
     "AgiWorkContextIdentity": [
       "apps/web/app/api/llm/v1/chat/completions/lib/agiwork-plan.ts"
-    ],
-    "AgiWorkExamples": [
-      "apps/mobile/src/features/chat/components/AgiWorkExamples.tsx"
     ],
     "AgiWorkExcludableTool": [
       "apps/web/app/api/llm/v1/chat/completions/lib/agiwork-plan.ts",
@@ -51457,9 +51448,6 @@
     "generate_agent_id": [
       "apps/cli/src/features/a2a/mod.rs"
     ],
-    "generate_agi_lockup": [
-      "apps/mobile/scripts/generate_logo_assets.py"
-    ],
     "generate_agi_logo": [
       "apps/mobile/scripts/generate_logo_assets.py"
     ],
@@ -51485,9 +51473,6 @@
     ],
     "GENERATE_IMAGE_TOOL_NAME": [
       "packages/contracts/types/src/interactive-cards.ts"
-    ],
-    "generate_lockups": [
-      "apps/mobile/scripts/generate_logo_assets.py"
     ],
     "generate_markdown": [
       "packages/tools/skills/reference-bundles/skill-creator/scripts/aggregate_benchmark.py"
@@ -106023,9 +106008,6 @@
     "render_vim": [
       "apps/cli/src/claude_parity.rs"
     ],
-    "render_wordmark": [
-      "apps/mobile/scripts/generate_logo_assets.py"
-    ],
     "render_working_principles": [
       "apps/cli/src/agent/prompt.rs"
     ],
@@ -145188,9 +145170,6 @@
     "workModeLabel": [
       "packages/ui/unified-chat/src/components/tasks/task-display.ts",
       "packages/ui/unified-chat/src/index.ts"
-    ],
-    "WorkModeSourceNotice": [
-      "apps/mobile/src/features/chat/components/WorkModeSourceNotice.tsx"
     ],
     "WorkModeSwitch": [
       "apps/mobile/src/features/chat/components/WorkModeSwitch.tsx"
