@@ -241,6 +241,7 @@ interface ModelPickerSheetProps {
   modelScope?: 'local' | 'cloud' | 'all';
   conversationId?: string;
   offerRoutingProfiles?: boolean;
+  showSpeed?: boolean;
 }
 
 export function ModelPickerSheet({
@@ -252,6 +253,7 @@ export function ModelPickerSheet({
   modelScope = 'local',
   conversationId,
   offerRoutingProfiles = false,
+  showSpeed = true,
 }: ModelPickerSheetProps) {
   const colors = useThemeColors();
   const router = useRouter();
@@ -772,7 +774,7 @@ export function ModelPickerSheet({
           </View>
         ) : null}
 
-        {modelScope === 'cloud' ? <SpeedControl modelId={selectedModel} /> : null}
+        {modelScope === 'cloud' && showSpeed ? <SpeedControl modelId={selectedModel} /> : null}
 
         {readingInstalled ? (
           <View

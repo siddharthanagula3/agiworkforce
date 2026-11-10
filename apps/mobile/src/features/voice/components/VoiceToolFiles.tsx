@@ -1,11 +1,15 @@
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, View } from 'react-native';
 import { FileText } from 'lucide-react-native';
 import { resolveGeneratedFileUri, type LiveVoiceToolFile } from '@agiworkforce/cloud-contracts';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
 import { API_URL } from '@/lib/constants';
+import {
+  captureAccountScopedUiState,
+  isAccountScopedUiStateOwned,
+} from '@/src/features/auth/services/accountScopedUiState';
 import { downloadGeneratedFile, shareFile } from '@/services/fileCreation';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
@@ -19,22 +23,35 @@ export function openableVoiceFiles(files: readonly LiveVoiceToolFile[]): LiveVoi
 export function VoiceToolFiles({ files }: { files: readonly LiveVoiceToolFile[] }) {
   const colors = useThemeColors();
   const [opening, setOpening] = useState<string | null>(null);
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
   const openable = openableVoiceFiles(files);
   if (openable.length === 0) return null;
 
   const open = async (file: LiveVoiceToolFile) => {
     if (opening) return;
+    const scope = captureAccountScopedUiState('cloud');
+    if (!scope) return;
+    const isCurrent = () => mountedRef.current && isAccountScopedUiStateOwned(scope);
     setOpening(file.uri);
     try {
       const localUri = await downloadGeneratedFile(
         resolveGeneratedFileUri(file.uri, API_URL),
         file.name,
       );
-      await shareFile(localUri);
+      if (!isCurrent()) return;
+      await shareFile(localUri, { isCurrent });
     } catch {
-      Alert.alert('Could not open this file', 'The file could not be downloaded.');
+      if (isCurrent()) {
+        Alert.alert('Could not open this file', 'The file could not be downloaded.');
+      }
     } finally {
-      setOpening(null);
+      if (mountedRef.current) setOpening(null);
     }
   };
 

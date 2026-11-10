@@ -89,6 +89,11 @@ jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockPush }),
 }));
 
+jest.mock('../src/features/model-picker/components/SpeedControl', () => {
+  const { View } = require('react-native');
+  return { SpeedControl: () => <View testID="model-picker-speed" /> };
+});
+
 import { ModelPickerSheet } from '../src/features/model-picker/components/ModelPickerSheet';
 import { useFreeQuotaCatalogueStore } from '../src/features/model-picker/freeQuotaCatalogue';
 import {
@@ -233,6 +238,7 @@ function renderPicker(overrides?: {
   onOpenCloudAccess?: (defaultTab?: 'invite' | 'waitlist') => void;
   modelScope?: 'local' | 'cloud' | 'all';
   conversationId?: string;
+  showSpeed?: boolean;
 }) {
   return render(
     <ModelPickerSheet
@@ -242,6 +248,7 @@ function renderPicker(overrides?: {
       onOpenCloudAccess={overrides?.onOpenCloudAccess}
       modelScope={overrides?.modelScope}
       conversationId={overrides?.conversationId}
+      showSpeed={overrides?.showSpeed}
     />,
   );
 }
@@ -559,6 +566,18 @@ describe('ModelPickerSheet', () => {
     expect(mockSheetRef.current.close).toHaveBeenCalled();
     await waitFor(() => expect(onOpenCloudAccess).toHaveBeenCalledWith('invite'));
     expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it('offers the speed switch in the Cloud picker unless the caller opts out of it', () => {
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    useTierStore.setState({ tier: 'max' });
+
+    const shown = renderPicker({ modelScope: 'cloud' });
+    expect(shown.queryByTestId('model-picker-speed')).toBeTruthy();
+    shown.unmount();
+
+    const hidden = renderPicker({ modelScope: 'cloud', showSpeed: false });
+    expect(hidden.queryByTestId('model-picker-speed')).toBeNull();
   });
 
   it('selects cloud rows after invite access', () => {

@@ -32,9 +32,17 @@ jest.mock('../services/streaming', () => ({
 }));
 
 const mockSelectModels: Array<(id: string) => void> = [];
+const mockSheetShowSpeed: Array<boolean | undefined> = [];
 jest.mock('../src/features/model-picker/components/ModelPickerSheet', () => ({
-  ModelPickerSheet: ({ onSelect }: { onSelect: (id: string) => void }) => {
+  ModelPickerSheet: ({
+    onSelect,
+    showSpeed,
+  }: {
+    onSelect: (id: string) => void;
+    showSpeed?: boolean;
+  }) => {
     mockSelectModels.push(onSelect);
+    mockSheetShowSpeed.push(showSpeed);
     return null;
   },
 }));
@@ -94,7 +102,11 @@ describe('CompareScreen Cloud account isolation', () => {
   });
 
   it('opts both compared answers out of the picker fast speed, like web compare', () => {
+    mockSheetShowSpeed.length = 0;
     render(<CompareScreen />);
+
+    expect(mockSheetShowSpeed.length).toBeGreaterThan(0);
+    expect(mockSheetShowSpeed.every((showSpeed) => showSpeed === false)).toBe(true);
 
     fireEvent.press(screen.getByLabelText('Send comparison prompt'));
 
