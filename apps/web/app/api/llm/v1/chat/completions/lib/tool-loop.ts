@@ -570,6 +570,7 @@ export interface ToolLoopApprovalCheckpoint {
     qualifiedName: string;
     args: Record<string, unknown>;
     approvalScopes: ToolApprovalScope[];
+    permissionGeneration?: string;
   }>;
 }
 
@@ -7149,11 +7150,20 @@ export async function* runToolLoop(
           completedSteps: step,
           events: approvalEvents,
           messages: messages.map((message) => ({ ...message })),
-          pendingToolCalls: approvalCalls.map(({ tc: call, gate }) => ({
-            ...call,
-            args: { ...call.args },
-            approvalScopes: toolApprovalReview(call.qualifiedName, gate).approval_scopes,
-          })),
+          pendingToolCalls: approvalCalls.map(({ tc: call, gate }) => {
+            const approvalScopes = toolApprovalReview(call.qualifiedName, gate).approval_scopes;
+            const connectorId = parseQualifiedToolName(call.qualifiedName)?.serverId;
+            const permissionGeneration =
+              approvalScopes.length > 1 && connectorId
+                ? connectorPermissions.permissionGenerationFor?.(connectorId)
+                : undefined;
+            return {
+              ...call,
+              args: { ...call.args },
+              approvalScopes,
+              ...(permissionGeneration !== undefined ? { permissionGeneration } : {}),
+            };
+          }),
         });
 
         for (const chunk of approvalChunks) yield chunk;

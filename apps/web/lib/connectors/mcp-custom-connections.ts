@@ -21,7 +21,10 @@ import {
 } from '@/lib/services/free-plan-entitlements';
 import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
 import { decryptConnectorToken, encryptConnectorToken } from '@/lib/custom-connector-crypto';
-import { revokeConnectorSessionGrants } from '@/app/api/llm/v1/chat/completions/lib/connector-tool-session-grants';
+import {
+  advanceConnectorPermissionGeneration,
+  revokeConnectorSessionGrants,
+} from '@/app/api/llm/v1/chat/completions/lib/connector-tool-session-grants';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import type { McpSuppliedOAuthClient } from '@/lib/connectors/mcp-oauth-provider';
@@ -404,6 +407,7 @@ export async function clearConnectorToolPermissions(
 ): Promise<boolean> {
   try {
     await db.transaction(async (transaction) => {
+      await advanceConnectorPermissionGeneration(transaction, userId, connectorId);
       await revokeConnectorSessionGrants(transaction, connectorId, null);
       await transaction.execute(
         `delete from public.connector_tool_permissions where user_id = $1 and connector_id = $2`,

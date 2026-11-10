@@ -767,6 +767,7 @@ describe('POST /api/llm/v1/chat/completions/approve, approval scopes', () => {
   const READ_TOOL = 'mcp__github__get_pull_request_diff';
   let sessionGrants: Array<unknown[]>;
   let standingWrites: Array<unknown[]>;
+  let generations: Map<string, number>;
 
   function claimFor(qualifiedName: string) {
     return {
@@ -774,7 +775,13 @@ describe('POST /api/llm/v1/chat/completions/approve, approval scopes', () => {
       checkpoint: {
         ...claimedCheckpoint.checkpoint,
         pendingToolCalls: [
-          { id: 'call_1', qualifiedName, args: {}, approvalScopes: ['once', 'session', 'always'] },
+          {
+            id: 'call_1',
+            qualifiedName,
+            args: {},
+            approvalScopes: ['once', 'session', 'always'],
+            permissionGeneration: '0',
+          },
         ],
       },
     };
@@ -798,6 +805,7 @@ describe('POST /api/llm/v1/chat/completions/approve, approval scopes', () => {
     vi.clearAllMocks();
     sessionGrants = [];
     standingWrites = [];
+    generations = new Map();
     toolMocks.loadOperatorTools.mockResolvedValue([]);
     gateMocks.managedCompute.mockReturnValue(null);
     gateMocks.orgPolicy.mockResolvedValue(null);
@@ -819,6 +827,17 @@ describe('POST /api/llm/v1/chat/completions/approve, approval scopes', () => {
       }),
     );
     db.query.mockImplementation(async (sql: string, params: unknown[] = []) => {
+      if (sql.includes('insert into public.connector_permission_generations')) {
+        const connectorId = params[1] as string;
+        const next = (generations.get(connectorId) ?? 0) + (sql.includes('generation + 1') ? 1 : 0);
+        generations.set(connectorId, next);
+        return [{ generation: String(next) }];
+      }
+      if (sql.includes('from public.connector_permission_generations'))
+        return [...generations].map(([connector_id, generation]) => ({
+          connector_id,
+          generation: String(generation),
+        }));
       if (sql.includes('revoke_connector_tool_session_grants')) {
         const existing = sessionGrants;
         sessionGrants = existing.filter(
@@ -900,6 +919,34 @@ describe('POST /api/llm/v1/chat/completions/approve, approval scopes', () => {
         },
       }),
     });
+  });
+
+  it('refuses a remembered approval whose card predates a reset to Ask, and saves nothing', async () => {
+    checkpointMocks.claim.mockResolvedValue(claimFor(COMMENT_TOOL));
+    generations.set('github', 1);
+
+    const response = await POST(makeRequest(scopedBody('approved-for-session')));
+
+    expect(response.status).toBe(409);
+    expect(sessionGrants).toEqual([]);
+    expect(standingWrites).toEqual([]);
+    expect(workflowMocks.start).not.toHaveBeenCalled();
+  });
+
+  it('refuses a remembered approval from a checkpoint written before generations existed', async () => {
+    const claim = claimFor(COMMENT_TOOL);
+    const [call] = claim.checkpoint.pendingToolCalls;
+    const { permissionGeneration: _omitted, ...legacy } = call!;
+    checkpointMocks.claim.mockResolvedValue({
+      ...claim,
+      checkpoint: { ...claim.checkpoint, pendingToolCalls: [legacy] },
+    });
+
+    const response = await POST(makeRequest(scopedBody('approved-for-session')));
+
+    expect(response.status).toBe(409);
+    expect(sessionGrants).toEqual([]);
+    expect(workflowMocks.start).not.toHaveBeenCalled();
   });
 
   it('approves the call once and remembers nothing for a plain approval', async () => {
@@ -1106,6 +1153,7 @@ describe('POST /api/llm/v1/chat/completions/approve, approval scopes', () => {
             qualifiedName: READ_TOOL,
             args: {},
             approvalScopes: ['once', 'session', 'always'],
+            permissionGeneration: '0',
           },
         ],
       },

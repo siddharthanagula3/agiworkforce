@@ -151,13 +151,17 @@ describe('respondToAccountCompromise', () => {
   function expectCleanupBeforeReportUpdate() {
     expect(mocks.revoke).toHaveBeenCalledExactlyOnceWith(identity, 'user-1', null, undefined);
     expect(mocks.finishIntent).toHaveBeenCalledTimes(1);
-    expect(execute).toHaveBeenCalledTimes(3);
+    expect(execute).toHaveBeenCalledTimes(4);
     expect(execute.mock.calls[0]?.[0]).toContain('update public.mobile_intent_tokens');
     expect(execute.mock.calls[0]?.[1]).toEqual(['user-1', null]);
     expect(execute.mock.calls[1]?.[0]).toContain('update public.device_authorization_codes');
     expect(execute.mock.calls[2]?.[0]).toContain('delete from public.desktop_sign_in_grants');
     expect(execute.mock.calls[1]?.[1]).toEqual(['user-1']);
     expect(execute.mock.calls[2]?.[1]).toEqual(['user-1']);
+    expect(execute.mock.calls[3]?.[0]).toContain(
+      'insert into public.device_refresh_token_families',
+    );
+    expect(execute.mock.calls[3]?.[1]).toEqual(['user-1']);
     expect(query.mock.calls[1]?.[0]).toContain('update device_refresh_tokens');
     expect(query.mock.calls[1]?.[1]).toEqual(['user-1']);
     expect(query).toHaveBeenCalledTimes(3);
@@ -607,7 +611,7 @@ describe('handleIdentitySecurityEvent', () => {
     expect(auditTypes()).toEqual(['login', 'risk_signal_detected']);
     expect(mocks.revoke).toHaveBeenCalledTimes(1);
     expect(mocks.finishIntent).toHaveBeenCalledTimes(1);
-    expect(execute).toHaveBeenCalledTimes(3);
+    expect(execute).toHaveBeenCalledTimes(4);
     expect(query).toHaveBeenCalledTimes(3);
     expect(mocks.compromiseNotice).not.toHaveBeenCalled();
   });

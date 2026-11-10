@@ -2392,6 +2392,8 @@ export const UNEXPORTED_USER_TABLES: Readonly<Record<string, string>> = {
     'The pairing secret a device redeems. The device it belongs to is exported as desktop_devices, mobile_devices or device_authorizations.',
   device_refresh_tokens:
     'Live refresh credentials. What the subject would want, which device and when it was registered, is exported as desktop_devices and mobile_devices.',
+  connector_permission_generations:
+    'A counter of how many times a connector permission changed, used to refuse approvals made against an older setting; the settings themselves are exported as connector_tool_permissions and connector_account_states.',
   device_refresh_token_families:
     'Which refresh credential families have been ended; token state, not subject content. The devices themselves are exported as desktop_devices and mobile_devices.',
   revoked_jwts:

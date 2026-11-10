@@ -81,7 +81,12 @@ describe('device refresh across a terms revision', () => {
     });
     mocks.transaction.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) =>
       callback({
-        query: (...args: unknown[]) => mocks.query(...args),
+        query: (...args: unknown[]) =>
+          /^\s*insert into public\.device_refresh_token_families \(family_id, user_id\)\s/.test(
+            String(args[0]),
+          )
+            ? Promise.resolve([{ family_id: FAMILY_ID, revoked_at: null }])
+            : mocks.query(...args),
         execute: (...args: unknown[]) => mocks.execute(...args),
       }),
     );

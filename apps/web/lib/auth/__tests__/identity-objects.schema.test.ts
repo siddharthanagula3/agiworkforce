@@ -18,6 +18,7 @@ const SEPARATELY_IDENTIFIED = /(?:session|device|identit|connector|api_key)/;
  */
 const KEYED_BY_ITS_SESSION: Readonly<Record<string, string>> = {
   account_security_sessions: 'session_id',
+  device_refresh_token_families: 'family_id',
 };
 
 /**
@@ -25,7 +26,10 @@ const KEYED_BY_ITS_SESSION: Readonly<Record<string, string>> = {
  * row is the pair, and the connector id is what keeps it from being keyed by the
  * account alone.
  */
-const KEYED_BY_ACCOUNT_AND_CONNECTOR: ReadonlySet<string> = new Set(['connector_account_states']);
+const KEYED_BY_ACCOUNT_AND_CONNECTOR: ReadonlySet<string> = new Set([
+  'connector_account_states',
+  'connector_permission_generations',
+]);
 
 function migrationSql(): { file: string; sql: string }[] {
   return readdirSync(MIGRATIONS_DIR)

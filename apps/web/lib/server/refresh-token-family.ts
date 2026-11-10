@@ -23,6 +23,20 @@ export interface DeviceCredentialRevocationResult {
   compromiseRecorded: boolean;
 }
 
+const FENCE_CONFLICT = `
+  on conflict (family_id) do update
+     set revoked_at = coalesce(device_refresh_token_families.revoked_at, excluded.revoked_at)
+   where device_refresh_token_families.user_id = excluded.user_id`;
+
+const FENCE_DEVICE = `
+  insert into public.device_refresh_token_families (family_id, user_id, revoked_at)
+  select distinct family_id, user_id, now()
+    from device_refresh_tokens
+   where user_id = $2
+     and (device_id = $1 or family_id::text = $3)
+   order by family_id
+  ${FENCE_CONFLICT}`;
+
 /**
  * By family, not by row: rotation issues a fresh row per refresh, so device_id
  * alone misses families whose earlier rows predate 0133.
@@ -58,6 +72,14 @@ const COMPROMISE = `
        or family_id::text = $3
      )`;
 
+const FENCE_FAMILY = `
+  insert into public.device_refresh_token_families (family_id, user_id, revoked_at)
+  select distinct family_id, user_id, $3::timestamptz
+    from device_refresh_tokens
+   where family_id::text = $1
+     and user_id = $2
+  ${FENCE_CONFLICT}`;
+
 const REVOKE_FAMILY = `
   update device_refresh_tokens
      set revoked_at = coalesce(revoked_at, $3)
@@ -77,21 +99,82 @@ const COMPROMISE_FAMILY = `
    where family_id::text = $1
      and user_id = $2`;
 
+const FENCE_EVERY = `
+  insert into public.device_refresh_token_families (family_id, user_id, revoked_at)
+  select distinct family_id, user_id, now()
+    from device_refresh_tokens
+   where user_id = $1
+     and revoked_at is null
+   order by family_id
+  ${FENCE_CONFLICT}`;
+
+const REVOKE_EVERY = `
+  update device_refresh_tokens
+     set revoked_at = coalesce(revoked_at, now())
+   where user_id = $1
+     and revoked_at is null
+   returning id`;
+
+const FENCE_WORKSPACE = `
+  insert into public.device_refresh_token_families (family_id, user_id, revoked_at)
+  select distinct family_id, user_id, now()
+    from device_refresh_tokens
+   where user_id = $1
+     and organization_id = $2
+     and revoked_at is null
+   order by family_id
+  ${FENCE_CONFLICT}`;
+
+const REVOKE_WORKSPACE = `
+  update device_refresh_tokens
+     set revoked_at = coalesce(revoked_at, now())
+   where user_id = $1
+     and organization_id = $2
+     and revoked_at is null
+   returning id`;
+
 /**
- * Under READ COMMITTED an UPDATE that waits on a rotation's row lock finishes
- * against the rows it saw when it started, so the successor that rotation
- * committed survives it. A second statement starts after the wait and sees it.
- * A third pass is never needed: the successor's own rotation needs a token this
- * revocation has already ended.
+ * Rotation locks the family row before the presented token and refuses a
+ * revoked family; a revocation ends the family row before it touches token
+ * rows. Under READ COMMITTED a rotation that held the family lock first has
+ * committed its successor before the revoking UPDATE starts, so that UPDATE
+ * sees it; a later rotation waits on the family row and is refused. Both sides
+ * take the family row first, so the two can never deadlock.
  */
-async function revokeSettled(
+async function endFamiliesThenRevoke(
   db: DatabaseAdapter,
-  statement: string,
+  fence: string,
+  revoke: string,
   params: unknown[],
 ): Promise<number> {
-  const first = await db.query<{ id: string }>(statement, params);
-  const second = await db.query<{ id: string }>(statement, params);
-  return new Set([...first, ...second].map((revoked) => revoked.id)).size;
+  await db.execute(fence, params);
+  const revoked = await db.query<{ id: string }>(revoke, params);
+  return revoked.length;
+}
+
+export interface RotationFamilyLock {
+  familyId: string;
+  revoked: boolean;
+}
+
+/**
+ * Taken first in a rotation transaction: inserts the family row when it is
+ * missing and holds its lock until the rotation commits.
+ */
+export async function lockRefreshFamilyForRotation(
+  tx: DatabaseAdapter,
+  tokenHash: string,
+): Promise<RotationFamilyLock | null> {
+  const rows = await tx.query<{ family_id: string; revoked_at: string | null }>(
+    `insert into public.device_refresh_token_families (family_id, user_id)
+     select family_id, user_id from device_refresh_tokens where token_hash = $1
+     on conflict (family_id) do update
+        set user_id = device_refresh_token_families.user_id
+     returning family_id, revoked_at`,
+    [tokenHash],
+  );
+  const family = rows[0];
+  return family ? { familyId: family.family_id, revoked: family.revoked_at !== null } : null;
 }
 
 export interface FamilyCompromise {
@@ -110,18 +193,42 @@ export async function finishFamilyAsCompromised(
   input: FamilyCompromise,
 ): Promise<DeviceCredentialRevocationResult> {
   const scope = [input.familyId, input.userId, input.at];
-  const revoked = await revokeSettled(db, REVOKE_FAMILY, scope);
+  const revoked = await endFamiliesThenRevoke(db, FENCE_FAMILY, REVOKE_FAMILY, scope);
 
   await db.execute(COMPROMISE_FAMILY, [...scope, input.reason]);
   return { revoked, compromiseRecorded: true };
 }
 
-const REVOKE_EVERY = `
-  update device_refresh_tokens
-     set revoked_at = coalesce(revoked_at, now())
-   where user_id = $1
-     and revoked_at is null
-   returning id`;
+/** One device's sign-out: the family its credential belongs to ends for good. */
+export async function revokeDeviceRefreshFamily(
+  db: DatabaseAdapter,
+  input: { familyId: string; userId: string },
+): Promise<number> {
+  return endFamiliesThenRevoke(db, FENCE_FAMILY, REVOKE_FAMILY, [
+    input.familyId,
+    input.userId,
+    new Date().toISOString(),
+  ]);
+}
+
+/** Every family the account holds, ended for good; nothing else is touched. */
+export async function revokeEveryDeviceRefreshFamily(
+  db: DatabaseAdapter,
+  userId: string,
+): Promise<number> {
+  return endFamiliesThenRevoke(db, FENCE_EVERY, REVOKE_EVERY, [userId]);
+}
+
+/** The families a workspace issued to one member; personal ones are left alone. */
+export async function revokeWorkspaceDeviceRefreshFamilies(
+  db: DatabaseAdapter,
+  input: { userId: string; organizationId: string },
+): Promise<number> {
+  return endFamiliesThenRevoke(db, FENCE_WORKSPACE, REVOKE_WORKSPACE, [
+    input.userId,
+    input.organizationId,
+  ]);
+}
 
 const REVOKE_APPROVED_DEVICE_CODES = `
   update public.device_authorization_codes
@@ -148,19 +255,20 @@ export async function revokeEveryDeviceRefreshCredential(
   await revokeMobileIntentTokens(db, userId, null);
   await db.execute(REVOKE_APPROVED_DEVICE_CODES, [userId]);
   await db.execute(DELETE_UNCONSUMED_DESKTOP_GRANTS, [userId]);
-  return revokeSettled(db, REVOKE_EVERY, [userId]);
+  return revokeEveryDeviceRefreshFamily(db, userId);
 }
 
 /**
  * Forced reauthentication needs no push: a developer token is honoured only
- * while its family has a live row, so it dies on the device's next request.
+ * while its family has a live row and is not ended, so it dies on the device's
+ * next request.
  */
 export async function revokeDeviceRefreshCredentials(
   db: DatabaseAdapter,
   input: DeviceCredentialRevocation,
 ): Promise<DeviceCredentialRevocationResult> {
   const params = [input.deviceId, input.userId, input.credentialFamilyId];
-  const revoked = await revokeSettled(db, REVOKE, params);
+  const revoked = await endFamiliesThenRevoke(db, FENCE_DEVICE, REVOKE, params);
 
   if (!input.compromisedAs) {
     return { revoked, compromiseRecorded: false };

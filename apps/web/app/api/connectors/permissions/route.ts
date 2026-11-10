@@ -20,7 +20,10 @@ import {
   CriticalStandingAllowError,
   saveConnectorToolPermissions,
 } from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
-import { revokeConnectorSessionGrants } from '@/app/api/llm/v1/chat/completions/lib/connector-tool-session-grants';
+import {
+  advanceConnectorPermissionGeneration,
+  revokeConnectorSessionGrants,
+} from '@/app/api/llm/v1/chat/completions/lib/connector-tool-session-grants';
 
 export const runtime = 'nodejs';
 
@@ -144,6 +147,7 @@ async function handleDelete(request: NextRequest): Promise<NextResponse> {
 
   const { db, userId, organizationId } = await getUserScopedDb(request);
   const removed = await db.transaction(async (transaction) => {
+    await advanceConnectorPermissionGeneration(transaction, userId, connectorId);
     const revoked = await revokeConnectorSessionGrants(transaction, connectorId, toolName);
     const standingRemoved = toolName
       ? await transaction.execute(

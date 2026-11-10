@@ -211,6 +211,10 @@ const PendingToolCallSchema = z.object({
   approvalScopes: ToolApprovalReviewWireSchema.shape.approval_scopes
     .refine((scopes) => scopes.includes('once') && new Set(scopes).size === scopes.length)
     .optional(),
+  permissionGeneration: z
+    .string()
+    .regex(/^\d{1,19}$/)
+    .optional(),
 });
 
 const CheckpointStateSchema = z.enum(['pending', 'resuming', 'resolved', 'failed']);

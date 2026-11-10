@@ -150,6 +150,7 @@ describe('clearConnectorToolPermissions', () => {
     const transaction = {
       query: vi.fn(async (sql: string, params: unknown[]) => {
         calls.push({ kind: 'query', sql, params });
+        if (sql.includes('connector_permission_generations')) return [{ generation: '3' }];
         return [{ removed: 2 }];
       }),
       execute: vi.fn(async (sql: string, params: unknown[]) => {
@@ -171,11 +172,14 @@ describe('clearConnectorToolPermissions', () => {
 
     await expect(clearConnectorToolPermissions(db, 'user-1', 'linear')).resolves.toBe(true);
 
-    expect(calls.map((call) => call.kind)).toEqual(['query', 'execute']);
-    expect(calls[0]?.sql).toContain('revoke_connector_tool_session_grants');
-    expect(calls[0]?.params).toEqual(['linear', null]);
-    expect(calls[1]?.sql).toContain('delete from public.connector_tool_permissions');
-    expect(calls[1]?.params).toEqual(['user-1', 'linear']);
+    expect(calls.map((call) => call.kind)).toEqual(['query', 'query', 'execute']);
+    expect(calls[0]?.sql).toContain('insert into public.connector_permission_generations');
+    expect(calls[0]?.sql).toContain('generation + 1');
+    expect(calls[0]?.params).toEqual(['user-1', 'linear']);
+    expect(calls[1]?.sql).toContain('revoke_connector_tool_session_grants');
+    expect(calls[1]?.params).toEqual(['linear', null]);
+    expect(calls[2]?.sql).toContain('delete from public.connector_tool_permissions');
+    expect(calls[2]?.params).toEqual(['user-1', 'linear']);
   });
 
   it('reports that nothing was cleared when the transaction fails', async () => {
