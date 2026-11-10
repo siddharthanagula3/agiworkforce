@@ -27,7 +27,12 @@ vi.mock('@/lib/server/rls-db', () => ({
     db: {
       query: (...args: unknown[]) => mockNeonQuery(...args),
       execute: vi.fn().mockResolvedValue(1),
-      transaction: vi.fn((fn: (db: unknown) => unknown) => fn({})),
+      transaction: vi.fn((fn: (db: unknown) => unknown) =>
+        fn({
+          query: (...args: unknown[]) => mockNeonQuery(...args),
+          execute: vi.fn().mockResolvedValue(1),
+        }),
+      ),
       withUser: vi.fn(() => ({})),
       dispose: vi.fn(),
     },
@@ -60,7 +65,6 @@ function wireInsertPath(summaryOnRow: string | null): void {
   mockNeonQuery.mockResolvedValueOnce([{ count: 0 }]);
   mockNeonQuery.mockResolvedValueOnce([]);
   mockNeonQuery.mockResolvedValueOnce([{ total: 0 }]);
-  mockNeonQuery.mockResolvedValueOnce([]);
   mockNeonQuery.mockResolvedValueOnce([
     {
       id: 'file-1',

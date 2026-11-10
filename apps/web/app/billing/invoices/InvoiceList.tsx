@@ -18,7 +18,7 @@ interface Invoice {
 
 type ListState =
   | { status: 'loading' }
-  | { status: 'ready'; invoices: Invoice[] }
+  | { status: 'ready'; invoices: Invoice[]; available: boolean; hasMore: boolean }
   | { status: 'error'; message: string };
 
 function formatAmount(minorUnits: number, currency: string): string {
@@ -39,8 +39,17 @@ export function InvoiceList() {
       if (!response.ok) {
         throw Object.assign(new Error(`HTTP ${response.status}`), { status: response.status });
       }
-      const body = (await response.json()) as { invoices?: Invoice[] };
-      setState({ status: 'ready', invoices: body.invoices ?? [] });
+      const body = (await response.json()) as {
+        invoices?: Invoice[];
+        available?: boolean;
+        hasMore?: boolean;
+      };
+      setState({
+        status: 'ready',
+        invoices: body.invoices ?? [],
+        available: body.available !== false,
+        hasMore: body.hasMore === true,
+      });
     } catch (error) {
       if (signal?.aborted) return;
       setState({
@@ -86,6 +95,15 @@ export function InvoiceList() {
 
   if (state.status !== 'ready') return null;
 
+  if (!state.available) {
+    return (
+      <p role="status" className="py-6 text-sm text-muted-foreground">
+        Invoices cannot be shown right now. Your receipts are also available from the billing portal
+        in Settings.
+      </p>
+    );
+  }
+
   if (state.invoices.length === 0) {
     return (
       <p className="py-6 text-sm text-muted-foreground">
@@ -96,6 +114,12 @@ export function InvoiceList() {
 
   return (
     <div className="overflow-x-auto">
+      {state.hasMore ? (
+        <p role="status" className="px-4 pb-3 text-sm text-muted-foreground">
+          Showing your {state.invoices.length} most recent invoices. Older invoices are available
+          from the billing portal in Settings.
+        </p>
+      ) : null}
       <table className="w-full border-collapse text-sm">
         <caption className="sr-only">Your invoices, newest first</caption>
         <thead>

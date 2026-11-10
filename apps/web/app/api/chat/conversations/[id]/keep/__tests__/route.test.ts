@@ -244,4 +244,37 @@ describe('POST /api/chat/conversations/[id]/keep', () => {
       expect.objectContaining({ userId: 'user-1', messageId: ASSISTANT_MESSAGE }),
     );
   });
+
+  it('keeps files the saved messages attach even when the upload carried no conversation', async () => {
+    const attached = 'b1c2d3e4-f5a6-4b7c-8d9e-0f1a2b3c4d5e';
+    await call({
+      messages: [
+        {
+          id: USER_MESSAGE,
+          role: 'user',
+          content: 'Summarize this',
+          metadata: {
+            attachments: [
+              { id: 'local-1', assetId: attached, type: 'file', name: 'notes.pdf' },
+              { id: 'local-2', assetId: 'not-a-uuid', type: 'file', name: 'bad.pdf' },
+              { id: 'local-3', assetId: attached.toUpperCase(), type: 'file', name: 'dup.pdf' },
+            ],
+          },
+        },
+        {
+          role: 'assistant',
+          content: 'Done',
+          metadata: {
+            attachments: [{ id: 'x', assetId: ASSISTANT_MESSAGE, type: 'file', name: 'x' }],
+          },
+        },
+      ],
+    });
+
+    const [sql, params] = mocks.txExecute.mock.calls[1] as [string, unknown[]];
+    expect(sql).toContain('id = any($4::uuid[])');
+    expect(sql).toContain('user_id = $2');
+    expect(sql).toContain('organization_id is not distinct from $3');
+    expect(params).toEqual([CONVERSATION, 'user-1', 'org-1', [attached]]);
+  });
 });

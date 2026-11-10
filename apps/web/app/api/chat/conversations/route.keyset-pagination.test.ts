@@ -38,6 +38,12 @@ function row(index: number, pinned = false): Record<string, unknown> {
   };
 }
 
+function unreferencedOrdinals(sql: string, params: unknown[]): number[] {
+  return params.flatMap((_, index) =>
+    new RegExp(`\\$${index + 1}(?!\\d)`, 'u').test(sql) ? [] : [index + 1],
+  );
+}
+
 function listRequest(query = ''): NextRequest {
   return new NextRequest(`https://agiworkforce.com/api/chat/conversations${query}`);
 }
@@ -89,9 +95,40 @@ describe('GET /api/chat/conversations · keyset pagination', () => {
     await GET(listRequest(`?limit=2&cursor=${cursor}`));
 
     const [sql, params] = mocks.query.mock.calls[0] as [string, unknown[]];
-    expect(sql).toContain('(page_sort_key, id) < ($5, $6)');
+    expect(sql).toContain('(page_sort_key, id) < ($4, $5)');
     expect(sql).not.toMatch(/offset \$/u);
-    expect(params[4]).toBe('02026-01-02T00:00:00.000000Z');
-    expect(params[5]).toBe('00000002-0000-4000-8000-000000000000');
+    expect(params[3]).toBe('02026-01-02T00:00:00.000000Z');
+    expect(params[4]).toBe('00000002-0000-4000-8000-000000000000');
+    expect(unreferencedOrdinals(sql, params)).toEqual([]);
+  });
+
+  it('references every bound parameter when filtering and paging by offset', async () => {
+    mocks.query.mockResolvedValue([]);
+
+    await GET(
+      listRequest('?limit=2&offset=4&q=plan&projectId=00000000-0000-4000-8000-000000000001'),
+    );
+
+    const [sql, params] = mocks.query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toMatch(/offset \$\d/u);
+    expect(unreferencedOrdinals(sql, params)).toEqual([]);
+  });
+
+  it('references every bound parameter when filtering and paging from a cursor', async () => {
+    mocks.query.mockResolvedValue([]);
+    const cursor = encodeKeysetCursor({
+      sortValue: '02026-01-02T00:00:00.000000Z',
+      id: '00000002-0000-4000-8000-000000000000',
+    });
+
+    await GET(
+      listRequest(
+        `?limit=2&cursor=${cursor}&q=plan&projectId=00000000-0000-4000-8000-000000000001`,
+      ),
+    );
+
+    const [sql, params] = mocks.query.mock.calls[0] as [string, unknown[]];
+    expect(sql).not.toMatch(/offset \$/u);
+    expect(unreferencedOrdinals(sql, params)).toEqual([]);
   });
 });
