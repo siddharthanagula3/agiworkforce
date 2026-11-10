@@ -825,13 +825,51 @@ describe('moving a member back to a Standard seat', () => {
     expect(world.privilegedWrites[0]?.sql).toContain('premium_paid_through = $3');
     expect(world.privilegedWrites[0]?.params).toEqual([ORGANIZATION, 'target-1', PERIOD_END_ISO]);
     expect(mocks.events).toEqual([
-      'stripe.update',
       'member.write',
+      'stripe.update',
       'commit',
       'paid_through.write',
       'seats.persist',
     ]);
     expect(mocks.carryCredits).not.toHaveBeenCalled();
+  });
+
+  it('moves the chosen member before Stripe lowers the Premium count, so the webhook cannot pick another member', async () => {
+    const { changeMemberSeatType } = await loadService();
+    const world = fakeDatabases({
+      requesterRole: 'owner',
+      target: PREMIUM_TARGET,
+      assignedPremium: 2,
+    });
+    const { stripe } = fakeStripe(teamSubscription({ standard: 3, premium: 2 }));
+
+    await changeMemberSeatType(
+      world.db,
+      { privileged: world.privileged, stripe },
+      request('standard'),
+    );
+
+    expect(mocks.events.indexOf('member.write')).toBeLessThan(
+      mocks.events.indexOf('stripe.update'),
+    );
+  });
+
+  it('leaves the member on Premium in the database when Stripe refuses the lower count', async () => {
+    const { changeMemberSeatType } = await loadService();
+    const world = fakeDatabases({
+      requesterRole: 'owner',
+      target: PREMIUM_TARGET,
+      assignedPremium: 2,
+    });
+    const { stripe, update } = fakeStripe(teamSubscription({ standard: 3, premium: 2 }));
+    update.mockRejectedValueOnce(new Error('stripe unavailable'));
+
+    await expect(
+      changeMemberSeatType(world.db, { privileged: world.privileged, stripe }, request('standard')),
+    ).rejects.toThrow();
+
+    expect(mocks.events).not.toContain('commit');
+    expect(world.privilegedWrites).toEqual([]);
   });
 
   it('grants no paid-through period for a Premium seat Stripe was never billing', async () => {

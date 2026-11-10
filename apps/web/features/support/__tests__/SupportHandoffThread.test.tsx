@@ -242,6 +242,7 @@ describe('the agent can take a waiting visitor and answer them', () => {
           ],
         });
       }
+      if (url.includes('/agent/active')) return jsonResponse({ sessions: [] });
       if (url.includes('/claim')) {
         return jsonResponse({
           sessionId: SESSION_ID,
@@ -310,6 +311,7 @@ describe('the agent can take a waiting visitor and answer them', () => {
             ],
           });
         }
+        if (url.includes('/agent/active')) return jsonResponse({ sessions: [] });
         return jsonResponse({ error: { message: 'That request is already connected' } }, 409);
       }),
     );
@@ -326,7 +328,7 @@ describe('the agent can take a waiting visitor and answer them', () => {
   it('says the queue is empty rather than looking broken', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () => jsonResponse({ queue: [] })),
+      vi.fn(async () => jsonResponse({ queue: [], sessions: [] })),
     );
 
     render(<SupportHandoffQueuePanel />);
@@ -344,7 +346,7 @@ describe('the agent can take a waiting visitor and answer them', () => {
             warning: 'AGI_SUPPORT_LIVE_HANDOFF_ENABLED is not set, so live handoff stays off.',
           });
         }
-        return jsonResponse({ queue: [] });
+        return jsonResponse({ queue: [], sessions: [] });
       }),
     );
 
@@ -359,5 +361,203 @@ describe('the agent can take a waiting visitor and answer them', () => {
         'AGI_SUPPORT_LIVE_HANDOFF_ENABLED is not set, so live handoff stays off.',
       ),
     ).toBeVisible();
+  });
+});
+
+function queueEntry(sessionId: string, referenceId: string) {
+  return {
+    sessionId,
+    referenceId,
+    summary: `Summary ${referenceId}`,
+    createdAt: '2026-11-08T10:00:00.000Z',
+    waitExpiresAt: new Date(Date.now() + 60_000).toISOString(),
+    signedIn: true,
+  };
+}
+
+function claimPayload(sessionId: string, referenceId: string, extra: Record<string, unknown> = {}) {
+  return {
+    sessionId,
+    referenceId,
+    status: 'connected',
+    summary: `Summary ${referenceId}`,
+    contactEmail: 'visitor@example.com',
+    pollIntervalMs: 1000,
+    ...extra,
+  };
+}
+
+function agentFetch(options: {
+  queue?: unknown[];
+  active?: unknown[];
+  claims?: Record<string, unknown>;
+}) {
+  return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (url.includes('/agent/queue')) return jsonResponse({ queue: options.queue ?? [] });
+    if (url.includes('/agent/active')) return jsonResponse({ sessions: options.active ?? [] });
+    const claim = /\/agent\/([^/]+)\/claim/.exec(url);
+    if (claim) return jsonResponse(options.claims?.[claim[1] ?? ''] ?? {}, 200);
+    if (init?.method === 'POST') return jsonResponse({ message: message(9, 'agent', 'sent') });
+    return jsonResponse({
+      sessionId: SESSION_ID,
+      status: 'connected',
+      messages: [],
+      nextAfter: 0,
+      pollIntervalMs: 1000,
+    });
+  });
+}
+
+describe('an agent working several conversations keeps each one separate', () => {
+  it('never carries an unsent reply from one visitor to another', async () => {
+    const fetchMock = agentFetch({
+      queue: [queueEntry('sess-a', 'REF-A'), queueEntry('sess-b', 'REF-B')],
+      claims: {
+        'sess-a': claimPayload('sess-a', 'REF-A'),
+        'sess-b': claimPayload('sess-b', 'REF-B'),
+      },
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<SupportHandoffQueuePanel />);
+    const user = userEvent.setup();
+
+    const takeButtons = await screen.findAllByRole('button', { name: 'Take this' });
+    await user.click(takeButtons[0]!);
+    await user.type(await screen.findByLabelText('Reply to this visitor'), 'details for A only');
+
+    await user.click(screen.getAllByRole('button', { name: 'Take this' })[1]!);
+    await screen.findByRole('region', { name: 'Conversation REF-B' });
+    expect(screen.getByLabelText('Reply to this visitor')).toHaveValue('');
+
+    await user.click(screen.getByRole('button', { name: /REF-A/ }));
+    await screen.findByRole('region', { name: 'Conversation REF-A' });
+    expect(screen.getByLabelText('Reply to this visitor')).toHaveValue('details for A only');
+
+    const sent = fetchMock.mock.calls.filter(
+      (call) =>
+        (call[1] as RequestInit | undefined)?.method === 'POST' &&
+        String(call[0]).endsWith('/messages'),
+    );
+    expect(sent).toHaveLength(0);
+  });
+
+  it('shows the conversation the visitor had before the claim', async () => {
+    vi.stubGlobal(
+      'fetch',
+      agentFetch({
+        queue: [queueEntry('sess-a', 'REF-A')],
+        claims: {
+          'sess-a': claimPayload('sess-a', 'REF-A', {
+            transcript: [
+              { role: 'user', content: 'I cannot sign in', at: '2026-11-08T10:00:00.000Z' },
+              {
+                role: 'assistant',
+                content: 'Try resetting your password',
+                at: '2026-11-08T10:00:05.000Z',
+              },
+            ],
+            attemptedActions: [
+              {
+                action: 'resend_verification_email',
+                outcome: 'refused',
+                at: '2026-11-08T10:00:06.000Z',
+              },
+            ],
+            citations: [{ title: 'Sign in help' }],
+            accountContext: {
+              signedIn: true,
+              userId: null,
+              planTier: 'pro',
+              subscriptionStatus: 'active',
+              currentPeriodEnd: null,
+              usagePercentage: 42,
+              usageResetAt: null,
+              hasUsageRemaining: true,
+            },
+          }),
+        },
+      }),
+    );
+
+    render(<SupportHandoffQueuePanel />);
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole('button', { name: 'Take this' }));
+
+    const earlier = await screen.findByRole('list', { name: 'Earlier conversation' });
+    expect(within(earlier).getByText('I cannot sign in')).toBeVisible();
+    expect(within(earlier).getByText('Try resetting your password')).toBeVisible();
+    expect(screen.getByText('resend_verification_email: refused')).toBeVisible();
+    expect(screen.getByText('Sources shown: Sign in help')).toBeVisible();
+    expect(screen.getByText(/plan pro/)).toBeVisible();
+  });
+
+  it('reopens the conversations an agent already took after a reload', async () => {
+    vi.stubGlobal(
+      'fetch',
+      agentFetch({
+        active: [
+          claimPayload('sess-a', 'REF-A'),
+          claimPayload('sess-b', 'REF-B', {
+            transcript: [{ role: 'user', content: 'Where is my invoice', at: '' }],
+          }),
+        ],
+      }),
+    );
+
+    render(<SupportHandoffQueuePanel />);
+
+    expect(await screen.findByRole('region', { name: 'Conversation REF-A' })).toBeVisible();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: /REF-B/ }));
+    expect(await screen.findByText('Where is my invoice')).toBeVisible();
+  });
+});
+
+describe('the online control keeps the agent fresh for as long as the console is open', () => {
+  it('renews presence on the interval the server asked for', async () => {
+    const presenceCalls: unknown[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.includes('/agent/presence') && init?.method === 'POST') {
+          const request = JSON.parse(String(init.body)) as { status: string };
+          presenceCalls.push(request);
+          return jsonResponse({
+            presence: { status: request.status, heartbeatIntervalMs: 2000 },
+          });
+        }
+        if (url.includes('/agent/active')) return jsonResponse({ sessions: [] });
+        return jsonResponse({ queue: [] });
+      }),
+    );
+
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      render(<SupportHandoffQueuePanel />);
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
+      await user.type(await screen.findByLabelText('Name visitors see'), 'Robin');
+      await user.click(screen.getByRole('button', { name: 'Go online' }));
+      await waitFor(() => expect(presenceCalls).toHaveLength(1));
+
+      await act(async () => {
+        vi.advanceTimersByTime(2100);
+      });
+      await waitFor(() => expect(presenceCalls).toHaveLength(2));
+      expect(presenceCalls[1]).toEqual({ status: 'online', displayName: 'Robin' });
+
+      await user.click(screen.getByRole('button', { name: 'Go offline' }));
+      await waitFor(() => expect(presenceCalls).toHaveLength(3));
+      await act(async () => {
+        vi.advanceTimersByTime(6000);
+      });
+      expect(presenceCalls).toHaveLength(3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

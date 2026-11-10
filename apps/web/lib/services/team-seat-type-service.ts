@@ -331,6 +331,17 @@ export async function changeMemberSeatType(
       const paidSeat = seats.premium >= 1;
       const paidThrough = paidSeat ? billing.paidThrough : null;
       if (paidSeat) await requireSeatBillingAuthority(input.organizationId, actorId);
+
+      // Written before Stripe is asked to lower the count: the membership trigger locks the
+      // organization row, so the subscription webhook reconciling the lower count waits for this
+      // commit and sees this member already on Standard instead of demoting a different one.
+      await tx.execute(
+        `update public.organization_members
+            set seat_type = 'standard'
+          where organization_id = $1 and user_id = $2`,
+        [input.organizationId, input.targetUserId],
+      );
+
       const nextSeats = paidSeat
         ? await billing.moveSeat({
             seats: { standard: seats.standard + 1, premium: seats.premium - 1 },
@@ -338,13 +349,6 @@ export async function changeMemberSeatType(
             idempotencyKey: input.idempotencyKey ?? null,
           })
         : seats;
-
-      await tx.execute(
-        `update public.organization_members
-            set seat_type = 'standard'
-          where organization_id = $1 and user_id = $2`,
-        [input.organizationId, input.targetUserId],
-      );
 
       return {
         seatType: 'standard',

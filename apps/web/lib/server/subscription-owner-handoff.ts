@@ -98,7 +98,8 @@ export async function applySubscriptionOwnerHandoff(
             apple_original_transaction_id, google_purchase_token, current_period_end
        from subscriptions
       where user_id = $1
-      limit 1`,
+      limit 1
+      for update`,
     [userId],
   );
 
