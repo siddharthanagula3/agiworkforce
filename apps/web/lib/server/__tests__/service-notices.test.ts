@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DependencyStatus, HealthCheckResult, UnreadyDependency } from '../health-check';
 
@@ -29,6 +29,7 @@ vi.mock('@/lib/redis-outage-policy', async (importOriginal) => ({
 import {
   maintenanceUnderway,
   readIncidentRecoveries,
+  readMaintenanceSchedule,
   readServiceNotices,
 } from '../service-notices';
 import { PRODUCT_BRAND } from '@agiworkforce/types';
@@ -284,6 +285,51 @@ describe('readServiceNotices', () => {
 
     delete process.env['AGI_MAINTENANCE_WINDOW'];
     expect(maintenanceUnderway(new Date('2026-10-02T08:30:00.000Z'))).toBeNull();
+  });
+});
+
+describe('maintenance schedule', () => {
+  const START = Date.parse('2026-10-02T08:00:00.000Z');
+  const END = Date.parse('2026-10-02T09:00:00.000Z');
+  const AHEAD_MS = 72 * 60 * 60 * 1000;
+  const at = (ms: number) => new Date(ms);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.resolveRedisOutagePolicy.mockReturnValue('fail-open');
+    mocks.getKeyValueStore.mockReturnValue(null);
+    process.env['AGI_MAINTENANCE_WINDOW'] = '2026-10-02T08:00:00.000Z/2026-10-02T09:00:00.000Z';
+  });
+
+  afterEach(() => {
+    delete process.env['AGI_MAINTENANCE_WINDOW'];
+  });
+
+  it('names the same phase the notice announces at every boundary', async () => {
+    mocks.getCachedHealthChecks.mockResolvedValue(health());
+    const cases: Array<[number, 'upcoming' | 'underway' | null]> = [
+      [START - AHEAD_MS - 1, null],
+      [START - AHEAD_MS, 'upcoming'],
+      [START - 1, 'upcoming'],
+      [START, 'underway'],
+      [END - 1, 'underway'],
+      [END, null],
+    ];
+    for (const [ms, phase] of cases) {
+      expect(readMaintenanceSchedule(at(ms))?.phase ?? null).toBe(phase);
+      const notices = await readServiceNotices(at(ms));
+      const tone = notices.find(({ kind }) => kind === 'maintenance')?.tone;
+      expect(tone ?? null).toBe(phase === 'underway' ? 'warning' : phase ? 'info' : null);
+    }
+  });
+
+  it('has no schedule when the window is absent or malformed', () => {
+    delete process.env['AGI_MAINTENANCE_WINDOW'];
+    expect(readMaintenanceSchedule(at(START))).toBeNull();
+    process.env['AGI_MAINTENANCE_WINDOW'] = '2026-10-02T09:00:00.000Z/2026-10-02T08:00:00.000Z';
+    expect(readMaintenanceSchedule(at(START))).toBeNull();
+    process.env['AGI_MAINTENANCE_WINDOW'] = 'soon';
+    expect(readMaintenanceSchedule(at(START))).toBeNull();
   });
 });
 

@@ -37,11 +37,24 @@ function formatInstant(at: Date): string {
   });
 }
 
-function maintenanceNotice(window: MaintenanceWindow, now: Date): ServiceNotice | null {
+export type MaintenancePhase = 'upcoming' | 'underway';
+
+export interface MaintenanceSchedule {
+  phase: MaintenancePhase;
+  window: MaintenanceWindow;
+}
+
+function announcedPhase(window: MaintenanceWindow, now: Date): MaintenancePhase | null {
   const nowMs = now.getTime();
   if (nowMs >= window.endsAt.getTime()) return null;
   if (window.startsAt.getTime() - nowMs > ANNOUNCE_AHEAD_MS) return null;
-  const underway = isMaintenanceUnderway(window, now);
+  return isMaintenanceUnderway(window, now) ? 'underway' : 'upcoming';
+}
+
+function maintenanceNotice(window: MaintenanceWindow, now: Date): ServiceNotice | null {
+  const phase = announcedPhase(window, now);
+  if (!phase) return null;
+  const underway = phase === 'underway';
   return {
     id: `maintenance:${window.startsAt.toISOString()}`,
     kind: 'maintenance',
@@ -202,6 +215,16 @@ function readMaintenanceWindow(): MaintenanceWindow | null {
 export function maintenanceUnderway(now: Date = new Date()): MaintenanceWindow | null {
   const window = readMaintenanceWindow();
   return window && isMaintenanceUnderway(window, now) ? window : null;
+}
+
+export function readMaintenanceSchedule(now: Date = new Date()): MaintenanceSchedule | null {
+  const window = readMaintenanceWindow();
+  const phase = window ? announcedPhase(window, now) : null;
+  return window && phase ? { phase, window } : null;
+}
+
+export function formatMaintenanceStart(window: MaintenanceWindow): string {
+  return formatInstant(window.startsAt);
 }
 
 export function formatMaintenanceEnd(window: MaintenanceWindow): string {
