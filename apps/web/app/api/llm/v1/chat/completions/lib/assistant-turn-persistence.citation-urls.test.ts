@@ -243,6 +243,47 @@ describe('a persisted grounded turn is patched to the publisher URLs', () => {
     expect(patchedMetadata()).not.toHaveProperty('serverPersisted');
   });
 
+  it('patches the client save that landed during resolution instead of restoring the server copy', async () => {
+    const url = `${REDIRECT}/raced`;
+    const serverCopy = { citations: [{ type: 'url_citation', url, title: 'AP News' }] };
+    const clientCopy = {
+      citations: [
+        { type: 'url_citation', url, title: 'AP News' },
+        { type: 'url_citation', url: 'https://www.reuters.com/world/extra', title: 'Reuters' },
+      ],
+    };
+    storedMetadata = serverCopy;
+    db.execute.mockImplementation(async (sql: string, params: unknown[] = []) => {
+      executed.push({ sql, params });
+      const current = JSON.stringify(storedMetadata?.['citations'] ?? null);
+      if (params[6] !== current) return 0;
+      storedMetadata = { ...storedMetadata, ...JSON.parse(String(params[3])) };
+      return 1;
+    });
+    const fetchImpl = vi.fn(async () => {
+      storedMetadata = clientCopy;
+      return redirectTo('https://apnews.com/article/raced');
+    }) as unknown as typeof fetch;
+
+    await patchAssistantTurnSourceUrls({
+      processed,
+      userId: USER_ID,
+      citations: [cite({ url, title: 'AP News' })],
+      overrides: { fetchImpl },
+    });
+
+    expect(executed).toHaveLength(2);
+    expect(executed[0]?.sql).toContain('is not distinct from $7::jsonb');
+    expect(storedMetadata?.['citations']).toEqual([
+      { type: 'url_citation', url: 'https://apnews.com/article/raced', title: 'AP News' },
+      { type: 'url_citation', url: 'https://www.reuters.com/world/extra', title: 'Reuters' },
+    ]);
+    db.execute.mockImplementation(async (sql: string, params: unknown[] = []) => {
+      executed.push({ sql, params });
+      return 1;
+    });
+  });
+
   /**
    * The patch is a second write to a row another request may also be updating,
    * so it carries the same ownership join the insert does rather than trusting
