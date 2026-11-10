@@ -125,6 +125,32 @@ describe('the text a native dialog is drawn with', () => {
     expect(text.detail?.length).toBeLessThan(12_100);
   });
 
+  it('shows nothing after the notice when no tail is asked for, and counts only what was cut', () => {
+    const name = `${'A'.repeat(60)}B`;
+
+    expect(dialogText.headAndTail(name, { head: 60, tail: 0 })).toBe(
+      `${'A'.repeat(60)} [1 characters not shown] `,
+    );
+    expect(dialogText.shownValue(name, { head: 10, tail: 0 })).toBe(
+      `${'A'.repeat(10)} [51 characters not shown] `,
+    );
+    expect(dialogText.headAndTail(name, { head: 60, tail: 1 })).toBe(name);
+    expect(dialogText.headAndTail(name, { head: 40, tail: 5 })).toBe(
+      `${'A'.repeat(40)} [16 characters not shown] AAAAB`,
+    );
+  });
+
+  it('counts a long capture source name once, against the name itself', () => {
+    const name = `${'A'.repeat(60)}${'C'.repeat(20)}${'B'.repeat(20)}`;
+    const { buttons } = nativeMessageText({
+      message: 'm',
+      buttons: [dialogText.visibleInDialog(name), 'Cancel'],
+    });
+
+    expect(buttons?.[0]).toBe(`${'A'.repeat(60)} [20 characters not shown] ${'B'.repeat(20)}`);
+    expect(buttons?.[1]).toBe('Cancel');
+  });
+
   it('adds no field the caller left out, and passes the rest through', () => {
     const signal = new AbortController().signal;
 

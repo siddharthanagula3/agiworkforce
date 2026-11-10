@@ -96,7 +96,7 @@ import {
 import { getRoot, listRoots } from './runtime/workspaceStore';
 import { agentAllowedIn, agentConsentAt } from './runtime/agentAccess';
 import { openOpenSourceNotices, openSourceNoticesPath } from './openSourceNoticesFile';
-import { NOT_THIS_APP, shownValue } from './runtime/dialogText';
+import { NOT_THIS_APP, shownValue, visibleInDialog } from './runtime/dialogText';
 import { createNativeNotification, showNativeMessage } from './runtime/nativeSurface';
 import { askNativeQuestion, NOT_ASKED_MESSAGES } from './runtime/nativeQuestions';
 import { getPermissionState } from './runtime/permissionManager';
@@ -857,10 +857,7 @@ function configureSession(targetSession: Electron.Session): void {
             message: `Choose what to share with ${PRODUCT_NAMES.desktop}`,
             detail:
               'A window shares only that window, even when something else is in front of it. Sharing stops when you end screen capture in the chat.',
-            buttons: [
-              ...offered.map((source) => shownValue(source.name, CAPTURE_SOURCE_SHOWN)),
-              'Cancel',
-            ],
+            buttons: [...offered.map((source) => visibleInDialog(source.name)), 'Cancel'],
             defaultId: cancelId,
             cancelId,
             noLink: true,
@@ -1972,7 +1969,6 @@ function hostPreferencesState(): HostPreferencesState {
  */
 const PROGRAM_PATH_SHOWN = { head: 400, tail: 200 };
 const PAIRING_CODE_SHOWN = { head: 40, tail: 0 };
-const CAPTURE_SOURCE_SHOWN = { head: 60, tail: 0 };
 
 /**
  * A yes or no this window asks because a page changed a preference. The
@@ -2540,8 +2536,8 @@ if (!hasSingleInstanceLock) {
       answersUserInput: windowAnswersUserInput,
     });
 
-    void startLocalRoutines().catch((error: unknown) =>
-      console.warn('[local-routines] unavailable:', error),
+    void startLocalRoutines((rootId, event) => agentNotifier.handle(rootId, event)).catch(
+      (error: unknown) => console.warn('[local-routines] unavailable:', error),
     );
 
     configureQuickAskBridge({
