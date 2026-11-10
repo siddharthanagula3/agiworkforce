@@ -149,7 +149,7 @@ function MacHero({
       </p>
       <div className="agi-ds-btn-row">
         <a
-          href={macDownloadHref(recommended)}
+          href={macDownloadHref(recommended, version)}
           className="agi-ds-btn"
           data-variant="primary"
           aria-describedby="agi-download-arch"
@@ -170,7 +170,7 @@ function MacHero({
         {other ? (
           <>
             {` On ${OTHER_MAC[other]}? `}
-            <a href={macDownloadHref(other)} className="agi-dl-link">
+            <a href={macDownloadHref(other, version)} className="agi-dl-link">
               Download the {ARCHITECTURE_LABELS[other]} version
             </a>
             .
@@ -292,7 +292,7 @@ export function DownloadSurfaces({
       if (desktopRelease) {
         return (
           <a
-            href={macDownloadHref(desktopRelease.recommended)}
+            href={macDownloadHref(desktopRelease.recommended, desktopRelease.version)}
             className="agi-ds-btn"
             data-variant="primary"
           >

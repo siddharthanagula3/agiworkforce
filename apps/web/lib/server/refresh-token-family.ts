@@ -77,6 +77,23 @@ const COMPROMISE_FAMILY = `
    where family_id::text = $1
      and user_id = $2`;
 
+/**
+ * Under READ COMMITTED an UPDATE that waits on a rotation's row lock finishes
+ * against the rows it saw when it started, so the successor that rotation
+ * committed survives it. A second statement starts after the wait and sees it.
+ * A third pass is never needed: the successor's own rotation needs a token this
+ * revocation has already ended.
+ */
+async function revokeSettled(
+  db: DatabaseAdapter,
+  statement: string,
+  params: unknown[],
+): Promise<number> {
+  const first = await db.query<{ id: string }>(statement, params);
+  const second = await db.query<{ id: string }>(statement, params);
+  return new Set([...first, ...second].map((revoked) => revoked.id)).size;
+}
+
 export interface FamilyCompromise {
   familyId: string;
   userId: string;
@@ -93,10 +110,10 @@ export async function finishFamilyAsCompromised(
   input: FamilyCompromise,
 ): Promise<DeviceCredentialRevocationResult> {
   const scope = [input.familyId, input.userId, input.at];
-  const revoked = await db.query<{ id: string }>(REVOKE_FAMILY, scope);
+  const revoked = await revokeSettled(db, REVOKE_FAMILY, scope);
 
   await db.execute(COMPROMISE_FAMILY, [...scope, input.reason]);
-  return { revoked: revoked.length, compromiseRecorded: true };
+  return { revoked, compromiseRecorded: true };
 }
 
 const REVOKE_EVERY = `
@@ -131,8 +148,7 @@ export async function revokeEveryDeviceRefreshCredential(
   await revokeMobileIntentTokens(db, userId, null);
   await db.execute(REVOKE_APPROVED_DEVICE_CODES, [userId]);
   await db.execute(DELETE_UNCONSUMED_DESKTOP_GRANTS, [userId]);
-  const revoked = await db.query<{ id: string }>(REVOKE_EVERY, [userId]);
-  return revoked.length;
+  return revokeSettled(db, REVOKE_EVERY, [userId]);
 }
 
 /**
@@ -144,12 +160,12 @@ export async function revokeDeviceRefreshCredentials(
   input: DeviceCredentialRevocation,
 ): Promise<DeviceCredentialRevocationResult> {
   const params = [input.deviceId, input.userId, input.credentialFamilyId];
-  const revoked = await db.query<{ id: string }>(REVOKE, params);
+  const revoked = await revokeSettled(db, REVOKE, params);
 
   if (!input.compromisedAs) {
-    return { revoked: revoked.length, compromiseRecorded: false };
+    return { revoked, compromiseRecorded: false };
   }
 
   await db.execute(COMPROMISE, [...params, input.compromisedAs]);
-  return { revoked: revoked.length, compromiseRecorded: true };
+  return { revoked, compromiseRecorded: true };
 }

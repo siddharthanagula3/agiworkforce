@@ -277,3 +277,68 @@ describe('signing out everywhere also ends credentials nobody has redeemed yet',
     ]);
   });
 });
+
+describe('a rotation that commits while the revocation is waiting on its row lock', () => {
+  function successorCommitsDuringFirstRevocation(rows: TokenRow[], successor: TokenRow) {
+    const inner = fakeDeviceRefreshTokens(rows);
+    let revocations = 0;
+    const settle = async <T>(sql: string, run: () => Promise<T>): Promise<T> => {
+      const result = await run();
+      if (/set revoked_at/.test(sql) && (revocations += 1) === 1) rows.push(successor);
+      return result;
+    };
+    return {
+      ...inner,
+      query: ((sql: string, params?: unknown[]) =>
+        settle(sql, () => inner.query(sql, params))) as DatabaseAdapter['query'],
+      execute: ((sql: string, params?: unknown[]) =>
+        settle(sql, () => inner.execute(sql, params))) as DatabaseAdapter['execute'],
+    } as DatabaseAdapter;
+  }
+
+  function racingRows() {
+    const rows = [row({ id: 'spent', family_id: 'family-a' })];
+    const successor = row({ id: 'successor', family_id: 'family-a' });
+    return { rows, successor };
+  }
+
+  it('unlinking a device also ends the successor credential the rotation issued', async () => {
+    const { rows, successor } = racingRows();
+
+    const outcome = await revokeDeviceRefreshCredentials(
+      successorCommitsDuringFirstRevocation(rows, successor),
+      { userId: 'user-1', deviceId: 'device-1', credentialFamilyId: null },
+    );
+
+    expect(rows.map(({ id, revoked_at }) => [id, revoked_at !== null])).toEqual([
+      ['spent', true],
+      ['successor', true],
+    ]);
+    expect(outcome.revoked).toBe(2);
+  });
+
+  it('finishing a compromised family also ends the successor credential', async () => {
+    const { rows, successor } = racingRows();
+
+    await finishFamilyAsCompromised(successorCommitsDuringFirstRevocation(rows, successor), {
+      familyId: 'family-a',
+      userId: 'user-1',
+      reason: 'replayed',
+      at: AT,
+    });
+
+    expect(rows.every((candidate) => candidate.revoked_at !== null)).toBe(true);
+  });
+
+  it('signing out everywhere also ends the successor credential', async () => {
+    const { rows, successor } = racingRows();
+
+    const revoked = await revokeEveryDeviceRefreshCredential(
+      successorCommitsDuringFirstRevocation(rows, successor),
+      'user-1',
+    );
+
+    expect(rows.every((candidate) => candidate.revoked_at !== null)).toBe(true);
+    expect(revoked).toBe(2);
+  });
+});

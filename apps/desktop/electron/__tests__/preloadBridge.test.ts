@@ -183,3 +183,59 @@ describe('the theme report', () => {
     expect(invoke).not.toHaveBeenCalled();
   });
 });
+
+describe('a downloaded update the page missed', () => {
+  type RuntimeEvents = { onRuntimeEvent: (callback: (event: unknown) => void) => () => void };
+
+  async function runtimeEvents(): Promise<RuntimeEvents> {
+    return (await loadPreload([])) as unknown as RuntimeEvents;
+  }
+
+  it('is replayed to a page that subscribes after the update finished downloading', async () => {
+    const bridge = await runtimeEvents();
+    invoke.mockClear();
+    invoke.mockResolvedValueOnce({ version: '1.3.0' });
+    const seen = vi.fn();
+
+    bridge.onRuntimeEvent(seen);
+    await vi.waitFor(() => expect(seen).toHaveBeenCalledTimes(1));
+
+    expect(invoke).toHaveBeenCalledWith(ELECTRON_IPC_CHANNELS.pendingUpdate);
+    expect(seen).toHaveBeenCalledWith({ kind: 'update-ready', version: '1.3.0' });
+  });
+
+  it('says nothing when no update is downloaded', async () => {
+    const bridge = await runtimeEvents();
+    invoke.mockClear();
+    invoke.mockResolvedValueOnce(null);
+    const seen = vi.fn();
+
+    bridge.onRuntimeEvent(seen);
+    await vi.waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith(ELECTRON_IPC_CHANNELS.pendingUpdate),
+    );
+    await Promise.resolve();
+
+    expect(seen).not.toHaveBeenCalled();
+  });
+
+  it('is not delivered to a page that already unsubscribed', async () => {
+    const bridge = await runtimeEvents();
+    invoke.mockClear();
+    let answer!: (value: unknown) => void;
+    invoke.mockReturnValueOnce(
+      new Promise((resolve) => {
+        answer = resolve;
+      }),
+    );
+    const seen = vi.fn();
+
+    const stop = bridge.onRuntimeEvent(seen);
+    stop();
+    answer({ version: '1.3.0' });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(seen).not.toHaveBeenCalled();
+  });
+});

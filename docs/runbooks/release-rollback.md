@@ -43,9 +43,11 @@ Rollback is a **workflow dispatch**, not a step in the deploy run.
    the same approval as a deploy, deliberately: it changes what users get.
 
 The job builds nothing. It calls
-`POST /v1/projects/{projectId}/rollback/{deploymentId}`, then re-runs
-`scripts/verify-deployment.mjs` against the public apex, then appends a
-`rolled_back` row to the release audit trail.
+`POST /v1/projects/{projectId}/rollback/{deploymentId}`, appends a
+`rolled_back` row to the release audit trail, then re-runs
+`scripts/verify-deployment.mjs` against the public apex. An audit write that
+fails after the provider accepted the rollback is a workflow warning, not a
+failure, so the serving-path verification still runs.
 
 ### From a laptop, when Actions is the thing that is down
 

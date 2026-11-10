@@ -38,9 +38,9 @@ function desktopManifest(architectures = { arm64: true, x64: true }) {
   };
 }
 
-function checksumManifest() {
+function checksumManifest(version = '1.2.0') {
   return {
-    version: '1.2.0',
+    version,
     algorithm: 'sha256',
     installers: [
       { name: 'agiworkforce_1.2.0_aarch64.dmg', architecture: 'arm64', sha256: ARM64_SHA },
@@ -83,10 +83,10 @@ describe('the Desktop installer section on /desktop', () => {
     const region = await screen.findByRole('region', { name: 'Desktop installer availability' });
     expect(
       await within(region).findByRole('link', { name: 'Download for Apple silicon' }),
-    ).toHaveAttribute('href', '/api/download?platform=mac&arch=arm64');
+    ).toHaveAttribute('href', '/api/download?platform=mac&arch=arm64&version=1.2.0');
     expect(within(region).getByRole('link', { name: 'Download for Intel Mac' })).toHaveAttribute(
       'href',
-      '/api/download?platform=mac&arch=x64',
+      '/api/download?platform=mac&arch=x64&version=1.2.0',
     );
     expect(within(region).queryByRole('link', { name: /Linux|Windows/i })).not.toBeInTheDocument();
     const desktopRequests = fetchMock.mock.calls
@@ -133,6 +133,46 @@ describe('the Desktop installer section on /desktop', () => {
     expect(within(steps).getAllByRole('listitem').length).toBeGreaterThanOrEqual(4);
     expect(steps).toHaveTextContent('shasum -a 256');
     expect(steps).toHaveTextContent('Applications');
+  });
+
+  it('never shows checksums published for a different release than the one offered', async () => {
+    respondWith(desktopManifest(), checksumManifest('1.1.0'));
+    render(<DesktopDownloadAvailability />);
+
+    expect(
+      await screen.findByRole('link', { name: 'Download for Apple silicon' }),
+    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        fetchMock.mock.calls.some(([input]) =>
+          requestPath(input as RequestInfo).includes(CHECKSUM_PATH),
+        ),
+      ).toBe(true),
+    );
+    expect(screen.queryByRole('list', { name: 'Installer checksums' })).not.toBeInTheDocument();
+  });
+
+  it('refreshes the published checksums together with the release on retry', async () => {
+    let releaseRequests = 0;
+    let checksumRequests = 0;
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      if (requestPath(input).includes(CHECKSUM_PATH)) {
+        checksumRequests += 1;
+        return Promise.resolve(Response.json(checksumManifest()));
+      }
+      releaseRequests += 1;
+      return releaseRequests === 1
+        ? Promise.reject(new Error('network unavailable'))
+        : Promise.resolve(Response.json(desktopManifest()));
+    });
+    render(<DesktopDownloadAvailability />);
+
+    const alert = await screen.findByRole('alert');
+    expect(checksumRequests).toBe(1);
+    fireEvent.click(within(alert).getByRole('button', { name: 'Retry release check' }));
+
+    expect(await screen.findByRole('list', { name: 'Installer checksums' })).toBeInTheDocument();
+    expect(checksumRequests).toBe(2);
   });
 
   it('shows no checksum block when the release publishes none', async () => {
@@ -212,7 +252,7 @@ describe('the Desktop installer section on /desktop', () => {
 
     expect(await screen.findByRole('link', { name: 'Download for Apple silicon' })).toHaveAttribute(
       'href',
-      '/api/download?platform=mac&arch=arm64',
+      '/api/download?platform=mac&arch=arm64&version=1.2.0',
     );
     expect(screen.queryByText(/AppImage|Tauri|Linux x64/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Public launch ·/i)).not.toBeInTheDocument();

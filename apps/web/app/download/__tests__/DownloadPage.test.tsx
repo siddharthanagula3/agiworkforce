@@ -221,11 +221,11 @@ describe('/download with a published macOS build', () => {
     await waitFor(() => expect(hero).toHaveTextContent('Detected: Apple silicon.'));
     expect(within(hero).getByRole('link', { name: 'Download for Mac' })).toHaveAttribute(
       'href',
-      '/api/download?platform=mac&arch=arm64',
+      '/api/download?platform=mac&arch=arm64&version=1.2.0',
     );
     expect(
       within(hero).getByRole('link', { name: 'Download the Intel Mac version' }),
-    ).toHaveAttribute('href', '/api/download?platform=mac&arch=x64');
+    ).toHaveAttribute('href', '/api/download?platform=mac&arch=x64&version=1.2.0');
     expect(within(hero).getByRole('link', { name: 'Open AGI Chat' })).toHaveAttribute(
       'href',
       WEB_ENTRY_HREF,
@@ -236,7 +236,7 @@ describe('/download with a published macOS build', () => {
     expect(desktop).toHaveTextContent(AVAILABLE_NOW_LABEL);
     expect(within(desktop).getByRole('link', { name: 'Download for Mac' })).toHaveAttribute(
       'href',
-      '/api/download?platform=mac&arch=arm64',
+      '/api/download?platform=mac&arch=arm64&version=1.2.0',
     );
   });
 
@@ -251,13 +251,13 @@ describe('/download with a published macOS build', () => {
     await waitFor(() =>
       expect(within(hero).getByRole('link', { name: 'Download for Mac' })).toHaveAttribute(
         'href',
-        '/api/download?platform=mac&arch=x64',
+        '/api/download?platform=mac&arch=x64&version=1.2.0',
       ),
     );
     expect(hero).toHaveTextContent('Detected: Intel Mac.');
     expect(
       within(hero).getByRole('link', { name: 'Download the Apple silicon version' }),
-    ).toHaveAttribute('href', '/api/download?platform=mac&arch=arm64');
+    ).toHaveAttribute('href', '/api/download?platform=mac&arch=arm64&version=1.2.0');
   });
 
   it('says so when the release carries only the other architecture', async () => {
@@ -273,7 +273,7 @@ describe('/download with a published macOS build', () => {
     );
     expect(within(hero).getByRole('link', { name: 'Download for Mac' })).toHaveAttribute(
       'href',
-      '/api/download?platform=mac&arch=arm64',
+      '/api/download?platform=mac&arch=arm64&version=1.2.0',
     );
     expect(within(hero).queryByRole('link', { name: /version$/ })).not.toBeInTheDocument();
   });

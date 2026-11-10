@@ -985,6 +985,35 @@ describe('the update buttons', () => {
     }
   });
 
+  it('tells a page that attaches later which update is already downloaded', async () => {
+    const pending = ipcHandlers.get(ELECTRON_IPC_CHANNELS.pendingUpdate);
+    if (!pending) throw new Error('the pending update channel was never registered');
+
+    await expect(pending(trustedCaller())).resolves.toBeNull();
+    downloadedVersion = '1.3.0';
+    try {
+      await expect(pending(trustedCaller())).resolves.toEqual({ version: '1.3.0' });
+      downloadedVersion = '';
+      await expect(pending(trustedCaller())).resolves.toEqual({ version: '' });
+    } finally {
+      downloadedVersion = null;
+    }
+  });
+
+  it('does not tell a page it does not trust which update is downloaded', async () => {
+    const pending = ipcHandlers.get(ELECTRON_IPC_CHANNELS.pendingUpdate);
+    if (!pending) throw new Error('the pending update channel was never registered');
+    const frame = { url: 'https://untrusted.example/page' };
+    downloadedVersion = '1.3.0';
+    try {
+      await expect(pending({ senderFrame: frame, sender: { mainFrame: frame } })).rejects.toThrow(
+        'Untrusted bridge caller.',
+      );
+    } finally {
+      downloadedVersion = null;
+    }
+  });
+
   it('opens the installer download while no update is downloaded, and restart says not ready', async () => {
     const download = ipcHandlers.get(ELECTRON_IPC_CHANNELS.openUpdateInstaller);
     const restart = ipcHandlers.get(ELECTRON_IPC_CHANNELS.restartToUpdate);
