@@ -39,9 +39,30 @@ fn atomic_write_session(target: &Path, contents: &[u8]) -> Result<()> {
     Ok(())
 }
 
-/// Serializes this process's saves, not other processes. External writers still
-/// require a cooperative lock around the whole read/preserve/replace operation.
+/// Serializes this process's saves. [`lock_session_saves`] extends the same
+/// exclusion to every other process saving into the directory.
 static SESSION_WRITES: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+pub(crate) const SESSION_SAVE_LOCK_FILE: &str = ".session-save.lock";
+
+/// Every writer holds this across reading, preserving and replacing a session
+/// file, so two processes cannot both observe the same baseline and the second
+/// rename silently discard the first one's turns. Closing the handle unlocks.
+fn lock_session_saves(target: &Path) -> Result<fs::File> {
+    let dir = target
+        .parent()
+        .context("Managed session path has no parent")?;
+    let lock_path = dir.join(SESSION_SAVE_LOCK_FILE);
+    let file = fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(&lock_path)
+        .with_context(|| format!("Failed to open session lock {}", lock_path.display()))?;
+    file.lock()
+        .with_context(|| format!("Failed to lock {}", lock_path.display()))?;
+    Ok(file)
+}
 
 #[derive(Debug, Clone)]
 struct SessionBaseline {
@@ -1562,6 +1583,7 @@ impl ManagedSession {
             .lock()
             .map_err(|_| anyhow::anyhow!("Session write lock is poisoned"))?;
         let target = session_target(path)?;
+        let _saves = lock_session_saves(&target)?;
         let mut baseline = self
             .persistence
             .baseline
@@ -1586,8 +1608,6 @@ impl ManagedSession {
             }
             None => {}
         }
-        // This is not cross-process compare-and-swap: a foreign writer can
-        // still change the target between the read above and this replacement.
         atomic_write_session(&target, &buf)
             .with_context(|| format!("Failed to write session file {}", target.display()))?;
         *baseline = Some(SessionBaseline {
@@ -3374,5 +3394,59 @@ mod tests {
                 .any(|message| format!("{:?}", message.content).contains("more of mine")),
             "the writer that won must still have written its turn"
         );
+    }
+
+    #[test]
+    fn a_save_reads_the_destination_only_under_the_cross_process_lock() {
+        let dir = tempdir().expect("tempdir");
+        let path = dir.path().join("s1.jsonl");
+        let mut mine = ManagedSession::new("s1", Utc::now());
+        mine.save_to_path(&path).expect("baseline save");
+
+        let elsewhere = tempdir().expect("other process dir");
+        let foreign_path = elsewhere.path().join("s1.jsonl");
+        let mut theirs = ManagedSession::load_from_path(&path).expect("load second writer");
+        theirs.messages.push(Message::text("user", "theirs"));
+        theirs
+            .save_to_path(&foreign_path)
+            .expect("stage the other process's version");
+        let theirs_bytes = std::fs::read(&foreign_path).expect("their bytes");
+
+        let held = std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(dir.path().join(super::SESSION_SAVE_LOCK_FILE))
+            .expect("open the shared save lock");
+        held.lock().expect("the other process holds the save lock");
+
+        mine.messages.push(Message::text("user", "mine"));
+        let saving = std::thread::spawn({
+            let path = path.clone();
+            move || mine.save_to_path(&path)
+        });
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        assert!(
+            !saving.is_finished(),
+            "a save must wait for another process's read-to-rename window to close"
+        );
+
+        std::fs::write(&path, &theirs_bytes).expect("the other process installs its version");
+        drop(held);
+        saving
+            .join()
+            .expect("save thread")
+            .expect("save after the lock is released");
+
+        assert_eq!(
+            recovery_bytes(dir.path()),
+            vec![theirs_bytes],
+            "the version installed while this save waited must be preserved"
+        );
+        let current = ManagedSession::load_from_path(&path).expect("load current");
+        assert!(current
+            .messages
+            .iter()
+            .any(|message| message.text_content() == "mine"));
     }
 }

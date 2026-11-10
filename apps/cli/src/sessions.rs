@@ -897,6 +897,15 @@ pub fn db_stats(conn: &Connection) -> Result<DbStats> {
     })
 }
 
+/// A destination holding only a strict prefix of its legacy source was left
+/// by an interrupted import; anything else carries turns of its own.
+fn is_unfinished_import(existing: &[Message], legacy: &[Message]) -> bool {
+    existing.len() < legacy.len()
+        && existing.iter().zip(legacy).all(|(have, source)| {
+            have.role == source.role && have.text_content() == source.text_content()
+        })
+}
+
 /// Import legacy JSON conversations into the managed session store.
 pub fn migrate_json_conversations(conn: &Connection, json_dir: &Path) -> Result<usize> {
     if !json_dir.exists() {
@@ -929,9 +938,39 @@ pub fn migrate_json_conversations(conn: &Connection, json_dir: &Path) -> Result<
             _ => continue,
         };
 
-        if find_session_path(&conn.base_dir, session_id).is_some() {
-            continue;
-        }
+        let legacy_messages: Vec<Message> = json
+            .get("messages")
+            .and_then(|value| value.as_array())
+            .map(|messages| {
+                messages
+                    .iter()
+                    .map(|message| {
+                        let role = message
+                            .get("role")
+                            .and_then(|value| value.as_str())
+                            .unwrap_or("user");
+                        let content = message
+                            .get("content")
+                            .and_then(|value| value.as_str())
+                            .unwrap_or("");
+                        Message::text(role, content)
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let mut session = match find_session_path(&conn.base_dir, session_id) {
+            None => ManagedSession::new(session_id.to_string(), Utc::now()),
+            Some(path) => {
+                let Ok(existing) = load_managed_session_from_path(&path) else {
+                    continue;
+                };
+                if !is_unfinished_import(&existing.messages, &legacy_messages) {
+                    continue;
+                }
+                existing
+            }
+        };
 
         let title = json
             .get("title")
@@ -941,21 +980,18 @@ pub fn migrate_json_conversations(conn: &Connection, json_dir: &Path) -> Result<
             .get("model")
             .and_then(|value| value.as_str())
             .unwrap_or("unknown");
-        save_session(conn, session_id, title, model, "", "")?;
+        let mut metadata = read_metadata(&conn.base_dir, session_id)?.unwrap_or_default();
+        metadata.title = Some(title.to_string());
+        metadata.custom_title = true;
+        metadata.model = Some(model.to_string());
+        write_metadata(&conn.base_dir, session_id, &metadata)?;
 
-        if let Some(messages) = json.get("messages").and_then(|value| value.as_array()) {
-            for message in messages {
-                let role = message
-                    .get("role")
-                    .and_then(|value| value.as_str())
-                    .unwrap_or("user");
-                let content = message
-                    .get("content")
-                    .and_then(|value| value.as_str())
-                    .unwrap_or("");
-                save_message(conn, session_id, &Message::text(role, content), 0)?;
-            }
+        let already_imported = session.messages.len();
+        for message in legacy_messages.into_iter().skip(already_imported) {
+            session.push_message(message);
         }
+        session.touch();
+        save_session_to_default_path(&conn.base_dir, &session)?;
 
         imported += 1;
     }
@@ -1647,6 +1683,89 @@ mod tests {
         let imported = migrate_json_conversations(&conn, &conversations_dir).unwrap();
         assert_eq!(imported, 1);
         assert_eq!(list_sessions(&conn, 10).unwrap()[0].id, "legacy-session");
+    }
+
+    fn write_legacy_conversation(dir: &Path, id: &str, turns: &[(&str, &str)]) {
+        fs::create_dir_all(dir).unwrap();
+        let messages: Vec<_> = turns
+            .iter()
+            .map(|(role, content)| serde_json::json!({ "role": role, "content": content }))
+            .collect();
+        fs::write(
+            dir.join(format!("{id}.json")),
+            serde_json::json!({ "id": id, "title": "Legacy", "messages": messages }).to_string(),
+        )
+        .unwrap();
+    }
+
+    fn turn_texts(conn: &Connection, id: &str) -> Vec<(String, String)> {
+        load_session(conn, id)
+            .unwrap()
+            .into_iter()
+            .map(|message| (message.role.clone(), message.text_content()))
+            .collect()
+    }
+
+    #[test]
+    fn rerunning_the_migration_completes_an_interrupted_import() {
+        let (tempdir, conn) = temp_connection();
+        let conversations_dir = tempdir.path().join("conversations");
+        let turns = [("user", "Hello"), ("assistant", "Hi"), ("user", "Bye")];
+        write_legacy_conversation(&conversations_dir, "interrupted", &turns);
+        save_session(&conn, "interrupted", "Legacy", "", "", "").unwrap();
+        save_message(&conn, "interrupted", &Message::text("user", "Hello"), 0).unwrap();
+
+        let imported = migrate_json_conversations(&conn, &conversations_dir).unwrap();
+
+        assert_eq!(
+            imported, 1,
+            "a prefix left by an interrupted run is not a finished import"
+        );
+        assert_eq!(
+            turn_texts(&conn, "interrupted"),
+            turns
+                .iter()
+                .map(|(role, text)| (role.to_string(), text.to_string()))
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(
+            migrate_json_conversations(&conn, &conversations_dir).unwrap(),
+            0,
+            "a completed import is not imported twice"
+        );
+        assert_eq!(turn_texts(&conn, "interrupted").len(), 3);
+    }
+
+    #[test]
+    fn the_migration_never_rewrites_a_destination_with_its_own_turns() {
+        let (tempdir, conn) = temp_connection();
+        let conversations_dir = tempdir.path().join("conversations");
+        write_legacy_conversation(
+            &conversations_dir,
+            "continued",
+            &[("user", "Hello"), ("assistant", "Hi"), ("user", "Bye")],
+        );
+        save_session(&conn, "continued", "Legacy", "", "", "").unwrap();
+        save_message(&conn, "continued", &Message::text("user", "Hello"), 0).unwrap();
+        save_message(
+            &conn,
+            "continued",
+            &Message::text("user", "local follow-up"),
+            0,
+        )
+        .unwrap();
+
+        assert_eq!(
+            migrate_json_conversations(&conn, &conversations_dir).unwrap(),
+            0
+        );
+        assert_eq!(
+            turn_texts(&conn, "continued"),
+            vec![
+                ("user".to_string(), "Hello".to_string()),
+                ("user".to_string(), "local follow-up".to_string()),
+            ]
+        );
     }
 
     #[test]

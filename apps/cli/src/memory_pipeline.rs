@@ -344,7 +344,9 @@ impl MemoryPipeline {
             summary_body
         );
 
-        fs::write(&output_path, content)?;
+        let staged = tempfile::NamedTempFile::new_in(&summaries_dir)?;
+        fs::write(staged.path(), content)?;
+        staged.persist(&output_path)?;
         Ok(())
     }
 

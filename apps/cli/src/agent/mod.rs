@@ -364,6 +364,10 @@ pub struct AgentSession {
     /// its shutdown acknowledgment.
     memory_consolidation_tasks: Vec<tokio::task::JoinHandle<()>>,
     memory_extracted_through: usize,
+    /// Start of the earliest scheduled memory window whose summary was never
+    /// written. The next window and the session-end summary begin there, so a
+    /// failed write is retried instead of being counted as extracted.
+    memory_unsaved_from: std::sync::Arc<std::sync::Mutex<Option<usize>>>,
     memory_window_due_at: std::time::Instant,
     /// Marks this session's memory origin tags; see
     /// [`crate::memory_pipeline::origin_memory_tag`].
@@ -859,6 +863,7 @@ impl AgentSession {
             team_identity: None,
             memory_consolidation_tasks: Vec::new(),
             memory_extracted_through: 0,
+            memory_unsaved_from: Default::default(),
             memory_window_due_at: std::time::Instant::now()
                 + crate::memory_pipeline::MEMORY_WINDOW_INTERVAL,
             memory_nonce,
@@ -2075,6 +2080,14 @@ impl AgentSession {
         self.recent_tool_calls.clear();
         self.loop_strike_count = 0;
         self.memory_extracted_through = self.memory_extracted_through.min(self.messages.len());
+        if let Some(failed) = self
+            .memory_unsaved_from
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_mut()
+        {
+            *failed = (*failed).min(self.messages.len());
+        }
         Ok(())
     }
 
@@ -2573,10 +2586,21 @@ impl AgentSession {
         self.managed_session.as_ref().map(|s| s.session_id.as_str())
     }
 
+    fn unsummarized_messages(&self) -> &[Message] {
+        let failed = *self
+            .memory_unsaved_from
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let start = failed.map_or(self.memory_extracted_through, |failed| {
+            failed.min(self.memory_extracted_through)
+        });
+        &self.messages[start.min(self.messages.len())..]
+    }
+
     /// Persist the session-end memory summary through the session's own
     /// off-device route when it has one, and on the device otherwise.
     pub async fn finalize_memory(&self, config: &CliConfig) -> Result<()> {
-        let unextracted = &self.messages[self.memory_extracted_through.min(self.messages.len())..];
+        let unextracted = self.unsummarized_messages();
         if !self.memory_enabled || !unextracted.iter().any(|message| message.role != "system") {
             return Ok(());
         }

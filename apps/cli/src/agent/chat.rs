@@ -2990,17 +2990,10 @@ impl TurnHost for TurnHostAdapter<'_> {
                                 .record_subagent_run(&spent.model, spent.cost_usd);
                         }
                         if let Some(sa_result) = mgr.get_result(id).await {
-                            let mut output = format!("Child task: {id}\n\n{}", sa_result.output);
-                            if !sa_result.files_modified.is_empty() {
-                                output.push_str("\n\nFiles modified:\n");
-                                for f in &sa_result.files_modified {
-                                    output.push_str(&format!("  - {}\n", f));
-                                }
-                            }
                             crate::tools::ToolResult {
                                 tool_name: tool_name.clone(),
                                 success: true,
-                                output,
+                                output: sa_result.tool_output(),
                             }
                         } else if let Some(sa_status) = mgr.get_status(id).await {
                             crate::tools::ToolResult {
@@ -5295,7 +5288,8 @@ mod tests {
 
             let (content, is_error) = committed_result(&session, "read-1");
             assert_eq!(
-                content, "[redacted]",
+                content,
+                "[redacted]",
                 "the ToolResultPersist transform must replace the committed output (parallel={})",
                 !concurrency_safe.is_empty()
             );
@@ -5664,9 +5658,10 @@ mod tests {
         std::fs::write(&blocked, "a file where the memory directory belongs").unwrap();
 
         let mut session = make_local_session();
-        session
-            .messages
-            .push(Message::text("user", "I always prefer tabs for indentation."));
+        session.messages.push(Message::text(
+            "user",
+            "I always prefer tabs for indentation.",
+        ));
         session
             .messages
             .push(Message::text("assistant", "Noted, tabs it is."));
