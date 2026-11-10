@@ -170,4 +170,102 @@ describe('reviewing code at an effort', () => {
   });
 });
 
+describe('a review that finishes after the file moved on', () => {
+  beforeEach(() => {
+    vscode.workspace.isTrusted = true;
+    chatCompletion.mockReset();
+    realpath.mockReset().mockImplementation((path) => path);
+  });
+
+  function versionedEditor(text: string) {
+    const editor = editorWith(text);
+    const document = editor.document as { version: number; isClosed: boolean };
+    document.version = 1;
+    document.isClosed = false;
+    return { editor, document };
+  }
+
+  function deferred() {
+    let resolve!: (value: string) => void;
+    const promise = new Promise<string>((done) => {
+      resolve = done;
+    });
+    return { promise, resolve };
+  }
+
+  async function review(provider: AgiDiagnosticsProvider, editor: vscode.TextEditor) {
+    return provider.reviewCode(
+      editor,
+      {} as vscode.SecretStorage,
+      new vscode.CancellationTokenSource().token,
+      'medium',
+    );
+  }
+
+  it('publishes nothing when the document was edited while the review ran', async () => {
+    const pending = deferred();
+    chatCompletion.mockReturnValue(pending.promise);
+    const provider = new AgiDiagnosticsProvider();
+    const { editor, document } = versionedEditor('const a = 1;');
+
+    const result = review(provider, editor);
+    document.version = 2;
+    pending.resolve('ISSUE|0|error|Unchecked value\nOne issue.');
+
+    await expect(result).resolves.toEqual({
+      status: 'not-reviewed',
+      reason: expect.stringMatching(/changed while the review ran/),
+    });
+    expect(provider.collection.set).not.toHaveBeenCalled();
+    expect(provider.collection.delete).not.toHaveBeenCalled();
+  });
+
+  it('publishes nothing when the document was closed while the review ran', async () => {
+    const pending = deferred();
+    chatCompletion.mockReturnValue(pending.promise);
+    const provider = new AgiDiagnosticsProvider();
+    const { editor, document } = versionedEditor('const a = 1;');
+
+    const result = review(provider, editor);
+    document.isClosed = true;
+    pending.resolve('Looks fine.');
+
+    await expect(result).resolves.toMatchObject({ status: 'not-reviewed' });
+    expect(provider.collection.delete).not.toHaveBeenCalled();
+  });
+
+  it('keeps the newer review findings when an older review for the file finishes last', async () => {
+    const older = deferred();
+    const newer = deferred();
+    chatCompletion.mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise);
+    const provider = new AgiDiagnosticsProvider();
+    const { editor } = versionedEditor('const a = 1;');
+
+    const olderResult = review(provider, editor);
+    const newerResult = review(provider, editor);
+    newer.resolve('ISSUE|0|warning|Shadowed name\nOne issue.');
+    await expect(newerResult).resolves.toMatchObject({ status: 'completed', diagnosticCount: 1 });
+    expect(provider.collection.set).toHaveBeenCalledTimes(1);
+
+    older.resolve('Looks fine.');
+    await expect(olderResult).resolves.toMatchObject({ status: 'not-reviewed' });
+    expect(provider.collection.set).toHaveBeenCalledTimes(1);
+    expect(provider.collection.delete).toHaveBeenCalledTimes(1);
+  });
+
+  it('reviews a different file independently of one still running', async () => {
+    const first = deferred();
+    chatCompletion.mockReturnValueOnce(first.promise).mockResolvedValueOnce('Looks fine.');
+    const provider = new AgiDiagnosticsProvider();
+    const one = versionedEditor('const a = 1;');
+    const other = versionedEditor('const b = 2;');
+    (other.document as unknown as { uri: vscode.Uri }).uri = vscode.Uri.file('/repo/src/other.ts');
+
+    const firstResult = review(provider, one.editor);
+    await expect(review(provider, other.editor)).resolves.toMatchObject({ status: 'completed' });
+    first.resolve('Looks fine.');
+    await expect(firstResult).resolves.toMatchObject({ status: 'completed' });
+  });
+});
+
 type ImportedModule0 = typeof import('node:fs');

@@ -178,6 +178,16 @@ class CodeAction {
   ) {}
 }
 
+class Diagnostic {
+  source?: string;
+
+  constructor(
+    public readonly range: Range,
+    public readonly message: string,
+    public readonly severity?: number,
+  ) {}
+}
+
 class Hover {
   constructor(
     public readonly contents: MarkdownString | string,
@@ -797,6 +807,7 @@ export {
   EventEmitter,
   CodeAction,
   CodeLens,
+  Diagnostic,
   Hover,
   InlineCompletionItem,
   MarkdownString,
