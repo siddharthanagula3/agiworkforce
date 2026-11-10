@@ -64,6 +64,7 @@ const MAX_TICKET_REF_LENGTH = 128;
 const GENESIS_HASH = '0'.repeat(64);
 const SUPPORT_ACCESS_HASH_VERSION = 'agi:support-access-entry:v2';
 const MAX_GRANT_PAGE = 100;
+const MAX_EXPIRY_BATCH = 100;
 
 export interface SupportAccessGrant {
   id: string;
@@ -583,41 +584,62 @@ async function loadGrantForUpdate(
   return mapGrant(row);
 }
 
+export interface SupportAccessExpirySweep {
+  expired: number;
+  failed: number;
+  more: boolean;
+}
+
 /**
  * Expiry is a state the trail has to carry, not a `where expires_at > now()`
  * nobody can read later. The sweep is idempotent and safe to run from the job
  * drain as often as it likes.
  */
-export async function expireStaleSupportAccessGrants(db: DatabaseAdapter): Promise<number> {
+export async function expireStaleSupportAccessGrants(
+  db: DatabaseAdapter,
+): Promise<SupportAccessExpirySweep> {
   const stale = await db.query<GrantRow>(
     `select ${GRANT_COLUMNS} from public.support_access_grants
       where status = 'approved' and expires_at <= now()
       order by expires_at asc
-      limit ${MAX_GRANT_PAGE}`,
+      limit ${MAX_EXPIRY_BATCH + 1}`,
     [],
   );
   let expired = 0;
-  for (const row of stale) {
-    const closed = await db.transaction(async (tx) => {
-      const affected = await tx.execute(
-        `update public.support_access_grants
-            set status = 'expired'
-          where id = $1 and status = 'approved' and expires_at <= now()`,
-        [row.id],
-      );
-      if (affected !== 1) return false;
-      await appendEvent(tx, {
-        grantId: row.id,
-        organizationId: row.organization_id,
-        actorUserId: row.approved_by_user_id ?? row.requested_by_user_id,
-        event: 'expired',
-        detail: { expiresAt: iso(row.expires_at) },
+  let failed = 0;
+  for (const row of stale.slice(0, MAX_EXPIRY_BATCH)) {
+    try {
+      const closed = await db.transaction(async (tx) => {
+        const affected = await tx.execute(
+          `update public.support_access_grants
+              set status = 'expired'
+            where id = $1 and status = 'approved' and expires_at <= now()`,
+          [row.id],
+        );
+        if (affected !== 1) return false;
+        await appendEvent(tx, {
+          grantId: row.id,
+          organizationId: row.organization_id,
+          actorUserId: row.approved_by_user_id ?? row.requested_by_user_id,
+          event: 'expired',
+          detail: { expiresAt: iso(row.expires_at) },
+        });
+        return true;
       });
-      return true;
-    });
-    if (closed) expired += 1;
+      if (closed) expired += 1;
+    } catch (error) {
+      failed += 1;
+      logger.error(
+        {
+          grantId: row.id,
+          organizationId: row.organization_id,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        'Support access grant could not be closed as expired; the rest continue',
+      );
+    }
   }
-  return expired;
+  return { expired, failed, more: stale.length > MAX_EXPIRY_BATCH };
 }
 
 export interface SupportAccessLookup {

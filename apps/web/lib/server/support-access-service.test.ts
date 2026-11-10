@@ -3,8 +3,13 @@ import { createHash } from 'node:crypto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
+vi.mock('@/lib/logger', () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+
+import { logger } from '@/lib/logger';
 
 import {
   GOOGLE_USER_DATA_WITHHELD,
@@ -204,9 +209,13 @@ function harness(
       return grants.filter((row) => row.id === params[0]) as never[];
     }
     if (sql.includes("where status = 'approved' and expires_at <= now()")) {
-      return grants.filter(
-        (row) => row.status === 'approved' && Date.parse(row.expires_at ?? '') <= clock,
-      ) as never[];
+      const limit = Number(/limit (\d+)/.exec(sql)?.[1] ?? Number.POSITIVE_INFINITY);
+      return grants
+        .filter((row) => row.status === 'approved' && Date.parse(row.expires_at ?? '') <= clock)
+        .sort(
+          (left, right) => Date.parse(left.expires_at ?? '') - Date.parse(right.expires_at ?? ''),
+        )
+        .slice(0, limit) as never[];
     }
     if (sql.includes('organization_id = any ($3::uuid[])')) {
       const wanted = params[2] as string[];
@@ -504,7 +513,11 @@ describe('the gate', () => {
       }),
     ).rejects.toBeInstanceOf(SupportAccessDeniedError);
 
-    expect(await expireStaleSupportAccessGrants(h.db)).toBe(1);
+    expect(await expireStaleSupportAccessGrants(h.db)).toEqual({
+      expired: 1,
+      failed: 0,
+      more: false,
+    });
     expect(h.grants[0]?.status).toBe('expired');
     expect(h.events.at(-1)).toMatchObject({ event: 'expired' });
   });
@@ -573,9 +586,121 @@ describe('an approved grant can be withdrawn or lapse', () => {
     const grant = await approvedGrant(h);
     h.advance(MAX_SUPPORT_ACCESS_TTL_MS + 60_000);
 
-    expect(await expireStaleSupportAccessGrants(h.db)).toBe(1);
+    expect(await expireStaleSupportAccessGrants(h.db)).toEqual({
+      expired: 1,
+      failed: 0,
+      more: false,
+    });
     expect(h.grants[0]).toMatchObject({ status: 'expired', approved_by_user_id: APPROVER });
+    expect(h.grants[0]?.decided_at).not.toBeNull();
+    expect(h.grants[0]?.expires_at).not.toBeNull();
     expect(h.events.at(-1)).toMatchObject({ event: 'expired', grant_id: grant.id });
+    await expect(verifySupportAccessTrail(h.db, ORG)).resolves.toMatchObject({ intact: true });
+  });
+
+  it('does nothing when no approved grant has lapsed', async () => {
+    const h = harness();
+    await approvedGrant(h);
+    const eventsBefore = h.events.length;
+
+    expect(await expireStaleSupportAccessGrants(h.db)).toEqual({
+      expired: 0,
+      failed: 0,
+      more: false,
+    });
+    expect(h.grants[0]?.status).toBe('approved');
+    expect(h.events).toHaveLength(eventsBefore);
+  });
+
+  it('closes a lapsed grant once, however often the sweep runs', async () => {
+    const h = harness();
+    await approvedGrant(h);
+    h.advance(MAX_SUPPORT_ACCESS_TTL_MS + 60_000);
+
+    await expireStaleSupportAccessGrants(h.db);
+    const eventsAfterFirst = h.events.length;
+
+    expect(await expireStaleSupportAccessGrants(h.db)).toEqual({
+      expired: 0,
+      failed: 0,
+      more: false,
+    });
+    expect(h.events).toHaveLength(eventsAfterFirst);
+  });
+
+  it('leaves a revoked grant and a live grant alone', async () => {
+    const h = harness();
+    const revoked = await approvedGrant(h);
+    await revokeSupportAccess({ db: h.db, grantId: revoked.id, actorUserId: APPROVER });
+    h.advance(MAX_SUPPORT_ACCESS_TTL_MS + 60_000);
+    await approvedGrant(h);
+
+    expect(await expireStaleSupportAccessGrants(h.db)).toEqual({
+      expired: 0,
+      failed: 0,
+      more: false,
+    });
+    expect(h.grants.map((grant) => grant.status)).toEqual(['revoked', 'approved']);
+  });
+
+  it('closes the other grants when one cannot be closed, and counts the failure', async () => {
+    const h = harness();
+    const stuck = await approvedGrant(h);
+    const sound = await approvedGrant(h, ['files']);
+    const stuckRow = h.grants.find((grant) => grant.id === stuck.id);
+    if (stuckRow) stuckRow.decided_at = null;
+    h.advance(MAX_SUPPORT_ACCESS_TTL_MS + 60_000);
+
+    expect(await expireStaleSupportAccessGrants(h.db)).toEqual({
+      expired: 1,
+      failed: 1,
+      more: false,
+    });
+    expect(h.grants.find((grant) => grant.id === stuck.id)?.status).toBe('approved');
+    expect(h.grants.find((grant) => grant.id === sound.id)?.status).toBe('expired');
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({ grantId: stuck.id, organizationId: ORG }),
+      expect.stringContaining('could not be closed'),
+    );
+  });
+
+  it('takes a bounded batch, oldest first, and says that grants remain', async () => {
+    const h = harness();
+    const base = Date.parse('2026-09-17T10:00:00.000Z');
+    for (let index = 0; index < 101; index += 1) {
+      h.grants.push({
+        id: `lapsed-${index}`,
+        organization_id: ORG,
+        requested_by_user_id: REQUESTER,
+        approved_by_user_id: APPROVER,
+        revoked_by_user_id: null,
+        reason: REASON,
+        ticket_ref: TICKET,
+        purpose: 'support',
+        scopes: ['conversations'],
+        status: 'approved',
+        requested_at: '2026-09-17T09:00:00.000Z',
+        decided_at: '2026-09-17T09:30:00.000Z',
+        expires_at: new Date(base + index * 1_000).toISOString(),
+        revoked_at: null,
+      });
+    }
+    h.advance(MAX_SUPPORT_ACCESS_TTL_MS + 60_000);
+
+    expect(await expireStaleSupportAccessGrants(h.db)).toEqual({
+      expired: 100,
+      failed: 0,
+      more: true,
+    });
+    expect(
+      h.grants.filter((grant) => grant.status === 'approved').map((grant) => grant.id),
+    ).toEqual(['lapsed-100']);
+
+    expect(await expireStaleSupportAccessGrants(h.db)).toEqual({
+      expired: 1,
+      failed: 0,
+      more: false,
+    });
   });
 
   it('could not withdraw a live grant under the 0229 constraint', async () => {
@@ -586,9 +711,12 @@ describe('an approved grant can be withdrawn or lapse', () => {
       revokeSupportAccess({ db: h.db, grantId: grant.id, actorUserId: APPROVER }),
     ).rejects.toThrow(/support_access_grants_approval_is_complete/);
     h.advance(MAX_SUPPORT_ACCESS_TTL_MS + 60_000);
-    await expect(expireStaleSupportAccessGrants(h.db)).rejects.toThrow(
-      /support_access_grants_approval_is_complete/,
-    );
+    expect(await expireStaleSupportAccessGrants(h.db)).toEqual({
+      expired: 0,
+      failed: 1,
+      more: false,
+    });
+    expect(h.grants[0]?.status).toBe('approved');
   });
 });
 

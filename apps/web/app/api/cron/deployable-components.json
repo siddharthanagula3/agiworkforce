@@ -318,6 +318,24 @@
       ]
     },
     {
+      "name": "expire-support-access-grants",
+      "role": "cleanup",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "A row lock on one approved grant and the per-workspace trail lock while it is marked expired and its trail entry is appended in one transaction; an interrupted run closes nothing, and the grant is already refused by expires_at.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-11-10",
+          "change": "Added: closes approved break-glass grants past expires_at as expired and appends their expired trail entry, up to a batch per run."
+        }
+      ]
+    },
+    {
       "name": "expire-support-handoffs",
       "role": "cleanup",
       "version": "1.0.0",
