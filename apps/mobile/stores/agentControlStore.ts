@@ -58,7 +58,7 @@ export const useAgentControlStore = create<AgentControlStore>()(
 
       setMode: (conversationId, mode) =>
         set((state) => {
-          const existing = state.byConversation[conversationId] ?? GLOBAL_DEFAULT;
+          const existing = state.resolve(conversationId, null);
           return {
             byConversation: {
               ...state.byConversation,
@@ -73,7 +73,7 @@ export const useAgentControlStore = create<AgentControlStore>()(
 
       setEffort: (conversationId, effort) =>
         set((state) => {
-          const existing = state.byConversation[conversationId] ?? GLOBAL_DEFAULT;
+          const existing = state.resolve(conversationId, null);
           return {
             byConversation: {
               ...state.byConversation,
@@ -88,7 +88,7 @@ export const useAgentControlStore = create<AgentControlStore>()(
 
       setTemporaryChat: (conversationId, value) =>
         set((state) => {
-          const existing = state.byConversation[conversationId] ?? GLOBAL_DEFAULT;
+          const existing = state.resolve(conversationId, null);
           return {
             byConversation: {
               ...state.byConversation,
