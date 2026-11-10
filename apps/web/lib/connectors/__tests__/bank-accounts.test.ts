@@ -41,7 +41,10 @@ vi.mock('@/lib/connectors/plaid-config', async (importOriginal) => ({
 vi.mock('@/lib/custom-connector-crypto', async (importOriginal) => ({
   ...(await importOriginal<ScanModule1>()),
   encryptConnectorToken: (token: string) => `enc:${token}`,
-  decryptConnectorToken: (sealed: string) => sealed.replace(/^enc:/, ''),
+  decryptConnectorToken: (sealed: string) => {
+    if (!sealed.startsWith('enc:')) throw new Error('sealed token cannot be opened');
+    return sealed.slice('enc:'.length);
+  },
 }));
 vi.mock('@/lib/url-fetch/guarded-fetch', async (importOriginal) => ({
   ...(await importOriginal<ScanModule2>()),
@@ -216,6 +219,18 @@ describe('removing one bank', () => {
 
     await expect(removeBankAccountsItem(USER)).resolves.toBeUndefined();
     expect(state.rows).toEqual([]);
+  });
+
+  it('keeps a link it cannot open and reports the removal as incomplete', async () => {
+    seed(ITEM_A, 'token-a');
+    seed(ITEM_B, 'token-b');
+    state.rows.find((row) => row.id === ITEM_B)!.access_token_enc = 'damaged-ciphertext';
+
+    await expect(removeBankAccountsItem(USER)).rejects.toThrow('Try again in a few minutes');
+    expect(state.rows.map((row) => row.id)).toEqual([ITEM_B]);
+    expect(state.calls).toEqual([
+      { path: '/item/remove', body: expect.objectContaining({ access_token: 'token-a' }) },
+    ]);
   });
 
   it('never re-points the grant at a carried-over link when a live bank survives', async () => {

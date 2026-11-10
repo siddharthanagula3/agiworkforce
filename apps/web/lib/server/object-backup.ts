@@ -318,29 +318,38 @@ export async function backupReplicaSummary(): Promise<BackupReplicaSummary> {
 export async function reconcileBackupDeletions(
   limit: number,
   options: { source?: ObjectStore; target?: BackupTarget | null; sourceBucket?: string } = {},
-): Promise<{ checked: number; deleted: number; retained: number }> {
+): Promise<{ checked: number; deleted: number; retained: number; failed: number }> {
   const target = options.target === undefined ? resolveObjectBackupTarget() : options.target;
-  if (!target) return { checked: 0, deleted: 0, retained: 0 };
+  if (!target) return { checked: 0, deleted: 0, retained: 0, failed: 0 };
 
   const source = options.source ?? getObjectStore();
   const sourceBucket = options.sourceBucket ?? objectStorageConfig().privateBucket;
-  if (!sourceBucket) return { checked: 0, deleted: 0, retained: 0 };
+  if (!sourceBucket) return { checked: 0, deleted: 0, retained: 0, failed: 0 };
 
   const keys = await replicasDueForReconciliation(limit);
   const orphaned: string[] = [];
   let retained = 0;
+  let failed = 0;
 
   for (const key of keys) {
-    const head = await source.head(sourceBucket, key);
-    if (head) {
-      retained += 1;
-      await markReplicaVerified(key);
-      continue;
+    try {
+      const head = await source.head(sourceBucket, key);
+      if (head) {
+        retained += 1;
+        await markReplicaVerified(key);
+        continue;
+      }
+      await deleteBackupObject(key, { target });
+      orphaned.push(key);
+    } catch (error) {
+      failed += 1;
+      logger.error(
+        { key, error: error instanceof Error ? error.message : String(error) },
+        'Backup deletion reconciliation failed for one key; it stays tracked for the next run',
+      );
     }
-    await deleteBackupObject(key, { target });
-    orphaned.push(key);
   }
 
   await forgetBackupReplicas(orphaned);
-  return { checked: keys.length, deleted: orphaned.length, retained };
+  return { checked: keys.length, deleted: orphaned.length, retained, failed };
 }

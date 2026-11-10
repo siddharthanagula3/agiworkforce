@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   reconcileBackupDeletions: vi.fn(),
   backupReplicaSummary: vi.fn(),
   objectKeyFromStorageUri: vi.fn(),
+  publicBucket: vi.fn(),
   error: vi.fn(),
 }));
 
@@ -30,6 +31,9 @@ vi.mock('@/lib/server/object-backup', () => ({
 }));
 vi.mock('@/lib/server/object-storage', () => ({
   objectKeyFromStorageUri: mocks.objectKeyFromStorageUri,
+}));
+vi.mock('@/lib/server/object-storage-runtime', () => ({
+  objectStorageConfig: () => ({ publicBucket: mocks.publicBucket() }),
 }));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: mocks.error, debug: vi.fn() },
@@ -89,13 +93,19 @@ beforeEach(() => {
   mocks.replicateObject.mockResolvedValue({ outcome: 'replicated', bytes: 1_024 });
   mocks.resolveObjectBackupTarget.mockReturnValue(TARGET);
   mocks.recordBackupReplica.mockResolvedValue(undefined);
-  mocks.reconcileBackupDeletions.mockResolvedValue({ checked: 0, deleted: 0, retained: 0 });
+  mocks.reconcileBackupDeletions.mockResolvedValue({
+    checked: 0,
+    deleted: 0,
+    retained: 0,
+    failed: 0,
+  });
   mocks.backupReplicaSummary.mockResolvedValue({
     tracked: 2,
     newestReplicatedAt: '2026-09-16T11:00:00.000Z',
     oldestVerifiedAt: '2026-09-16T10:00:00.000Z',
   });
   mocks.getKeyValueStore.mockReturnValue(null);
+  mocks.publicBucket.mockReturnValue('agi-public');
 });
 
 describe(`GET ${ROUTE}`, () => {
@@ -190,6 +200,7 @@ describe(`GET ${ROUTE}`, () => {
   });
 
   it('does not record a key it failed to copy', async () => {
+    mocks.publicBucket.mockReturnValue(undefined);
     mocks.replicateObject
       .mockResolvedValueOnce({ outcome: 'missing-source', bytes: 0 })
       .mockResolvedValueOnce({ outcome: 'too-large', bytes: 0 })
@@ -201,7 +212,12 @@ describe(`GET ${ROUTE}`, () => {
   });
 
   it('propagates deletions the primary already made and reports the backlog it tracks', async () => {
-    mocks.reconcileBackupDeletions.mockResolvedValue({ checked: 5, deleted: 2, retained: 3 });
+    mocks.reconcileBackupDeletions.mockResolvedValue({
+      checked: 5,
+      deleted: 2,
+      retained: 3,
+      failed: 0,
+    });
 
     const response = await GET(request());
 
@@ -215,6 +231,24 @@ describe(`GET ${ROUTE}`, () => {
       tracked: 2,
       newestReplicatedAt: '2026-09-16T11:00:00.000Z',
       oldestVerifiedAt: '2026-09-16T10:00:00.000Z',
+    });
+  });
+
+  it('reports a key whose backup deletion could not be reconciled instead of passing silently', async () => {
+    mocks.reconcileBackupDeletions.mockResolvedValue({
+      checked: 5,
+      deleted: 2,
+      retained: 2,
+      failed: 1,
+    });
+
+    const response = await GET(request());
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toMatchObject({
+      reconciled: 5,
+      backupDeletesPropagated: 2,
+      reconcileFailed: 1,
     });
   });
 
@@ -271,6 +305,59 @@ describe(`GET ${ROUTE}`, () => {
       '2026-09-16T09:00:00.000000Z',
       ASSETS[0]?.row_id,
     ]);
+  });
+
+  it('does not scan from the fallback window when a saved cursor cannot be read', async () => {
+    const store = {
+      get: vi.fn(async () => {
+        throw new Error('kv unavailable');
+      }),
+      set: vi.fn(async () => true),
+    };
+    mocks.getKeyValueStore.mockReturnValue(store);
+
+    const response = await GET(request());
+
+    expect(mocks.query).not.toHaveBeenCalled();
+    expect(mocks.replicateObject).not.toHaveBeenCalled();
+    expect(store.set).not.toHaveBeenCalled();
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toMatchObject({ cursorUnreadable: 2, scanned: 0 });
+  });
+
+  it('starts from the fallback window only when there is no saved cursor', async () => {
+    const store = { get: vi.fn(async () => null), set: vi.fn(async () => true) };
+    mocks.getKeyValueStore.mockReturnValue(store);
+
+    const response = await GET(request());
+
+    expect(response.status).toBe(200);
+    expect(mocks.query).toHaveBeenCalledTimes(2);
+  });
+
+  it('copies a knowledge object that only the public bucket holds', async () => {
+    mocks.replicateObject.mockImplementation(async (_key: string, options?: unknown) => {
+      const sourceBucket = (options as { sourceBucket?: string } | undefined)?.sourceBucket;
+      return sourceBucket === 'agi-public'
+        ? { outcome: 'replicated', bytes: 7 }
+        : { outcome: 'missing-source', bytes: 0 };
+    });
+
+    const response = await GET(request());
+
+    expect(mocks.replicateObject).toHaveBeenCalledWith(KNOWLEDGE[0]?.object_reference, {
+      sourceBucket: 'agi-public',
+    });
+    expect(mocks.replicateObject).not.toHaveBeenCalledWith(ASSETS[0]?.object_reference, {
+      sourceBucket: 'agi-public',
+    });
+    expect(mocks.recordBackupReplica).toHaveBeenCalledTimes(1);
+    expect(mocks.recordBackupReplica).toHaveBeenCalledWith(
+      KNOWLEDGE[0]?.object_reference,
+      7,
+      TARGET.bucket,
+    );
+    await expect(response.json()).resolves.toMatchObject({ replicated: 1, missingSource: 2 });
   });
 
   it('answers 500 without leaking the failure to the scheduler body', async () => {

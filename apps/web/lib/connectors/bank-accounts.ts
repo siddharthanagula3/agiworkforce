@@ -305,6 +305,12 @@ function itemIdOf(item: BankItem): string {
 }
 
 async function readBankItems(userId: string): Promise<BankItem[]> {
+  return (await readBankItemRecords(userId)).items;
+}
+
+async function readBankItemRecords(
+  userId: string,
+): Promise<{ items: BankItem[]; unreadable: string[] }> {
   const rows = await getNeonDb().query<BankItemRow>(
     `select id, plaid_item_id, access_token_enc, institution_name, excluded_account_ids
        from public.bank_account_items
@@ -314,34 +320,38 @@ async function readBankItems(userId: string): Promise<BankItem[]> {
   );
   if (rows.length === 0) {
     const legacy = await readBankAccountsToken(userId);
-    return legacy
-      ? [
-          {
-            id: null,
-            carriedOver: false,
-            accessToken: legacy,
-            institutionName: null,
-            excludedAccountIds: [],
-          },
-        ]
-      : [];
+    return {
+      items: legacy
+        ? [
+            {
+              id: null,
+              carriedOver: false,
+              accessToken: legacy,
+              institutionName: null,
+              excludedAccountIds: [],
+            },
+          ]
+        : [],
+      unreadable: [],
+    };
   }
-  return rows.flatMap((row) => {
+  const items: BankItem[] = [];
+  const unreadable: string[] = [];
+  for (const row of rows) {
     try {
-      return [
-        {
-          id: row.id,
-          carriedOver: row.plaid_item_id === null,
-          accessToken: decryptConnectorToken(row.access_token_enc, 'plaid-access-token'),
-          institutionName: row.institution_name,
-          excludedAccountIds: row.excluded_account_ids ?? [],
-        },
-      ];
+      items.push({
+        id: row.id,
+        carriedOver: row.plaid_item_id === null,
+        accessToken: decryptConnectorToken(row.access_token_enc, 'plaid-access-token'),
+        institutionName: row.institution_name,
+        excludedAccountIds: row.excluded_account_ids ?? [],
+      });
     } catch {
       logger.warn({ itemId: row.id }, '[bank-accounts] a stored bank link could not be opened');
-      return [];
+      unreadable.push(row.id);
     }
-  });
+  }
+  return { items, unreadable };
 }
 
 async function recordBankItem(
@@ -452,7 +462,8 @@ async function deleteBankItemRow(userId: string, itemId: string): Promise<void> 
 
 export async function removeBankAccountsItem(userId: string): Promise<void> {
   const survivors: BankItem[] = [];
-  for (const item of await readBankItems(userId)) {
+  const { items, unreadable } = await readBankItemRecords(userId);
+  for (const item of items) {
     try {
       await removePlaidItem(item.accessToken, item.carriedOver);
     } catch {
@@ -461,7 +472,7 @@ export async function removeBankAccountsItem(userId: string): Promise<void> {
     }
     if (item.id) await deleteBankItemRow(userId, item.id);
   }
-  if (survivors.length > 0) {
+  if (survivors.length > 0 || unreadable.length > 0) {
     const live = survivors.filter((item) => !item.carriedOver).at(-1);
     if (live) await pointGrantAt(userId, live);
     throw new PlaidApiError('item_remove_failed', REMOVE_FAILED);

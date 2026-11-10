@@ -138,6 +138,18 @@ describe('drainBackgroundJobs', () => {
     expect(summary.drained).toBe(true);
   });
 
+  it('claims only the region the drain serves', async () => {
+    await drainBackgroundJobs({
+      db,
+      handlers: {},
+      budgetMs: 120_000,
+      maxInFlight: 4,
+      region: 'us',
+    });
+
+    expect(mocks.claimJobs).toHaveBeenCalledWith(db, expect.objectContaining({ region: 'us' }));
+  });
+
   it('runs a claimed job through its handler and settles it', async () => {
     const handler = vi.fn(async () => ({ pushed: true }));
     mocks.claimJobs.mockResolvedValueOnce([job()]).mockResolvedValue([]);

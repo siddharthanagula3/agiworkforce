@@ -205,7 +205,27 @@ export async function writeArtifactStorageValue(
   db: DatabaseAdapter,
   target: StorageTarget & { key: string; value: string },
 ): Promise<'saved' | 'over_limit'> {
-  const rows = await db.query<{ storage_key: string }>(
+  return db.transaction((tx) => admitArtifactStorageValue(tx, target));
+}
+
+async function admitArtifactStorageValue(
+  tx: DatabaseAdapter,
+  target: StorageTarget & { key: string; value: string },
+): Promise<'saved' | 'over_limit'> {
+  const [isolation] = await tx.query<{ isolation: string }>(
+    `select current_setting('transaction_isolation') as isolation`,
+  );
+  if (isolation?.isolation !== 'read committed') {
+    throw new Error('Artifact storage admission requires read committed isolation');
+  }
+  const [lock] = await tx.query<{ locked: boolean }>(
+    `select pg_advisory_xact_lock(hashtextextended('agi:artifact-storage:' || $1::text || ':' || coalesce($2::text, ''), 0)),
+            true as locked`,
+    [target.artifact.publishedArtifactId, scopeOwner(target)],
+  );
+  if (lock?.locked !== true) throw new Error('Artifact storage admission lock was not acquired');
+
+  const rows = await tx.query<{ storage_key: string }>(
     `with used as (
        select coalesce(sum(value_bytes), 0)::bigint as bytes
          from public.published_artifact_storage
