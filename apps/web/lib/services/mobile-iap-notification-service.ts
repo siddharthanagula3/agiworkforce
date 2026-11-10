@@ -5,7 +5,6 @@ import {
   BILLING_PLAN_CATALOG_VERSION,
   SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
   isEntitledSubscriptionStatus,
-  topUpBudgetCentsForCredits,
   type MobileIapCatalogProduct,
   type MobileIapPlatform,
 } from '@agiworkforce/types';
@@ -13,13 +12,17 @@ import { createError, isAppError } from '@/lib/errors';
 import { readStoreTestPurchasesAllowed } from '@/lib/feature-flags/store-test-purchase-gate';
 import { logger } from '@/lib/logger';
 import { logSecurityEvent } from '@/lib/security-audit';
-import { MICROUSD_PER_LEDGER_CENT } from '@/lib/server/managed-usage-policy';
 import { grantsAccess, type MobileIapEntitlementState } from '@/lib/server/mobile-iap-lifecycle';
 import {
   hashMobileIapPurchaseToken,
   isUnfundedStorePurchase,
   type VerifiedMobileIapPurchase,
 } from '@/lib/server/mobile-iap-store-verification';
+import {
+  mobileTopUpBudgetMicrousd,
+  mobileTopUpRefundDescription,
+  mobileTopUpRefundReversalDescription,
+} from '@/lib/server/mobile-iap-top-up-budget';
 import type { SubscriptionRow } from '@/lib/server/neon-types';
 import type { NormalizedEnvironment } from '@/lib/server/payments/domain';
 import { resolveEffectiveSubscriptionBillingStatus } from '@/lib/server/subscription-billing-owner';
@@ -167,13 +170,6 @@ async function claimsNewestStoreState(
 function isOlderRefundNotice(anchor: ReceiptAnchor, event: MobileIapLifecycleEvent): boolean {
   if (!event.signedAt || !anchor.refund_state_signed_at) return false;
   return new Date(anchor.refund_state_signed_at).getTime() > event.signedAt.getTime();
-}
-
-function grantedBudgetMicrousd(anchor: ReceiptAnchor, retailCents: number): number {
-  if (anchor.intended_amount_cents <= 0) return 0;
-  const grantedMicrousd =
-    topUpBudgetCentsForCredits(anchor.units_granted) * MICROUSD_PER_LEDGER_CENT;
-  return Math.round((grantedMicrousd * retailCents) / anchor.intended_amount_cents);
 }
 
 type LifecycleOutcome = 'processed' | 'duplicate' | 'unknown_purchase' | 'stale';
@@ -422,14 +418,14 @@ async function applyMobileIapLifecycleEvent(input: {
         const refundTargetCents = Math.round(anchor.intended_amount_cents * fraction);
         const revokeMicrousd = Math.max(
           0,
-          grantedBudgetMicrousd(anchor, refundTargetCents) -
-            grantedBudgetMicrousd(anchor, anchor.refunded_amount_cents),
+          mobileTopUpBudgetMicrousd(anchor, refundTargetCents) -
+            mobileTopUpBudgetMicrousd(anchor, anchor.refunded_amount_cents),
         );
         if (revokeMicrousd > 0) {
           await tx.execute('select public.handle_top_up_refund_microusd($1, $2, $3)', [
             anchor.user_id,
             revokeMicrousd,
-            `Mobile ${input.event.platform} refund ${input.event.storeTransactionId}`,
+            mobileTopUpRefundDescription(input.event.platform, input.event.storeTransactionId),
           ]);
         }
         await tx.execute(
@@ -449,8 +445,11 @@ async function applyMobileIapLifecycleEvent(input: {
         await tx.execute('select public.add_credits_microusd($1, $2, $3, $4, $5)', [
           anchor.user_id,
           balance.account_id,
-          grantedBudgetMicrousd(anchor, anchor.refunded_amount_cents),
-          `Mobile ${input.event.platform} refund reversed ${input.event.storeTransactionId}`,
+          mobileTopUpBudgetMicrousd(anchor, anchor.refunded_amount_cents),
+          mobileTopUpRefundReversalDescription(
+            input.event.platform,
+            input.event.storeTransactionId,
+          ),
           'purchase',
         ]);
         await tx.execute(
