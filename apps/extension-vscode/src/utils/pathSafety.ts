@@ -16,6 +16,11 @@ export type SafeResolveResult =
         | 'unavailable';
     };
 
+function isMissingPathError(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException | undefined)?.code;
+  return code === 'ENOENT' || code === 'ENOTDIR';
+}
+
 export interface SafeResolveOptions {
   checkSensitive?: boolean;
   allowSymlinkEscape?: boolean;
@@ -24,7 +29,8 @@ export interface SafeResolveOptions {
 
 /**
  * Resolve `input` against the open workspace folders. Tries each folder
- * in turn; returns the first containment success. Optionally checks the
+ * in turn; returns the first containing folder where the path exists, so a
+ * file present only in a later root resolves. Optionally checks the
  * sensitive-file denylist and symlink-escape behavior.
  *
  * Returns either {ok: true, uri, folder, resolvedPath} or {ok: false, reason}.
@@ -48,6 +54,7 @@ export async function safeResolveWorkspacePath(
   const allowAbsolute = opts?.allowAbsolute ?? false;
 
   let lastResult: ContainmentResult | undefined;
+  let missingInContainingFolder = false;
   for (const folder of folders) {
     const result = resolveContained(folder.uri.fsPath, input, { allowAbsolute });
     if (result.ok) {
@@ -71,8 +78,13 @@ export async function safeResolveWorkspacePath(
           }
           resolvedPath = real;
           resolvedFolder = { ...folder, uri: vscode.Uri.file(root) };
-        } catch {
-          return { ok: false, reason: 'unavailable' };
+        } catch (error) {
+          if (!isMissingPathError(error)) {
+            return { ok: false, reason: 'unavailable' };
+          }
+          missingInContainingFolder = true;
+          lastResult = result;
+          continue;
         }
       }
       return {
@@ -85,6 +97,9 @@ export async function safeResolveWorkspacePath(
     lastResult = result;
   }
 
+  if (missingInContainingFolder) {
+    return { ok: false, reason: 'unavailable' };
+  }
   if (lastResult && !lastResult.ok) {
     if (lastResult.reason === 'traversal') return { ok: false, reason: 'traversal' };
     if (lastResult.reason === 'absolute-input') return { ok: false, reason: 'not-in-workspace' };

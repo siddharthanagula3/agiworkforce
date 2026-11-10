@@ -1177,7 +1177,9 @@ wss.on('connection', (socket, request) => {
     });
     logger.debug({ correlationId, closeCode: code, closeReason }, 'WebSocket connection closed');
     metrics.recordMessage('disconnection');
-    metrics.recordError(`ws_close_${code}`);
+    if (code !== NORMAL_WS_CLOSE_CODE) {
+      metrics.recordError(`ws_close_${code}`);
+    }
     connectionSpan.setAttributes({ 'ws.close.code': code, 'ws.close.reason': closeReason });
     connectionSpan.end(code === NORMAL_WS_CLOSE_CODE ? 'ok' : 'error');
 

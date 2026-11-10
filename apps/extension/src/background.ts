@@ -135,6 +135,7 @@ import {
   type BrowserUploadBinding,
   type BrowserUploadedFileMetadata,
 } from './features/computer-use/userFileUpload';
+import { createRunInputWatch } from './features/computer-use/inputWatch';
 import {
   COMPUTER_USE_RUN_ID_PATTERN,
   ComputerUseRunCoordinator,
@@ -5796,6 +5797,11 @@ async function handleMessageAsync(
         });
       };
 
+      const inputWatch = createRunInputWatch({
+        lease,
+        activeRun: () => computerUseRuns.getActive(),
+        send: watchComputerUseUserInput,
+      });
       const taskTabs =
         Number.isSafeInteger(lease.windowId) && lease.windowId !== undefined && lease.windowId >= 0
           ? new TaskTabs({
@@ -5807,8 +5813,11 @@ async function handleMessageAsync(
               assertCurrent: () => assertComputerUseOwnership(lease).then(() => undefined),
               beginTransition: (targetTabId) =>
                 computerUseRuns.beginTabTransition(lease, targetTabId),
-              commitTransition: (transition, url) =>
-                computerUseRuns.commitTabTransition(lease, transition, url),
+              commitTransition: (transition, url) => {
+                const previousTabId = lease.tabId;
+                computerUseRuns.commitTabTransition(lease, transition, url);
+                inputWatch.retarget(previousTabId);
+              },
               abortTransition: (transition) =>
                 computerUseRuns.abortTabTransition(lease, transition),
               transitionFailed: () => {
@@ -5877,8 +5886,8 @@ async function handleMessageAsync(
             pending.settle(false);
         })
         .catch(() => undefined);
-      watchComputerUseUserInput(cuTabId, true);
-      void completion.finally(() => watchComputerUseUserInput(cuTabId, false));
+      inputWatch.start();
+      void completion.finally(() => inputWatch.stop(cuTabId));
       const unmarkTab = markComputerUseTab(cuTabId);
       void completion.finally(() => flushAutomationAuditOutbox().catch(() => false));
       void completion.finally(() => unmarkTab.then((unmark) => unmark()));
