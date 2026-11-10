@@ -447,7 +447,7 @@ async function readExportJob(
       where user_id = $1
         and kind = $2
         and ($3::text is null or payload->>'exportId' = $3::text)
-      order by created_at desc
+      order by payload->>'requestedAt' desc nulls last, created_at desc
       limit 1`,
     [userId, DATA_EXPORT_BUILD_ARCHIVE_JOB, exportId],
   );
@@ -529,21 +529,38 @@ export async function requestDataExportArchive(input: {
     contentType: 'application/json',
     contentLength: json.byteLength,
   });
-  await enqueueJob(input.db, {
-    kind: DATA_EXPORT_BUILD_ARCHIVE_JOB,
-    userId: input.userId,
-    idempotencyKey: `data-export:${exportId}:1`,
-    payload: {
-      exportId,
-      requestedAt,
-      origin: input.origin,
-      delivery,
-      workspaces,
-      volume: 1,
-      cursor: null,
-      volumes: [],
-    },
+  const concurrent = await input.db.transaction(async (tx) => {
+    await tx.query(`select pg_advisory_xact_lock(hashtext($1))`, [
+      `data-export-admission:${input.userId}`,
+    ]);
+    const preparing = await readDataExportArchive(tx, input.userId);
+    if (preparing?.status === 'preparing') return preparing;
+    await enqueueJob(tx, {
+      kind: DATA_EXPORT_BUILD_ARCHIVE_JOB,
+      userId: input.userId,
+      idempotencyKey: `data-export:${exportId}:1`,
+      payload: {
+        exportId,
+        requestedAt,
+        origin: input.origin,
+        delivery,
+        workspaces,
+        volume: 1,
+        cursor: null,
+        volumes: [],
+      },
+    });
+    return null;
   });
+  if (concurrent) {
+    await deletePrivateObject(exportJsonKey(input.userId, exportId)).catch((error: unknown) => {
+      logger.error(
+        { err: error, userId: input.userId, exportId },
+        '[data-export] a superseded export staging object was kept',
+      );
+    });
+    return { archive: concurrent, created: false };
+  }
   return {
     archive: {
       id: exportId,
@@ -556,6 +573,19 @@ export async function requestDataExportArchive(input: {
     },
     created: true,
   };
+}
+
+async function recordedExpiry(
+  db: DatabaseAdapter,
+  expiryJobId: string,
+  fallback: Date,
+): Promise<Date> {
+  const [row] = await db.query<{ run_after: string | Date | null }>(
+    `select run_after from public.background_jobs where id = $1`,
+    [expiryJobId],
+  );
+  const recorded = row?.run_after ? new Date(row.run_after) : null;
+  return recorded && Number.isFinite(recorded.getTime()) ? recorded : fallback;
 }
 
 export async function buildDataExportArchiveVolume(
@@ -600,9 +630,9 @@ export async function buildDataExportArchiveVolume(
           (file.byteCount ?? 0) +
           storedZipEntryOverhead(file.entryName) +
           STORED_ZIP_TRAILER_BYTES;
-        const hasContent = zip.entryCount > 0;
+        const hasProgress = zip.entryCount > 0 || unavailable.length > 0;
         if (
-          hasContent &&
+          hasProgress &&
           (Date.now() - startedAt > VOLUME_WORK_MS ||
             projectedBytes > VOLUME_TARGET_BYTES ||
             zip.entryCount >= STORED_ZIP_MAX_ENTRIES - 1)
@@ -652,9 +682,9 @@ export async function buildDataExportArchiveVolume(
     return { exportId: payload.exportId, volume: payload.volume, done: false };
   }
 
-  const readyAt = new Date();
-  const expiresAt = new Date(readyAt.getTime() + DATA_EXPORT_DOWNLOAD_HOURS * HOUR_MS);
-  await enqueueJob(context.db, {
+  const lifetimeMs = DATA_EXPORT_DOWNLOAD_HOURS * HOUR_MS;
+  let expiresAt = new Date(Date.now() + lifetimeMs);
+  const expiry = await enqueueJob(context.db, {
     kind: 'data-export.expire-archive',
     userId: null,
     idempotencyKey: `data-export-expire:${payload.exportId}`,
@@ -665,6 +695,8 @@ export async function buildDataExportArchiveVolume(
       keys: [exportJsonKey(userId, payload.exportId), ...volumes.map((volume) => volume.key)],
     },
   });
+  if (!expiry.created) expiresAt = await recordedExpiry(context.db, expiry.id, expiresAt);
+  const readyAt = new Date(expiresAt.getTime() - lifetimeMs);
   await enqueueJob(context.db, {
     kind: 'email.data-export-ready',
     userId,
@@ -742,6 +774,9 @@ export async function sendDataExportReadyEmailJob(
   const origin = requireString(context.job.payload, 'origin');
   const db = createClaimedUserScopedDb(context.db, { userId, organizationId: null });
   const archive = await readDataExportArchive(db, userId, exportId);
+  if (archive?.status === 'preparing') {
+    throw new Error('The export is still being finalized, so its ready email will be retried');
+  }
   if (!archive || archive.status !== 'ready' || !archive.expiresAt) {
     return { skipped: archive?.status ?? 'missing' };
   }

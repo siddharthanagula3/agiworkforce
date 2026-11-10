@@ -32,6 +32,13 @@ const TOMBSTONE_RESWEEP_INTERVAL = '30 days';
  * calls it "the round-robin cursor", so it rotates the queue without touching
  * the user-facing schedule. Never-attempted accounts have no tombstone and sort
  * first.
+ *
+ * An account whose erasure job for the current schedule already exists, in any
+ * state, is left out: the queue returns that job instead of a new one, so
+ * listing the account again would only spend the batch on work that cannot
+ * progress. A dead job re-qualifies the account once the queue prunes it. The
+ * tombstone is created only after billing cleanup, so a failing billing stage
+ * never advances the cursor above.
  */
 const DUE_ACCOUNTS = `
   select profile.id, profile.deletion_scheduled_for
@@ -39,6 +46,14 @@ const DUE_ACCOUNTS = `
     left join public.erasure_tombstones as tombstone on tombstone.user_id = profile.id
    where profile.deletion_scheduled_for is not null
      and profile.deletion_scheduled_for <= now()
+     and not exists (
+       select 1
+         from public.background_jobs as erasure_job
+        where erasure_job.kind = 'data-deletion.scheduled-account-erasure'
+          and erasure_job.payload->>'mode' = 'scheduled'
+          and erasure_job.payload->>'subjectUserId' = profile.id
+          and erasure_job.created_at >= profile.deletion_scheduled_for
+     )
    order by tombstone.last_swept_at asc nulls first, profile.deletion_scheduled_for asc
    limit ${MAX_ACCOUNTS_PER_RUN}
 `;

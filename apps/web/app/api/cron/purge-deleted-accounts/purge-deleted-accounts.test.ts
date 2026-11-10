@@ -141,6 +141,23 @@ describe('GET /api/cron/purge-deleted-accounts', () => {
     expect(dueQuery).toContain('order by tombstone.last_swept_at asc nulls first');
   });
 
+  it('leaves out accounts whose job for the current schedule exists in any state', async () => {
+    primeDb({ due: [], tombstones: [] });
+
+    await GET(cronRequest());
+
+    const dueQuery = mocks.query.mock.calls
+      .map((call) => String(call[0]))
+      .find((sql) => sql.includes('deletion_scheduled_for <= now()'))!;
+    expect(dueQuery).toContain('not exists');
+    expect(dueQuery).toContain('from public.background_jobs as erasure_job');
+    expect(dueQuery).toContain("erasure_job.kind = 'data-deletion.scheduled-account-erasure'");
+    expect(dueQuery).toContain("erasure_job.payload->>'mode' = 'scheduled'");
+    expect(dueQuery).toContain("erasure_job.payload->>'subjectUserId' = profile.id");
+    expect(dueQuery).toContain('erasure_job.created_at >= profile.deletion_scheduled_for');
+    expect(dueQuery).not.toContain('erasure_job.status');
+  });
+
   it('fails loudly instead of reporting nothing due when the due query cannot run', async () => {
     mocks.query.mockRejectedValue(
       Object.assign(new Error('column does not exist'), { code: '42703' }),

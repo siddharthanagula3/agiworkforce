@@ -8,12 +8,16 @@ type ObjectStorageRuntimeModule = typeof import('@/lib/server/object-storage-run
 type IdentityModule = typeof import('@/lib/server/identity');
 type EmailModule = typeof import('@/lib/services/notification-email-service');
 type JobServiceModule = typeof import('@/lib/jobs/job-service');
+type MediaStorageModule = typeof import('@/lib/server/media-storage');
 
 const mocks = vi.hoisted(() => ({
   emailConfigured: vi.fn(() => true),
   getIdentityUser: vi.fn(),
   enqueueJob: vi.fn(async () => ({ id: 'job-1' })),
   putPrivateObject: vi.fn(async () => undefined),
+  deletePrivateObject: vi.fn(async () => undefined),
+  getPrivateObjectStream: vi.fn(),
+  streamStoredMedia: vi.fn(),
   sendDataExportReadyEmail: vi.fn(),
 }));
 
@@ -31,6 +35,12 @@ vi.mock('@/lib/server/object-storage', async (importOriginal) => ({
   ...(await importOriginal<ObjectStorageModule>()),
   isPrivateObjectStorageConfigured: () => true,
   putPrivateObject: mocks.putPrivateObject,
+  deletePrivateObject: mocks.deletePrivateObject,
+  getPrivateObjectStream: mocks.getPrivateObjectStream,
+}));
+vi.mock('@/lib/server/media-storage', async (importOriginal) => ({
+  ...(await importOriginal<MediaStorageModule>()),
+  streamStoredMedia: mocks.streamStoredMedia,
 }));
 vi.mock('@/lib/server/object-storage-runtime', async (importOriginal) => ({
   ...(await importOriginal<ObjectStorageRuntimeModule>()),
@@ -52,16 +62,23 @@ vi.mock('@/lib/jobs/job-service', async (importOriginal) => ({
 }));
 
 import {
+  buildDataExportArchiveVolume,
   readDataExportArchive,
   requestDataExportArchive,
   resolveDataExportDownload,
+  sendDataExportReadyEmailJob,
 } from './data-export-archive';
+import type { JobHandlerContext } from '@/lib/jobs/job-drain';
 
 const USER_ID = 'user_export';
 
 function databaseWith(rows: unknown[][]): DatabaseAdapter {
   const query = vi.fn(async () => rows.shift() ?? []);
-  return { query } as unknown as DatabaseAdapter;
+  const db = {
+    query,
+    transaction: async (callback: (tx: unknown) => Promise<unknown>) => callback(db),
+  };
+  return db as unknown as DatabaseAdapter;
 }
 
 async function requestWith(db: DatabaseAdapter) {
@@ -169,6 +186,10 @@ describe('requestDataExportArchive staging order', () => {
     const order: string[] = [];
     const workspaceId = '00000000-0000-4000-8000-000000000001';
     const query = vi.fn(async (sql: string) => {
+      if (sql.includes('pg_advisory_xact_lock')) {
+        order.push('lock');
+        return [];
+      }
       if (sql.includes('from public.background_jobs')) {
         order.push('existing');
         return [];
@@ -177,7 +198,10 @@ describe('requestDataExportArchive staging order', () => {
       order.push('workspaces');
       return [{ organization_id: workspaceId }];
     });
-    const db = { query } as unknown as DatabaseAdapter;
+    const db = {
+      query,
+      transaction: async (callback: (tx: unknown) => Promise<unknown>) => callback(db),
+    } as unknown as DatabaseAdapter;
     const account = { account: { id: USER_ID } };
     mocks.putPrivateObject.mockImplementationOnce(async () => {
       order.push('put');
@@ -197,7 +221,15 @@ describe('requestDataExportArchive staging order', () => {
       },
     });
 
-    expect(order).toEqual(['existing', 'collect', 'workspaces', 'put', 'enqueue']);
+    expect(order).toEqual([
+      'existing',
+      'collect',
+      'workspaces',
+      'put',
+      'lock',
+      'existing',
+      'enqueue',
+    ]);
     expect(created).toBe(true);
     expect(mocks.putPrivateObject).toHaveBeenCalledOnce();
     expect(mocks.putPrivateObject).toHaveBeenCalledWith({
@@ -224,6 +256,51 @@ describe('requestDataExportArchive staging order', () => {
 
     expect(mocks.putPrivateObject).toHaveBeenCalledOnce();
     expect(mocks.enqueueJob).not.toHaveBeenCalled();
+  });
+});
+
+describe('requestDataExportArchive concurrent admission', () => {
+  it('returns the export another request admitted first and drops its own staging', async () => {
+    const admitted = {
+      status: 'queued',
+      payload: {
+        exportId: 'export-first',
+        requestedAt: '2026-11-08T10:00:00.000Z',
+        delivery: 'in_app',
+      },
+      result: null,
+    };
+    const db = databaseWith([[], [], [], [admitted]]);
+
+    const { archive, created } = await requestWith(db);
+
+    expect(created).toBe(false);
+    expect(archive).toMatchObject({ id: 'export-first', status: 'preparing' });
+    expect(mocks.enqueueJob).not.toHaveBeenCalled();
+    expect(mocks.deletePrivateObject).toHaveBeenCalledOnce();
+    expect(mocks.deletePrivateObject).toHaveBeenCalledWith(
+      expect.stringMatching(new RegExp(`^exports/${USER_ID}/[^/]+/export\\.json$`)),
+    );
+  });
+
+  it('serializes admission per account before it enqueues', async () => {
+    const statements: string[] = [];
+    const query = vi.fn(async (sql: string) => {
+      statements.push(sql.includes('pg_advisory_xact_lock') ? 'lock' : 'read');
+      return [];
+    });
+    const db = {
+      query,
+      transaction: async (callback: (tx: unknown) => Promise<unknown>) => callback(db),
+    } as unknown as DatabaseAdapter;
+    mocks.enqueueJob.mockImplementationOnce(async () => {
+      statements.push('enqueue');
+      return { id: 'job-1' };
+    });
+
+    await requestWith(db);
+
+    expect(statements.slice(-3)).toEqual(['lock', 'read', 'enqueue']);
   });
 });
 
@@ -337,5 +414,222 @@ describe('completed archive timestamp validation', () => {
       status: expected,
       volumes: [],
     });
+  });
+});
+
+describe('latest export selection', () => {
+  it('orders the account-wide status by request time before job creation time', async () => {
+    const query = vi.fn(async () => []);
+    const db = { query } as unknown as DatabaseAdapter;
+
+    await readDataExportArchive(db, USER_ID);
+
+    const sql = String((query.mock.calls[0] as unknown[])[0]);
+    expect(sql).toMatch(/order by payload->>'requestedAt' desc nulls last,\s*created_at desc/);
+  });
+});
+
+describe('final volume expiry', () => {
+  const exportId = 'export-retry';
+  const recordedExpiry = new Date('2026-11-08T10:00:00.000Z');
+
+  function finalVolumeContext(): JobHandlerContext {
+    const tx = { query: vi.fn(async () => []), execute: vi.fn(async () => 0) };
+    const query = vi.fn(async () => [{ run_after: recordedExpiry }]);
+    const db = {
+      query,
+      transaction: async (callback: (inner: unknown) => Promise<unknown>) => callback(tx),
+    } as unknown as DatabaseAdapter;
+    return {
+      db,
+      signal: new AbortController().signal,
+      isFinalAttempt: false,
+      job: {
+        userId: USER_ID,
+        payload: {
+          exportId,
+          requestedAt: '2026-11-08T08:00:00.000Z',
+          origin: 'https://agiworkforce.com',
+          delivery: 'email',
+          workspaces: [null],
+          volume: 1,
+          cursor: {
+            workspace: 0,
+            phase: 'projects',
+            afterId: '00000000-0000-4000-8000-000000000001',
+          },
+          volumes: [],
+        },
+      },
+    } as unknown as JobHandlerContext;
+  }
+
+  beforeEach(() => {
+    multipartStore.createMultipartUpload.mockResolvedValue({ bucket: 'private-bucket', key: 'k' });
+    multipartStore.uploadPart.mockResolvedValue({ partNumber: 1, etag: 'etag' });
+    multipartStore.completeMultipartUpload.mockResolvedValue(undefined);
+  });
+
+  it('publishes the deadline of the expiry job a prior attempt already queued', async () => {
+    mocks.enqueueJob.mockResolvedValueOnce({ id: 'expiry-job', created: false });
+
+    const result = await buildDataExportArchiveVolume(finalVolumeContext());
+
+    expect(result['done']).toBe(true);
+    expect(result['expiresAt']).toBe(recordedExpiry.toISOString());
+    expect(Date.parse(String(result['readyAt']))).toBeLessThan(recordedExpiry.getTime());
+  });
+
+  it('computes the deadline from now when it queues the expiry job itself', async () => {
+    mocks.enqueueJob.mockResolvedValueOnce({ id: 'expiry-job', created: true });
+    const before = Date.now();
+
+    const result = await buildDataExportArchiveVolume(finalVolumeContext());
+
+    const [, expiryInput] = mocks.enqueueJob.mock.calls[0] as unknown as [
+      unknown,
+      { runAfter: Date },
+    ];
+    expect(result['expiresAt']).toBe(expiryInput.runAfter.toISOString());
+    expect(Date.parse(String(result['readyAt']))).toBeGreaterThanOrEqual(before);
+  });
+});
+
+describe('resumed export volume with unavailable files', () => {
+  const WORK_LIMIT_PASSED_MS = 160_000;
+  const rows = [1, 2, 3].map((n) => ({
+    id: `00000000-0000-4000-8000-00000000010${n}`,
+    kind: 'upload',
+    mime_type: 'text/plain',
+    byte_size: 10,
+    storage_pathname: `library/${n}`,
+    metadata: { filename: `file-${n}.txt` },
+    created_at: '2026-11-01T00:00:00.000Z',
+  }));
+
+  function resumedVolumeContext(): JobHandlerContext {
+    let served = false;
+    const tx = {
+      query: vi.fn(async (sql: string) => {
+        if (served || !sql.includes('from public.media_assets')) return [];
+        served = true;
+        return rows;
+      }),
+      execute: vi.fn(async () => 0),
+    };
+    const db = {
+      transaction: async (callback: (inner: unknown) => Promise<unknown>) => callback(tx),
+    } as unknown as DatabaseAdapter;
+    return {
+      db,
+      signal: new AbortController().signal,
+      isFinalAttempt: false,
+      job: {
+        userId: USER_ID,
+        payload: {
+          exportId: 'export-resumed',
+          requestedAt: '2026-11-08T08:00:00.000Z',
+          origin: 'https://agiworkforce.com',
+          delivery: 'in_app',
+          workspaces: [null],
+          volume: 2,
+          cursor: { workspace: 0, phase: 'library', afterId: null },
+          volumes: [],
+        },
+      },
+    } as unknown as JobHandlerContext;
+  }
+
+  beforeEach(() => {
+    multipartStore.createMultipartUpload.mockResolvedValue({
+      bucket: 'private-bucket',
+      key: 'k',
+      uploadId: 'upload-1',
+    });
+    multipartStore.uploadPart.mockResolvedValue({ partNumber: 1, etag: 'etag' });
+    multipartStore.completeMultipartUpload.mockResolvedValue(undefined);
+    mocks.streamStoredMedia.mockResolvedValue(null);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('checkpoints the cursor past unavailable files once the work limit has passed', async () => {
+    const start = Date.now();
+    vi.spyOn(Date, 'now')
+      .mockReturnValueOnce(start)
+      .mockReturnValue(start + WORK_LIMIT_PASSED_MS);
+
+    const result = await buildDataExportArchiveVolume(resumedVolumeContext());
+
+    expect(result).toEqual({ exportId: 'export-resumed', volume: 2, done: false });
+    expect(mocks.enqueueJob).toHaveBeenCalledOnce();
+    const [, next] = mocks.enqueueJob.mock.calls[0] as unknown as [
+      unknown,
+      { payload: { volume: number; cursor: { afterId: string } } },
+    ];
+    expect(next.payload.volume).toBe(3);
+    expect(next.payload.cursor.afterId).toBe(rows[0]?.id);
+    const uploaded = multipartStore.uploadPart.mock.calls.flatMap(([input]) =>
+      (input as { body: Buffer }).body.toString('latin1'),
+    );
+    expect(uploaded.join('')).toContain('unavailable-files.json');
+    expect(multipartStore.completeMultipartUpload).toHaveBeenCalledOnce();
+  });
+});
+
+describe('sendDataExportReadyEmailJob', () => {
+  function emailContext(archiveRow: Record<string, unknown>): JobHandlerContext {
+    const tx = { query: vi.fn(async () => [archiveRow]), execute: vi.fn(async () => 0) };
+    const db = {
+      transaction: async (callback: (inner: unknown) => Promise<unknown>) => callback(tx),
+    } as unknown as DatabaseAdapter;
+    return {
+      db,
+      signal: new AbortController().signal,
+      isFinalAttempt: false,
+      job: {
+        userId: USER_ID,
+        payload: { exportId: 'export-mail', origin: 'https://agiworkforce.com' },
+      },
+    } as unknown as JobHandlerContext;
+  }
+
+  const payload = { exportId: 'export-mail', requestedAt: '2026-11-08T08:00:00.000Z' };
+
+  it.each(['queued', 'running'])(
+    'retries instead of settling when the build job is still %s',
+    async (status) => {
+      await expect(
+        sendDataExportReadyEmailJob(emailContext({ status, payload, result: null })),
+      ).rejects.toThrow(/retried/);
+
+      expect(mocks.sendDataExportReadyEmail).not.toHaveBeenCalled();
+    },
+  );
+
+  it('sends the email once the build job has settled as ready', async () => {
+    mocks.sendDataExportReadyEmail.mockResolvedValue({ delivered: true });
+    const row = {
+      status: 'succeeded',
+      payload,
+      result: {
+        done: true,
+        readyAt: new Date(Date.now() - 1_000).toISOString(),
+        expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+        volumes: [{ volume: 1, key: 'exports/k.zip', byteCount: 10, fileCount: 1 }],
+      },
+    };
+
+    await expect(sendDataExportReadyEmailJob(emailContext(row))).resolves.toEqual({
+      delivered: true,
+    });
+  });
+
+  it('still settles without retry when the build job failed', async () => {
+    await expect(
+      sendDataExportReadyEmailJob(emailContext({ status: 'dead', payload, result: null })),
+    ).resolves.toEqual({ skipped: 'failed' });
   });
 });
