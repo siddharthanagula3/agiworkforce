@@ -1,5 +1,5 @@
 {
-  "$generated": "GENERATED FILE, do not edit. Run `node scripts/generate-agent-context-indexes.mjs`; `pnpm check:agent-context-indexes` byte-compares this against a fresh render.",
+  "$generated": "GENERATED FILE, do not edit. Run `node scripts/generate-agent-context-indexes.mjs` after tracked files change; it renders from git ls-files, so a file that is not committed is not in the graph, and `pnpm check:agent-context-indexes` byte-compares this against a fresh render.",
   "units": [
     {
       "path": ".",
@@ -2356,13 +2356,13 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 317,
+      "files": 319,
       "roles": {
         "config": 1,
         "doc": 6,
         "other": 3,
-        "source": 277,
-        "test": 30
+        "source": 278,
+        "test": 31
       }
     },
     {
@@ -2373,7 +2373,7 @@
       "owner": "Desktop lead",
       "trustBoundary": null,
       "status": null,
-      "entry": ["electron/dist/main.cjs"],
+      "entry": ["electron/dist/bootstrap.cjs"],
       "agentsDoc": "AGENTS.md",
       "checks": [
         "pnpm --filter @agiworkforce/desktop test",
@@ -2405,15 +2405,15 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 1782,
+      "files": 1791,
       "roles": {
-        "asset": 58,
+        "asset": 59,
         "config": 20,
         "doc": 1,
-        "other": 23,
-        "source": 1085,
+        "other": 22,
+        "source": 1087,
         "style": 2,
-        "test": 593
+        "test": 600
       }
     },
     {
@@ -2445,15 +2445,15 @@
       ],
       "dependents": [],
       "lanes": ["chrome-extension"],
-      "files": 478,
+      "files": 538,
       "roles": {
-        "asset": 4,
+        "asset": 5,
         "config": 5,
         "doc": 3,
-        "other": 31,
-        "source": 197,
+        "other": 29,
+        "source": 219,
         "style": 2,
-        "test": 236
+        "test": 275
       }
     },
     {
@@ -2485,14 +2485,14 @@
       ],
       "dependents": [],
       "lanes": ["vscode-extension"],
-      "files": 375,
+      "files": 384,
       "roles": {
-        "asset": 2,
+        "asset": 3,
         "config": 5,
         "doc": 8,
-        "other": 6,
-        "source": 186,
-        "test": 168
+        "other": 4,
+        "source": 187,
+        "test": 177
       }
     },
     {
@@ -2530,16 +2530,16 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 1531,
+      "files": 1633,
       "roles": {
-        "asset": 5,
+        "asset": 6,
         "config": 10,
         "doc": 4,
         "generated": 1,
         "other": 46,
-        "source": 869,
+        "source": 895,
         "style": 1,
-        "test": 595
+        "test": 670
       }
     },
     {
@@ -2594,17 +2594,17 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 7755,
+      "files": 8252,
       "roles": {
-        "asset": 55,
-        "config": 69,
+        "asset": 57,
+        "config": 70,
         "doc": 51,
         "generated": 2,
-        "migration": 686,
-        "other": 40,
-        "source": 3386,
-        "style": 34,
-        "test": 3432
+        "migration": 738,
+        "other": 37,
+        "source": 3507,
+        "style": 35,
+        "test": 3755
       }
     },
     {
@@ -2621,11 +2621,11 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 346,
+      "files": 355,
       "roles": {
         "asset": 20,
-        "config": 35,
-        "doc": 276,
+        "config": 37,
+        "doc": 283,
         "other": 6,
         "source": 6,
         "test": 3
@@ -2668,12 +2668,12 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 175,
+      "files": 222,
       "roles": {
         "asset": 1,
         "config": 19,
-        "doc": 148,
-        "generated": 6,
+        "doc": 156,
+        "generated": 45,
         "other": 1
       }
     },
@@ -2719,10 +2719,12 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": ["chat-artifacts"],
-      "files": 4,
+      "files": 7,
       "roles": {
         "config": 3,
-        "other": 1
+        "other": 1,
+        "source": 2,
+        "test": 1
       }
     },
     {
@@ -2914,11 +2916,11 @@
       ],
       "dependents": ["apps/web", "packages/ai/providers/factory"],
       "lanes": ["provider-routing"],
-      "files": 28,
+      "files": 29,
       "roles": {
         "config": 3,
         "source": 5,
-        "test": 20
+        "test": 21
       }
     },
     {
@@ -3548,7 +3550,7 @@
         "pnpm check:service-domain-ownership",
         "scripts/check-no-hardcoded-models.sh"
       ],
-      "dependsOn": ["packages/ai/model-registry", "packages/contracts/types"],
+      "dependsOn": ["packages/ai/model-registry", "packages/ai/search", "packages/contracts/types"],
       "dependents": [
         "apps/desktop",
         "apps/extension",
@@ -3558,12 +3560,12 @@
         "packages/ui/unified-chat"
       ],
       "lanes": ["provider-routing"],
-      "files": 87,
+      "files": 89,
       "roles": {
         "config": 3,
         "doc": 1,
-        "source": 31,
-        "test": 52
+        "source": 32,
+        "test": 53
       }
     },
     {
@@ -3587,13 +3589,13 @@
         "scripts/check-no-hardcoded-models.sh"
       ],
       "dependsOn": ["packages/contracts/types"],
-      "dependents": ["apps/mobile", "apps/web", "packages/ui/unified-chat"],
+      "dependents": ["apps/mobile", "apps/web", "packages/ai/routing", "packages/ui/unified-chat"],
       "lanes": ["provider-routing"],
-      "files": 13,
+      "files": 17,
       "roles": {
         "config": 3,
-        "source": 6,
-        "test": 4
+        "source": 7,
+        "test": 7
       }
     },
     {
@@ -3631,12 +3633,12 @@
         "packages/ui/unified-chat"
       ],
       "lanes": [],
-      "files": 63,
+      "files": 66,
       "roles": {
         "config": 5,
         "doc": 2,
-        "source": 38,
-        "test": 18
+        "source": 39,
+        "test": 20
       }
     },
     {
@@ -3770,11 +3772,11 @@
         "services/upload-scanner"
       ],
       "lanes": ["contracts-types"],
-      "files": 155,
+      "files": 165,
       "roles": {
         "config": 7,
-        "source": 97,
-        "test": 51
+        "source": 100,
+        "test": 58
       }
     },
     {
@@ -3917,6 +3919,7 @@
       "entry": [
         ".",
         "./capabilities",
+        "./chart-spec",
         "./country-groups",
         "./encryption-key",
         "./live-voices",
@@ -3986,12 +3989,12 @@
         "services/upload-scanner"
       ],
       "lanes": ["contracts-types"],
-      "files": 810,
+      "files": 814,
       "roles": {
         "config": 27,
         "generated": 485,
-        "source": 172,
-        "test": 126
+        "source": 173,
+        "test": 129
       }
     },
     {
@@ -4074,11 +4077,11 @@
         "packages/client/sync"
       ],
       "lanes": ["chat-artifacts"],
-      "files": 14,
+      "files": 15,
       "roles": {
         "config": 3,
         "source": 7,
-        "test": 4
+        "test": 5
       }
     },
     {
@@ -4152,17 +4155,17 @@
       "owner": "Backend and data",
       "trustBoundary": "session verification, request identity and provider account reads behind the identity port",
       "status": "active",
-      "entry": [".", "./browser", "./src/index.ts"],
+      "entry": [".", "./browser", "./management", "./src/index.ts"],
       "agentsDoc": "AGENTS.md",
       "checks": [],
       "dependsOn": [],
       "dependents": ["apps/web"],
       "lanes": [],
-      "files": 17,
+      "files": 20,
       "roles": {
         "config": 3,
-        "source": 8,
-        "test": 6
+        "source": 10,
+        "test": 7
       }
     },
     {
@@ -4200,11 +4203,11 @@
       "dependsOn": ["packages/contracts/types"],
       "dependents": ["apps/mobile"],
       "lanes": [],
-      "files": 19,
+      "files": 20,
       "roles": {
         "config": 3,
         "source": 9,
-        "test": 7
+        "test": 8
       }
     },
     {
@@ -4221,10 +4224,10 @@
       "dependsOn": [],
       "dependents": ["apps/web"],
       "lanes": [],
-      "files": 24,
+      "files": 25,
       "roles": {
         "config": 3,
-        "source": 11,
+        "source": 12,
         "test": 10
       }
     },
@@ -4261,6 +4264,7 @@
         ".",
         "./async",
         "./circuit-breaker",
+        "./composer-incoming",
         "./composer-paste",
         "./control-receipts",
         "./cron",
@@ -4280,6 +4284,7 @@
         "./remote-control",
         "./retry-policy",
         "./scheduling/dayparts",
+        "./scheduling/local-input",
         "./scheduling/recurrence-rule",
         "./scheduling/schedule-time",
         "./scheduling/zoned-time",
@@ -4308,11 +4313,11 @@
         "packages/ui/unified-chat"
       ],
       "lanes": [],
-      "files": 71,
+      "files": 76,
       "roles": {
         "config": 5,
-        "source": 40,
-        "test": 26
+        "source": 42,
+        "test": 29
       }
     },
     {
@@ -4494,6 +4499,7 @@
         "./cn",
         "./dialog",
         "./i18n",
+        "./ime-composition",
         "./label",
         "./network-error",
         "./search-shortcut",
@@ -4508,12 +4514,13 @@
       "dependsOn": ["packages/ui/icons"],
       "dependents": ["apps/desktop", "apps/web", "packages/ui/unified-chat"],
       "lanes": [],
-      "files": 181,
+      "files": 188,
       "roles": {
+        "asset": 1,
         "config": 3,
-        "source": 104,
+        "source": 106,
         "style": 1,
-        "test": 73
+        "test": 77
       }
     },
     {
@@ -4529,9 +4536,11 @@
         "./agi-work-progress",
         "./artifact-sandbox",
         "./assistant-fence",
+        "./assistant-fence-edits",
         "./capabilities",
         "./composer-editor",
         "./composer-editor.css",
+        "./continuation-seam",
         "./ime-composition",
         "./markdown-document",
         "./model-picker",
@@ -4567,12 +4576,12 @@
         "apps/web"
       ],
       "lanes": ["chat-artifacts"],
-      "files": 424,
+      "files": 444,
       "roles": {
         "config": 3,
-        "source": 197,
-        "style": 2,
-        "test": 222
+        "source": 206,
+        "style": 3,
+        "test": 232
       }
     },
     {
@@ -4589,9 +4598,11 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 5,
+      "files": 18,
       "roles": {
-        "other": 5
+        "config": 1,
+        "other": 16,
+        "source": 1
       }
     },
     {
@@ -4608,13 +4619,13 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 706,
+      "files": 719,
       "roles": {
-        "config": 65,
+        "config": 67,
         "doc": 1,
         "other": 21,
-        "source": 370,
-        "test": 249
+        "source": 374,
+        "test": 256
       }
     },
     {
@@ -4634,13 +4645,13 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": ["backend-services"],
-      "files": 77,
+      "files": 78,
       "roles": {
         "config": 6,
         "doc": 1,
         "other": 4,
         "source": 28,
-        "test": 38
+        "test": 39
       }
     },
     {

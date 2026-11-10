@@ -1,5 +1,5 @@
 {
-  "$generated": "GENERATED FILE, do not edit. Run `node scripts/generate-agent-context-indexes.mjs`; `pnpm check:agent-context-indexes` byte-compares this against a fresh render.",
+  "$generated": "GENERATED FILE, do not edit. Run `node scripts/generate-agent-context-indexes.mjs` after tracked files change; it renders from git ls-files, so a file that is not committed is not in the graph, and `pnpm check:agent-context-indexes` byte-compares this against a fresh render.",
   "migrations": [
     {
       "path": "apps/web/db/neon/0001_mvp_chat.sql",
@@ -2074,6 +2074,136 @@
       "follows": "apps/web/db/neon/0390_usage_limit_promotions.sql"
     },
     {
+      "path": "apps/web/db/neon/0392_video_cancellation_wins_settlement.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0391_artifact_runtime_usage_cap.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0393_connector_session_grant_revocation.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0392_video_cancellation_wins_settlement.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0394_account_security_recovery_batch.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0393_connector_session_grant_revocation.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0395_published_artifact_audience_revocation.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0394_account_security_recovery_batch.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0396_operator_usage_reset_window.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0395_published_artifact_audience_revocation.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0397_mobile_iap_refund_state_signed_at.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0396_operator_usage_reset_window.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0398_stripe_cogs_import_coverage.sql",
+      "tables": ["public.stripe_cogs_import_coverage"],
+      "follows": "apps/web/db/neon/0397_mobile_iap_refund_state_signed_at.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0399_billing_collection_owner_notice_and_review_cursor.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0398_stripe_cogs_import_coverage.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0400_overage_pending_destination.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0399_billing_collection_owner_notice_and_review_cursor.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0401_overage_contract_closeout.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0400_overage_pending_destination.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0402_support_access_grant_lifecycle.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0401_overage_contract_closeout.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0403_upgrade_waitlist_access_checked_at.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0402_support_access_grant_lifecycle.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0404_admin_account_actions.sql",
+      "tables": ["public.admin_account_actions"],
+      "follows": "apps/web/db/neon/0403_upgrade_waitlist_access_checked_at.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0405_organization_deletion_last_attempt.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0404_admin_account_actions.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0406_account_security_undo_cleanup.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0405_organization_deletion_last_attempt.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0407_developer_eval_run_cases.sql",
+      "tables": ["public.developer_eval_run_cases"],
+      "follows": "apps/web/db/neon/0406_account_security_undo_cleanup.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0408_memory_import_workspace_unique_key.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0407_developer_eval_run_cases.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0409_retrieval_message_marks_indexing_stale.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0408_memory_import_workspace_unique_key.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0410_connector_permission_generations.sql",
+      "tables": ["public.connector_permission_generations"],
+      "follows": "apps/web/db/neon/0409_retrieval_message_marks_indexing_stale.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0411_device_refresh_token_families.sql",
+      "tables": ["public.device_refresh_token_families"],
+      "follows": "apps/web/db/neon/0410_connector_permission_generations.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0412_github_installation_writable_repositories.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0411_device_refresh_token_families.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0413_renewal_expires_due_purchases_before_carry.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0412_github_installation_writable_repositories.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0414_release_after_renewal_restores_purchased_carry.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0413_renewal_expires_due_purchases_before_carry.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0415_legal_hold_preserves.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0414_release_after_renewal_restores_purchased_carry.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0416_trial_reminder_settled_for.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/0415_legal_hold_preserves.sql"
+    },
+    {
+      "path": "apps/web/db/neon/0417_feedback_screenshot_cleanups.sql",
+      "tables": ["public.feedback_screenshot_cleanups"],
+      "follows": "apps/web/db/neon/0416_trial_reminder_settled_for.sql"
+    },
+    {
       "path": "apps/web/db/neon/down/0097_connector_oauth_broker.down.sql",
       "tables": [],
       "follows": null
@@ -3547,6 +3677,136 @@
       "path": "apps/web/db/neon/down/0391_artifact_runtime_usage_cap.down.sql",
       "tables": [],
       "follows": "apps/web/db/neon/down/0390_usage_limit_promotions.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0392_video_cancellation_wins_settlement.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0391_artifact_runtime_usage_cap.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0393_connector_session_grant_revocation.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0392_video_cancellation_wins_settlement.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0394_account_security_recovery_batch.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0393_connector_session_grant_revocation.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0395_published_artifact_audience_revocation.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0394_account_security_recovery_batch.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0396_operator_usage_reset_window.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0395_published_artifact_audience_revocation.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0397_mobile_iap_refund_state_signed_at.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0396_operator_usage_reset_window.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0398_stripe_cogs_import_coverage.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0397_mobile_iap_refund_state_signed_at.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0399_billing_collection_owner_notice_and_review_cursor.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0398_stripe_cogs_import_coverage.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0400_overage_pending_destination.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0399_billing_collection_owner_notice_and_review_cursor.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0401_overage_contract_closeout.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0400_overage_pending_destination.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0402_support_access_grant_lifecycle.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0401_overage_contract_closeout.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0403_upgrade_waitlist_access_checked_at.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0402_support_access_grant_lifecycle.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0404_admin_account_actions.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0403_upgrade_waitlist_access_checked_at.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0405_organization_deletion_last_attempt.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0404_admin_account_actions.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0406_account_security_undo_cleanup.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0405_organization_deletion_last_attempt.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0407_developer_eval_run_cases.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0406_account_security_undo_cleanup.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0408_memory_import_workspace_unique_key.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0407_developer_eval_run_cases.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0409_retrieval_message_marks_indexing_stale.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0408_memory_import_workspace_unique_key.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0410_connector_permission_generations.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0409_retrieval_message_marks_indexing_stale.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0411_device_refresh_token_families.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0410_connector_permission_generations.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0412_github_installation_writable_repositories.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0411_device_refresh_token_families.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0413_renewal_expires_due_purchases_before_carry.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0412_github_installation_writable_repositories.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0414_release_after_renewal_restores_purchased_carry.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0413_renewal_expires_due_purchases_before_carry.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0415_legal_hold_preserves.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0414_release_after_renewal_restores_purchased_carry.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0416_trial_reminder_settled_for.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0415_legal_hold_preserves.down.sql"
+    },
+    {
+      "path": "apps/web/db/neon/down/0417_feedback_screenshot_cleanups.down.sql",
+      "tables": [],
+      "follows": "apps/web/db/neon/down/0416_trial_reminder_settled_for.down.sql"
     }
   ]
 }

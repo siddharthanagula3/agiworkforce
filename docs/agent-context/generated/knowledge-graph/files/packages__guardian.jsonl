@@ -1,4 +1,4 @@
-{"$generated":"GENERATED FILE, do not edit. Run `node scripts/generate-agent-context-indexes.mjs`; `pnpm check:agent-context-indexes` byte-compares this against a fresh render."}
+{"$generated":"GENERATED FILE, do not edit. Run `node scripts/generate-agent-context-indexes.mjs` after tracked files change; it renders from git ls-files, so a file that is not committed is not in the graph, and `pnpm check:agent-context-indexes` byte-compares this against a fresh render."}
 {"path":"packages/guardian/core/package.json","unit":"packages/guardian/core","role":"config","unparsed":"notCode"}
 {"path":"packages/guardian/core/src/__tests__/adapters.test.ts","unit":"packages/guardian/core","role":"test","imports":["packages/guardian/core/src/adapters/builder.ts","packages/guardian/core/src/adapters/repo-check.ts","packages/guardian/core/src/adapters/types.ts","spec:vitest"]}
 {"path":"packages/guardian/core/src/__tests__/config.test.ts","unit":"packages/guardian/core","role":"test","imports":["packages/guardian/core/src/config.ts","spec:vitest"]}

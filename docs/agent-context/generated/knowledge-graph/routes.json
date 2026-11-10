@@ -1,5 +1,5 @@
 {
-  "$generated": "GENERATED FILE, do not edit. Run `node scripts/generate-agent-context-indexes.mjs`; `pnpm check:agent-context-indexes` byte-compares this against a fresh render.",
+  "$generated": "GENERATED FILE, do not edit. Run `node scripts/generate-agent-context-indexes.mjs` after tracked files change; it renders from git ls-files, so a file that is not committed is not in the graph, and `pnpm check:agent-context-indexes` byte-compares this against a fresh render.",
   "routes": [
     {
       "surface": "mobile",
@@ -1608,7 +1608,7 @@
       "url": "/api/artifacts/publish/:token/versions/:version",
       "file": "apps/web/app/api/artifacts/publish/[token]/versions/[version]/route.ts",
       "segments": ["api", "artifacts", "publish", "[token]", "versions", "[version]"],
-      "methods": ["GET"]
+      "methods": ["GET", "POST"]
     },
     {
       "surface": "web",
@@ -1632,7 +1632,15 @@
       "url": "/api/artifacts/publish/:token",
       "file": "apps/web/app/api/artifacts/publish/[token]/route.ts",
       "segments": ["api", "artifacts", "publish", "[token]"],
-      "methods": ["PATCH", "DELETE"]
+      "methods": ["GET", "PATCH", "DELETE", "OPTIONS"]
+    },
+    {
+      "surface": "web",
+      "kind": "endpoint",
+      "url": "/api/artifacts/publish/lookup",
+      "file": "apps/web/app/api/artifacts/publish/lookup/route.ts",
+      "segments": ["api", "artifacts", "publish", "lookup"],
+      "methods": ["GET", "OPTIONS"]
     },
     {
       "surface": "web",
@@ -2472,6 +2480,14 @@
       "url": "/api/cron/expire-purchased-credits",
       "file": "apps/web/app/api/cron/expire-purchased-credits/route.ts",
       "segments": ["api", "cron", "expire-purchased-credits"],
+      "methods": ["GET"]
+    },
+    {
+      "surface": "web",
+      "kind": "endpoint",
+      "url": "/api/cron/expire-support-access-grants",
+      "file": "apps/web/app/api/cron/expire-support-access-grants/route.ts",
+      "segments": ["api", "cron", "expire-support-access-grants"],
       "methods": ["GET"]
     },
     {
@@ -3770,6 +3786,14 @@
     {
       "surface": "web",
       "kind": "endpoint",
+      "url": "/api/models/free-quota/media-offer",
+      "file": "apps/web/app/api/models/free-quota/media-offer/route.ts",
+      "segments": ["api", "models", "free-quota", "media-offer"],
+      "methods": ["GET"]
+    },
+    {
+      "surface": "web",
+      "kind": "endpoint",
       "url": "/api/models/free-quota",
       "file": "apps/web/app/api/models/free-quota/route.ts",
       "segments": ["api", "models", "free-quota"],
@@ -3806,6 +3830,14 @@
       "file": "apps/web/app/api/operator/route.ts",
       "segments": ["api", "operator"],
       "methods": ["GET", "POST"]
+    },
+    {
+      "surface": "web",
+      "kind": "endpoint",
+      "url": "/api/page-context/read",
+      "file": "apps/web/app/api/page-context/read/route.ts",
+      "segments": ["api", "page-context", "read"],
+      "methods": ["POST", "OPTIONS"]
     },
     {
       "surface": "web",
@@ -4493,7 +4525,7 @@
       "url": "/api/settings/email",
       "file": "apps/web/app/api/settings/email/route.ts",
       "segments": ["api", "settings", "email"],
-      "methods": ["POST", "PATCH", "OPTIONS"]
+      "methods": ["GET", "POST", "PATCH", "OPTIONS"]
     },
     {
       "surface": "web",
@@ -5288,6 +5320,14 @@
     {
       "surface": "web",
       "kind": "endpoint",
+      "url": "/api/support/handoff/agent/active",
+      "file": "apps/web/app/api/support/handoff/agent/active/route.ts",
+      "segments": ["api", "support", "handoff", "agent", "active"],
+      "methods": ["GET"]
+    },
+    {
+      "surface": "web",
+      "kind": "endpoint",
       "url": "/api/support/handoff/agent/presence",
       "file": "apps/web/app/api/support/handoff/agent/presence/route.ts",
       "segments": ["api", "support", "handoff", "agent", "presence"],
@@ -5572,6 +5612,14 @@
       "file": "apps/web/app/api/usage/route.ts",
       "segments": ["api", "usage"],
       "methods": ["GET", "OPTIONS"]
+    },
+    {
+      "surface": "web",
+      "kind": "endpoint",
+      "url": "/api/user/delete-account/cancel-schedule",
+      "file": "apps/web/app/api/user/delete-account/cancel-schedule/route.ts",
+      "segments": ["api", "user", "delete-account", "cancel-schedule"],
+      "methods": ["PUT", "OPTIONS"]
     },
     {
       "surface": "web",
@@ -5955,6 +6003,20 @@
       "url": "/billing",
       "file": "apps/web/app/billing/page.tsx",
       "segments": ["billing"]
+    },
+    {
+      "surface": "web",
+      "kind": "layout",
+      "url": "/blog/multi-model-ai-vs-separate-subscriptions",
+      "file": "apps/web/app/blog/multi-model-ai-vs-separate-subscriptions/layout.tsx",
+      "segments": ["blog", "multi-model-ai-vs-separate-subscriptions"]
+    },
+    {
+      "surface": "web",
+      "kind": "page",
+      "url": "/blog/multi-model-ai-vs-separate-subscriptions",
+      "file": "apps/web/app/blog/multi-model-ai-vs-separate-subscriptions/page.tsx",
+      "segments": ["blog", "multi-model-ai-vs-separate-subscriptions"]
     },
     {
       "surface": "web",
@@ -6747,6 +6809,13 @@
       "url": "/github",
       "file": "apps/web/app/github/loading.tsx",
       "segments": ["github"]
+    },
+    {
+      "surface": "web",
+      "kind": "layout",
+      "url": "/help/:slug",
+      "file": "apps/web/app/help/[slug]/layout.tsx",
+      "segments": ["help", "[slug]"]
     },
     {
       "surface": "web",

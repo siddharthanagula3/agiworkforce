@@ -1,5 +1,5 @@
 {
-  "$generated": "GENERATED FILE, do not edit. Run `node scripts/generate-agent-context-indexes.mjs`; `pnpm check:agent-context-indexes` byte-compares this against a fresh render.",
+  "$generated": "GENERATED FILE, do not edit. Run `node scripts/generate-agent-context-indexes.mjs` after tracked files change; it renders from git ls-files, so a file that is not committed is not in the graph, and `pnpm check:agent-context-indexes` byte-compares this against a fresh render.",
   "edges": [
     {
       "from": "apps/desktop",
@@ -1084,6 +1084,12 @@
     {
       "from": "packages/ai/routing",
       "to": "packages/ai/model-registry",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "packages/ai/routing",
+      "to": "packages/ai/search",
       "type": "depends_on",
       "via": "typescript"
     },
