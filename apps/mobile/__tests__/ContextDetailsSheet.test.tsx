@@ -21,6 +21,8 @@ jest.mock('@/lib/models', () => {
 
 jest.mock('@/src/features/model-picker/service', () => ({
   getManagedDisplayName: () => 'Fixture model',
+  getSelectableModelById: (id: string) =>
+    id === 'fixture-on-device-model' ? { id, contextWindow: 100 } : undefined,
 }));
 
 import { ContextDetailsSheet } from '@/src/features/chat/components/ContextDetailsSheet';
@@ -78,5 +80,33 @@ describe('context details', () => {
     fireEvent.press(getByText('Start a new chat'));
     expect(onClose).toHaveBeenCalled();
     expect(onStartFreshChat).toHaveBeenCalled();
+  });
+
+  it('describes an on-device model by its own limit and never promises summarization', () => {
+    const { getByText, queryByText } = render(
+      <ContextDetailsSheet
+        visible
+        modelId="fixture-on-device-model"
+        messages={[message('big', 'user', 'a'.repeat(300))]}
+        onClose={jest.fn()}
+      />,
+    );
+
+    expect(getByText(/of 100 tokens/)).toBeTruthy();
+    expect(getByText(/limit of the on-device model/)).toBeTruthy();
+    expect(queryByText(/summarized/)).toBeNull();
+  });
+
+  it('keeps the summarization guidance for a cloud model near its window', () => {
+    const { getByText } = render(
+      <ContextDetailsSheet
+        visible
+        modelId="fixture-model"
+        messages={[message('big', 'user', 'a'.repeat(3600))]}
+        onClose={jest.fn()}
+      />,
+    );
+
+    expect(getByText(/oldest messages are summarized/)).toBeTruthy();
   });
 });

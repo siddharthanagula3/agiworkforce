@@ -13,6 +13,22 @@ function backoffMs(attempt: number): number {
   return 1000 * Math.pow(2, attempt);
 }
 
+function waitForBackoff(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise<void>((resolve) => {
+    if (signal.aborted) {
+      resolve();
+      return;
+    }
+    const finish = () => {
+      clearTimeout(timer);
+      signal.removeEventListener('abort', finish);
+      resolve();
+    };
+    const timer = setTimeout(finish, ms);
+    signal.addEventListener('abort', finish, { once: true });
+  });
+}
+
 export function unsentAttachmentMessage(fileNames: string[]): string {
   const named = fileNames.map((name) => `“${name}”`).join(', ');
   return fileNames.length === 1
@@ -88,7 +104,8 @@ export async function uploadWithRetry(
         return null;
       }
       if (attempt < MAX_UPLOAD_RETRIES) {
-        await new Promise<void>((resolve) => setTimeout(resolve, backoffMs(attempt)));
+        await waitForBackoff(backoffMs(attempt), signal);
+        if (signal.aborted) return null;
       }
     }
   }
