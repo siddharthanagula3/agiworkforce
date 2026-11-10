@@ -1,6 +1,6 @@
 import { PRODUCT_NAMES } from '@agiworkforce/types';
 import * as vscode from 'vscode';
-import type { ThreadReadResponse, ThreadSummary } from '@agiworkforce/types';
+import type { ThreadListParams, ThreadReadResponse, ThreadSummary } from '@agiworkforce/types';
 import {
   CLI_NOT_EXECUTABLE_MARKER,
   CLI_NOT_FOUND_MARKER,
@@ -84,6 +84,27 @@ export interface SessionListing<T> {
   failures: SessionListingFailure[];
 }
 
+async function listEveryThread(
+  runtime: LocalRuntimeClient,
+  params: ThreadListParams,
+): Promise<ThreadSummary[]> {
+  const threads: ThreadSummary[] = [];
+  const seenCursors = new Set<string>();
+  let cursor: string | undefined;
+  do {
+    const page = await runtime.listThreads(cursor === undefined ? params : { ...params, cursor });
+    threads.push(...page.threads);
+    cursor = page.nextCursor;
+    if (cursor !== undefined) {
+      if (seenCursors.has(cursor)) {
+        throw new Error('The session list did not advance past its continuation.');
+      }
+      seenCursors.add(cursor);
+    }
+  } while (cursor !== undefined);
+  return threads;
+}
+
 export class ConversationTreeProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<
     vscode.TreeItem | undefined | null | void
@@ -125,13 +146,13 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<vscode.
       folders.map(async (folder) => {
         try {
           const runtime = this.runtimes.forWorkspace(folder.uri.fsPath);
-          const page = await runtime.listThreads({
+          const listed = await listEveryThread(runtime, {
             cwd: folder.uri.fsPath,
             limit: 100,
             includeArchived: false,
             includeCloud: true,
           });
-          const ownedThreads = page.threads.filter((thread) => {
+          const ownedThreads = listed.filter((thread) => {
             const owned =
               isCloudThread(thread) || isSameWorkspacePath(folder.uri.fsPath, thread.cwd);
             if (!owned) {
@@ -167,12 +188,12 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<vscode.
       getAllWorkspaceFolders().map(async (folder) => {
         try {
           const runtime = this.runtimes.forWorkspace(folder.uri.fsPath);
-          const page = await runtime.listThreads({
+          const listed = await listEveryThread(runtime, {
             cwd: folder.uri.fsPath,
             limit: 100,
             includeArchived: true,
           });
-          const archived = page.threads.filter(
+          const archived = listed.filter(
             (thread) =>
               thread.status === 'archived' && isSameWorkspacePath(folder.uri.fsPath, thread.cwd),
           );
