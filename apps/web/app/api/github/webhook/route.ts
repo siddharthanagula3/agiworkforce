@@ -37,7 +37,7 @@ import {
   type GitHubCodeTaskRequest,
 } from '@/lib/services/cloud-code-github-task';
 import { routeGitHubWebhookEvent } from './webhook-router';
-import { recordDeliveryOnce } from './delivery-dedup';
+import { recordDeliveryOnce, releaseDelivery } from './delivery-dedup';
 import { escapeUntrustedPrDiff } from './pr-diff-prompt';
 
 export const maxDuration = 800;
@@ -107,10 +107,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ received: true, event: 'ping' });
   }
 
+  const deliveryId = request.headers.get('x-github-delivery');
+  let claimedDeliveryId: string | null = null;
   {
     const payloadRecord = rawPayload as Record<string, unknown>;
     const dedupOutcome = await recordDeliveryOnce(getNeonDb(), {
-      deliveryId: request.headers.get('x-github-delivery'),
+      deliveryId,
       event: event ?? 'unknown',
       action: typeof payloadRecord['action'] === 'string' ? payloadRecord['action'] : null,
       installationId:
@@ -126,6 +128,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
       return NextResponse.json({ received: true, duplicate: true });
     }
+    if (dedupOutcome === 'first') claimedDeliveryId = deliveryId;
   }
 
   if (routedEvent.kind === 'automation-event') {
@@ -152,6 +155,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
     try {
       const outcomes = await ingestTriggerEvent(getNeonDb(), triggerEvent);
+      if (outcomes.some((outcome) => outcome.outcome === 'failed')) {
+        throw new Error('An event trigger could not queue its run');
+      }
       return NextResponse.json({
         received: true,
         event: triggerEvent.type,
@@ -164,6 +170,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         { error, event: triggerEvent.type },
         'GitHub automation event could not be ingested',
       );
+      await releaseDelivery(getNeonDb(), claimedDeliveryId);
       return NextResponse.json(
         { error: 'Webhook processing failed' },
         { status: 500, headers: { 'Retry-After': '10' } },
@@ -187,6 +194,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         { error, installationId: routedEvent.installationId },
         'Failed to remove deleted GitHub installation',
       );
+      await releaseDelivery(getNeonDb(), claimedDeliveryId);
       return NextResponse.json(
         { error: 'Webhook processing failed' },
         { status: 500, headers: { 'Retry-After': '10' } },

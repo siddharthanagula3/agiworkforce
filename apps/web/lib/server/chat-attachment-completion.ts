@@ -88,9 +88,11 @@ async function resolveUploadConversation(
   input: { conversationId?: string | undefined; temporary?: boolean | undefined },
 ): Promise<UploadConversation> {
   const { userId, organizationId } = scope;
-  if (!input.conversationId) return { temporary: input.temporary === true, conversationId: null };
+  const declaredTemporary = input.temporary === true;
+  if (!input.conversationId) return { temporary: declaredTemporary, conversationId: null };
+  let row: { id: string; is_temporary: boolean } | undefined;
   try {
-    const [row] = await db.query<{ id: string; is_temporary: boolean }>(
+    [row] = await db.query<{ id: string; is_temporary: boolean }>(
       `select id, is_temporary
          from web_conversations
         where id = $1
@@ -100,14 +102,17 @@ async function resolveUploadConversation(
         limit 1`,
       [input.conversationId, userId, organizationId],
     );
-    return { temporary: row?.is_temporary === true, conversationId: row?.id ?? null };
   } catch (error) {
     logger.warn(
       { err: error, userId, conversationId: input.conversationId },
-      '[uploads] temporary-chat lookup failed; counting the file against storage',
+      '[uploads] temporary-chat lookup failed; refusing the upload instead of guessing its retention',
     );
-    return { temporary: false, conversationId: null };
+    throw createError.serviceUnavailable(
+      'This file could not be attached because the chat could not be checked. Try again.',
+    );
   }
+  if (!row) return { temporary: declaredTemporary, conversationId: null };
+  return { temporary: row.is_temporary === true, conversationId: row.id };
 }
 
 function reportedUploadFindings(

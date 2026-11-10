@@ -93,6 +93,34 @@ describe('emitIdentitySecurityEvent', () => {
     expect(auditTypes()).toEqual(['password_changed']);
   });
 
+  it('gives two occurrences of one event distinct notice references', async () => {
+    await emitIdentitySecurityEvent(db, { userId: 'user-1', event: 'password_changed' });
+    await emitIdentitySecurityEvent(db, { userId: 'user-1', event: 'password_changed' });
+
+    const references = mocks.notify.mock.calls.map(([, input]) => input.subjectRef);
+    expect(references).toEqual([expect.any(String), expect.any(String)]);
+    expect(new Set(references).size).toBe(2);
+  });
+
+  it('keeps the reference the call site supplied so one occurrence stays one notice', async () => {
+    await emitIdentitySecurityEvent(db, {
+      userId: 'user-1',
+      event: 'new_location',
+      subjectRef: 'session-9',
+    });
+    await emitIdentitySecurityEvent(db, {
+      userId: 'user-1',
+      event: 'email_changed',
+      subjectRef: 'address-1',
+      noticeRef: 'notice-1',
+    });
+
+    expect(mocks.notify.mock.calls.map(([, input]) => input.subjectRef)).toEqual([
+      'session-9',
+      'notice-1',
+    ]);
+  });
+
   it('adds a risk-signal event when the engine fires', async () => {
     mocks.observe.mockResolvedValueOnce({ level: 'elevated', signals: ['new_device'] });
 
