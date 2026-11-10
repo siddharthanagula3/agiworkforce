@@ -157,12 +157,31 @@ pub async fn account_status(refresh: bool) -> AccountSnapshot {
     let Ok(context) = tier_cache::ManagedRequestContext::capture() else {
         return AccountSnapshot::default();
     };
+    account_status_for(context, crate::account_privacy_mode(), refresh).await
+}
+
+async fn account_status_for(
+    context: tier_cache::ManagedRequestContext,
+    privacy: crate::platform::runtime::session::PrivacyMode,
+    refresh: bool,
+) -> AccountSnapshot {
     let Some(_) = context.jwt.as_deref() else {
         return AccountSnapshot {
             cached: true,
             ..AccountSnapshot::default()
         };
     };
+    if crate::cloud::CloudClient::admit(privacy).is_err() {
+        return AccountSnapshot {
+            signed_in: true,
+            tier: context
+                .with_current(|| tier_cache::read_tier_for(&context))
+                .flatten()
+                .map(|cached| tier_cache::tier_slug(&cached.tier)),
+            cached: true,
+            ..AccountSnapshot::default()
+        };
+    }
     if refresh {
         context.with_current(|| {
             tier_cache::invalidate_tier_cache();
@@ -956,6 +975,50 @@ mod tests {
             store.entries.is_empty(),
             "a device grant survives sign-out: save_device_grant writes a key MANAGED_AUTH_KEYS does not name"
         );
+    }
+
+    #[tokio::test]
+    async fn a_local_or_byok_session_reads_no_account_status_from_the_cloud() {
+        use crate::platform::runtime::session::PrivacyMode;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        let connections = Arc::new(AtomicUsize::new(0));
+        let counted = Arc::clone(&connections);
+        let server = tokio::spawn(async move {
+            while let Ok((stream, _)) = listener.accept().await {
+                counted.fetch_add(1, Ordering::SeqCst);
+                drop(stream);
+            }
+        });
+        let context = |base: &str| tier_cache::ManagedRequestContext {
+            jwt: Some(token("account-a", "session-a", 1)),
+            base: base.to_string(),
+            owner: None,
+        };
+
+        for mode in [PrivacyMode::Local, PrivacyMode::Byok] {
+            let snapshot = account_status_for(context(&base), mode, true).await;
+            assert!(snapshot.signed_in);
+            assert!(snapshot.cached);
+            assert_eq!(snapshot.email, None);
+            assert_eq!(snapshot.balance_credits, None);
+            assert_eq!(snapshot.purchased_credits, None);
+        }
+        assert_eq!(
+            connections.load(Ordering::SeqCst),
+            0,
+            "a Local or BYOK session reached the account for its status"
+        );
+
+        account_status_for(context(&base), PrivacyMode::Managed, false).await;
+        assert!(
+            connections.load(Ordering::SeqCst) > 0,
+            "the probe never saw the managed read, so it proves nothing about the refused modes"
+        );
+        server.abort();
     }
 
     #[test]

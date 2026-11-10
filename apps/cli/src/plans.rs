@@ -392,7 +392,7 @@ mod tests {
         }
         assert_eq!(
             capability_label("developer_surfaces"),
-            "Managed Cloud in the CLI and VS Code"
+            "Cloud in the CLI and VS Code"
         );
     }
 }

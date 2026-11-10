@@ -990,7 +990,7 @@ pub async fn login_agiworkforce() -> Result<()> {
     let entry = crate::oauth::device_code_login(&base).await?;
     crate::app_server::account::save_device_grant(entry)?;
     record_credential_use(AGIWORKFORCE_AUTH_KEY, "signed in and saved a credential");
-    crate::device_registry::send_heartbeat().await;
+    let _ = crate::device_registry::send_heartbeat(crate::account_privacy_mode()).await;
     Ok(())
 }
 

@@ -17,6 +17,7 @@ use tokio_tungstenite::tungstenite::protocol::Role;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::WebSocketStream;
 
+use crate::platform::runtime::session::PrivacyMode;
 use envelope::{DispatchSession, VerifyError};
 use host::{CodeHost, Outgoing};
 
@@ -602,12 +603,9 @@ async fn report_activity(
         agiworkforce_protocol::developer_session::AppServerNotification,
     >,
     root_id: String,
+    privacy: PrivacyMode,
     stop: Stop,
 ) {
-    let privacy = crate::config::CliConfig::load_merged()
-        .or_else(|_| crate::config::CliConfig::load_without_project())
-        .unwrap_or_default()
-        .account_privacy_mode();
     let Ok(client) = crate::cloud::CloudClient::connect(privacy) else {
         return;
     };
@@ -703,16 +701,22 @@ fn print_status(status: RemoteControlStatus) {
     }
 }
 
-pub async fn run<H: DeveloperSessionHost + 'static>(host: Arc<H>, workspace: &Path) -> Result<()> {
-    run_with(host, workspace, stop_on_ctrl_c(), print_status).await
+pub async fn run<H: DeveloperSessionHost + 'static>(
+    host: Arc<H>,
+    workspace: &Path,
+    privacy: PrivacyMode,
+) -> Result<()> {
+    run_with(host, workspace, privacy, stop_on_ctrl_c(), print_status).await
 }
 
 pub async fn run_with<H: DeveloperSessionHost + 'static>(
     host: Arc<H>,
     workspace: &Path,
+    privacy: PrivacyMode,
     stop: Stop,
     status: impl Fn(RemoteControlStatus) + Send + Sync + 'static,
 ) -> Result<()> {
+    crate::cloud::CloudClient::admit(privacy).map_err(|refused| anyhow!("{refused}"))?;
     let status: StatusSink = Arc::new(status);
     let jwt = crate::tier_cache::load_jwt()
         .ok_or_else(|| anyhow!("Sign in with `agi login` before starting Remote Control"))?;
@@ -750,10 +754,11 @@ pub async fn run_with<H: DeveloperSessionHost + 'static>(
     });
 
     crate::device_registry::set_remote_control(true);
-    let heartbeat = crate::device_registry::spawn_heartbeat_loop();
+    let heartbeat = crate::device_registry::spawn_heartbeat_loop(privacy);
     let activity = tokio::spawn(report_activity(
         activity_notifications,
         root_id(workspace),
+        privacy,
         stop.clone(),
     ));
     let mut attempt: u32 = 0;
@@ -798,7 +803,7 @@ pub async fn run_with<H: DeveloperSessionHost + 'static>(
     }
     let _ = tokio::time::timeout(
         END_PAIRING_TIMEOUT,
-        crate::device_registry::send_heartbeat(),
+        crate::device_registry::send_heartbeat(privacy),
     )
     .await;
     status(RemoteControlStatus::Off);
@@ -1180,5 +1185,35 @@ mod tests {
         let (_sender, stop) = tokio::sync::watch::channel(false);
         let step = or_stopped(&stop, async { 7 }).await;
         assert!(matches!(step, Step::Done(7)));
+    }
+
+    #[tokio::test]
+    async fn a_local_or_byok_session_never_pairs_through_the_account_relay() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let store = tempfile::tempdir().expect("store");
+        for mode in [PrivacyMode::Local, PrivacyMode::Byok] {
+            let host = crate::app_server::CliDeveloperSessionHost::new_with_store(
+                crate::config::CliConfig::default(),
+                workspace.path().to_path_buf(),
+                crate::runtime::session_control::ManagedSessionStore::new(
+                    store.path().to_path_buf(),
+                ),
+                false,
+            )
+            .expect("host");
+            let statuses = Arc::new(std::sync::Mutex::new(0usize));
+            let seen = Arc::clone(&statuses);
+            let (_sender, stop) = tokio::sync::watch::channel(false);
+            let refused = run_with(Arc::new(host), workspace.path(), mode, stop, move |_| {
+                *seen.lock().unwrap() += 1
+            })
+            .await
+            .expect_err("Remote Control must be refused outside Cloud mode");
+            assert_eq!(
+                refused.to_string(),
+                crate::cloud::CloudError::NotManaged(mode).to_string()
+            );
+            assert_eq!(*statuses.lock().unwrap(), 0);
+        }
     }
 }

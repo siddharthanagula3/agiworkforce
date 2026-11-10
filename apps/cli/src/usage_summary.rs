@@ -1020,7 +1020,7 @@ mod tests {
     fn renders_each_meter_with_remaining_and_reset() {
         let usage = parse_account_usage(contract_fixture()).expect("contract fixture must parse");
         let rendered = render_account_usage(&usage, fixture_now()).join("\n");
-        assert!(rendered.contains("Plan: Max 20x"), "{rendered}");
+        assert!(rendered.contains("Plan: Ultra"), "{rendered}");
         assert!(
             rendered
                 .contains("5-hour window: 10.25 of 200 credits used, 189.75 left, resets in 3h 0m"),

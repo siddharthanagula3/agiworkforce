@@ -6422,7 +6422,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
                                 .skip_permissions,
                     ),
                 );
-                remote_control::run(host, &workspace_root).await
+                remote_control::run(host, &workspace_root, app_config.account_privacy_mode()).await
             }
             Command::AppServer {
                 workspace_consent: _,
@@ -6453,7 +6453,8 @@ async fn run_cli(cli: Cli) -> Result<()> {
                 );
                 host.prepare().await;
                 let capabilities = host.capabilities();
-                let _heartbeat = device_registry::spawn_heartbeat_loop();
+                let _heartbeat =
+                    device_registry::spawn_heartbeat_loop(app_config.account_privacy_mode());
                 if listen == "stdio" {
                     return app_server::run_developer_session_stdio(host, capabilities).await;
                 }

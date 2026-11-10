@@ -4430,6 +4430,10 @@ fn start_remote_control(app: &mut TuiApp) -> String {
     if app.remote.is_some() {
         return "Remote Control is already on. /remote-control off stops it.".to_string();
     }
+    let privacy = app.session.privacy_mode;
+    if let Err(refused) = crate::cloud::CloudClient::admit(privacy) {
+        return refused.to_string();
+    }
     let Some(thread_id) = app.session.managed_session_id().map(str::to_string) else {
         return "Remote Control needs a saved session, and this one is not being saved."
             .to_string();
@@ -4469,6 +4473,7 @@ fn start_remote_control(app: &mut TuiApp) -> String {
         let result = crate::remote_control::run_with(
             relay_host,
             &workspace,
+            privacy,
             stopped,
             move |update: crate::remote_control::RemoteControlStatus| {
                 use crate::remote_control::RemoteControlStatus;

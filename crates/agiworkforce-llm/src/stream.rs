@@ -1861,6 +1861,10 @@ where
                             .get("candidatesTokenCount")
                             .and_then(serde_json::Value::as_u64)
                             .unwrap_or(0) as u32;
+                        usage.cache_read_input_tokens =
+                            u.get("cachedContentTokenCount")
+                                .and_then(serde_json::Value::as_u64)
+                                .unwrap_or(0) as u32;
                         on_event(StreamEvent::Usage {
                             usage: usage.clone(),
                         });
@@ -2870,6 +2874,31 @@ mod openai_compat_stream_tests {
             StreamEvent::Usage { usage }
                 if usage.cache_read_input_tokens == 1536
                     && usage.cache_creation_input_tokens == 512
+        )));
+    }
+
+    #[tokio::test]
+    async fn gemini_cached_content_is_counted_inside_the_prompt_not_beside_it() {
+        let frames = concat!(
+            "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"text\":\"ok\"}]},\"finishReason\":\"STOP\"}],",
+            "\"usageMetadata\":{\"promptTokenCount\":4096,\"cachedContentTokenCount\":3072,\"candidatesTokenCount\":12,\"totalTokenCount\":4108}}\n\n"
+        );
+        let stream = futures_util::stream::iter(vec![Ok::<Bytes, LlmError>(Bytes::from(frames))]);
+        let mut events = Vec::new();
+        let outcome = run_gemini_stream(stream, Duration::from_secs(5), &mut |event| {
+            events.push(event)
+        })
+        .await
+        .expect("the stream decodes");
+        assert_eq!(outcome.text, "ok");
+        assert_eq!(outcome.usage.input_tokens, 4096);
+        assert_eq!(outcome.usage.output_tokens, 12);
+        assert_eq!(outcome.usage.cache_read_input_tokens, 3072);
+        assert_eq!(outcome.usage.cache_creation_input_tokens, 0);
+        assert!(events.iter().any(|event| matches!(
+            event,
+            StreamEvent::Usage { usage }
+                if usage.input_tokens == 4096 && usage.cache_read_input_tokens == 3072
         )));
     }
 

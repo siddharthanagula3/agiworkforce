@@ -290,6 +290,13 @@ impl CloudClient {
                 "The upload destination is not secure.".to_string(),
             ));
         }
+        let missing = unsent_signed_headers(&target, upload_headers);
+        if !missing.is_empty() {
+            return Err(CloudError::Transport(format!(
+                "Refusing an upload that storage would reject: it does not send {}.",
+                missing.join(", ")
+            )));
+        }
         let client = reqwest::Client::builder()
             .redirect(reqwest::redirect::Policy::none())
             .build()
@@ -560,6 +567,23 @@ impl CloudClient {
     }
 }
 
+const HEADERS_THE_TRANSPORT_SETS: [&str; 2] = ["host", "content-length"];
+
+fn unsent_signed_headers(target: &reqwest::Url, sent: &HashMap<String, String>) -> Vec<String> {
+    target
+        .query_pairs()
+        .filter(|(name, _)| name.eq_ignore_ascii_case("x-amz-signedheaders"))
+        .flat_map(|(_, value)| {
+            value
+                .split(';')
+                .map(|name| name.trim().to_ascii_lowercase())
+                .collect::<Vec<_>>()
+        })
+        .filter(|name| !name.is_empty() && !HEADERS_THE_TRANSPORT_SETS.contains(&name.as_str()))
+        .filter(|name| !sent.keys().any(|sent| sent.eq_ignore_ascii_case(name)))
+        .collect()
+}
+
 fn disposition_file_name(disposition: &str) -> Option<String> {
     let raw = disposition.split(';').map(str::trim).find_map(|part| {
         part.strip_prefix("filename=")
@@ -723,6 +747,42 @@ mod tests {
         ] {
             assert!(client.upload_request(destination, &headers).is_err());
         }
+    }
+
+    #[test]
+    fn an_upload_that_omits_a_signed_header_is_refused_before_it_is_sent() {
+        let client = CloudClient {
+            base: "https://cloud.example".to_string(),
+            jwt: "fixture-account-token".to_string(),
+            auth_base: "https://cloud.example".to_string(),
+            owner: "fixture-owner".to_string(),
+            http: reqwest::Client::new(),
+        };
+        let destination = "https://storage.example/object?X-Amz-SignedHeaders=content-length%3Bcontent-type%3Bhost%3Bx-amz-server-side-encryption&X-Amz-Signature=fixture";
+        let mut headers = HashMap::from([("Content-Type".to_string(), "text/plain".to_string())]);
+        let refused = client
+            .upload_request(destination, &headers)
+            .expect_err("storage would reject a PUT without the signed encryption header");
+        assert!(
+            refused
+                .to_string()
+                .contains("does not send x-amz-server-side-encryption"),
+            "{refused}"
+        );
+        assert!(!refused.to_string().contains("content-length"));
+        assert!(!refused.to_string().contains("host"));
+
+        headers.insert(
+            "X-Amz-Server-Side-Encryption".to_string(),
+            "AES256".to_string(),
+        );
+        let request = client
+            .upload_request(destination, &headers)
+            .expect("every signed header is sent")
+            .build()
+            .expect("request builds");
+        assert_eq!(request.headers()["x-amz-server-side-encryption"], "AES256");
+        assert_eq!(request.headers()["content-type"], "text/plain");
     }
 
     #[test]

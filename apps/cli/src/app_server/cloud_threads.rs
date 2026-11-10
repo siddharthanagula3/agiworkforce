@@ -67,15 +67,15 @@ fn summary(session: &CodeSession) -> ThreadSummary {
     }
 }
 
-fn client() -> Option<CloudClient> {
-    CloudClient::connect(PrivacyMode::Managed).ok()
+pub async fn list(workspace: &Path) -> Vec<ThreadSummary> {
+    list_in(workspace, crate::account_privacy_mode()).await
 }
 
-pub async fn list(workspace: &Path) -> Vec<ThreadSummary> {
+async fn list_in(workspace: &Path, privacy: PrivacyMode) -> Vec<ThreadSummary> {
     let Some(repository) = workspace_repository(workspace) else {
         return Vec::new();
     };
-    let Some(client) = client() else {
+    let Ok(client) = CloudClient::connect(privacy) else {
         return Vec::new();
     };
     match code_sessions::list(&client, OPEN_SESSIONS).await {
@@ -95,10 +95,18 @@ pub async fn list(workspace: &Path) -> Vec<ThreadSummary> {
 }
 
 pub async fn read(session_id: &str) -> Result<ThreadReadResponse, DeveloperSessionHostError> {
-    let client = client().ok_or_else(|| {
-        DeveloperSessionHostError::unavailable(
+    read_in(session_id, crate::account_privacy_mode()).await
+}
+
+async fn read_in(
+    session_id: &str,
+    privacy: PrivacyMode,
+) -> Result<ThreadReadResponse, DeveloperSessionHostError> {
+    let client = CloudClient::connect(privacy).map_err(|error| match error {
+        CloudError::NotManaged(_) => DeveloperSessionHostError::unavailable(error.to_string()),
+        _ => DeveloperSessionHostError::unavailable(
             "Sign in with `agi login` to read cloud Code sessions.",
-        )
+        ),
     })?;
     let detail = code_sessions::show(&client, session_id)
         .await
@@ -152,5 +160,36 @@ mod tests {
         assert_eq!(cloud_session_id(&thread.id), Some("5f1c"));
         assert_eq!(cloud_session_id("5f1c"), None);
         assert_eq!(session_repository(&session).as_deref(), Some("acme/app"));
+    }
+
+    #[tokio::test]
+    async fn a_local_or_byok_session_never_lists_or_reads_cloud_code_sessions() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        std::process::Command::new("git")
+            .args(["init", "--quiet"])
+            .current_dir(workspace.path())
+            .status()
+            .expect("git init");
+        std::process::Command::new("git")
+            .args(["remote", "add", "origin", "https://github.com/acme/app.git"])
+            .current_dir(workspace.path())
+            .status()
+            .expect("git remote");
+        assert_eq!(
+            workspace_repository(workspace.path()).as_deref(),
+            Some("acme/app")
+        );
+        for mode in [PrivacyMode::Local, PrivacyMode::Byok] {
+            assert!(list_in(workspace.path(), mode).await.is_empty());
+            let refused = read_in("5f1c", mode)
+                .await
+                .expect_err("a cloud session read must be refused outside Cloud mode");
+            assert!(
+                refused
+                    .to_string()
+                    .contains(&CloudError::NotManaged(mode).to_string()),
+                "{refused}"
+            );
+        }
     }
 }
