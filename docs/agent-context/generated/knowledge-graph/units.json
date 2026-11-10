@@ -2312,10 +2312,15 @@
       "status": null,
       "entry": [],
       "agentsDoc": "AGENTS.md",
-      "checks": ["bash scripts/check-action-pins.sh", "pnpm check:llm-operability"],
+      "checks": [
+        "bash scripts/check-action-pins.sh",
+        "pnpm check:llm-operability"
+      ],
       "dependsOn": [],
       "dependents": [],
-      "lanes": ["release-ci"],
+      "lanes": [
+        "release-ci"
+      ],
       "files": 52,
       "roles": {
         "config": 41,
@@ -2373,7 +2378,9 @@
       "owner": "Desktop lead",
       "trustBoundary": null,
       "status": null,
-      "entry": ["electron/dist/bootstrap.cjs"],
+      "entry": [
+        "electron/dist/bootstrap.cjs"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [
         "pnpm --filter @agiworkforce/desktop test",
@@ -2426,7 +2433,10 @@
       "status": null,
       "entry": [],
       "agentsDoc": "AGENTS.md",
-      "checks": ["pnpm --filter @agiworkforce/extension test", "pnpm lint:extension"],
+      "checks": [
+        "pnpm --filter @agiworkforce/extension test",
+        "pnpm lint:extension"
+      ],
       "dependsOn": [
         "packages/ai/provider-protocol",
         "packages/ai/provider-runtime",
@@ -2444,7 +2454,9 @@
         "packages/ui/unified-chat"
       ],
       "dependents": [],
-      "lanes": ["chrome-extension"],
+      "lanes": [
+        "chrome-extension"
+      ],
       "files": 538,
       "roles": {
         "asset": 5,
@@ -2464,9 +2476,14 @@
       "owner": "Extension lead",
       "trustBoundary": null,
       "status": null,
-      "entry": ["./out/extension.js"],
+      "entry": [
+        "./out/extension.js"
+      ],
       "agentsDoc": "AGENTS.md",
-      "checks": ["pnpm --filter agi-workforce test", "pnpm --filter agi-workforce typecheck"],
+      "checks": [
+        "pnpm --filter agi-workforce test",
+        "pnpm --filter agi-workforce typecheck"
+      ],
       "dependsOn": [
         "packages/ai/agent-core",
         "packages/ai/routing",
@@ -2484,7 +2501,9 @@
         "packages/ui/unified-chat"
       ],
       "dependents": [],
-      "lanes": ["vscode-extension"],
+      "lanes": [
+        "vscode-extension"
+      ],
       "files": 384,
       "roles": {
         "asset": 3,
@@ -2503,7 +2522,9 @@
       "owner": "Mobile lead",
       "trustBoundary": null,
       "status": null,
-      "entry": ["index.ts"],
+      "entry": [
+        "index.ts"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [
         "pnpm --filter @agiworkforce/mobile test",
@@ -2641,10 +2662,15 @@
       "status": null,
       "entry": [],
       "agentsDoc": "AGENTS.md",
-      "checks": ["cargo check --workspace", "cargo test --workspace --lib"],
+      "checks": [
+        "cargo check --workspace",
+        "cargo test --workspace --lib"
+      ],
       "dependsOn": [],
       "dependents": [],
-      "lanes": ["rust-runtime-protocol"],
+      "lanes": [
+        "rust-runtime-protocol"
+      ],
       "files": 659,
       "roles": {
         "config": 13,
@@ -2718,7 +2744,9 @@
       ],
       "dependsOn": [],
       "dependents": [],
-      "lanes": ["chat-artifacts"],
+      "lanes": [
+        "chat-artifacts"
+      ],
       "files": 7,
       "roles": {
         "config": 3,
@@ -2737,7 +2765,9 @@
       "status": null,
       "entry": [],
       "agentsDoc": "AGENTS.md",
-      "checks": ["pnpm exec turbo run typecheck --filter='./packages/*'"],
+      "checks": [
+        "pnpm exec turbo run typecheck --filter='./packages/*'"
+      ],
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
@@ -2754,10 +2784,14 @@
       "owner": "AI platform",
       "trustBoundary": "none; turn-loop orchestration over host-supplied transports",
       "status": "active",
-      "entry": ["./src/index.ts"],
+      "entry": [
+        "./src/index.ts"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [],
-      "dependsOn": ["packages/contracts/types"],
+      "dependsOn": [
+        "packages/contracts/types"
+      ],
       "dependents": [
         "apps/extension-vscode",
         "apps/mobile",
@@ -2780,11 +2814,20 @@
       "owner": "Model platform",
       "trustBoundary": "canonical model and harness metadata",
       "status": "active-generated-source-of-truth",
-      "entry": [".", "./generated/registry.ts", "./registry.json", "./routing-policies.json"],
+      "entry": [
+        ".",
+        "./generated/registry.ts",
+        "./registry.json",
+        "./routing-policies.json"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [],
       "dependsOn": [],
-      "dependents": ["apps/desktop", "packages/ai/routing", "packages/contracts/types"],
+      "dependents": [
+        "apps/desktop",
+        "packages/ai/routing",
+        "packages/contracts/types"
+      ],
       "lanes": [],
       "files": 47,
       "roles": {
@@ -2802,7 +2845,11 @@
       "owner": "Provider platform",
       "trustBoundary": "provider request and response normalization",
       "status": "active-high-fan-in",
-      "entry": [".", "./src/index.ts", "./thinking-tag-splitter"],
+      "entry": [
+        ".",
+        "./src/index.ts",
+        "./thinking-tag-splitter"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [
         "pnpm --filter './packages/ai/providers/*' --if-present typecheck",
@@ -2814,7 +2861,9 @@
         "pnpm check:service-domain-ownership",
         "scripts/check-no-hardcoded-models.sh"
       ],
-      "dependsOn": ["packages/contracts/types"],
+      "dependsOn": [
+        "packages/contracts/types"
+      ],
       "dependents": [
         "apps/extension",
         "apps/web",
@@ -2833,7 +2882,9 @@
         "packages/ai/providers/xai",
         "packages/ai/providers/zhipu"
       ],
-      "lanes": ["provider-routing"],
+      "lanes": [
+        "provider-routing"
+      ],
       "files": 35,
       "roles": {
         "config": 3,
@@ -2849,7 +2900,11 @@
       "owner": "Provider platform",
       "trustBoundary": "provider egress, streaming, retry and fallback",
       "status": "active-high-fan-in",
-      "entry": [".", "./decisions", "./src/index.ts"],
+      "entry": [
+        ".",
+        "./decisions",
+        "./src/index.ts"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [
         "pnpm --filter './packages/ai/providers/*' --if-present typecheck",
@@ -2861,7 +2916,10 @@
         "pnpm check:service-domain-ownership",
         "scripts/check-no-hardcoded-models.sh"
       ],
-      "dependsOn": ["packages/ai/agent-core", "packages/contracts/types"],
+      "dependsOn": [
+        "packages/ai/agent-core",
+        "packages/contracts/types"
+      ],
       "dependents": [
         "apps/extension",
         "apps/mobile",
@@ -2881,7 +2939,9 @@
         "packages/ai/providers/xai",
         "packages/ai/providers/zhipu"
       ],
-      "lanes": ["provider-routing"],
+      "lanes": [
+        "provider-routing"
+      ],
       "files": 25,
       "roles": {
         "config": 3,
@@ -2897,7 +2957,9 @@
       "owner": "Provider platform",
       "trustBoundary": "Anthropic API egress",
       "status": "active",
-      "entry": ["./src/index.ts"],
+      "entry": [
+        "./src/index.ts"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [
         "pnpm --filter './packages/ai/providers/*' --if-present typecheck",
@@ -2914,8 +2976,13 @@
         "packages/ai/provider-runtime",
         "packages/contracts/types"
       ],
-      "dependents": ["apps/web", "packages/ai/providers/factory"],
-      "lanes": ["provider-routing"],
+      "dependents": [
+        "apps/web",
+        "packages/ai/providers/factory"
+      ],
+      "lanes": [
+        "provider-routing"
+      ],
       "files": 29,
       "roles": {
         "config": 3,
@@ -2931,7 +2998,9 @@
       "owner": "Provider platform",
       "trustBoundary": "DeepSeek API egress",
       "status": "active-single-composition-consumer",
-      "entry": ["./src/index.ts"],
+      "entry": [
+        "./src/index.ts"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [
         "pnpm --filter './packages/ai/providers/*' --if-present typecheck",
@@ -2949,8 +3018,12 @@
         "packages/ai/providers/openai",
         "packages/contracts/types"
       ],
-      "dependents": ["packages/ai/providers/factory"],
-      "lanes": ["provider-routing"],
+      "dependents": [
+        "packages/ai/providers/factory"
+      ],
+      "lanes": [
+        "provider-routing"
+      ],
       "files": 9,
       "roles": {
         "config": 3,
@@ -2966,7 +3039,9 @@
       "owner": "Provider platform",
       "trustBoundary": "provider adapter construction with caller-owned credentials and egress policy",
       "status": "active",
-      "entry": ["./src/index.ts"],
+      "entry": [
+        "./src/index.ts"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [
         "pnpm --filter './packages/ai/providers/*' --if-present typecheck",
@@ -2998,8 +3073,12 @@
         "packages/ai/providers/zhipu",
         "packages/contracts/types"
       ],
-      "dependents": ["apps/web"],
-      "lanes": ["provider-routing"],
+      "dependents": [
+        "apps/web"
+      ],
+      "lanes": [
+        "provider-routing"
+      ],
       "files": 8,
       "roles": {
         "config": 3,
@@ -3015,7 +3094,9 @@
       "owner": "Provider platform",
       "trustBoundary": "Google AI API egress",
       "status": "active",
-      "entry": ["./src/index.ts"],
+      "entry": [
+        "./src/index.ts"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [
         "pnpm --filter './packages/ai/providers/*' --if-present typecheck",
@@ -3032,8 +3113,13 @@
         "packages/ai/provider-runtime",
         "packages/contracts/types"
       ],
-      "dependents": ["apps/web", "packages/ai/providers/factory"],
-      "lanes": ["provider-routing"],
+      "dependents": [
+        "apps/web",
+        "packages/ai/providers/factory"
+      ],
+      "lanes": [
+        "provider-routing"
+      ],
       "files": 27,
       "roles": {
         "config": 3,
@@ -3049,7 +3135,9 @@
       "owner": "Provider platform",
       "trustBoundary": "Groq API egress",
       "status": "active-single-composition-consumer",
-      "entry": ["./src/index.ts"],
+      "entry": [
+        "./src/index.ts"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [
         "pnpm --filter './packages/ai/providers/*' --if-present typecheck",
@@ -3061,9 +3149,16 @@
         "pnpm check:service-domain-ownership",
         "scripts/check-no-hardcoded-models.sh"
       ],
-      "dependsOn": ["packages/ai/providers/openai", "packages/contracts/types"],
-      "dependents": ["packages/ai/providers/factory"],
-      "lanes": ["provider-routing"],
+      "dependsOn": [
+        "packages/ai/providers/openai",
+        "packages/contracts/types"
+      ],
+      "dependents": [
+        "packages/ai/providers/factory"
+      ],
+      "lanes": [
+        "provider-routing"
+      ],
       "files": 8,
       "roles": {
         "config": 3,
@@ -3079,7 +3174,9 @@
       "owner": "Provider platform",
       "trustBoundary": "local loopback model server",
       "status": "active-single-composition-consumer",
-      "entry": ["./src/index.ts"],
+      "entry": [
+        "./src/index.ts"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [
         "pnpm --filter './packages/ai/providers/*' --if-present typecheck",
@@ -3097,8 +3194,13 @@
         "packages/ai/providers/openai",
         "packages/contracts/types"
       ],
-      "dependents": ["apps/desktop", "packages/ai/providers/factory"],
-      "lanes": ["provider-routing"],
+      "dependents": [
+        "apps/desktop",
+        "packages/ai/providers/factory"
+      ],
+      "lanes": [
+        "provider-routing"
+      ],
       "files": 5,
       "roles": {
         "config": 3,
@@ -3114,7 +3216,9 @@
       "owner": "Provider platform",
       "trustBoundary": "MiniMax API egress",
       "status": "active-single-composition-consumer",
-      "entry": ["./src/index.ts"],
+      "entry": [
+        "./src/index.ts"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [
         "pnpm --filter './packages/ai/providers/*' --if-present typecheck",
@@ -3132,8 +3236,12 @@
         "packages/ai/providers/openai",
         "packages/contracts/types"
       ],
-      "dependents": ["packages/ai/providers/factory"],
-      "lanes": ["provider-routing"],
+      "dependents": [
+        "packages/ai/providers/factory"
+      ],
+      "lanes": [
+        "provider-routing"
+      ],
       "files": 9,
       "roles": {
         "config": 3,
@@ -3149,7 +3257,9 @@
       "owner": "Provider platform",
       "trustBoundary": "Moonshot API egress",
       "status": "active-single-composition-consumer",
-      "entry": ["./src/index.ts"],
+      "entry": [
+        "./src/index.ts"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [
         "pnpm --filter './packages/ai/providers/*' --if-present typecheck",
@@ -3167,8 +3277,12 @@
         "packages/ai/providers/openai",
         "packages/contracts/types"
       ],
-      "dependents": ["packages/ai/providers/factory"],
-      "lanes": ["provider-routing"],
+      "dependents": [
+        "packages/ai/providers/factory"
+      ],
+      "lanes": [
+        "provider-routing"
+      ],
       "files": 9,
       "roles": {
         "config": 3,
@@ -3184,7 +3298,9 @@
       "owner": "Provider platform",
       "trustBoundary": "NVIDIA NIM API egress",
       "status": "active-single-composition-consumer",
-      "entry": ["./src/index.ts"],
+      "entry": [
+        "./src/index.ts"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [
         "pnpm --filter './packages/ai/providers/*' --if-present typecheck",
@@ -3196,9 +3312,16 @@
         "pnpm check:service-domain-ownership",
         "scripts/check-no-hardcoded-models.sh"
       ],
-      "dependsOn": ["packages/ai/providers/openai", "packages/contracts/types"],
-      "dependents": ["packages/ai/providers/factory"],
-      "lanes": ["provider-routing"],
+      "dependsOn": [
+        "packages/ai/providers/openai",
+        "packages/contracts/types"
+      ],
+      "dependents": [
+        "packages/ai/providers/factory"
+      ],
+      "lanes": [
+        "provider-routing"
+      ],
       "files": 6,
       "roles": {
         "config": 3,
@@ -3214,7 +3337,9 @@
       "owner": "Provider platform",
       "trustBoundary": "deployment-local Ollama egress",
       "status": "active-single-composition-consumer",
-      "entry": ["./src/index.ts"],
+      "entry": [
+        "./src/index.ts"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [
         "pnpm --filter './packages/ai/providers/*' --if-present typecheck",
@@ -3231,8 +3356,13 @@
         "packages/ai/provider-runtime",
         "packages/contracts/types"
       ],
-      "dependents": ["apps/desktop", "packages/ai/providers/factory"],
-      "lanes": ["provider-routing"],
+      "dependents": [
+        "apps/desktop",
+        "packages/ai/providers/factory"
+      ],
+      "lanes": [
+        "provider-routing"
+      ],
       "files": 17,
       "roles": {
         "config": 3,
@@ -3248,7 +3378,9 @@
       "owner": "Provider platform",
       "trustBoundary": "OpenAI API egress and OpenAI-compatible wire translation",
       "status": "active-high-fan-in",
-      "entry": ["./src/index.ts"],
+      "entry": [
+        "./src/index.ts"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [
         "pnpm --filter './packages/ai/providers/*' --if-present typecheck",
@@ -3282,7 +3414,9 @@
         "packages/ai/providers/xai",
         "packages/ai/providers/zhipu"
       ],
-      "lanes": ["provider-routing"],
+      "lanes": [
+        "provider-routing"
+      ],
       "files": 37,
       "roles": {
         "config": 3,
@@ -3298,7 +3432,9 @@
       "owner": "Provider platform",
       "trustBoundary": "OpenRouter API egress",
       "status": "active-single-composition-consumer",
-      "entry": ["./src/index.ts"],
+      "entry": [
+        "./src/index.ts"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [
         "pnpm --filter './packages/ai/providers/*' --if-present typecheck",
@@ -3316,8 +3452,12 @@
         "packages/ai/providers/openai",
         "packages/contracts/types"
       ],
-      "dependents": ["packages/ai/providers/factory"],
-      "lanes": ["provider-routing"],
+      "dependents": [
+        "packages/ai/providers/factory"
+      ],
+      "lanes": [
+        "provider-routing"
+      ],
       "files": 14,
       "roles": {
         "config": 3,
@@ -3333,7 +3473,9 @@
       "owner": "Provider platform",
       "trustBoundary": "Perplexity API egress and citations",
       "status": "active-single-composition-consumer",
-      "entry": ["./src/index.ts"],
+      "entry": [
+        "./src/index.ts"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [
         "pnpm --filter './packages/ai/providers/*' --if-present typecheck",
@@ -3351,8 +3493,12 @@
         "packages/ai/providers/openai",
         "packages/contracts/types"
       ],
-      "dependents": ["packages/ai/providers/factory"],
-      "lanes": ["provider-routing"],
+      "dependents": [
+        "packages/ai/providers/factory"
+      ],
+      "lanes": [
+        "provider-routing"
+      ],
       "files": 7,
       "roles": {
         "config": 3,
@@ -3368,7 +3514,9 @@
       "owner": "Provider platform",
       "trustBoundary": "Qwen API egress",
       "status": "active-single-composition-consumer",
-      "entry": ["./src/index.ts"],
+      "entry": [
+        "./src/index.ts"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [
         "pnpm --filter './packages/ai/providers/*' --if-present typecheck",
@@ -3386,8 +3534,12 @@
         "packages/ai/providers/openai",
         "packages/contracts/types"
       ],
-      "dependents": ["packages/ai/providers/factory"],
-      "lanes": ["provider-routing"],
+      "dependents": [
+        "packages/ai/providers/factory"
+      ],
+      "lanes": [
+        "provider-routing"
+      ],
       "files": 12,
       "roles": {
         "config": 3,
@@ -3403,7 +3555,9 @@
       "owner": "Provider platform",
       "trustBoundary": "Vercel AI Gateway egress",
       "status": "active-single-composition-consumer",
-      "entry": ["./src/index.ts"],
+      "entry": [
+        "./src/index.ts"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [
         "pnpm --filter './packages/ai/providers/*' --if-present typecheck",
@@ -3421,8 +3575,13 @@
         "packages/ai/providers/openai",
         "packages/contracts/types"
       ],
-      "dependents": ["apps/web", "packages/ai/providers/factory"],
-      "lanes": ["provider-routing"],
+      "dependents": [
+        "apps/web",
+        "packages/ai/providers/factory"
+      ],
+      "lanes": [
+        "provider-routing"
+      ],
       "files": 16,
       "roles": {
         "config": 3,
@@ -3438,7 +3597,9 @@
       "owner": "Provider platform",
       "trustBoundary": "Cloudflare AI Gateway egress to Workers AI",
       "status": "active-single-composition-consumer",
-      "entry": ["./src/index.ts"],
+      "entry": [
+        "./src/index.ts"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [
         "pnpm --filter './packages/ai/providers/*' --if-present typecheck",
@@ -3450,9 +3611,16 @@
         "pnpm check:service-domain-ownership",
         "scripts/check-no-hardcoded-models.sh"
       ],
-      "dependsOn": ["packages/ai/providers/openai", "packages/contracts/types"],
-      "dependents": ["packages/ai/providers/factory"],
-      "lanes": ["provider-routing"],
+      "dependsOn": [
+        "packages/ai/providers/openai",
+        "packages/contracts/types"
+      ],
+      "dependents": [
+        "packages/ai/providers/factory"
+      ],
+      "lanes": [
+        "provider-routing"
+      ],
       "files": 6,
       "roles": {
         "config": 3,
@@ -3468,7 +3636,9 @@
       "owner": "Provider platform",
       "trustBoundary": "xAI API egress",
       "status": "active-single-composition-consumer",
-      "entry": ["./src/index.ts"],
+      "entry": [
+        "./src/index.ts"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [
         "pnpm --filter './packages/ai/providers/*' --if-present typecheck",
@@ -3486,8 +3656,12 @@
         "packages/ai/providers/openai",
         "packages/contracts/types"
       ],
-      "dependents": ["packages/ai/providers/factory"],
-      "lanes": ["provider-routing"],
+      "dependents": [
+        "packages/ai/providers/factory"
+      ],
+      "lanes": [
+        "provider-routing"
+      ],
       "files": 7,
       "roles": {
         "config": 3,
@@ -3503,7 +3677,9 @@
       "owner": "Provider platform",
       "trustBoundary": "Zhipu API egress",
       "status": "active-single-composition-consumer",
-      "entry": ["./src/index.ts"],
+      "entry": [
+        "./src/index.ts"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [
         "pnpm --filter './packages/ai/providers/*' --if-present typecheck",
@@ -3521,8 +3697,12 @@
         "packages/ai/providers/openai",
         "packages/contracts/types"
       ],
-      "dependents": ["packages/ai/providers/factory"],
-      "lanes": ["provider-routing"],
+      "dependents": [
+        "packages/ai/providers/factory"
+      ],
+      "lanes": [
+        "provider-routing"
+      ],
       "files": 8,
       "roles": {
         "config": 3,
@@ -3538,7 +3718,12 @@
       "owner": "Model platform",
       "trustBoundary": "model selection, cost, fallback and cache-consequence policy",
       "status": "active",
-      "entry": [".", "./model-picker", "./release-ledger", "./src/index.ts"],
+      "entry": [
+        ".",
+        "./model-picker",
+        "./release-ledger",
+        "./src/index.ts"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [
         "pnpm --filter './packages/ai/providers/*' --if-present typecheck",
@@ -3550,7 +3735,11 @@
         "pnpm check:service-domain-ownership",
         "scripts/check-no-hardcoded-models.sh"
       ],
-      "dependsOn": ["packages/ai/model-registry", "packages/ai/search", "packages/contracts/types"],
+      "dependsOn": [
+        "packages/ai/model-registry",
+        "packages/ai/search",
+        "packages/contracts/types"
+      ],
       "dependents": [
         "apps/desktop",
         "apps/extension",
@@ -3559,7 +3748,9 @@
         "apps/web",
         "packages/ui/unified-chat"
       ],
-      "lanes": ["provider-routing"],
+      "lanes": [
+        "provider-routing"
+      ],
       "files": 89,
       "roles": {
         "config": 3,
@@ -3576,7 +3767,10 @@
       "owner": "Search platform",
       "trustBoundary": "implemented web-search harness availability; no search execution or credentials",
       "status": "active-canonical-owner",
-      "entry": [".", "./src/index.ts"],
+      "entry": [
+        ".",
+        "./src/index.ts"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [
         "pnpm --filter './packages/ai/providers/*' --if-present typecheck",
@@ -3588,9 +3782,18 @@
         "pnpm check:service-domain-ownership",
         "scripts/check-no-hardcoded-models.sh"
       ],
-      "dependsOn": ["packages/contracts/types"],
-      "dependents": ["apps/mobile", "apps/web", "packages/ai/routing", "packages/ui/unified-chat"],
-      "lanes": ["provider-routing"],
+      "dependsOn": [
+        "packages/contracts/types"
+      ],
+      "dependents": [
+        "apps/mobile",
+        "apps/web",
+        "packages/ai/routing",
+        "packages/ui/unified-chat"
+      ],
+      "lanes": [
+        "provider-routing"
+      ],
       "files": 17,
       "roles": {
         "config": 3,
@@ -3649,11 +3852,18 @@
       "owner": "Desktop platform",
       "trustBoundary": "renderer-to-privileged-host command transport",
       "status": "active",
-      "entry": ["./src/index.ts"],
+      "entry": [
+        "./src/index.ts"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [],
-      "dependsOn": ["packages/client/client-runtime", "packages/contracts/types"],
-      "dependents": ["apps/desktop"],
+      "dependsOn": [
+        "packages/client/client-runtime",
+        "packages/contracts/types"
+      ],
+      "dependents": [
+        "apps/desktop"
+      ],
       "lanes": [],
       "files": 18,
       "roles": {
@@ -3669,11 +3879,21 @@
       "owner": "Client platform",
       "trustBoundary": "IDE session, diff and diagnostics contract over the CLI app server",
       "status": "active",
-      "entry": [".", "./git", "./src/index.ts", "./workspace"],
+      "entry": [
+        ".",
+        "./git",
+        "./src/index.ts",
+        "./workspace"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [],
-      "dependsOn": ["packages/platform/utils"],
-      "dependents": ["apps/desktop", "apps/extension-vscode"],
+      "dependsOn": [
+        "packages/platform/utils"
+      ],
+      "dependents": [
+        "apps/desktop",
+        "apps/extension-vscode"
+      ],
       "lanes": [],
       "files": 12,
       "roles": {
@@ -3690,7 +3910,10 @@
       "owner": "Cross-surface synchronization",
       "trustBoundary": "typed managed-cloud delta validation and local apply mechanics",
       "status": "active-canonical-owner",
-      "entry": [".", "./src/index.ts"],
+      "entry": [
+        ".",
+        "./src/index.ts"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [
         "pnpm --filter @agiworkforce/cloud-contracts lint",
@@ -3708,7 +3931,10 @@
         "pnpm check:service-domain-ownership",
         "pnpm exec turbo run typecheck --filter=@agiworkforce/types"
       ],
-      "dependsOn": ["packages/contracts/cloud-contracts", "packages/platform/artifacts"],
+      "dependsOn": [
+        "packages/contracts/cloud-contracts",
+        "packages/platform/artifacts"
+      ],
       "dependents": [
         "apps/desktop",
         "apps/extension",
@@ -3716,7 +3942,9 @@
         "apps/mobile",
         "apps/web"
       ],
-      "lanes": ["contracts-types"],
+      "lanes": [
+        "contracts-types"
+      ],
       "files": 26,
       "roles": {
         "config": 6,
@@ -3758,7 +3986,9 @@
         "pnpm check:service-domain-ownership",
         "pnpm exec turbo run typecheck --filter=@agiworkforce/types"
       ],
-      "dependsOn": ["packages/contracts/types"],
+      "dependsOn": [
+        "packages/contracts/types"
+      ],
       "dependents": [
         "apps/desktop",
         "apps/extension",
@@ -3771,7 +4001,9 @@
         "packages/platform/utils",
         "services/upload-scanner"
       ],
-      "lanes": ["contracts-types"],
+      "lanes": [
+        "contracts-types"
+      ],
       "files": 165,
       "roles": {
         "config": 7,
@@ -3787,12 +4019,26 @@
       "owner": "Compliance and privacy",
       "trustBoundary": "provider disclosure and jurisdiction policy",
       "status": "active-single-consumer",
-      "entry": [".", "./service-regions", "./src/index.ts"],
+      "entry": [
+        ".",
+        "./service-regions",
+        "./src/index.ts"
+      ],
       "agentsDoc": "AGENTS.md",
-      "checks": ["pnpm check:boundaries"],
-      "dependsOn": ["packages/contracts/types"],
-      "dependents": ["apps/extension", "apps/mobile", "apps/web"],
-      "lanes": ["database-compliance"],
+      "checks": [
+        "pnpm check:boundaries"
+      ],
+      "dependsOn": [
+        "packages/contracts/types"
+      ],
+      "dependents": [
+        "apps/extension",
+        "apps/mobile",
+        "apps/web"
+      ],
+      "lanes": [
+        "database-compliance"
+      ],
       "files": 33,
       "roles": {
         "config": 3,
@@ -3809,11 +4055,18 @@
       "owner": "Cloud platform",
       "trustBoundary": "typed context source taxonomy: provenance, authorship and trust classification, no I/O",
       "status": "active",
-      "entry": [".", "./src/index.ts"],
+      "entry": [
+        ".",
+        "./src/index.ts"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [],
       "dependsOn": [],
-      "dependents": ["apps/mobile", "apps/web", "packages/platform/context-engine"],
+      "dependents": [
+        "apps/mobile",
+        "apps/web",
+        "packages/platform/context-engine"
+      ],
       "lanes": [],
       "files": 15,
       "roles": {
@@ -3830,7 +4083,12 @@
       "owner": "Enterprise platform and security",
       "trustBoundary": "signed enterprise license and policy verification",
       "status": "active-partial-adoption",
-      "entry": [".", "./org-policy", "./src/index.ts", "./test-support"],
+      "entry": [
+        ".",
+        "./org-policy",
+        "./src/index.ts",
+        "./test-support"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [],
       "dependsOn": [],
@@ -3853,10 +4111,15 @@
       "owner": "Privileged local runtime contract",
       "trustBoundary": "the request and response shapes the Electron shell's privileged local runtime accepts, with the path-safety and capability predicates that decide what a workspace grant reaches; pure types and validation, performs no I/O",
       "status": "active-canonical-owner",
-      "entry": [".", "./src/index.ts"],
+      "entry": [
+        ".",
+        "./src/index.ts"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [],
-      "dependsOn": ["packages/contracts/types"],
+      "dependsOn": [
+        "packages/contracts/types"
+      ],
       "dependents": [
         "apps/desktop",
         "apps/extension-vscode",
@@ -3880,7 +4143,10 @@
       "owner": "Security and privacy platform",
       "trustBoundary": "classification of AGI-owned Managed Cloud hosts; no network I/O",
       "status": "active-canonical-owner",
-      "entry": [".", "./src/index.ts"],
+      "entry": [
+        ".",
+        "./src/index.ts"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [
         "pnpm --filter @agiworkforce/cloud-contracts lint",
@@ -3899,8 +4165,13 @@
         "pnpm exec turbo run typecheck --filter=@agiworkforce/types"
       ],
       "dependsOn": [],
-      "dependents": ["apps/desktop", "apps/mobile"],
-      "lanes": ["contracts-types"],
+      "dependents": [
+        "apps/desktop",
+        "apps/mobile"
+      ],
+      "lanes": [
+        "contracts-types"
+      ],
       "files": 7,
       "roles": {
         "config": 3,
@@ -3945,7 +4216,9 @@
         "pnpm check:service-domain-ownership",
         "pnpm exec turbo run typecheck --filter=@agiworkforce/types"
       ],
-      "dependsOn": ["packages/ai/model-registry"],
+      "dependsOn": [
+        "packages/ai/model-registry"
+      ],
       "dependents": [
         "apps/desktop",
         "apps/extension",
@@ -3988,7 +4261,9 @@
         "packages/ui/unified-chat",
         "services/upload-scanner"
       ],
-      "lanes": ["contracts-types"],
+      "lanes": [
+        "contracts-types"
+      ],
       "files": 814,
       "roles": {
         "config": 27,
@@ -4018,8 +4293,12 @@
       ],
       "agentsDoc": "AGENTS.md",
       "checks": [],
-      "dependsOn": ["packages/platform/utils"],
-      "dependents": ["packages/guardian/github"],
+      "dependsOn": [
+        "packages/platform/utils"
+      ],
+      "dependents": [
+        "packages/guardian/github"
+      ],
       "lanes": [],
       "files": 22,
       "roles": {
@@ -4036,10 +4315,17 @@
       "owner": "Guardian",
       "trustBoundary": "github check-run surface",
       "status": "active",
-      "entry": [".", "./checks", "./src/index.ts", "./summary"],
+      "entry": [
+        ".",
+        "./checks",
+        "./src/index.ts",
+        "./summary"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [],
-      "dependsOn": ["packages/guardian/core"],
+      "dependsOn": [
+        "packages/guardian/core"
+      ],
       "dependents": [],
       "lanes": [],
       "files": 12,
@@ -4057,7 +4343,10 @@
       "owner": "Artifact domain",
       "trustBoundary": "artifact derivation, client state, managed publish and cloud merge/apply",
       "status": "active-canonical-owner",
-      "entry": [".", "./src/index.ts"],
+      "entry": [
+        ".",
+        "./src/index.ts"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [
         "pnpm --filter @agiworkforce/artifacts lint",
@@ -4067,7 +4356,10 @@
         "pnpm --filter @agiworkforce/unified-chat test",
         "pnpm check:artifact-sync-ownership"
       ],
-      "dependsOn": ["packages/contracts/cloud-contracts", "packages/contracts/types"],
+      "dependsOn": [
+        "packages/contracts/cloud-contracts",
+        "packages/contracts/types"
+      ],
       "dependents": [
         "apps/desktop",
         "apps/extension",
@@ -4076,7 +4368,9 @@
         "apps/web",
         "packages/client/sync"
       ],
-      "lanes": ["chat-artifacts"],
+      "lanes": [
+        "chat-artifacts"
+      ],
       "files": 15,
       "roles": {
         "config": 3,
@@ -4092,11 +4386,18 @@
       "owner": "Cloud platform",
       "trustBoundary": "the one engine every context source is resolved through: per-source permission and policy checks, per-source budgets, cross-source dedup, staleness, and a per-turn manifest that records identities and counts but never the context text",
       "status": "active",
-      "entry": [".", "./src/index.ts"],
+      "entry": [
+        ".",
+        "./src/index.ts"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [],
-      "dependsOn": ["packages/contracts/context"],
-      "dependents": ["apps/web"],
+      "dependsOn": [
+        "packages/contracts/context"
+      ],
+      "dependents": [
+        "apps/web"
+      ],
       "lanes": [],
       "files": 12,
       "roles": {
@@ -4113,12 +4414,22 @@
       "owner": "Backend and data",
       "trustBoundary": "tenant-scoped database access",
       "status": "active",
-      "entry": [".", "./search", "./src/index.ts"],
+      "entry": [
+        ".",
+        "./search",
+        "./src/index.ts"
+      ],
       "agentsDoc": "AGENTS.md",
-      "checks": ["pnpm check:boundaries"],
+      "checks": [
+        "pnpm check:boundaries"
+      ],
       "dependsOn": [],
-      "dependents": ["apps/web"],
-      "lanes": ["database-compliance"],
+      "dependents": [
+        "apps/web"
+      ],
+      "lanes": [
+        "database-compliance"
+      ],
       "files": 30,
       "roles": {
         "config": 3,
@@ -4134,10 +4445,15 @@
       "owner": "Cloud platform",
       "trustBoundary": "one file identity, version chain and lineage graph shared by uploads, generated files, artifacts and exports",
       "status": "active",
-      "entry": [".", "./src/index.ts"],
+      "entry": [
+        ".",
+        "./src/index.ts"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [],
-      "dependsOn": ["packages/contracts/types"],
+      "dependsOn": [
+        "packages/contracts/types"
+      ],
       "dependents": [],
       "lanes": [],
       "files": 9,
@@ -4155,11 +4471,18 @@
       "owner": "Backend and data",
       "trustBoundary": "session verification, request identity and provider account reads behind the identity port",
       "status": "active",
-      "entry": [".", "./browser", "./management", "./src/index.ts"],
+      "entry": [
+        ".",
+        "./browser",
+        "./management",
+        "./src/index.ts"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [],
       "dependsOn": [],
-      "dependents": ["apps/web"],
+      "dependents": [
+        "apps/web"
+      ],
       "lanes": [],
       "files": 20,
       "roles": {
@@ -4176,11 +4499,15 @@
       "owner": "Backend and data",
       "trustBoundary": "shared cache, rate limit and lock state behind the keyvalue port",
       "status": "active",
-      "entry": ["./src/index.ts"],
+      "entry": [
+        "./src/index.ts"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [],
       "dependsOn": [],
-      "dependents": ["apps/web"],
+      "dependents": [
+        "apps/web"
+      ],
       "lanes": [],
       "files": 16,
       "roles": {
@@ -4197,11 +4524,17 @@
       "owner": "Mobile platform",
       "trustBoundary": "on-device model loading and inference",
       "status": "active-platform-specific",
-      "entry": ["./src/index.ts"],
+      "entry": [
+        "./src/index.ts"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [],
-      "dependsOn": ["packages/contracts/types"],
-      "dependents": ["apps/mobile"],
+      "dependsOn": [
+        "packages/contracts/types"
+      ],
+      "dependents": [
+        "apps/mobile"
+      ],
       "lanes": [],
       "files": 20,
       "roles": {
@@ -4218,11 +4551,18 @@
       "owner": "Backend and data",
       "trustBoundary": "bucket bytes behind the objectstore port",
       "status": "active",
-      "entry": [".", "./config", "./presign", "./src/index.ts"],
+      "entry": [
+        ".",
+        "./config",
+        "./presign",
+        "./src/index.ts"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [],
       "dependsOn": [],
-      "dependents": ["apps/web"],
+      "dependents": [
+        "apps/web"
+      ],
       "lanes": [],
       "files": 25,
       "roles": {
@@ -4239,11 +4579,19 @@
       "owner": "Backend and data",
       "trustBoundary": "error reporting behind an adapter port, gated by user consent and scrubbed of message text, file paths and urls before send",
       "status": "active",
-      "entry": [".", "./src/index.ts"],
+      "entry": [
+        ".",
+        "./src/index.ts"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [],
       "dependsOn": [],
-      "dependents": ["apps/desktop", "apps/extension", "apps/extension-vscode", "apps/web"],
+      "dependents": [
+        "apps/desktop",
+        "apps/extension",
+        "apps/extension-vscode",
+        "apps/web"
+      ],
       "lanes": [],
       "files": 14,
       "roles": {
@@ -4328,11 +4676,16 @@
       "owner": "Tooling and security",
       "trustBoundary": "privileged filesystem mutation",
       "status": "active",
-      "entry": ["./src/index.ts"],
+      "entry": [
+        "./src/index.ts"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [],
       "dependsOn": [],
-      "dependents": ["apps/desktop", "apps/web"],
+      "dependents": [
+        "apps/desktop",
+        "apps/web"
+      ],
       "lanes": [],
       "files": 10,
       "roles": {
@@ -4349,7 +4702,9 @@
       "owner": "Browser automation and security",
       "trustBoundary": "isolated browser profile and computer-use actions",
       "status": "unwired-pending-contract-slice",
-      "entry": ["./src/index.ts"],
+      "entry": [
+        "./src/index.ts"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [
         "pnpm --filter @agiworkforce/artifacts lint",
@@ -4359,9 +4714,15 @@
         "pnpm --filter @agiworkforce/unified-chat test",
         "pnpm check:artifact-sync-ownership"
       ],
-      "dependsOn": ["packages/contracts/types"],
-      "dependents": ["apps/extension"],
-      "lanes": ["chat-artifacts"],
+      "dependsOn": [
+        "packages/contracts/types"
+      ],
+      "dependents": [
+        "apps/extension"
+      ],
+      "lanes": [
+        "chat-artifacts"
+      ],
       "files": 12,
       "roles": {
         "config": 3,
@@ -4378,11 +4739,16 @@
       "owner": "Tooling platform",
       "trustBoundary": "external MCP server transport and tool metadata",
       "status": "active",
-      "entry": ["./src/index.ts"],
+      "entry": [
+        "./src/index.ts"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [],
       "dependsOn": [],
-      "dependents": ["apps/desktop", "apps/web"],
+      "dependents": [
+        "apps/desktop",
+        "apps/web"
+      ],
       "lanes": [],
       "files": 15,
       "roles": {
@@ -4399,11 +4765,18 @@
       "owner": "Tooling platform",
       "trustBoundary": "untrusted skill metadata parsing and merge",
       "status": "active",
-      "entry": [".", "./src/index.ts", "./validation"],
+      "entry": [
+        ".",
+        "./src/index.ts",
+        "./validation"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [],
       "dependsOn": [],
-      "dependents": ["apps/desktop", "apps/web"],
+      "dependents": [
+        "apps/desktop",
+        "apps/web"
+      ],
       "lanes": [],
       "files": 38,
       "roles": {
@@ -4421,7 +4794,13 @@
       "owner": "Frontend platform",
       "trustBoundary": "presentation-only",
       "status": "active",
-      "entry": [".", "./chat.css", "./foundation.css", "./src/index.ts", "./tailwind.css"],
+      "entry": [
+        ".",
+        "./chat.css",
+        "./foundation.css",
+        "./src/index.ts",
+        "./tailwind.css"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [],
       "dependsOn": [],
@@ -4449,11 +4828,24 @@
       "owner": "Frontend platform",
       "trustBoundary": "none; locale catalogues and message resolution",
       "status": "active",
-      "entry": [".", "./en", "./languages", "./lazy", "./resources", "./src/index.ts", "./vscode"],
+      "entry": [
+        ".",
+        "./en",
+        "./languages",
+        "./lazy",
+        "./resources",
+        "./src/index.ts",
+        "./vscode"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [],
       "dependsOn": [],
-      "dependents": ["apps/desktop", "apps/extension-vscode", "apps/mobile", "apps/web"],
+      "dependents": [
+        "apps/desktop",
+        "apps/extension-vscode",
+        "apps/mobile",
+        "apps/web"
+      ],
       "lanes": [],
       "files": 116,
       "roles": {
@@ -4469,11 +4861,16 @@
       "owner": "Frontend platform",
       "trustBoundary": "presentation-only",
       "status": "active",
-      "entry": ["./src/index.ts"],
+      "entry": [
+        "./src/index.ts"
+      ],
       "agentsDoc": "AGENTS.md",
       "checks": [],
       "dependsOn": [],
-      "dependents": ["apps/web", "packages/ui/ui"],
+      "dependents": [
+        "apps/web",
+        "packages/ui/ui"
+      ],
       "lanes": [],
       "files": 19,
       "roles": {
@@ -4511,8 +4908,14 @@
       ],
       "agentsDoc": "AGENTS.md",
       "checks": [],
-      "dependsOn": ["packages/ui/icons"],
-      "dependents": ["apps/desktop", "apps/web", "packages/ui/unified-chat"],
+      "dependsOn": [
+        "packages/ui/icons"
+      ],
+      "dependents": [
+        "apps/desktop",
+        "apps/web",
+        "packages/ui/unified-chat"
+      ],
       "lanes": [],
       "files": 188,
       "roles": {
@@ -4575,7 +4978,9 @@
         "apps/mobile",
         "apps/web"
       ],
-      "lanes": ["chat-artifacts"],
+      "lanes": [
+        "chat-artifacts"
+      ],
       "files": 444,
       "roles": {
         "config": 3,
@@ -4644,7 +5049,9 @@
       ],
       "dependsOn": [],
       "dependents": [],
-      "lanes": ["backend-services"],
+      "lanes": [
+        "backend-services"
+      ],
       "files": 78,
       "roles": {
         "config": 6,
@@ -4668,9 +5075,14 @@
         "pnpm --filter @agiworkforce/signaling-server test",
         "pnpm --filter @agiworkforce/upload-scanner test"
       ],
-      "dependsOn": ["packages/contracts/cloud-contracts", "packages/contracts/types"],
+      "dependsOn": [
+        "packages/contracts/cloud-contracts",
+        "packages/contracts/types"
+      ],
       "dependents": [],
-      "lanes": ["backend-services"],
+      "lanes": [
+        "backend-services"
+      ],
       "files": 23,
       "roles": {
         "config": 3,
