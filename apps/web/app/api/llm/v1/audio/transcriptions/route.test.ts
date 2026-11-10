@@ -45,7 +45,8 @@ vi.mock('@shared/utils/env', () => ({
   requireEnv: vi.fn(() => 'sk-test-openai-key'),
   getOptionalEnv: vi.fn(() => undefined),
 }));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1' })),
 }));
 vi.mock('@/lib/server/rls-db', () => ({
@@ -651,3 +652,5 @@ describe('POST /api/llm/v1/audio/transcriptions, outside the proxy', () => {
     expect(served.status).toBe(200);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/api-auth');

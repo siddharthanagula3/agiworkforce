@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
-vi.mock('@/lib/client/csrf', () => ({
+vi.mock('@/lib/client/csrf', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   addCsrfHeaders: vi.fn(async (headers: HeadersInit = {}) => headers),
   getCsrfToken: vi.fn(async () => 'csrf-token'),
 }));
@@ -89,3 +90,5 @@ describe('SourcesPanel failed removal', () => {
     expect(screen.getByText('charlie.pdf')).toBeTruthy();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/client/csrf');

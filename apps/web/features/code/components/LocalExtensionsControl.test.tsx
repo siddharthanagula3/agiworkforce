@@ -11,7 +11,8 @@ const setDeveloperSkillConsent =
 const setDeveloperSkillEnabled = vi.fn();
 const setDeveloperPluginEnabled = vi.fn();
 
-vi.mock('@/features/desktop-host', () => ({
+vi.mock('@/features/desktop-host', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   listDeveloperSkills: (rootId: string) => listDeveloperSkills(rootId),
   listDeveloperPlugins: () => listDeveloperPlugins(),
   setDeveloperSkillConsent: (rootId: string, granted: boolean, digest?: string) =>
@@ -115,3 +116,5 @@ describe("trusting a folder's skills", () => {
     expect(setDeveloperSkillConsent.mock.calls[0]?.[1]).toBe(false);
   });
 });
+
+type ImportedModule0 = typeof import('@/features/desktop-host');

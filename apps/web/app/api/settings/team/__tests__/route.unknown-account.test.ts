@@ -40,7 +40,8 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   getClerkAuthUser: vi.fn(async () => ({ userId: 'owner-user' })),
 }));
 
@@ -135,3 +136,5 @@ describe('POST /api/settings/team unknown account honesty', () => {
     expect(body.error.message).toMatch(/no email was sent/i);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/api-auth');

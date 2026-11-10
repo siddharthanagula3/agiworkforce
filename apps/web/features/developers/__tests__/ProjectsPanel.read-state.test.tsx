@@ -7,7 +7,8 @@ const { mockProjects, mockUsage, mockKeys } = vi.hoisted(() => ({
   mockUsage: vi.fn(),
   mockKeys: vi.fn(),
 }));
-vi.mock('../hooks/use-developer-projects', () => ({
+vi.mock('../hooks/use-developer-projects', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule2>()),
   ProjectMutationRejectedError: class ProjectMutationRejectedError extends Error {},
   useDeveloperProjects: () => mockProjects(),
   useCreateDeveloperProject: () => ({ mutateAsync: vi.fn(), isPending: false }),
@@ -39,10 +40,12 @@ const admission = vi.hoisted(() => {
 vi.mock('@/lib/identity/useSessionSnapshot', () => ({
   useSessionSnapshot: () => () => admission.session,
 }));
-vi.mock('@/features/workspaces/hooks/use-workspaces', () => ({
+vi.mock('@/features/workspaces/hooks/use-workspaces', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   useAccountWorkspaces: () => ({ data: admission.data }),
 }));
-vi.mock('@/features/workspaces/lib/workspace-admission', () => ({
+vi.mock('@/features/workspaces/lib/workspace-admission', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   observeWorkspaceOwner: () => admission.owner,
   workspaceOwnerIsCurrent: () => true,
   subscribeWorkspaceAdmission: () => () => undefined,
@@ -168,3 +171,7 @@ describe('ProjectsPanel read states', () => {
     expect(screen.queryByText(/Key count unavailable/)).not.toBeInTheDocument();
   });
 });
+
+type ImportedModule2 = typeof import('../hooks/use-developer-projects');
+type ImportedModule1 = typeof import('@/features/workspaces/hooks/use-workspaces');
+type ImportedModule0 = typeof import('@/features/workspaces/lib/workspace-admission');

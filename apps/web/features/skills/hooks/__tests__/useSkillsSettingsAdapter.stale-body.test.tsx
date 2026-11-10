@@ -1,12 +1,19 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@features/skills/services/skills-catalog', () => ({
+vi.mock('@features/skills/services/skills-catalog', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule2>()),
   loadSkillsCatalog: vi.fn(async () => []),
   skillAuthoringCapability: () => true,
 }));
-vi.mock('@shared/events/skill-catalog-events', () => ({ announceSkillCatalogChanged: vi.fn() }));
-vi.mock('@/lib/client/csrf', () => ({ getCsrfToken: vi.fn(async () => 'csrf') }));
+vi.mock('@shared/events/skill-catalog-events', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
+  announceSkillCatalogChanged: vi.fn(),
+}));
+vi.mock('@/lib/client/csrf', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
+  getCsrfToken: vi.fn(async () => 'csrf'),
+}));
 
 import { useSkillsSettingsAdapter } from '../useSkillsSettingsAdapter';
 
@@ -136,3 +143,7 @@ describe('opening a skill editor while an earlier body read is still pending', (
     expect(result.current.skillEditorProps.bodyLoading).toBe(false);
   });
 });
+
+type ImportedModule2 = typeof import('@features/skills/services/skills-catalog');
+type ImportedModule1 = typeof import('@shared/events/skill-catalog-events');
+type ImportedModule0 = typeof import('@/lib/client/csrf');

@@ -55,7 +55,8 @@ vi.mock('@/lib/server/rls-db', () => ({
   getVerifiedBearerUserScopedDb: vi.fn(),
   getUserScopedDb: mocks.getUserScopedDb,
 }));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   getClerkAuthUser: vi.fn(),
   getClerkAuthorizedParties: vi.fn(),
   getOptionalAuthUser: vi.fn(),
@@ -287,3 +288,5 @@ describe('POST /api/artifacts/runtime/[token]/storage', () => {
     );
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/api-auth');

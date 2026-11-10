@@ -53,7 +53,8 @@ vi.mock('@/lib/security-audit', () => ({
   logRateLimitExceeded: vi.fn(),
 }));
 
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   getClerkAuthUser: vi.fn(async () => ({ userId: 'admin-user' })),
 }));
 
@@ -345,3 +346,5 @@ describe('GET /api/settings/team authorization invariants', () => {
     expect(mockNeonQuery).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/api-auth');

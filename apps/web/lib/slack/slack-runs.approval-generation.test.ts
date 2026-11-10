@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/services/cloud-agent-run-service', () => ({ transitionCloudAgentRun: vi.fn() }));
+vi.mock('@/lib/services/cloud-agent-run-service', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
+  transitionCloudAgentRun: vi.fn(),
+}));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
@@ -121,3 +124,5 @@ describe('Slack approval generation', () => {
     expect(claimed.checkpoint.turnId).toBe('turn-1');
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/services/cloud-agent-run-service');

@@ -11,7 +11,10 @@ vi.mock('@/lib/services/spend-alert-service', () => ({
   dispatchSpendAlertIfDue: alertMocks.dispatchSpendAlertIfDue,
 }));
 const neon = vi.hoisted(() => ({ db: null as unknown }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => neon.db }));
+vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
+  getNeonDb: () => neon.db,
+}));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { creditsFromCents, creditsFromMicrousd, microusdFromCredits } from '@agiworkforce/types';
@@ -342,3 +345,5 @@ describe('personal spend limit', () => {
     expect(h.query.mock.calls[0]![1]).toEqual([USER]);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/server/neon-db');

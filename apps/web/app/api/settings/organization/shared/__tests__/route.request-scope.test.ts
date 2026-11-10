@@ -41,7 +41,8 @@ vi.mock('@/lib/security-audit', () => ({
   BLOCK_APPEAL_PATH: '/support',
   logRateLimitExceeded: vi.fn(),
 }));
-vi.mock('@/lib/services/organization-permission-service', () => ({
+vi.mock('@/lib/services/organization-permission-service', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   resolveOrganizationPermissions: mocks.permissions,
 }));
 vi.mock('@/lib/connectors/connector-capability', () => ({ assertConnectorsReleased: vi.fn() }));
@@ -341,3 +342,5 @@ describe('sharing routes consume mocked authenticated scope through the real mem
 });
 
 type ImportedModule0 = typeof import('@/lib/services/org-sharing-service');
+
+type ImportedModule1 = typeof import('@/lib/services/organization-permission-service');

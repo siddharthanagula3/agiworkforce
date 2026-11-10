@@ -33,7 +33,8 @@ vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   getClerkAuthUser: vi.fn(async () => ({ userId: 'attacker-user' })),
 }));
 vi.mock('@/lib/security-audit', () => ({
@@ -221,3 +222,5 @@ describe('POST /api/settings/team requires the target account to be the organiza
     expect(insertStatements()).toHaveLength(1);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/api-auth');

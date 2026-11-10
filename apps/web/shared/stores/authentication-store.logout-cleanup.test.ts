@@ -9,14 +9,18 @@ vi.mock('./layout-store', () => ({
   useLayoutStore: { getState: () => ({ reset: publicationCleanupMocks.reset }) },
 }));
 vi.mock('./web-chat-store', () => ({}));
-vi.mock('./web-settings-store', () => ({}));
+vi.mock('./web-settings-store', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
+}));
 vi.mock('./model-store', () => ({}));
 vi.mock('./thinking-store', () => ({}));
 vi.mock('@/features/chat/stores/artifacts-store', () => ({}));
 vi.mock('@/features/chat/stores/voice-input-store', () => ({}));
 vi.mock('@/features/chat/stores/voice-session-store', () => ({}));
 vi.mock('@/features/chat/stores/style-store', () => ({}));
-vi.mock('@/features/connectors/stores/tool-permissions-store', () => ({}));
+vi.mock('@/features/connectors/stores/tool-permissions-store', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
+}));
 vi.mock('@/features/chat/lib/use-model-favourites', () => ({}));
 vi.mock('@/features/connectors/hooks/use-connectors', () => ({}));
 vi.mock('@/features/connectors/hooks/use-connector-capabilities', () => ({}));
@@ -332,3 +336,6 @@ describe('common cleanup publication boundary', () => {
     }
   });
 });
+
+type ImportedModule1 = typeof import('./web-settings-store');
+type ImportedModule0 = typeof import('@/features/connectors/stores/tool-permissions-store');

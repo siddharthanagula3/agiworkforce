@@ -4,17 +4,20 @@ import { DEFAULT_WORKSPACE_CONTROLS } from '@agiworkforce/types';
 
 const mocks = vi.hoisted(() => ({ policy: vi.fn() }));
 
-vi.mock('@/features/settings/hooks/use-settings-queries', () => ({
+vi.mock('@/features/settings/hooks/use-settings-queries', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule2>()),
   useWorkspacePolicy: () => mocks.policy(),
   useUpdateWorkspacePolicy: () => ({ mutate: vi.fn(), isPending: false }),
   useTeamMembers: () => ({ data: [] }),
 }));
 
-vi.mock('../../hooks/use-model-policy', () => ({
+vi.mock('../../hooks/use-model-policy', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   useModelPolicy: () => ({ data: { catalog: { models: [], providers: [] } } }),
 }));
 
-vi.mock('../../hooks/use-workspace-roles', () => ({
+vi.mock('../../hooks/use-workspace-roles', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   usePolicyOverrides: () => ({ data: { overrides: [] } }),
   useWorkspaceRoles: () => ({ data: { roles: [] } }),
   useWorkspaceGroups: () => ({ data: { groups: [] } }),
@@ -66,3 +69,7 @@ describe('WorkspaceFeatureControls draft lifecycle', () => {
     expect(countriesInput()).toHaveValue('DE, IT');
   });
 });
+
+type ImportedModule2 = typeof import('@/features/settings/hooks/use-settings-queries');
+type ImportedModule1 = typeof import('../../hooks/use-model-policy');
+type ImportedModule0 = typeof import('../../hooks/use-workspace-roles');

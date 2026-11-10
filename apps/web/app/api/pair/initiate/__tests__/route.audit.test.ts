@@ -23,7 +23,8 @@ vi.mock('@/lib/managed-compute-gate', () => ({
 
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   isAccountUnavailableError: vi.fn(() => false),
   getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1' })),
 }));
@@ -285,3 +286,5 @@ describe('POST /api/pair/initiate audit trail', () => {
     },
   );
 });
+
+type ImportedModule0 = typeof import('@/lib/api-auth');

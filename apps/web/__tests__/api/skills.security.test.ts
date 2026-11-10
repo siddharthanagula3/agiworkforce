@@ -26,7 +26,8 @@ vi.mock('@/lib/error-handler', () => ({
       handler(req, context),
 }));
 
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   getClerkAuthUser: vi.fn().mockResolvedValue({ userId: 'user_test' }),
 }));
 
@@ -282,3 +283,5 @@ describe('skills API security contract', () => {
     ).rejects.toThrow('Unauthorized');
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/api-auth');

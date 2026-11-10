@@ -21,7 +21,8 @@ vi.mock('@/lib/security-audit', () => ({
   logAuthFailure: vi.fn(async () => undefined),
   logRateLimitExceeded: vi.fn(),
 }));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   getClerkAuthUser: vi.fn(async () => ({ userId: 'current-owner' })),
 }));
 vi.mock('@/app/api/settings/team/team-admin-access', () => ({
@@ -283,3 +284,5 @@ describe('sole-owner protection on the member routes', () => {
     expect(mockExecute).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/api-auth');

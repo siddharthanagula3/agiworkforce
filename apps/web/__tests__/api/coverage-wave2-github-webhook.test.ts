@@ -18,11 +18,13 @@ vi.mock('next/server', async (importOriginal) => ({
   },
 }));
 
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule4>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock('@/lib/rate-limit', () => ({
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule3>()),
   withRateLimit: vi.fn().mockResolvedValue(null),
 }));
 
@@ -48,7 +50,8 @@ const mockGetInstallationAccessToken = vi.fn();
 const mockGetPrDiff = vi.fn();
 const mockPostIssueComment = vi.fn();
 
-vi.mock('@/lib/services/organization-policy-code-gate', () => ({
+vi.mock('@/lib/services/organization-policy-code-gate', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule2>()),
   assertWorkspaceCodeAccess: vi.fn(async () => ({
     allowed: true,
     code: 'allowed',
@@ -58,10 +61,12 @@ vi.mock('@/lib/services/organization-policy-code-gate', () => ({
   })),
 }));
 const mockComputePolicy = vi.fn();
-vi.mock('@/lib/services/organization-policy-gate', () => ({
+vi.mock('@/lib/services/organization-policy-gate', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   evaluateActiveWorkspacePolicy: (...args: unknown[]) => mockComputePolicy(...args),
 }));
-vi.mock('@/lib/github-app', () => ({
+vi.mock('@/lib/github-app', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   listPrReviewCommentBodies: vi.fn(async () => []),
   postPrReview: vi.fn(async () => undefined),
   verifyGitHubWebhookSignature: (...args: unknown[]) => mockVerifySignature(...args),
@@ -513,3 +518,9 @@ describe('POST /api/github/webhook', () => {
     );
   });
 });
+
+type ImportedModule4 = typeof import('@/lib/logger');
+type ImportedModule3 = typeof import('@/lib/rate-limit');
+type ImportedModule2 = typeof import('@/lib/services/organization-policy-code-gate');
+type ImportedModule1 = typeof import('@/lib/services/organization-policy-gate');
+type ImportedModule0 = typeof import('@/lib/github-app');

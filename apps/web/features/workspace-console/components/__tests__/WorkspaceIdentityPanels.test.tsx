@@ -5,7 +5,8 @@ const mocks = vi.hoisted(() => ({
   useOrganizationOverview: vi.fn(),
 }));
 
-vi.mock('@/features/settings/hooks/use-settings-queries', () => ({
+vi.mock('@/features/settings/hooks/use-settings-queries', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   useOrganizationOverview: mocks.useOrganizationOverview,
 }));
 vi.mock('@/features/settings/sections/team/SSOPanel', () => ({
@@ -14,7 +15,8 @@ vi.mock('@/features/settings/sections/team/SSOPanel', () => ({
 vi.mock('@/features/admin/pages/DirectorySyncAdminPage', () => ({
   default: () => <div data-testid="directory-sync" />,
 }));
-vi.mock('../WorkspaceServicePrincipals', () => ({
+vi.mock('../WorkspaceServicePrincipals', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   WorkspaceServicePrincipals: () => <div data-testid="service-principals" />,
 }));
 
@@ -36,3 +38,6 @@ describe('WorkspaceIdentityPanels', () => {
     expect(screen.getByText('Not yet available')).toBeTruthy();
   });
 });
+
+type ImportedModule1 = typeof import('@/features/settings/hooks/use-settings-queries');
+type ImportedModule0 = typeof import('../WorkspaceServicePrincipals');

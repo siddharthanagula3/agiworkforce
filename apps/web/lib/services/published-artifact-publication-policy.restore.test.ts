@@ -12,7 +12,8 @@ vi.mock('server-only', () => ({}));
 vi.mock('@/lib/managed-compute-gate', () => ({ buildExternalSharingGateResponse: vi.fn() }));
 vi.mock('@/lib/moderation', () => ({ moderateManagedPrompt: vi.fn() }));
 vi.mock('@/lib/security/outbound-content-inspection', () => ({ inspectOutboundContent: vi.fn() }));
-vi.mock('@/lib/services/organization-policy-gate', () => ({
+vi.mock('@/lib/services/organization-policy-gate', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   resolveSecretHandlingPolicy: vi.fn(),
 }));
 
@@ -148,3 +149,5 @@ describe('publication preparation shared by restore and Publish', () => {
     expect(inspectOutboundContent).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/services/organization-policy-gate');

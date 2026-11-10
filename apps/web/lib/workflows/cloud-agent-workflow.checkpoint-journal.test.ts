@@ -25,7 +25,8 @@ const mocks = vi.hoisted(() => ({
 const db = { query: vi.fn(), execute: vi.fn(), transaction: vi.fn() };
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule7>()),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 vi.mock('workflow', () => ({
@@ -33,8 +34,12 @@ vi.mock('workflow', () => ({
   RetryableError: class RetryableError extends Error {},
   getWritable: () => mocks.writable(),
 }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => mocks.getNeonDb() }));
-vi.mock('@/app/api/llm/v1/chat/completions/lib/tool-loop', () => ({
+vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule6>()),
+  getNeonDb: () => mocks.getNeonDb(),
+}));
+vi.mock('@/app/api/llm/v1/chat/completions/lib/tool-loop', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule5>()),
   applyToolResultSecretPolicy: vi.fn(
     async (_userId: string, _name: string, content: string) => content,
   ),
@@ -45,17 +50,26 @@ vi.mock('@/app/api/llm/v1/chat/completions/lib/tool-loop', () => ({
   trimToolResultHistory: vi.fn(),
   runToolLoop: mocks.runToolLoop,
 }));
-vi.mock('@/app/api/llm/v1/chat/completions/lib/approval-checkpoint-request', () => ({
-  buildApprovalCheckpointRequest: vi.fn(() => ({})),
-}));
-vi.mock('./cloud-agent-operation-executor', () => ({
+vi.mock(
+  '@/app/api/llm/v1/chat/completions/lib/approval-checkpoint-request',
+  async (importOriginal) => ({
+    ...(await importOriginal<ImportedModule4>()),
+    buildApprovalCheckpointRequest: vi.fn(() => ({})),
+  }),
+);
+vi.mock('./cloud-agent-operation-executor', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule3>()),
   executeCloudAgentOperation: mocks.executeOperation,
 }));
-vi.mock('./steps/settle-workflow-invocation', () => ({ settleWorkflowInvocation: mocks.settle }));
+vi.mock('./steps/settle-workflow-invocation', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule2>()),
+  settleWorkflowInvocation: mocks.settle,
+}));
 vi.mock('./cloud-agent-workflow-stream', () => ({
   projectCloudAgentWorkflowChunk: mocks.projectChunk,
 }));
-vi.mock('@/lib/services/cloud-agent-run-service', () => ({
+vi.mock('@/lib/services/cloud-agent-run-service', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   takeCloudAgentRunSteers: vi.fn(async () => []),
   APPROVAL_CHECKPOINT_TTL_HOURS: 24,
   appendCloudAgentEvent: vi.fn(),
@@ -78,7 +92,10 @@ vi.mock('@/lib/services/cloud-agent-event-journal', () => ({
     flush: mocks.journalFlush,
   }),
 }));
-vi.mock('@/lib/user-connector-tools', () => ({ makeUserConnectorExecutor: vi.fn() }));
+vi.mock('@/lib/user-connector-tools', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
+  makeUserConnectorExecutor: vi.fn(),
+}));
 
 import { executeCloudAgentWorkflowInvocation } from './steps/execute-cloud-agent-invocation';
 import type { CloudAgentWorkflowInput } from './cloud-agent-workflow-input';
@@ -200,3 +217,13 @@ describe('a durable turn that reaches a checkpoint with buffered events', () => 
     },
   );
 });
+
+type ImportedModule7 = typeof import('@/lib/logger');
+type ImportedModule6 = typeof import('@/lib/server/neon-db');
+type ImportedModule5 = typeof import('@/app/api/llm/v1/chat/completions/lib/tool-loop');
+type ImportedModule4 =
+  typeof import('@/app/api/llm/v1/chat/completions/lib/approval-checkpoint-request');
+type ImportedModule3 = typeof import('./cloud-agent-operation-executor');
+type ImportedModule2 = typeof import('./steps/settle-workflow-invocation');
+type ImportedModule1 = typeof import('@/lib/services/cloud-agent-run-service');
+type ImportedModule0 = typeof import('@/lib/user-connector-tools');

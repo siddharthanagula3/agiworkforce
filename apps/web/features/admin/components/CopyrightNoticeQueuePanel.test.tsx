@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import CopyrightNoticeQueuePanel from './CopyrightNoticeQueuePanel';
 
-vi.mock('@/lib/client/csrf', () => ({
+vi.mock('@/lib/client/csrf', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   addCsrfHeaders: async (headers: Record<string, string>) => headers,
 }));
 
@@ -187,3 +188,5 @@ describe('CopyrightNoticeQueuePanel', () => {
     });
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/client/csrf');

@@ -24,7 +24,8 @@ const mocks = vi.hoisted(() => ({
   fetch: vi.fn(),
 }));
 
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   assertAccountActive: vi.fn(),
   getClerkAuthorizedParties: vi.fn(),
   getOptionalAuthUser: vi.fn(),
@@ -365,3 +366,5 @@ describe('POST /api/voice/speech', () => {
     expect(mocks.clientDelivered).toHaveBeenCalledWith(reservation);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/api-auth');

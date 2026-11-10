@@ -28,7 +28,8 @@ vi.mock('@/lib/server/device-signin-policy', async (importOriginal) => {
   const actual = await importOriginal<ImportedModule0>();
   return { ...actual, readDeviceCodeSignInPolicy: vi.fn(actual.readDeviceCodeSignInPolicy) };
 });
-vi.mock('@/lib/security-audit', () => ({
+vi.mock('@/lib/security-audit', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   recordAuditEvent: (...args: unknown[]) => mocks.audit(...args),
 }));
 vi.mock('@/lib/services/account-activity-notifications', () => ({
@@ -291,3 +292,5 @@ describe('POST /api/auth/device/approve', () => {
 });
 
 type ImportedModule0 = typeof import('@/lib/server/device-signin-policy');
+
+type ImportedModule1 = typeof import('@/lib/security-audit');

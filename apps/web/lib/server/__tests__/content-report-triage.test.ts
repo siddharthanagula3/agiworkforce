@@ -3,7 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 
 const query = vi.hoisted(() => vi.fn());
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({ query }) }));
+vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
+  getNeonDb: () => ({ query }),
+}));
 
 import { parseReportAsset, readContentReportQueue } from '../content-report-triage';
 
@@ -71,3 +74,5 @@ describe('the media a content report carries', () => {
     expect(parsed?.reference.length).toBe(2048);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/server/neon-db');

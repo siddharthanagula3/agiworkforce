@@ -22,11 +22,13 @@ vi.mock('@/lib/egress-policy', () => ({
   assertResolvedPublicHostname: mocks.forbidden,
   pinnedPublicFetch: mocks.forbidden,
 }));
-vi.mock('@/lib/crypto/envelope', () => ({
+vi.mock('@/lib/crypto/envelope', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   openEnvelope: mocks.forbidden,
   sealEnvelope: mocks.forbidden,
 }));
-vi.mock('@/lib/server/organization-encryption-keys', () => ({
+vi.mock('@/lib/server/organization-encryption-keys', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   PLATFORM_TENANT_KEY_ENV: 'UNUSED_WEBHOOK_FIXTURE_KEY',
   platformTenantRing: mocks.forbidden,
 }));
@@ -483,3 +485,6 @@ describe('developer webhook enqueue transaction with the canonical job service',
     expect(mocks.error).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule1 = typeof import('@/lib/crypto/envelope');
+type ImportedModule0 = typeof import('@/lib/server/organization-encryption-keys');

@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule9>()),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
@@ -13,38 +14,51 @@ const mocks = vi.hoisted(() => ({
   getBoundedPrivateObject: vi.fn(),
 }));
 
-vi.mock('@/lib/server/object-storage', () => ({
+vi.mock('@/lib/server/object-storage', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule8>()),
   deletePrivateObject: vi.fn(async () => undefined),
   putPrivateObject: vi.fn(async () => undefined),
   getBoundedPrivateObject: mocks.getBoundedPrivateObject,
   StoredObjectTooLargeError: class StoredObjectTooLargeError extends Error {},
 }));
-vi.mock('@/lib/server/media-assets', () => ({
+vi.mock('@/lib/server/media-assets', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule7>()),
   insertMediaAsset: mocks.insertMediaAsset,
   getMediaAssetByStoragePathname: mocks.getMediaAssetByStoragePathname,
   getMediaAssetByContentHash: mocks.getMediaAssetByContentHash,
 }));
-vi.mock('@/lib/server/media-storage', () => ({
+vi.mock('@/lib/server/media-storage', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule6>()),
   sealedChatAttachmentPathname: (key: string) => `${key}.sealed`,
 }));
-vi.mock('@/lib/server/file-storage', () => ({ assertFileStorageAvailable: vi.fn() }));
-vi.mock('@/lib/server/product-analytics', () => ({ trackProductAnalyticsEvent: vi.fn() }));
+vi.mock('@/lib/server/file-storage', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule5>()),
+  assertFileStorageAvailable: vi.fn(),
+}));
+vi.mock('@/lib/server/product-analytics', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule4>()),
+  trackProductAnalyticsEvent: vi.fn(),
+}));
 vi.mock('@/lib/server/upload-signing', () => ({
   readSignedUploadClaims: vi.fn(),
   signUploadClaims: vi.fn(),
 }));
-vi.mock('@/lib/security/upload-scan', () => ({
+vi.mock('@/lib/security/upload-scan', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule3>()),
   scanUploadBytes: vi.fn(async () => ({ ok: true, findings: [] })),
   uploadFindingRejects: vi.fn(() => false),
   uploadRefusalMessage: vi.fn(() => 'refused'),
 }));
-vi.mock('@/lib/security/outbound-content-inspection', () => ({
+vi.mock('@/lib/security/outbound-content-inspection', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule2>()),
   inspectOutboundContent: vi.fn(async () => ({ action: 'allowed' })),
 }));
-vi.mock('@/lib/services/organization-policy-gate', () => ({
+vi.mock('@/lib/services/organization-policy-gate', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   resolveSecretHandlingPolicy: vi.fn(async () => ({ mode: 'allow' })),
 }));
-vi.mock('@/lib/moderation', () => ({
+vi.mock('@/lib/moderation', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   matchDenylistedUpload: vi.fn(() => ({ matched: false, sha256: 'a'.repeat(64) })),
   recordModerationEvent: vi.fn(),
 }));
@@ -167,3 +181,14 @@ describe('completeChatAttachmentUpload conversation provenance', () => {
     expect(insertedParams()).not.toHaveProperty('conversationId');
   });
 });
+
+type ImportedModule9 = typeof import('@/lib/logger');
+type ImportedModule8 = typeof import('@/lib/server/object-storage');
+type ImportedModule7 = typeof import('@/lib/server/media-assets');
+type ImportedModule6 = typeof import('@/lib/server/media-storage');
+type ImportedModule5 = typeof import('@/lib/server/file-storage');
+type ImportedModule4 = typeof import('@/lib/server/product-analytics');
+type ImportedModule3 = typeof import('@/lib/security/upload-scan');
+type ImportedModule2 = typeof import('@/lib/security/outbound-content-inspection');
+type ImportedModule1 = typeof import('@/lib/services/organization-policy-gate');
+type ImportedModule0 = typeof import('@/lib/moderation');

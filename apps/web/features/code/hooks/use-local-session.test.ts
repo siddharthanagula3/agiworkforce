@@ -16,7 +16,8 @@ const answerDeveloperUserInput = vi.fn();
 const takeOverDeveloperThread = vi.fn();
 let emit: ((rootId: string, event: DeveloperSessionEvent) => void) | null = null;
 
-vi.mock('@/features/desktop-host', () => ({
+vi.mock('@/features/desktop-host', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   readDeveloperSession,
   startDeveloperTurn,
   takeOverDeveloperThread,
@@ -1202,3 +1203,5 @@ it('loads persisted child task identity and clears it when switching parent sess
   await waitFor(() => expect(result.current.loading).toBe(false));
   expect(result.current.childTasks).toEqual([]);
 });
+
+type ImportedModule0 = typeof import('@/features/desktop-host');

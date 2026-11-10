@@ -28,31 +28,40 @@ const {
   mockBanUser: vi.fn(),
 }));
 
-vi.mock('@/lib/rate-limit', () => ({
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule7>()),
   withRateLimit: vi.fn(async () => null),
 }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/csrf', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule6>()),
+  requireCsrfToken: vi.fn(async () => null),
+}));
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule5>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/security-audit', () => ({
+vi.mock('@/lib/security-audit', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule4>()),
   recordAuditEvent: vi.fn(async () => undefined),
   logSecurityEvent: (...args: unknown[]) => mockLogSecurityEvent(...args),
   BLOCK_APPEAL_PATH: '/support',
   logRateLimitExceeded: vi.fn(),
 }));
-vi.mock('@/lib/server/neon-db', () => ({
+vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule3>()),
   getNeonDb: vi.fn(() => ({
     query: vi.fn(async () => []),
     execute: (...args: unknown[]) => mockExecute(...args),
   })),
 }));
-vi.mock('@/lib/server/admin-account-actions', () => ({
+vi.mock('@/lib/server/admin-account-actions', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule2>()),
   recordAdminAccountAction: (...args: unknown[]) => mockRecordAction(...args),
   settleAccountProviderStep: (...args: unknown[]) => mockSettleStep(...args),
   queueAccountProviderStepRetry: (...args: unknown[]) => mockQueueRetry(...args),
 }));
-vi.mock('@/lib/services/security-monitoring-service', () => ({
+vi.mock('@/lib/services/security-monitoring-service', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   SecurityMonitoringService: {
     getDashboardSummary: (...args: unknown[]) => mockGetDashboardSummary(...args),
   },
@@ -67,7 +76,8 @@ vi.mock('@clerk/nextjs/server', () => ({
   }),
 }));
 
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
   assertAccountActive: (...args: unknown[]) => mockAssertAccountActive(...args),
   getClerkAuthorizedParties: () =>
@@ -317,3 +327,12 @@ describe('the guard rejects non-operators before touching account status', () =>
     expect(mockAssertAccountActive).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule7 = typeof import('@/lib/rate-limit');
+type ImportedModule6 = typeof import('@/lib/csrf');
+type ImportedModule5 = typeof import('@/lib/logger');
+type ImportedModule4 = typeof import('@/lib/security-audit');
+type ImportedModule3 = typeof import('@/lib/server/neon-db');
+type ImportedModule2 = typeof import('@/lib/server/admin-account-actions');
+type ImportedModule1 = typeof import('@/lib/services/security-monitoring-service');
+type ImportedModule0 = typeof import('@/lib/api-auth');

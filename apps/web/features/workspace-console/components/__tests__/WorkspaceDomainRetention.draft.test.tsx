@@ -4,7 +4,8 @@ import { RETENTION_DOMAINS } from '@agiworkforce/types';
 
 const mocks = vi.hoisted(() => ({ useDomainRetention: vi.fn() }));
 
-vi.mock('../../hooks/use-domain-retention', () => ({
+vi.mock('../../hooks/use-domain-retention', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   useDomainRetention: mocks.useDomainRetention,
   useSaveDomainRetention: () => ({
     mutate: vi.fn(),
@@ -57,3 +58,5 @@ describe('WorkspaceDomainRetention draft lifecycle', () => {
     expect(days(1)).toHaveValue(120);
   });
 });
+
+type ImportedModule0 = typeof import('../../hooks/use-domain-retention');

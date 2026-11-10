@@ -33,7 +33,8 @@ vi.mock('@/lib/crypto/envelope', async (importOriginal) => ({
   openEnvelope: mocks.openEnvelope,
   sealEnvelope: mocks.forbidden,
 }));
-vi.mock('@/lib/server/organization-encryption-keys', () => ({
+vi.mock('@/lib/server/organization-encryption-keys', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   PLATFORM_TENANT_KEY_ENV: 'UNUSED_WEBHOOK_FIXTURE_KEY',
   platformTenantRing: mocks.keyRing,
 }));
@@ -536,3 +537,5 @@ describe('developer webhook cooperative cancellation', () => {
 type CompleteMockModule1 = typeof import('@/lib/crypto/envelope');
 
 type RetainedMockModule0 = typeof import('@/lib/logger');
+
+type ImportedModule0 = typeof import('@/lib/server/organization-encryption-keys');

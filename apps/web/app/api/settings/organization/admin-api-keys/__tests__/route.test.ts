@@ -72,7 +72,8 @@ vi.mock('@/lib/server/request-context-cache', () => ({
   getCachedActiveOrganizationId: vi.fn(async () => undefined),
   setCachedActiveOrganizationId: vi.fn(async () => undefined),
 }));
-vi.mock('@/lib/services/org-entitlements', () => ({
+vi.mock('@/lib/services/org-entitlements', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   getOrganizationEntitlements: vi.fn(),
   getSharedProjectLimitErrorMessage: vi.fn(),
   isOrgResourceLimitError: vi.fn(),
@@ -815,3 +816,5 @@ describe('captured workspace scope', () => {
     },
   );
 });
+
+type ImportedModule0 = typeof import('@/lib/services/org-entitlements');

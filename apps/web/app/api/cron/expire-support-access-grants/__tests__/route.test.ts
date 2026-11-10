@@ -8,16 +8,20 @@ const mocks = vi.hoisted(() => ({
   db: { query: vi.fn() },
 }));
 
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule3>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/rate-limit', () => ({
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule2>()),
   getClientIpForRateLimit: vi.fn(() => '203.0.113.7'),
 }));
-vi.mock('@/lib/server/neon-db', () => ({
+vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   getNeonDb: () => mocks.db,
 }));
-vi.mock('@/lib/server/support-access-service', () => ({
+vi.mock('@/lib/server/support-access-service', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   expireStaleSupportAccessGrants: mocks.expireStaleSupportAccessGrants,
 }));
 
@@ -127,3 +131,8 @@ describe('/api/cron/expire-support-access-grants', () => {
     expect(await response.json()).toEqual({ error: 'Internal server error' });
   });
 });
+
+type ImportedModule3 = typeof import('@/lib/logger');
+type ImportedModule2 = typeof import('@/lib/rate-limit');
+type ImportedModule1 = typeof import('@/lib/server/neon-db');
+type ImportedModule0 = typeof import('@/lib/server/support-access-service');

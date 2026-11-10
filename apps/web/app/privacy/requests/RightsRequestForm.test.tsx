@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { RightsRequestForm } from './RightsRequestForm';
 
-vi.mock('@/lib/client/csrf', () => ({
+vi.mock('@/lib/client/csrf', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   addCsrfHeaders: vi.fn(async (headers: Record<string, string>) => headers),
 }));
 
@@ -61,3 +62,5 @@ describe('RightsRequestForm', () => {
     expect(tokens[1]).toBe(tokens[0]);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/client/csrf');

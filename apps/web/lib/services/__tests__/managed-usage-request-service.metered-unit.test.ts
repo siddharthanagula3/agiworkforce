@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 
@@ -101,3 +102,5 @@ describe('reserveManagedUsageRequest records the metered unit while the request 
     expect(usageWrites(execute)).toHaveLength(0);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/logger');

@@ -20,7 +20,8 @@ const {
 }));
 
 vi.mock('sonner', () => ({ toast: { success: toastSuccess, error: vi.fn() } }));
-vi.mock('@features/projects/services/project-knowledge-upload', () => ({
+vi.mock('@features/projects/services/project-knowledge-upload', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   uploadProjectKnowledgeFile,
 }));
 vi.mock('@features/chat/components/artifacts/publishArtifactClient', () => ({
@@ -626,3 +627,5 @@ describe('library share trust boundary', () => {
     expect(publish).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('@features/projects/services/project-knowledge-upload');

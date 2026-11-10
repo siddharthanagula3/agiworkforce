@@ -7,41 +7,55 @@ const { mockDeletePrivateObject, mockGetMediaAssetByStoragePathname } = vi.hoist
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule9>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/server/object-storage', () => ({
+vi.mock('@/lib/server/object-storage', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule8>()),
   deletePrivateObject: mockDeletePrivateObject,
   putPrivateObject: vi.fn(),
   getBoundedPrivateObject: vi.fn(),
   StoredObjectTooLargeError: class extends Error {},
 }));
-vi.mock('@/lib/server/media-assets', () => ({
+vi.mock('@/lib/server/media-assets', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule7>()),
   getMediaAssetByStoragePathname: mockGetMediaAssetByStoragePathname,
   getMediaAssetByContentHash: vi.fn(),
   insertMediaAsset: vi.fn(),
 }));
-vi.mock('@/lib/server/media-storage', () => ({
+vi.mock('@/lib/server/media-storage', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule6>()),
   sealedChatAttachmentPathname: (key: string) => `${key}.scanned`,
 }));
-vi.mock('@/lib/server/file-storage', () => ({ assertFileStorageAvailable: vi.fn() }));
-vi.mock('@/lib/server/product-analytics', () => ({ trackProductAnalyticsEvent: vi.fn() }));
+vi.mock('@/lib/server/file-storage', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule5>()),
+  assertFileStorageAvailable: vi.fn(),
+}));
+vi.mock('@/lib/server/product-analytics', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule4>()),
+  trackProductAnalyticsEvent: vi.fn(),
+}));
 vi.mock('@/lib/server/upload-signing', () => ({
   readSignedUploadClaims: vi.fn(),
   signUploadClaims: vi.fn(),
 }));
-vi.mock('@/lib/security/upload-scan', () => ({
+vi.mock('@/lib/security/upload-scan', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule3>()),
   scanUploadBytes: vi.fn(),
   uploadFindingRejects: vi.fn(),
   uploadRefusalMessage: vi.fn(),
 }));
-vi.mock('@/lib/security/outbound-content-inspection', () => ({
+vi.mock('@/lib/security/outbound-content-inspection', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule2>()),
   inspectOutboundContent: vi.fn(),
 }));
-vi.mock('@/lib/services/organization-policy-gate', () => ({
+vi.mock('@/lib/services/organization-policy-gate', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   resolveSecretHandlingPolicy: vi.fn(),
 }));
-vi.mock('@/lib/moderation', () => ({
+vi.mock('@/lib/moderation', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   matchDenylistedUpload: vi.fn(),
   recordModerationEvent: vi.fn(),
 }));
@@ -109,3 +123,14 @@ describe('findCompletedChatAttachment staging cleanup', () => {
     expect(mockDeletePrivateObject).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule9 = typeof import('@/lib/logger');
+type ImportedModule8 = typeof import('@/lib/server/object-storage');
+type ImportedModule7 = typeof import('@/lib/server/media-assets');
+type ImportedModule6 = typeof import('@/lib/server/media-storage');
+type ImportedModule5 = typeof import('@/lib/server/file-storage');
+type ImportedModule4 = typeof import('@/lib/server/product-analytics');
+type ImportedModule3 = typeof import('@/lib/security/upload-scan');
+type ImportedModule2 = typeof import('@/lib/security/outbound-content-inspection');
+type ImportedModule1 = typeof import('@/lib/services/organization-policy-gate');
+type ImportedModule0 = typeof import('@/lib/moderation');

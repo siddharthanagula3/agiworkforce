@@ -1,15 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
-vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: vi.fn(async () => undefined) }));
-vi.mock('@/lib/server/request-context-cache', () => ({
+vi.mock('@/lib/security-audit', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule3>()),
+  recordAuditEvent: vi.fn(async () => undefined),
+}));
+vi.mock('@/lib/server/request-context-cache', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule2>()),
   invalidateActiveOrganizationCache: vi.fn(async () => undefined),
 }));
-vi.mock('@/lib/server/identity', () => ({ getIdentityProvider: () => ({}) }));
+vi.mock('@/lib/server/identity', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
+  getIdentityProvider: () => ({}),
+}));
 vi.mock('@/lib/services/deprovision-service', () => ({
   deprovisionMember: vi.fn(async () => ({ errors: [] as string[], sessionsRevoked: 0 })),
 }));
-vi.mock('@/lib/services/identity-events', () => ({
+vi.mock('@/lib/services/identity-events', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   emitIdentitySecurityEvent: vi.fn(async () => ({ level: 'none', signals: [] })),
 }));
 
@@ -170,3 +178,8 @@ describe('deleting a SCIM user removes the membership and the resource under one
     expect(world.log).toEqual(['lock-user:tx']);
   });
 });
+
+type ImportedModule3 = typeof import('@/lib/security-audit');
+type ImportedModule2 = typeof import('@/lib/server/request-context-cache');
+type ImportedModule1 = typeof import('@/lib/server/identity');
+type ImportedModule0 = typeof import('@/lib/services/identity-events');

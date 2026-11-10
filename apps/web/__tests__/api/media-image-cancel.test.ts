@@ -43,7 +43,8 @@ const mocks = vi.hoisted(() => ({
   assetIds: vi.fn(),
 }));
 
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   getClerkAuthUser: (...args: unknown[]) => mocks.authUser(...args),
 }));
 
@@ -217,3 +218,5 @@ describe('POST /api/media/image/cancel', () => {
     expect(mocks.requestCancel).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/api-auth');

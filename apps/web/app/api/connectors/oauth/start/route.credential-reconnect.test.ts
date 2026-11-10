@@ -27,7 +27,8 @@ vi.mock('@/lib/auth/email-confirmation', async (importOriginal) => ({
   ...(await importOriginal()),
   readPrimaryEmailState: vi.fn(async () => ({ confirmed: true, email: 'person@example.com' })),
 }));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   isAccountUnavailableError: vi.fn(() => false),
   getClerkAuthUser: (...a: unknown[]) => mocks.authUser(...a),
 }));
@@ -164,3 +165,5 @@ describe('GET /api/connectors/oauth/start, API-key reconnect', () => {
     expect(mocks.credentialSpec).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/api-auth');

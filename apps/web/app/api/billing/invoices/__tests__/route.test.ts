@@ -9,12 +9,20 @@ const mocks = vi.hoisted(() => ({
   withRateLimit: vi.fn(),
 }));
 
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
-vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mocks.getUserScopedDb }));
-vi.mock('@/lib/services/billing-invoice-service', () => ({
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule3>()),
+  withRateLimit: mocks.withRateLimit,
+}));
+vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule2>()),
+  getUserScopedDb: mocks.getUserScopedDb,
+}));
+vi.mock('@/lib/services/billing-invoice-service', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   readUserBillingInvoicePage: mocks.readPage,
 }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
@@ -59,3 +67,8 @@ describe('GET /api/billing/invoices', () => {
     expect(body).toEqual({ invoices: [], available: false, hasMore: false });
   });
 });
+
+type ImportedModule3 = typeof import('@/lib/rate-limit');
+type ImportedModule2 = typeof import('@/lib/server/rls-db');
+type ImportedModule1 = typeof import('@/lib/services/billing-invoice-service');
+type ImportedModule0 = typeof import('@/lib/logger');

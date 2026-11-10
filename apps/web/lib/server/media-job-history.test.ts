@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/server/media-storage', () => ({
+vi.mock('@/lib/server/media-storage', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   authenticatedMediaUrl: (assetId: string) => `/api/media/${assetId}`,
 }));
 
@@ -81,3 +82,5 @@ describe('image jobs awaiting their next attempt in the media history', () => {
     expect(job.cancellable).toBe(true);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/server/media-storage');

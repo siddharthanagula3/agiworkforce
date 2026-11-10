@@ -14,7 +14,8 @@ const mocks = vi.hoisted(() => ({
   reconcile: vi.fn(),
 }));
 
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   getClerkAuthUser: (...args: unknown[]) => mocks.auth(...args),
 }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: (...args: unknown[]) => mocks.csrf(...args) }));
@@ -208,3 +209,5 @@ describe('POST /api/media/video/cancel', () => {
     expect(mocks.reconcile).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/api-auth');

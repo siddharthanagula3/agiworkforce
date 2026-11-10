@@ -7,11 +7,13 @@ const mocks = vi.hoisted(() => ({
   getPrompt: vi.fn(),
 }));
 
-vi.mock('@/lib/prompts/prompt-registry', () => ({
+vi.mock('@/lib/prompts/prompt-registry', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   resolvePromptText: () => 'UNTRUSTED_CONTEXT_RULES',
 }));
 
-vi.mock('@/lib/user-connector-tools', () => ({
+vi.mock('@/lib/user-connector-tools', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   withUserConnectorMcpHandle: async (
     _userId: string,
     connectorId: string,
@@ -104,3 +106,6 @@ describe('loadSelectedMcpContext', () => {
     expect(context).not.toMatch(/Left out to fit the total limit:[^\n]*notion:\/\/a/);
   });
 });
+
+type ImportedModule1 = typeof import('@/lib/prompts/prompt-registry');
+type ImportedModule0 = typeof import('@/lib/user-connector-tools');

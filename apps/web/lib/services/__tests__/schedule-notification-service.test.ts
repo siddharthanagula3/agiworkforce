@@ -11,7 +11,8 @@ vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
-vi.mock('../push-notification-service', () => ({
+vi.mock('../push-notification-service', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   sendPushToUser: (...args: unknown[]) => mocks.sendPush(...args),
 }));
 vi.mock('../notification-service', () => ({
@@ -353,3 +354,5 @@ describe('per-routine notification policy', () => {
     expect(mocks.sendEmail).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('../push-notification-service');

@@ -81,7 +81,8 @@ vi.mock('@/lib/connectors/oauth-access', () => ({
   revokeAllConnectorTokensAtProviders: (userId: string) =>
     mocks.revokeAllConnectorTokensAtProviders(userId),
 }));
-vi.mock('@/lib/server/object-backup', () => ({
+vi.mock('@/lib/server/object-backup', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   resolveObjectBackupTarget: () => mocks.resolveObjectBackupTarget(),
   deleteBackupObject: (key: string, options?: unknown) => mocks.deleteBackupObject(key, options),
   forgetBackupReplicas: (keys: readonly string[]) => mocks.forgetBackupReplicas(keys),
@@ -1330,3 +1331,5 @@ describe('POST /api/auth/device/refresh', () => {
     expect(body.refresh_token).toBeTruthy();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/server/object-backup');

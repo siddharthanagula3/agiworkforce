@@ -10,20 +10,28 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule5>()),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('../../account/context-resolver', () => ({ resolveSupportAccountContext: vi.fn() }));
-vi.mock('@/lib/connectors/mcp-custom-connections', () => ({
+vi.mock('../../account/context-resolver', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule4>()),
+  resolveSupportAccountContext: vi.fn(),
+}));
+vi.mock('@/lib/connectors/mcp-custom-connections', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule3>()),
   clearConnectorToolPermissions: (...args: unknown[]) => mocks.clearPermissions(...args),
 }));
-vi.mock('@/lib/connectors/oauth-access', () => ({
+vi.mock('@/lib/connectors/oauth-access', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule2>()),
   disconnectConnectorOAuthGrant: (...args: unknown[]) => mocks.disconnect(...args),
 }));
-vi.mock('@/lib/user-connector-tools', () => ({
+vi.mock('@/lib/user-connector-tools', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   evictConnectorOAuthCaches: (...args: unknown[]) => mocks.evict(...args),
 }));
-vi.mock('@/lib/github-app', () => ({
+vi.mock('@/lib/github-app', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   deleteGitHubAppInstallation: (...args: unknown[]) => mocks.deleteInstallation(...args),
 }));
 
@@ -109,3 +117,10 @@ describe('support action revoke_connector', () => {
     },
   );
 });
+
+type ImportedModule5 = typeof import('@/lib/logger');
+type ImportedModule4 = typeof import('../../account/context-resolver');
+type ImportedModule3 = typeof import('@/lib/connectors/mcp-custom-connections');
+type ImportedModule2 = typeof import('@/lib/connectors/oauth-access');
+type ImportedModule1 = typeof import('@/lib/user-connector-tools');
+type ImportedModule0 = typeof import('@/lib/github-app');

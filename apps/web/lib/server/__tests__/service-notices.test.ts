@@ -10,7 +10,8 @@ const mocks = vi.hoisted(() => ({
   getKeyValueStore: vi.fn(),
 }));
 
-vi.mock('@/lib/server/health-check', () => ({
+vi.mock('@/lib/server/health-check', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   DEPENDENCY_LIVE_CHECKS: {},
   NOT_CONFIGURED: 'not configured',
   getCachedHealthChecks: mocks.getCachedHealthChecks,
@@ -394,3 +395,5 @@ describe('incident recovery', () => {
     ]);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/server/health-check');

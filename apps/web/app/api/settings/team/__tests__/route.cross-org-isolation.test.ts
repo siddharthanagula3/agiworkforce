@@ -41,7 +41,8 @@ vi.mock('@/lib/security-audit', () => ({
   logAuthFailure: vi.fn(async () => undefined),
   logRateLimitExceeded: vi.fn(),
 }));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   getClerkAuthUser: vi.fn(async () => ({ userId: 'org-a-admin' })),
 }));
 vi.mock('@/app/api/settings/team/team-admin-access', () => ({
@@ -337,3 +338,5 @@ describe('settings/team cross-organization isolation', () => {
     }
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/api-auth');

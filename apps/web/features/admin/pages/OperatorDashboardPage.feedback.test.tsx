@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 
-vi.mock('@/lib/client/csrf', () => ({ addCsrfHeaders: () => ({}) }));
+vi.mock('@/lib/client/csrf', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
+  addCsrfHeaders: () => ({}),
+}));
 
 import { OperatorDashboardPage } from './OperatorDashboardPage';
 
@@ -77,3 +80,5 @@ describe('operator feedback tab', () => {
     expect(within(card).queryByLabelText('Reporter-supplied context')).toBeNull();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/client/csrf');

@@ -12,7 +12,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/server/cron-auth', () => ({ verifyCronRequest: mocks.verifyCronRequest }));
-vi.mock('@/lib/server/health-check', () => ({ runHealthChecks: mocks.runHealthChecks }));
+vi.mock('@/lib/server/health-check', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
+  runHealthChecks: mocks.runHealthChecks,
+}));
 vi.mock('@/lib/support/handoff/resend-client', () => ({
   sendSupportEmail: mocks.sendSupportEmail,
 }));
@@ -315,3 +318,5 @@ describe('health probe consecutive-failure debounce', () => {
     expect(await response.json()).toMatchObject({ alerted: true, delivery: 'delivered' });
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/server/health-check');

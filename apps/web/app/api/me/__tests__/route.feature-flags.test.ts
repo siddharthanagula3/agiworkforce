@@ -20,7 +20,8 @@ vi.mock('@/lib/feature-flags/flag-store', () => ({
   getSubjectOverrides: (...args: unknown[]) => flagMocks.getSubjectOverrides(...args),
 }));
 
-vi.mock('@/lib/services/org-sharing-service', () => ({
+vi.mock('@/lib/services/org-sharing-service', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   resolveOrgMembership: (...args: unknown[]) => flagMocks.resolveOrgMembership(...args),
 }));
 
@@ -334,3 +335,5 @@ describe('GET /api/me, capabilities held closed', () => {
     expect(body.disabled_features).toEqual([]);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/services/org-sharing-service');

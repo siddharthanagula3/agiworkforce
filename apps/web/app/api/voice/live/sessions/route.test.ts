@@ -75,7 +75,8 @@ vi.mock('@shared/utils/env', () => ({
   requireEnv: (...args: unknown[]) => mocks.requireEnv(...args),
   getOptionalEnv: vi.fn(() => undefined),
 }));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1' })),
 }));
 vi.mock('@/lib/server/rls-db', () => ({
@@ -984,3 +985,5 @@ describe('POST /api/voice/live/sessions', () => {
     expect(mocks.reserve).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/api-auth');

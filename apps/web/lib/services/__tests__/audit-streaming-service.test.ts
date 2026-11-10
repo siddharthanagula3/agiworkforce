@@ -38,7 +38,8 @@ const { mockOrganizationKeyRing, mockKeyFence, testKeyRing } = vi.hoisted(() => 
     ),
   };
 });
-vi.mock('@/lib/server/organization-encryption-keys', () => ({
+vi.mock('@/lib/server/organization-encryption-keys', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   organizationKeyRing: mockOrganizationKeyRing,
   withOrganizationKeyFence: mockKeyFence,
 }));
@@ -822,3 +823,5 @@ describe('the published schema document', () => {
     expect(SCHEMA_DOC).toContain(AUDIT_SIGNATURE_HEADER);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/server/organization-encryption-keys');

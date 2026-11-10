@@ -28,7 +28,8 @@ vi.mock('@/lib/server/neon-db', () => {
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/github-app', () => ({
+vi.mock('@/lib/github-app', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   GitHubWriteOutcomeUnknownError: class GitHubWriteOutcomeUnknownError extends Error {},
   issueCommentPostedSince: vi.fn(() => false),
   pullRequestReviewPostedSince: vi.fn(() => false),
@@ -181,3 +182,5 @@ describe('GitHub installations carry the set the linking account can push to', (
     expect(String(mocks.neonQuery.mock.calls[0]?.[0])).toContain('writable_repositories');
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/github-app');

@@ -47,7 +47,8 @@ vi.mock('@/lib/error-handler', () => ({
 vi.mock('@/lib/services/active-workspace-service', () => ({
   resolveActiveOrganizationId: mocks.resolveActiveOrganizationId,
 }));
-vi.mock('@/lib/services/org-entitlements', () => ({
+vi.mock('@/lib/services/org-entitlements', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule4>()),
   getOrganizationEntitlements: vi.fn(),
   getSharedProjectLimitErrorMessage: vi.fn(),
   isOrgResourceLimitError: vi.fn(),
@@ -71,7 +72,8 @@ vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: mocks.getUserScopedDb,
 }));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: mocks.getNeonDb }));
-vi.mock('@/lib/server/organization-encryption-keys', () => ({
+vi.mock('@/lib/server/organization-encryption-keys', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule3>()),
   organizationKeyRing: vi.fn(async () => ({ ring: {} })),
   withOrganizationKeyFence: async (
     db: unknown,
@@ -80,7 +82,8 @@ vi.mock('@/lib/server/organization-encryption-keys', () => ({
     run: (tx: unknown) => Promise<unknown>,
   ) => run(db),
 }));
-vi.mock('@/lib/crypto/envelope', () => ({
+vi.mock('@/lib/crypto/envelope', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule2>()),
   sealEnvelope: vi.fn(() => 'sealed-audit-signing-secret'),
   openEnvelope: vi.fn(() => ({ plaintext: 'fixture-secret' })),
 }));
@@ -92,7 +95,8 @@ vi.mock('@/lib/security-audit', () => ({
 vi.mock('@/app/api/settings/team/team-admin-access', () => ({
   requireTeamAdminAccess: mocks.requireTeamAdminAccess,
 }));
-vi.mock('@/lib/egress-policy', () => ({
+vi.mock('@/lib/egress-policy', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   EgressPolicyError: class EgressPolicyError extends Error {},
   assertResolvedPublicHostname: mocks.assertResolvedPublicHostname,
 }));
@@ -648,3 +652,8 @@ describe('captured audit destination organization with saved workspace A', () =>
 });
 
 type ImportedModule0 = typeof import('node:crypto');
+
+type ImportedModule4 = typeof import('@/lib/services/org-entitlements');
+type ImportedModule3 = typeof import('@/lib/server/organization-encryption-keys');
+type ImportedModule2 = typeof import('@/lib/crypto/envelope');
+type ImportedModule1 = typeof import('@/lib/egress-policy');

@@ -1,11 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule2>()),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({ query: vi.fn(async () => []) }) }));
-vi.mock('@/lib/support/handoff/escalation-email', () => ({ sendCustomerTicketEmail: vi.fn() }));
+vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
+  getNeonDb: () => ({ query: vi.fn(async () => []) }),
+}));
+vi.mock('@/lib/support/handoff/escalation-email', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
+  sendCustomerTicketEmail: vi.fn(),
+}));
 
 const service = vi.hoisted(() => ({
   findLatestTicket: vi.fn(),
@@ -39,3 +46,7 @@ describe('readLatestAppeal', () => {
     expect(service.readTicket).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule2 = typeof import('@/lib/logger');
+type ImportedModule1 = typeof import('@/lib/server/neon-db');
+type ImportedModule0 = typeof import('@/lib/support/handoff/escalation-email');

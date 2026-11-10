@@ -46,7 +46,8 @@ vi.mock('@/lib/security-audit', async (importOriginal) => ({
   recordAuditEvent: (...args: unknown[]) => mocks.recordAuditEvent(...args),
 }));
 
-vi.mock('@/lib/feature-flags/flag-store', () => ({
+vi.mock('@/lib/feature-flags/flag-store', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   ensureFlagDefinition: (...args: unknown[]) => mocks.ensureFlagDefinition(...args),
   getFlagDefinition: (...args: unknown[]) => mocks.getFlagDefinition(...args),
   updateFlagDefinition: (...args: unknown[]) => mocks.updateFlagDefinition(...args),
@@ -291,3 +292,5 @@ describe('lifting one incident off a capability', () => {
     expect(mocks.getFlagDefinition).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/feature-flags/flag-store');

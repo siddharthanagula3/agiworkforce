@@ -9,12 +9,22 @@ const mocks = vi.hoisted(() => ({
   drainBackgroundJobs: vi.fn(),
 }));
 
-vi.mock('@/lib/server/cron-auth', () => ({ verifyCronRequest: mocks.verifyCronRequest }));
-vi.mock('@/lib/server/cron-low-power', () => ({ lowPowerCronSkip: mocks.lowPowerCronSkip }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: mocks.getNeonDb }));
+vi.mock('@/lib/server/cron-auth', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule3>()),
+  verifyCronRequest: mocks.verifyCronRequest,
+}));
+vi.mock('@/lib/server/cron-low-power', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule2>()),
+  lowPowerCronSkip: mocks.lowPowerCronSkip,
+}));
+vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
+  getNeonDb: mocks.getNeonDb,
+}));
 vi.mock('@/lib/jobs/job-drain', () => ({ drainBackgroundJobs: mocks.drainBackgroundJobs }));
 vi.mock('@/lib/jobs/job-handlers', () => ({ BACKGROUND_JOB_HANDLERS: {} }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
@@ -53,3 +63,8 @@ describe('GET /api/cron/drain-background-jobs', () => {
     expect(mocks.drainBackgroundJobs).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule3 = typeof import('@/lib/server/cron-auth');
+type ImportedModule2 = typeof import('@/lib/server/cron-low-power');
+type ImportedModule1 = typeof import('@/lib/server/neon-db');
+type ImportedModule0 = typeof import('@/lib/logger');

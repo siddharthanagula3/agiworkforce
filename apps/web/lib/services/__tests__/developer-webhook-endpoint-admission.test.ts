@@ -10,19 +10,28 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('next/server', () => ({ after: mocks.after }));
-vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn() } }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: vi.fn() }));
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule4>()),
+  logger: { error: vi.fn(), warn: vi.fn() },
+}));
+vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule3>()),
+  getNeonDb: vi.fn(),
+}));
 vi.mock('@/lib/server/claimed-user-scope-db', () => ({ createClaimedUserScopedDb: vi.fn() }));
-vi.mock('@/lib/egress-policy', () => ({
+vi.mock('@/lib/egress-policy', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule2>()),
   EgressPolicyError: class EgressPolicyError extends Error {},
   assertResolvedPublicHostname: mocks.assertResolvedPublicHostname,
   pinnedPublicFetch: vi.fn(),
 }));
-vi.mock('@/lib/crypto/envelope', () => ({
+vi.mock('@/lib/crypto/envelope', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   openEnvelope: vi.fn(),
   sealEnvelope: mocks.sealEnvelope,
 }));
-vi.mock('@/lib/server/organization-encryption-keys', () => ({
+vi.mock('@/lib/server/organization-encryption-keys', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   platformTenantRing: mocks.platformTenantRing,
 }));
 
@@ -162,3 +171,9 @@ describe('createWebhookEndpoint admission', () => {
     expect(statements.some((sql) => sql.includes('insert into'))).toBe(false);
   });
 });
+
+type ImportedModule4 = typeof import('@/lib/logger');
+type ImportedModule3 = typeof import('@/lib/server/neon-db');
+type ImportedModule2 = typeof import('@/lib/egress-policy');
+type ImportedModule1 = typeof import('@/lib/crypto/envelope');
+type ImportedModule0 = typeof import('@/lib/server/organization-encryption-keys');

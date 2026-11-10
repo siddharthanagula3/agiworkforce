@@ -17,7 +17,10 @@ vi.hoisted(() => {
 });
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: mocks.recordAuditEvent }));
+vi.mock('@/lib/security-audit', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
+  recordAuditEvent: mocks.recordAuditEvent,
+}));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@clerk/nextjs/server', () => ({ auth: vi.fn(async () => ({ userId: null })) }));
@@ -146,3 +149,5 @@ describe('POST /api/privacy/requests', () => {
     expect(mocks.createDataRightsRequest).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/security-audit');

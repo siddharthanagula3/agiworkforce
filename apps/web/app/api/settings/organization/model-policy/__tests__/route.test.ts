@@ -43,7 +43,8 @@ vi.mock('@/lib/cors', () => ({ handleCorsPreflightRequest: vi.fn(() => null) }))
 vi.mock('@/lib/services/active-workspace-service', () => ({
   resolveActiveOrganizationId: mockResolveSavedOrganization,
 }));
-vi.mock('@/lib/services/org-entitlements', () => ({
+vi.mock('@/lib/services/org-entitlements', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   getOrganizationEntitlements: vi.fn(),
   getSharedProjectLimitErrorMessage: vi.fn(),
   isOrgResourceLimitError: vi.fn(),
@@ -543,3 +544,5 @@ describe('captured model-policy workspace boundary', () => {
 });
 
 type ImportedModule0 = typeof import('@/lib/services/org-sharing-service');
+
+type ImportedModule1 = typeof import('@/lib/services/org-entitlements');

@@ -64,7 +64,8 @@ vi.mock('@/lib/user-connector-tools', () => ({
 }));
 
 const workflowMocks = vi.hoisted(() => ({ start: vi.fn() }));
-vi.mock('@/lib/workflows/start-cloud-agent-workflow', () => ({
+vi.mock('@/lib/workflows/start-cloud-agent-workflow', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   runCloudAgentTurn: workflowMocks.start,
 }));
 
@@ -1297,3 +1298,5 @@ describe('POST /api/llm/v1/chat/completions/approve, approval scopes', () => {
     expect(sessionGrants).toEqual([]);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/workflows/start-cloud-agent-workflow');

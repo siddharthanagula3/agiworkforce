@@ -36,7 +36,8 @@ vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mockCsrf }));
 vi.mock('@/lib/services/active-workspace-service', () => ({
   resolveActiveOrganizationId: mockSavedSelection,
 }));
-vi.mock('@/lib/services/org-entitlements', () => ({
+vi.mock('@/lib/services/org-entitlements', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   getOrganizationEntitlements: vi.fn(),
   getSharedProjectLimitErrorMessage: vi.fn(),
   isOrgResourceLimitError: vi.fn(),
@@ -504,3 +505,5 @@ describe('legal holds captured workspace binding', () => {
     expectNoResources();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/services/org-entitlements');

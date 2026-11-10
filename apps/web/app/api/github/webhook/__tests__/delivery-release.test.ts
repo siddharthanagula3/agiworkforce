@@ -40,7 +40,8 @@ vi.mock('@/lib/server/neon-db', () => ({
   }),
 }));
 vi.mock('@/lib/server/claimed-user-scope-db', () => ({ createClaimedUserScopedDb: () => ({}) }));
-vi.mock('@/lib/server/side-call-training-policy', () => ({
+vi.mock('@/lib/server/side-call-training-policy', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   sideCallTrainingOptOut: async () => false,
 }));
 vi.mock('@/lib/services/entitlement-resolution', () => ({
@@ -49,7 +50,8 @@ vi.mock('@/lib/services/entitlement-resolution', () => ({
 vi.mock('@/lib/services/organization-policy-code-gate', () => ({
   assertWorkspaceCodeAccess: async () => ({ allowed: true, code: 'allowed', reason: '' }),
 }));
-vi.mock('@/lib/services/organization-policy-gate', () => ({
+vi.mock('@/lib/services/organization-policy-gate', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   evaluateActiveWorkspacePolicy: async () => ({ allowed: true, code: 'allowed', reason: '' }),
 }));
 vi.mock('@/lib/managed-compute-gate', () => ({ isManagedComputePrivateBetaEnabled: () => true }));
@@ -130,3 +132,6 @@ describe('a webhook receipt is kept only for a delivery that was fully handled',
     expect(releasedReceipts()).toEqual([]);
   });
 });
+
+type ImportedModule1 = typeof import('@/lib/server/side-call-training-policy');
+type ImportedModule0 = typeof import('@/lib/services/organization-policy-gate');

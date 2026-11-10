@@ -19,7 +19,8 @@ vi.mock('@/lib/server/rls-db', () => ({
     return { db: authMocks.db, userId, organizationId: null };
   },
 }));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   isAccountUnavailableError: vi.fn(() => false),
   getClerkAuthUser: authMocks.getClerkAuthUser,
 }));
@@ -112,3 +113,5 @@ describe('GET /api/llm/v1/models under a kill switch', () => {
     expect(withoutFlags.length).toBeGreaterThan(0);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/api-auth');

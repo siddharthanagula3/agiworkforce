@@ -1,11 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../src/utils', () => ({
+vi.mock('../src/utils', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
 const authorizeBrowserToolUrl = vi.hoisted(() => vi.fn());
-vi.mock('../src/features/browser-tools/tabAuthority', () => ({ authorizeBrowserToolUrl }));
+vi.mock('../src/features/browser-tools/tabAuthority', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
+  authorizeBrowserToolUrl,
+}));
 
 import { callTool } from '../src/webmcp';
 
@@ -126,3 +130,6 @@ describe('declarative site-tool form destination', () => {
     expect(form.requestSubmit).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule1 = typeof import('../src/utils');
+type ImportedModule0 = typeof import('../src/features/browser-tools/tabAuthority');

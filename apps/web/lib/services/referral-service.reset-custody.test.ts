@@ -7,10 +7,14 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule3>()),
   logger: { debug: vi.fn(), error: mocks.loggerError, info: vi.fn(), warn: vi.fn() },
 }));
-vi.mock('@/lib/server/identity', () => ({ getIdentityUser: vi.fn() }));
+vi.mock('@/lib/server/identity', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule2>()),
+  getIdentityUser: vi.fn(),
+}));
 type BonusCreditModule = typeof import('@/lib/services/bonus-credit-service');
 
 vi.mock('@/lib/services/bonus-credit-service', async (importOriginal) => ({
@@ -19,8 +23,12 @@ vi.mock('@/lib/services/bonus-credit-service', async (importOriginal) => ({
   grantBonusCredits: vi.fn(),
   revokeBonusCreditGrant: vi.fn(),
 }));
-vi.mock('@/lib/services/notification-service', () => ({ recordNotification: vi.fn() }));
-vi.mock('@/lib/services/usage-limit-promotion-service', () => ({
+vi.mock('@/lib/services/notification-service', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
+  recordNotification: vi.fn(),
+}));
+vi.mock('@/lib/services/usage-limit-promotion-service', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   grantReferralResetsToReferrer: mocks.grantReferralResetsToReferrer,
 }));
 
@@ -118,3 +126,8 @@ describe('referral reset custody', () => {
     expect(replay?.params).toEqual([50, 7]);
   });
 });
+
+type ImportedModule3 = typeof import('@/lib/logger');
+type ImportedModule2 = typeof import('@/lib/server/identity');
+type ImportedModule1 = typeof import('@/lib/services/notification-service');
+type ImportedModule0 = typeof import('@/lib/services/usage-limit-promotion-service');

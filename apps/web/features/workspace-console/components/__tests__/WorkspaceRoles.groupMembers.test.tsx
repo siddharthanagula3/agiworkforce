@@ -11,7 +11,8 @@ function mutation() {
   return { mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false, error: null };
 }
 
-vi.mock('../../hooks/use-workspace-roles', () => ({
+vi.mock('../../hooks/use-workspace-roles', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   useWorkspaceRoles: () => ({
     isPending: false,
     isError: false,
@@ -57,7 +58,8 @@ vi.mock('../../hooks/use-workspace-roles', () => ({
   useWorkspaceGroupMembers: () => mocks.members(),
 }));
 
-vi.mock('@/features/settings/hooks/use-settings-queries', () => ({
+vi.mock('@/features/settings/hooks/use-settings-queries', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   useTeamMembers: () => ({
     isError: false,
     data: [
@@ -116,3 +118,6 @@ describe('WorkspaceRoles group members draft', () => {
     expect(selectedIds()).toEqual(['user-2']);
   });
 });
+
+type ImportedModule1 = typeof import('../../hooks/use-workspace-roles');
+type ImportedModule0 = typeof import('@/features/settings/hooks/use-settings-queries');

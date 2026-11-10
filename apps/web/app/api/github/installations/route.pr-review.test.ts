@@ -10,7 +10,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: (...args: unknown[]) => mocks.csrf(...args) }));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   isAccountUnavailableError: vi.fn(() => false),
   getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1' })),
 }));
@@ -197,3 +198,5 @@ describe('PATCH /api/github/installations, pull request review setting', () => {
     expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/api-auth');

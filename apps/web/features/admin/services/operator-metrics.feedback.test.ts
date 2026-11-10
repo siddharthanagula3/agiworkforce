@@ -6,11 +6,13 @@ const mocks = vi.hoisted(() => ({
   query: vi.fn(),
 }));
 
-vi.mock('@/lib/server/neon-db', () => ({
+vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   getNeonDb: () => ({ query: mocks.query }),
 }));
 
-vi.mock('@/lib/services/bonus-credit-service', () => ({
+vi.mock('@/lib/services/bonus-credit-service', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   bonusCreditExpiry: vi.fn(),
   grantBonusCredits: vi.fn(),
 }));
@@ -99,3 +101,6 @@ describe('readRecentFeedback', () => {
     expect(noMetadata?.context).toEqual({});
   });
 });
+
+type ImportedModule1 = typeof import('@/lib/server/neon-db');
+type ImportedModule0 = typeof import('@/lib/services/bonus-credit-service');

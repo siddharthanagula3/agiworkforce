@@ -179,7 +179,8 @@ vi.mock('@/lib/cors', () => ({
 
 const mockGetClerkAuthUser = vi.fn();
 
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
 
@@ -2110,3 +2111,5 @@ describe('POST /api/media/image/generate', () => {
     });
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/api-auth');

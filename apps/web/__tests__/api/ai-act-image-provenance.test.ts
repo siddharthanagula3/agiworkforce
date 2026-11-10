@@ -24,7 +24,8 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 const mockGetClerkAuthUser = vi.fn();
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
 
@@ -678,3 +679,5 @@ describe('Article 50(2), the mark survives to the download', () => {
     expect(response.headers.get(AI_GENERATED_HEADER)).toBeNull();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/api-auth');

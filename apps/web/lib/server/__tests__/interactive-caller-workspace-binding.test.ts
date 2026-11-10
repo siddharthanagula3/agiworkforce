@@ -29,7 +29,8 @@ vi.mock('@/lib/services/organization-permission-service', () => ({
   requireMemberPermission: mocks.requireMemberPermission,
   resolveOrganizationPermissions: mocks.resolveOrganizationPermissions,
 }));
-vi.mock('@/lib/services/org-entitlements', () => ({
+vi.mock('@/lib/services/org-entitlements', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   getOrganizationEntitlements: vi.fn(),
   getSharedProjectLimitErrorMessage: vi.fn(),
   isOrgResourceLimitError: vi.fn(),
@@ -298,3 +299,5 @@ describe('compliance key scope is independent of interactive selection', () => {
 });
 
 type ImportedModule0 = typeof import('@/lib/server/admin-api-keys');
+
+type ImportedModule1 = typeof import('@/lib/services/org-entitlements');

@@ -7,9 +7,13 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
+  withRateLimit: vi.fn(async () => null),
+}));
 vi.mock('@/lib/auth-guards', () => ({ requirePlatformAdmin: vi.fn(async () => undefined) }));
-vi.mock('@/lib/server/data-rights-requests', () => ({
+vi.mock('@/lib/server/data-rights-requests', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   readOpenDataRightsRequests: mocks.read,
   countOpenDataRightsRequests: mocks.count,
 }));
@@ -54,3 +58,6 @@ describe('GET /api/admin/privacy/requests', () => {
     expect(mocks.read).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule1 = typeof import('@/lib/rate-limit');
+type ImportedModule0 = typeof import('@/lib/server/data-rights-requests');

@@ -15,12 +15,20 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: (...a: unknown[]) => mocks.csrf(...a) }));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: (...a: unknown[]) => mocks.rateLimit(...a) }));
-vi.mock('@/lib/server/rls-db', () => ({
+vi.mock('@/lib/csrf', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule3>()),
+  requireCsrfToken: (...a: unknown[]) => mocks.csrf(...a),
+}));
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule2>()),
+  withRateLimit: (...a: unknown[]) => mocks.rateLimit(...a),
+}));
+vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   getUserScopedDb: (...a: unknown[]) => mocks.scopedDb(...a),
 }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 
@@ -143,3 +151,8 @@ describe('/api/artifacts/[artifactId]/comments', () => {
     expect(missing.status).toBe(404);
   });
 });
+
+type ImportedModule3 = typeof import('@/lib/csrf');
+type ImportedModule2 = typeof import('@/lib/rate-limit');
+type ImportedModule1 = typeof import('@/lib/server/rls-db');
+type ImportedModule0 = typeof import('@/lib/logger');

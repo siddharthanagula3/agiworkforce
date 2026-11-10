@@ -38,7 +38,8 @@ vi.mock('@/lib/csrf', () => ({
 }));
 
 const mockGetClerkAuthUser = vi.fn();
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
 
@@ -345,3 +346,5 @@ describe('CSRF protection on state-changing endpoints', () => {
     });
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/api-auth');

@@ -17,7 +17,8 @@ const routeMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@clerk/nextjs/server', () => ({ auth: routeMocks.auth }));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   getSuspendedAccountUser: vi.fn(async () => null),
   getOptionalAuthUser: routeMocks.optionalUser,
   getClerkAuthUser: vi.fn(),
@@ -253,3 +254,5 @@ describe('POST /api/support/handoff', () => {
     expect(response.headers.get('set-cookie')).toContain('__Host-anon-session-id=anon-new');
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/api-auth');

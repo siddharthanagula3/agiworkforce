@@ -92,7 +92,7 @@
     },
     {
       "path": "/api/cron/expire-support-access-grants",
-      "schedule": "15 2 * * *"
+      "schedule": "3 2 * * *"
     },
     {
       "path": "/api/cron/expire-support-handoffs",

@@ -6,7 +6,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useSaveDomainRetention } from './use-domain-retention';
 
 vi.mock('@shared/lib/get-auth-token', () => ({ getAuthToken: vi.fn(async () => 'test-token') }));
-vi.mock('@/lib/client/csrf', () => ({
+vi.mock('@/lib/client/csrf', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   addCsrfHeaders: vi.fn(async (headers: Record<string, string>) => headers),
 }));
 
@@ -53,3 +54,5 @@ describe('saving domain retention', () => {
     },
   );
 });
+
+type ImportedModule0 = typeof import('@/lib/client/csrf');

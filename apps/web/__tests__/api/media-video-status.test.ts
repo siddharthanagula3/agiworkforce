@@ -38,7 +38,8 @@ vi.mock('@/lib/error-handler', async () => {
 
 const mockGetClerkAuthUser = vi.fn();
 
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule2>()),
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
 
@@ -354,3 +355,5 @@ describe('GET /api/media/video/status', () => {
 
 type ImportedModule0 = typeof import('@/lib/errors');
 type ImportedModule1 = typeof import('@/lib/error-handler');
+
+type ImportedModule2 = typeof import('@/lib/api-auth');

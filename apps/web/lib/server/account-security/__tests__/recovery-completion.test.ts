@@ -15,27 +15,53 @@ const mocks = vi.hoisted(() => ({
   forget: vi.fn(),
 }));
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn() } }));
-vi.mock('@/lib/seo/site', () => ({ SITE_URL: 'https://example.test', SITE_NAME: 'Test' }));
-vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: mocks.audit }));
-vi.mock('@/lib/server/identity', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule10>()),
+  logger: { error: vi.fn() },
+}));
+vi.mock('@/lib/seo/site', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule9>()),
+  SITE_URL: 'https://example.test',
+  SITE_NAME: 'Test',
+}));
+vi.mock('@/lib/security-audit', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule8>()),
+  recordAuditEvent: mocks.audit,
+}));
+vi.mock('@/lib/server/identity', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule7>()),
   getIdentityProvider: vi.fn(() => ({})),
   getRequestIdentity: vi.fn(),
   verifyIdentitySessionToken: vi.fn(),
   getIdentityUser: vi.fn(),
 }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: vi.fn(() => ({})) }));
-vi.mock('@/lib/server/refresh-token-family', () => ({
+vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule6>()),
+  getNeonDb: vi.fn(() => ({})),
+}));
+vi.mock('@/lib/server/refresh-token-family', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule5>()),
   revokeEveryDeviceRefreshCredential: vi.fn(),
 }));
-vi.mock('@/lib/server/session-revocation', () => ({ revokeEveryOtherSession: vi.fn() }));
-vi.mock('@/lib/server/step-up-auth', () => ({ requireStepUp: vi.fn() }));
-vi.mock('@/lib/services/identity-events', () => ({ emitIdentitySecurityEvent: mocks.event }));
-vi.mock('@/lib/services/notification-email-service', () => ({
+vi.mock('@/lib/server/session-revocation', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule4>()),
+  revokeEveryOtherSession: vi.fn(),
+}));
+vi.mock('@/lib/server/step-up-auth', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule3>()),
+  requireStepUp: vi.fn(),
+}));
+vi.mock('@/lib/services/identity-events', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule2>()),
+  emitIdentitySecurityEvent: mocks.event,
+}));
+vi.mock('@/lib/services/notification-email-service', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   sendAccountSecurityCodeEmail: vi.fn(),
   sendAccountSecurityEnabledEmail: vi.fn(),
 }));
-vi.mock('../gate', () => ({
+vi.mock('../gate', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   forgetSessionVerification: mocks.forget,
   rememberEnrollment: vi.fn(),
   sessionVerifiedUntil: vi.fn(),
@@ -182,3 +208,15 @@ describe('handoff completion', () => {
     expect(mocks.record).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule10 = typeof import('@/lib/logger');
+type ImportedModule9 = typeof import('@/lib/seo/site');
+type ImportedModule8 = typeof import('@/lib/security-audit');
+type ImportedModule7 = typeof import('@/lib/server/identity');
+type ImportedModule6 = typeof import('@/lib/server/neon-db');
+type ImportedModule5 = typeof import('@/lib/server/refresh-token-family');
+type ImportedModule4 = typeof import('@/lib/server/session-revocation');
+type ImportedModule3 = typeof import('@/lib/server/step-up-auth');
+type ImportedModule2 = typeof import('@/lib/services/identity-events');
+type ImportedModule1 = typeof import('@/lib/services/notification-email-service');
+type ImportedModule0 = typeof import('../gate');

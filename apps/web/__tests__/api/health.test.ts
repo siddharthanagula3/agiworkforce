@@ -31,11 +31,13 @@ const priceMocks = vi.hoisted(() => ({
 
 const originalEnv = { ...process.env };
 
-vi.mock('@/lib/rate-limit', () => ({
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule7>()),
   withRateLimit: vi.fn(() => null),
 }));
 
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule6>()),
   logger: {
     info: vi.fn(),
     error: vi.fn(),
@@ -44,11 +46,13 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-vi.mock('@/lib/price-tier-mapping', () => ({
+vi.mock('@/lib/price-tier-mapping', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule5>()),
   getConfiguredStripePriceIds: vi.fn(() => ['price_configured']),
   isGrandfatheredPriceId: priceMocks.isGrandfathered,
 }));
-vi.mock('@/lib/server/identity', () => ({
+vi.mock('@/lib/server/identity', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule4>()),
   getIdentityProvider: () => ({
     canVerifySessionTokens: () => Boolean(process.env['CLERK_SECRET_KEY']),
     checkReachable: async () => undefined,
@@ -74,13 +78,16 @@ vi.mock('@agiworkforce/types', async (importOriginal) => ({
   isModelLive: () => true,
   listManagedRoutesForModel: () => [{ routeId: 'route-a', provider: 'provider-under-test' }],
 }));
-vi.mock('@/lib/services/provider-adapter-service', () => ({
+vi.mock('@/lib/services/provider-adapter-service', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule3>()),
   listAvailableManagedProviderIds: () => new Set(['provider-under-test']),
 }));
-vi.mock('@/lib/services/provider-availability-service', () => ({
+vi.mock('@/lib/services/provider-availability-service', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule2>()),
   getProviderAvailabilityMap: async () => ({}),
 }));
-vi.mock('@/lib/jobs/job-service', () => ({
+vi.mock('@/lib/jobs/job-service', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   readJobQueueStats: async () => [
     { queue: 'default', queued: 0, running: 0, dead: 0, oldestQueuedAgeMs: 0, stuck: 0 },
   ],
@@ -95,7 +102,8 @@ vi.mock('@/lib/server/key-value', async (importOriginal) => {
     getKeyValueStore: () => store,
   };
 });
-vi.mock('@/lib/server/neon-db', () => ({
+vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   getNeonDb: vi.fn(() => ({
     query: mockNeonQuery,
     execute: vi.fn().mockResolvedValue(1),
@@ -565,3 +573,12 @@ describe('public health route load shape', () => {
     expect(source).toMatch(/export const maxDuration = \d+/);
   });
 });
+
+type ImportedModule7 = typeof import('@/lib/rate-limit');
+type ImportedModule6 = typeof import('@/lib/logger');
+type ImportedModule5 = typeof import('@/lib/price-tier-mapping');
+type ImportedModule4 = typeof import('@/lib/server/identity');
+type ImportedModule3 = typeof import('@/lib/services/provider-adapter-service');
+type ImportedModule2 = typeof import('@/lib/services/provider-availability-service');
+type ImportedModule1 = typeof import('@/lib/jobs/job-service');
+type ImportedModule0 = typeof import('@/lib/server/neon-db');

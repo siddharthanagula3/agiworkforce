@@ -15,21 +15,30 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule8>()),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
-vi.mock('@/lib/rate-limit', () => ({ checkRateLimit: vi.fn() }));
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule7>()),
+  checkRateLimit: vi.fn(),
+}));
 vi.mock('@/lib/server/claimed-user-scope-db', () => ({
   createClaimedUserScopedDb: vi.fn(() => ({ scoped: true })),
 }));
-vi.mock('@/lib/services/notification-service', () => ({ recordNotification: vi.fn() }));
-vi.mock('./slack-config', () => ({
+vi.mock('@/lib/services/notification-service', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule6>()),
+  recordNotification: vi.fn(),
+}));
+vi.mock('./slack-config', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule5>()),
   SLACK_WORKING_REACTION: 'hourglass',
   slackAppOrigin: () => 'https://agi.invalid',
   slackLinkUrl: vi.fn(),
   slackSettingsUrl: vi.fn(),
 }));
-vi.mock('./slack-api', () => ({
+vi.mock('./slack-api', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule4>()),
   isSlackTokenRevoked: vi.fn(() => false),
   postSlackEphemeral: mocks.postSlackEphemeral,
   postSlackMessage: mocks.postSlackMessage,
@@ -37,16 +46,19 @@ vi.mock('./slack-api', () => ({
 }));
 vi.mock('./slack-assistant-turn', () => ({ runSlackAssistantTurn: mocks.runSlackAssistantTurn }));
 vi.mock('./slack-context', () => ({ buildSlackTurnContext: vi.fn() }));
-vi.mock('./slack-installations', () => ({
+vi.mock('./slack-installations', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule3>()),
   deleteSlackInstallationForTeam: vi.fn(),
   findSlackInstallation: vi.fn(),
   findSlackInstallationById: mocks.findSlackInstallationById,
 }));
-vi.mock('./slack-links', () => ({
+vi.mock('./slack-links', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule2>()),
   issueSlackLinkRequest: vi.fn(),
   resolveSlackAccountLink: vi.fn(),
 }));
-vi.mock('./slack-runs', () => ({
+vi.mock('./slack-runs', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   SLACK_TASK_STOPPED_ERROR: 'stopped',
   claimSlackRunApproval: mocks.claimSlackRunApproval,
   parkSlackRunForApproval: vi.fn(),
@@ -54,7 +66,8 @@ vi.mock('./slack-runs', () => ({
   slackApprovalGeneration: vi.fn(),
   startSlackRun: vi.fn(),
 }));
-vi.mock('./slack-tasks', () => ({
+vi.mock('./slack-tasks', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   findSlackTask: mocks.findSlackTask,
   slackTask: mocks.slackTask,
   slackTaskAvailable: vi.fn(),
@@ -168,3 +181,13 @@ describe('resuming a parked Slack approval', () => {
     );
   });
 });
+
+type ImportedModule8 = typeof import('@/lib/logger');
+type ImportedModule7 = typeof import('@/lib/rate-limit');
+type ImportedModule6 = typeof import('@/lib/services/notification-service');
+type ImportedModule5 = typeof import('./slack-config');
+type ImportedModule4 = typeof import('./slack-api');
+type ImportedModule3 = typeof import('./slack-installations');
+type ImportedModule2 = typeof import('./slack-links');
+type ImportedModule1 = typeof import('./slack-runs');
+type ImportedModule0 = typeof import('./slack-tasks');

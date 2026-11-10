@@ -20,7 +20,10 @@ const mockHasAcceptedCurrentTerms = vi.hoisted(() => vi.fn(async (_userId: strin
 vi.mock('@/lib/server/device-signin-policy', () => ({
   readDeviceCodeSignInPolicy: vi.fn(async () => 'enabled'),
 }));
-vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: vi.fn(async () => undefined) }));
+vi.mock('@/lib/security-audit', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
+  recordAuditEvent: vi.fn(async () => undefined),
+}));
 vi.mock('@/lib/services/account-activity-notifications', () => ({
   notifyDeviceSignInApproved: vi.fn(async () => undefined),
 }));
@@ -177,3 +180,5 @@ describe('Device code approve compatibility API', () => {
     expect(mockQuery).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/security-audit');

@@ -11,7 +11,10 @@ vi.mock('../lib/run-completion', () => ({
   CHAT_COMPLETIONS_PATH: '/api/llm/v1/chat/completions',
   runGatewayCompletion: vi.fn(),
 }));
-vi.mock('@features/auth/step-up-fetch', () => ({ sendAuthorizedJson: vi.fn() }));
+vi.mock('@features/auth/step-up-fetch', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
+  sendAuthorizedJson: vi.fn(),
+}));
 vi.mock('../hooks/use-gateway-models', () => ({
   formatRetirement: (date: string) => date,
   useGatewayModels: () => ({ list: { status: 'ready', models: [] }, retry: vi.fn() }),
@@ -154,3 +157,5 @@ describe('PromptsPanel draft custody', () => {
     expect(screen.getByLabelText('ticket')).toHaveValue('Half written');
   });
 });
+
+type ImportedModule0 = typeof import('@features/auth/step-up-fetch');

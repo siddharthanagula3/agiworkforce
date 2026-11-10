@@ -36,7 +36,8 @@ vi.mock('@/lib/security-audit', () => ({
   logAuthFailure: vi.fn(async () => undefined),
   logRateLimitExceeded: vi.fn(),
 }));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   getClerkAuthUser: vi.fn(async () => ({ userId: 'admin-user' })),
 }));
 vi.mock('@/app/api/settings/team/team-admin-access', () => ({
@@ -219,3 +220,5 @@ describe('POST /api/settings/team seat ceiling', () => {
     expect(expiryCall?.[1]).toEqual([ORG_A]);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/api-auth');

@@ -23,7 +23,8 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
   markManagedUsageProviderStarted: vi.fn(),
   finalizeManagedUsageRequest: vi.fn(),
 }));
-vi.mock('@/lib/services/llm-cost-calculator', () => ({
+vi.mock('@/lib/services/llm-cost-calculator', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   LLMCostCalculator: {
     calculateListCost: vi.fn(() => null),
     calculateListCostMicrousd: vi.fn(() => null),
@@ -591,3 +592,5 @@ describe('compactContextWindow', () => {
     expect(reserveManagedUsageRequest).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/services/llm-cost-calculator');

@@ -31,7 +31,10 @@ vi.mock('@/lib/server/rls-db', () => ({
     organizationId: requestScope.organizationId,
   })),
 }));
-vi.mock('@/lib/server/key-value', () => ({ getKeyValueStore: () => null }));
+vi.mock('@/lib/server/key-value', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
+  getKeyValueStore: () => null,
+}));
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: () => ({ query: (...args: unknown[]) => mockQuery(...args) }),
 }));
@@ -378,3 +381,5 @@ describe('service principal route request scope', () => {
     },
   );
 });
+
+type ImportedModule0 = typeof import('@/lib/server/key-value');

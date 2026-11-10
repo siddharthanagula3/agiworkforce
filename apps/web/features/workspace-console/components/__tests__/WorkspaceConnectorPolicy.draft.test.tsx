@@ -3,7 +3,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@shared/lib/get-auth-token', () => ({ getAuthToken: async () => 'token' }));
-vi.mock('@/lib/client/csrf', () => ({
+vi.mock('@/lib/client/csrf', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   addCsrfHeaders: async (headers: Record<string, string>) => headers,
 }));
 
@@ -95,3 +96,5 @@ describe('WorkspaceConnectorPolicy draft lifecycle', () => {
     expect(saveButton()).toBeEnabled();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/client/csrf');

@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 
 const mocks = vi.hoisted(() => ({ scan: vi.fn() }));
-vi.mock('@/lib/services/plugin-marketplace-service', () => ({
+vi.mock('@/lib/services/plugin-marketplace-service', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   scanAndRecordPluginPackage: mocks.scan,
   PluginPackageRefusedError: class PluginPackageRefusedError extends Error {},
 }));
@@ -122,3 +123,5 @@ describe('createSubmission', () => {
     ).resolves.toBeNull();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/services/plugin-marketplace-service');

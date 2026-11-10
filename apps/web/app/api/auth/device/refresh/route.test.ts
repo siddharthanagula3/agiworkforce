@@ -12,7 +12,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
+  withRateLimit: vi.fn(async () => null),
+}));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
@@ -325,3 +328,5 @@ describe('POST /api/auth/device/refresh', () => {
     expect(mocks.transaction).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/rate-limit');

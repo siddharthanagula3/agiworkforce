@@ -11,14 +11,19 @@ vi.mock('next/server', async (importOriginal) => ({
     void task;
   },
 }));
-vi.mock('@shared/utils/env', () => ({
+vi.mock('@shared/utils/env', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule10>()),
   requireEnv: (_key: string) => '',
   getOptionalEnv: (_key: string) => undefined,
 }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule9>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule8>()),
+  withRateLimit: vi.fn().mockResolvedValue(null),
+}));
 
 const HEAD_A = 'a'.repeat(40);
 const HEAD_B = 'b'.repeat(40);
@@ -40,7 +45,8 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('@/lib/server/neon-db', () => ({
+vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule7>()),
   getNeonDb: () => ({
     query: (...args: unknown[]) => mocks.query(...args),
     execute: (...args: unknown[]) => mocks.execute(...args),
@@ -50,21 +56,32 @@ vi.mock('@/lib/server/neon-db', () => ({
   }),
 }));
 vi.mock('@/lib/server/claimed-user-scope-db', () => ({ createClaimedUserScopedDb: () => ({}) }));
-vi.mock('@/lib/server/side-call-training-policy', () => ({
+vi.mock('@/lib/server/side-call-training-policy', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule6>()),
   sideCallTrainingOptOut: async () => false,
 }));
-vi.mock('@/lib/services/entitlement-resolution', () => ({
+vi.mock('@/lib/services/entitlement-resolution', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule5>()),
   resolveEntitledPlanTier: async () => 'pro',
 }));
-vi.mock('@/lib/services/organization-policy-code-gate', () => ({
+vi.mock('@/lib/services/organization-policy-code-gate', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule4>()),
   assertWorkspaceCodeAccess: async () => ({ allowed: true, code: 'allowed', reason: '' }),
 }));
-vi.mock('@/lib/services/organization-policy-gate', () => ({
+vi.mock('@/lib/services/organization-policy-gate', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule3>()),
   evaluateActiveWorkspacePolicy: async () => ({ allowed: true, code: 'allowed', reason: '' }),
 }));
-vi.mock('@/lib/managed-compute-gate', () => ({ isManagedComputePrivateBetaEnabled: () => true }));
-vi.mock('@/lib/triggers/trigger-ingest', () => ({ ingestTriggerEvent: async () => [] }));
-vi.mock('@/lib/github-app', () => ({
+vi.mock('@/lib/managed-compute-gate', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule2>()),
+  isManagedComputePrivateBetaEnabled: () => true,
+}));
+vi.mock('@/lib/triggers/trigger-ingest', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
+  ingestTriggerEvent: async () => [],
+}));
+vi.mock('@/lib/github-app', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   GITHUB_WEBHOOK_SECRET: mocks.secret,
   verifyGitHubWebhookSignature: (body: string, sig: string, secret: string) =>
     sig === mocks.hmac(secret, body),
@@ -314,3 +331,15 @@ describe('a review is published against the commit it read', () => {
     expect((mocks.postPrReview.mock.calls[0] as unknown[])[4]).toContain('Partial review');
   });
 });
+
+type ImportedModule10 = typeof import('@shared/utils/env');
+type ImportedModule9 = typeof import('@/lib/logger');
+type ImportedModule8 = typeof import('@/lib/rate-limit');
+type ImportedModule7 = typeof import('@/lib/server/neon-db');
+type ImportedModule6 = typeof import('@/lib/server/side-call-training-policy');
+type ImportedModule5 = typeof import('@/lib/services/entitlement-resolution');
+type ImportedModule4 = typeof import('@/lib/services/organization-policy-code-gate');
+type ImportedModule3 = typeof import('@/lib/services/organization-policy-gate');
+type ImportedModule2 = typeof import('@/lib/managed-compute-gate');
+type ImportedModule1 = typeof import('@/lib/triggers/trigger-ingest');
+type ImportedModule0 = typeof import('@/lib/github-app');

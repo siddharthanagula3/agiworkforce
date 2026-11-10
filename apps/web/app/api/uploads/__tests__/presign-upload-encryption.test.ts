@@ -14,12 +14,20 @@ vi.mock('@/lib/server/attachment-allowance', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   admitAttachmentUpload: vi.fn(async () => undefined),
 }));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn().mockResolvedValue(null) }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule4>()),
+  withRateLimit: vi.fn().mockResolvedValue(null),
+}));
+vi.mock('@/lib/csrf', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule3>()),
+  requireCsrfToken: vi.fn().mockResolvedValue(null),
+}));
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule2>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/server/rls-db', () => ({
+vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   getUserScopedDb: vi.fn(async () => ({
     db: {
       query: (...args: unknown[]) => mockNeonQuery(...args),
@@ -32,7 +40,8 @@ vi.mock('@/lib/server/rls-db', () => ({
     organizationId: '11111111-1111-4111-8111-111111111111',
   })),
 }));
-vi.mock('@/lib/server/object-storage', () => ({
+vi.mock('@/lib/server/object-storage', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   putPrivateObject: vi.fn(async ({ key }: { key: string }) => ({ key })),
   copyPrivateObjectIfUnchanged: vi.fn(),
   isObjectStorageConfigured: vi.fn(() => true),
@@ -194,3 +203,9 @@ describe('POST /api/uploads/presign · server-side encryption', () => {
     },
   );
 });
+
+type ImportedModule4 = typeof import('@/lib/rate-limit');
+type ImportedModule3 = typeof import('@/lib/csrf');
+type ImportedModule2 = typeof import('@/lib/logger');
+type ImportedModule1 = typeof import('@/lib/server/rls-db');
+type ImportedModule0 = typeof import('@/lib/server/object-storage');

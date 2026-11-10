@@ -43,7 +43,8 @@ vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: vi.fn(() => ({})) }));
 vi.mock('@/lib/server/refresh-token-family', () => ({
   revokeEveryDeviceRefreshCredential: mocks.revokeDevices,
 }));
-vi.mock('@/lib/server/session-revocation', () => ({
+vi.mock('@/lib/server/session-revocation', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   revokeEveryOtherSession: mocks.revokeSessions,
 }));
 vi.mock('@/lib/server/step-up-auth', () => ({ requireStepUp: mocks.proof }));
@@ -448,3 +449,5 @@ describe('locked enrollment promotion admission', () => {
     noPostCommitEffects();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/server/session-revocation');

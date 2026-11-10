@@ -5,13 +5,15 @@ import type { ReactNode } from 'react';
 
 const toastMock = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn() }));
 vi.mock('@shared/lib/get-auth-token', () => ({ getAuthToken: vi.fn(async () => 'session-token') }));
-vi.mock('@/lib/client/csrf', () => ({
+vi.mock('@/lib/client/csrf', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   getCsrfToken: vi.fn(async () => 'csrf-token'),
   addCsrfHeaders: vi.fn(),
   clearCsrfToken: vi.fn(),
 }));
 vi.mock('sonner', () => ({ toast: toastMock }));
-vi.mock('@shared/lib/logger', () => ({
+vi.mock('@shared/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
 }));
 
@@ -99,3 +101,6 @@ describe('removing a team member reports what the server could not revoke', () =
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
+
+type ImportedModule1 = typeof import('@/lib/client/csrf');
+type ImportedModule0 = typeof import('@shared/lib/logger');

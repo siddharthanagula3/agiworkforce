@@ -23,7 +23,8 @@ vi.mock('@/lib/cors', () => ({
 vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1' })),
 }));
 vi.mock('@/lib/server/rls-db', () => ({
@@ -230,3 +231,5 @@ describe('POST /api/voice/live/sessions/[sessionId]/close', () => {
     expect(mocks.finalize).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/api-auth');

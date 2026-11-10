@@ -55,7 +55,8 @@ vi.mock('@/lib/services/org-sharing-service', async (importOriginal) => ({
 vi.mock('@/lib/services/active-workspace-service', () => ({
   resolveActiveOrganizationId: fixture.savedOrganization,
 }));
-vi.mock('@/lib/services/org-entitlements', () => ({
+vi.mock('@/lib/services/org-entitlements', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   getOrganizationEntitlements: fixture.forbiddenIo,
   getSharedProjectLimitErrorMessage: fixture.forbiddenIo,
   isOrgResourceLimitError: fixture.forbiddenIo,
@@ -502,3 +503,5 @@ describe('authoritative retention workspace', () => {
 });
 
 type ImportedModule0 = typeof import('@/lib/services/org-sharing-service');
+
+type ImportedModule1 = typeof import('@/lib/services/org-entitlements');

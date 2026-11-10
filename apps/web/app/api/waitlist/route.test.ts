@@ -11,7 +11,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1', email: 'user@example.com' })),
 }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
@@ -188,3 +189,5 @@ describe('GET /api/waitlist', () => {
     await expect((await GET(get())).json()).resolves.toMatchObject({ noticeEmail: null });
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/api-auth');

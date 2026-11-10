@@ -18,7 +18,8 @@ vi.mock('@clerk/backend', () => ({
   verifyToken: (...args: unknown[]) => mockVerifyToken(...args),
 }));
 
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
 
@@ -98,3 +99,5 @@ describe('resolveSessionsPrincipal binds Clerk bearer verification to an authori
     expect(principal).toMatchObject({ userId: 'user_sessions_1', currentSessionId: null });
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/api-auth');

@@ -3,10 +3,14 @@ import { describe, expect, it, vi } from 'vitest';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: vi.fn() }));
+vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
+  getNeonDb: vi.fn(),
+}));
 
 import { archiveStaleFlagDefinition, upsertFlagOverride } from '../flag-store';
 
@@ -167,3 +171,6 @@ describe('writing a subject override', () => {
     expect(tx.execute).toHaveBeenCalledTimes(1);
   });
 });
+
+type ImportedModule1 = typeof import('@/lib/logger');
+type ImportedModule0 = typeof import('@/lib/server/neon-db');

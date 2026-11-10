@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/lib/client/csrf', () => ({
+vi.mock('@/lib/client/csrf', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   addCsrfHeaders: async (headers: Record<string, string>) => headers,
 }));
 
@@ -63,3 +64,5 @@ describe('sendGuestTurn', () => {
     expect(GUEST_BLOCKING_CODES.has(GUEST_CHAT_ERROR_CODES.capacityReached)).toBe(true);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/client/csrf');

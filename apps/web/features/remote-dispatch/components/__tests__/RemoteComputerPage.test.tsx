@@ -27,10 +27,12 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../../lib/remote-dispatch-client', () => ({
   connectRemoteDispatch: mocks.connect,
 }));
-vi.mock('../../lib/browser-pairing', () => ({
+vi.mock('../../lib/browser-pairing', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   readBrowserPairing: (raw: string) => (raw.trim() ? { code: raw.trim(), secret: 'secret' } : null),
 }));
-vi.mock('@features/chat/hooks/use-dictation', () => ({
+vi.mock('@features/chat/hooks/use-dictation', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   useDictation: () => ({
     isActive: false,
     status: 'idle',
@@ -187,3 +189,6 @@ describe('RemoteComputerPage task ownership', () => {
     );
   });
 });
+
+type ImportedModule1 = typeof import('../../lib/browser-pairing');
+type ImportedModule0 = typeof import('@features/chat/hooks/use-dictation');

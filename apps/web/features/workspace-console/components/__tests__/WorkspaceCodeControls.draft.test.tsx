@@ -9,7 +9,8 @@ import {
 } from '@agiworkforce/types';
 
 vi.mock('@shared/lib/get-auth-token', () => ({ getAuthToken: async () => 'token' }));
-vi.mock('@/lib/client/csrf', () => ({
+vi.mock('@/lib/client/csrf', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   addCsrfHeaders: async (headers: Record<string, string>) => headers,
 }));
 
@@ -94,3 +95,5 @@ describe('WorkspaceCodeControls draft lifecycle', () => {
     expect(githubSwitch()).not.toBeChecked();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/client/csrf');

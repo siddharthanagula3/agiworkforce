@@ -11,7 +11,8 @@ const { mockQuery, mockNeonQuery, mockGetUserScopedDb } = vi.hoisted(() => ({
 }));
 
 const callerRole = vi.hoisted(() => ({ value: 'admin' as string }));
-vi.mock('@/lib/services/organization-permission-service', () => ({
+vi.mock('@/lib/services/organization-permission-service', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   resolveOrganizationPermissions: vi.fn(async () =>
     callerRole.value === 'member'
       ? new Set(['content.read', 'content.share'])
@@ -202,3 +203,5 @@ describe('organization shared surface · cross-org isolation', () => {
     expect(insert).toBeUndefined();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/services/organization-permission-service');

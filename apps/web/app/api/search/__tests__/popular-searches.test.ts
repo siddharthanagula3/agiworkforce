@@ -18,7 +18,8 @@ vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn().mockResolvedValue(null)
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   getClerkAuthUser: mockGetClerkAuthUser,
   getAuthenticatedUserWithClient: vi.fn(),
   getAuthenticatedUser: vi.fn(),
@@ -40,7 +41,8 @@ vi.mock('@/lib/server/rls-db', () => ({
   })),
 }));
 
-vi.mock('@/lib/server/data-region', () => ({
+vi.mock('@/lib/server/data-region', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   readStoredOrganizationRegion: mockReadStoredOrganizationRegion,
 }));
 
@@ -186,3 +188,6 @@ describe('search-history workspace scope', () => {
     expect(mockNeonQuery).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule1 = typeof import('@/lib/api-auth');
+type ImportedModule0 = typeof import('@/lib/server/data-region');

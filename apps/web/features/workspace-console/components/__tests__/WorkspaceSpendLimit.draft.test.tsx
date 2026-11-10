@@ -3,7 +3,8 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@shared/lib/get-auth-token', () => ({ getAuthToken: vi.fn(async () => 'token') }));
-vi.mock('@/lib/client/csrf', () => ({
+vi.mock('@/lib/client/csrf', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   addCsrfHeaders: vi.fn(async (headers: Record<string, string>) => headers),
 }));
 
@@ -80,3 +81,5 @@ describe('WorkspaceSpendLimit draft lifecycle', () => {
     expect(screen.getByLabelText('Cap (credits)')).toHaveValue(300);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/client/csrf');

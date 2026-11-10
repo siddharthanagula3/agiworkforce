@@ -30,7 +30,8 @@ vi.mock('@/lib/services/identity-events', () => ({
 }));
 vi.mock('../gate', () => ({ rememberEnrollment: mocks.remember }));
 vi.mock('../secrets', () => ({ hashUndoToken: mocks.hash, newUnusablePassword: mocks.password }));
-vi.mock('../store', () => ({
+vi.mock('../store', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   readEnrollmentUndo: mocks.read,
   undoEnrollment: mocks.undo,
   claimUndoCleanup: mocks.claim,
@@ -339,3 +340,5 @@ describe('turnOffFromEmailLink with a durable cleanup record', () => {
     },
   );
 });
+
+type ImportedModule0 = typeof import('../store');

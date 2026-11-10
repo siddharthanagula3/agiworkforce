@@ -48,7 +48,8 @@ vi.mock('@shared/utils/env', () => ({
 }));
 
 const mockGetClerkAuthUser = vi.fn();
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   isAccountUnavailableError: vi.fn(() => false),
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
   getAuthenticatedUser: vi.fn(),
@@ -193,3 +194,5 @@ describe('POST /api/llm/v1/chat/completions · auth contract', () => {
     expect(mockSendRequest).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/api-auth');

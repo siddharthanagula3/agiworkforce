@@ -1,19 +1,25 @@
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule3>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/egress-policy', () => ({
+vi.mock('@/lib/egress-policy', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule2>()),
   assertResolvedPublicHostname: vi.fn(async () => undefined),
   pinnedPublicFetch: vi.fn(),
 }));
-vi.mock('@/lib/server/key-value', () => ({ getKeyValueStore: () => null }));
+vi.mock('@/lib/server/key-value', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
+  getKeyValueStore: () => null,
+}));
 
 const { testKeyRing } = vi.hoisted(() => ({
   testKeyRing: { active: { id: 'test-key', material: Buffer.alloc(32, 7) }, retired: [] },
 }));
-vi.mock('@/lib/server/organization-encryption-keys', () => ({
+vi.mock('@/lib/server/organization-encryption-keys', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   organizationKeyRing: vi.fn(async () => ({
     ring: testKeyRing,
     source: 'platform_derived',
@@ -134,3 +140,8 @@ describe('drainAuditDestination across a destination replacement', () => {
     expect(store.destination.last_delivered_id).toBe(EVENTS[EVENTS.length - 1]!.id);
   });
 });
+
+type ImportedModule3 = typeof import('@/lib/logger');
+type ImportedModule2 = typeof import('@/lib/egress-policy');
+type ImportedModule1 = typeof import('@/lib/server/key-value');
+type ImportedModule0 = typeof import('@/lib/server/organization-encryption-keys');

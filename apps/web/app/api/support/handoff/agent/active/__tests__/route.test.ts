@@ -6,12 +6,17 @@ const mocks = vi.hoisted(() => ({
   listConnectedSessionsForAgent: vi.fn(),
 }));
 
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule2>()),
+  withRateLimit: mocks.withRateLimit,
+}));
 vi.mock('@/lib/auth-guards', () => ({ requirePlatformAdmin: mocks.requirePlatformAdmin }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/support/handoff/store', () => ({
+vi.mock('@/lib/support/handoff/store', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   cancelSessionForOwner: vi.fn(),
   claimExpiredWaitingBatch: vi.fn(),
   claimExpiredWaitingSession: vi.fn(),
@@ -82,3 +87,7 @@ describe('GET /api/support/handoff/agent/active', () => {
     expect(response.headers.get('cache-control')).toBe('no-store');
   });
 });
+
+type ImportedModule2 = typeof import('@/lib/rate-limit');
+type ImportedModule1 = typeof import('@/lib/logger');
+type ImportedModule0 = typeof import('@/lib/support/handoff/store');

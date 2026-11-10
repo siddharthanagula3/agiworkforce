@@ -9,7 +9,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/jobs/job-service', () => ({ enqueueJob: mocks.enqueueJob }));
+vi.mock('@/lib/jobs/job-service', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
+  enqueueJob: mocks.enqueueJob,
+}));
 vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
@@ -521,3 +524,5 @@ describe('device push preferences', () => {
 });
 
 type ImportedModule0 = typeof import('@/lib/egress-policy');
+
+type ImportedModule1 = typeof import('@/lib/jobs/job-service');

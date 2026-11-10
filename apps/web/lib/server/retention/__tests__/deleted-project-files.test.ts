@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
@@ -9,7 +10,10 @@ const mocks = vi.hoisted(() => ({
   recordAuditEvent: vi.fn(async () => undefined),
 }));
 
-vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: mocks.recordAuditEvent }));
+vi.mock('@/lib/security-audit', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
+  recordAuditEvent: mocks.recordAuditEvent,
+}));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { FakePostgres } from '@/lib/services/__tests__/fake-postgres';
@@ -264,3 +268,6 @@ describe('purgeDeletedProjectFiles after a legal hold is released', () => {
     );
   });
 });
+
+type ImportedModule1 = typeof import('@/lib/logger');
+type ImportedModule0 = typeof import('@/lib/security-audit');

@@ -19,7 +19,8 @@ vi.mock('@/lib/server/rls-db', () => ({
     return { db: authMocks.db, userId, organizationId: null };
   },
 }));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   isAccountUnavailableError: vi.fn(() => false),
   getClerkAuthUser: authMocks.getClerkAuthUser,
 }));
@@ -249,3 +250,5 @@ describe('GET /api/llm/v1/models authentication downgrade boundary', () => {
     });
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/api-auth');

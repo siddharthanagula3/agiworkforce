@@ -15,12 +15,24 @@ vi.mock('../runtime/computerUseSession', () => ({
   computerUsePhase: () => 'idle',
   stopComputerUse: vi.fn(),
 }));
-vi.mock('../runtime/developerSessionService', () => ({ stopDeveloperRuntime: vi.fn() }));
+vi.mock('../runtime/developerSessionService', () => ({
+  answerDeveloperApproval: vi.fn(),
+  interruptDeveloperTurn: vi.fn(),
+  listDeveloperSessions: vi.fn(),
+  readDeveloperSessionActivity: vi.fn(),
+  readPendingApproval: vi.fn(),
+  startDeveloperSession: vi.fn(),
+  startRemoteDeveloperTurn: vi.fn(),
+  stopDeveloperRuntime: vi.fn(),
+}));
 vi.mock('../runtime/shellService', () => ({
   cancelShellRun: vi.fn(),
   listShellRuns: () => [],
 }));
 vi.mock('../runtime/workspaceStore', () => ({
+  WorktreeRootRefused: class WorktreeRootRefused extends Error {},
+  admitWorktreeRoot: vi.fn(),
+  forgetWorktreeRoot: vi.fn(),
   getRoot: (id: string) => roots.find((root) => root.id === id),
   listRoots: () => roots,
 }));

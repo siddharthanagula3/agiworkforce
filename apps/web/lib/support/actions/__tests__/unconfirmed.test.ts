@@ -20,7 +20,8 @@ vi.mock('@/lib/services/subscription-service', () => ({
 vi.mock('@/lib/services/managed-usage-summary-service', () => ({
   getManagedUsageSummary: vi.fn(async () => null),
 }));
-vi.mock('@/lib/connectors/oauth-access', () => ({
+vi.mock('@/lib/connectors/oauth-access', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   disconnectConnectorOAuthGrant: vi.fn(async () => ({
     disconnected: true,
     vendorRevocation: { status: 'revoked' },
@@ -126,3 +127,5 @@ describe('support actions, nothing runs without a confirmation', () => {
     expect(mocks.db!.proposals[0]!.outcome).toBe('success');
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/connectors/oauth-access');

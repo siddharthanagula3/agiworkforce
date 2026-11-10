@@ -18,7 +18,10 @@ const mocks = vi.hoisted(() => ({
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mocks.requireCsrfToken }));
-vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: mocks.getClerkAuthUser }));
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule2>()),
+  getClerkAuthUser: mocks.getClerkAuthUser,
+}));
 vi.mock('@/lib/workspace-audit', () => ({
   recordWorkspaceAuditEvent: mocks.recordWorkspaceAuditEvent,
 }));
@@ -345,3 +348,5 @@ describe('/api/skills/installs', () => {
 
 type ImportedModule0 = typeof import('@/lib/managed-compute-gate');
 type ImportedModule1 = typeof import('@/lib/services/workspace-plugin-access');
+
+type ImportedModule2 = typeof import('@/lib/api-auth');

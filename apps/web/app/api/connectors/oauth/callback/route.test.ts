@@ -56,7 +56,8 @@ vi.mock('@/lib/security-audit', () => ({
   getClientIp: vi.fn(),
   logRateLimitExceeded: vi.fn(),
 }));
-vi.mock('@/lib/connectors/oauth-store', () => ({
+vi.mock('@/lib/connectors/oauth-store', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   appReturnOwner: (...a: unknown[]) => mocks.appReturnOwner(...a),
   consumePendingAuthorization: (...a: unknown[]) => mocks.consumePending(...a),
   upsertConnectorOAuthGrant: (...a: unknown[]) => mocks.upsertGrant(...a),
@@ -381,3 +382,5 @@ vi.mock('@/lib/services/connector-policy-gate', async (importOriginal) => ({
   ...(await importOriginal<ConnectorPolicyGateModule>()),
   evaluateConnectorPolicyForUser: vi.fn(async () => ({ allowed: true })),
 }));
+
+type ImportedModule0 = typeof import('@/lib/connectors/oauth-store');

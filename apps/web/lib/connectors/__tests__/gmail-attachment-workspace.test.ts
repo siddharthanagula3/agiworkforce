@@ -24,9 +24,13 @@ vi.mock('@/lib/services/active-workspace-service', () => ({
 vi.mock('@/lib/server/media-assets', () => ({
   getActiveWorkspaceMediaAssetById: mocks.asset,
 }));
-vi.mock('@/lib/server/media-storage', () => ({ readStoredMedia: mocks.read }));
+vi.mock('@/lib/server/media-storage', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule2>()),
+  readStoredMedia: mocks.read,
+}));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => mocks.db }));
-vi.mock('@/lib/url-fetch/guarded-fetch', () => ({
+vi.mock('@/lib/url-fetch/guarded-fetch', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   createDeadline: () => ({ release: vi.fn() }),
   credentialedFetch: mocks.fetch,
 }));
@@ -259,3 +263,6 @@ describe('Gmail aggregate attachment read budget', () => {
 });
 
 type ImportedModule0 = typeof import('@/lib/connectors/oauth-access');
+
+type ImportedModule2 = typeof import('@/lib/server/media-storage');
+type ImportedModule1 = typeof import('@/lib/url-fetch/guarded-fetch');

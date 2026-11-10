@@ -32,7 +32,8 @@ vi.mock('../request-context-cache', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),
   invalidateAccountStatusCache: (...args: unknown[]) => mocks.invalidateAccountStatusCache(...args),
 }));
-vi.mock('../payments/stripe-provider', () => ({
+vi.mock('../payments/stripe-provider', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   cancelLiveStripeSubscriptionsNow: (...args: unknown[]) => {
     mocks.calls.push('stripe');
     return mocks.cancelLiveStripeSubscriptionsNow(...args);
@@ -385,3 +386,5 @@ describe('reEraseTombstonedAccount', () => {
     expect(mocks.eraseProfileRow).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('../payments/stripe-provider');

@@ -8,7 +8,8 @@ vi.mock('next/navigation', () => ({
   useParams: () => ({ id: 'project-1' }),
 }));
 
-vi.mock('@shared/components/layout/WebAppShell', () => ({
+vi.mock('@shared/components/layout/WebAppShell', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule3>()),
   WebAppShell: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 
@@ -47,11 +48,13 @@ vi.mock('@/lib/hooks/useConversations', async (importOriginal) => ({
   }),
 }));
 
-vi.mock('@/features/chat/components/Composer/ChatComposerNew', () => ({
+vi.mock('@/features/chat/components/Composer/ChatComposerNew', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule2>()),
   ChatComposerNew: () => <div data-testid="project-composer-stub" />,
 }));
 
-vi.mock('@/features/schedules', () => ({
+vi.mock('@/features/schedules', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   SchedulesPage: () => <div data-testid="project-schedules-section" />,
   SchedulesEntitlementLoading: () => <div aria-label="Loading schedule access" role="status" />,
 }));
@@ -60,7 +63,8 @@ vi.mock('@/features/projects/components/SourcesPanel', () => ({
   SourcesPanel: () => <div data-testid="sources-panel" />,
 }));
 
-vi.mock('@/features/projects/services/project-knowledge-upload', () => ({
+vi.mock('@/features/projects/services/project-knowledge-upload', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   listProjectKnowledgeFiles: async () => [],
   uploadProjectKnowledgeFile: async () => undefined,
 }));
@@ -158,3 +162,8 @@ describe('unsaved project notes when the project tab changes', () => {
     );
   });
 });
+
+type ImportedModule3 = typeof import('@shared/components/layout/WebAppShell');
+type ImportedModule2 = typeof import('@/features/chat/components/Composer/ChatComposerNew');
+type ImportedModule1 = typeof import('@/features/schedules');
+type ImportedModule0 = typeof import('@/features/projects/services/project-knowledge-upload');

@@ -267,7 +267,8 @@ vi.mock('@/lib/services/free-trial-service', async (importOriginal) => ({
   settleFreeTrialRequest: freeTrialMocks.settle,
 }));
 
-vi.mock('@/lib/workflows/start-cloud-agent-workflow', () => ({
+vi.mock('@/lib/workflows/start-cloud-agent-workflow', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   startCloudAgentWorkflowExecution: workflowRouteMocks.start,
 }));
 
@@ -331,7 +332,8 @@ vi.mock('@/lib/services/provider-adapter-service', async (importOriginal) => {
     resolveProviderFromModel: (...args: unknown[]) => mockGetProviderFromModel(...args),
   };
 });
-vi.mock('@/lib/services/llm-cost-calculator', () => ({
+vi.mock('@/lib/services/llm-cost-calculator', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   LLMCostCalculator: {
     calculateListCost: vi.fn(() => null),
     calculateListCostMicrousd: vi.fn(() => null),
@@ -1057,3 +1059,6 @@ type RetainedMockModule1 = typeof import('@/lib/error-handler');
 type RetainedMockModule2 = typeof import('@/lib/logger');
 type RetainedMockModule3 = typeof import('@/lib/cors');
 type RetainedMockModule4 = typeof import('@shared/utils/env');
+
+type ImportedModule1 = typeof import('@/lib/workflows/start-cloud-agent-workflow');
+type ImportedModule0 = typeof import('@/lib/services/llm-cost-calculator');

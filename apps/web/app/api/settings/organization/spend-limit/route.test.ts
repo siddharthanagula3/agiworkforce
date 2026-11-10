@@ -32,7 +32,8 @@ vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => mocks.privilegedDb }))
 vi.mock('@/lib/services/active-workspace-service', () => ({
   resolveActiveOrganizationId: mocks.savedSelection,
 }));
-vi.mock('@/lib/services/org-entitlements', () => ({
+vi.mock('@/lib/services/org-entitlements', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   getOrganizationEntitlements: vi.fn(),
   getSharedProjectLimitErrorMessage: vi.fn(),
   isOrgResourceLimitError: vi.fn(),
@@ -47,7 +48,10 @@ vi.mock('@/lib/services/organization-permission-service', () => ({
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mocks.csrf }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.rateLimit }));
 vi.mock('@/lib/cors', () => ({ handleCorsPreflightRequest: vi.fn() }));
-vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: mocks.audit }));
+vi.mock('@/lib/security-audit', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
+  recordAuditEvent: mocks.audit,
+}));
 vi.mock('@/lib/services/spend-limit-service', () => ({
   readSpendState: mocks.read,
   upsertSpendLimit: mocks.upsert,
@@ -307,3 +311,6 @@ describe('spend-limit forwards the first resolved workspace', () => {
     expect(mocks.audit).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule1 = typeof import('@/lib/services/org-entitlements');
+type ImportedModule0 = typeof import('@/lib/security-audit');

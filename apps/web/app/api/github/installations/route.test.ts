@@ -10,7 +10,8 @@ vi.mock('server-only', () => ({}));
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn(async () => null),
 }));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   isAccountUnavailableError: vi.fn(() => false),
   getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1' })),
 }));
@@ -149,3 +150,5 @@ describe('GitHub installation listing ownership proof', () => {
     await expect(response.json()).resolves.toEqual({ error: 'Failed to fetch installations' });
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/api-auth');

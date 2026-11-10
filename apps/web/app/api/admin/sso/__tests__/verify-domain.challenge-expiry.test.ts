@@ -9,20 +9,30 @@ const { mockQuery, mockExecute, mockGetSubscription, mockGetClerkAuthUser } = vi
   mockGetClerkAuthUser: vi.fn(),
 }));
 
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule5>()),
+  withRateLimit: vi.fn(async () => null),
+}));
+vi.mock('@/lib/csrf', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule4>()),
+  requireCsrfToken: vi.fn(async () => null),
+}));
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule3>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/security-audit', () => ({
+vi.mock('@/lib/security-audit', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule2>()),
   logSecurityEvent: vi.fn(async () => undefined),
   BLOCK_APPEAL_PATH: '/support',
   logRateLimitExceeded: vi.fn(),
 }));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
-vi.mock('@/lib/server/neon-db', () => ({
+vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   getNeonDb: vi.fn(() => ({
     query: (...args: unknown[]) => mockQuery(...args),
     execute: (...args: unknown[]) => mockExecute(...args),
@@ -311,3 +321,10 @@ describe('POST /api/admin/sso/verify-domain, challenge expiry', () => {
     expect(body.connection.domainChallengeExpiresAt).toBe(expiresAt!.toISOString());
   });
 });
+
+type ImportedModule5 = typeof import('@/lib/rate-limit');
+type ImportedModule4 = typeof import('@/lib/csrf');
+type ImportedModule3 = typeof import('@/lib/logger');
+type ImportedModule2 = typeof import('@/lib/security-audit');
+type ImportedModule1 = typeof import('@/lib/api-auth');
+type ImportedModule0 = typeof import('@/lib/server/neon-db');

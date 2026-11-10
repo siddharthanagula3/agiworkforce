@@ -115,14 +115,16 @@ vi.mock('@/lib/services/subscription-service', () => ({
 vi.mock('@/lib/services/managed-compute-access', () => ({
   evaluateManagedComputeAccess: mockEvaluateManagedComputeAccess,
 }));
-vi.mock('@/lib/services/cloud-code-session-service', () => ({
+vi.mock('@/lib/services/cloud-code-session-service', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   resolveCloudCodeSessionOwnerOrganizationId: mockResolveSessionOrganizationId,
 }));
 vi.mock('@/lib/services/cogs-ledger-service', () => ({
   recordSettledProviderCost: mockRecordSettledProviderCost,
   getOrganizationMonthToDateSpendCents: mockGetOrganizationMonthToDateSpendCents,
 }));
-vi.mock('@/lib/services/llm-cost-calculator', () => ({
+vi.mock('@/lib/services/llm-cost-calculator', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   UnpricedModelError: MockUnpricedModelError,
   LLMCostCalculator: {
     calculateListCost: mockCalculateListCost,
@@ -972,3 +974,6 @@ describe('provider proxy, a model outside the plan or the workspace policy', () 
     vi.unstubAllGlobals();
   });
 });
+
+type ImportedModule1 = typeof import('@/lib/services/cloud-code-session-service');
+type ImportedModule0 = typeof import('@/lib/services/llm-cost-calculator');

@@ -69,7 +69,8 @@ vi.mock('@/lib/security-audit', () => ({
   sanitizeAuditDetail: vi.fn(),
   recordAuditEvent: mocks.recordAuditEvent,
 }));
-vi.mock('@/lib/github-app', () => ({
+vi.mock('@/lib/github-app', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   GITHUB_WEBHOOK_SECRET: vi.fn(),
   GitHubAuthorizationRevokedError: class GitHubAuthorizationRevokedError extends Error {},
   GitHubInstallationUnverifiedError: class GitHubInstallationUnverifiedError extends Error {},
@@ -265,3 +266,5 @@ describe('POST /api/code/local-pull-requests', () => {
     );
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/github-app');

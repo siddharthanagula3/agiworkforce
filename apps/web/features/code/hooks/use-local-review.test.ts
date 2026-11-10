@@ -17,7 +17,8 @@ vi.mock('@agiworkforce/ui', async (importOriginal) => ({
   useConfirmAction: () => ({ confirm: vi.fn(), dialog: null }),
 }));
 
-vi.mock('@/features/desktop-host', () => ({
+vi.mock('@/features/desktop-host', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule2>()),
   compactDeveloperThread: vi.fn(),
   onDeveloperSessionEvent: (listener: (rootId: string, event: unknown) => void) => {
     emitSessionEvent.current = listener;
@@ -27,11 +28,15 @@ vi.mock('@/features/desktop-host', () => ({
   },
 }));
 
-vi.mock('../local-summaries', () => ({ runThreadSummary: vi.fn() }));
+vi.mock('../local-summaries', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
+  runThreadSummary: vi.fn(),
+}));
 
 vi.mock('../components/LocalRewindChooser', () => ({ LocalRewindChooser: () => null }));
 
-vi.mock('../services/local-review-client', () => ({
+vi.mock('../services/local-review-client', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   applyLocalWorktree: vi.fn(),
   deleteLocalWorktree: vi.fn(),
   listLocalCheckpoints,
@@ -109,3 +114,7 @@ describe('useLocalReview setup', () => {
     expect(result.current.setupExitCode).toBe(0);
   });
 });
+
+type ImportedModule2 = typeof import('@/features/desktop-host');
+type ImportedModule1 = typeof import('../local-summaries');
+type ImportedModule0 = typeof import('../services/local-review-client');

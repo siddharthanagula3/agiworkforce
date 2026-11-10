@@ -37,7 +37,10 @@ vi.mock('@/lib/managed-compute-gate', () => ({
   buildWorkspaceFeatureGateResponse: (...args: unknown[]) => featureGateMock(...args),
 }));
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: authUserMock }));
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
+  getClerkAuthUser: authUserMock,
+}));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: csrfMock }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: rateLimitMock }));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: getNeonDbMock }));
@@ -366,3 +369,5 @@ describe('plugins that another installed plugin needs', () => {
     ]);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/api-auth');

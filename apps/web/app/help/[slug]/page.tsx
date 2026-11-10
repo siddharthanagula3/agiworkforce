@@ -7,14 +7,13 @@ import { DocsArticleBody } from '@/features/docs/components/DocsArticleBody';
 import { DocsShell } from '@/features/docs/components/DocsShell';
 import {
   DOCS_HOME_PATH,
+  docsGroupFor,
   docsNavGroups,
   docsNeighbours,
   docsRelated,
 } from '@/features/docs/lib/docs-nav';
 import { Breadcrumb } from '@/features/marketing/components/system';
 import { buildMetadata } from '@/lib/seo/metadata';
-import { articleSchema, breadcrumbSchema } from '@/lib/seo/structured-data';
-import { JsonLd } from '@shared/components/seo/JsonLd';
 import {
   DOC_AUDIENCE_LABELS,
   describePlans,
@@ -56,7 +55,7 @@ export default async function HelpArticlePage({ params }: ArticleProps) {
 
   const path = helpArticlePath(article.id);
   const groups = docsNavGroups();
-  const group = groups.find((candidate) => candidate.links.some((link) => link.href === path));
+  const group = docsGroupFor(groups, path);
   const { previous, next } = docsNeighbours(groups, path);
   const related = docsRelated(groups, path);
   const metadata = docMetadataFor(article.id);
@@ -69,16 +68,6 @@ export default async function HelpArticlePage({ params }: ArticleProps) {
 
   return (
     <DocsShell toc={toc}>
-      <JsonLd
-        data={[
-          articleSchema({ ...article, path }),
-          breadcrumbSchema([
-            { name: 'Documentation', path: DOCS_HOME_PATH },
-            ...(group ? [{ name: group.label, path: `/help/collections/${group.id}` }] : []),
-            { name: article.title, path },
-          ]),
-        ]}
-      />
       <article className="break-words">
         <Breadcrumb
           items={[

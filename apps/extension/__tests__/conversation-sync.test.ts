@@ -73,7 +73,8 @@ const authContext = {
     owner: { accountId: 'account-a', authIncarnation: 'session-a' },
   } as { token: string; owner: { accountId: string; authIncarnation: string } } | null,
 };
-vi.mock('../src/features/cloud-bridge/freeTrialClient', () => ({
+vi.mock('../src/features/cloud-bridge/freeTrialClient', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   CODE_EXECUTION_OUTPUT_MAX_CHARS: 16_000,
   FREE_TRIAL_GATEWAY: 'https://agiworkforce.com',
   getManagedCloudAuthContext: vi.fn(async () => authContext.current),
@@ -939,3 +940,5 @@ describe('conversation cloud sync', () => {
     expect(conversationPosts()).toHaveLength(1);
   });
 });
+
+type ImportedModule0 = typeof import('../src/features/cloud-bridge/freeTrialClient');

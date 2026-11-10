@@ -32,10 +32,12 @@ vi.mock('@/lib/services/organization-permission-service', () => ({
   resolveOrganizationPermissions: mockResolvePermissions,
   requireMemberPermission: mockRequirePermission,
 }));
-vi.mock('@/lib/services/active-workspace-service', () => ({
+vi.mock('@/lib/services/active-workspace-service', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   resolveActiveOrganizationId: mockResolveActiveOrganizationId,
 }));
-vi.mock('@/lib/services/org-entitlements', () => ({
+vi.mock('@/lib/services/org-entitlements', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   getOrganizationEntitlements: vi.fn(),
   getSharedProjectLimitErrorMessage: vi.fn(),
   isOrgResourceLimitError: vi.fn(),
@@ -642,3 +644,6 @@ describe('captured connector-policy workspace', () => {
     expect(JSON.stringify(policies.get(ORG))).toBe(savedPolicy);
   });
 });
+
+type ImportedModule1 = typeof import('@/lib/services/active-workspace-service');
+type ImportedModule0 = typeof import('@/lib/services/org-entitlements');

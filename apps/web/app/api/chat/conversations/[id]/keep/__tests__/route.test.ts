@@ -54,7 +54,8 @@ vi.mock('@/lib/server/rls-db', () => ({
   getVerifiedBearerUserScopedDb: vi.fn(),
   getUserScopedDb: mocks.getUserScopedDb,
 }));
-vi.mock('@/lib/services/tier-unit-quota-service', () => ({
+vi.mock('@/lib/services/tier-unit-quota-service', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   FreeDailyLimitError: class FreeDailyLimitError extends Error {},
   PlanDownloadLimitError: class PlanDownloadLimitError extends Error {},
   MONTHLY_DOWNLOAD_LIMIT_CODE: 'monthly_download_limit_reached',
@@ -278,3 +279,5 @@ describe('POST /api/chat/conversations/[id]/keep', () => {
     expect(params).toEqual([CONVERSATION, 'user-1', 'org-1', [attached]]);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/services/tier-unit-quota-service');

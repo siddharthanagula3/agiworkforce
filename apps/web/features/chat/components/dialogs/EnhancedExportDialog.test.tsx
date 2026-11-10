@@ -6,7 +6,8 @@ const mocks = vi.hoisted(() => ({
   downloadAsMarkdown: vi.fn(),
 }));
 
-vi.mock('../../services/document-export-service', () => ({
+vi.mock('../../services/document-export-service', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   downloadAsMarkdown: mocks.downloadAsMarkdown,
   downloadAsPDF: vi.fn(),
   downloadAsDOCX: vi.fn(),
@@ -72,3 +73,5 @@ describe('EnhancedExportDialog metadata option', () => {
     expect(content).toContain('hello there');
   });
 });
+
+type ImportedModule0 = typeof import('../../services/document-export-service');

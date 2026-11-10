@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule7>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
@@ -10,7 +11,8 @@ const mockExecute = vi.fn();
 const mockQuery = vi.fn();
 const mockTransaction = vi.fn();
 
-vi.mock('@/lib/server/neon-db', () => ({
+vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule6>()),
   getNeonDb: vi.fn(() => ({
     execute: mockExecute,
     query: mockQuery,
@@ -20,34 +22,40 @@ vi.mock('@/lib/server/neon-db', () => ({
   })),
 }));
 
-vi.mock('@/lib/rate-limit', () => ({
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule5>()),
   withRateLimit: vi.fn().mockResolvedValue(null),
 }));
 
-vi.mock('@/lib/csrf', () => ({
+vi.mock('@/lib/csrf', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule4>()),
   requireCsrfToken: vi.fn().mockResolvedValue(null),
 }));
 
 const mockGetClerkAuthUser = vi.fn();
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule3>()),
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
 
 const mockGetUserScopedDb = vi.fn();
-vi.mock('@/lib/server/rls-db', () => ({
+vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule2>()),
   getUserScopedDb: (...args: unknown[]) => mockGetUserScopedDb(...args),
 }));
 
 const mockCreateApiKey = vi.fn();
 const mockRevokeApiKey = vi.fn();
-vi.mock('@/lib/services/api-key-service', () => ({
+vi.mock('@/lib/services/api-key-service', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   ApiKeyService: {
     createApiKey: (...args: unknown[]) => mockCreateApiKey(...args),
     revokeApiKey: (...args: unknown[]) => mockRevokeApiKey(...args),
   },
 }));
 
-vi.mock('@/app/api/settings/team/team-admin-access', () => ({
+vi.mock('@/app/api/settings/team/team-admin-access', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   requireTeamAdminAccess: vi.fn().mockResolvedValue({ maxMembers: null }),
 }));
 
@@ -539,3 +547,12 @@ describe('recordAuditEvent, rows are readable through the existing audit-log end
     }
   });
 });
+
+type ImportedModule7 = typeof import('@/lib/logger');
+type ImportedModule6 = typeof import('@/lib/server/neon-db');
+type ImportedModule5 = typeof import('@/lib/rate-limit');
+type ImportedModule4 = typeof import('@/lib/csrf');
+type ImportedModule3 = typeof import('@/lib/api-auth');
+type ImportedModule2 = typeof import('@/lib/server/rls-db');
+type ImportedModule1 = typeof import('@/lib/services/api-key-service');
+type ImportedModule0 = typeof import('@/app/api/settings/team/team-admin-access');

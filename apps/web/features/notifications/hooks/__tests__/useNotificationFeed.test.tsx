@@ -2,7 +2,10 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useNotificationFeed } from '../use-notification-feed';
 
-vi.mock('@/lib/client/csrf', () => ({ getCsrfToken: vi.fn(async () => 'csrf-token') }));
+vi.mock('@/lib/client/csrf', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
+  getCsrfToken: vi.fn(async () => 'csrf-token'),
+}));
 
 afterEach(() => {
   vi.useRealTimers();
@@ -83,3 +86,5 @@ describe('rejected mark-all-read', () => {
     expect(result.current.notifications.map((entry) => entry.id)).toEqual(['n-2', 'n-1']);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/client/csrf');

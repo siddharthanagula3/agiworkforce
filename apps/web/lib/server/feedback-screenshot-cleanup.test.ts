@@ -7,8 +7,12 @@ const mocks = vi.hoisted(() => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock('@/lib/logger', () => ({ logger: mocks.logger }));
-vi.mock('@/lib/server/object-storage', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
+  logger: mocks.logger,
+}));
+vi.mock('@/lib/server/object-storage', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   deletePrivateObject: mocks.deletePrivateObject,
   isPrivateObjectStorageConfigured: mocks.storageConfigured,
 }));
@@ -131,3 +135,6 @@ describe('sweepAbandonedFeedbackScreenshots', () => {
     expect(execute).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule1 = typeof import('@/lib/logger');
+type ImportedModule0 = typeof import('@/lib/server/object-storage');

@@ -19,7 +19,8 @@ vi.mock('@/lib/connectors/mcp-oauth-clients', () => ({
   saveMcpOAuthClient: mocks.saveClient,
   deleteMcpOAuthClient: mocks.deleteClient,
 }));
-vi.mock('@/lib/connectors/oauth-store', () => ({
+vi.mock('@/lib/connectors/oauth-store', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   createPendingAuthorization: mocks.savePending,
   upsertConnectorOAuthGrant: mocks.saveGrant,
 }));
@@ -520,3 +521,5 @@ describe('revoking a discovered grant at its authorization server (RFC 7009)', (
     expect(requested).toEqual([]);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/connectors/oauth-store');

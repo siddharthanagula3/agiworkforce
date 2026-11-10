@@ -50,7 +50,8 @@ vi.mock('@/lib/server/project-knowledge-files', () => ({
   findProjectKnowledgeFileByChecksum: vi.fn().mockResolvedValue(null),
   registerProjectKnowledgeFile: mockRegisterProjectKnowledgeFile,
 }));
-vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
+vi.mock('@/lib/server/project-knowledge-object-storage', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   deleteProjectKnowledgeObject: vi.fn().mockResolvedValue(undefined),
   sealProjectKnowledgeObject: vi.fn(),
 }));
@@ -447,3 +448,5 @@ describe('resumable upload for every upload kind', () => {
     expect(await store.current?.listPendingMultipartUploads(PRIVATE_BUCKET)).toEqual([]);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/server/project-knowledge-object-storage');

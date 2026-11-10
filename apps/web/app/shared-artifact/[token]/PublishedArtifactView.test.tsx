@@ -99,7 +99,8 @@ vi.mock('next/link', () => ({
   ),
 }));
 
-vi.mock('@/lib/identity/client', () => ({
+vi.mock('@/lib/identity/client', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   useSession: () => ({
     isLoaded: identity.loaded,
     isSignedIn: identity.signedIn,
@@ -435,3 +436,5 @@ it('retires a previous session for the same account and enables a fresh copy', a
   expect(routerPush).toHaveBeenCalledWith('/chat/later');
   expect(artifactUpsert).toHaveBeenCalledTimes(1);
 });
+
+type ImportedModule0 = typeof import('@/lib/identity/client');

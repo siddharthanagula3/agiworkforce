@@ -12,7 +12,8 @@ vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn().mockResolvedValue(null)
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   getClerkAuthUser: mockGetClerkAuthUser,
   getAuthenticatedUserWithClient: vi.fn(),
   getAuthenticatedUser: vi.fn(),
@@ -286,3 +287,5 @@ describe('GET /api/search message scoping', () => {
     ]);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/api-auth');

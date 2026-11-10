@@ -59,7 +59,8 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   getClerkAuthUser: mockGetClerkAuthUser,
   getAuthenticatedUserWithClient: vi.fn(),
   getAuthenticatedUser: vi.fn(),
@@ -689,3 +690,5 @@ describe('POST /api/projects · round-10 fields', () => {
     expect(mockNeonQuery).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/api-auth');

@@ -20,13 +20,18 @@ vi.mock('next/server', async () => {
   };
 });
 
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule6>()),
+  withRateLimit: vi.fn().mockResolvedValue(null),
+}));
 
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule5>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock('@/lib/cors', () => ({
+vi.mock('@/lib/cors', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule4>()),
   handleCorsPreflightRequest: vi.fn().mockReturnValue(null),
   getCorsHeaders: vi.fn().mockReturnValue({}),
   getSecurityHeaders: vi.fn().mockReturnValue({}),
@@ -58,15 +63,18 @@ const mocks = vi.hoisted(() => ({
   closeExhausted: vi.fn(),
 }));
 
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule3>()),
   getClerkAuthUser: (...args: unknown[]) => mocks.authUser(...args),
 }));
 
-vi.mock('@/lib/server/rls-db', () => ({
+vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule2>()),
   getUserScopedDb: (...args: unknown[]) => mocks.scoped(...args),
 }));
 
-vi.mock('@/lib/server/media-storage', () => ({
+vi.mock('@/lib/server/media-storage', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   authenticatedMediaUrl: (assetId: string) => `/api/files/${assetId}`,
   isImageStorageConfigured: () => true,
   bytesFromBase64: vi.fn(),
@@ -76,7 +84,8 @@ vi.mock('@/lib/server/media-storage', () => ({
   readStoredMedia: vi.fn(),
 }));
 
-vi.mock('@/lib/services/managed-usage-request-service', () => ({
+vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   markManagedUsageClientDelivered: (...args: unknown[]) => mocks.delivered(...args),
   markManagedUsageProviderStarted: vi.fn(),
   finalizeManagedUsageRequest: (...args: unknown[]) => mocks.finalize(...args),
@@ -413,3 +422,11 @@ describe('GET /api/media/image/status', () => {
     expect(response.status).toBe(400);
   });
 });
+
+type ImportedModule6 = typeof import('@/lib/rate-limit');
+type ImportedModule5 = typeof import('@/lib/logger');
+type ImportedModule4 = typeof import('@/lib/cors');
+type ImportedModule3 = typeof import('@/lib/api-auth');
+type ImportedModule2 = typeof import('@/lib/server/rls-db');
+type ImportedModule1 = typeof import('@/lib/server/media-storage');
+type ImportedModule0 = typeof import('@/lib/services/managed-usage-request-service');

@@ -54,7 +54,8 @@ vi.mock('@/lib/security-audit', () => ({
   getClientIp: vi.fn(),
   logRateLimitExceeded: vi.fn(async () => undefined),
 }));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   isAccountUnavailableError: vi.fn(() => false),
   getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1' })),
 }));
@@ -600,3 +601,5 @@ describe('CRIT-001, an available connector completes the whole lifecycle', () =>
     expect(await loadUserConnectorToolDefs('user-1')).toEqual([]);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/api-auth');

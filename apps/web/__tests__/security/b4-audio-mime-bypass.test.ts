@@ -15,7 +15,8 @@ const TRANSCRIPTION_MODEL = (() => {
 
 vi.mock('server-only', () => ({}));
 
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   getClerkAuthUser: vi.fn(),
 }));
 
@@ -129,3 +130,5 @@ describe('B4: audio MIME + magic-bytes validation', () => {
     expect(providerCalls()).toEqual([]);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/api-auth');

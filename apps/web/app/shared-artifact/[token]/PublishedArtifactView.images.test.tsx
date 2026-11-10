@@ -32,7 +32,8 @@ vi.mock('next/link', () => ({
   ),
 }));
 
-vi.mock('@/lib/identity/client', () => ({
+vi.mock('@/lib/identity/client', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   useSession: () => ({
     isLoaded: true,
     isSignedIn: false,
@@ -76,3 +77,5 @@ describe('PublishedArtifactView images', () => {
     ).toEqual([PNG_DATA_URL, BEACON_URL]);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/identity/client');

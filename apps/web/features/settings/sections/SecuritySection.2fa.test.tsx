@@ -23,7 +23,8 @@ vi.mock('@agiworkforce/ui', async (original) => ({
 vi.mock('@features/settings/hooks/useStepUp', () => ({
   useStepUp: () => ({ withStepUp: vi.fn(), dialog: null }),
 }));
-vi.mock('@features/settings/hooks/use-settings-queries', () => ({
+vi.mock('@features/settings/hooks/use-settings-queries', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule4>()),
   useUserSettings: () => ({ data: fixture.settings, isLoading: false, isError: false }),
   useUpdateSettings: () => ({ mutate: fixture.mutate, isPending: false }),
 }));
@@ -168,3 +169,5 @@ type ImportedModule0 = typeof import('@/lib/identity/client');
 type ImportedModule1 = typeof import('@agiworkforce/ui');
 type ImportedModule2 = typeof import('@features/settings/hooks/use-mfa-readers');
 type ImportedModule3 = typeof import('@features/settings/components/Settings/TwoFactor');
+
+type ImportedModule4 = typeof import('@features/settings/hooks/use-settings-queries');

@@ -9,7 +9,8 @@ const mocks = vi.hoisted(() => ({
   runAttempt: vi.fn(),
 }));
 
-vi.mock('@/lib/jobs/job-service', () => ({
+vi.mock('@/lib/jobs/job-service', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule3>()),
   PermanentJobError: class PermanentJobError extends Error {},
 }));
 
@@ -17,15 +18,18 @@ vi.mock('@/lib/server/claimed-user-scope-db', () => ({
   createClaimedUserScopedDb: (db: unknown) => db,
 }));
 
-vi.mock('@/lib/server/image-generation-jobs', () => ({
+vi.mock('@/lib/server/image-generation-jobs', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule2>()),
   getImageGenerationJob: (...args: unknown[]) => mocks.getJob(...args),
 }));
 
-vi.mock('../../app/api/media/image/lib/image-job-drive-queue', () => ({
+vi.mock('../../app/api/media/image/lib/image-job-drive-queue', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   isImageGenerationJobDrivable: () => true,
 }));
 
-vi.mock('../../app/api/media/image/lib/image-job-executor', () => ({
+vi.mock('../../app/api/media/image/lib/image-job-executor', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   isImageJobAttemptDue: () => true,
   isImageJobCancellationPending: () => false,
   isImageJobExhaustedAndAbandoned: (
@@ -94,3 +98,8 @@ describe('durable image job drain', () => {
     expect(mocks.runAttempt).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule3 = typeof import('@/lib/jobs/job-service');
+type ImportedModule2 = typeof import('@/lib/server/image-generation-jobs');
+type ImportedModule1 = typeof import('../../app/api/media/image/lib/image-job-drive-queue');
+type ImportedModule0 = typeof import('../../app/api/media/image/lib/image-job-executor');

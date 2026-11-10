@@ -33,7 +33,10 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/server/cron-auth', () => ({ verifyCronRequest: mocks.verifyCronRequest }));
-vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: mocks.recordAuditEvent }));
+vi.mock('@/lib/security-audit', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule2>()),
+  recordAuditEvent: mocks.recordAuditEvent,
+}));
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: () => {
     const db = {
@@ -43,13 +46,15 @@ vi.mock('@/lib/server/neon-db', () => ({
     return db;
   },
 }));
-vi.mock('@/lib/resources/purge-soft-deleted', () => ({
+vi.mock('@/lib/resources/purge-soft-deleted', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   purgeDerivedRecords: mocks.purgeDerivedRecords,
 }));
 vi.mock('@/lib/server/media-storage', () => ({
   deleteStoredMediaObjects: mocks.deleteStoredMediaObjects,
 }));
-vi.mock('@/lib/server/feedback-screenshot-cleanup', () => ({
+vi.mock('@/lib/server/feedback-screenshot-cleanup', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   sweepAbandonedFeedbackScreenshots: mocks.sweepFeedbackScreenshots,
 }));
 vi.mock('@/lib/server/object-storage-runtime', () => ({
@@ -276,3 +281,7 @@ describe('purge-deleted-media against a hold placed during the run', () => {
     expect(message).not.toMatch(/nothing was purged/);
   });
 });
+
+type ImportedModule2 = typeof import('@/lib/security-audit');
+type ImportedModule1 = typeof import('@/lib/resources/purge-soft-deleted');
+type ImportedModule0 = typeof import('@/lib/server/feedback-screenshot-cleanup');

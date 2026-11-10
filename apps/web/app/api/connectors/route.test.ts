@@ -73,7 +73,8 @@ vi.mock('@/lib/auth/email-confirmation', async (importOriginal) => ({
   ...(await importOriginal()),
   readPrimaryEmailState: vi.fn(async () => ({ confirmed: true, email: 'person@example.com' })),
 }));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1' })),
 }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
@@ -185,7 +186,8 @@ vi.mock('@/lib/connectors/oauth-access', async (importOriginal) => ({
   disconnectConnectorOAuthGrant: (...args: unknown[]) => mocks.disconnectOauth(...args),
   resolveConnectorAccessToken: vi.fn(),
 }));
-vi.mock('@/lib/github-app', () => ({
+vi.mock('@/lib/github-app', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   GitHubWriteOutcomeUnknownError: class GitHubWriteOutcomeUnknownError extends Error {},
   issueCommentPostedSince: vi.fn(() => false),
   pullRequestReviewPostedSince: vi.fn(() => false),
@@ -1289,3 +1291,6 @@ describe('selective connector offerings', () => {
     expect(mocks.probe).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule1 = typeof import('@/lib/api-auth');
+type ImportedModule0 = typeof import('@/lib/github-app');

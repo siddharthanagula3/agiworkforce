@@ -8,10 +8,12 @@ const authState = vi.hoisted(() => ({
 }));
 const settingsState = vi.hoisted(() => ({ value: { data: { session_timeout: 15 } } }));
 
-vi.mock('@shared/stores/authentication-store', () => ({
+vi.mock('@shared/stores/authentication-store', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   useAuthStore: () => authState.value,
 }));
-vi.mock('@features/settings/hooks/use-settings-queries', () => ({
+vi.mock('@features/settings/hooks/use-settings-queries', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   useUserSettings: () => settingsState.value,
 }));
 
@@ -135,3 +137,6 @@ describe('useSessionTimeout idle enforcement', () => {
     expect(onTimeout).toHaveBeenCalledTimes(1);
   });
 });
+
+type ImportedModule1 = typeof import('@shared/stores/authentication-store');
+type ImportedModule0 = typeof import('@features/settings/hooks/use-settings-queries');

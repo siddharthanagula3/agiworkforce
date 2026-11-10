@@ -11,7 +11,8 @@ const mocks = vi.hoisted(() => ({
   warn: vi.fn(),
 }));
 
-vi.mock('@/lib/github-app', () => ({
+vi.mock('@/lib/github-app', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule2>()),
   GitHubPullRequestError: class GitHubPullRequestError extends Error {
     constructor(
       readonly status: number,
@@ -25,10 +26,12 @@ vi.mock('@/lib/github-app', () => ({
   getGitHubPullRequestStatus: mocks.getGitHubPullRequestStatus,
   getInstallationAccessToken: mocks.getInstallationAccessToken,
 }));
-vi.mock('@/lib/user-connector-tools', () => ({
+vi.mock('@/lib/user-connector-tools', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   getUserGithubInstallations: mocks.getUserGithubInstallations,
 }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   logger: { info: vi.fn(), warn: mocks.warn, error: vi.fn(), debug: vi.fn() },
 }));
 
@@ -158,3 +161,7 @@ describe('looking up a local session pull request', () => {
     });
   });
 });
+
+type ImportedModule2 = typeof import('@/lib/github-app');
+type ImportedModule1 = typeof import('@/lib/user-connector-tools');
+type ImportedModule0 = typeof import('@/lib/logger');

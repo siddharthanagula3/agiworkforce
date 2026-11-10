@@ -15,7 +15,8 @@ vi.mock('@/lib/server/cron-auth', () => ({ verifyCronRequest: mockVerifyCronRequ
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: () => ({ query: (...args: unknown[]) => mockQuery(...args) }),
 }));
-vi.mock('@/lib/server/temporary-files', () => ({
+vi.mock('@/lib/server/temporary-files', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   purgeTemporaryChatFiles: mockPurgeFiles,
 }));
 
@@ -128,3 +129,5 @@ describe('GET /api/cron/purge-temporary-chats', () => {
     expect(body.remaining).toBe(true);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/server/temporary-files');

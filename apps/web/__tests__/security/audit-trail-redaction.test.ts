@@ -28,7 +28,8 @@ vi.mock('@/lib/csrf', () => ({
 }));
 
 const mockGetClerkAuthUser = vi.fn();
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
 
@@ -251,3 +252,5 @@ describe('POST /api/settings/api-keys, the generated key never lands in the audi
     expect(JSON.stringify(details)).not.toContain(rawKey);
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/api-auth');

@@ -18,7 +18,8 @@ vi.mock('next/server', async (importOriginal) => ({
   },
 }));
 
-vi.mock('@shared/utils/env', () => ({
+vi.mock('@shared/utils/env', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule6>()),
   requireEnv: (_key: string) => '',
   getOptionalEnv: (_key: string) => undefined,
 }));
@@ -26,9 +27,15 @@ vi.mock('@shared/utils/env', () => ({
 const { mockLogger } = vi.hoisted(() => ({
   mockLogger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/logger', () => ({ logger: mockLogger }));
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule5>()),
+  logger: mockLogger,
+}));
 
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule4>()),
+  withRateLimit: vi.fn().mockResolvedValue(null),
+}));
 
 vi.mock('@agiworkforce/types', async () => {
   const actual = await vi.importActual<ScanModule1>('@agiworkforce/types');
@@ -60,7 +67,8 @@ const {
     hoistedCreateHmac: cryptoMod.createHmac,
   };
 });
-vi.mock('@/lib/github-app', () => ({
+vi.mock('@/lib/github-app', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule3>()),
   listPrReviewCommentBodies: vi.fn(async () => []),
   GITHUB_WEBHOOK_SECRET: WEBHOOK_SECRET,
   verifyGitHubWebhookSignature: (body: string, sig: string, secret: string) => {
@@ -81,7 +89,8 @@ vi.mock('@/lib/github-app', () => ({
   listGitHubFailedChecks: vi.fn(async () => []),
 }));
 
-vi.mock('@/lib/managed-compute-gate', () => ({
+vi.mock('@/lib/managed-compute-gate', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule2>()),
   isManagedComputePrivateBetaEnabled: () => true,
 }));
 
@@ -91,14 +100,16 @@ vi.mock('@/lib/services/subscription-service', () => ({
   },
 }));
 
-vi.mock('@/lib/code-review/pipeline', () => ({
+vi.mock('@/lib/code-review/pipeline', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule1>()),
   reviewPullRequestDiff: (...args: unknown[]) => mockReviewPullRequestDiff(...args),
   reviewCoverageIsPartial: () => false,
   reviewLineComments: () => [],
   reviewSummaryBody: () => '## AGI Code Review\n\nNo defects found.',
 }));
 
-vi.mock('@/lib/server/neon-db', () => ({
+vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   getNeonDb: vi.fn(() => ({
     query: vi
       .fn()
@@ -307,3 +318,11 @@ describe('RT-03: GitHub webhook prompt injection defense', () => {
     expect(mockGetPrDiff).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule6 = typeof import('@shared/utils/env');
+type ImportedModule5 = typeof import('@/lib/logger');
+type ImportedModule4 = typeof import('@/lib/rate-limit');
+type ImportedModule3 = typeof import('@/lib/github-app');
+type ImportedModule2 = typeof import('@/lib/managed-compute-gate');
+type ImportedModule1 = typeof import('@/lib/code-review/pipeline');
+type ImportedModule0 = typeof import('@/lib/server/neon-db');

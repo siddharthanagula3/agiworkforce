@@ -14,7 +14,10 @@ const TEAM_PREMIUM_PRICE = 'price_team_premium_test';
 
 const mocks = vi.hoisted(() => ({ getTierMapping: vi.fn(), getPricePoint: vi.fn() }));
 vi.mock('@/lib/price-tier-mapping', () => ({ getTierMapping: mocks.getTierMapping }));
-vi.mock('@/lib/pricing', () => ({ getPricePointForPriceId: mocks.getPricePoint }));
+vi.mock('@/lib/pricing', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
+  getPricePointForPriceId: mocks.getPricePoint,
+}));
 
 import {
   compareBilledPrice,
@@ -489,3 +492,5 @@ describe('requeueSubscriptionsForReview', () => {
     expect(db.execute).not.toHaveBeenCalled();
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/pricing');

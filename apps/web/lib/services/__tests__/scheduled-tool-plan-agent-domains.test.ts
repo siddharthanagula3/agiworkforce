@@ -10,7 +10,8 @@ const mocks = vi.hoisted(() => ({
   approvalPolicy: vi.fn(async () => 'auto_approve_read_only'),
 }));
 
-vi.mock('@/lib/connectors/connector-capability', () => ({
+vi.mock('@/lib/connectors/connector-capability', async (importOriginal) => ({
+  ...(await importOriginal<ImportedModule0>()),
   connectorsAllowedWithoutRequest: mocks.connectorsAllowed,
 }));
 
@@ -96,3 +97,5 @@ describe('the website rules of an agent in a scheduled run', () => {
     expect(result.webDomainPolicy).toEqual({ allow: [], deny: ['ads.example.net'] });
   });
 });
+
+type ImportedModule0 = typeof import('@/lib/connectors/connector-capability');
