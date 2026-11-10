@@ -391,9 +391,9 @@ pub async fn hosted_conversation(
 pub async fn refresh_projects(privacy: PrivacyMode) -> Result<projects::ProjectCache, CloudError> {
     let mut session = CloudSession::open(privacy)?;
     let sync = projects::ProjectsSync::new(&session.client);
-    let since = session.state.projects.cursor.clone();
-    let mut response = sync.pull_all(&since).await?;
     let mut cache = load_project_cache(&session.config_dir);
+    let since = state::pull_frontier(&session.state.projects, cache.synced_through.as_deref());
+    let mut response = sync.pull_all(&since).await?;
     if let Some(scope) = projects::scope_to_adopt(&response, &cache, &session.state) {
         projects::reset_scope(&scope, &mut cache, &mut session.state);
         if since != state::INITIAL_CURSOR {
@@ -401,12 +401,14 @@ pub async fn refresh_projects(privacy: PrivacyMode) -> Result<projects::ProjectC
             projects::require_scope(&response, &scope)?;
         }
     }
-    cache.apply(&response.projects);
+    cache.adopt(&response);
     projects::apply_pull_response(&response, &mut session.state);
-    if let Err(error) = save_project_cache(&session.config_dir, &cache) {
-        crate::output::print_warn(&format!("could not cache the project list: {error}"));
+    match save_project_cache(&session.config_dir, &cache) {
+        Ok(()) => session.persist(),
+        Err(error) => crate::output::print_warn(&format!(
+            "could not cache the project list, so it will be fetched again next time: {error}"
+        )),
     }
-    session.persist();
     Ok(cache)
 }
 
@@ -606,17 +608,17 @@ pub async fn active_workspace_label(privacy: PrivacyMode) -> Result<String, Clou
 pub async fn refresh_memory(privacy: PrivacyMode) -> Result<memory::MemoryCache, CloudError> {
     let mut session = CloudSession::open(privacy)?;
     let sync = memory::MemorySync::new(&session.client);
-    let response = sync.pull_all(&session.state.memories.cursor).await?;
     let mut cache = load_memory_cache(&session.config_dir);
-    cache.apply(&response.memories);
-    if let Some(enabled) = response.memory_enabled {
-        cache.account_memory_off = !enabled;
-    }
+    let since = state::pull_frontier(&session.state.memories, cache.synced_through.as_deref());
+    let response = sync.pull_all(&since).await?;
+    cache.adopt(&response);
     memory::apply_pull_response(&response, &mut session.state);
-    if let Err(error) = save_memory_cache(&session.config_dir, &cache) {
-        crate::output::print_warn(&format!("could not cache the account memory: {error}"));
+    match save_memory_cache(&session.config_dir, &cache) {
+        Ok(()) => session.persist(),
+        Err(error) => crate::output::print_warn(&format!(
+            "could not cache the account memory, so it will be fetched again next time: {error}"
+        )),
     }
-    session.persist();
     Ok(cache)
 }
 

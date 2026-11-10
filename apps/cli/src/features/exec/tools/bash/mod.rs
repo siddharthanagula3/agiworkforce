@@ -351,10 +351,10 @@ pub(super) async fn execute_command_output(
     else {
         return Ok(result(
             true,
-            crate::terminals::summary(&crate::terminals::list()),
+            crate::terminals::summary(&crate::terminals::list_owned()),
         ));
     };
-    let Some(background) = crate::terminals::find(id) else {
+    let Some(background) = crate::terminals::find_owned(id) else {
         return Ok(result(
             false,
             format!("There is no background command {id}. Call command_output without an id to list them."),
@@ -448,7 +448,10 @@ pub(super) async fn execute_command_stop(args: &HashMap<String, String>) -> Resu
         success,
         output,
     };
-    let Some(background) = args.get("id").and_then(|id| crate::terminals::find(id)) else {
+    let Some(background) = args
+        .get("id")
+        .and_then(|id| crate::terminals::find_owned(id))
+    else {
         return Ok(result(
             false,
             "There is no background command with that id. Call command_output without an id to list them.".to_string(),

@@ -86,19 +86,63 @@ fn create_private_dir(path: &Path) -> Result<()> {
 }
 
 fn save(run: &BackgroundRun) -> Result<()> {
-    let dir = run_dir(&run.id)?;
+    save_in(&root()?, run)
+}
+
+fn load(id: &str) -> Result<BackgroundRun> {
+    load_in(&root()?, id)
+}
+
+fn save_in(root: &Path, run: &BackgroundRun) -> Result<()> {
+    let dir = root.join(&run.id);
     create_private_dir(&dir)?;
     let path = dir.join(RUN_FILE);
-    let temp = dir.join(format!("{RUN_FILE}.tmp"));
+    let temp = dir.join(format!("{RUN_FILE}.{}.tmp", std::process::id()));
     std::fs::write(&temp, serde_json::to_vec_pretty(run)?)
         .with_context(|| format!("write {}", temp.display()))?;
     std::fs::rename(&temp, &path).with_context(|| format!("write {}", path.display()))
 }
 
-fn load(id: &str) -> Result<BackgroundRun> {
-    let path = run_dir(id)?.join(RUN_FILE);
+fn load_in(root: &Path, id: &str) -> Result<BackgroundRun> {
+    let path = root.join(id).join(RUN_FILE);
     let bytes = std::fs::read(&path).with_context(|| format!("read {}", path.display()))?;
     serde_json::from_slice(&bytes).with_context(|| format!("parse {}", path.display()))
+}
+
+fn update_in(
+    root: &Path,
+    id: &str,
+    change: impl FnOnce(&mut BackgroundRun),
+) -> Result<BackgroundRun> {
+    let mut run = load_in(root, id)?;
+    change(&mut run);
+    save_in(root, &run)?;
+    Ok(run)
+}
+
+fn launch_in(
+    root: &Path,
+    mut run: BackgroundRun,
+    launch_supervisor: impl FnOnce(&BackgroundRun) -> Result<u32>,
+) -> Result<BackgroundRun> {
+    save_in(root, &run)?;
+    match launch_supervisor(&run) {
+        Ok(supervisor_pid) => {
+            run.supervisor_pid = Some(supervisor_pid);
+            Ok(run)
+        }
+        Err(error) => {
+            match update_in(root, &run.id, |stored| {
+                stored.finished_at = Some(Utc::now());
+                stored.exit_code = Some(-1);
+            }) {
+                Ok(_) => Err(error),
+                Err(record_error) => Err(error.context(format!(
+                    "the run could not be marked as failed to start: {record_error:#}"
+                ))),
+            }
+        }
+    }
 }
 
 pub fn list() -> Result<Vec<BackgroundRun>> {
@@ -177,7 +221,7 @@ pub fn start(request: StartRequest<'_>) -> Result<BackgroundRun> {
     }
     args.extend(["--".to_string(), prompt.to_string()]);
 
-    let mut run = BackgroundRun {
+    let run = BackgroundRun {
         id,
         prompt: prompt.to_string(),
         cwd: cwd.clone(),
@@ -192,21 +236,19 @@ pub fn start(request: StartRequest<'_>) -> Result<BackgroundRun> {
         parent_session: request.parent_session.map(str::to_string),
         gathered: false,
     };
-    save(&run)?;
-
-    let exe = std::env::current_exe().context("find the agi executable")?;
-    let mut command = std::process::Command::new(exe);
-    command
-        .args(["background", "supervise", &run.id])
-        .current_dir(&cwd)
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null());
-    detach(&mut command);
-    let child = command.spawn().context("start the background supervisor")?;
-    run.supervisor_pid = Some(child.id());
-    save(&run)?;
-    Ok(run)
+    launch_in(&root()?, run, |run| {
+        let exe = std::env::current_exe().context("find the agi executable")?;
+        let mut command = std::process::Command::new(exe);
+        command
+            .args(["background", "supervise", &run.id])
+            .current_dir(&cwd)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null());
+        detach(&mut command);
+        let child = command.spawn().context("start the background supervisor")?;
+        Ok(child.id())
+    })
 }
 
 pub fn hand_off(
@@ -381,41 +423,56 @@ pub fn gather_prompt(session: &crate::agent::AgentSession) -> std::result::Resul
 }
 
 pub fn supervise(id: &str) -> Result<()> {
-    let mut run = load(id)?;
-    let log = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(log_path(&run)?)
-        .context("open the background log")?;
-    let exe = std::env::current_exe().context("find the agi executable")?;
-    let mut command = std::process::Command::new(exe);
-    command
-        .args(&run.args)
-        .current_dir(&run.cwd)
-        .env("AGI_BACKGROUND_RUN", &run.id)
-        .stdin(std::process::Stdio::null())
-        .stdout(log.try_clone().context("share the background log")?)
-        .stderr(log);
-    let mut child = match command.spawn() {
+    let root = root()?;
+    supervise_in(&root, id, |run| {
+        let log = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(root.join(&run.id).join(LOG_FILE))
+            .context("open the background log")?;
+        let exe = std::env::current_exe().context("find the agi executable")?;
+        let mut command = std::process::Command::new(exe);
+        command
+            .args(&run.args)
+            .current_dir(&run.cwd)
+            .env("AGI_BACKGROUND_RUN", &run.id)
+            .stdin(std::process::Stdio::null())
+            .stdout(log.try_clone().context("share the background log")?)
+            .stderr(log);
+        command.spawn().context("start the background run")
+    })
+}
+
+fn supervise_in(
+    root: &Path,
+    id: &str,
+    start_child: impl FnOnce(&BackgroundRun) -> Result<std::process::Child>,
+) -> Result<()> {
+    let run = update_in(root, id, |run| {
+        run.supervisor_pid = Some(std::process::id());
+    })?;
+    let mut child = match start_child(&run) {
         Ok(child) => child,
         Err(error) => {
-            run.finished_at = Some(Utc::now());
-            run.exit_code = Some(-1);
-            save(&run)?;
-            return Err(error).context("start the background run");
+            update_in(root, id, |run| {
+                run.finished_at = Some(Utc::now());
+                run.exit_code = Some(-1);
+            })?;
+            return Err(error);
         }
     };
-    run.pid = Some(child.id());
-    save(&run)?;
+    let child_pid = child.id();
+    let recorded = update_in(root, id, |run| run.pid = Some(child_pid));
     let status = child.wait().context("wait for the background run")?;
-    let mut run = load(id).unwrap_or(run);
-    run.finished_at = Some(Utc::now());
-    run.exit_code = Some(status.code().unwrap_or(-1));
-    save(&run)
+    update_in(root, id, |run| {
+        run.finished_at = Some(Utc::now());
+        run.exit_code = Some(status.code().unwrap_or(-1));
+    })?;
+    recorded.map(|_| ())
 }
 
 pub fn stop(reference: &str) -> Result<BackgroundRun> {
-    let mut run = find(reference)?;
+    let run = find(reference)?;
     if state(&run) != RunState::Running {
         bail!(
             "Background run {} is not running ({}).",
@@ -423,8 +480,7 @@ pub fn stop(reference: &str) -> Result<BackgroundRun> {
             state(&run).label()
         );
     }
-    run.stopped = true;
-    save(&run)?;
+    let run = update_in(&root()?, &run.id, |run| run.stopped = true)?;
     if let Some(pid) = run.pid {
         terminate(pid)?;
     } else if let Some(pid) = run.supervisor_pid {
@@ -516,7 +572,22 @@ fn process_is_alive(pid: u32) -> bool {
     }
 }
 
-#[cfg(not(unix))]
+#[cfg(windows)]
+fn process_is_alive(pid: u32) -> bool {
+    if pid == 0 {
+        return false;
+    }
+    let filter = format!("PID eq {pid}");
+    std::process::Command::new("tasklist")
+        .args(["/FI", filter.as_str(), "/FO", "CSV", "/NH"])
+        .stdin(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .output()
+        .map(|output| String::from_utf8_lossy(&output.stdout).contains(&format!(",\"{pid}\",")))
+        .unwrap_or(true)
+}
+
+#[cfg(not(any(unix, windows)))]
 fn process_is_alive(pid: u32) -> bool {
     pid != 0
 }
@@ -545,4 +616,81 @@ fn terminate(pid: u32) -> Result<()> {
         bail!("taskkill could not stop process {pid}");
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn fixture(id: &str) -> BackgroundRun {
+        BackgroundRun {
+            id: id.to_string(),
+            prompt: "fixture".to_string(),
+            cwd: std::env::temp_dir(),
+            session_id: "fixture-session".to_string(),
+            started_at: Utc::now(),
+            args: Vec::new(),
+            supervisor_pid: None,
+            pid: None,
+            finished_at: None,
+            exit_code: None,
+            stopped: false,
+            parent_session: None,
+            gathered: false,
+        }
+    }
+
+    #[test]
+    fn a_starter_that_returns_late_keeps_the_supervisors_pid_and_result() {
+        let root = tempfile::tempdir().expect("root");
+        let started = launch_in(root.path(), fixture("lateack"), |run| {
+            update_in(root.path(), &run.id, |stored| {
+                stored.supervisor_pid = Some(4_000_001);
+                stored.pid = Some(4_000_002);
+            })?;
+            update_in(root.path(), &run.id, |stored| {
+                stored.finished_at = Some(Utc::now());
+                stored.exit_code = Some(0);
+            })?;
+            Ok(4_000_001)
+        })
+        .expect("launch");
+        assert_eq!(started.supervisor_pid, Some(4_000_001));
+        let stored = load_in(root.path(), "lateack").expect("stored run");
+        assert_eq!(stored.pid, Some(4_000_002));
+        assert_eq!(stored.exit_code, Some(0));
+        assert_eq!(state(&stored), RunState::Finished);
+    }
+
+    #[test]
+    fn a_supervisor_that_cannot_launch_leaves_a_failed_record() {
+        let root = tempfile::tempdir().expect("root");
+        let error = launch_in(root.path(), fixture("nolaunch"), |_| {
+            anyhow::bail!("supervisor fixture refused")
+        })
+        .expect_err("launch failure");
+        assert!(error.to_string().contains("supervisor fixture refused"));
+        let stored = load_in(root.path(), "nolaunch").expect("stored run");
+        assert_eq!(state(&stored), RunState::Failed);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_supervisor_owns_its_pid_and_keeps_a_stop_recorded_while_it_ran() {
+        let root = tempfile::tempdir().expect("root");
+        save_in(root.path(), &fixture("owned")).expect("initial record");
+        supervise_in(root.path(), "owned", |run| {
+            assert_eq!(run.supervisor_pid, Some(std::process::id()));
+            update_in(root.path(), &run.id, |stored| stored.stopped = true)?;
+            Ok(std::process::Command::new("/bin/sh")
+                .args(["-c", "exit 3"])
+                .spawn()?)
+        })
+        .expect("supervise");
+        let stored = load_in(root.path(), "owned").expect("stored run");
+        assert_eq!(stored.supervisor_pid, Some(std::process::id()));
+        assert!(stored.pid.is_some());
+        assert_eq!(stored.exit_code, Some(3));
+        assert_eq!(state(&stored), RunState::Stopped);
+    }
 }

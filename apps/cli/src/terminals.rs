@@ -29,6 +29,18 @@ const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
 static COMMANDS: OnceLock<Mutex<Vec<Arc<BackgroundCommand>>>> = OnceLock::new();
 
+tokio::task_local! {
+    static COMMAND_OWNER: String;
+}
+
+pub(crate) async fn scope_owner<F: std::future::Future>(owner: String, future: F) -> F::Output {
+    COMMAND_OWNER.scope(owner, future).await
+}
+
+fn current_owner() -> Option<String> {
+    COMMAND_OWNER.try_with(Clone::clone).ok()
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum CommandState {
     Running,
@@ -163,6 +175,7 @@ pub(crate) struct BackgroundCommand {
     pub(crate) command: String,
     pub(crate) started_at: DateTime<Utc>,
     pub(crate) terminal: bool,
+    owner: Option<String>,
     status: watch::Sender<Status>,
     stop_requested: AtomicBool,
     input: Mutex<Option<Box<dyn Write + Send>>>,
@@ -277,6 +290,7 @@ pub(crate) fn start(
         command: command_line.to_string(),
         started_at: Utc::now(),
         terminal: spawned.terminal,
+        owner: current_owner(),
         status,
         stop_requested: AtomicBool::new(false),
         input: Mutex::new(spawned.input),
@@ -430,6 +444,20 @@ pub(crate) fn find(id: &str) -> Option<Arc<BackgroundCommand>> {
         .iter()
         .find(|command| command.id == id.trim())
         .cloned()
+}
+
+pub(crate) fn list_owned() -> Vec<Arc<BackgroundCommand>> {
+    let owner = current_owner();
+    commands()
+        .iter()
+        .filter(|command| command.owner == owner)
+        .cloned()
+        .collect()
+}
+
+pub(crate) fn find_owned(id: &str) -> Option<Arc<BackgroundCommand>> {
+    let owner = current_owner();
+    find(id).filter(|command| command.owner == owner)
 }
 
 pub(crate) async fn read_new(command: &BackgroundCommand, wait: Duration) -> NewOutput {
@@ -629,6 +657,7 @@ mod input_tests {
             command: "controlled interactive input".into(),
             started_at: Utc::now(),
             terminal: true,
+            owner: None,
             status,
             stop_requested: AtomicBool::new(false),
             input: Mutex::new(Some(writer)),
@@ -721,5 +750,62 @@ mod input_tests {
             assert!(prepare_input(command.clone(), "retry\n").await.is_err());
             assert!(lock(&command.input_state).uncertain);
         }
+    }
+
+    fn registered(id: &str, owner: Option<&str>) -> Arc<BackgroundCommand> {
+        let (status, _) = watch::channel(Status {
+            state: CommandState::Running,
+            open_outputs: 0,
+        });
+        let command = Arc::new(BackgroundCommand {
+            id: id.into(),
+            command: format!("owned by {owner:?}"),
+            started_at: Utc::now(),
+            terminal: false,
+            owner: owner.map(str::to_string),
+            status,
+            stop_requested: AtomicBool::new(false),
+            input: Mutex::new(None),
+            input_transaction: Arc::new(tokio::sync::Mutex::new(())),
+            input_state: Mutex::new(InputState::default()),
+            output: Mutex::new(OutputLog::default()),
+            tree: Mutex::new(None),
+            scratch: Mutex::new(None),
+        });
+        commands().push(Arc::clone(&command));
+        command
+    }
+
+    #[tokio::test]
+    async fn a_session_lists_reads_and_stops_only_the_commands_it_started() {
+        let first = registered("owner-test-a", Some("owner-test-thread-a"));
+        let second = registered("owner-test-b", Some("owner-test-thread-b"));
+        first.record(b"unread output of thread a\n");
+
+        let seen_by_b = scope_owner("owner-test-thread-b".into(), async {
+            (
+                list_owned()
+                    .iter()
+                    .map(|command| command.id.clone())
+                    .collect::<Vec<_>>(),
+                find_owned("owner-test-a").is_some(),
+                find_owned("owner-test-b").is_some(),
+            )
+        })
+        .await;
+        assert_eq!(seen_by_b.0, vec!["owner-test-b".to_string()]);
+        assert!(!seen_by_b.1, "thread b resolved thread a's command");
+        assert!(seen_by_b.2);
+        assert!(find_owned("owner-test-a").is_none());
+
+        let read_by_a = scope_owner("owner-test-thread-a".into(), async {
+            let command = find_owned("owner-test-a").expect("thread a owns its command");
+            read_new(&command, Duration::ZERO).await
+        })
+        .await;
+        assert_eq!(read_by_a.text, "unread output of thread a\n");
+
+        commands()
+            .retain(|command| !Arc::ptr_eq(command, &first) && !Arc::ptr_eq(command, &second));
     }
 }

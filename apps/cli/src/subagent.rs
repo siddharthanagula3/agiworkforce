@@ -151,6 +151,10 @@ pub fn format_task_detail(
             }
             lines.push(String::new());
             lines.push(result.output.trim().to_string());
+            if let Some(line) = result.incomplete_line() {
+                lines.push(String::new());
+                lines.push(line);
+            }
             if !result.files_modified.is_empty() {
                 lines.push(String::new());
                 lines.push(format!(
@@ -241,6 +245,47 @@ pub struct SubagentResult {
     pub usage: SubagentUsage,
     #[serde(default)]
     pub transcript: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub incomplete: Option<String>,
+}
+
+impl SubagentResult {
+    fn from_turn(
+        id: String,
+        model: &str,
+        turn: crate::agent::TurnResult,
+        transcript: Vec<String>,
+    ) -> Self {
+        Self {
+            id,
+            files_modified: extract_modified_files(&turn.response),
+            usage: SubagentUsage::from_turn(model, &turn),
+            incomplete: turn.incomplete.map(|cause| cause.notice()),
+            output: turn.response,
+            transcript,
+        }
+    }
+
+    pub(crate) fn incomplete_line(&self) -> Option<String> {
+        self.incomplete
+            .as_ref()
+            .map(|notice| format!("Incomplete answer: {notice}"))
+    }
+
+    pub(crate) fn tool_output(&self) -> String {
+        let mut output = format!("Child task: {}\n\n{}", self.id, self.output);
+        if let Some(line) = self.incomplete_line() {
+            output.push_str("\n\n");
+            output.push_str(&line);
+        }
+        if !self.files_modified.is_empty() {
+            output.push_str("\n\nFiles modified:\n");
+            for file in &self.files_modified {
+                output.push_str(&format!("  - {file}\n"));
+            }
+        }
+        output
+    }
 }
 
 const TRANSCRIPT_LINE_CHARS: usize = 400;
@@ -659,16 +704,12 @@ impl SubagentManager {
 
                     match outcome {
                         Ok((model, turn, transcript)) => {
-                            let files = extract_modified_files(&turn.response);
-                            let usage = SubagentUsage::from_turn(&model, &turn);
-
-                            let subagent_result = SubagentResult {
-                                id: task_id.clone(),
-                                output: turn.response,
-                                files_modified: files,
-                                usage,
+                            let subagent_result = SubagentResult::from_turn(
+                                task_id.clone(),
+                                &model,
+                                turn,
                                 transcript,
-                            };
+                            );
 
                             audit(
                                 &SubagentStatus::Completed,
@@ -1842,5 +1883,53 @@ mod tests {
         session.disallowed_tools.push("task".to_string());
         let reason = workflow_blocker(&session).expect("blocked");
         assert!(reason.contains("task tool"), "{reason}");
+    }
+
+    #[test]
+    fn a_child_answer_cut_at_the_output_limit_reaches_the_parent_with_its_notice() {
+        let notice = crate::errors::IncompleteTurnCause::OutputLimitReached.notice();
+        let turn = |incomplete| crate::agent::TurnResult {
+            response: "partial investigation".to_string(),
+            input_tokens: 10,
+            output_tokens: 20,
+            cache_read_tokens: 0,
+            cache_creation_tokens: 0,
+            cost_usd: 0.0,
+            via_subscription: false,
+            incomplete,
+            managed_request_ids: Vec::new(),
+            sources: Vec::new(),
+        };
+        let result = SubagentResult::from_turn(
+            "child-1".to_string(),
+            "fixture-model",
+            turn(Some(crate::errors::IncompleteTurnCause::OutputLimitReached)),
+            Vec::new(),
+        );
+        assert_eq!(result.output, "partial investigation");
+        assert_eq!(result.usage.output_tokens, 20);
+        let parent = result.tool_output();
+        assert!(parent.contains("partial investigation"), "{parent}");
+        assert!(parent.contains(&notice), "{parent}");
+        let detail = format_task_detail(
+            "child-1",
+            "investigate",
+            &SubagentStatus::Completed,
+            Some(&result),
+        );
+        assert!(detail.contains(&notice), "{detail}");
+
+        let complete = SubagentResult::from_turn(
+            "child-2".to_string(),
+            "fixture-model",
+            turn(None),
+            Vec::new(),
+        );
+        assert!(!complete.tool_output().contains("Incomplete answer"));
+        let stored: SubagentResult = serde_json::from_str(
+            r#"{"id":"old","output":"done","files_modified":[],"usage":{"model":"","input_tokens":0,"output_tokens":0,"cache_read_tokens":0,"cache_creation_tokens":0,"cost_usd":0.0,"via_subscription":false}}"#,
+        )
+        .expect("a result saved before the notice existed");
+        assert_eq!(stored.incomplete, None);
     }
 }

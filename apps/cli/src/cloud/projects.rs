@@ -90,6 +90,8 @@ pub struct ProjectCache {
     pub scope: Option<String>,
     #[serde(default)]
     pub projects: Vec<CachedProject>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub synced_through: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -126,6 +128,11 @@ impl ProjectCache {
         }
         self.projects
             .sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+    }
+
+    pub fn adopt(&mut self, response: &ProjectsPullResponse) {
+        self.apply(&response.projects);
+        self.synced_through = Some(response.cursor.clone());
     }
 
     pub fn find(&self, id_or_name: &str) -> Option<&CachedProject> {
@@ -165,7 +172,6 @@ pub fn apply_push_response(response: &ProjectsPushResponse, state: &mut SyncStat
             state.projects.record(&conflict.id, &current.server_version);
         }
     }
-    state.projects.advance(&response.cursor);
 }
 
 pub fn apply_pull_response(response: &ProjectsPullResponse, state: &mut SyncState) {
@@ -212,6 +218,7 @@ pub fn reset_scope(scope: &str, cache: &mut ProjectCache, state: &mut SyncState)
     *cache = ProjectCache {
         scope: Some(scope.to_string()),
         projects: Vec::new(),
+        synced_through: None,
     };
     state.projects = SyncSection::default();
     state.projects_scope = Some(scope.to_string());
@@ -353,7 +360,46 @@ mod tests {
         };
         apply_push_response(&response, &mut state);
         assert_eq!(state.projects.base_version("p1"), "44");
-        assert_eq!(state.projects.cursor, "44");
+        assert_eq!(state.projects.cursor, super::super::state::INITIAL_CURSOR);
+    }
+
+    #[test]
+    fn creating_a_project_does_not_skip_deltas_this_device_has_not_pulled() {
+        let mut state = SyncState::default();
+        state.projects.advance("10");
+        let created = new_project("Launch", None);
+        let response = ProjectsPushResponse {
+            applied: vec![AppliedRow {
+                id: created.id.clone(),
+                server_version: "12".to_string(),
+            }],
+            conflicts: Vec::new(),
+            cursor: "12".to_string(),
+        };
+        apply_push_response(&response, &mut state);
+        assert_eq!(state.projects.base_version(&created.id), "12");
+        assert_eq!(state.projects.cursor, "10");
+
+        let mut cache = ProjectCache {
+            synced_through: Some("10".to_string()),
+            ..ProjectCache::default()
+        };
+        let since =
+            super::super::state::pull_frontier(&state.projects, cache.synced_through.as_deref());
+        assert_eq!(since, "10");
+        let renamed_elsewhere = pull(
+            None,
+            vec![
+                delta("p-other", "Renamed elsewhere", "11", false),
+                delta(&created.id, "Launch", "12", false),
+            ],
+            "12",
+        );
+        cache.adopt(&renamed_elsewhere);
+        apply_pull_response(&renamed_elsewhere, &mut state);
+        assert!(cache.find("p-other").is_some());
+        assert_eq!(cache.synced_through.as_deref(), Some("12"));
+        assert_eq!(state.projects.cursor, "12");
     }
 
     #[test]

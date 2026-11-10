@@ -615,7 +615,7 @@ async fn execute_tool_with_scoped_permissions(
             call.args.get("input").filter(|input| !input.is_empty()),
             call.args
                 .get("id")
-                .and_then(|id| crate::terminals::find(id.trim())),
+                .and_then(|id| crate::terminals::find_owned(id.trim())),
         ) {
             (Some(input), Some(command))
                 if command.state() == crate::terminals::CommandState::Running =>
@@ -3586,6 +3586,82 @@ decision = "ask"
             }
         }
         assert!(failures.is_empty(), "{failures:?}");
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn another_session_cannot_list_read_or_stop_a_background_command() {
+        let background = crate::terminals::scope_owner("tool-owner-thread-a".into(), async {
+            crate::terminals::start("sleep 30", |_| {
+                let mut command = std::process::Command::new("/bin/sh");
+                command.args(["-c", "sleep 30"]);
+                Ok(crate::terminals::PreparedCommand {
+                    command,
+                    scratch: None,
+                })
+            })
+        })
+        .await
+        .unwrap();
+        let opts = ToolExecOptions {
+            additional_workspace_roots: Vec::new(),
+            require_confirmation: false,
+            auto_approve_safe: true,
+            auto_approve_edits: true,
+            quiet: true,
+            approval_callback: None,
+            user_input_callback: None,
+            privacy_mode: crate::agent::PrivacyMode::Byok,
+            workspace_root: None,
+            tool_search_catalog: None,
+        };
+        let permissions = crate::permissions::PermissionStore::default();
+        let call = |name: &str, args: Vec<(&str, String)>| ToolCall {
+            name: name.into(),
+            args: args
+                .into_iter()
+                .map(|(key, value)| (key.to_string(), value))
+                .collect(),
+        };
+        let (listing, read, stop) =
+            crate::terminals::scope_owner("tool-owner-thread-b".into(), async {
+                let listing = execute_tool_with_opts_and_permissions(
+                    &call("command_output", Vec::new()),
+                    &opts,
+                    &permissions,
+                )
+                .await
+                .unwrap();
+                let read = execute_tool_with_opts_and_permissions(
+                    &call(
+                        "command_output",
+                        vec![("id", background.id.clone()), ("wait_seconds", "0".into())],
+                    ),
+                    &opts,
+                    &permissions,
+                )
+                .await
+                .unwrap();
+                let stop = execute_tool_with_opts_and_permissions(
+                    &call("command_stop", vec![("id", background.id.clone())]),
+                    &opts,
+                    &permissions,
+                )
+                .await
+                .unwrap();
+                (listing, read, stop)
+            })
+            .await;
+        let still_running = background.state() == crate::terminals::CommandState::Running;
+        crate::terminals::stop(&background).await;
+        assert!(
+            !listing.output.contains(&background.id),
+            "{}",
+            listing.output
+        );
+        assert!(!read.success, "{}", read.output);
+        assert!(!stop.success, "{}", stop.output);
+        assert!(still_running, "another session stopped the command");
     }
 
     #[tokio::test]
