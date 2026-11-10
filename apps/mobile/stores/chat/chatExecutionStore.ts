@@ -197,6 +197,7 @@ import {
   unsentAttachmentMessage,
   uploadWithRetry,
 } from '@/src/features/chat/upload/uploadAttachment';
+import { isConversationTemporary } from '@/src/features/chat/upload/uploadContext';
 import { speedFirstSlots } from '@agiworkforce/routing';
 import { isWebSearchAvailable } from '@agiworkforce/search';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
@@ -376,6 +377,7 @@ interface PendingApprovalTurn {
   resolving: boolean;
   deviceResults?: Map<string, PhoneStepOutcome>;
   deviceStarted?: Set<string>;
+  resultsUndelivered?: boolean;
   inputAnswers?: ManagedCloudAgentRunInputAnswer[];
   pausedInput?: PendingToolInput;
 }
@@ -593,7 +595,9 @@ async function settlePhoneDeviceSteps(
   assistantMessageId: string,
 ): Promise<void> {
   const turn = pendingApprovalTurns.get(assistantMessageId);
-  if (!turn?.deviceResults || !turn.deviceStarted || turn.resolving) return;
+  if (!turn?.deviceResults || !turn.deviceStarted || turn.resolving || turn.resultsUndelivered) {
+    return;
+  }
   for (const call of turn.calls) {
     if (!call.deviceStep || turn.deviceStarted.has(call.toolCallId)) continue;
     const decision = turn.decisions.get(call.toolCallId);
@@ -636,8 +640,18 @@ export function isApprovalTurnLive(assistantMessageId: string): boolean {
           call.requiresApproval === true && typeof call.toolCallId === 'string',
       )
       .map((call) => ({ toolCallId: call.toolCallId, name: call.name }));
-    if (!runReference.success || calls.length === 0) return false;
     const phoneSteps = storedPhoneSteps(message.metadata);
+    const allPhoneStepsFinished =
+      phoneSteps.size > 0 &&
+      message.isStreaming !== true &&
+      [...phoneSteps.keys()].every((toolCallId) =>
+        (message.toolCalls ?? []).some(
+          (call) =>
+            call.toolCallId === toolCallId &&
+            (call.status === 'succeeded' || call.status === 'failed'),
+        ),
+      );
+    if (!runReference.success || (calls.length === 0 && !allPhoneStepsFinished)) return false;
     if (calls.some((call) => isPhoneStepTool(call.name) && !phoneSteps.has(call.toolCallId))) {
       return false;
     }
@@ -673,6 +687,7 @@ export function isApprovalTurnLive(assistantMessageId: string): boolean {
           isError: call.status === 'failed',
         });
       }
+      turn.resultsUndelivered = turn.deviceResults?.size === turn.calls.length;
       pendingApprovalTurns.set(assistantMessageId, turn);
       return true;
     }
@@ -687,6 +702,12 @@ export function isApprovalTurnLive(assistantMessageId: string): boolean {
     return true;
   }
   return false;
+}
+
+function undeliveredDeviceTurn(assistantMessageId: string): PendingApprovalTurn | null {
+  if (!isApprovalTurnLive(assistantMessageId)) return null;
+  const turn = pendingApprovalTurns.get(assistantMessageId);
+  return turn?.deviceResults && turn.resultsUndelivered && !turn.resolving ? turn : null;
 }
 
 export function __resetPendingApprovalTurnsForTests(): void {
@@ -1387,9 +1408,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     let uploadedAttachments: MessageAttachment[] | undefined;
     const msgStore = getConversationMessageStore(conversationId);
     const conversation = msgStore.getState().conversations.find((c) => c.id === conversationId);
-    const temporaryConversation = conversation
-      ? conversation.temporary === true
-      : useSettingsStore.getState().isTemporaryChat;
+    const temporaryConversation = isConversationTemporary(conversation);
     const cloudUnlocked = useWaitlistStore.getState().cloudUnlocked;
     const remoteDisabledReason = getRemoteChatDisabledReason(undefined, { cloudUnlocked });
     const requestedModel = model;
@@ -3352,6 +3371,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     const approvalAccountEpoch = captureCloudAccountEpoch();
     if (approvalAccountEpoch === null) {
       turn.resolving = false;
+      if (turn.deviceResults) turn.resultsUndelivered = true;
       const pausedInput = turn.pausedInput;
       if (pausedInput) {
         pendingApprovalTurns.delete(assistantMessageId);
@@ -3629,7 +3649,11 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             const inputTurn = turn.inputAnswers !== undefined;
             const terminal = !inputTurn && isTerminalResumeError(error);
             const inactiveReason = inputTurn ? inactiveInputReason(error) : null;
-            if (turn.deviceResults || terminal || inputTurn) {
+            const retainDeviceResults =
+              turn.deviceResults !== undefined && !terminal && !controller.signal.aborted;
+            if (retainDeviceResults) {
+              turn.resultsUndelivered = true;
+            } else if (turn.deviceResults || terminal || inputTurn) {
               pendingApprovalTurns.delete(assistantMessageId);
             }
             const checkpointIds = new Set(
@@ -3691,7 +3715,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       const inputTurn = turn.inputAnswers !== undefined;
       const terminal = !inputTurn && isTerminalResumeError(caughtErr);
       const inactiveReason = inputTurn ? inactiveInputReason(caughtErr) : null;
-      if (turn.deviceResults || terminal || inputTurn) {
+      if (turn.deviceResults !== undefined && !terminal && !controller.signal.aborted) {
+        turn.resultsUndelivered = true;
+      } else if (turn.deviceResults || terminal || inputTurn) {
         pendingApprovalTurns.delete(assistantMessageId);
       }
       if (!controller.signal.aborted) {
@@ -3931,6 +3957,18 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       const next = msgs[msgIndex + 1];
       assistantMsg = next && next.role === 'assistant' ? next : undefined;
     } else {
+      return;
+    }
+    const undeliveredTurn = assistantMsg ? undeliveredDeviceTurn(assistantMsg.id) : null;
+    if (assistantMsg && undeliveredTurn) {
+      undeliveredTurn.resultsUndelivered = false;
+      undeliveredTurn.resolving = true;
+      get()
+        .continuePausedCloudTurn(conversationId, assistantMsg.id)
+        .catch((err: unknown) => {
+          console.warn('[chatExecutionStore] Device result delivery failed:', err);
+          set({ error: 'Retry failed. Please try again.' });
+        });
       return;
     }
     if (!userMsg || userMsg.role !== 'user') return;

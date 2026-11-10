@@ -104,8 +104,25 @@ let capturedAttachmentPreviewProps:
         sendFailed?: boolean;
       }>;
       onExpandPastedText?: (id: string) => void;
+      onRetryUpload?: (id: string) => void;
     }
   | undefined;
+
+jest.mock('../src/features/auth/services/cloudAccountSession', () => ({
+  ...jest.requireActual('../src/features/auth/services/cloudAccountSession'),
+  captureCloudAccountEpoch: () => ({ ownerId: 'account-a', epoch: 1 }),
+  isCloudAccountEpochCurrent: () => true,
+}));
+
+const mockUploadWithRetry = jest.fn();
+jest.mock('../src/features/chat/upload/uploadAttachment', () => ({
+  uploadWithRetry: (...args: unknown[]) => mockUploadWithRetry(...args),
+}));
+
+const mockResolveUploadContext = jest.fn();
+jest.mock('../src/features/chat/upload/uploadContext', () => ({
+  resolveUploadContext: (...args: unknown[]) => mockResolveUploadContext(...args),
+}));
 
 jest.mock('../src/features/chat/components/AttachmentPreview', () => {
   const React = require('react');
@@ -119,6 +136,7 @@ jest.mock('../src/features/chat/components/AttachmentPreview', () => {
         sendFailed?: boolean;
       }>;
       onExpandPastedText?: (id: string) => void;
+      onRetryUpload?: (id: string) => void;
     }) => {
       capturedAttachmentPreviewProps = props;
       return <View testID="attachment-preview" />;
@@ -539,6 +557,39 @@ describe('ChatInput', () => {
         expect(sentAttachments[0]).not.toHaveProperty('sendFailed');
       },
     );
+  });
+
+  describe('attachment Retry context', () => {
+    it('uploads a retried file under the receiving conversation, not the new-chat preference', async () => {
+      const context = { conversationId: 'conversation-1', temporary: false };
+      mockResolveUploadContext.mockReturnValue(context);
+      mockUploadWithRetry.mockResolvedValue(null);
+      const attachRef = React.createRef<ChatInputHandle>();
+      renderInput({ attachRef, conversationId: 'conversation-1' });
+
+      await act(async () => {
+        attachRef.current?.addAttachments([
+          {
+            id: 'a-1',
+            uri: 'file:///doc.pdf',
+            mimeType: 'application/pdf',
+            fileName: 'doc.pdf',
+            fileSize: 1024,
+          },
+        ]);
+      });
+      await act(async () => {
+        capturedAttachmentPreviewProps?.onRetryUpload?.('a-1');
+      });
+
+      expect(mockResolveUploadContext).toHaveBeenCalledWith('conversation-1');
+      expect(mockUploadWithRetry).toHaveBeenCalledWith(
+        { uri: 'file:///doc.pdf', name: 'doc.pdf', type: 'application/pdf' },
+        'doc.pdf',
+        'a-1',
+        context,
+      );
+    });
   });
 
   describe('[+] button', () => {

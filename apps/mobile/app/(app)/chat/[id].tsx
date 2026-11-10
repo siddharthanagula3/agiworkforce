@@ -2053,6 +2053,7 @@ export default function ChatScreen() {
             exhaustedUsageRecovery={usageLimit.exhaustedRecovery}
             initialText={initialPrompt || undefined}
             draftKey={id}
+            conversationId={id}
             draftProvenance={
               conversationExecutionMode === 'local'
                 ? { scope: 'local' }

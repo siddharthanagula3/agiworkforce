@@ -1,5 +1,6 @@
 import {
   Document,
+  ExternalHyperlink,
   HeadingLevel,
   LevelFormat,
   Packer,
@@ -9,7 +10,9 @@ import {
   TableRow,
   TextRun,
   WidthType,
+  type ParagraphChild,
 } from 'docx';
+import { isSafeExportLink } from '@/services/exportMarkdownHtml';
 
 const HEADINGS = [
   HeadingLevel.HEADING_1,
@@ -25,7 +28,10 @@ const CODE_FONT = 'Courier New';
 const INLINE =
   /(\*\*[^*]+\*\*|__[^_]+__|\*[^*\s][^*]*\*|_[^_\s][^_]*_|`[^`]+`|!?\[[^\]]*\]\([^)]*\))/g;
 
-function runs(text: string): TextRun[] {
+const INLINE_LINK = /^\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^)]*")?\)$/;
+const LINK_COLOR = '0563C1';
+
+export function runs(text: string): ParagraphChild[] {
   return text
     .split(INLINE)
     .filter((part) => part.length > 0)
@@ -33,6 +39,13 @@ function runs(text: string): TextRun[] {
       if (/^(\*\*|__).+(\*\*|__)$/.test(part))
         return new TextRun({ text: part.slice(2, -2), bold: true });
       if (/^`.+`$/.test(part)) return new TextRun({ text: part.slice(1, -1), font: CODE_FONT });
+      const link = INLINE_LINK.exec(part);
+      if (link && isSafeExportLink(link[2]!)) {
+        return new ExternalHyperlink({
+          link: link[2]!,
+          children: [new TextRun({ text: link[1] || link[2]!, color: LINK_COLOR, underline: {} })],
+        });
+      }
       if (/^!?\[/.test(part))
         return new TextRun({ text: part.replace(/^!?\[([^\]]*)\].*$/, '$1') });
       if (/^[*_].+[*_]$/.test(part)) return new TextRun({ text: part.slice(1, -1), italics: true });

@@ -18,6 +18,7 @@ interface ComposerProps {
   isThreadActive?: boolean;
   initialText?: string;
   draftKey?: string;
+  conversationId?: string;
   draftProvenance?: DraftProvenance;
   sendPreview?: SendPreviewInput;
   attachmentPrivacyShortLabel?: string;
@@ -41,6 +42,7 @@ export function Composer({
   isThreadActive,
   initialText,
   draftKey,
+  conversationId,
   draftProvenance,
   sendPreview,
   attachmentPrivacyShortLabel,
@@ -64,6 +66,7 @@ export function Composer({
       isThreadActive={isThreadActive}
       initialText={initialText}
       draftKey={draftKey}
+      conversationId={conversationId}
       draftProvenance={draftProvenance}
       sendPreview={sendPreview}
       attachmentPrivacyShortLabel={attachmentPrivacyShortLabel}

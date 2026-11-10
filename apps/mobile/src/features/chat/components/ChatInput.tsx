@@ -48,6 +48,7 @@ import { trailingMention, withoutTrailingMention } from '@/src/features/chat/uti
 import { MediaModeChip } from './MediaModeChip';
 import { useChatViewStore } from '@/stores/chat/chatViewStore';
 import { uploadWithRetry } from '@/src/features/chat/upload/uploadAttachment';
+import { resolveUploadContext } from '@/src/features/chat/upload/uploadContext';
 import { useUploadLifecycleStore } from '@/src/features/chat/upload/uploadLifecycle';
 import { useKeyboardVisible } from '@/src/features/chat/chrome/keyboardSafeComposer';
 import { exitMediaMode, mediaModelIdForMode } from '@/src/features/chat/actions/mediaMode';
@@ -147,6 +148,7 @@ interface ChatInputProps {
   isThreadActive?: boolean;
   initialText?: string;
   draftKey?: string;
+  conversationId?: string;
   draftProvenance?: DraftProvenance;
   selectedSkillName?: string;
   onClearSelectedSkill?: () => void;
@@ -171,6 +173,7 @@ export function ChatInput({
   isThreadActive = false,
   initialText,
   draftKey,
+  conversationId,
   draftProvenance,
   selectedSkillName,
   onClearSelectedSkill,
@@ -631,7 +634,7 @@ ${current}`
         { uri: target.uri, name: target.fileName, type: target.mimeType },
         target.fileName,
         target.id,
-        { temporary: useSettingsStore.getState().isTemporaryChat },
+        resolveUploadContext(conversationId),
       )
         .then((result) => {
           if (!result || !isCloudAccountEpochCurrent(accountEpoch)) return;
@@ -658,7 +661,7 @@ ${current}`
             .settle(id, 'failed', 'Could not upload this file. Check your connection and retry.');
         });
     },
-    [attachments],
+    [attachments, conversationId],
   );
 
   const handleDictationFailure = useCallback(() => {

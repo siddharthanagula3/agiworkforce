@@ -4,6 +4,11 @@ import { KATEX_JS_URL } from '@/src/features/chat/utils/katexAssets';
 
 const ESCAPABLE_PUNCTUATION = /[!-/:-@[-`{-~]/;
 const SAFE_LINK = /^(?:https?:|mailto:)/i;
+
+export function isSafeExportLink(url: string): boolean {
+  return SAFE_LINK.test(url);
+}
+
 const HEADING = /^(#{1,6})\s+(.+?)(?:\s+#+)?\s*$/;
 const RULE = /^\s{0,3}([-*_])(?:\s*\1){2,}\s*$/;
 const LIST_ITEM = /^(\s*)(?:[-*+]|(\d{1,9})[.)])\s+(.*)$/;
