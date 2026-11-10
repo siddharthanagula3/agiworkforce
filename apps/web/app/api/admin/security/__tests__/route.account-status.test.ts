@@ -11,7 +11,13 @@ const {
   mockLogSecurityEvent,
   mockBanUser,
   mockUnbanUser,
+  mockRecordAction,
+  mockSettleStep,
+  mockQueueRetry,
 } = vi.hoisted(() => ({
+  mockRecordAction: vi.fn(),
+  mockSettleStep: vi.fn(),
+  mockQueueRetry: vi.fn(),
   mockUnbanUser: vi.fn(),
   mockAssertAccountActive: vi.fn(),
   mockGetClerkAuthUser: vi.fn(),
@@ -40,6 +46,11 @@ vi.mock('@/lib/server/neon-db', () => ({
     query: vi.fn(async () => []),
     execute: (...args: unknown[]) => mockExecute(...args),
   })),
+}));
+vi.mock('@/lib/server/admin-account-actions', () => ({
+  recordAdminAccountAction: (...args: unknown[]) => mockRecordAction(...args),
+  settleAccountProviderStep: (...args: unknown[]) => mockSettleStep(...args),
+  queueAccountProviderStepRetry: (...args: unknown[]) => mockQueueRetry(...args),
 }));
 vi.mock('@/lib/services/security-monitoring-service', () => ({
   SecurityMonitoringService: {
@@ -72,6 +83,7 @@ import { PLATFORM_ADMIN_ENV_VAR } from '@/features/admin/lib/platform-admin-acce
 
 const ADMIN_ID = 'user_admin_1';
 const TARGET_ID = 'user_target_2';
+const STEP = { actionId: 'action-1', userId: TARGET_ID };
 
 function adminRequest(url: string, method: 'GET' | 'POST', body?: unknown) {
   return new Request(url, {
@@ -97,6 +109,9 @@ beforeEach(() => {
   mockLogSecurityEvent.mockResolvedValue(undefined);
   mockBanUser.mockResolvedValue(undefined);
   mockUnbanUser.mockResolvedValue(undefined);
+  mockRecordAction.mockResolvedValue(STEP);
+  mockSettleStep.mockResolvedValue(undefined);
+  mockQueueRetry.mockResolvedValue(true);
 });
 
 afterEach(() => {
@@ -214,8 +229,68 @@ describe('POST /api/admin/security reactivation reports the provider step', () =
       success: true,
       complete: true,
       provider_status: 'completed',
+      retry_queued: false,
+      action_id: 'action-1',
       message: `User ${TARGET_ID} has been reactivated`,
     });
+    expect(mockSettleStep).toHaveBeenCalledWith(expect.anything(), STEP, { ok: true });
+    expect(mockQueueRetry).not.toHaveBeenCalled();
+  });
+
+  it('records the action and its provider step before calling the provider', async () => {
+    await reactivate();
+
+    expect(mockRecordAction).toHaveBeenCalledWith(expect.anything(), {
+      userId: TARGET_ID,
+      action: 'reactivate-user',
+      accountStatus: 'active',
+      providerSuspended: false,
+      requestedByUserId: ADMIN_ID,
+    });
+    expect(mockRecordAction.mock.invocationCallOrder[0]).toBeLessThan(
+      mockUnbanUser.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it('stores the failed provider step and queues its retry', async () => {
+    const failure = new Error('provider unavailable');
+    mockUnbanUser.mockRejectedValue(failure);
+
+    const body = (await (await reactivate()).json()) as Record<string, unknown>;
+
+    expect(mockSettleStep).toHaveBeenCalledWith(expect.anything(), STEP, {
+      ok: false,
+      error: failure,
+    });
+    expect(mockQueueRetry).toHaveBeenCalledWith(expect.anything(), STEP);
+    expect(body).toMatchObject({ complete: false, retry_queued: true, action_id: 'action-1' });
+    expect(String(body['message'])).toContain('retried automatically');
+  });
+
+  it('asks the operator to resubmit when the action could not be stored', async () => {
+    mockRecordAction.mockResolvedValue(null);
+    mockUnbanUser.mockRejectedValue(new Error('provider unavailable'));
+
+    const body = (await (await reactivate()).json()) as Record<string, unknown>;
+
+    expect(mockQueueRetry).not.toHaveBeenCalled();
+    expect(mockSettleStep).not.toHaveBeenCalled();
+    expect(body).toMatchObject({ complete: false, retry_queued: false, action_id: null });
+    expect(String(body['message'])).toContain('Submit again to retry it.');
+  });
+
+  it('still bans at the provider when the action could not be stored', async () => {
+    mockRecordAction.mockResolvedValue(null);
+
+    const response = await POST(
+      adminRequest('https://app.test/api/admin/security?action=ban-user', 'POST', {
+        userId: TARGET_ID,
+        reason: 'abuse',
+      }),
+    );
+
+    expect(mockBanUser).toHaveBeenCalledWith(TARGET_ID);
+    expect(await response.json()).toMatchObject({ complete: true, provider_status: 'completed' });
   });
 });
 

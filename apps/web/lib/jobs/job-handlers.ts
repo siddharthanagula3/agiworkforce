@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { driveImageGenerationJob } from '@/app/api/media/image/lib/image-job-drain';
+import { retryAccountProviderStep } from '@/lib/server/admin-account-actions';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import {
   buildDataExportArchiveVolume,
@@ -283,6 +284,7 @@ async function retryRelayRevocation(context: JobHandlerContext): Promise<Record<
 
 export const BACKGROUND_JOB_HANDLERS: JobHandlerRegistry = {
   'webhooks.signaling-device-revoke': retryRelayRevocation,
+  'webhooks.identity-account-status': retryAccountProviderStep,
   'notifications.schedule-completed': announceScheduleCompletion,
   'email.schedule-completed': sendScheduleCompletionEmailJob,
   'webhooks.audit-stream-delivery': deliverAuditStream,

@@ -14,6 +14,11 @@ import { readJsonBody } from '@/lib/read-json-body';
 import { setCachedAccountStatus } from '@/lib/server/request-context-cache';
 import { getIdentityProvider } from '@/lib/server/identity';
 import {
+  queueAccountProviderStepRetry,
+  recordAdminAccountAction,
+  settleAccountProviderStep,
+} from '@/lib/server/admin-account-actions';
+import {
   liftTenantLockdown,
   listLockedDownTenants,
   lockdownTenant,
@@ -283,36 +288,58 @@ async function changeAccountStatus(
   }
   if (updated === 0) throw createError.notFound('No account has that user id').asUserSafe();
 
+  const step = await recordAdminAccountAction(db, {
+    userId: targetUserId,
+    action,
+    accountStatus: change.status,
+    providerSuspended: change.providerSuspended,
+    requestedByUserId: adminUserId,
+  });
+  const actionId = step?.actionId ?? null;
+
   let providerStatus: 'completed' | 'failed' | 'not_required' = 'not_required';
   if (change.providerSuspended !== null) {
     try {
       await getIdentityProvider().setUserSuspended(targetUserId, change.providerSuspended);
       providerStatus = 'completed';
+      if (step) await settleAccountProviderStep(db, step, { ok: true });
     } catch (providerError) {
       providerStatus = 'failed';
       logger.warn({ error: providerError, targetUserId }, change.providerFailure);
+      if (step) await settleAccountProviderStep(db, step, { ok: false, error: providerError });
     }
   }
 
   if (providerStatus === 'failed') {
+    const retryQueued = step ? await queueAccountProviderStepRetry(db, step) : false;
     await logSecurityEvent({
       userId: adminUserId,
       eventType: 'admin_action',
       severity: change.severity,
       endpoint: `/api/admin/security?action=${action}`,
-      details: { action, targetUserId, accountStatus: change.status, providerStatus },
+      details: {
+        action,
+        targetUserId,
+        accountStatus: change.status,
+        providerStatus,
+        actionId,
+        retryQueued,
+      },
     });
     logger.warn(
-      { adminUserId, targetUserId, reason },
+      { adminUserId, targetUserId, reason, actionId, retryQueued },
       `User account ${change.outcome} locally but the identity provider step failed`,
     );
+    const retry = retryQueued ? 'It is retried automatically.' : 'Submit again to retry it.';
     return NextResponse.json({
       success: false,
       complete: false,
       provider_status: providerStatus,
+      retry_queued: retryQueued,
+      action_id: actionId,
       message: change.providerSuspended
-        ? `User ${targetUserId} is banned here, but the sign-in provider ban failed. Submit again to retry it.`
-        : `User ${targetUserId} is active here, but the sign-in provider still blocks them. Submit again to retry it.`,
+        ? `User ${targetUserId} is banned here, but the sign-in provider ban failed. ${retry}`
+        : `User ${targetUserId} is active here, but the sign-in provider still blocks them. ${retry}`,
       account_status: change.status,
     });
   }
@@ -323,6 +350,8 @@ async function changeAccountStatus(
     success: true,
     complete: true,
     provider_status: providerStatus,
+    retry_queued: false,
+    action_id: actionId,
     message: `User ${targetUserId} has been ${change.outcome}`,
     account_status: change.status,
   });

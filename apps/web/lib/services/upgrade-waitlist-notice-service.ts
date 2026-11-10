@@ -204,6 +204,7 @@ async function dueAccounts(
                   or max(waitlisted.upgrade_email_attempted_at) <= now() - make_interval(
                        mins => $2::int * power(2, max(waitlisted.upgrade_email_attempts) - 1)::int)))
       order by count(waitlisted.upgrade_notified_at) > 0,
+               max(waitlisted.upgrade_access_checked_at) nulls first,
                max(waitlisted.upgrade_email_attempted_at) nulls first,
                min(coalesce(waitlisted.joined_at, waitlisted.created_at)),
                waitlisted.user_id
@@ -217,6 +218,23 @@ async function dueAccounts(
       offset,
     ],
   );
+}
+
+async function recordStillClosed(db: DatabaseAdapter, userIds: string[]): Promise<void> {
+  if (userIds.length === 0) return;
+  try {
+    await db.execute(
+      `update public.waitlist
+          set upgrade_access_checked_at = now()
+        where user_id = any ($1::text[])`,
+      [userIds],
+    );
+  } catch (error) {
+    logger.error(
+      { error, accounts: userIds.length },
+      'Could not record which waitlisted accounts are still closed; the next run checks them first again',
+    );
+  }
 }
 
 export const UPGRADE_WAITLIST_SCAN_PAGES = 10;
@@ -238,6 +256,7 @@ export async function notifyUpgradeWaitlist(
 
   const pageSize = Math.max(1, maxNotices);
   const open: WaitlistedAccount[] = [];
+  const stillClosed: string[] = [];
   let scanned = 0;
   let unexamined = false;
   for (let offset = 0; ; offset += pageSize) {
@@ -249,6 +268,7 @@ export async function notifyUpgradeWaitlist(
       examined += 1;
       scanned += 1;
       if (await billingUpgradesOpenFor(account.user_id)) open.push(account);
+      else stillClosed.push(account.user_id);
     }
     if (examined < rows.length) {
       unexamined = true;
@@ -260,6 +280,8 @@ export async function notifyUpgradeWaitlist(
       break;
     }
   }
+
+  await recordStillClosed(db, stillClosed);
 
   summary.remaining = unexamined;
   if (scanned > 0 && open.length === 0 && !unexamined) {

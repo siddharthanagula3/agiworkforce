@@ -89,6 +89,8 @@ describe('SecurityOperationsPanel', () => {
       account_status: 'suspended',
       complete: true,
       provider_status: 'not_required',
+      retry_queued: false,
+      action_id: 'action-1',
     });
   });
 
@@ -99,6 +101,8 @@ describe('SecurityOperationsPanel', () => {
       account_status: 'active',
       complete: false,
       provider_status: 'failed',
+      retry_queued: true,
+      action_id: 'action-2',
     });
     render(<SecurityOperationsPanel />);
     await screen.findByText('authorization_failed');

@@ -499,6 +499,7 @@ describe('the registry', () => {
         'research.settle-report-cost',
         'webhooks.audit-stream-delivery',
         'webhooks.developer-delivery',
+        'webhooks.identity-account-status',
         'webhooks.signaling-device-revoke',
       ].sort(),
     );

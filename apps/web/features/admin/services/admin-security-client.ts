@@ -96,4 +96,6 @@ export interface AdminAccountActionResult {
   account_status: string;
   complete: boolean;
   provider_status: 'completed' | 'failed' | 'not_required';
+  retry_queued: boolean;
+  action_id: string | null;
 }
