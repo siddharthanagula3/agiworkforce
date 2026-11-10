@@ -121,6 +121,7 @@ describe('shared knowledge capacity keeps the admitted workspace', () => {
       write?: boolean;
       archived?: boolean;
       count?: number;
+      replacesCurrent?: boolean;
       duplicate?: boolean;
     } = {},
   ) {
@@ -157,8 +158,10 @@ describe('shared knowledge capacity keeps the admitted workspace', () => {
         expect(sql).toContain('deleted_at is null');
         expect(sql).toContain('superseded_at is null');
         if (sql.includes('count(*)')) {
-          expect(parameters).toEqual([SHARED_PROJECT]);
-          return [{ count: options.count ?? 0 }];
+          expect(parameters).toEqual([SHARED_PROJECT, metadata.fileName]);
+          return [
+            { count: options.count ?? 0, replaces_current: options.replacesCurrent ?? false },
+          ];
         }
         expect(sql).toContain('checksum_sha256 = $2');
         expect(parameters).toEqual([SHARED_PROJECT, metadata.checksumSha256]);
@@ -254,6 +257,18 @@ describe('shared knowledge capacity keeps the admitted workspace', () => {
     expect(mockPermissions).toHaveBeenCalledWith(ORG, 'member-1');
     expect(mockStorageAllowance).not.toHaveBeenCalled();
     expect(mockStorageAvailable).not.toHaveBeenCalled();
+  });
+
+  it('admits a replacement of a current file when the project is at the file limit', async () => {
+    const { scope } = capacityFixture({
+      count: MAX_PROJECT_KNOWLEDGE_FILES,
+      replacesCurrent: true,
+    });
+
+    await expect(checkProjectKnowledgeCapacity(scope, metadata)).resolves.toEqual({
+      status: 'ready',
+      planTier: 'free',
+    });
   });
 
   it('preserves a storage quota refusal after shared editor admission', async () => {

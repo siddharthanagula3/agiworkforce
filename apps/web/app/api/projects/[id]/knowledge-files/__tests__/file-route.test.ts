@@ -4,6 +4,7 @@ import { NextRequest } from 'next/server';
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   execute: vi.fn(),
+  transactionRolledBack: { current: false },
   getBoundedPrivateObject: vi.fn(),
   deletePrivateObject: vi.fn(),
   deleteObject: vi.fn(),
@@ -18,7 +19,20 @@ vi.mock('@/lib/logger', () => ({
 }));
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: async () => ({
-    db: { query: mocks.query, execute: mocks.execute },
+    db: {
+      query: mocks.query,
+      execute: mocks.execute,
+      transaction: async <T>(
+        run: (tx: { query: typeof mocks.query; execute: typeof mocks.execute }) => Promise<T>,
+      ): Promise<T> => {
+        try {
+          return await run({ query: mocks.query, execute: mocks.execute });
+        } catch (error) {
+          mocks.transactionRolledBack.current = true;
+          throw error;
+        }
+      },
+    },
     userId: 'user-1',
     organizationId: await mocks.resolveActiveOrganizationId(),
   }),
@@ -49,6 +63,7 @@ const context = {
 describe('project knowledge file bytes and deletion', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.transactionRolledBack.current = false;
     mocks.query.mockResolvedValue([
       {
         mime_type: 'text/plain',
@@ -144,15 +159,31 @@ describe('project knowledge file bytes and deletion', () => {
     expect(response.headers.get('content-disposition')).toBe('attachment; filename="notes.txt"');
   });
 
-  function noOtherRowSharesTheObject() {
-    const owned = mocks.query.getMockImplementation();
-    mocks.query.mockImplementation(async (sql: string, params: unknown[]) =>
-      sql.includes('where storage_uri = $1') ? [] : owned?.(sql, params),
+  const ORGANIZATION = '11111111-1111-4111-8111-111111111111';
+  const STORAGE_URI = 'knowledge-files/projects/project-1/notes.txt';
+
+  function deletionDatabase(options: { sharers?: boolean; held?: boolean }) {
+    const owned = { storage_uri: STORAGE_URI };
+    mocks.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('pg_advisory_xact_lock_shared')) return [];
+      if (sql.includes('where storage_uri = $1')) return options.sharers ? [{ id: 'file-2' }] : [];
+      if (sql.includes('any($1::text[])'))
+        return options.held ? [{ storage_uri: STORAGE_URI }] : [];
+      return [owned];
+    });
+  }
+
+  function deleteRequest() {
+    return DELETE(
+      new NextRequest('https://agiworkforce.com/api/projects/project-1/knowledge-files/file-1', {
+        method: 'DELETE',
+      }),
+      context,
     );
   }
 
   it('soft-deletes metadata before removing the backing object', async () => {
-    noOtherRowSharesTheObject();
+    deletionDatabase({});
     const order: string[] = [];
     mocks.execute.mockImplementation(async () => {
       order.push('metadata');
@@ -162,43 +193,60 @@ describe('project knowledge file bytes and deletion', () => {
       order.push('object');
     });
 
-    const response = await DELETE(
-      new NextRequest('https://agiworkforce.com/api/projects/project-1/knowledge-files/file-1', {
-        method: 'DELETE',
-      }),
-      context,
-    );
+    const response = await deleteRequest();
 
     expect(response.status).toBe(200);
     expect(order).toEqual(['metadata', 'object']);
+    expect(mocks.transactionRolledBack.current).toBe(false);
   });
 
-  it('restores visible metadata when backing-object deletion fails', async () => {
-    noOtherRowSharesTheObject();
+  it('rolls the metadata deletion back when backing-object deletion fails', async () => {
+    deletionDatabase({});
     mocks.deleteObject.mockRejectedValueOnce(new Error('R2 unavailable'));
 
-    const response = await DELETE(
-      new NextRequest('https://agiworkforce.com/api/projects/project-1/knowledge-files/file-1', {
-        method: 'DELETE',
-      }),
-      context,
-    );
+    const response = await deleteRequest();
 
     expect(response.status).toBe(500);
-    expect(mocks.execute).toHaveBeenCalledTimes(2);
-    expect(String(mocks.execute.mock.calls[1]?.[0])).toContain('set deleted_at = null');
+    expect(mocks.execute).toHaveBeenCalledTimes(1);
+    expect(String(mocks.execute.mock.calls[0]?.[0])).toContain('set deleted_at = now()');
+    expect(mocks.transactionRolledBack.current).toBe(true);
   });
 
   it('keeps the backing object while a duplicated project still points at it', async () => {
-    const response = await DELETE(
-      new NextRequest('https://agiworkforce.com/api/projects/project-1/knowledge-files/file-1', {
-        method: 'DELETE',
-      }),
-      context,
-    );
+    deletionDatabase({ sharers: true });
+
+    const response = await deleteRequest();
 
     expect(response.status).toBe(200);
     expect(mocks.deletePrivateObject).not.toHaveBeenCalled();
     expect(mocks.deleteObject).not.toHaveBeenCalled();
+  });
+
+  it('keeps the backing object of a file under legal hold', async () => {
+    deletionDatabase({ held: true });
+
+    const response = await deleteRequest();
+
+    expect(response.status).toBe(200);
+    expect(mocks.execute).toHaveBeenCalledTimes(1);
+    expect(mocks.deletePrivateObject).not.toHaveBeenCalled();
+    expect(mocks.deleteObject).not.toHaveBeenCalled();
+    expect(mocks.transactionRolledBack.current).toBe(false);
+  });
+
+  it('serializes a workspace deletion with legal-hold placement before touching the file', async () => {
+    mocks.resolveActiveOrganizationId.mockResolvedValue(ORGANIZATION);
+    deletionDatabase({});
+
+    const response = await deleteRequest();
+
+    expect(response.status).toBe(200);
+    const statements = mocks.query.mock.calls.map(([sql]) => String(sql));
+    const lock = statements.findIndex((sql) => sql.includes('pg_advisory_xact_lock_shared'));
+    expect(lock).toBeGreaterThan(0);
+    expect(mocks.execute.mock.invocationCallOrder[0]).toBeGreaterThan(
+      mocks.query.mock.invocationCallOrder[lock]!,
+    );
+    expect(mocks.deleteObject).toHaveBeenCalledTimes(1);
   });
 });
