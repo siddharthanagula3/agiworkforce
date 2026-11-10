@@ -201,6 +201,15 @@ export default function ContentReportQueuePanel() {
                 Reporter note: {report.userNote}
               </p>
             ) : null}
+            {report.asset ? (
+              <p className="mt-2 break-all text-xs text-muted-foreground">
+                Reported {report.asset.kind} reference, as the reporter sent it and never opened
+                here: <code className="font-mono">{report.asset.reference}</code>
+                {report.asset.inlineHeaderOnly
+                  ? ' (inline data: only its header was sent, the bytes stayed on the reporter’s device)'
+                  : null}
+              </p>
+            ) : null}
             <p className="mt-2 font-mono text-xs text-muted-foreground">
               conversation {report.conversationId} · message {report.messageId} · reporter{' '}
               {report.userId ?? 'anonymous'}

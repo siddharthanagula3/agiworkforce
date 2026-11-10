@@ -112,6 +112,16 @@ export default function CopyrightNoticeQueuePanel() {
     void load();
   }, [load]);
 
+  async function recordDisposition(
+    notice: CopyrightNoticeRecord,
+    status: Exclude<CopyrightNoticeStatus, 'received'>,
+    note: string,
+  ) {
+    await postJson(NOTICES_ENDPOINT, { reference: notice.reference, status, note });
+    setMessage(`${notice.reference} is marked ${STATUS_LABEL[status].toLowerCase()}.`);
+    await load();
+  }
+
   async function record(
     notice: CopyrightNoticeRecord,
     status: Exclude<CopyrightNoticeStatus, 'received'>,
@@ -121,14 +131,33 @@ export default function CopyrightNoticeQueuePanel() {
     setMessage(null);
     try {
       if (status === 'actioned') {
-        await postJson(TAKEDOWN_ENDPOINT, {
-          token: notice.targetToken,
-          reason: `${notice.reference}: ${note}`,
-        });
+        try {
+          await postJson(TAKEDOWN_ENDPOINT, {
+            token: notice.targetToken,
+            reason: `${notice.reference}: ${note}`,
+          });
+        } catch (error) {
+          if ((error as { status?: number }).status !== 404) throw error;
+          confirm({
+            title: `Record ${notice.reference} as unpublished?`,
+            description:
+              'Nothing is published at this link any more, so there is nothing left to delete. This only records the notice as unpublished with your note; it does not remove anything. Use it when the copy is already gone because an earlier unpublish went through or its owner removed it.',
+            confirmLabel: 'Record as unpublished',
+            onConfirm: async () => {
+              setPendingReference(notice.reference);
+              try {
+                await recordDisposition(notice, status, note);
+              } catch (recordError) {
+                setMessage(toUserMessage(recordError, `${notice.reference} could not be updated.`));
+              } finally {
+                setPendingReference(null);
+              }
+            },
+          });
+          return;
+        }
       }
-      await postJson(NOTICES_ENDPOINT, { reference: notice.reference, status, note });
-      setMessage(`${notice.reference} is marked ${STATUS_LABEL[status].toLowerCase()}.`);
-      await load();
+      await recordDisposition(notice, status, note);
     } catch (error) {
       setMessage(toUserMessage(error, `${notice.reference} could not be updated.`));
     } finally {

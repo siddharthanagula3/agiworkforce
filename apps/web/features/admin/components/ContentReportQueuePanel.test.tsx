@@ -63,6 +63,49 @@ describe('ContentReportQueuePanel', () => {
     );
   });
 
+  it('shows the reviewer the media reference the reporter sent, as text', async () => {
+    mocks.fetch.mockImplementation(async () =>
+      jsonResponse({
+        reports: [
+          {
+            ...OVERDUE_REPORT,
+            asset: {
+              kind: 'video',
+              reference: 'https://cdn.example/clip.mp4',
+              inlineHeaderOnly: false,
+            },
+          },
+        ],
+        counts: COUNTS,
+      }),
+    );
+
+    render(<ContentReportQueuePanel />);
+
+    expect(await screen.findByText('https://cdn.example/clip.mp4')).toBeInTheDocument();
+    expect(screen.getByText(/never opened here/)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /clip\.mp4/ })).toBeNull();
+  });
+
+  it('says when only the header of inline media was sent', async () => {
+    mocks.fetch.mockImplementation(async () =>
+      jsonResponse({
+        reports: [
+          {
+            ...OVERDUE_REPORT,
+            asset: { kind: 'image', reference: 'data:image/png;base64', inlineHeaderOnly: true },
+          },
+        ],
+        counts: COUNTS,
+      }),
+    );
+
+    render(<ContentReportQueuePanel />);
+
+    expect(await screen.findByText('data:image/png;base64')).toBeInTheDocument();
+    expect(screen.getByText(/only its header was sent/)).toBeInTheDocument();
+  });
+
   it('sends the reviewer disposition to the moderation endpoint', async () => {
     render(<ContentReportQueuePanel />);
     await screen.findByText(/explained how to hurt someone/);

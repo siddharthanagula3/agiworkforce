@@ -6,6 +6,7 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { resourceDeletionPolicy } from '@/lib/resources/deletion-policies';
 import { recordAuditEvent } from '@/lib/security-audit';
 import {
   HOLDABLE_RESOURCE_TYPES,
@@ -232,14 +233,95 @@ export function legalHoldPredicate(
   };
 }
 
+interface CascadeChild {
+  resourceType: LegalHoldResourceType;
+  table: string;
+  column: string;
+}
+
+function holdableCascadeChildren(table: string): CascadeChild[] {
+  const policy = resourceDeletionPolicy(table);
+  if (policy === null) return [];
+  const children: CascadeChild[] = [];
+  for (const child of policy.children) {
+    if (child.disposition !== 'cascade_delete') continue;
+    const resource = holdableResourceForTable(child.table);
+    if (resource !== null && isLegalHoldResourceType(resource.resourceType)) {
+      children.push({
+        resourceType: resource.resourceType,
+        table: resource.table,
+        column: child.column,
+      });
+    }
+  }
+  return children;
+}
+
+// A hard delete takes its cascading children with it, so a row is preserved
+// when it is held itself or when any held child would go with it.
+function legalHoldDeletionBranches(
+  resourceType: LegalHoldResourceType | null,
+  options: LegalHoldPredicateOptions,
+): { branches: string[]; params: string[]; table: string | null } {
+  const own = legalHoldPredicate(resourceType, options);
+  const policy = own.table === null ? null : resourceDeletionPolicy(own.table);
+  if (policy === null || options.holdId !== undefined || options.coversParam !== undefined) {
+    return { branches: [own.sql], params: own.params, table: own.table };
+  }
+
+  const params = [...own.params];
+  let nextIndex = options.nextParamIndex + own.params.length;
+  let aliasCount = 0;
+
+  const reach = (table: string, key: string, alias: string, path: ReadonlySet<string>): string[] =>
+    holdableCascadeChildren(table)
+      .filter((child) => !path.has(child.table))
+      .map((child) => {
+        aliasCount += 1;
+        const childAlias = `hold_cascade_${aliasCount}`;
+        const held = legalHoldPredicate(child.resourceType, {
+          alias: childAlias,
+          nextParamIndex: nextIndex,
+        });
+        params.push(...held.params);
+        nextIndex += held.params.length;
+        const childKey = resourceDeletionPolicy(child.table)?.keyColumn ?? 'id';
+        const nested = reach(child.table, childKey, childAlias, new Set(path).add(child.table));
+        return `exists (
+          select 1
+            from public.${child.table} ${childAlias}
+           where ${childAlias}.${child.column} = ${alias}.${key}
+             and (${[held.sql, ...nested].join('\n or ')})
+        )`;
+      });
+
+  const branches = [
+    own.sql,
+    ...reach(policy.table, policy.keyColumn, options.alias, new Set([policy.table])),
+  ];
+  return { branches, params, table: own.table };
+}
+
+function legalHoldDeletionReach(
+  resourceType: LegalHoldResourceType | null,
+  options: LegalHoldPredicateOptions,
+): LegalHoldPredicate {
+  const { branches, params, table } = legalHoldDeletionBranches(resourceType, options);
+  return {
+    table,
+    params,
+    sql: branches.length === 1 ? branches[0]! : `(${branches.join('\n or ')})`,
+  };
+}
+
 // ANDed into the destroying statement's own WHERE, so nothing can be placed
 // under hold between a read and the delete.
 export function legalHoldExclusion(
   resourceType: LegalHoldResourceType | null,
   options: LegalHoldPredicateOptions,
 ): LegalHoldPredicate {
-  const predicate = legalHoldPredicate(resourceType, options);
-  return { ...predicate, sql: `not ${predicate.sql}` };
+  const { branches, params, table } = legalHoldDeletionBranches(resourceType, options);
+  return { table, params, sql: branches.map((branch) => `not ${branch}`).join('\n and ') };
 }
 
 // `where` is the sweep's own condition over `alias`; the hold predicate takes
@@ -257,7 +339,7 @@ async function countRowsMatching(
   },
   held: boolean,
 ): Promise<number> {
-  const render = held ? legalHoldPredicate : legalHoldExclusion;
+  const render = held ? legalHoldDeletionReach : legalHoldExclusion;
   const predicate = render(resourceType, {
     alias: options.alias,
     nextParamIndex: options.params.length + 1,
