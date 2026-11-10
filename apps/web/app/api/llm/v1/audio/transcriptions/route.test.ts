@@ -342,6 +342,31 @@ describe('POST /api/llm/v1/audio/transcriptions, on the Free monthly voice allow
     expect(mocks.clientDelivered).not.toHaveBeenCalled();
   });
 
+  it('refuses a developer API key on the Free plan before any grant or provider spend', async () => {
+    providerReturns({ text: 'hello' });
+
+    const response = await POST(
+      transcriptionRequest({
+        authorization: 'Bearer sk_live_abc123',
+        'Idempotency-Key': IDEMPOTENCY_KEY,
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    const body = (await response.json()) as {
+      error: { code: string; requiredTier: string; type: string };
+    };
+    expect(body.error).toMatchObject({
+      code: 'managed_api_plan_required',
+      requiredTier: 'pro',
+      type: 'invalid_request_error',
+    });
+    expect(mocks.grantFree).not.toHaveBeenCalled();
+    expect(mocks.sweep).not.toHaveBeenCalled();
+    expect(mocks.reserve).not.toHaveBeenCalled();
+    expect(providerCalls()).toHaveLength(0);
+  });
+
   it('settles abandoned calls before the allowance is granted, on the plan backend', async () => {
     providerReturns({ text: 'hello' });
 

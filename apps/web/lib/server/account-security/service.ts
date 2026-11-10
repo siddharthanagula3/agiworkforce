@@ -711,23 +711,35 @@ export async function beginVerification(
   return options;
 }
 
-async function markSessionVerified(
-  db: DatabaseAdapter,
-  input: {
-    userId: string;
-    sessionId: string;
-    method: VerificationMethod;
-    credentialRowId: string | null;
-    request: NextRequest;
-  },
-): Promise<string> {
-  const expiresAt = await recordSessionVerification(db, {
+type SessionVerificationInput = {
+  userId: string;
+  sessionId: string;
+  method: VerificationMethod;
+  credentialRowId: string | null;
+  request: NextRequest;
+};
+
+function recordVerification(db: DatabaseAdapter, input: SessionVerificationInput): Promise<number> {
+  return recordSessionVerification(db, {
     userId: input.userId,
     sessionId: input.sessionId,
     method: input.method,
     credentialRowId: input.credentialRowId,
     lifetimeSeconds: verificationLifetimeSeconds(),
   });
+}
+
+async function markSessionVerified(
+  db: DatabaseAdapter,
+  input: SessionVerificationInput,
+): Promise<string> {
+  return announceSessionVerified(input, await recordVerification(db, input));
+}
+
+async function announceSessionVerified(
+  input: SessionVerificationInput,
+  expiresAt: number,
+): Promise<string> {
   await forgetSessionVerification(input.sessionId);
   await recordAuditEvent({
     userId: input.userId,
@@ -811,18 +823,22 @@ export async function completeRecovery(
   caller: AccountSecurityCaller,
   request: NextRequest,
 ): Promise<string> {
-  if (!(await finishRecovery(caller.db, caller.userId, caller.sessionId))) {
-    throw createError.conflict(
-      'Recovery can be completed only from the device that started it, once the waiting period ends.',
-    );
-  }
-  const verifiedUntil = await markSessionVerified(caller.db, {
+  const verification: SessionVerificationInput = {
     userId: caller.userId,
     sessionId: caller.sessionId,
     method: 'recovery',
     credentialRowId: null,
     request,
+  };
+  const expiresAt = await caller.db.transaction(async (tx) => {
+    if (!(await finishRecovery(tx, caller.userId, caller.sessionId))) {
+      throw createError.conflict(
+        'Recovery can be completed only from the device that started it, once the waiting period ends.',
+      );
+    }
+    return recordVerification(tx, verification);
   });
+  const verifiedUntil = await announceSessionVerified(verification, expiresAt);
   await emitIdentitySecurityEvent(caller.db, {
     userId: caller.userId,
     event: 'advanced_security_recovery_completed',
@@ -875,16 +891,29 @@ export async function completeHandoff(
   input: { handoff: string; code: string; codeVerifier: string },
   request: NextRequest,
 ): Promise<string> {
-  const taken = await takeCompletedHandoff(caller.db, {
-    handoffHash: hashHandoffToken(input.handoff),
+  const verification: SessionVerificationInput = {
     userId: caller.userId,
     sessionId: caller.sessionId,
+    method: 'passkey',
+    credentialRowId: null,
+    request,
+  };
+  const expiresAt = await caller.db.transaction(async (tx) => {
+    const taken = await takeCompletedHandoff(tx, {
+      handoffHash: hashHandoffToken(input.handoff),
+      userId: caller.userId,
+      sessionId: caller.sessionId,
+    });
+    if (
+      !taken?.codeHash ||
+      !sameSecret(taken.codeHash, hashHandoffCode(input.code)) ||
+      !sameSecret(taken.codeChallenge, codeChallengeFor(input.codeVerifier))
+    ) {
+      return null;
+    }
+    return recordVerification(tx, verification);
   });
-  if (
-    !taken?.codeHash ||
-    !sameSecret(taken.codeHash, hashHandoffCode(input.code)) ||
-    !sameSecret(taken.codeChallenge, codeChallengeFor(input.codeVerifier))
-  ) {
+  if (expiresAt === null) {
     await recordAuditEvent({
       userId: caller.userId,
       eventType: 'account_security_verification_failed',
@@ -895,11 +924,5 @@ export async function completeHandoff(
     });
     throw createError.validation('This sign-in could not be confirmed. Start again from the app.');
   }
-  return markSessionVerified(caller.db, {
-    userId: caller.userId,
-    sessionId: caller.sessionId,
-    method: 'passkey',
-    credentialRowId: null,
-    request,
-  });
+  return announceSessionVerified(verification, expiresAt);
 }

@@ -695,6 +695,7 @@ export async function executeCloudAgentWorkflowInvocation(
         },
       )
     : null;
+  const journal = createCloudAgentEventJournal({ db, userId: input.userId, runId: input.runId });
   const generator =
     researchGenerator ??
     runToolLoop(processed, {
@@ -782,6 +783,7 @@ export async function executeCloudAgentWorkflowInvocation(
           runId: input.runId,
         }),
       onPauseCheckpoint: async (checkpoint) => {
+        await journal.flush();
         await saveCloudAgentPauseCheckpoint(db, {
           userId: input.userId,
           runId: input.runId,
@@ -804,6 +806,7 @@ export async function executeCloudAgentWorkflowInvocation(
         pauseCheckpointSaved = true;
       },
       onApprovalCheckpoint: async (checkpoint) => {
+        await journal.flush();
         await saveCloudAgentApprovalCheckpoint(db, {
           userId: input.userId,
           runId: input.runId,
@@ -827,6 +830,7 @@ export async function executeCloudAgentWorkflowInvocation(
         approvalCheckpointSaved = true;
       },
       onInputCheckpoint: async (checkpoint) => {
+        await journal.flush();
         await saveCloudAgentInputCheckpoint(db, {
           userId: input.userId,
           runId: input.runId,
@@ -852,6 +856,7 @@ export async function executeCloudAgentWorkflowInvocation(
         inputCheckpointSaved = true;
       },
       onDeviceCheckpoint: async (checkpoint) => {
+        await journal.flush();
         await saveCloudAgentDeviceCheckpoint(db, {
           userId: input.userId,
           runId: input.runId,
@@ -877,7 +882,6 @@ export async function executeCloudAgentWorkflowInvocation(
       },
     });
 
-  const journal = createCloudAgentEventJournal({ db, userId: input.userId, runId: input.runId });
   const writer = getWritable<Uint8Array>().getWriter();
   const stream = createBoundedDurableWriter(writer, {
     onUnreadable: reportUnreadableStream(input.runId, 'projection'),

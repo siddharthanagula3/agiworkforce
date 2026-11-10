@@ -19,7 +19,10 @@ import {
   buildSpendLimitGateResponse,
   buildModelPolicyGateResponse,
 } from '@/lib/managed-compute-gate';
-import { resolveAuthenticatedSurface } from '../../chat/completions/lib/request-surface';
+import {
+  managedCloudSurfaceRefusal,
+  resolveAuthenticatedSurface,
+} from '../../chat/completions/lib/request-surface';
 import {
   getModelMetadataById,
   getRoutingSlotModel,
@@ -313,6 +316,11 @@ async function handleTranscriptions(request: NextRequest, admit?: TranscriptionA
   );
   if (managedGateResponse) return managedGateResponse;
 
+  const surface = resolveAuthenticatedSurface(request, {
+    token: request.headers.get('authorization')?.replace(/^Bearer /, '') ?? '',
+    surfaceClass: auth.surfaceClass,
+    boundSurface: auth.boundSurface,
+  });
   const policyGateResponse = await buildOrganizationPolicyGateResponse(
     userId,
     request,
@@ -320,11 +328,7 @@ async function handleTranscriptions(request: NextRequest, admit?: TranscriptionA
       provider: 'openai',
       model: 'audio-transcription',
       feature: 'audio_transcription',
-      surface: resolveAuthenticatedSurface(request, {
-        token: request.headers.get('authorization')?.replace(/^Bearer /, '') ?? '',
-        surfaceClass: auth.surfaceClass,
-        boundSurface: auth.boundSurface,
-      }),
+      surface,
     },
     {
       ...getCorsHeaders(request),
@@ -567,6 +571,13 @@ async function handleTranscriptions(request: NextRequest, admit?: TranscriptionA
         ...getSecurityHeaders(),
       });
       if (gateResponse) return gateResponse;
+    }
+    if (surface === 'api') {
+      const planRefusal = managedCloudSurfaceRefusal(entitlement.plan, surface, {
+        ...getCorsHeaders(request),
+        ...getSecurityHeaders(),
+      });
+      if (planRefusal) return planRefusal;
     }
     const freeAllowanceSeconds = freeVoiceAllowanceSeconds(entitlement.plan);
     if (freeAllowanceSeconds === null) {
