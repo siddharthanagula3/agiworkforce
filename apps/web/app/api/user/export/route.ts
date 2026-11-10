@@ -2396,6 +2396,8 @@ export const UNEXPORTED_USER_TABLES: Readonly<Record<string, string>> = {
     'A counter of how many times a connector permission changed, used to refuse approvals made against an older setting; the settings themselves are exported as connector_tool_permissions and connector_account_states.',
   device_refresh_token_families:
     'Which refresh credential families have been ended; token state, not subject content. The devices themselves are exported as desktop_devices and mobile_devices.',
+  feedback_screenshot_cleanups:
+    'A short-lived record of a screenshot upload that has not yet been attached to a report, kept so the file can be removed; storage housekeeping, not subject content. Submitted reports are exported as feedback.',
   revoked_jwts:
     'The deny list a signed-out token is checked against; token state, not subject content.',
   mcp_app_payloads:

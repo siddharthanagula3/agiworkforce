@@ -1201,7 +1201,12 @@ describe('cloud code session GitHub App credentials', () => {
       executor as unknown as Awaited<ReturnType<typeof getE2BExecutor>>,
     );
     vi.mocked(getUserGithubInstallations).mockResolvedValue([
-      { installationId: 42, login: 'acme', verifiedRepositories: ['acme/widgets'] },
+      {
+        installationId: 42,
+        login: 'acme',
+        verifiedRepositories: ['acme/widgets'],
+        writableRepositories: null,
+      },
     ]);
     vi.mocked(getInstallationAccessToken).mockResolvedValue('installation-token');
 
@@ -1228,7 +1233,12 @@ describe('cloud code session GitHub App credentials', () => {
       executor as unknown as Awaited<ReturnType<typeof getE2BExecutor>>,
     );
     vi.mocked(getUserGithubInstallations).mockResolvedValue([
-      { installationId: 42, login: 'acme', verifiedRepositories: ['acme/widgets'] },
+      {
+        installationId: 42,
+        login: 'acme',
+        verifiedRepositories: ['acme/widgets'],
+        writableRepositories: null,
+      },
     ]);
     vi.mocked(getInstallationAccessToken).mockResolvedValue('installation-token');
 
@@ -1247,7 +1257,12 @@ describe('cloud code session GitHub App credentials', () => {
       executor as unknown as Awaited<ReturnType<typeof getE2BExecutor>>,
     );
     vi.mocked(getUserGithubInstallations).mockResolvedValue([
-      { installationId: 42, login: 'acme', verifiedRepositories: ['acme/public-docs'] },
+      {
+        installationId: 42,
+        login: 'acme',
+        verifiedRepositories: ['acme/public-docs'],
+        writableRepositories: null,
+      },
     ]);
 
     await expect(createCloudCodeSession(db, OWNER, repoInput(0), PLAN_TIER)).rejects.toBeInstanceOf(
