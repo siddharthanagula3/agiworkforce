@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   DEVELOPER,
+  EVAL_CASE,
   EVAL_RUN,
   PROMPT,
   PROMPT_ID,
@@ -39,6 +40,7 @@ const { GET, POST } = await import('./route');
 
 const PATH = `/api/developers/prompts/${PROMPT_ID}/runs`;
 const { results: _results, ...RUN_SUMMARY_BASE } = EVAL_RUN;
+const RUN_START = { ...EVAL_RUN, results: [], cases: [EVAL_CASE] };
 const RUN_SUMMARY = { ...RUN_SUMMARY_BASE, passed: 1, failed: 0, graded: 0, averageGrade: null };
 
 describe('/api/developers/prompts/[promptId]/runs', () => {
@@ -48,7 +50,7 @@ describe('/api/developers/prompts/[promptId]/runs', () => {
     mocks.openWrite.mockResolvedValue(opened());
     mocks.requirePrompt.mockResolvedValue(PROMPT);
     mocks.listRuns.mockResolvedValue([RUN_SUMMARY]);
-    mocks.createRun.mockResolvedValue(EVAL_RUN);
+    mocks.createRun.mockResolvedValue(RUN_START);
   });
 
   it('GET lists run summaries only after confirming the caller owns the prompt', async () => {
@@ -66,7 +68,7 @@ describe('/api/developers/prompts/[promptId]/runs', () => {
 
     expect(response.status).toBe(201);
     expect(mocks.createRun).toHaveBeenCalledWith(expect.anything(), DEVELOPER, PROMPT_ID, body);
-    expect(await response.json()).toEqual({ run: EVAL_RUN });
+    expect(await response.json()).toEqual({ run: RUN_START });
   });
 
   it('POST refuses a check the workbench does not offer', async () => {

@@ -125,6 +125,7 @@ export type DeveloperEvalResultInput = z.infer<typeof DeveloperEvalResultInputSc
 export const DeveloperEvalResultSchema = DeveloperEvalResultInputSchema.extend({
   id: z.string().uuid(),
   caseId: z.string().uuid().nullable(),
+  expectedOutput: z.string().nullable(),
   passed: z.boolean().nullable(),
   grade: z.number().int().min(1).max(5).nullable(),
 });

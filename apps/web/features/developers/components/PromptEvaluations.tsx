@@ -117,15 +117,13 @@ function CaseForm({
 
 function ResultRow({
   result,
-  testCase,
   onGrade,
 }: {
   result: DeveloperEvalResult;
-  testCase: DeveloperEvalCase | undefined;
   onGrade: (grade: number | null) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const expected = testCase?.expectedOutput ?? null;
+  const expected = result.expectedOutput;
   const verdict = result.error
     ? 'Error'
     : result.passed === true
@@ -387,8 +385,6 @@ export function PromptEvaluations({
     }
   };
 
-  const casesById = new Map((cases ?? []).map((entry) => [entry.id, entry]));
-
   return (
     <section aria-label="Test cases and runs" className="flex flex-col gap-3">
       {dialog}
@@ -510,7 +506,6 @@ export function PromptEvaluations({
               <ResultRow
                 key={result.id}
                 result={result}
-                testCase={result.caseId ? casesById.get(result.caseId) : undefined}
                 onGrade={(value) => void grade(result, value)}
               />
             ))}

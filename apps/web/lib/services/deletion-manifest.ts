@@ -45,6 +45,7 @@ const CUSTOMER_CONTENT = [
   'conversations',
   'developer_eval_cases',
   'developer_eval_results',
+  'developer_eval_run_cases',
   'developer_eval_runs',
   'developer_prompt_versions',
   'developer_prompts',

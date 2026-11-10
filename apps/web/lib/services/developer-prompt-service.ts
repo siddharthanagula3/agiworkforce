@@ -20,6 +20,7 @@ import { getModelMetadataById, isAutoModeModelId } from '@agiworkforce/types';
 import { createError } from '@/lib/errors';
 
 const PG_UNIQUE_VIOLATION = '23505';
+const PG_FOREIGN_KEY_VIOLATION = '23503';
 const LIST_LIMIT = 200;
 
 interface VersionRow {
@@ -57,12 +58,16 @@ function toVersion(row: VersionRow): DeveloperPromptVersion {
   };
 }
 
+function hasErrorCode(error: unknown, code: string): boolean {
+  return typeof error === 'object' && error !== null && (error as { code?: unknown }).code === code;
+}
+
 function isUniqueViolation(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    (error as { code?: unknown }).code === PG_UNIQUE_VIOLATION
-  );
+  return hasErrorCode(error, PG_UNIQUE_VIOLATION);
+}
+
+function isForeignKeyViolation(error: unknown): boolean {
+  return hasErrorCode(error, PG_FOREIGN_KEY_VIOLATION);
 }
 
 export function validatePromptModel(model: string): string {
@@ -352,9 +357,13 @@ interface ResultRow {
   latency_ms: number | null;
   input_tokens: number | null;
   output_tokens: number | null;
+  expected_output: string | null;
   passed: boolean | null;
   grade: number | null;
 }
+
+const RESULT_COLUMNS = `id, case_id, rendered_input, output, error, latency_ms, input_tokens,
+  output_tokens, expected_output, passed, grade`;
 
 function toResult(row: ResultRow): DeveloperEvalResult {
   return {
@@ -363,6 +372,7 @@ function toResult(row: ResultRow): DeveloperEvalResult {
     renderedInput: row.rendered_input,
     output: row.output,
     error: row.error,
+    expectedOutput: row.expected_output,
     latencyMs: row.latency_ms === null ? null : Number(row.latency_ms),
     inputTokens: row.input_tokens === null ? null : Number(row.input_tokens),
     outputTokens: row.output_tokens === null ? null : Number(row.output_tokens),
@@ -393,6 +403,14 @@ export async function createRun(
       [promptId, userId, input.version, input.checkKind, cases.length],
     );
     if (!row) throw createError.internal('The run could not be started.');
+    await tx.execute(
+      `insert into public.developer_eval_run_cases
+         (run_id, case_id, user_id, position, variables, expected_output)
+       select $1, (entry->>'id')::uuid, $2, (entry->>'position')::integer, entry->'variables',
+              entry->>'expectedOutput'
+         from jsonb_array_elements($3::jsonb) as entry`,
+      [row.id, userId, JSON.stringify(cases)],
+    );
     return {
       id: row.id,
       version: Number(row.version),
@@ -419,8 +437,7 @@ export async function readRun(
   );
   if (!row) throw createError.notFound('Run not found');
   const results = await db.query<ResultRow>(
-    `select id, case_id, rendered_input, output, error, latency_ms, input_tokens, output_tokens,
-            passed, grade
+    `select ${RESULT_COLUMNS}
        from public.developer_eval_results
       where run_id = $1 and user_id = $2
       order by created_at`,
@@ -467,6 +484,35 @@ export async function listRuns(db: DatabaseAdapter, userId: string, promptId: st
   }));
 }
 
+async function gradingExpectation(
+  db: DatabaseAdapter,
+  userId: string,
+  promptId: string,
+  run: DeveloperEvalRun,
+  caseId: string,
+): Promise<{ expectedOutput: string | null } | null> {
+  const [frozen] = await db.query<{ expected_output: string | null }>(
+    `select expected_output from public.developer_eval_run_cases
+      where run_id = $1 and user_id = $2 and case_id = $3`,
+    [run.id, userId, caseId],
+  );
+  if (frozen) return { expectedOutput: frozen.expected_output };
+  const [admitted] = await db.query<{ present: number }>(
+    `select 1 as present from public.developer_eval_run_cases
+      where run_id = $1 and user_id = $2 limit 1`,
+    [run.id, userId],
+  );
+  if (admitted) throw createError.notFound('Test case not found');
+  const [current] = await db.query<{ expected_output: string | null; updated_at: string | Date }>(
+    `select expected_output, updated_at from public.developer_eval_cases
+      where id = $1 and prompt_id = $2 and user_id = $3`,
+    [caseId, promptId, userId],
+  );
+  if (!current) throw createError.notFound('Test case not found');
+  const editedSinceAdmission = new Date(current.updated_at).getTime() > Date.parse(run.createdAt);
+  return editedSinceAdmission ? null : { expectedOutput: current.expected_output };
+}
+
 export async function recordResult(
   db: DatabaseAdapter,
   userId: string,
@@ -478,24 +524,17 @@ export async function recordResult(
     throw createError.validation('A result needs an output or an error.');
   }
   const run = await readRun(db, userId, promptId, runId);
-  const [testCase] = await db.query<{ expected_output: string | null; updated_at: string | Date }>(
-    `select expected_output, updated_at from public.developer_eval_cases
-      where id = $1 and prompt_id = $2 and user_id = $3`,
-    [input.caseId, promptId, userId],
-  );
-  if (!testCase) throw createError.notFound('Test case not found');
-  const editedSinceAdmission = new Date(testCase.updated_at).getTime() > Date.parse(run.createdAt);
-  const passed = editedSinceAdmission
-    ? null
-    : evalCheckPasses(run.checkKind, input.output, testCase.expected_output);
+  const expectation = await gradingExpectation(db, userId, promptId, run, input.caseId);
+  const passed = expectation
+    ? evalCheckPasses(run.checkKind, input.output, expectation.expectedOutput)
+    : null;
   try {
     const [row] = await db.query<ResultRow>(
       `insert into public.developer_eval_results
          (run_id, case_id, user_id, rendered_input, output, error, latency_ms, input_tokens,
-          output_tokens, passed)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-       returning id, case_id, rendered_input, output, error, latency_ms, input_tokens,
-                 output_tokens, passed, grade`,
+          output_tokens, expected_output, passed)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       returning ${RESULT_COLUMNS}`,
       [
         runId,
         input.caseId,
@@ -506,6 +545,7 @@ export async function recordResult(
         input.latencyMs,
         input.inputTokens,
         input.outputTokens,
+        expectation?.expectedOutput ?? null,
         passed,
       ],
     );
@@ -515,6 +555,7 @@ export async function recordResult(
     if (isUniqueViolation(error)) {
       throw createError.conflict('This case already has a result in this run.');
     }
+    if (isForeignKeyViolation(error)) throw createError.notFound('Test case not found');
     throw error;
   }
 }
@@ -529,8 +570,7 @@ export async function gradeResult(
   const [row] = await db.query<ResultRow>(
     `update public.developer_eval_results set grade = $4
       where id = $1 and run_id = $2 and user_id = $3
-      returning id, case_id, rendered_input, output, error, latency_ms, input_tokens,
-                output_tokens, passed, grade`,
+      returning ${RESULT_COLUMNS}`,
     [resultId, runId, userId, grade],
   );
   if (!row) throw createError.notFound('Result not found');

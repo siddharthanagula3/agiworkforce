@@ -7,11 +7,21 @@ const PROMPT_ID = '0190a000-0000-7000-8000-0000000000f1';
 const RUN_ID = '0190a000-0000-7000-8000-0000000000f2';
 const CASE_ID = '0190a000-0000-7000-8000-0000000000c1';
 
+interface Frozen {
+  caseIds: string[];
+  expected: string | null;
+}
+
 function db(
   checkKind: 'exact' | 'contains' | 'none',
   expected: string | null,
-  caseUpdatedAt = '2026-10-18T00:00:00Z',
+  options: { caseUpdatedAt?: string; frozen?: Frozen | null; liveExpected?: string | null } = {},
 ) {
+  const {
+    caseUpdatedAt = '2026-10-18T00:00:00Z',
+    frozen = null,
+    liveExpected = expected,
+  } = options;
   const query = vi.fn(async (sql: string, params?: unknown[]) => {
     if (sql.includes('from public.developer_eval_runs')) {
       return [
@@ -25,8 +35,15 @@ function db(
       ];
     }
     if (sql.includes('from public.developer_eval_results') && sql.includes('select')) return [];
+    if (sql.includes('from public.developer_eval_run_cases')) {
+      if (!frozen) return [];
+      if (!sql.includes('case_id = $3')) return [{ present: 1 }];
+      return frozen.caseIds.includes(String(params?.[2]))
+        ? [{ expected_output: frozen.expected }]
+        : [];
+    }
     if (sql.includes('from public.developer_eval_cases'))
-      return [{ expected_output: expected, updated_at: caseUpdatedAt }];
+      return [{ expected_output: liveExpected, updated_at: caseUpdatedAt }];
     if (sql.includes('insert into public.developer_eval_results')) {
       return [
         {
@@ -38,7 +55,8 @@ function db(
           latency_ms: params?.[6],
           input_tokens: params?.[7],
           output_tokens: params?.[8],
-          passed: params?.[9],
+          expected_output: params?.[9],
+          passed: params?.[10],
           grade: null,
         },
       ];
@@ -74,16 +92,75 @@ describe('developer prompt evaluations', () => {
     expect(none.passed).toBeNull();
   });
 
-  it('leaves a result ungraded when its case was edited after the run was admitted', async () => {
+  it('grades against the expectation frozen at admission, not the case as it is now', async () => {
+    const { db: adapter, query } = db('contains', 'billing', {
+      frozen: { caseIds: [CASE_ID], expected: 'billing' },
+      liveExpected: 'refunds',
+      caseUpdatedAt: '2026-10-19T00:00:01Z',
+    });
+    const graded = await recordResult(adapter, 'user_1', PROMPT_ID, RUN_ID, input);
+    expect(graded.passed).toBe(true);
+    expect(graded.expectedOutput).toBe('billing');
+    const sqls = query.mock.calls.map(([sql]) => sql as string);
+    expect(sqls.some((sql) => sql.includes('from public.developer_eval_cases'))).toBe(false);
+  });
+
+  it('refuses a result for a case the run was not admitted with', async () => {
+    const { db: adapter, query } = db('contains', 'billing', {
+      frozen: { caseIds: ['0190a000-0000-7000-8000-0000000000c9'], expected: 'billing' },
+    });
+    await expect(recordResult(adapter, 'user_1', PROMPT_ID, RUN_ID, input)).rejects.toThrow(
+      'Test case not found',
+    );
+    const sqls = query.mock.calls.map(([sql]) => sql as string);
+    expect(sqls.some((sql) => sql.includes('insert into public.developer_eval_results'))).toBe(
+      false,
+    );
+  });
+
+  it('reports a case deleted since admission as not found instead of failing the insert', async () => {
+    const { db: adapter, query } = db('contains', 'billing', {
+      frozen: { caseIds: [CASE_ID], expected: 'billing' },
+    });
+    query.mockImplementationOnce(async () => [
+      {
+        id: RUN_ID,
+        version: 1,
+        check_kind: 'contains',
+        case_count: 1,
+        created_at: '2026-10-19T00:00:00Z',
+      },
+    ]);
+    query.mockImplementationOnce(async () => []);
+    query.mockImplementationOnce(async () => [{ expected_output: 'billing' }]);
+    query.mockImplementationOnce(async () => {
+      throw Object.assign(new Error('violates foreign key constraint'), { code: '23503' });
+    });
+    await expect(recordResult(adapter, 'user_1', PROMPT_ID, RUN_ID, input)).rejects.toThrow(
+      'Test case not found',
+    );
+  });
+
+  it('leaves a result of a run admitted before snapshots ungraded once its case was edited', async () => {
     const edited = await recordResult(
-      db('contains', 'billing', '2026-10-19T00:00:01Z').db,
+      db('contains', 'billing', { caseUpdatedAt: '2026-10-19T00:00:01Z' }).db,
       'user_1',
       PROMPT_ID,
       RUN_ID,
       input,
     );
     expect(edited.passed).toBeNull();
+    expect(edited.expectedOutput).toBeNull();
     expect(edited.output).toBe('Billing team');
+    const untouched = await recordResult(
+      db('contains', 'billing').db,
+      'user_1',
+      PROMPT_ID,
+      RUN_ID,
+      input,
+    );
+    expect(untouched.passed).toBe(true);
+    expect(untouched.expectedOutput).toBe('billing');
   });
 
   it('scopes every read and write to the caller', async () => {
@@ -126,13 +203,15 @@ describe('starting a developer evaluation run', () => {
       }
       return [];
     });
-    const adapter = { query, execute: vi.fn() } as unknown as DatabaseAdapter;
+    const execute = vi.fn();
+    const adapter = { query, execute } as unknown as DatabaseAdapter;
     const transaction = vi.fn(async (work: (tx: DatabaseAdapter) => Promise<unknown>) =>
       work(adapter),
     );
     return {
       db: { ...(adapter as object), transaction } as unknown as DatabaseAdapter,
       query,
+      execute,
       transaction,
     };
   }
@@ -159,6 +238,30 @@ describe('starting a developer evaluation run', () => {
       variables: { ticket: 'Crash' },
       expectedOutput: 'Support',
     });
+  });
+
+  it('freezes the cases it counted in the transaction that creates the run', async () => {
+    const rows = [
+      { id: CASE_ID, variables: { ticket: 'Refund' }, expected_output: 'Billing', position: 0 },
+      {
+        id: '0190a000-0000-7000-8000-0000000000c2',
+        variables: { ticket: 'Crash' },
+        expected_output: null,
+        position: 1,
+      },
+    ];
+    const { db: adapter, execute } = runDb(rows);
+    const run = await createRun(adapter, 'user_1', PROMPT_ID, {
+      version: 2,
+      checkKind: 'contains',
+    });
+    expect(execute).toHaveBeenCalledTimes(1);
+    const [sql, params] = execute.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('insert into public.developer_eval_run_cases');
+    expect(params[0]).toBe(RUN_ID);
+    expect(params[1]).toBe('user_1');
+    expect(JSON.parse(String(params[2]))).toEqual(run.cases);
+    expect(run.cases).toHaveLength(run.caseCount);
   });
 
   it('refuses a run with no cases', async () => {

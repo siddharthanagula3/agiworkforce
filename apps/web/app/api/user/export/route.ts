@@ -1236,6 +1236,7 @@ const githubInstallationExportSchema = z.object({
   pr_review_enabled: z.boolean(),
   review_model: z.string().nullable(),
   verified_repositories: z.array(z.string()).nullable(),
+  writable_repositories: z.array(z.string()).nullable(),
   ownership_verified_at: nullableTimestampSchema,
   created_at: timestampSchema,
 });
@@ -1567,6 +1568,14 @@ const developerEvalRunExportSchema = z.object({
   created_at: timestampSchema,
 });
 
+const developerEvalRunCaseExportSchema = z.object({
+  run_id: z.string(),
+  case_id: z.string(),
+  position: z.number().int(),
+  variables: z.unknown(),
+  expected_output: z.string().nullable(),
+});
+
 const developerEvalResultExportSchema = z.object({
   id: z.string(),
   run_id: z.string(),
@@ -1574,6 +1583,7 @@ const developerEvalResultExportSchema = z.object({
   rendered_input: z.string(),
   output: z.string().nullable(),
   error: z.string().nullable(),
+  expected_output: z.string().nullable(),
   latency_ms: z.number().int().nullable(),
   passed: z.boolean().nullable(),
   grade: z.number().int().nullable(),
@@ -2016,7 +2026,7 @@ const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
     section: 'github_installations',
     table: 'github_installations',
     sql: `select id, installation_id, account_login, account_type, pr_review_enabled,
-                 review_model, verified_repositories, ownership_verified_at, created_at
+                 review_model, verified_repositories, writable_repositories, ownership_verified_at, created_at
           from github_installations
           where user_id = $1
           order by created_at asc`,
@@ -2307,10 +2317,21 @@ const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
     rowLimit: EXPORT_ROW_LIMIT,
   },
   {
+    section: 'developer_eval_run_cases',
+    table: 'developer_eval_run_cases',
+    sql: `select run_id, case_id, position, variables, expected_output
+          from developer_eval_run_cases
+          where user_id = $1
+          order by run_id, position
+          limit 1000`,
+    schema: developerEvalRunCaseExportSchema,
+    rowLimit: EXPORT_ROW_LIMIT,
+  },
+  {
     section: 'developer_eval_results',
     table: 'developer_eval_results',
-    sql: `select id, run_id, case_id, rendered_input, output, error, latency_ms, passed, grade,
-                 created_at, updated_at
+    sql: `select id, run_id, case_id, rendered_input, output, error, expected_output, latency_ms,
+                 passed, grade, created_at, updated_at
           from developer_eval_results
           where user_id = $1
           order by created_at desc

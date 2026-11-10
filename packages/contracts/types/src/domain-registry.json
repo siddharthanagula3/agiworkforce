@@ -807,6 +807,7 @@
         "api_keys",
         "developer_eval_cases",
         "developer_eval_results",
+        "developer_eval_run_cases",
         "developer_eval_runs",
         "developer_projects",
         "developer_prompt_versions",
