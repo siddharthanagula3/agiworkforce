@@ -38,6 +38,16 @@ function formatDate(iso: string | null): string {
   });
 }
 
+function formatCalendarDate(iso: string | null): string {
+  if (!iso) return NOT_ON_RECORD;
+  return new Date(iso).toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
 function formatAmount(cents: number, currency: string): string {
   return (cents / 100).toLocaleString(undefined, {
     style: 'currency',
@@ -47,7 +57,7 @@ function formatAmount(cents: number, currency: string): string {
 
 function termLabel(contract: EnterpriseContractSummary): string {
   if (!contract.termStart && !contract.termEnd) return NOT_ON_RECORD;
-  return `${formatDate(contract.termStart)} to ${formatDate(contract.termEnd)}`;
+  return `${formatCalendarDate(contract.termStart)} to ${formatCalendarDate(contract.termEnd)}`;
 }
 
 function paymentTermsLabel(days: number | null): string {

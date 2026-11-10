@@ -875,7 +875,9 @@ export async function readEnterpriseContractSummary(
   organizationId: string,
 ): Promise<{ contract: EnterpriseContractSummary | null; invoices: EnterpriseInvoiceSummary[] }> {
   const [contract] = await db.query<EnterpriseContractRow>(
-    `select customer_legal_entity, procurement_reference, contract_term_start, contract_term_end,
+    `select customer_legal_entity, procurement_reference,
+            contract_term_start::text as contract_term_start,
+            contract_term_end::text as contract_term_end,
             billing_cadence, committed_seats, support_tier, payment_terms_days, tax_exempt_status,
             collection_stage, ended_at, billing_contact_name, billing_contact_email,
             procurement_contact_name, procurement_contact_email, signed_order_reference,

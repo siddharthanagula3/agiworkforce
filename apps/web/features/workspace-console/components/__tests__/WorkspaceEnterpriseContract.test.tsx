@@ -210,4 +210,23 @@ describe('WorkspaceEnterpriseContract accessibility', () => {
 
     expect(screen.getByText(/Older invoices stay with the billing provider/)).toBeTruthy();
   });
+
+  it('shows the recorded calendar days of the term in a zone behind UTC', () => {
+    const previousZone = process.env.TZ;
+    process.env.TZ = 'America/Los_Angeles';
+    try {
+      state({
+        contract: contract({ termStart: '2026-01-01', termEnd: '2026-12-31' }),
+        invoices: [],
+      });
+
+      render(<WorkspaceEnterpriseContract />);
+
+      const term = screen.getByText(/Jan 1, 2026/);
+      expect(term.textContent).toContain('Dec 31, 2026');
+    } finally {
+      if (previousZone === undefined) delete process.env.TZ;
+      else process.env.TZ = previousZone;
+    }
+  });
 });
