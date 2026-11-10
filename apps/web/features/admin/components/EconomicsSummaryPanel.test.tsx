@@ -13,7 +13,14 @@ function group(legacyRows: number) {
     canonicalValueCredits: 0,
     cogs: {
       totalMicrousd: 0,
-      byClassMicrousd: { model: 0, search: 0, sandbox: 0, voice: 0, media: 0 },
+      byClassMicrousd: {
+        model: 0,
+        search: 0,
+        sandbox: 0,
+        voice: 0,
+        media: 0,
+        infrastructure: 0,
+      },
     },
     paymentFeesMicrousd: 0,
     storeCommission: { totalMicrousd: 0 },

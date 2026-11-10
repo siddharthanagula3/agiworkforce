@@ -337,6 +337,52 @@ export async function archiveFlagDefinition(
   return row ? toDefinition(row) : null;
 }
 
+export interface StaleArchiveOptions {
+  expectedVersion: number;
+  keepRestrictedSubjects: boolean;
+}
+
+interface StaleCandidateRow {
+  default_variant: string;
+}
+
+export async function archiveStaleFlagDefinition(
+  key: string,
+  options: StaleArchiveOptions,
+  db: DatabaseAdapter = getNeonDb(),
+): Promise<FlagDefinition | null> {
+  const row = await db.transaction(async (tx) => {
+    const [candidate] = await tx.query<StaleCandidateRow>(
+      `select default_variant from public.feature_flag_definitions
+        where key = $1 and version = $2 and archived_at is null and kill_switch = false
+          for update`,
+      [key, options.expectedVersion],
+    );
+    if (!candidate) return null;
+    if (options.keepRestrictedSubjects) {
+      const [restriction] = await tx.query<{ restricted: boolean }>(
+        `select true as restricted from public.feature_flags
+          where flag_name = $1
+            and (expires_at is null or expires_at > now())
+            and coalesce(variant, case when enabled then 'on' else 'off' end) <> $2
+          limit 1`,
+        [key, candidate.default_variant],
+      );
+      if (restriction) return null;
+    }
+    const [archived] = await tx.query<DefinitionRow>(
+      `update public.feature_flag_definitions
+          set archived_at = now(), version = version + 1, updated_at = now()
+        where key = $1 and archived_at is null
+        returning ${DEFINITION_COLUMNS}`,
+      [key],
+    );
+    return archived ?? null;
+  });
+  resetFlagDefinitionCache();
+  return row ? toDefinition(row) : null;
+}
+
 export async function restoreFlagDefinition(
   key: string,
   db: DatabaseAdapter = getNeonDb(),
@@ -370,27 +416,35 @@ export async function upsertFlagOverride(
   key: string,
   input: FlagOverrideInput,
   db: DatabaseAdapter = getNeonDb(),
-): Promise<void> {
+): Promise<boolean> {
   const enabled = input.variant !== 'off';
-  if (input.subject === 'workspace') {
-    await db.execute(
-      `insert into public.feature_flags (organization_id, flag_name, enabled, variant, expires_at)
-       values ($1::uuid, $2, $3, $4, $5)
-       on conflict (organization_id, flag_name) where organization_id is not null
+  return db.transaction(async (tx) => {
+    const [definition] = await tx.query<{ archived_at: string | Date | null }>(
+      `select archived_at from public.feature_flag_definitions where key = $1 for share`,
+      [key],
+    );
+    if (definition && definition.archived_at !== null) return false;
+    if (input.subject === 'workspace') {
+      await tx.execute(
+        `insert into public.feature_flags (organization_id, flag_name, enabled, variant, expires_at)
+         values ($1::uuid, $2, $3, $4, $5)
+         on conflict (organization_id, flag_name) where organization_id is not null
+         do update set enabled = excluded.enabled, variant = excluded.variant,
+                       expires_at = excluded.expires_at, updated_at = now()`,
+        [input.subjectId, key, enabled, input.variant, input.expiresAt],
+      );
+      return true;
+    }
+    await tx.execute(
+      `insert into public.feature_flags (user_id, flag_name, enabled, variant, expires_at)
+       values ($1, $2, $3, $4, $5)
+       on conflict (user_id, flag_name)
        do update set enabled = excluded.enabled, variant = excluded.variant,
                      expires_at = excluded.expires_at, updated_at = now()`,
       [input.subjectId, key, enabled, input.variant, input.expiresAt],
     );
-    return;
-  }
-  await db.execute(
-    `insert into public.feature_flags (user_id, flag_name, enabled, variant, expires_at)
-     values ($1, $2, $3, $4, $5)
-     on conflict (user_id, flag_name)
-     do update set enabled = excluded.enabled, variant = excluded.variant,
-                   expires_at = excluded.expires_at, updated_at = now()`,
-    [input.subjectId, key, enabled, input.variant, input.expiresAt],
-  );
+    return true;
+  });
 }
 
 export async function deleteFlagOverride(

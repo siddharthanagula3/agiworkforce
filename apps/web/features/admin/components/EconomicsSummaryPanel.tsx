@@ -45,6 +45,7 @@ const COGS_CLASS_LABEL: Record<CogsClass, string> = {
   sandbox: 'Sandbox',
   voice: 'Voice',
   media: 'Image and video',
+  infrastructure: 'Infrastructure',
 };
 
 const GROUPINGS = Object.keys(GROUPING_LABEL) as EconomicsGrouping[];

@@ -113,7 +113,7 @@ async function officeParts(data: Buffer, requiredPart: string): Promise<Map<stri
   return parts;
 }
 
-function xmlText(value: string): string {
+function assertXmlText(value: string): void {
   for (const character of value) {
     const code = character.codePointAt(0) ?? 0;
     if (
@@ -125,6 +125,10 @@ function xmlText(value: string): string {
       throw new ManagedOfficeProcessingError('The edit contains unsupported XML characters.');
     }
   }
+}
+
+function xmlText(value: string): string {
+  assertXmlText(value);
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
@@ -160,12 +164,14 @@ export async function editManagedDocx(
       'Documents with tracked revisions are not supported by this edit operation.',
     );
   for (const replacement of source.replacements) {
-    const find = xmlText(replacement.find);
-    const value = xmlText(replacement.replace);
+    const find = replacement.find;
+    const value = replacement.replace;
+    const escapedFind = xmlText(find);
+    const escapedValue = xmlText(value);
     if (!find) throw new ManagedOfficeProcessingError('An edit must name nonempty text.');
     let count = 0;
     for (const run of xml.matchAll(/<w:t\b[^>]*>([^<]*)<\/w:t>/g)) {
-      const text = run[1] ?? '';
+      const text = decodedXmlText(run[1] ?? '');
       let offset = 0;
       while ((offset = text.indexOf(find, offset)) !== -1) {
         count += 1;
@@ -186,20 +192,19 @@ export async function editManagedDocx(
       originalPartBytes -
       document.byteLength +
       Buffer.byteLength(xml) +
-      (Buffer.byteLength(value) - Buffer.byteLength(find)) * count;
+      (Buffer.byteLength(escapedValue) - Buffer.byteLength(escapedFind)) * count;
     if (projectedBytes > MAX_GENERATED_FILE_BYTES)
       throw new ManagedOfficeProcessingError(
         'The edit would exceed the Office package size limit.',
       );
     xml = xml.replace(
       /(<w:t\b[^>]*>)([^<]*)(<\/w:t>)/g,
-      (_match, open: string, text: string, close: string) => {
-        const edited = text.split(find).join(value);
-        const tag =
-          edited !== text && !/xml:space=/.test(open)
-            ? open.replace(/>$/, ' xml:space="preserve">')
-            : open;
-        return tag + edited + close;
+      (match, open: string, text: string, close: string) => {
+        const decoded = decodedXmlText(text);
+        const edited = decoded.split(find).join(value);
+        if (edited === decoded) return match;
+        const tag = /xml:space=/.test(open) ? open : open.replace(/>$/, ' xml:space="preserve">');
+        return tag + xmlText(edited) + close;
       },
     );
   }
@@ -350,8 +355,11 @@ export async function recalculateManagedWorkbook(
   for (const [name, bytes] of parts) {
     let xml = bytes.toString('utf8');
     if (/^xl\/worksheets\/[^/]+\.xml$/.test(name)) {
-      xml = xml.replace(/<c\b[^>]*>[\s\S]*?<\/c>/g, (cell) =>
-        /<f\b/.test(cell) ? cell.replace(/<v\b[^>]*>[\s\S]*?<\/v>/g, '') : cell,
+      const resultRanges = formulaResultRanges(xml);
+      xml = xml.replace(CELL_ELEMENT, (cell) =>
+        /<f\b/.test(cell) || withinRanges(cellAddress(cell), resultRanges)
+          ? cell.replace(/<v\b[^>]*>[\s\S]*?<\/v>/g, '')
+          : cell,
       );
       calculationInput.file(name, xml);
     } else if (name === 'xl/workbook.xml') {
@@ -420,17 +428,10 @@ export async function recalculateManagedWorkbook(
     const calculatedParts = await officeParts(calculated, 'xl/workbook.xml');
     for (const [name, bytes] of parts) {
       if (!/^xl\/worksheets\/[^/]+\.xml$/.test(name)) continue;
-      const after = calculatedParts.get(name)?.toString('utf8') ?? '';
-      const cells = new Map(
-        [...after.matchAll(/<c\b[^>]*\br=["']([^"']+)["'][^>]*>[\s\S]*?<\/c>/g)].map((cell) => [
-          cell[1],
-          cell[0],
-        ]),
-      );
-      for (const cell of bytes
-        .toString('utf8')
-        .matchAll(/<c\b[^>]*\br=["']([^"']+)["'][^>]*>[\s\S]*?<\/c>/g)) {
-        if (/<f\b/.test(cell[0]) && !/<f\b/.test(cells.get(cell[1]) ?? ''))
+      const cells = cellsByAddress(calculatedParts.get(name)?.toString('utf8') ?? '');
+      for (const cell of bytes.toString('utf8').matchAll(CELL_ELEMENT)) {
+        const address = cellAddress(cell[0]);
+        if (address && /<f\b/.test(cell[0]) && !/<f\b/.test(cells.get(address) ?? ''))
           throw new ManagedOfficeProcessingError('Recalculation removed a workbook formula.');
       }
     }
@@ -438,38 +439,16 @@ export async function recalculateManagedWorkbook(
     for (const [name, bytes] of parts) {
       let content = bytes;
       if (/^xl\/worksheets\/[^/]+\.xml$/.test(name)) {
-        const caches = new Map(
-          [
-            ...calculatedParts
-              .get(name)!
-              .toString('utf8')
-              .matchAll(/<c\b[^>]*\br=["']([^"']+)["'][^>]*>[\s\S]*?<\/c>/g),
-          ].map((cell) => [cell[1], cell[0]]),
-        );
+        const original = bytes.toString('utf8');
+        const caches = cellsByAddress(calculatedParts.get(name)!.toString('utf8'));
+        const resultRanges = formulaResultRanges(original);
         content = Buffer.from(
-          bytes
-            .toString('utf8')
-            .replace(
-              /<c\b[^>]*\br=["']([^"']+)["'][^>]*>[\s\S]*?<\/c>/g,
-              (cell, address: string) => {
-                if (!/<f\b/.test(cell)) return cell;
-                const evaluated = caches.get(address) ?? '';
-                const value = evaluated.match(/<v>([^<]+)<\/v>/)?.[0];
-                const type = evaluated.match(/^<c\b[^>]*\bt=["']([^"']+)["']/)?.[1];
-                if (!value || (type && !['n', 'str', 'b'].includes(type)))
-                  throw new ManagedOfficeProcessingError(
-                    'The evaluator returned an unsupported formula cache.',
-                  );
-                return cell
-                  .replace(/^<c\b[^>]*>/, (open: string) =>
-                    open
-                      .replace(/\s+t=["'][^"']*["']/, '')
-                      .replace(/>$/, type ? ` t="${type}">` : '>'),
-                  )
-                  .replace(/<v\b[^>]*>[\s\S]*?<\/v>/g, '')
-                  .replace(/<\/c>$/, value + '</c>');
-              },
-            ),
+          original.replace(CELL_ELEMENT, (cell) => {
+            const address = cellAddress(cell);
+            if (!address || !(/<f\b/.test(cell) || withinRanges(address, resultRanges)))
+              return cell;
+            return withEvaluatedCache(cell, caches.get(address) ?? '');
+          }),
         );
       }
       preserved.file(name, content);
@@ -692,6 +671,83 @@ function decodedXmlText(xml: string): string {
   return text;
 }
 
+const CELL_ELEMENT = /<c\b[^>]*?(?:\/>|>[\s\S]*?<\/c>)/g;
+
+interface CellRange {
+  firstColumn: number;
+  firstRow: number;
+  lastColumn: number;
+  lastRow: number;
+}
+
+function cellAddress(cell: string): string | undefined {
+  return cell.match(/^<c\b[^>]*\br=["']([^"']+)["']/)?.[1];
+}
+
+function cellsByAddress(sheetXml: string): Map<string, string> {
+  const cells = new Map<string, string>();
+  for (const cell of sheetXml.matchAll(CELL_ELEMENT)) {
+    const address = cellAddress(cell[0]);
+    if (address) cells.set(address, cell[0]);
+  }
+  return cells;
+}
+
+function cellCoordinates(address: string): { column: number; row: number } | null {
+  const parts = address.match(/^\$?([A-Za-z]{1,3})\$?(\d+)$/);
+  if (!parts) return null;
+  let column = 0;
+  for (const letter of parts[1]!.toUpperCase()) column = column * 26 + letter.charCodeAt(0) - 64;
+  return { column, row: Number(parts[2]) };
+}
+
+function formulaResultRanges(sheetXml: string): CellRange[] {
+  const ranges: CellRange[] = [];
+  for (const cell of sheetXml.matchAll(CELL_ELEMENT)) {
+    const attributes = cell[0].match(/<f\b([^>]*)>/)?.[1];
+    if (attributes === undefined || !/\bt=["'](?:array|dataTable)["']/.test(attributes)) continue;
+    const reference = attributes.match(/\bref=["']([^"']+)["']/)?.[1] ?? cellAddress(cell[0]) ?? '';
+    const [from, to = from] = reference.split(':');
+    const first = cellCoordinates(from ?? '');
+    const last = cellCoordinates(to ?? '');
+    if (!first || !last)
+      throw new ManagedOfficeProcessingError('An array formula result range is unreadable.');
+    ranges.push({
+      firstColumn: Math.min(first.column, last.column),
+      firstRow: Math.min(first.row, last.row),
+      lastColumn: Math.max(first.column, last.column),
+      lastRow: Math.max(first.row, last.row),
+    });
+  }
+  return ranges;
+}
+
+function withinRanges(address: string | undefined, ranges: readonly CellRange[]): boolean {
+  const coordinates = address ? cellCoordinates(address) : null;
+  if (!coordinates) return false;
+  return ranges.some(
+    (range) =>
+      coordinates.column >= range.firstColumn &&
+      coordinates.column <= range.lastColumn &&
+      coordinates.row >= range.firstRow &&
+      coordinates.row <= range.lastRow,
+  );
+}
+
+function withEvaluatedCache(cell: string, evaluated: string): string {
+  const value = evaluated.match(/<v>([^<]+)<\/v>/)?.[0];
+  const type = evaluated.match(/^<c\b[^>]*\bt=["']([^"']+)["']/)?.[1];
+  if (!value || (type && !['n', 'str', 'b'].includes(type)))
+    throw new ManagedOfficeProcessingError('The evaluator returned an unsupported formula cache.');
+  const closed = cell.endsWith('/>') ? `${cell.slice(0, -2).trimEnd()}></c>` : cell;
+  return closed
+    .replace(/^<c\b[^>]*>/, (open: string) =>
+      open.replace(/\s+t=["'][^"']*["']/, '').replace(/>$/, type ? ` t="${type}">` : '>'),
+    )
+    .replace(/<v\b[^>]*>[\s\S]*?<\/v>/g, '')
+    .replace(/<\/c>$/, value + '</c>');
+}
+
 export async function editManagedWorkbook(
   source: ManagedWorkbookSource,
   attachments: readonly TurnAttachment[],
@@ -754,41 +810,46 @@ export async function editManagedWorkbook(
       throw new ManagedOfficeProcessingError('Each workbook cell may be edited once per request.');
     touched.add(key);
     let found = false;
-    const xml = parts
-      .get(part)!
-      .toString('utf8')
-      .replace(/<c\b[^>]*\br=["']([^"']+)["'][^>]*>[\s\S]*?<\/c>/g, (cell, address: string) => {
-        if (address !== edit.cell) return cell;
-        if (/<f\b[^>]*\b(?:t|ref|si)=/.test(cell))
-          throw new ManagedOfficeProcessingError(
-            'Shared, array and spill formula edits are unsupported.',
-          );
-        found = true;
-        const formula = cell.match(/<f\b[^>]*>([\s\S]*?)<\/f>/)?.[1];
-        const value = cell.match(/<v>([\s\S]*?)<\/v>/)?.[1] ?? '';
-        const type = cell.match(/^<c\b[^>]*\bt=["']([^"']+)["']/)?.[1];
-        const current =
-          formula !== undefined
-            ? '=' + decodedXmlText(formula)
-            : type === 's'
-              ? shared[Number(value)]
-              : type === 'inlineStr'
-                ? decodedXmlText(cell.match(/<is>([\s\S]*?)<\/is>/)?.[1] ?? '')
-                : type === 'str'
-                  ? decodedXmlText(value)
-                  : Number(value);
-        if (current !== edit.expected)
-          throw new ManagedOfficeProcessingError(
-            'A workbook cell differs from the expected value; refresh the source before editing.',
-          );
-        const open = cell.match(/^<c\b[^>]*>/)![0].replace(/\s+t=["'][^"']*["']/, '');
-        if (typeof edit.value === 'number') return open + `<v>${edit.value}</v></c>`;
-        if (edit.value.startsWith('=')) return open + `<f>${xmlText(edit.value.slice(1))}</f></c>`;
-        return (
-          open.replace(/>$/, ' t="inlineStr">') +
-          `<is><t xml:space="preserve">${xmlText(edit.value)}</t></is></c>`
+    const sheetXml = parts.get(part)!.toString('utf8');
+    if (withinRanges(edit.cell, formulaResultRanges(sheetXml)))
+      throw new ManagedOfficeProcessingError(
+        'Shared, array and spill formula edits are unsupported.',
+      );
+    const xml = sheetXml.replace(CELL_ELEMENT, (cell) => {
+      if (cellAddress(cell) !== edit.cell) return cell;
+      if (/<f\b[^>]*\b(?:t|ref|si)=/.test(cell))
+        throw new ManagedOfficeProcessingError(
+          'Shared, array and spill formula edits are unsupported.',
         );
-      });
+      found = true;
+      const formula = cell.match(/<f\b[^>]*>([\s\S]*?)<\/f>/)?.[1];
+      const value = cell.match(/<v>([\s\S]*?)<\/v>/)?.[1] ?? '';
+      const type = cell.match(/^<c\b[^>]*\bt=["']([^"']+)["']/)?.[1];
+      const current =
+        formula !== undefined
+          ? '=' + decodedXmlText(formula)
+          : type === 's'
+            ? shared[Number(value)]
+            : type === 'inlineStr'
+              ? decodedXmlText(cell.match(/<is>([\s\S]*?)<\/is>/)?.[1] ?? '')
+              : type === 'str'
+                ? decodedXmlText(value)
+                : Number(value);
+      if (current !== edit.expected)
+        throw new ManagedOfficeProcessingError(
+          'A workbook cell differs from the expected value; refresh the source before editing.',
+        );
+      const open = cell
+        .match(/^<c\b[^>]*?\/?>/)![0]
+        .replace(/\s*\/?>$/, '>')
+        .replace(/\s+t=["'][^"']*["']/, '');
+      if (typeof edit.value === 'number') return open + `<v>${edit.value}</v></c>`;
+      if (edit.value.startsWith('=')) return open + `<f>${xmlText(edit.value.slice(1))}</f></c>`;
+      return (
+        open.replace(/>$/, ' t="inlineStr">') +
+        `<is><t xml:space="preserve">${xmlText(edit.value)}</t></is></c>`
+      );
+    });
     if (!found)
       throw new ManagedOfficeProcessingError(
         'Inserting new workbook cells is unsupported; select an existing explicit cell.',
