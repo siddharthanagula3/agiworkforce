@@ -17,7 +17,11 @@ import { executionModeForConversation } from '@/src/features/chat/utils/conversa
 import { getRemoteChatDisabledReason } from '@/services/remoteChatGate';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { requestMicPermission } from '@/src/features/voice/services/voiceInput';
-import { applyAudioRoute } from '@/src/features/voice/services/audioRoute';
+import {
+  applyAudioRoute,
+  audioRouteNotAppliedMessage,
+  audioRouteSwitchingSupported,
+} from '@/src/features/voice/services/audioRoute';
 import {
   activeAudioRoute,
   activeSpeechLanguage,
@@ -69,6 +73,7 @@ export interface LiveVoiceController {
   interrupted: boolean;
   turns: LiveTranscriptTurn[];
   error: string | null;
+  routeNotice: string | null;
   approvals: readonly LiveVoicePendingApproval[];
   toolActivity: readonly LiveVoiceToolActivity[];
   toolOutcomes: readonly LiveVoiceToolOutcome[];
@@ -105,6 +110,7 @@ export function useLiveVoiceSession({
   const [interrupted, setInterrupted] = useState(false);
   const [turns, setTurns] = useState<LiveTranscriptTurn[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [routeNotice, setRouteNotice] = useState<string | null>(null);
   const [approvals, setApprovals] = useState<readonly LiveVoicePendingApproval[]>([]);
   const [toolActivity, setToolActivity] = useState<readonly LiveVoiceToolActivity[]>([]);
   const [toolOutcomes, setToolOutcomes] = useState<readonly LiveVoiceToolOutcome[]>([]);
@@ -211,6 +217,7 @@ export function useLiveVoiceSession({
     };
     setStatus('connecting');
     setError(null);
+    setRouteNotice(null);
     if (reconnectsRef.current === 0) {
       setTurns([]);
       setToolOutcomes([]);
@@ -291,7 +298,10 @@ export function useLiveVoiceSession({
           'microphone_denied',
         );
       }
-      applyAudioRoute(activeAudioRoute());
+      const requestedRoute = activeAudioRoute();
+      if (!applyAudioRoute(requestedRoute) && audioRouteSwitchingSupported()) {
+        setRouteNotice(audioRouteNotAppliedMessage(requestedRoute));
+      }
       const ensured = target ?? (await binding.ensureConversation());
       authority.assertCurrent();
       if (!ensured) throw new Error('Voice conversation is unavailable');
@@ -527,6 +537,7 @@ export function useLiveVoiceSession({
     interrupted,
     turns,
     error,
+    routeNotice,
     approvals,
     toolActivity,
     toolOutcomes,

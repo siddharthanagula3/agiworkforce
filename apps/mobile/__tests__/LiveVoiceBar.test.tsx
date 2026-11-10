@@ -70,6 +70,20 @@ describe('LiveVoiceBar', () => {
     expect(queryByTestId('live-voice-bar')).toBeNull();
   });
 
+  it('shows the audio route notice only while no error is showing', () => {
+    const notice = 'Could not switch audio to speaker. This call may use a different output.';
+    const shown = renderLiveBar({ routeNotice: notice });
+    expect(shown.getByTestId('live-voice-route-notice').props.children).toBe(notice);
+    shown.unmount();
+
+    const withError = renderLiveBar({ routeNotice: notice, error: 'Connection failed' });
+    expect(withError.queryByTestId('live-voice-route-notice')).toBeNull();
+    withError.unmount();
+
+    const none = renderLiveBar();
+    expect(none.queryByTestId('live-voice-route-notice')).toBeNull();
+  });
+
   it('fills the transcript area with a stage and centres the orb in it', () => {
     const { getByTestId } = renderLiveBar();
 

@@ -11,6 +11,7 @@ import {
   AUDIO_ROUTE_HINTS,
   AUDIO_ROUTE_LABELS,
   applyAudioRoute,
+  audioRouteNotAppliedMessage,
   audioRouteSwitchingSupported,
   type AudioRoute,
 } from '@/src/features/voice/services/audioRoute';
@@ -27,12 +28,14 @@ export function AudioRoutePicker({ compact = false }: { compact?: boolean }) {
   const route = useSettingsStore((s) => s.audioRoute);
   const setAudioRoute = useSettingsStore((s) => s.setAudioRoute);
   const [open, setOpen] = useState(false);
+  const [unappliedRoute, setUnappliedRoute] = useState<AudioRoute | null>(null);
 
   const choose = useCallback(
     (next: AudioRoute) => {
       setAudioRoute(next);
-      applyAudioRoute(next);
-      setOpen(false);
+      const applied = applyAudioRoute(next);
+      setUnappliedRoute(applied ? null : next);
+      if (applied) setOpen(false);
     },
     [setAudioRoute],
   );
@@ -40,13 +43,14 @@ export function AudioRoutePicker({ compact = false }: { compact?: boolean }) {
   if (!audioRouteSwitchingSupported()) return null;
 
   const ActiveIcon = ROUTE_ICON[route];
+  const notApplied = unappliedRoute === route;
 
   return (
     <>
       <PressableBox
         onPress={() => setOpen(true)}
         accessibilityRole="button"
-        accessibilityLabel={`Audio route, ${AUDIO_ROUTE_LABELS[route]}`}
+        accessibilityLabel={`Audio route, ${AUDIO_ROUTE_LABELS[route]}${notApplied ? ', not applied' : ''}`}
         accessibilityHint="Choose where this call plays and records"
         testID="audio-route-trigger"
         style={{
@@ -107,6 +111,20 @@ export function AudioRoutePicker({ compact = false }: { compact?: boolean }) {
             >
               AUDIO ROUTE
             </Text>
+            {notApplied ? (
+              <Text
+                testID="audio-route-not-applied"
+                accessibilityLiveRegion="polite"
+                style={{
+                  color: colors.textPrimary,
+                  fontSize: typeScale.caption,
+                  paddingHorizontal: 12,
+                  paddingBottom: 8,
+                }}
+              >
+                {audioRouteNotAppliedMessage(route)}
+              </Text>
+            ) : null}
             {AUDIO_ROUTES.map((candidate) => {
               const Icon = ROUTE_ICON[candidate];
               const selected = candidate === route;

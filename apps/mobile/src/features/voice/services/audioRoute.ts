@@ -70,6 +70,10 @@ export function applyAudioRoute(route: AudioRoute): boolean {
   }
 }
 
+export function audioRouteNotAppliedMessage(route: AudioRoute): string {
+  return `Could not switch audio to ${AUDIO_ROUTE_LABELS[route].toLowerCase()}. This call may use a different output.`;
+}
+
 export function readActiveAudioRoute(): AudioRoute | null {
   if (!audioRouteSwitchingSupported()) return null;
   try {

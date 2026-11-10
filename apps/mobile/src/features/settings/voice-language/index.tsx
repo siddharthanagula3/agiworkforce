@@ -18,7 +18,8 @@ import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import * as TTS from '@/src/features/voice/services/tts';
 import { useVoiceOutputOwner } from '@/src/features/voice/hooks/useVoiceOutputOwner';
-import { VOICE_PRESETS, findVoiceForPreset } from '@/src/features/voice/voicePresets';
+import { VOICE_PRESETS } from '@/src/features/voice/voicePresets';
+import { applyVoicePreset } from '@/src/features/voice/services/voicePresetSelection';
 import type { VoiceInfo } from '@/src/features/voice/services/tts';
 
 function PresetRow({
@@ -236,14 +237,9 @@ export default function VoiceLanguageScreen() {
 
   const handleSelectPreset = useCallback(
     (presetId: string) => {
-      const preset = VOICE_PRESETS.find((item) => item.id === presetId);
-      if (!preset) return;
-      setSelectedPresetId(preset.id);
-      setSpeechRate(preset.rate);
-      setSpeechPitch(preset.pitch);
-      setSelectedVoiceId(findVoiceForPreset(preset, voices));
+      applyVoicePreset(presetId, voices);
     },
-    [setSelectedPresetId, setSelectedVoiceId, setSpeechPitch, setSpeechRate, voices],
+    [voices],
   );
 
   const handleSelectSystemVoice = useCallback(

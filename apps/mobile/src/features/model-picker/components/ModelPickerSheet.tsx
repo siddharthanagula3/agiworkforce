@@ -379,11 +379,12 @@ export function ModelPickerSheet({
   // Recency order comes from the store, not from the catalogue, so the row is
   // built by walking `recentModels` rather than filtering the model list.
   const recentModelDefs = useMemo(() => {
+    if (query) return [];
     const byId = new Map(filteredModels.map((model) => [model.id, model]));
     return recentModels
       .map((id) => byId.get(id))
       .filter((model): model is ModelDef => model !== undefined);
-  }, [filteredModels, recentModels]);
+  }, [filteredModels, query, recentModels]);
 
   const favoriteModels = useMemo(
     () => filteredModels.filter((model) => favorites.includes(model.id)),
@@ -816,7 +817,7 @@ export function ModelPickerSheet({
             </View>
           ) : null}
 
-          {!query && recentModelDefs.length > 0 ? (
+          {recentModelDefs.length > 0 ? (
             <View style={{ marginBottom: 6 }}>
               <Text
                 style={{
