@@ -3854,20 +3854,6 @@ Verification: Three real-hook/store assertions fail as expected; this particular
 
 Resolution/acceptance: Construct an otherwise admitted request with adequate budget and an allowed model; require the exact managed_compute_disabled code when the policy is off, then enable the policy and require that this gate permits the same request. Inject a broken managed-compute gate and prove the test fails even if another refusal remains.
 
-## CLI-CHECKPOINT-PARENT-SYMLINK-ESCAPE-01
-
-Severity: High. Status: open in source snapshot `49d0c30f38ca53570dd4eade84548c9cf43705ae`; deployment unknown.
-
-Checkpoint rewind follows swapped parent symlinks outside the approved workspace. Snapshot paths are lexical root joins, not stable confined handles. restore_files checks the final file only for Contents; symlink_metadata follows symlink parents, so an outside regular leaf passes. Absent directly removes the lexical path. The app-server rewind checks thread/writer ownership but never revalidates snapshot paths against the workspace or executes these writes in its shell sandbox.
-
-Impact/trigger: Capture workspace/sub/file during an approved edit, then replace sub with a symlink to a directory outside the workspace before choosing code rewind. An outside regular file of the same name is overwritten; a file captured as Absent is deleted through the symlink.
-
-Start at `apps/cli/src/agent/checkpoints.rs:322` in `.worktrees/billing-e2e`. Evidence and full anchors: [`rust-developer-review.json`](evidence/2026-09-29-ecosystem-review/rust-developer-review.json).
-
-Verification: Exact unsafe_to_overwrite function extracted from current source into a standalone Rust probe; same restore filesystem operations performed in temporary directories. Limit: Primitive reproduction, not full CLI build, mounted app-server or rendered UI. No user files touched.
-
-Resolution/acceptance: Revalidate every snapshot destination under the owned workspace immediately before restore/delete and reject symlink ancestors; use confined/no-follow filesystem operations to avoid a check/write race. Keep skipped-file reporting.
-
 ## VSCODE-CLI-HANDOFF-NOT-ACTIVATED-01
 
 Severity: Medium. Status: open in source snapshot `49d0c30f38ca53570dd4eade84548c9cf43705ae`; deployment unknown.
