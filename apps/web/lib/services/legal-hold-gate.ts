@@ -502,6 +502,26 @@ function organizationColumnOf(table: string): string {
 export const HELD_DELETION_REFUSAL =
   'This is preserved by an active legal hold and cannot be deleted yet. It will be deleted once the hold is released.';
 
+// A refused message is not remembered as a deletion, so its refusal promises nothing later.
+export const HELD_MESSAGE_DELETION_REFUSAL =
+  'This message is preserved by an active legal hold and cannot be deleted while the hold is active.';
+
+export const HELD_UNDEFERRED_DELETION_REFUSAL =
+  'This is preserved by an active legal hold and cannot be deleted while the hold is active.';
+
+// Only these stores keep the refused item tombstoned for the purge cron that
+// finishes the deletion after release.
+const DEFERRED_HELD_DELETIONS: ReadonlySet<LegalHoldResourceType> = new Set([
+  'file',
+  'project_file',
+]);
+
+export function heldDeletionRefusal(resourceType: LegalHoldResourceType): string {
+  if (DEFERRED_HELD_DELETIONS.has(resourceType)) return HELD_DELETION_REFUSAL;
+  if (resourceType === 'message') return HELD_MESSAGE_DELETION_REFUSAL;
+  return HELD_UNDEFERRED_DELETION_REFUSAL;
+}
+
 // The record matters as much as the refusal: an opposing party asks whether
 // anybody tried to destroy the evidence.
 export async function refuseHeldDeletion(input: {
@@ -527,5 +547,5 @@ export async function refuseHeldDeletion(input: {
       '[legal-hold] refused deletion could not be audited',
     );
   });
-  throw createError.forbidden(HELD_DELETION_REFUSAL);
+  throw createError.forbidden(heldDeletionRefusal(input.resourceType));
 }

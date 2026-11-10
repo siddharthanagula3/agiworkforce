@@ -482,7 +482,7 @@
     {
       "name": "purge-deleted-media",
       "role": "cleanup",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "produces": [],
       "consumes": [],
       "inFlightWork": {
@@ -490,6 +490,11 @@
         "recovery": "next-tick"
       },
       "changelog": [
+        {
+          "version": "1.1.0",
+          "date": "2026-11-10",
+          "change": "Also purges deleted project knowledge files (object, then row) and deleted projects with no files or project memories left, 30 days after deletion and only once no legal hold covers them; every purge is audited as deleted_content_purged."
+        },
         {
           "version": "1.0.0",
           "date": "2026-09-17",

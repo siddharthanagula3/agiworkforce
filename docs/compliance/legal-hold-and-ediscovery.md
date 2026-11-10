@@ -49,7 +49,7 @@ beforehand cannot let it. `scripts/check-legal-hold-coverage.mjs` enumerates
 every destructive statement in `apps/web` and `packages` from the source, takes
 the reach of a delete from the foreign keys in `apps/web/db/neon`, and judges
 each statement individually: a predicate elsewhere in the same file does not
-vouch for it. It reports 17 of 17 statements gated with an empty baseline, and
+vouch for it. It reports 18 of 18 statements gated with an empty baseline, and
 fails on a seventeenth.
 
 Two paths refuse instead of filtering, which is the stronger answer: account
@@ -62,8 +62,13 @@ uncapped query, so a workspace cannot outgrow the answer.
 A deletion a user asked for and a hold refused is recorded, not only refused.
 `refuseHeldDeletion` in `legal-hold-gate.ts` writes a
 `deletion_blocked_by_legal_hold` audit event with `outcome: 'denied'` before
-throwing, and the message the user sees names the consequence and its end: the
-content is preserved by a hold, and will be deleted once the hold is released.
+throwing, and the message the user sees names the consequence
+(`heldDeletionRefusal`). Only a refused media file keeps the promise that it
+will be deleted once the hold is released, because it stays tombstoned and
+`cron/purge-deleted-media` finishes it. A refused chat message is not
+remembered as a deletion, so its refusal says it is preserved and cannot be
+deleted while the hold is active, and promises nothing later; the user deletes
+it again after the release.
 
 ## Retention never beats a hold
 
@@ -194,6 +199,12 @@ for media assets as well. The thirty days follow the leaders' practice:
 Microsoft Purview keeps released content for a 30-day delay hold, and Google
 Vault purges content users deleted more than 30 days earlier once no hold or
 retention rule covers it.
+
+The same run then purges a deleted project's own row, on the same window and
+with the same hold checks, lock and audit event, once none of its knowledge
+files is left (`purgeEmptiedDeletedProjects`). A deleted project that still
+scopes memories keeps its row: deleting it would cascade to those memories,
+which nobody deleted.
 
 ## Related
 

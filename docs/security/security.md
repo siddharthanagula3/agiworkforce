@@ -1134,7 +1134,7 @@ the WHERE clause of each statement that destroys, never evaluated into a list of
 rows first: a hold placed between a read and a delete has to win, and a
 candidate list computed beforehand cannot let it.
 `scripts/check-legal-hold-coverage.mjs` judges that per statement, from the
-source, and reports 17 of 17 gated with an empty baseline. Account and workspace
+source, and reports 18 of 18 gated with an empty baseline. Account and workspace
 erasure refuse the whole operation instead, so a held subject is never partly
 erased. A refusal is audited as `deletion_blocked_by_legal_hold` with
 `outcome: 'denied'`.
@@ -1143,10 +1143,12 @@ erased. A refusal is audited as `deletion_blocked_by_legal_hold` with
 
 - **The soft-delete purge ships off.** `SOFT_DELETED_RESOURCE_PURGE_ENABLED` is
   unset by default, so on a deployment that has not set it the recovery window
-  for conversations, messages, artifacts and projects does not end on schedule.
-  `media_assets` and `project_knowledge_files` are purged by
-  `cron/purge-deleted-media`, which is always on. Until the switch is turned
-  on, the published recovery window is honoured for two stores out of six.
+  for conversations, messages and artifacts does not end on schedule.
+  `media_assets`, `project_knowledge_files` and deleted projects with no files
+  or project memories left are purged by `cron/purge-deleted-media`, which is
+  always on. Until the switch is turned on, the published recovery window is
+  honoured for three stores out of six (projects that still scope memories
+  excepted).
 - **A hold does not preserve what this product never stored.** A knowledge file
   or media asset row whose storage pointer is null is a reference to content
   held elsewhere. The preservation endpoint and the export manifest count those

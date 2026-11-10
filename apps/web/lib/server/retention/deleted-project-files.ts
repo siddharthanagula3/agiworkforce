@@ -11,7 +11,7 @@ import { countHeldRows, legalHoldExclusion } from '@/lib/services/legal-hold-gat
 import { serializeDestructionWithHolds } from '@/lib/services/legal-hold-placement';
 
 const TABLE = 'project_knowledge_files';
-const MAX_FILES_PER_RUN = 500;
+const MAX_ROWS_PER_RUN = 500;
 const BATCH_SIZE = 50;
 
 export interface DeletedProjectFilesPurge {
@@ -34,9 +34,9 @@ interface Confirmed {
   storage_uri: string | null;
 }
 
-function recoveryWindow(): string {
-  const policy = resourceDeletionPolicy(TABLE);
-  if (policy === null) throw new Error(`${TABLE} has no resource deletion policy`);
+function recoveryWindow(table: string = TABLE): string {
+  const policy = resourceDeletionPolicy(table);
+  if (policy === null) throw new Error(`${table} has no resource deletion policy`);
   return `${policy.recoveryWindowDays} days`;
 }
 
@@ -165,9 +165,11 @@ export async function recordDeletedContentPurge(input: {
   table: string;
   rowsPurged: number;
   objectsDeleted: number;
+  source?: string;
 }): Promise<void> {
   if (input.rowsPurged === 0 && input.objectsDeleted === 0) return;
-  const source = resourceDeletionPolicy(input.table)?.externalObjects?.sweep ?? input.table;
+  const source =
+    input.source ?? resourceDeletionPolicy(input.table)?.externalObjects?.sweep ?? input.table;
   await recordAuditEvent({
     userId: 'system',
     eventType: 'deleted_content_purged',
@@ -220,7 +222,7 @@ export async function purgeDeletedProjectFiles(
       where ${dueForPurge('knowledge', '$1')}
         and ${candidateExclusion.sql}
       order by knowledge.deleted_at asc
-      limit ${MAX_FILES_PER_RUN}`,
+      limit ${MAX_ROWS_PER_RUN}`,
     [window, ...candidateExclusion.params],
   );
   tally.candidates = candidates.length;
@@ -246,6 +248,111 @@ export async function purgeDeletedProjectFiles(
       table: TABLE,
       rowsPurged: purged,
       objectsDeleted: tally.objectsDeleted - before,
+    });
+  }
+  return tally;
+}
+
+const PROJECTS = 'user_projects';
+
+export interface DeletedProjectsPurge {
+  candidates: number;
+  rowsPurged: number;
+  heldFromPurge: number;
+}
+
+// A project row goes only once every knowledge file is gone, so the cascade
+// never takes a file whose bytes the file purge has not reached. A project
+// still scoping memories is kept: the cascade would take them, and nobody
+// deleted those.
+function emptiedProject(alias: string): string {
+  return `not exists (
+             select 1 from public.project_knowledge_files remaining
+              where remaining.project_id = ${alias}.id
+           )
+           and not exists (
+             select 1 from public.user_memories scoped
+              where scoped.project_id = ${alias}.id
+           )`;
+}
+
+async function purgeProjectBatch(
+  db: DatabaseAdapter,
+  organizationId: string | null,
+  ids: readonly string[],
+  window: string,
+): Promise<number> {
+  return db.transaction(async (tx) => {
+    await serializeDestructionWithHolds(tx, organizationId);
+    const purgeExclusion = legalHoldExclusion('project', {
+      alias: 'target',
+      nextParamIndex: 3,
+    });
+    const purged = await tx.query<{ id: string }>(
+      `delete from public.user_projects target
+        where target.id = any($1::uuid[])
+          and ${dueForPurge('target', '$2')}
+          and ${emptiedProject('target')}
+          and ${purgeExclusion.sql}
+        returning target.id`,
+      [ids, window, ...purgeExclusion.params],
+    );
+    return purged.length;
+  });
+}
+
+export async function purgeEmptiedDeletedProjects(
+  db: DatabaseAdapter,
+): Promise<DeletedProjectsPurge> {
+  const window = recoveryWindow(PROJECTS);
+  const tally: DeletedProjectsPurge = { candidates: 0, rowsPurged: 0, heldFromPurge: 0 };
+  const due = `${dueForPurge('emptied', '$1')}
+           and ${emptiedProject('emptied')}`;
+
+  tally.heldFromPurge = await countHeldRows(db, 'project', {
+    table: PROJECTS,
+    alias: 'emptied',
+    where: due,
+    params: [window],
+  });
+  const candidateExclusion = legalHoldExclusion('project', {
+    alias: 'emptied',
+    nextParamIndex: 2,
+  });
+  const candidates = await db.query<{ id: string; organization_id: string | null }>(
+    `select emptied.id, emptied.organization_id
+       from public.user_projects emptied
+      where ${due}
+        and ${candidateExclusion.sql}
+      order by emptied.deleted_at asc
+      limit ${MAX_ROWS_PER_RUN}`,
+    [window, ...candidateExclusion.params],
+  );
+  tally.candidates = candidates.length;
+
+  const byWorkspace = new Map<string | null, string[]>();
+  for (const candidate of candidates) {
+    const workspace = candidate.organization_id ?? null;
+    byWorkspace.set(workspace, [...(byWorkspace.get(workspace) ?? []), candidate.id]);
+  }
+  for (const [organizationId, ids] of byWorkspace) {
+    let purged = 0;
+    for (let offset = 0; offset < ids.length; offset += BATCH_SIZE) {
+      purged += await purgeProjectBatch(
+        db,
+        organizationId,
+        ids.slice(offset, offset + BATCH_SIZE),
+        window,
+      );
+    }
+    tally.rowsPurged += purged;
+    await recordDeletedContentPurge({
+      organizationId,
+      resourceType: 'project',
+      table: PROJECTS,
+      source: resourceDeletionPolicy(TABLE)?.externalObjects?.sweep ?? PROJECTS,
+      rowsPurged: purged,
+      objectsDeleted: 0,
     });
   }
   return tally;

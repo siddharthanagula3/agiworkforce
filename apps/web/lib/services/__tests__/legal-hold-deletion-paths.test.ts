@@ -46,7 +46,12 @@ import { permanentlyDeleteMediaAsset } from '@/lib/server/media-assets';
 import { purgeTemporaryChatFiles } from '@/lib/server/temporary-files/purge';
 import { deleteMessages } from '@/app/api/chat/conversations/[id]/messages/lib/message-thread';
 import { createDomainSweepers } from '../domain-retention-service';
-import { HELD_DELETION_REFUSAL, legalHoldExclusion } from '../legal-hold-gate';
+import {
+  HELD_DELETION_REFUSAL,
+  HELD_MESSAGE_DELETION_REFUSAL,
+  heldDeletionRefusal,
+  legalHoldExclusion,
+} from '../legal-hold-gate';
 import { FakePostgres } from './fake-postgres';
 
 const HELD = 'alice';
@@ -515,7 +520,7 @@ describe('a held row survives every path and its unheld sibling does not', () =>
         userId: HELD,
         organizationId: ORG,
       }),
-    ).rejects.toMatchObject({ statusCode: 403, message: HELD_DELETION_REFUSAL });
+    ).rejects.toMatchObject({ statusCode: 403, message: HELD_MESSAGE_DELETION_REFUSAL });
 
     expect(ids(db, 'web_messages')).toContain('msg-held');
     expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
@@ -539,6 +544,23 @@ describe('a held row survives every path and its unheld sibling does not', () =>
     const db = world('released');
     await deleteMessages(db as unknown as DatabaseAdapter, 'conv-held', ['msg-held']);
     expect(ids(db, 'web_messages')).toEqual(['msg-free']);
+  });
+});
+
+describe('a refusal promises a later deletion only where a sweep performs it', () => {
+  it('keeps the promise for files, which stay tombstoned for the purge cron', () => {
+    expect(heldDeletionRefusal('file')).toBe(HELD_DELETION_REFUSAL);
+    expect(heldDeletionRefusal('project_file')).toBe(HELD_DELETION_REFUSAL);
+    expect(HELD_DELETION_REFUSAL).toMatch(/once the hold is released/u);
+  });
+
+  it('makes no promise for a message or any store nothing finishes later', () => {
+    for (const store of ['message', 'conversation', 'project', 'artifact', 'work_run'] as const) {
+      const refusal = heldDeletionRefusal(store);
+      expect(refusal).toMatch(/legal hold/u);
+      expect(refusal).not.toMatch(/will be deleted|once the hold is released/u);
+    }
+    expect(heldDeletionRefusal('message')).toMatch(/^This message is preserved/u);
   });
 });
 
@@ -573,7 +595,7 @@ describe('an ordinary member, whose connection RLS keeps from reading any hold',
         userId: HELD,
         organizationId: ORG,
       }),
-    ).rejects.toMatchObject({ statusCode: 403, message: HELD_DELETION_REFUSAL });
+    ).rejects.toMatchObject({ statusCode: 403, message: HELD_MESSAGE_DELETION_REFUSAL });
 
     expect(ids(db, 'web_messages')).toContain('msg-held');
   });

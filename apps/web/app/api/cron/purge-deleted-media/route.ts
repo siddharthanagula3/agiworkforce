@@ -21,8 +21,10 @@ import {
 } from '@/lib/server/feedback-screenshot-cleanup';
 import {
   purgeDeletedProjectFiles,
+  purgeEmptiedDeletedProjects,
   recordDeletedContentPurge,
   type DeletedProjectFilesPurge,
+  type DeletedProjectsPurge,
 } from '@/lib/server/retention/deleted-project-files';
 
 export const runtime = 'nodejs';
@@ -87,6 +89,20 @@ async function sweepDeletedProjectFiles(
     logger.error(
       { error: error instanceof Error ? error.message : String(error) },
       'Deleted project file purge failed; nothing past the failure was removed',
+    );
+    return null;
+  }
+}
+
+async function sweepEmptiedDeletedProjects(
+  db: DatabaseAdapter,
+): Promise<DeletedProjectsPurge | null> {
+  try {
+    return await purgeEmptiedDeletedProjects(db);
+  } catch (error) {
+    logger.error(
+      { error: error instanceof Error ? error.message : String(error) },
+      'Deleted project purge failed; nothing past the failure was removed',
     );
     return null;
   }
@@ -209,6 +225,7 @@ export async function GET(request: NextRequest) {
     const multipart = await sweepOrphanedMultipartUploads();
     const feedbackScreenshots = await sweepFeedbackScreenshots(db);
     const projectFiles = await sweepDeletedProjectFiles(db);
+    const deletedProjects = await sweepEmptiedDeletedProjects(db);
 
     // The hold decides candidacy before any byte is touched: one that only
     // reached the DELETE would still have lost the file it preserved.
@@ -243,6 +260,7 @@ export async function GET(request: NextRequest) {
         multipart,
         feedbackScreenshots,
         projectFiles,
+        deletedProjects,
       });
     }
 
@@ -259,6 +277,7 @@ export async function GET(request: NextRequest) {
         multipart,
         feedbackScreenshots,
         projectFiles,
+        deletedProjects,
       },
       heldFromPurge > 0
         ? 'Purged expired soft-deleted media assets; some were preserved by an active legal hold and will be purged once it is released'
@@ -276,6 +295,7 @@ export async function GET(request: NextRequest) {
       multipart,
       feedbackScreenshots,
       projectFiles,
+      deletedProjects,
     });
   } catch (error) {
     logger.error(
