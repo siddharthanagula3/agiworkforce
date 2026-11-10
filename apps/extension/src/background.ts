@@ -100,6 +100,7 @@ import {
   ScheduledTaskCancellationAttemptCoordinator,
   selectScheduledTaskCancellationCredential,
 } from './features/background/scheduled-task-cancellation';
+import { readEnabledPreference } from './features/background/enabled-preference';
 import {
   publishAuthorizedScheduledTaskNotification,
   scheduledTaskNotificationAuthority,
@@ -1874,14 +1875,16 @@ function showNotification(
 }
 
 async function taskNotificationsEnabled(): Promise<boolean> {
-  try {
-    const { agi_task_notifications: enabled } = await chrome.storage.local.get({
-      agi_task_notifications: true,
-    });
-    return enabled !== false;
-  } catch {
-    return true;
-  }
+  return readEnabledPreference({
+    read: async () => {
+      const { agi_task_notifications: enabled } = await chrome.storage.local.get({
+        agi_task_notifications: true,
+      });
+      return enabled;
+    },
+    onUnreadable: (error) =>
+      logger.warn('Task notification setting could not be read; staying quiet', error),
+  });
 }
 
 const notifyBrowserTask = createTaskNotifier<ManagedCloudOwner>({

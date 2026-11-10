@@ -18,7 +18,10 @@ import {
   deliverDeveloperWebhookJob,
   queueDeveloperWebhookEvent,
 } from '@/lib/services/developer-webhook-service';
+import { logger } from '@/lib/logger';
+import { recordNotificationDelivery } from '@/lib/observability/metrics';
 import { sendScheduleCompletionEmail } from '@/lib/services/notification-email-service';
+import { resumeDeferredPush, type PushMessage } from '@/lib/services/push-notification-service';
 import { recordResearchReportSettledCost } from '@/lib/services/research-report-service';
 import {
   loadSchedulePreferences,
@@ -26,7 +29,7 @@ import {
   scheduleNoticeKey,
   scheduleQuietHoursType,
 } from '@/lib/services/schedule-notification-service';
-import { quietHoursEndFor } from '@/lib/services/quiet-hours-service';
+import { QuietHoursUnreadableError, quietHoursEndFor } from '@/lib/services/quiet-hours-service';
 import { fireEventTriggerJob } from '@/lib/triggers/trigger-fire';
 import {
   DEVICE_REVOCATION_REASONS,
@@ -108,7 +111,10 @@ async function announceScheduleCompletion(
       userId,
       new Date(),
       scheduleQuietHoursType(notice.status),
-    );
+    ).catch((error: unknown) => {
+      if (error instanceof QuietHoursUnreadableError) return null;
+      throw error;
+    });
     await enqueueJob(context.db, {
       kind: 'email.schedule-completed',
       userId,
@@ -158,12 +164,27 @@ async function sendScheduleCompletionEmailJob(
   const preferences = await loadSchedulePreferences(scopedDb, userId, notice);
   if (!preferences.email || !preferences.email_address) return { skipped: 'opted_out' };
 
-  const heldUntil = await quietHoursEndFor(
-    scopedDb,
-    userId,
-    new Date(),
-    scheduleQuietHoursType(notice.status),
-  );
+  let heldUntil: Date | null;
+  try {
+    heldUntil = await quietHoursEndFor(
+      scopedDb,
+      userId,
+      new Date(),
+      scheduleQuietHoursType(notice.status),
+    );
+  } catch (error) {
+    if (!(error instanceof QuietHoursUnreadableError) || !context.isFinalAttempt) throw error;
+    logger.error(
+      { error, userId, runId: notice.runId },
+      '[notifications] quiet hours stayed unreadable; the schedule email is not sent',
+    );
+    recordNotificationDelivery({
+      channel: 'email',
+      outcome: 'failed',
+      reason: 'quiet_hours_unreadable_expired',
+    });
+    return { skipped: 'quiet_hours_unreadable' };
+  }
   if (heldUntil) {
     await enqueueJob(context.db, {
       kind: 'email.schedule-completed',
@@ -192,6 +213,45 @@ async function sendScheduleCompletionEmailJob(
     throw new PermanentJobError(`The provider refused the message: ${result.detail}`);
   }
   throw new Error(`Schedule email could not be sent (${result.reason}): ${result.detail}`);
+}
+
+function readDeferredPush(payload: Record<string, unknown>): {
+  message: PushMessage;
+  transports: { expo: boolean; web: boolean };
+} {
+  const message = payload['message'];
+  const transports = payload['transports'];
+  if (typeof message !== 'object' || message === null || Array.isArray(message)) {
+    throw new PermanentJobError('Deferred push payload carries no message');
+  }
+  const { title, body, data, quietHoursType } = message as Record<string, unknown>;
+  if (typeof title !== 'string' || typeof body !== 'string') {
+    throw new PermanentJobError('Deferred push payload is malformed');
+  }
+  const flags = (typeof transports === 'object' && transports !== null ? transports : {}) as Record<
+    string,
+    unknown
+  >;
+  const readable = (value: unknown): value is Record<string, string> =>
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Object.values(value).every((entry) => typeof entry === 'string');
+  return {
+    message: {
+      title,
+      body,
+      ...(readable(data) ? { data } : {}),
+      ...(typeof quietHoursType === 'string' ? { quietHoursType } : {}),
+    },
+    transports: { expo: flags['expo'] === true, web: flags['web'] === true },
+  };
+}
+
+async function deliverDeferredPush(context: JobHandlerContext): Promise<Record<string, unknown>> {
+  const userId = requireAccount(context);
+  const { message, transports } = readDeferredPush(context.job.payload);
+  return resumeDeferredPush(userId, message, transports, context.isFinalAttempt);
 }
 
 async function deliverAuditStream(context: JobHandlerContext): Promise<Record<string, unknown>> {
@@ -286,6 +346,7 @@ export const BACKGROUND_JOB_HANDLERS: JobHandlerRegistry = {
   'webhooks.signaling-device-revoke': retryRelayRevocation,
   'webhooks.identity-account-status': retryAccountProviderStep,
   'notifications.schedule-completed': announceScheduleCompletion,
+  'notifications.deferred-push': deliverDeferredPush,
   'email.schedule-completed': sendScheduleCompletionEmailJob,
   'webhooks.audit-stream-delivery': deliverAuditStream,
   'webhooks.developer-delivery': deliverDeveloperWebhookJob,

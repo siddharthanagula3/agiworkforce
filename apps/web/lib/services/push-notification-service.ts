@@ -1,10 +1,13 @@
 import 'server-only';
 
+import { randomUUID } from 'node:crypto';
+
+import { enqueueJob } from '@/lib/jobs/job-service';
 import { logger } from '@/lib/logger';
 import { recordNotificationDelivery, type NotificationChannel } from '@/lib/observability/metrics';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { sendWebPushToUser } from './web-push-service';
-import { heldByQuietHours } from './quiet-hours-service';
+import { QuietHoursUnreadableError, heldByQuietHours } from './quiet-hours-service';
 import { MobilePushPreferencesSchema, mobilePushWantsEvent } from '@agiworkforce/cloud-contracts';
 import {
   isDateWithinQuietHours,
@@ -27,6 +30,7 @@ export interface PushDeliveryResult {
   sent: number;
   invalidated: number;
   error?: string;
+  deferred?: boolean;
 }
 
 interface ExpoTicket {
@@ -227,10 +231,86 @@ export async function sendPushToUser(
   transports: PushTransports = {},
 ): Promise<PushDeliveryResult> {
   const { expo: toExpo = true, web: toWeb = true } = transports;
-  const quietHoursType = message.quietHoursType ?? message.data?.['type'];
-  if ((toExpo || toWeb) && (await heldByQuietHours(getNeonDb(), userId, quietHoursType))) {
-    return NO_DELIVERY;
+  if (toExpo || toWeb) {
+    try {
+      if (await heldByQuietHours(getNeonDb(), userId, pushQuietHoursType(message))) {
+        return NO_DELIVERY;
+      }
+    } catch (error) {
+      if (!(error instanceof QuietHoursUnreadableError)) throw error;
+      return deferUntilQuietHoursReadable(userId, message, { expo: toExpo, web: toWeb });
+    }
   }
+  return fanOutPush(userId, message, { expo: toExpo, web: toWeb });
+}
+
+function pushQuietHoursType(message: PushMessage): string | undefined {
+  return message.quietHoursType ?? message.data?.['type'];
+}
+
+async function deferUntilQuietHoursReadable(
+  userId: string,
+  message: PushMessage,
+  transports: Required<PushTransports>,
+): Promise<PushDeliveryResult> {
+  try {
+    await enqueueJob(getNeonDb(), {
+      kind: 'notifications.deferred-push',
+      userId,
+      idempotencyKey: `push-quiet-hours:${randomUUID()}`,
+      payload: { message, transports },
+    });
+    return { sent: 0, invalidated: 0, deferred: true };
+  } catch (error) {
+    logger.error(
+      { error, userId },
+      '[push] could not queue a notice held for unreadable quiet hours',
+    );
+    return { sent: 0, invalidated: 0, error: 'quiet_hours_unreadable' };
+  }
+}
+
+export async function resumeDeferredPush(
+  userId: string,
+  message: PushMessage,
+  transports: Required<PushTransports>,
+  isFinalAttempt: boolean,
+): Promise<Record<string, unknown>> {
+  try {
+    if (await heldByQuietHours(getNeonDb(), userId, pushQuietHoursType(message))) {
+      return { held: true };
+    }
+  } catch (error) {
+    if (!(error instanceof QuietHoursUnreadableError) || !isFinalAttempt) throw error;
+    logger.error(
+      { error, userId },
+      '[push] quiet hours stayed unreadable; the notice stays in the feed',
+    );
+    if (transports.expo) {
+      recordNotificationDelivery({
+        channel: 'push_expo',
+        outcome: 'failed',
+        reason: 'quiet_hours_unreadable_expired',
+      });
+    }
+    if (transports.web) {
+      recordNotificationDelivery({
+        channel: 'push_web',
+        outcome: 'failed',
+        reason: 'quiet_hours_unreadable_expired',
+      });
+    }
+    return { dropped: 'quiet_hours_unreadable' };
+  }
+  const result = await fanOutPush(userId, message, transports);
+  return { ...result };
+}
+
+async function fanOutPush(
+  userId: string,
+  message: PushMessage,
+  { expo: toExpo, web: toWeb }: Required<PushTransports>,
+): Promise<PushDeliveryResult> {
   const [expo, web] = await Promise.all([
     toExpo ? settle('expo', sendExpoPushToUser(userId, message)) : NO_DELIVERY,
     toWeb ? settle('web', sendWebPushToUser(userId, message)) : NO_DELIVERY,
