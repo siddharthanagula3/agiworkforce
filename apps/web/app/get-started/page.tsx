@@ -111,7 +111,7 @@ export default function GetStartedPage() {
               Choose your surface.
             </h2>
             <Prose>
-              {`Chat is ${SURFACE_STATUS.web.toLowerCase()}. Local and BYOK run on the CLI, which is ${SURFACE_STATUS.cli.toLowerCase()}; VS Code BYOK is ${SURFACE_STATUS.vscode.toLowerCase()}, and Desktop is cloud only.`}
+              {`Chat is ${SURFACE_STATUS.web.toLowerCase()}. Local and BYOK run on the CLI, which is ${SURFACE_STATUS.cli.toLowerCase()}; VS Code BYOK is ${SURFACE_STATUS.vscode.toLowerCase()}, and Desktop chat is cloud only while its local coding sessions run the CLI.`}
             </Prose>
             <Stack gap="loose" className="agi-ds-full">
               <SurfaceStatus

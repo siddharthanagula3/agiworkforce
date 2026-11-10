@@ -5496,17 +5496,19 @@
       "doc": "desktop-and-cli",
       "section": "The desktop app",
       "kind": "prose",
-      "sentence": "The current Desktop application is managed-cloud-only and does not accept provider keys or run local models.",
+      "sentence": "Desktop chat uses Cloud and Desktop does not accept provider keys; its local coding sessions run the CLI, which can use a local model or a provider key you set up there.",
       "implementation": [
         "apps/desktop/electron/config.ts#CLOUD_APP_ORIGIN",
         "apps/desktop/electron/runtime/dispatcher.ts#localInferenceCommands",
-        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE"
+        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE",
+        "apps/desktop/electron/runtime/developerSessionService.ts#readDeveloperModels",
+        "apps/cli/src/model_reachability.rs#with_running_local_models"
       ],
       "proof": [
         {
           "kind": "test",
           "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
-          "name": "retains the implemented Desktop cloud boundary in all touched surface explanations"
+          "name": "states the Desktop chat boundary and the CLI behind its local coding sessions in every touched surface explanation"
         }
       ]
     },
@@ -5515,17 +5517,19 @@
       "doc": "getting-started",
       "section": "Choose a model route",
       "kind": "prose",
-      "sentence": "The current Desktop application is managed-cloud-only and does not accept provider keys or run local models.",
+      "sentence": "Desktop chat uses Cloud and Desktop does not accept provider keys; its local coding sessions run the CLI, which can use a local model or a provider key you set up there.",
       "implementation": [
         "apps/desktop/electron/config.ts#CLOUD_APP_ORIGIN",
         "apps/desktop/electron/runtime/dispatcher.ts#localInferenceCommands",
-        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE"
+        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE",
+        "apps/desktop/electron/runtime/developerSessionService.ts#readDeveloperModels",
+        "apps/cli/src/model_reachability.rs#with_running_local_models"
       ],
       "proof": [
         {
           "kind": "test",
           "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
-          "name": "retains the implemented Desktop cloud boundary in all touched surface explanations"
+          "name": "states the Desktop chat boundary and the CLI behind its local coding sessions in every touched surface explanation"
         }
       ]
     },
@@ -5570,17 +5574,19 @@
       "doc": "install-desktop-and-mobile",
       "section": "What desktop provides",
       "kind": "prose",
-      "sentence": "The current Desktop application is managed-cloud-only and does not accept provider keys or run local models.",
+      "sentence": "Desktop chat uses Cloud and Desktop does not accept provider keys; its local coding sessions run the CLI, which can use a local model or a provider key you set up there.",
       "implementation": [
         "apps/desktop/electron/config.ts#CLOUD_APP_ORIGIN",
         "apps/desktop/electron/runtime/dispatcher.ts#localInferenceCommands",
-        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE"
+        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE",
+        "apps/desktop/electron/runtime/developerSessionService.ts#readDeveloperModels",
+        "apps/cli/src/model_reachability.rs#with_running_local_models"
       ],
       "proof": [
         {
           "kind": "test",
           "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
-          "name": "retains the implemented Desktop cloud boundary in all touched surface explanations"
+          "name": "states the Desktop chat boundary and the CLI behind its local coding sessions in every touched surface explanation"
         }
       ]
     },
@@ -5589,17 +5595,19 @@
       "doc": "local-mode",
       "section": "Running a local model",
       "kind": "prose",
-      "sentence": "The current Desktop application is managed-cloud-only and does not accept provider keys or run local models.",
+      "sentence": "Desktop chat uses Cloud and Desktop does not accept provider keys; its local coding sessions run the CLI, which can use a local model or a provider key you set up there.",
       "implementation": [
         "apps/desktop/electron/config.ts#CLOUD_APP_ORIGIN",
         "apps/desktop/electron/runtime/dispatcher.ts#localInferenceCommands",
-        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE"
+        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE",
+        "apps/desktop/electron/runtime/developerSessionService.ts#readDeveloperModels",
+        "apps/cli/src/model_reachability.rs#with_running_local_models"
       ],
       "proof": [
         {
           "kind": "test",
           "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
-          "name": "retains the implemented Desktop cloud boundary in all touched surface explanations"
+          "name": "states the Desktop chat boundary and the CLI behind its local coding sessions in every touched surface explanation"
         }
       ]
     },
@@ -5683,17 +5691,19 @@
       "doc": "providers-and-models",
       "section": "Choose a product surface first",
       "kind": "prose",
-      "sentence": "The current Desktop application is managed-cloud-only and does not accept provider keys or run local models.",
+      "sentence": "Desktop chat uses Cloud and Desktop does not accept provider keys; its local coding sessions run the CLI, which can use a local model or a provider key you set up there.",
       "implementation": [
         "apps/desktop/electron/config.ts#CLOUD_APP_ORIGIN",
         "apps/desktop/electron/runtime/dispatcher.ts#localInferenceCommands",
-        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE"
+        "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts#MANAGED_WEB_CLOUD_TRUST_MODE",
+        "apps/desktop/electron/runtime/developerSessionService.ts#readDeveloperModels",
+        "apps/cli/src/model_reachability.rs#with_running_local_models"
       ],
       "proof": [
         {
           "kind": "test",
           "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
-          "name": "retains the implemented Desktop cloud boundary in all touched surface explanations"
+          "name": "states the Desktop chat boundary and the CLI behind its local coding sessions in every touched surface explanation"
         }
       ]
     },

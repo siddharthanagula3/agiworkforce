@@ -2066,11 +2066,15 @@
       "reason": "the retained Tauri tree and the shipped Electron desktop are separate build graphs and no guard enumerates unreachability across them yet"
     },
     {
-      "id": "public-desktop-is-managed-cloud-only",
+      "id": "public-desktop-runs-no-retained-inference",
       "section": "1.3 Retained Tauri implementation, not a public Desktop capability",
       "kind": "prose",
-      "sentence": "The public Desktop is managed-cloud-only and exposes neither Local/BYOK inference nor OAuth connector flows from that tree.",
-      "implementation": ["apps/desktop/src-tauri/tauri.conf.json"],
+      "sentence": "The public Desktop does not expose Local/BYOK inference or OAuth connector flows from that tree: its chat uses Cloud, and its local coding sessions run the CLI and its own Local and BYOK routes.",
+      "implementation": [
+        "apps/desktop/src-tauri/tauri.conf.json",
+        "apps/desktop/electron/runtime/dispatcher.ts#localInferenceCommands",
+        "apps/desktop/electron/runtime/developerSessionService.ts#readDeveloperModels"
+      ],
       "reason": "the retained Tauri tree and the shipped Electron desktop are separate build graphs and no guard enumerates unreachability across them yet"
     }
   ],

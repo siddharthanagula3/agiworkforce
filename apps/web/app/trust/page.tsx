@@ -177,12 +177,12 @@ const POSTURE: { label: string; value: string }[] = [
   {
     label: 'Local mode isolation',
     value:
-      'Implemented in the CLI for Ollama and LM Studio on loopback. AGI infrastructure and subprocessors are not in that model request path. Desktop and web use Cloud and do not expose Local inference. As of 2026-09-19.',
+      'Implemented in the CLI for Ollama and LM Studio on loopback, including the local coding sessions Desktop runs through the CLI. AGI infrastructure and subprocessors are not in that model request path. Desktop chat and the web app use Cloud and do not expose Local inference. As of 2026-11-10.',
   },
   {
     label: 'Desktop credential storage',
     value:
-      'Implemented. Electron Desktop writes no account credential of its own. It loads the hosted web app, whose sign-in session lives in a persistent browser profile that belongs to the app alone, apart from your default browser. Desktop uses Cloud and does not accept provider API keys. As of 2026-10-18.',
+      'Implemented. Desktop loads the hosted web app, whose sign-in session lives in a persistent browser profile that belongs to the app alone, apart from your default browser. For local coding sessions, Desktop signs the CLI in to your account, and the CLI keeps that sign-in in the operating system credential store. Desktop does not accept provider API keys; a local coding session can use one you set up in the CLI. As of 2026-11-10.',
   },
   {
     label: 'CLI provider-key storage',
@@ -389,6 +389,11 @@ export default function TrustPage() {
                   <Ledger
                     caption="Change record"
                     rows={[
+                      {
+                        label: '2026-11-10',
+                        value:
+                          'Two rows corrected, with no review of the rest of the page. Local mode isolation and Desktop credential storage said Desktop uses Cloud only. Desktop chat does, but its local coding sessions run the CLI, which can use a local model or a provider key set up in the CLI, and Desktop signs that CLI in to your account, which keeps the sign-in in the operating system credential store.',
+                      },
                       {
                         label: '2026-10-18',
                         value:

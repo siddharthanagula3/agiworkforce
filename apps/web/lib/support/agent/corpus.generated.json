@@ -983,7 +983,7 @@
         "windows"
       ],
       "description": "How to check availability before installing, and how the desktop app and the CLI reach managed cloud.",
-      "updated": "2026-10-05",
+      "updated": "2026-11-10",
       "source": "content/support/desktop-and-cli.md",
       "chunks": [
         {
@@ -1005,7 +1005,7 @@
           "ordinal": 2,
           "heading": "The desktop app",
           "headingPath": "Desktop app and CLI › The desktop app",
-          "text": "The current Desktop application is managed-cloud-only and does not accept\nprovider keys or run local models. It is an Electron shell for your AGI account.\nRead the [Desktop overview](https://agiworkforce.com/desktop) for its workflows\nand platform requirements."
+          "text": "Desktop chat uses Cloud and Desktop does not accept provider keys; its local\ncoding sessions run the CLI, which can use a local model or a provider key you set\nup there. It is an Electron shell for your AGI account.\nRead the [Desktop overview](https://agiworkforce.com/desktop) for its workflows\nand platform requirements."
         },
         {
           "id": "desktop-and-cli#3",
@@ -1205,7 +1205,7 @@
         "install"
       ],
       "description": "How to create an account, start a chat, choose a model route and decide what to set up first.",
-      "updated": "2026-10-05",
+      "updated": "2026-11-10",
       "source": "content/support/getting-started.md",
       "chunks": [
         {
@@ -1220,7 +1220,7 @@
           "ordinal": 1,
           "heading": "Choose a model route",
           "headingPath": "Getting started with AGI › Choose a model route",
-          "text": "Check [surface availability](https://agiworkforce.com/get-started) before\ninstalling the CLI or another client.\n\n- **Local** uses a model served by a local runtime. With an installed CLI and\n  local model server, select Ollama or LM Studio. See\n  [Local mode](https://agiworkforce.com/help/local-mode) for setup.\n- **BYOK** means bringing your own provider API key. See\n  [BYOK](https://agiworkforce.com/help/byok-provider-keys) for supported login\n  commands, key storage and custom endpoints. Review your provider's billing and\n  data-use terms before using a key.\n- **Managed cloud** uses your AGI account. Review the current plan details on the\n  pricing page.\n\nThe current Desktop application is managed-cloud-only and does not accept\nprovider keys or run local models."
+          "text": "Check [surface availability](https://agiworkforce.com/get-started) before\ninstalling the CLI or another client.\n\n- **Local** uses a model served by a local runtime. With an installed CLI and\n  local model server, select Ollama or LM Studio. See\n  [Local mode](https://agiworkforce.com/help/local-mode) for setup.\n- **BYOK** means bringing your own provider API key. See\n  [BYOK](https://agiworkforce.com/help/byok-provider-keys) for supported login\n  commands, key storage and custom endpoints. Review your provider's billing and\n  data-use terms before using a key.\n- **Managed cloud** uses your AGI account. Review the current plan details on the\n  pricing page.\n\nDesktop chat uses Cloud and Desktop does not accept provider keys; its local\ncoding sessions run the CLI, which can use a local model or a provider key you set\nup there."
         },
         {
           "id": "getting-started#2",
@@ -1353,7 +1353,7 @@
         "windows"
       ],
       "description": "How to check release availability and install the desktop and mobile apps.",
-      "updated": "2026-10-05",
+      "updated": "2026-11-10",
       "source": "content/support/install-desktop-and-mobile.md",
       "chunks": [
         {
@@ -1375,7 +1375,7 @@
           "ordinal": 2,
           "heading": "What desktop provides",
           "headingPath": "Installing the desktop and mobile apps › What desktop provides",
-          "text": "The current Desktop application is managed-cloud-only and does not accept\nprovider keys or run local models. Read the\n[Desktop overview](https://agiworkforce.com/desktop) for supported workflows.\nFor CLI local inference and provider-key setup, see\n[Local mode](https://agiworkforce.com/help/local-mode) and\n[BYOK](https://agiworkforce.com/help/byok-provider-keys)."
+          "text": "Desktop chat uses Cloud and Desktop does not accept provider keys; its local\ncoding sessions run the CLI, which can use a local model or a provider key you set\nup there. Read the\n[Desktop overview](https://agiworkforce.com/desktop) for supported workflows.\nFor CLI local inference and provider-key setup, see\n[Local mode](https://agiworkforce.com/help/local-mode) and\n[BYOK](https://agiworkforce.com/help/byok-provider-keys)."
         },
         {
           "id": "install-desktop-and-mobile#3",
@@ -1617,7 +1617,7 @@
         "cli"
       ],
       "description": "How to run a local model with the CLI, how to set it up and how model routes and tool permissions apply.",
-      "updated": "2026-10-05",
+      "updated": "2026-11-10",
       "source": "content/support/local-mode.md",
       "chunks": [
         {
@@ -1625,7 +1625,7 @@
           "ordinal": 0,
           "heading": "Running a local model",
           "headingPath": "Run a local model › Running a local model",
-          "text": "Check [surface availability](https://agiworkforce.com/get-started) before\ninstalling the CLI. The CLI implementation supports local inference through\nOllama and LM Studio. The current Desktop application is managed-cloud-only and\ndoes not accept provider keys or run local models.\n\nLocal describes the inference route. Signed-in CLI startup may refresh the\nmanaged model catalog when it is not cached. Review network use by tools and\nconnectors separately."
+          "text": "Check [surface availability](https://agiworkforce.com/get-started) before\ninstalling the CLI. The CLI implementation supports local inference through\nOllama and LM Studio. Desktop chat uses Cloud and Desktop does not accept\nprovider keys; its local coding sessions run the CLI, which can use a local model\nor a provider key you set up there.\n\nLocal describes the inference route. Signed-in CLI startup may refresh the\nmanaged model catalog when it is not cached. Review network use by tools and\nconnectors separately."
         },
         {
           "id": "local-mode#1",
@@ -2068,7 +2068,7 @@
         "routing"
       ],
       "description": "How to choose a product surface, read the catalog counts, change the model route and use automatic routing.",
-      "updated": "2026-10-05",
+      "updated": "2026-11-10",
       "source": "content/support/providers-and-models.md",
       "chunks": [
         {
@@ -2076,7 +2076,7 @@
           "ordinal": 0,
           "heading": "Choose a product surface first",
           "headingPath": "Providers and models › Choose a product surface first",
-          "text": "Check [surface availability](https://agiworkforce.com/get-started) before\ninstalling the CLI or another client. Use the\n[provider directory](https://agiworkforce.com/providers) and the product's model\npicker when choosing a provider or model.\n\nThe current Desktop application is managed-cloud-only and does not accept\nprovider keys or run local models. For CLI local inference, see\n[Local mode](https://agiworkforce.com/help/local-mode). For provider-key login and\ncustom endpoint configuration, see\n[BYOK](https://agiworkforce.com/help/byok-provider-keys)."
+          "text": "Check [surface availability](https://agiworkforce.com/get-started) before\ninstalling the CLI or another client. Use the\n[provider directory](https://agiworkforce.com/providers) and the product's model\npicker when choosing a provider or model.\n\nDesktop chat uses Cloud and Desktop does not accept provider keys; its local\ncoding sessions run the CLI, which can use a local model or a provider key you set\nup there. For CLI local inference, see\n[Local mode](https://agiworkforce.com/help/local-mode). For provider-key login and\ncustom endpoint configuration, see\n[BYOK](https://agiworkforce.com/help/byok-provider-keys)."
         },
         {
           "id": "providers-and-models#1",

@@ -121,8 +121,9 @@ const MODE_LEDGER: readonly LedgerRow[] = [
         </Link>{' '}
         shows which CLI releases are published.
         <br />
-        <strong>What we hold:</strong> nothing about the local model request. The current Desktop
-        and web apps use Cloud; they do not expose Local inference.
+        <strong>What we hold:</strong> nothing about the local model request. Desktop chat and the
+        web app use Cloud; a Desktop local coding session runs the CLI and can use a model that
+        Ollama or LM Studio serves on your computer.
       </>
     ),
   },
@@ -133,8 +134,9 @@ const MODE_LEDGER: readonly LedgerRow[] = [
         <strong>Where your prompts go:</strong> from your client straight to the provider you
         targeted, on your own API key. We are not in that request path.{' '}
         <strong>
-          BYOK is part of the CLI. The VS Code extension is coming soon. Desktop and web are
-          cloud-only and have no user-key path, so work on those surfaces is Cloud.
+          BYOK is part of the CLI. The VS Code extension is coming soon. Web and Desktop chat have
+          no user-key path, so that work is Cloud; a Desktop local coding session runs the CLI and
+          can use a provider key you set up there.
         </strong>
         <br />
         <strong>What we hold:</strong> not the provider key or prompt traffic. The CLI stores the
@@ -931,8 +933,9 @@ const CONTROLS_LEDGER: readonly LedgerRow[] = [
         <Link href="/download" className="agi-ds-link">
           download page
         </Link>{' '}
-        shows which CLI releases are published. VS Code BYOK is coming soon. Web and Desktop are
-        cloud-only.
+        shows which CLI releases are published. VS Code BYOK is coming soon. Web and Desktop chat
+        use Cloud; Desktop local coding sessions run the CLI and can use a local model or your own
+        provider key.
       </>
     ),
   },

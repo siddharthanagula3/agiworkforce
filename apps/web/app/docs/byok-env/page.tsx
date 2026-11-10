@@ -112,7 +112,8 @@ export default function ByokEnvDocsPage() {
               stores a provider key in the operating system keyring, or in owner-only files on Linux
               or when the keyring is turned off, and the VS Code extension passes provider keys to
               that CLI runtime instead of keeping its own copy. Provider keys do not sync to Desktop
-              or the hosted apps.
+              or the hosted apps; a Desktop local coding session runs that CLI and can use the keys
+              it holds.
             </p>
           </section>
 

@@ -44,7 +44,7 @@ describe('privacy copy names the surface each trust boundary applies to', () => 
     expect(capabilities).toMatch(
       /provider keys belongs to the \$\{BYOK_SURFACES\.label\}\. \$\{BYOK_SURFACES\.availability\}/,
     );
-    expect(capabilities).toMatch(new RegExp(`Hosted Web and Desktop are ${CLOUD} only`));
+    expect(capabilities).toMatch(new RegExp(`Hosted Web and Desktop chat are ${CLOUD} only`));
     expect(capabilities).toMatch(/never store a provider key of yours/);
     expect(capabilities).not.toMatch(/\/settings\/byok/);
   });

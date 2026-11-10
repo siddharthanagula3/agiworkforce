@@ -67,7 +67,7 @@ const PRINCIPLES = [
   },
   {
     title: 'Your keys, your bill, no markup.',
-    body: `Bring your own provider keys in the CLI. ${BYOK_SURFACES.availability} Traffic goes straight to your provider, the CLI saves keys in the operating system credential store, or in owner-only files on Linux or when the keyring is turned off, and Desktop remains cloud only.`,
+    body: `Bring your own provider keys in the CLI. ${BYOK_SURFACES.availability} Traffic goes straight to your provider, the CLI saves keys in the operating system credential store, or in owner-only files on Linux or when the keyring is turned off, and Desktop takes no key of its own: its local coding sessions use the CLI's.`,
   },
   {
     title: `One contract layer, ${SURFACE_COUNT} surfaces at different stages.`,

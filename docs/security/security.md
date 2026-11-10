@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead, with Legal/compliance co-owning section 1
-Last updated: 2026-10-23
+Last updated: 2026-11-10
 Rotation cadence: every 12 months per key, plus immediately on suspected exposure
 
 The single security document for this repository. Four live policies live here as
@@ -312,9 +312,9 @@ DNS-resolution SSRF validation (`assertResolvedPublicHostname`).
 ### 1.3 Retained Tauri implementation, not a public Desktop capability
 
 The retained Tauri source tree is not reachable from the public Electron
-Desktop selected by D-2026-09-15-04. The public Desktop is managed-cloud-only
-and exposes neither Local/BYOK inference nor OAuth connector flows from that
-tree. This inventory records the security properties of retained code; it must
+Desktop selected by D-2026-09-15-04. The public Desktop does not expose Local/BYOK
+inference or OAuth connector flows from that tree: its chat uses Cloud, and its
+local coding sessions run the CLI and its own Local and BYOK routes. This inventory records the security properties of retained code; it must
 not be used as evidence of a shipped Desktop feature.
 
 The retained tree holds no Gmail, Google Calendar or Outlook Calendar client.

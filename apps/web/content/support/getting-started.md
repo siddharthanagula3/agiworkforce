@@ -4,7 +4,7 @@ title: Getting started with AGI
 path: /help
 category: getting-started
 tags: getting started, first steps, setup, sign in, new account, onboarding, install
-updated: 2026-10-05
+updated: 2026-11-10
 description: How to create an account, start a chat, choose a model route and decide what to set up first.
 scope: public
 ---
@@ -31,8 +31,9 @@ installing the CLI or another client.
 - **Managed cloud** uses your AGI account. Review the current plan details on the
   pricing page.
 
-The current Desktop application is managed-cloud-only and does not accept
-provider keys or run local models.
+Desktop chat uses Cloud and Desktop does not accept provider keys; its local
+coding sessions run the CLI, which can use a local model or a provider key you set
+up there.
 
 ## Keep model routes separate
 

@@ -26,7 +26,7 @@ const ACCOUNT_CARRIES = connectorsReleased()
 export const metadata = buildMetadata({
   title: 'Desktop | Your account, on your Mac',
   description:
-    'Desktop for macOS: cloud chat in a window that stays open, plus the folders you approve, computer use that asks each session and before each app, and a menu bar shortcut. The Desktop contract does not accept provider keys or local-model connections. Check installer availability.',
+    'Desktop for macOS: cloud chat in a window that stays open, plus the folders you approve, computer use that asks each session and before each app, and a menu bar shortcut. Desktop takes no provider key; its local coding sessions run the CLI, which can use a local model or a key you set up there. Check installer availability.',
   path: '/desktop',
 });
 
@@ -127,11 +127,11 @@ export default function DesktopPage() {
               mode: 'Boundary',
               glyph: '◆',
               title: 'Device access stays explicit.',
-              body: 'The current Desktop contract is cloud-only for inference. Local model servers and provider keys are not accepted.',
+              body: 'Desktop chat is cloud-only for inference, and Desktop takes no provider key. A local coding session runs the CLI, which can use a local model server or a provider key you set up there.',
               points: [
                 'Approved folders are the only local files a step can reach',
                 'The selected managed model and route stay visible',
-                'Local and BYOK are CLI routes, not Desktop ones',
+                'Local and BYOK run through the CLI, also in Desktop coding sessions',
               ],
               cta: { href: '/local', label: 'Run Local from the CLI' },
             },

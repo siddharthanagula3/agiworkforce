@@ -522,18 +522,21 @@
       "ledger": "POSTURE",
       "label": "Local mode isolation",
       "owner": "Platform lead",
-      "reviewedOn": "2026-10-07",
-      "asOf": "2026-09-19",
-      "digest": "ec261c97542e25fe",
+      "reviewedOn": "2026-11-10",
+      "asOf": "2026-11-10",
+      "digest": "141199e213fd9df1",
       "implementation": [
         "apps/desktop/electron/runtime/dispatcher.ts",
-        "apps/desktop/electron/config.ts"
+        "apps/desktop/electron/config.ts",
+        "apps/desktop/electron/runtime/developerSessionService.ts#readDeveloperModels",
+        "apps/cli/src/model_reachability.rs#with_running_local_models",
+        "apps/cli/src/local_models.rs#openai_chat_completions_url"
       ],
       "proof": [
         {
           "kind": "test",
           "file": "apps/web/__tests__/surface-page-claims.test.ts",
-          "name": "anchors the claim to the cloud-only runtime gate, not to a shared premise in prose"
+          "name": "anchors the claim to the Desktop chat gate and the CLI behind local coding sessions, not to a shared premise in prose"
         },
         {
           "kind": "test",
@@ -547,15 +550,25 @@
       "ledger": "POSTURE",
       "label": "Desktop credential storage",
       "owner": "Platform lead",
-      "reviewedOn": "2026-10-18",
-      "asOf": "2026-10-18",
-      "digest": "d386b370d0ae8ea9",
+      "reviewedOn": "2026-11-10",
+      "asOf": "2026-11-10",
+      "digest": "a1854509af0cb091",
       "implementation": [
         "apps/desktop/electron/config.ts#REMOTE_SESSION_PARTITION",
-        "apps/desktop/electron/main.ts#REMOTE_SESSION_PARTITION"
+        "apps/desktop/electron/main.ts#REMOTE_SESSION_PARTITION",
+        "apps/desktop/electron/runtime/developerAccountSync.ts#reconcileDeveloperAccount",
+        "apps/cli/src/app_server/account.rs#save_device_grant",
+        "apps/cli/src/secure_store.rs#uses_keychain",
+        "apps/desktop/electron/runtime/runtimeEnvironment.ts#AGIWORKFORCE_NO_KEYRING"
       ],
-      "proof": [],
-      "reason": "main.ts opens the hosted web app in the REMOTE_SESSION_PARTITION profile and nothing under apps/desktop/electron writes a credential to disk, but no test asserts that absence yet."
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/__tests__/surface-page-claims.test.ts",
+          "name": "anchors the claim to the Desktop chat gate and the CLI behind local coding sessions, not to a shared premise in prose"
+        }
+      ],
+      "reason": "The test pins the CLI sign-in, the keychain path, the stripped keyring opt-out and the absence of a provider-key method in Desktop. The REMOTE_SESSION_PARTITION profile is read from main.ts and no test asserts it. The other secrets apps/desktop/electron writes are the browser-bridge pairing and host tokens (browser/pairingStore.ts, browser/hostInstaller.ts, owner-only files) and a signed-in-by-this-app flag with no credential in it (runtime/cliAccountStore.ts); none is an account credential."
     },
     {
       "page": "apps/web/app/trust/page.tsx",

@@ -147,7 +147,7 @@ export default function IntegrationsPage() {
                 },
                 {
                   label: 'Local runtimes',
-                  value: `${CLI_LOCAL_RUNTIMES.label} in the CLI. Free, offline-capable after setup, no account required. Desktop is cloud only. ${CLI_AVAILABILITY_NOTE}`,
+                  value: `${CLI_LOCAL_RUNTIMES.label} in the CLI. Free, offline-capable after setup, no account required. Desktop chat is cloud only; Desktop local coding sessions reach them through the CLI. ${CLI_AVAILABILITY_NOTE}`,
                 },
                 {
                   label: 'MCP transports',

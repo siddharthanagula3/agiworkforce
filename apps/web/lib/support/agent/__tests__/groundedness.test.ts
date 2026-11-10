@@ -19,7 +19,7 @@ const FAITHFUL_ANSWERS: readonly (readonly [docId: string, answer: string])[] = 
   ],
   [
     'desktop-and-cli',
-    'The Desktop app is managed-cloud-only right now: it signs in with your AGI account and does not take provider keys or run local models. The Desktop overview page lists its workflows and platform requirements.',
+    'Desktop chat uses Cloud and the Desktop app does not take provider keys. Its local coding sessions run the CLI, which can use a local model or a provider key you set up there. The Desktop overview page lists its workflows and platform requirements.',
   ],
   [
     'projects',

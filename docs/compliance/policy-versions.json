@@ -218,6 +218,12 @@
           "date": "2026-10-18",
           "digest": "c72fbd1e34c18d91",
           "note": "Editorial, recorded 2026-11-10. Product-name change in commit 3a0d329bb4 (2026-11-08): the hosted mode is now called Cloud, the label PRIVACY_MODE_DISPLAY.managed carries in packages/contracts/types/src/suite-contracts.ts since 330ef6c0b9. Managed Cloud, AGI managed cloud and AGI Cloud now read Cloud in the page description, the mode table, the Local and BYOK paragraphs, the hosted providers list, the retention rows for conversations, temporary chats and background jobs, the legal-basis row for running the assistant, the summary, the processing-role sentence and the staff-access paragraph. No other word changed and nothing collected, used, shared or retained changes, so the date does not move."
+        },
+        {
+          "date": "2026-11-10",
+          "digest": "b406c1cf63a22764",
+          "note": "Substantive: it changes what the policy says about where Desktop sends a request. The policy said the Desktop and web apps use Cloud and do not expose Local inference, and that Desktop has no user-key path. Desktop chat does use Cloud, but a Desktop local coding session runs the AGI CLI as an app-server (apps/desktop/electron/runtime/developerSessionService.ts), offers the models that CLI can reach (readDeveloperModels, apps/web/features/code/local-code.ts localModelChoices), and that list includes models Ollama or LM Studio serve on the machine and routes on provider keys set up in the CLI (apps/cli/src/model_reachability.rs, apps/cli/src/app_server/developer_host.rs list_local_models). The three sentences now say so. The lead decided on 2026-11-10, after the owner did not answer, to correct the claims and move the date to 2026-11-10. The version this replaces was served by production on 2026-11-01, as the publications record shows.",
+          "summary": "Corrects what the policy says about Desktop. Desktop chat uses Cloud, as before. A local coding session in Desktop runs the CLI on your computer and can use a model that Ollama or LM Studio serves there, or a provider key you set up in the CLI; the policy used to say Desktop was cloud-only with no user-key path. The hosted mode is also called Cloud throughout, where it said Managed Cloud."
         }
       ]
     },
@@ -354,6 +360,11 @@
           "date": "2026-10-08",
           "digest": "9842d75c05e9e98c",
           "note": "Editorial, recorded 2026-11-10. Product-name change in commit 3a0d329bb4 (2026-11-08): app names drop the AGI prefix, as PRODUCT_NAMES in packages/contracts/types/src/product-names.ts now does. The local storage row says a conversation is a Chat or an Work thread where it said a Chat or an AGI Work thread; the article was not adjusted with the name. Nothing stored, read or kept changes, so the date does not move."
+        },
+        {
+          "date": "2026-10-08",
+          "digest": "a081185ecc55ed1e",
+          "note": "Editorial, recorded 2026-11-10. The local storage row read a Chat or an Work thread after the product-name change. It now renders both names from PRODUCT_NAMES with the article productNameWithArticle in packages/contracts/types/src/product-names.ts derives from each name, so it reads a Chat or a Work thread and follows any later rename. Nothing stored, read or kept changes, so the date does not move."
         }
       ]
     },
@@ -456,6 +467,38 @@
           "date": "2026-10-15",
           "digest": "1b4dcf6a427e32db",
           "note": "Editorial revision approved by the owner on 2026-10-16 after an external review of the public site, which found wording addressed to the page’s writers, rhetoric about the page’s own honesty and unqualified claims. The corrections introduction drops we would rather publish the correction than quietly reissue the list and says each correction is listed below. No recipient, role, provider or correction changed. No provider, recipient, retention period, right, limitation or commitment was added or removed, so the date stays."
+        },
+        {
+          "date": "2026-11-10",
+          "digest": "4a7b150998550f71",
+          "subprocessorNames": [
+            "Cheaper Inference (operated by Keak)",
+            "Clerk",
+            "Cloudflare",
+            "E2B",
+            "Experiential Labs (operated by Resolute Labs AI, Inc.)",
+            "Expo",
+            "Fly.io",
+            "GitHub",
+            "Google (Places API)",
+            "Google (Play Android Publisher)",
+            "Google Analytics",
+            "Model providers (Cloud)",
+            "Neon",
+            "OpenAI (dictation and Voice Mode)",
+            "OpenRouter",
+            "OpenStreetMap Foundation (Nominatim)",
+            "Perplexity",
+            "Qwen (Alibaba) and Zhipu",
+            "Resend",
+            "Runway",
+            "Sentry",
+            "Stripe",
+            "Upstash",
+            "Vercel"
+          ],
+          "note": "Two changes. The product-name change in commit 3a0d329bb4 (2026-11-08) renamed the hosted mode to Cloud, the label PRIVACY_MODE_DISPLAY.managed carries in packages/contracts/types/src/suite-contracts.ts: the row Model providers (Managed Cloud) is now Model providers (Cloud), the E2B row says Sandbox runtime where it said Managed sandbox runtime, and every Managed Cloud in the rows and correction notes reads Cloud. No recipient was added or removed and no provider id changed. A renamed row moves the date under docs/compliance/README.md rule 10. The BYOK section said the web app and the current Desktop app are cloud-only with no user-supplied-key path; a Desktop local coding session runs the CLI and can use a provider key set up there (apps/cli/src/model_reachability.rs), so the sentence now says so. That changes which surfaces can carry a request outside this list, which is substantive. The lead decided on 2026-11-10, after the owner did not answer, to move the date to 2026-11-10. The version this replaces was served by production on 2026-11-01.",
+          "summary": "The hosted mode is now called Cloud. The Model providers row is headed Model providers (Cloud), every row that mentions the mode says Cloud where it said Managed Cloud, and the E2B row says Sandbox runtime. No recipient was added or removed. The BYOK section also corrects which surfaces have a user-supplied-key path: the web app and Desktop chat have none, and a Desktop local coding session runs the CLI and can use a key you set up there."
         }
       ]
     },
@@ -533,6 +576,12 @@
           "date": "2026-10-08",
           "digest": "484c214e586e1bb1",
           "note": "Editorial, recorded 2026-11-10. Product-name change in commit 3a0d329bb4 (2026-11-08): the hosted mode is now called Cloud, the label PRIVACY_MODE_DISPLAY.managed carries in packages/contracts/types/src/suite-contracts.ts since 330ef6c0b9. Managed Cloud and managed-cloud now read Cloud or cloud in the Local mode summary, the Cloud section, the per-mode rows for content, artifacts, files, memories, provider keys, identity, audit logs and code execution, the Desktop and CLI paragraphs and the alpha notice. No measure, location or vendor changes, so the date does not move."
+        },
+        {
+          "date": "2026-11-10",
+          "digest": "8a5ec86fbe9902dd",
+          "note": "Substantive: it changes what the page says about where Desktop sends a request and where an account credential is kept. The Local boundary said the current public Desktop is cloud only, and the Desktop account data row called Desktop a cloud account shell with no separate Local or BYOK chat database. A Desktop local coding session runs the CLI as an app-server (apps/desktop/electron/runtime/developerSessionService.ts) and can use the CLI's local runtimes (apps/cli/src/model_reachability.rs). Desktop signs that CLI in to the account (apps/desktop/electron/runtime/developerAccountSync.ts), the CLI saves the device grant through AuthStore (apps/cli/src/app_server/account.rs save_device_grant), which on macOS writes the operating system keychain (apps/cli/src/secure_store.rs uses_keychain), and Desktop strips AGIWORKFORCE_NO_KEYRING from the CLI's environment (apps/desktop/electron/runtime/runtimeEnvironment.ts). The two sentences now say so. The lead decided on 2026-11-10, after the owner did not answer, to correct the claims and move the date. The version this replaces was served by production on 2026-11-01.",
+          "summary": "Corrects what the page says about Desktop. Desktop chat uses Cloud and keeps no chat database of its own. A local coding session in Desktop runs the CLI and can use the same local runtimes as CLI Local mode; for it, Desktop signs the CLI in to your account, and the CLI keeps that sign-in in the operating system credential store. The page used to call Desktop cloud only. The hosted mode is also called Cloud throughout, where it said Managed Cloud."
         }
       ]
     },
@@ -748,6 +797,12 @@
           "date": "2026-10-18",
           "digest": "2e173513976e775f",
           "note": "Editorial, recorded 2026-11-10. Product-name change in commit 3a0d329bb4 (2026-11-08): the hosted mode is now called Cloud, the label PRIVACY_MODE_DISPLAY.managed carries in packages/contracts/types/src/suite-contracts.ts since 330ef6c0b9. Managed Cloud now reads Cloud in the alpha notice and in the Subprocessor transparency, Local mode isolation and Desktop credential storage rows, and the Managed Cloud maturity row is now Cloud maturity and says cloud compute where it said managed compute. No status, as-of date or evidence changes, so the date does not move. Each changed row's review is kept in docs/compliance/trust-claims.json."
+        },
+        {
+          "date": "2026-11-10",
+          "digest": "2fde846265885049",
+          "note": "Substantive: two posture rows change what they claim. Local mode isolation said Desktop and web use Cloud and do not expose Local inference, and Desktop credential storage said Electron Desktop writes no account credential of its own and that Desktop uses Cloud. A Desktop local coding session runs the CLI and can use a model Ollama or LM Studio serves on the machine or a provider key set up in the CLI, and Desktop signs that CLI in to the account, whose device grant the CLI keeps in the operating system keychain. Both rows now say so, each with its as-of date and review in docs/compliance/trust-claims.json, and the change record on the page gains a 2026-11-10 entry. The lead decided on 2026-11-10, after the owner did not answer, to correct the claims and move the date. The version this replaces was served by production on 2026-11-01.",
+          "summary": "Corrects two rows. Local mode isolation and Desktop credential storage said Desktop uses Cloud only. Desktop chat does, but its local coding sessions run the CLI, which can use a local model or a provider key set up in the CLI, and Desktop signs that CLI in to your account, which keeps the sign-in in the operating system credential store. The hosted mode is also called Cloud throughout, and the Managed Cloud maturity row is now Cloud maturity."
         }
       ]
     },
@@ -958,6 +1013,12 @@
           "date": "2026-10-15",
           "digest": "4f40d360f58d7026",
           "note": "Editorial, recorded 2026-11-10. Product-name change in commit 3a0d329bb4 (2026-11-08): the hosted mode is now called Cloud, the label PRIVACY_MODE_DISPLAY.managed carries in packages/contracts/types/src/suite-contracts.ts since 330ef6c0b9. Managed Cloud now reads Cloud in the mode table, the data-category and purpose rows, the conversation retention row, the recipients summary, the providers paragraph and the alpha notice. The same commit renamed the apps in the install-notice consent purpose this page reads from apps/web/lib/consent-purposes.ts, which now says Mobile, the Chrome extension or the VS Code extension where it said AGI Mobile, AGI in Chrome or AGI in VS Code. Nothing collected, used, shared or retained changes and no data-principal right changes, so the date does not move."
+        },
+        {
+          "date": "2026-11-10",
+          "digest": "1049cb2f8c7e6687",
+          "note": "Substantive: it changes what the notice says about where Desktop sends a request. The Local row said the current Desktop and web apps use Cloud and do not expose Local inference. A Desktop local coding session runs the CLI as an app-server (apps/desktop/electron/runtime/developerSessionService.ts) and can use a model Ollama or LM Studio serves on the machine (apps/cli/src/model_reachability.rs, apps/cli/src/app_server/developer_host.rs list_local_models), so the row now says so. The lead decided on 2026-11-10, after the owner did not answer, to correct the claim and move the date. The version this replaces was served by production on 2026-11-01.",
+          "summary": "Corrects what the notice says about Desktop. Desktop chat uses Cloud, as before. A local coding session in Desktop runs the CLI on your computer and can use a model that Ollama or LM Studio serves there; the notice used to say the Desktop app does not expose Local inference. The hosted mode is also called Cloud throughout, where it said Managed Cloud, and the install-notice purpose names the apps without the AGI prefix."
         }
       ]
     },
@@ -1026,6 +1087,12 @@
           "date": "2026-10-15",
           "digest": "283e6ea63ad2e651",
           "note": "Editorial, recorded 2026-11-10. Product-name change in commit 3a0d329bb4 (2026-11-08): the hosted mode is now called Cloud, the label PRIVACY_MODE_DISPLAY.managed carries in packages/contracts/types/src/suite-contracts.ts since 330ef6c0b9. Managed Cloud now reads Cloud in the answers on training, on who at AGI can read chats, on the three modes and cloud-only surfaces, and on where data is stored. No answer changes, so the date does not move."
+        },
+        {
+          "date": "2026-11-10",
+          "digest": "95652604180e123d",
+          "note": "Substantive: it changes the answer on where a request goes. The answer said web and Desktop are cloud-only. A Desktop local coding session runs the CLI and can use Local or BYOK routes (apps/desktop/electron/runtime/developerSessionService.ts, apps/cli/src/model_reachability.rs), so it now says web and Desktop chat use Cloud and a Desktop local coding session can also use Local or BYOK. The lead decided on 2026-11-10, after the owner did not answer, to correct the claim and move the date. The version this replaces was served by production on 2026-11-01.",
+          "summary": "Corrects the answer on whether it depends on how you run AGI. Web and Desktop chat use Cloud, and a local coding session in Desktop runs the CLI and can also use Local or BYOK; the page used to say web and Desktop are cloud-only. The hosted mode is also called Cloud throughout, where it said Managed Cloud."
         }
       ]
     },

@@ -5,7 +5,7 @@ path: /cli
 category: surfaces
 tags: desktop, cli, terminal, install, download, macos, windows, linux, agi install, command line
 platforms: desktop, cli, macos, windows, linux
-updated: 2026-10-05
+updated: 2026-11-10
 description: How to check availability before installing, and how the desktop app and the CLI reach managed cloud.
 scope: public
 ---
@@ -26,8 +26,9 @@ LM Studio.
 
 ## The desktop app
 
-The current Desktop application is managed-cloud-only and does not accept
-provider keys or run local models. It is an Electron shell for your AGI account.
+Desktop chat uses Cloud and Desktop does not accept provider keys; its local
+coding sessions run the CLI, which can use a local model or a provider key you set
+up there. It is an Electron shell for your AGI account.
 Read the [Desktop overview](https://agiworkforce.com/desktop) for its workflows
 and platform requirements.
 

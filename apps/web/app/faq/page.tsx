@@ -43,7 +43,7 @@ const QA: { title: string; body: string }[] = [
   },
   {
     title: 'Can I run AGI fully offline?',
-    body: `Yes in the CLI after Ollama or LM Studio and a model are installed. ${CLI_AVAILABILITY_NOTE} Those Local conversations are not sent to AGI, and Local mode is free; downloading a model may require internet first. Desktop uses cloud, and Mobile has no published release.`,
+    body: `Yes in the CLI after Ollama or LM Studio and a model are installed. ${CLI_AVAILABILITY_NOTE} Those Local conversations are not sent to AGI, and Local mode is free; downloading a model may require internet first. Desktop chat uses cloud, Desktop local coding sessions run the CLI and can use the same local models, and Mobile has no published release.`,
   },
   {
     title: 'Can I switch models mid-conversation?',

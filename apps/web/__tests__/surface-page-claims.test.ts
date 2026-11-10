@@ -265,7 +265,7 @@ describe('Desktop computer use is described by the prompts the runtime really sh
 });
 
 describe('public Local and BYOK claims follow the shipping Electron enforcement', () => {
-  it('anchors the claim to the cloud-only runtime gate, not to a shared premise in prose', () => {
+  it('anchors the claim to the Desktop chat gate and the CLI behind local coding sessions, not to a shared premise in prose', () => {
     const config = repoText('apps', 'desktop', 'electron', 'config.ts');
     const dispatcher = repoText('apps', 'desktop', 'electron', 'runtime', 'dispatcher.ts');
 
@@ -275,14 +275,42 @@ describe('public Local and BYOK claims follow the shipping Electron enforcement'
     expect(dispatcher).toMatch(
       /if \(localInferenceCommands\.has\(command\)\) \{\s*return runtimeFailure\('unsupported-platform'/u,
     );
+    expect(dispatcher).not.toContain('providers/setKey');
+
+    const sessions = repoText(
+      'apps',
+      'desktop',
+      'electron',
+      'runtime',
+      'developerSessionService.ts',
+    );
+    expect(sessions).toContain("'app-server'");
+    expect(sessions).toMatch(/requestOrNull\(server, 'model\/list'/u);
+    expect(repoText('apps', 'cli', 'src', 'model_reachability.rs')).toMatch(
+      /"ollama" \| "lmstudio" => DeveloperSessionTrustMode::Local/u,
+    );
+
+    expect(repoText('apps', 'desktop', 'electron', 'runtime', 'developerAccountSync.ts')).toContain(
+      "call('account/login', {})",
+    );
+    expect(repoText('apps', 'cli', 'src', 'app_server', 'account.rs')).toMatch(
+      /pub fn save_device_grant[\s\S]*AuthStore::transaction_with_commit/u,
+    );
+    expect(repoText('apps', 'desktop', 'electron', 'runtime', 'runtimeEnvironment.ts')).toContain(
+      "'AGIWORKFORCE_NO_KEYRING'",
+    );
+    expect(repoText('apps', 'cli', 'src', 'secure_store.rs')).toContain(
+      '!cfg!(test) && !cfg!(target_os = "linux") && !keyring_disabled()',
+    );
   });
 
   it('states the same contract on the Desktop, Local, and BYOK pages', () => {
     expect(collapsed('app/desktop/page.tsx')).toMatch(
-      /Desktop contract is cloud-only for inference/u,
+      /Desktop chat is cloud-only for inference, and Desktop takes no provider key/u,
     );
+    expect(collapsed('app/desktop/page.tsx')).toMatch(/A local coding session runs the CLI/u);
     expect(collapsed('app/local/page.tsx')).toMatch(
-      /The Electron Desktop contract does not accept local-inference commands or provider keys/u,
+      /Desktop chat takes no local-inference commands or provider keys/u,
     );
     for (const page of ['app/desktop/page.tsx', 'app/local/page.tsx']) {
       expect(collapsed(page), `${page} words Desktop as already released`).not.toMatch(
@@ -320,7 +348,7 @@ describe('public Local and BYOK claims follow the shipping Electron enforcement'
       /CLI implementation supports local inference through\s+Ollama and LM Studio/iu,
     );
     expect(help).not.toMatch(/released CLI/iu);
-    expect(help).toMatch(/current Desktop\s+application is managed-cloud-only/iu);
+    expect(help).toMatch(/Desktop chat uses Cloud and Desktop does not accept\s+provider keys/iu);
   });
 
   it('keeps public pricing copy on the two CLI local runtimes', () => {
@@ -365,7 +393,7 @@ describe('public Local and BYOK claims follow the shipping Electron enforcement'
 
     expect(publicContract).toMatch(/from the CLI to Ollama or LM Studio on loopback/iu);
     expect(publicContract).not.toMatch(/released CLI/iu);
-    expect(publicContract).toMatch(new RegExp(`Desktop and web use ${CLOUD}`, 'iu'));
+    expect(publicContract).toMatch(new RegExp(`Desktop chat and the web app use ${CLOUD}`, 'iu'));
     expect(publicContract).toMatch(/operating system credential store/iu);
 
     for (const [label, pattern] of [
