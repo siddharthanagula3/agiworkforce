@@ -589,6 +589,9 @@ export function ScheduleForm({
                         {preset.label}
                       </option>
                     ))}
+                    {draft.customDayparts && (
+                      <option value="custom">Custom window (keep as saved)</option>
+                    )}
                   </select>
                   <p id="schedule-daypart-helper" className="text-xs text-muted-foreground">
                     An occurrence outside the window is not run late; it moves to the next

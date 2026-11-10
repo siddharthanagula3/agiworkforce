@@ -130,6 +130,7 @@ describe('managed mobile stream routing', () => {
             model: qwenModel.id,
             messages: [{ role: 'user', content: 'hello' }],
             stream: true,
+            client_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           }),
         }),
         { stream: true },

@@ -139,6 +139,41 @@ describe('schedule form contract', () => {
     }
   });
 
+  it('keeps a stored non-preset run window through an unrelated edit', () => {
+    const window = [{ days: [1], start: '10:00', end: '11:00' }];
+    const stored = task({
+      scheduleType: 'interval',
+      cronExpression: null,
+      intervalMs: 3_600_000,
+      metadata: { productRecurrence: 'interval' },
+      dayparts: window,
+    });
+    const edited = { ...scheduleToDraft(stored), name: 'Renamed' };
+
+    expect(edited.daypartPreset).toBe('custom');
+    const result = validateAndBuildScheduleRequest(edited, new Date('2026-07-15T12:00:00.000Z'));
+    expect(result).toMatchObject({ ok: true, payload: { name: 'Renamed', dayparts: window } });
+  });
+
+  it('round-trips a preset window and clears a window only on an explicit choice', () => {
+    const business = [{ days: [1, 2, 3, 4, 5], start: '09:00', end: '17:00' }];
+    const now = new Date('2026-07-15T12:00:00.000Z');
+    const presetDraft = scheduleToDraft(task({ dayparts: business }));
+    expect(presetDraft.daypartPreset).toBe('business');
+    expect(presetDraft.customDayparts).toBeNull();
+    expect(validateAndBuildScheduleRequest(presetDraft, now)).toMatchObject({
+      ok: true,
+      payload: { dayparts: business },
+    });
+
+    const custom = scheduleToDraft(
+      task({ dayparts: [{ days: [1], start: '10:00', end: '11:00' }] }),
+    );
+    expect(validateAndBuildScheduleRequest({ ...custom, daypartPreset: 'any' }, now)).toMatchObject(
+      { ok: true, payload: { dayparts: null } },
+    );
+  });
+
   it('converts a one-time wall clock value in its selected IANA timezone to UTC', () => {
     expect(zonedLocalInputToIso('2026-07-15T09:30', 'America/New_York')).toBe(
       '2026-07-15T13:30:00.000Z',

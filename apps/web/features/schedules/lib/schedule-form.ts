@@ -61,6 +61,7 @@ export const INITIAL_SCHEDULE_DRAFT: ScheduleDraft = {
   agentId: null,
   recurrenceRule: '',
   daypartPreset: 'any',
+  customDayparts: null,
   retryMaxAttempts: '0',
   retryBackoffMinutes: '5',
   missedExecutionPolicy: 'run_once',
@@ -113,6 +114,7 @@ export function scheduleToDraft(task: ScheduleTask): ScheduleDraft {
   const interval = intervalFields(task.intervalMs);
   const storedTime = metadata['timeOfDay'];
   const storedDay = metadata['dayOfMonth'];
+  const daypartPreset = presetForDayparts(task.dayparts);
   return {
     name: task.name,
     description: task.description ?? '',
@@ -134,7 +136,11 @@ export function scheduleToDraft(task: ScheduleTask): ScheduleDraft {
     projectId: task.projectId ?? null,
     agentId: task.agentId ?? null,
     recurrenceRule: task.recurrenceRule ?? '',
-    daypartPreset: presetForDayparts(task.dayparts),
+    daypartPreset,
+    customDayparts:
+      daypartPreset === 'custom' && task.dayparts
+        ? task.dayparts.map((window) => ({ ...window, days: [...window.days] }))
+        : null,
     retryMaxAttempts: String(task.retryMaxAttempts ?? 0),
     retryBackoffMinutes: String(Math.round((task.retryBackoffSeconds ?? 300) / 60)),
     missedExecutionPolicy: task.missedExecutionPolicy ?? 'run_once',
@@ -265,7 +271,9 @@ export function validateAndBuildScheduleRequest(
   const dayparts =
     draft.recurrence === 'once' || draft.recurrence === 'event'
       ? null
-      : daypartsForPreset(draft.daypartPreset);
+      : draft.daypartPreset === 'custom'
+        ? draft.customDayparts
+        : daypartsForPreset(draft.daypartPreset);
   const retryMaxAttempts = Number(draft.retryMaxAttempts || '0');
   if (!Number.isInteger(retryMaxAttempts) || retryMaxAttempts < 0 || retryMaxAttempts > 5) {
     addError(errors, 'retryMaxAttempts', 'Use a whole number of retries from 0 to 5.');

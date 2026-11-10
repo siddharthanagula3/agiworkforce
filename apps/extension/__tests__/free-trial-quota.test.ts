@@ -1155,6 +1155,20 @@ describe('streamFreeChat, SSE happy path', () => {
     });
   });
 
+  it('sends the browser time zone so a scheduled task defaults to the user zone', async () => {
+    fetchMock.mockResolvedValueOnce(
+      makeStreamResponse([
+        JSON.stringify({ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] }),
+      ]),
+    );
+
+    await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'valid-token'));
+
+    const [, fetchOpts] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(fetchOpts.body as string) as Record<string, unknown>;
+    expect(body['client_timezone']).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  });
+
   it('sends the caller-owned retry-stable idempotency key', async () => {
     fetchMock.mockResolvedValueOnce(
       makeStreamResponse([

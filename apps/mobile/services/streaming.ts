@@ -68,6 +68,7 @@ import {
   type ManagedCloudAgentRunReference,
   type FreeQuotaMessageContent,
 } from '@agiworkforce/cloud-contracts';
+import { getDeviceTimeZone } from '../src/platform/deviceTimeZone';
 import { platformRequestHeaders } from '../src/platform/platformHeaders';
 import { phoneDeviceHostHeaders } from '@/src/features/integrations/services/phoneDeviceHost';
 
@@ -415,6 +416,7 @@ interface InitialStreamRequest {
   connector_tools_enabled?: boolean;
   disabled_connector_ids?: string[];
   x_interactive_cards?: { supported: string[]; canRespond: boolean };
+  client_timezone?: string;
 }
 
 interface ApprovalResumeRequest {
@@ -697,6 +699,12 @@ function withPickerSpeed(body: InitialStreamRequest): InitialStreamRequest {
   return speed ? { ...body, speed } : body;
 }
 
+function withDeviceTimeZone(body: InitialStreamRequest): InitialStreamRequest {
+  if (body.client_timezone) return body;
+  const clientTimeZone = getDeviceTimeZone();
+  return clientTimeZone ? { ...body, client_timezone: clientTimeZone } : body;
+}
+
 export interface StreamChatOptions {
   ignorePickerSpeed?: boolean;
 }
@@ -731,7 +739,7 @@ export async function streamChat(
     return;
   }
 
-  const request = options.ignorePickerSpeed ? body : withPickerSpeed(body);
+  const request = withDeviceTimeZone(options.ignorePickerSpeed ? body : withPickerSpeed(body));
   let timeoutController = new AbortController();
   let timeoutId = setTimeout(() => timeoutController.abort(), TIMEOUTS.STREAMING);
   let combinedSignal = signal

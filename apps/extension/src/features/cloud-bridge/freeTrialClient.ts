@@ -762,6 +762,17 @@ export interface ManagedChatStreamOptions {
 
 const MANAGED_CHAT_IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{8,128}$/;
 
+function browserTimeZone(): string | undefined {
+  try {
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return typeof timeZone === 'string' && timeZone.length > 0 && timeZone.length <= 64
+      ? timeZone
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function isAbortSignal(value: unknown): value is AbortSignal {
   return Boolean(
     value &&
@@ -1381,6 +1392,7 @@ export async function* streamFreeChat(
                     : { agi_work_plan_approval: true }),
                 }
               : {}),
+            ...(browserTimeZone() ? { client_timezone: browserTimeZone() } : {}),
             ...(options.memoryCommand ? { memory_command: options.memoryCommand } : {}),
             ...(options.skillName ? { skill_name: options.skillName } : {}),
             ...(options.webSearch ? { web_search: true } : {}),
