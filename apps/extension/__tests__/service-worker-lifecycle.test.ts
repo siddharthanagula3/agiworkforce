@@ -201,7 +201,8 @@ describe('a computer-use run that dies with the worker ends visibly', () => {
 
   it('drains the automation receipts a previous worker did not live to send', () => {
     expect(background).toMatch(/^void flushAutomationAuditOutbox\(\);$/m);
-    expect(background).toMatch(/completion\.finally\(\(\) => flushAutomationAuditOutbox\(\)/);
+    expect(background).toContain('() => flushAutomationAuditOutbox().catch(() => false)');
+    expect(background).toMatch(/completion\s*\.then\(cleanup, cleanup\)/);
   });
 
   it("treats Chrome's own debugger Cancel as a stop, not a hiccup", () => {

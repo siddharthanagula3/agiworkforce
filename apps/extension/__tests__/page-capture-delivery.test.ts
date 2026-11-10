@@ -120,7 +120,9 @@ describe('page context is never silently missing', () => {
     const start = sidePanel.indexOf('function dispatchTurn(');
     const end = sidePanel.indexOf('function postTurn(', start);
     const slashSend = sidePanel.slice(start, end);
-    expect(slashSend).toContain('const pageAtAdmission = activePageSource');
+    expect(slashSend).toContain(
+      'const pageAtAdmission = payload.browserSource ?? activePageSource',
+    );
     expect(slashSend).toMatch(
       /pageContextStillDescribes\(pageAtAdmission, capture\.source\.tabId, capture\.source\.url\)/,
     );
