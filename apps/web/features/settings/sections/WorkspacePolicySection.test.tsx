@@ -197,6 +197,33 @@ describe('WorkspacePolicySection security controls', () => {
     );
   });
 
+  it('says nothing is deleted until retention enforcement is on', () => {
+    mockOverview.mockReturnValue(overview({ policy: policy({ retentionEnforced: false }) }));
+    renderSection();
+
+    expect(
+      screen.getByText(/nothing is deleted until enforce retention below is on, on any plan/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /off\. nothing is deleted until this is on, whatever the window above says/i,
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText('Enforce the retention window')).not.toBeChecked();
+  });
+
+  it('describes the nightly deletion once enforcement is on', () => {
+    mockOverview.mockReturnValue(overview({ policy: policy({ retentionEnforced: true }) }));
+    renderSection();
+
+    expect(
+      screen.getByText(/a nightly sweep permanently deletes workspace conversations/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/off\. nothing is deleted until this is on/i),
+    ).not.toBeInTheDocument();
+  });
+
   it('toggles zero data retention only', async () => {
     const user = userEvent.setup();
     mockOverview.mockReturnValue(overview());

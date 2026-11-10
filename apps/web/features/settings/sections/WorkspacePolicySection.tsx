@@ -520,7 +520,7 @@ export function WorkspacePolicySection() {
 
       <Row
         title="Retention window"
-        description="How long a workspace conversation is kept after its last activity. Measured from last activity, not from when it was created."
+        description="How long a workspace conversation is kept after its last activity. Measured from last activity, not from when it was created. Nothing is deleted until Enforce retention below is on, on any plan."
         control={
           <input
             type="number"
@@ -549,7 +549,7 @@ export function WorkspacePolicySection() {
         description={
           draft.retentionEnforced
             ? `A nightly sweep permanently deletes workspace conversations with no activity for ${draft.retentionDays} days. Conversations under legal hold are withheld. Every sweep is recorded.`
-            : 'Off. The window above is recorded as this workspace\u2019s position and nothing is deleted. Turning this on starts permanent deletion and cannot recover what it removes.'
+            : 'Off. Nothing is deleted until this is on, whatever the window above says: the window is recorded as this workspace\u2019s position only. Turning this on starts permanent deletion and cannot recover what it removes.'
         }
         control={
           <Toggle

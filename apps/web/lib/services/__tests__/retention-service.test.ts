@@ -16,6 +16,7 @@ import { listLegalHolds } from '../legal-hold-gate';
 import {
   createLegalHold,
   isSwept,
+  listOrganizationsWithRetentionEnforced,
   readRetentionBacklog,
   releaseLegalHold,
   sweepOrganizationRetention,
@@ -155,7 +156,7 @@ describe('sweepOrganizationRetention', () => {
     expect(h.sweepInserts).toEqual([]);
   });
 
-  it('does not sweep a workspace that has not opted in and owes no commitment', async () => {
+  it('does not sweep a workspace that has not turned enforcement on', async () => {
     const h = harness({ policy: { retention_days: 30, retention_enforced: false } });
     const result = await sweepOrganizationRetention(h.db, ORG, { now: NOW });
 
@@ -163,11 +164,21 @@ describe('sweepOrganizationRetention', () => {
     expect(h.deletes).toEqual([]);
   });
 
-  it('sweeps a plan-committed workspace whose owner never turned enforcement on', async () => {
-    // The window is contractual on this plan, so leaving it unswept is the
-    // product failing a commitment it sold, not respecting a preference.
+  it('sweeps nothing for an enterprise workspace with a window and enforcement off', async () => {
     mockResolvePlan.mockResolvedValue(ENTERPRISE_PLAN);
     const h = harness({ policy: { retention_days: 30, retention_enforced: false } });
+
+    const result = await sweepOrganizationRetention(h.db, ORG, { now: NOW });
+
+    expect(result.outcome).toBe('not_enforced');
+    expect(h.deletes).toEqual([]);
+    expect(h.sweepInserts).toEqual([]);
+    expect(mockResolvePlan).not.toHaveBeenCalled();
+  });
+
+  it('sweeps an enterprise workspace with a window once enforcement is on', async () => {
+    mockResolvePlan.mockResolvedValue(ENTERPRISE_PLAN);
+    const h = harness({ policy: { retention_days: 30, retention_enforced: true } });
 
     const result = await sweepOrganizationRetention(h.db, ORG, { now: NOW });
 
@@ -176,7 +187,7 @@ describe('sweepOrganizationRetention', () => {
     expect(sweepRow(h.sweepInserts).retentionDays).toBe(30);
   });
 
-  it('still sweeps nothing for a plan-committed workspace that recorded no window', async () => {
+  it('sweeps nothing for an enterprise workspace that recorded no window', async () => {
     mockResolvePlan.mockResolvedValue(ENTERPRISE_PLAN);
     const h = harness({ policy: null });
 
@@ -589,6 +600,23 @@ function backlogHarness(fixture: BacklogFixture = {}) {
   });
   return { db: { query, execute: vi.fn() } as unknown as DatabaseAdapter, query };
 }
+
+describe('listOrganizationsWithRetentionEnforced', () => {
+  it('lists only workspaces with a window and enforcement on, in the order read', async () => {
+    const query = vi.fn(async () => [
+      { organization_id: 'org-stale', retention_days: 30, retention_enforced: false },
+      { organization_id: 'org-on', retention_days: '90', retention_enforced: true },
+      { organization_id: 'org-on-too', retention_days: 7, retention_enforced: true },
+    ]);
+
+    const ids = await listOrganizationsWithRetentionEnforced({
+      query,
+    } as unknown as DatabaseAdapter);
+
+    expect(ids).toEqual(['org-on', 'org-on-too']);
+    expect(mockResolvePlan).not.toHaveBeenCalled();
+  });
+});
 
 describe('readRetentionBacklog', () => {
   beforeEach(() => vi.clearAllMocks());
