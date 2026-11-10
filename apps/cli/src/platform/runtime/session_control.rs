@@ -980,8 +980,14 @@ mod tests {
             .unwrap()
             .flatten()
             .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .filter(|name| name != super::super::session::SESSION_SAVE_LOCK_FILE)
             .collect();
         assert_eq!(remaining, vec!["neighbour.jsonl".to_string()]);
+        assert!(
+            dir.join(super::super::session::SESSION_SAVE_LOCK_FILE)
+                .exists(),
+            "the directory-wide save lock is shared by every session and must outlive any one of them"
+        );
     }
 
     #[test]

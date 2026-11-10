@@ -452,7 +452,7 @@ describe('projects shared with the member', () => {
       (managedCloudProjects.getProject as jest.Mock).mockResolvedValue(sharedProject);
       (api.get as jest.Mock).mockImplementation(async (path: string) => {
         if (path.includes('knowledge')) return { files: [] };
-        throw new ApiHttpError(500, 'overview unavailable');
+        throw new ApiHttpError('overview unavailable', 500);
       });
     }
 

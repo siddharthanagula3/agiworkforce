@@ -1306,6 +1306,7 @@ mod rewind_tests {
         crate::path_security::scope_workspace_paths_sync(root.clone(), Vec::new(), || {
             assert!(session.checkpoint_log.capture(&file, Some(&authority)));
         });
+        let messages_before = session.messages.len();
 
         match rewind_session_for_display("1", &mut session) {
             CommandOutcome::Info(message) => {
@@ -1315,7 +1316,7 @@ mod rewind_tests {
             }
             other => panic!("the rewind reports what it skipped: {other:?}"),
         }
-        assert_eq!(session.messages.len(), 2);
+        assert_eq!(session.messages.len(), messages_before);
         assert_eq!(session.checkpoint_log.len(), 1);
     }
 }

@@ -861,13 +861,14 @@ pub fn fork_session(conn: &Connection, source_id: &str) -> Result<String> {
     let source_metadata = read_metadata(&conn.base_dir, &source_session.session_id)?;
     let source_summary =
         summary_from_session(&source_path, &source_session, source_metadata.as_ref());
+    let source_metadata = source_metadata.unwrap_or_default();
     let metadata = SessionMetadata {
         title: Some(format!("(fork) {}", source_summary.title)),
         custom_title: true,
-        model: Some(source_summary.model),
-        cwd: Some(source_summary.cwd),
-        git_branch: Some(source_summary.git_branch),
-        imported_from: source_metadata.and_then(|metadata| metadata.imported_from),
+        model: source_metadata.model,
+        cwd: source_metadata.cwd,
+        git_branch: source_metadata.git_branch,
+        imported_from: source_metadata.imported_from,
     };
     write_metadata(&conn.base_dir, &new_id, &metadata)?;
 

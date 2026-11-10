@@ -68,6 +68,14 @@ pub(super) async fn handle_slash_command(
         return SlashResult::Handled;
     }
 
+    if matches!(cmd.as_str(), "/agents" | "/agent") {
+        if !crate::agents::is_management_subcommand(arg) {
+            return SlashResult::AgentInvoke(arg.to_string());
+        }
+        output::print_block(&crate::agents::render_agents_command(arg));
+        return SlashResult::Handled;
+    }
+
     // `/mcp <subcommand>` mutates the writable MCP registry (add/remove/enable/
     // disable/reconfigure/restart). Bare `/mcp` falls through to the shared
     // live-status renderer below.
@@ -239,12 +247,6 @@ pub(super) async fn handle_slash_command(
         "/skills" => {
             let all = crate::skills::discover_skills();
             output::print_block(&crate::skills::format_skill_list(&all));
-        }
-        "/agents" | "/agent" => {
-            if !crate::agents::is_management_subcommand(arg) {
-                return SlashResult::AgentInvoke(arg.to_string());
-            }
-            output::print_block(&crate::agents::render_agents_command(arg));
         }
         "/hooks" => {
             let hcfg = crate::hooks::load_hooks_or_default();
