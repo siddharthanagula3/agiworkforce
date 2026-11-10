@@ -585,6 +585,29 @@ describe('summary and apply while switched off', () => {
   });
 });
 
+describe('applying a reset while the promotion is edited', () => {
+  it('holds the promotion row from eligibility to the counter update', async () => {
+    const { db, calls } = scriptedDb({ promotions: [], grants: [], usage: NO_USAGE });
+    await expect(
+      applyUsageLimitReset(db, {
+        userId: 'user-1',
+        planTier: 'pro',
+        applyKey: 'agi.usage.reset.1',
+        grantId: null,
+        caps: CAPS,
+      }),
+    ).resolves.toEqual({ status: 'refused', reason: 'no_reset' });
+
+    const eligibility = calls.find(
+      (sql) => sql.includes("p.kind = 'limit_reset'") && sql.includes('p.apply_at_percent'),
+    );
+    expect(eligibility).toBeDefined();
+    const compact = eligibility!.replace(/\s+/g, ' ');
+    expect(compact).toContain('and p.enabled');
+    expect(compact).toContain('for update of g for no key update of p');
+  });
+});
+
 describe('configuration', () => {
   const reset = {
     id: 'spring-reset',

@@ -218,6 +218,33 @@ describe('POST /api/projects/sync, shared cloud contract', () => {
     expect(params[2]).not.toBe(getProjectLimit('free'));
   });
 
+  it('holds a restore-only batch to the project limit instead of skipping the quota check', async () => {
+    mockQuery.mockResolvedValueOnce([
+      { kind: 'applied', id: PROJ_ID, server_version: '6', current: null },
+    ]);
+
+    const res = await POST(
+      new Request('http://localhost:3000/api/projects/sync', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          projects: [{ id: PROJ_ID, name: 'Restored', baseVersion: '5', deletedAt: null }],
+        }),
+      }) as never,
+    );
+
+    expect(res.status).toBe(200);
+    const [sql, params] = mockQuery.mock.calls[0] as [string, unknown[]];
+    const compact = sql.replace(/\s+/g, ' ');
+    expect(compact).toContain('stored.deleted_at is not null');
+    expect(compact).toContain('incoming.should_delete as tombstoned');
+    expect(compact).toContain('where not updated.tombstoned');
+    expect(compact).toContain('updated.id in (select id from prior_tombstones)');
+    expect(compact).toContain('case when dependency.admitted_count > 0 then $3 else null end');
+    expect(compact).not.toContain('inserted_count');
+    expect(params[2]).toBe(getProjectLimit('free'));
+  });
+
   it('returns the current server row when a stale baseVersion loses CAS', async () => {
     mockQuery.mockResolvedValueOnce([
       { kind: 'conflict', id: PROJ_ID, server_version: null, current: projectRow },

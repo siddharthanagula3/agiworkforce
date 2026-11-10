@@ -38,6 +38,7 @@ import {
   ONE_CLICK_UNSUBSCRIBE_POST,
   emailBillingNotice,
   marketingEmailUnsubscribeUrl,
+  sendBillingNotice,
   readMarketingEmailUnsubscribeToken,
   unsubscribeFromMarketingEmail,
   type BillingNotice,
@@ -112,6 +113,84 @@ describe('emailBillingNotice', () => {
     expect(email.html).toContain(`${LEGAL_ENTITY}, ${NOTICE_ADDRESS}`);
     expect(email.headers).toEqual({ 'List-Unsubscribe': `<${UNSUBSCRIBE}>` });
     expect(email.replyTo).toBe(CONTACT_EMAIL);
+  });
+});
+
+describe('sendBillingNotice settlement', () => {
+  it('settles when the email was delivered', async () => {
+    await expect(sendBillingNotice(db, NOTICE)).resolves.toEqual({
+      recorded: true,
+      emailed: true,
+      settled: true,
+    });
+  });
+
+  it('stays unsettled when a configured email failed in a way a retry can fix', async () => {
+    mocks.send.mockResolvedValue({
+      delivered: false,
+      reason: 'rejected',
+      detail: '503',
+      status: 503,
+      retryable: true,
+    });
+
+    await expect(sendBillingNotice(db, NOTICE)).resolves.toEqual({
+      recorded: true,
+      emailed: false,
+      settled: false,
+    });
+  });
+
+  it('settles when the email was refused for a reason a retry cannot fix', async () => {
+    mocks.send.mockResolvedValue({
+      delivered: false,
+      reason: 'invalid_recipient',
+      detail: 'not an address',
+      retryable: false,
+    });
+
+    await expect(sendBillingNotice(db, NOTICE)).resolves.toMatchObject({
+      emailed: false,
+      settled: true,
+    });
+  });
+
+  it('settles an in-app-only notice when no email is configured', async () => {
+    vi.stubEnv('AGI_NOTIFICATIONS_FROM_EMAIL', '');
+
+    await expect(sendBillingNotice(db, NOTICE)).resolves.toMatchObject({
+      recorded: true,
+      emailed: false,
+      settled: true,
+    });
+    expect(mocks.send).not.toHaveBeenCalled();
+  });
+
+  it('stays unsettled when the in-app notice could not be stored and no email reached the account', async () => {
+    vi.stubEnv('AGI_NOTIFICATIONS_FROM_EMAIL', '');
+    mocks.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('insert into public.notifications')) {
+        throw new Error('database unavailable');
+      }
+      return [{ email: 'ada@example.com' }];
+    });
+
+    await expect(sendBillingNotice(db, NOTICE)).resolves.toEqual({
+      recorded: false,
+      emailed: false,
+      settled: false,
+    });
+  });
+
+  it('reads a deduplicated in-app notice as stored, not as a failure', async () => {
+    vi.stubEnv('AGI_NOTIFICATIONS_FROM_EMAIL', '');
+    mocks.query.mockResolvedValue([]);
+
+    await expect(sendBillingNotice(db, NOTICE)).resolves.toEqual({
+      recorded: false,
+      emailed: false,
+      settled: true,
+    });
   });
 });
 

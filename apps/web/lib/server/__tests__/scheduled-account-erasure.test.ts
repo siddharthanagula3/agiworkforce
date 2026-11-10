@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   cancelLiveStripeSubscriptionsNow: vi.fn(),
   readStripeBillingOwner: vi.fn(),
   calls: [] as string[],
+  identityRows: [] as Array<{ subject: string }>,
 }));
 
 vi.mock('server-only', () => ({}));
@@ -22,7 +23,10 @@ vi.mock('../neon-db', () => ({
   getNeonDb: () => ({ query: (...args: unknown[]) => mocks.query(...args) }),
 }));
 vi.mock('../identity', () => ({
-  getIdentityProvider: () => ({ deleteUser: (...args: unknown[]) => mocks.deleteUser(...args) }),
+  getIdentityProvider: () => ({
+    name: 'clerk',
+    deleteUser: (...args: unknown[]) => mocks.deleteUser(...args),
+  }),
 }));
 vi.mock('../request-context-cache', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),
@@ -63,9 +67,13 @@ function completeReport() {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.calls.length = 0;
-  mocks.query.mockImplementation(async (sql: string) =>
-    sql.includes('deletion_scheduled_for is not null') ? [{ due: true }] : [{ id: 'user-1' }],
-  );
+  mocks.identityRows = [];
+  mocks.query.mockImplementation(async (sql: string) => {
+    if (sql.includes('from public.identities')) return mocks.identityRows;
+    return sql.includes('deletion_scheduled_for is not null')
+      ? [{ due: true }]
+      : [{ id: 'user-1' }];
+  });
   mocks.openErasureTombstone.mockResolvedValue({ recorded: true });
   mocks.closeErasureTombstone.mockResolvedValue({ recorded: true });
   mocks.eraseUserAccountData.mockResolvedValue(completeReport());
@@ -207,6 +215,66 @@ describe('eraseScheduledAccount', () => {
     expect(mocks.deleteUser).not.toHaveBeenCalled();
   });
 
+  it('deletes the mapped provider subject instead of the account id', async () => {
+    mocks.identityRows = [{ subject: 'user_clerk_mapped' }];
+
+    await expect(eraseScheduledAccount('user-1')).resolves.toEqual({
+      status: 'purged',
+      resurrected: false,
+    });
+
+    const [lookupSql, lookupParams] = mocks.query.mock.calls.find(([sql]) =>
+      String(sql).includes('from public.identities'),
+    )!;
+    expect(String(lookupSql)).toContain('user_id = $1');
+    expect(lookupParams).toEqual(['user-1', 'clerk']);
+    expect(mocks.deleteUser).toHaveBeenCalledTimes(1);
+    expect(mocks.deleteUser).toHaveBeenCalledWith('user_clerk_mapped');
+    expect(mocks.eraseProfileRow).toHaveBeenCalledWith('user-1');
+  });
+
+  it('keeps the profile when the mapped subject is not deleted, so the mapping survives for the retry', async () => {
+    mocks.identityRows = [{ subject: 'user_clerk_mapped' }];
+    mocks.deleteUser.mockRejectedValue(new Error('clerk is down'));
+
+    await expect(eraseScheduledAccount('user-1')).resolves.toMatchObject({
+      status: 'failed',
+      stage: 'identity',
+    });
+    expect(mocks.deleteUser).not.toHaveBeenCalledWith('user-1');
+    expect(mocks.eraseProfileRow).not.toHaveBeenCalled();
+  });
+
+  it('deletes every mapped subject and stops at the first one the provider refuses', async () => {
+    mocks.identityRows = [{ subject: 'user_a' }, { subject: 'user_b' }];
+    mocks.deleteUser.mockRejectedValueOnce(new Error('clerk is down'));
+
+    await expect(eraseScheduledAccount('user-1')).resolves.toMatchObject({
+      status: 'failed',
+      stage: 'identity',
+    });
+    expect(mocks.deleteUser).toHaveBeenCalledTimes(1);
+    expect(mocks.deleteUser).toHaveBeenCalledWith('user_a');
+    expect(mocks.eraseProfileRow).not.toHaveBeenCalled();
+  });
+
+  it('keeps the profile when the mapping cannot be read', async () => {
+    mocks.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('from public.identities')) throw new Error('database unavailable');
+      return sql.includes('deletion_scheduled_for is not null')
+        ? [{ due: true }]
+        : [{ id: 'user-1' }];
+    });
+
+    await expect(eraseScheduledAccount('user-1')).resolves.toMatchObject({
+      status: 'failed',
+      stage: 'identity',
+      detail: 'database unavailable',
+    });
+    expect(mocks.deleteUser).not.toHaveBeenCalled();
+    expect(mocks.eraseProfileRow).not.toHaveBeenCalled();
+  });
+
   it('keeps the profile row when the identity provider will not delete the account', async () => {
     mocks.deleteUser.mockRejectedValue(new Error('clerk is down'));
 
@@ -250,13 +318,14 @@ describe('eraseScheduledAccount', () => {
 
   it('retries provider deletion while the profile remains due after an ambiguous failure', async () => {
     let profilePresent = true;
-    mocks.query.mockImplementation(async (sql: string) =>
-      sql.includes('deletion_scheduled_for is not null')
+    mocks.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('from public.identities')) return [];
+      return sql.includes('deletion_scheduled_for is not null')
         ? [{ due: profilePresent }]
         : profilePresent
           ? [{ id: 'user-1' }]
-          : [],
-    );
+          : [];
+    });
     mocks.eraseProfileRow.mockImplementation(async () => {
       profilePresent = false;
     });

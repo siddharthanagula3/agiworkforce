@@ -583,20 +583,21 @@ async function insertResetGrants(
   return rows.length;
 }
 
-/** Grants the resets a live referral promotion gives the referrer of a rewarded referral. */
+/** Grants the resets a referral promotion that was live when the referral was rewarded gives its referrer. */
 export async function grantReferralResets(
   db: DatabaseAdapter,
-  input: { userId: string; planTier: string; referralId: string },
+  input: { userId: string; planTier: string; referralId: string; eligibleAtMs?: number },
   nowMs: number = Date.now(),
 ): Promise<number> {
   if (!(await readUsagePromotionsOn(input.userId, input.planTier, nowMs))) return 0;
   const promotions = await listUsageLimitPromotions(db, { enabledOnly: true });
+  const eligibleAtMs = input.eligibleAtMs ?? nowMs;
   let issued = 0;
   for (const promotion of promotions) {
     if (
       promotion.kind !== 'limit_reset' ||
       promotion.resetSource !== 'referral' ||
-      !isLive(promotion, nowMs) ||
+      !isLive(promotion, eligibleAtMs) ||
       !coversPlan(promotion, input.planTier)
     ) {
       continue;
@@ -1070,7 +1071,8 @@ export async function applyUsageLimitReset(
           and ($3::uuid is null or g.id = $3::uuid)
         order by g.expires_at asc, g.id asc
         limit 1
-        for update of g`,
+        for update of g
+        for no key update of p`,
       [input.userId, planTier, input.grantId],
     );
     if (!grant) return { status: 'refused', reason: 'no_reset' };
@@ -1146,13 +1148,18 @@ export async function readAccountLimitCaps(
 /** Grants a rewarded referral's referrer the resets a live referral promotion gives. */
 export async function grantReferralResetsToReferrer(
   db: DatabaseAdapter,
-  input: { referrerId: string; referralId: string },
+  input: { referrerId: string; referralId: string; eligibleAtMs?: number },
   nowMs: number = Date.now(),
 ): Promise<number> {
   const { planTier } = await readAccountLimitCaps(db, input.referrerId);
   return grantReferralResets(
     db,
-    { userId: input.referrerId, planTier, referralId: input.referralId },
+    {
+      userId: input.referrerId,
+      planTier,
+      referralId: input.referralId,
+      eligibleAtMs: input.eligibleAtMs,
+    },
     nowMs,
   );
 }
