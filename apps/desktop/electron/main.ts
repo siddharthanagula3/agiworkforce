@@ -225,7 +225,7 @@ import {
 import { configureDictationBarBridge, openDictationBar } from './dictationBar';
 import { createDictationElsewhere } from './dictationElsewhere';
 import { closeLocalPreview } from './previewWindow';
-import { getPreferences, getShortcuts, saveSettings } from './settingsStore';
+import { getPreferences, getShortcuts, saveSettings, saveSettingsDurably } from './settingsStore';
 import {
   changeGarnishShortcuts,
   registerGarnishShortcuts,
@@ -322,8 +322,13 @@ async function appReachable(): Promise<boolean> {
   }
 }
 
-async function reloadOnceReachable(win: BrowserWindow, url: string): Promise<void> {
-  if (win.isDestroyed() || !(await appReachable()) || win.isDestroyed()) return;
+async function reloadOnceReachable(
+  win: BrowserWindow,
+  url: string,
+  isCurrent: () => boolean,
+): Promise<void> {
+  if (win.isDestroyed() || !isCurrent() || !(await appReachable())) return;
+  if (win.isDestroyed() || !isCurrent()) return;
   await win.loadURL(url).catch(() => undefined);
 }
 
@@ -1156,7 +1161,7 @@ function createShellWindow(options: { primary: boolean; route?: string | null })
   const showUnreachable = (errorCode: number, failedUrl: string): void => {
     const retryUrl = retryUrlAfterFailedLoad(failedUrl, entryUrl);
     void win.loadURL(shellScreenUrl(offlineScreen(errorCode), retryUrl)).catch(() => undefined);
-    screenRetry.watch(win.id, () => reloadOnceReachable(win, retryUrl));
+    screenRetry.watch(win.id, (isCurrent) => reloadOnceReachable(win, retryUrl, isCurrent));
   };
 
   let removeLoadingOverlay: (() => void) | null = null;
@@ -2106,29 +2111,31 @@ async function writeHostPreferences(
   }
 
   if (patch.agentNotifications && typeof patch.agentNotifications === 'object') {
-    saveSettings({ agentNotifications: normalizeAgentNotifications(patch.agentNotifications) });
+    saveSettingsDurably({
+      agentNotifications: normalizeAgentNotifications(patch.agentNotifications),
+    });
   }
 
   if (typeof patch.cliPath === 'string' && patch.cliPath.trim() !== before.cliPath) {
     const confirmed = await confirmCliPath(window, patch.cliPath.trim(), before.cliPath);
-    if (confirmed !== null) saveSettings({ cliPath: confirmed });
+    if (confirmed !== null) saveSettingsDurably({ cliPath: confirmed });
   }
 
   if (typeof patch.showInMenuBar === 'boolean' && patch.showInMenuBar !== before.showInMenuBar) {
-    saveSettings({ showInMenuBar: patch.showInMenuBar });
+    saveSettingsDurably({ showInMenuBar: patch.showInMenuBar });
     syncTray();
   }
 
   if (isSessionCompletionAlerts(patch.sessionCompletionAlerts)) {
-    saveSettings({ sessionCompletionAlerts: patch.sessionCompletionAlerts });
+    saveSettingsDurably({ sessionCompletionAlerts: patch.sessionCompletionAlerts });
   }
 
   if (typeof patch.sessionApprovalAlerts === 'boolean') {
-    saveSettings({ sessionApprovalAlerts: patch.sessionApprovalAlerts });
+    saveSettingsDurably({ sessionApprovalAlerts: patch.sessionApprovalAlerts });
   }
 
   if (typeof patch.preventSleepWhileRunning === 'boolean') {
-    saveSettings({ preventSleepWhileRunning: patch.preventSleepWhileRunning });
+    saveSettingsDurably({ preventSleepWhileRunning: patch.preventSleepWhileRunning });
     syncWorkKeeper();
   }
 
@@ -2137,7 +2144,7 @@ async function writeHostPreferences(
     patch.dictateIntoFocusedApp !== before.dictateIntoFocusedApp &&
     (!patch.dictateIntoFocusedApp || (await confirmDictateIntoApps(window)))
   ) {
-    saveSettings({ dictateIntoFocusedApp: patch.dictateIntoFocusedApp });
+    saveSettingsDurably({ dictateIntoFocusedApp: patch.dictateIntoFocusedApp });
     if (patch.dictateIntoFocusedApp) systemPreferences.isTrustedAccessibilityClient(true);
     else dictationElsewhere.closeAll();
   }

@@ -280,6 +280,78 @@ describe('ChatStateManager local turn lifecycle', () => {
     },
   );
 
+  it('discards a web page that finishes loading after New Chat replaced the conversation', async () => {
+    const harness = makeHarness();
+    let answerInput: (value: string) => void = () => undefined;
+    vi.mocked(vscode.window.showInputBox).mockImplementationOnce(
+      () =>
+        new Promise<string | undefined>((resolve) => {
+          answerInput = resolve;
+        }),
+    );
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'text/plain' }),
+        text: async () => 'OLD_CONVERSATION_PAGE_BODY',
+      }),
+    );
+    let send: Promise<void> | undefined;
+    try {
+      const attaching = harness.manager.handleMessage({
+        type: 'attachContext',
+        payload: { kind: 'url' },
+      });
+      await harness.manager.handleMessage({ type: 'newChat' });
+
+      answerInput('https://example.test/page');
+      await attaching;
+
+      expect(harness.posted.some((message) => message.type === 'contextAttached')).toBe(false);
+
+      send = harness.manager.handleMessage({ type: 'sendMessage', payload: { text: 'Hello' } });
+      await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+      expect(JSON.stringify(harness.runtime.startTurn.mock.calls[0]?.[0])).not.toContain(
+        'OLD_CONVERSATION_PAGE_BODY',
+      );
+    } finally {
+      vi.unstubAllGlobals();
+      harness.emit({
+        type: 'turn_completed',
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        status: 'completed',
+        response: 'done',
+        inputTokens: 1,
+        outputTokens: 1,
+      });
+      if (send !== undefined) await send;
+    }
+  });
+
+  it('keeps a web page that finishes loading in the same conversation', async () => {
+    const harness = makeHarness();
+    vi.mocked(vscode.window.showInputBox).mockResolvedValueOnce('https://example.test/page');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'text/plain' }),
+        text: async () => 'CURRENT_PAGE_BODY',
+      }),
+    );
+    try {
+      await harness.manager.handleMessage({ type: 'attachContext', payload: { kind: 'url' } });
+
+      expect(harness.posted.some((message) => message.type === 'contextAttached')).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('rechecks retained pinned context files against current gitignore before dispatch', async () => {
     const root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'agi-pinned-context-')));
     const file = path.join(root, 'ordinary.txt');

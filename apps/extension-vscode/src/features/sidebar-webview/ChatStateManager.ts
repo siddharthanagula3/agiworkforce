@@ -208,8 +208,7 @@ import {
   planFromThread,
   type PlanVisualization,
 } from '../../integrations/planVisualization';
-import { getTokenCounter } from '../../data/tokenCounter';
-import { formatCreditAmount, formatUnsettledRequests } from '../../data/usagePresentation';
+import { recordCompletedTurnUsage } from '../../data/turnUsage';
 import {
   CREDIT_BALANCE_LABEL,
   CREDIT_TOP_UP_LABEL,
@@ -2838,21 +2837,6 @@ export class ChatStateManager {
     }
   }
 
-  private async _reportBilledTurn(requestIds: readonly string[]): Promise<void> {
-    const settled = await getTokenCounter().settleBillingRequests(this._secrets, requestIds);
-    const billed = settled.filter((credits): credits is number => credits !== null);
-    if (billed.length === 0) return;
-    const total = billed.reduce((sum, credits) => sum + credits, 0);
-    const open = settled.length - billed.length;
-    const credits = formatCreditAmount(total);
-    vscode.window.setStatusBarMessage(
-      open === 0
-        ? t('billing.turnBilled', { credits })
-        : t('billing.turnBilledSoFar', { credits, unsettled: formatUnsettledRequests(open) }),
-      10_000,
-    );
-  }
-
   private _approvalAnsweredOnPhone(answer: ApprovalAnswer): void {
     const pending = this._pendingApprovals.get(answer.requestId);
     if (pending === undefined || pending.threadId !== answer.threadId) return;
@@ -3176,7 +3160,9 @@ export class ChatStateManager {
   }
 
   async attachContext(kind: ContextAttachmentKind): Promise<boolean> {
+    const epoch = this._conversationEpoch;
     const attachment = await buildContextAttachment(kind);
+    if (this._conversationEpoch !== epoch) return true;
     if (attachment === undefined) {
       this._post({
         type: 'contextMenuState',
@@ -4156,6 +4142,7 @@ export class ChatStateManager {
         const admittedAttachments = await this._admittedAttachments(attachmentEntries);
         const activeProject = getActiveCloudProject(this._context.workspaceState);
         const customInstructionInput = buildCustomInstructionInput(this._context, {
+          project: activeProject ?? null,
           projectAppliedByServer: activeProject !== undefined && thread.trustMode === 'managed',
         });
         const memoryInput = buildMemoryContextInput(getAccountMemoryStore()?.turnFacts() ?? []);
@@ -5059,10 +5046,14 @@ export class ChatStateManager {
         event.inputTokens + event.outputTokens,
         catalogContextWindow(resolvedModel),
       );
-      getTokenCounter().addMeasuredUsage(resolvedModel, event.inputTokens, event.outputTokens);
-      if (event.managedRequestIds !== undefined && event.managedRequestIds.length > 0) {
-        void this._reportBilledTurn(event.managedRequestIds);
-      }
+      recordCompletedTurnUsage(this._secrets, {
+        model: resolvedModel,
+        inputTokens: event.inputTokens,
+        outputTokens: event.outputTokens,
+        ...(event.managedRequestIds === undefined
+          ? {}
+          : { managedRequestIds: event.managedRequestIds }),
+      });
       this._conversationTreeProvider?.refresh();
       complete();
       return;

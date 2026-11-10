@@ -17,15 +17,20 @@ export interface ScreenRetryDeps {
 }
 
 export interface ScreenRetry {
-  /** The window is showing an unreachable screen; `attempt` tries to leave it. */
-  watch(id: number, attempt: () => Promise<void>): void;
+  /**
+   * The window is showing an unreachable screen; `attempt` tries to leave it.
+   * `isCurrent` turns false once the watch is released or drawn again, and an
+   * attempt must check it right before touching the window.
+   */
+  watch(id: number, attempt: (isCurrent: () => boolean) => Promise<void>): void;
   /** The window left the screen or closed. */
   release(id: number): void;
   watching(id: number): boolean;
 }
 
 interface Watch {
-  attempt: () => Promise<void>;
+  attempt: (isCurrent: () => boolean) => Promise<void>;
+  generation: number;
   failures: number;
   running: boolean;
   online: boolean;
@@ -71,7 +76,9 @@ export function createScreenRetry(deps: ScreenRetryDeps): ScreenRetry {
     if (watch.backoff) clearTimeout(watch.backoff);
     watch.backoff = null;
     watch.failures += 1;
-    await watch.attempt().catch(() => undefined);
+    const generation = watch.generation;
+    const isCurrent = (): boolean => watches.get(id) === watch && watch.generation === generation;
+    await watch.attempt(isCurrent).catch(() => undefined);
     watch.running = false;
     if (watches.get(id) === watch) scheduleBackoff(id, watch);
   };
@@ -81,11 +88,13 @@ export function createScreenRetry(deps: ScreenRetryDeps): ScreenRetry {
       const existing = watches.get(id);
       if (existing) {
         existing.attempt = attempt;
+        existing.generation += 1;
         if (!existing.running) scheduleBackoff(id, existing);
         return;
       }
       const watch: Watch = {
         attempt,
+        generation: 0,
         failures: 0,
         running: false,
         online: deps.isOnline(),
