@@ -32,7 +32,10 @@ import {
   type HistoryMessage,
 } from '../background/conversation-history';
 import { logger } from '../../utils';
-import { readCloudMirroringEnabled } from '../privacy/cloudMirroring';
+import {
+  cloudMirroringEnabledSnapshot,
+  readCloudMirroringEnabled,
+} from '../privacy/cloudMirroring';
 import { FREE_TRIAL_GATEWAY, getManagedCloudAuthContext } from './freeTrialClient';
 import { platformRequestHeaders } from '../../platformHeaders';
 import { UUID_PATTERN } from '../../lib/uuid';
@@ -297,7 +300,9 @@ async function flushEligibleConversation(
   const cloudConversationId = entry?.cloudSync?.conversationId;
   if (!entry || !cloudConversationId) return;
 
-  const client = createExtensionCloudChatClient(owner);
+  const client = createExtensionCloudChatClient(owner, {
+    isCurrent: cloudMirroringEnabledSnapshot,
+  });
   let organizationId = entry.cloudSync?.organizationId;
   // `entry` predates the create, so re-reading it would make an accepted project look unsynced.
   let syncedProjectId = entry.cloudSync?.syncedProjectId ?? null;

@@ -15,6 +15,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { getModelMetadataById, getRoutingSlotModel } from '@agiworkforce/types';
 
 const _store: Record<string, unknown> = {};
+const storageListeners: Array<
+  (changes: Record<string, { newValue?: unknown }>, area: string) => void
+> = [];
 
 function selectedValues(key: string | string[] | null): Record<string, unknown> {
   if (key === null) return { ..._store };
@@ -45,10 +48,24 @@ const chromeMock = {
         return Promise.resolve();
       }),
     },
+    onChanged: {
+      addListener: (
+        listener: (changes: Record<string, { newValue?: unknown }>, area: string) => void,
+      ) => {
+        storageListeners.push(listener);
+      },
+    },
   },
   runtime: { lastError: undefined as chrome.runtime.LastError | undefined },
 };
 (globalThis as unknown as Record<string, unknown>).chrome = chromeMock;
+
+function setCloudMirroring(enabled: boolean): void {
+  _store[CLOUD_MIRRORING_STORAGE_KEY] = enabled;
+  for (const listener of storageListeners) {
+    listener({ [CLOUD_MIRRORING_STORAGE_KEY]: { newValue: enabled } }, 'local');
+  }
+}
 
 const authContext = {
   current: {
@@ -79,6 +96,12 @@ import {
   type HistoryMessage,
 } from '../src/features/background/conversation-history';
 import type { ManagedCloudOwner } from '../src/features/cloud-bridge/managedCloudAuthority';
+import {
+  CLOUD_MIRRORING_STORAGE_KEY,
+  watchCloudMirroringEnabled,
+} from '../src/features/privacy/cloudMirroring';
+
+watchCloudMirroringEnabled();
 
 const OWNER: ManagedCloudOwner = { accountId: 'account-a', authIncarnation: 'session-a' };
 const OTHER_OWNER: ManagedCloudOwner = { accountId: 'account-b', authIncarnation: 'session-b' };
@@ -143,6 +166,7 @@ function conversationPosts(): RecordedRequest[] {
 describe('conversation cloud sync', () => {
   beforeEach(() => {
     for (const key of Object.keys(_store)) delete _store[key];
+    setCloudMirroring(true);
     requests.length = 0;
     respond = defaultResponder;
     authContext.current = { token: 'test-bearer', owner: { ...OWNER } };
@@ -456,6 +480,34 @@ describe('conversation cloud sync', () => {
     ).toBe(true);
     const entry = await getConversation(OWNER, 'conv-rotate');
     expect(entry?.cloudSync?.state).not.toBe('error');
+  });
+
+  it('sends no message once mirroring is turned off after the create was admitted', async () => {
+    await upsertConversation(OWNER, 'conv-mirror-off-create', cloudMessages(7_100));
+    respond = (request) => {
+      setCloudMirroring(false);
+      return defaultResponder(request);
+    };
+
+    await expect(flushConversation(OWNER, 'conv-mirror-off-create')).resolves.toBeUndefined();
+
+    expect(conversationPosts()).toHaveLength(1);
+    expect(messagePosts()).toHaveLength(0);
+    const entry = await getConversation(OWNER, 'conv-mirror-off-create');
+    expect(pendingCloudMessages(entry!)).toHaveLength(2);
+  });
+
+  it('sends no further message once mirroring is turned off between two messages', async () => {
+    await upsertConversation(OWNER, 'conv-mirror-off-between', cloudMessages(7_200));
+    respond = (request) => {
+      if (request.url.endsWith('/messages')) setCloudMirroring(false);
+      return defaultResponder(request);
+    };
+
+    await expect(flushConversation(OWNER, 'conv-mirror-off-between')).resolves.toBeUndefined();
+
+    expect(messagePosts()).toHaveLength(1);
+    expect(messagePosts()[0]?.body['content']).toBe('ask');
   });
 
   it('survives an offline fetch and keeps the work pending for the sweep', async () => {
