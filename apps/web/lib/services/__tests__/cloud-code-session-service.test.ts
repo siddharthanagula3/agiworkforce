@@ -1347,6 +1347,62 @@ describe('commitAndPushCloudCodeSession', () => {
     expect(result.push.stdout).toBe('pushed');
   });
 
+  it('commits only the chosen files and leaves a file already in the index out of the commit', async () => {
+    const db = createFakeDb();
+    const executor = gitExecutor();
+    vi.mocked(executor.git.status).mockResolvedValue({
+      ok: true,
+      output: '',
+      stdout: ' M src/a.ts\nM  src/b.ts\n',
+      stderr: '',
+      exitCode: 0,
+    });
+    vi.mocked(getUserGithubInstallations).mockResolvedValue([
+      { installationId: 7, login: 'acme', verifiedRepositories: ['acme/widgets'] },
+    ]);
+    vi.mocked(getInstallationAccessToken).mockResolvedValue('push-token');
+    const sessionId = await readySession(db, executor);
+
+    await commitAndPushCloudCodeSession(db, OWNER, sessionId, PLAN_TIER, 'fix things', [
+      'src/a.ts',
+    ]);
+
+    expect(executor.git.add).toHaveBeenCalledWith({
+      path: expect.any(String),
+      files: ['src/a.ts'],
+    });
+    expect(executor.git.commit).toHaveBeenCalledWith({
+      path: expect.any(String),
+      message: 'fix things',
+      only: ['src/a.ts'],
+    });
+  });
+
+  it('commits both sides of a chosen rename and nothing else', async () => {
+    const db = createFakeDb();
+    const executor = gitExecutor();
+    vi.mocked(executor.git.status).mockResolvedValue({
+      ok: true,
+      output: '',
+      stdout: 'R  src/old.ts -> src/new.ts\nM  src/b.ts\n',
+      stderr: '',
+      exitCode: 0,
+    });
+    vi.mocked(getUserGithubInstallations).mockResolvedValue([
+      { installationId: 7, login: 'acme', verifiedRepositories: ['acme/widgets'] },
+    ]);
+    vi.mocked(getInstallationAccessToken).mockResolvedValue('push-token');
+    const sessionId = await readySession(db, executor);
+
+    await commitAndPushCloudCodeSession(db, OWNER, sessionId, PLAN_TIER, 'move it', ['src/new.ts']);
+
+    expect(executor.git.commit).toHaveBeenCalledWith({
+      path: expect.any(String),
+      message: 'move it',
+      only: ['src/old.ts', 'src/new.ts'],
+    });
+  });
+
   it('records the branch the clone checked out as the base the work is measured against', async () => {
     const db = createFakeDb();
     const executor = gitExecutor();

@@ -2068,11 +2068,17 @@ export const commitAndPushCloudCodeSession = tracedCodeAction(
       const status = await executor.git.status({ path: claim.session.workspacePath });
       if (!status.ok) throw gitStepFailure('Workspace status could not be read', status, context);
       if (files || parseGitPorcelainEntries(status.stdout).length > 0) {
-        const add = files
+        const chosen = files
           ? await stageChosenFiles(executor.git, claim.session.workspacePath, files, context)
-          : await executor.git.add({ path: claim.session.workspacePath, all: true });
+          : null;
+        const add =
+          chosen?.add ?? (await executor.git.add({ path: claim.session.workspacePath, all: true }));
         if (!add.ok) throw gitStepFailure('Staging changes failed', add, context);
-        const commit = await executor.git.commit({ path: claim.session.workspacePath, message });
+        const commit = await executor.git.commit({
+          path: claim.session.workspacePath,
+          message,
+          ...(chosen ? { only: chosen.paths } : {}),
+        });
         if (!commit.ok) throw gitStepFailure('Commit failed', commit, context);
       }
       const push = await executor.git.push({
@@ -2202,16 +2208,14 @@ async function stageChosenFiles(
   workspacePath: string,
   files: readonly string[],
   context: { userId: string; sessionId: string },
-): Promise<CommandExecutionResult> {
+): Promise<{ add: CommandExecutionResult; paths: string[] }> {
   const status = await git.status({ path: workspacePath });
   if (!status.ok) throw gitStepFailure('Workspace status could not be read', status, context);
   const chosen = selectChangedEntries(status.stdout, files);
-  return git.add({
-    path: workspacePath,
-    files: chosen.flatMap((entry) =>
-      entry.originalPath ? [entry.originalPath, entry.path] : [entry.path],
-    ),
-  });
+  const paths = chosen.flatMap((entry) =>
+    entry.originalPath ? [entry.originalPath, entry.path] : [entry.path],
+  );
+  return { add: await git.add({ path: workspacePath, files: paths }), paths };
 }
 
 export const discardCloudCodeSessionChanges = tracedCodeAction(
