@@ -686,24 +686,21 @@ function toSyncRecord(cloudId: string, entry: ConversationEntry): SyncConversati
 }
 
 export async function pullCloudConversationFlags(owner: ManagedCloudOwner): Promise<boolean> {
-  const bound = new Map<string, ConversationEntry>();
+  const bound = new Map<string, ConversationEntry[]>();
   for (const entry of await listConversations(owner)) {
     const cloudId = entry.cloudSync?.conversationId;
-    if (cloudId && entry.cloudSync?.createAcknowledged === true) bound.set(cloudId, entry);
+    if (cloudId && entry.cloudSync?.createAcknowledged === true)
+      bound.set(cloudId, [...(bound.get(cloudId) ?? []), entry]);
   }
-  const dirty = [...bound]
-    .filter(([, entry]) => conversationFlagsNeedSync(entry))
-    .map(([cloudId]) => cloudId);
   const flags = new Map<string, { pinned: boolean; archived: boolean }>();
   const deleted = new Set<string>();
   const port: ConversationStorePort = {
     get: (cloudId) => {
-      const entry = bound.get(cloudId);
+      const entry = bound.get(cloudId)?.[0];
       return entry ? toSyncRecord(cloudId, entry) : undefined;
     },
     insert: () => {},
     patch: (cloudId, record) => {
-      if (dirty.includes(cloudId)) return;
       flags.set(cloudId, { pinned: record.pinned === true, archived: record.archived === true });
     },
     remove: (cloudId) => {
@@ -714,7 +711,7 @@ export async function pullCloudConversationFlags(owner: ManagedCloudOwner): Prom
   let cursor = await readConversationCursor(owner);
   for (let page = 0; page < FLAG_PULL_MAX_PAGES; page += 1) {
     const result = await pullConversationDeltas(owner, cursor);
-    applyConversationDeltas(port, result.conversations, dirty);
+    applyConversationDeltas(port, result.conversations, []);
     const next = selectNextCursor(cursor, result.cursor);
     const advanced = next !== cursor;
     cursor = next;
@@ -723,30 +720,31 @@ export async function pullCloudConversationFlags(owner: ManagedCloudOwner): Prom
 
   let changed = false;
   for (const cloudId of deleted) {
-    const entry = bound.get(cloudId);
-    if (!entry) continue;
-    await deleteConversation(owner, entry.id);
-    flags.delete(cloudId);
-    changed = true;
-  }
-  for (const [cloudId, conversation] of flags) {
-    const entry = bound.get(cloudId);
-    if (!entry) continue;
-    if (
-      (entry.pinned === true) !== conversation.pinned ||
-      (entry.archived === true) !== conversation.archived
-    ) {
-      await updateConversationEntry(owner, entry.id, conversation);
+    for (const entry of bound.get(cloudId) ?? []) {
+      await deleteConversation(owner, entry.id);
       changed = true;
     }
-    if (
-      entry.cloudSync?.syncedPinned !== conversation.pinned ||
-      entry.cloudSync?.syncedArchived !== conversation.archived
-    ) {
-      await recordCloudSyncState(owner, entry.id, {
-        syncedPinned: conversation.pinned,
-        syncedArchived: conversation.archived,
-      });
+    flags.delete(cloudId);
+  }
+  for (const [cloudId, conversation] of flags) {
+    for (const entry of bound.get(cloudId) ?? []) {
+      if (conversationFlagsNeedSync(entry)) continue;
+      if (
+        (entry.pinned === true) !== conversation.pinned ||
+        (entry.archived === true) !== conversation.archived
+      ) {
+        await updateConversationEntry(owner, entry.id, conversation);
+        changed = true;
+      }
+      if (
+        entry.cloudSync?.syncedPinned !== conversation.pinned ||
+        entry.cloudSync?.syncedArchived !== conversation.archived
+      ) {
+        await recordCloudSyncState(owner, entry.id, {
+          syncedPinned: conversation.pinned,
+          syncedArchived: conversation.archived,
+        });
+      }
     }
   }
   await writeConversationCursor(owner, cursor);

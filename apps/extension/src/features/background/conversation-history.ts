@@ -1565,6 +1565,51 @@ export interface ManagedCloudHistoryImport {
   messagesOffset?: number;
 }
 
+function retainedFlag(
+  local: boolean | undefined,
+  synced: boolean | undefined,
+  remote: boolean,
+): boolean {
+  return local !== undefined && local !== (synced ?? false) ? local : remote;
+}
+
+function aliasWithRemoteFlags(
+  alias: ConversationEntry,
+  remote: ManagedCloudConversation,
+  organizationId: string | null,
+): ConversationEntry | null {
+  const sync = alias.cloudSync;
+  if (!sync) return null;
+  if (sync.organizationId !== undefined && sync.organizationId !== organizationId) return null;
+  if (sync.remoteUpdatedAt && Date.parse(sync.remoteUpdatedAt) > Date.parse(remote.updatedAt))
+    return null;
+  const pinned = retainedFlag(alias.pinned, sync.syncedPinned, remote.pinned);
+  const starred = retainedFlag(alias.starred, sync.syncedStarred, remote.starred);
+  const archived = retainedFlag(alias.archived, sync.syncedArchived, remote.archived);
+  if (
+    (alias.pinned === true) === pinned &&
+    (alias.starred === true) === starred &&
+    (alias.archived === true) === archived &&
+    (sync.syncedPinned === true) === remote.pinned &&
+    (sync.syncedStarred === true) === remote.starred &&
+    (sync.syncedArchived === true) === remote.archived
+  )
+    return null;
+  return {
+    ...alias,
+    pinned,
+    starred,
+    archived,
+    cloudSync: {
+      ...sync,
+      syncedPinned: remote.pinned,
+      syncedStarred: remote.starred,
+      syncedArchived: remote.archived,
+      remoteUpdatedAt: remote.updatedAt,
+    },
+  };
+}
+
 function retainDeviceActivity(
   message: HistoryMessage,
   previous: readonly HistoryMessage[],
@@ -1644,6 +1689,21 @@ export async function importManagedCloudConversationHistory(
           sameManagedCloudOwner(entry.owner, owner) &&
           (entry.cloudSync?.conversationId === remote.id || entry.id === remote.id),
       );
+      conversations = conversations.map((candidate) => {
+        if (
+          candidate === existing ||
+          candidate.cloudSync?.conversationId !== remote.id ||
+          !sameManagedCloudOwner(candidate.owner, owner) ||
+          protectedEntries.includes(candidate) ||
+          protectsConversation(candidate.id)
+        )
+          return candidate;
+        const reconciled = aliasWithRemoteFlags(candidate, remote, organizationId);
+        if (!reconciled) return candidate;
+        imported += 1;
+        changedIds.add(reconciled.id);
+        return reconciled;
+      });
       if (existing && protectedEntries.includes(existing)) continue;
       if (protectsConversation(existing?.id ?? remote.id)) continue;
       if (
@@ -1693,18 +1753,9 @@ export async function importManagedCloudConversationHistory(
           normalizeRoutingState({
             selectedModel: remote.selectedRouteId ?? remote.model ?? 'auto',
           }),
-        pinned:
-          existing?.pinned !== undefined && existing.pinned !== (sync?.syncedPinned ?? false)
-            ? existing.pinned
-            : remote.pinned,
-        starred:
-          existing?.starred !== undefined && existing.starred !== (sync?.syncedStarred ?? false)
-            ? existing.starred
-            : remote.starred,
-        archived:
-          existing?.archived !== undefined && existing.archived !== (sync?.syncedArchived ?? false)
-            ? existing.archived
-            : remote.archived,
+        pinned: retainedFlag(existing?.pinned, sync?.syncedPinned, remote.pinned),
+        starred: retainedFlag(existing?.starred, sync?.syncedStarred, remote.starred),
+        archived: retainedFlag(existing?.archived, sync?.syncedArchived, remote.archived),
         cloudSync: {
           conversationId: remote.id,
           organizationId,
