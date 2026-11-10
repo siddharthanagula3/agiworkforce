@@ -331,7 +331,7 @@ export function ArtifactFullScreen({
   const storedArtifact = useArtifactStore((s) =>
     artifactId ? s.artifacts.find((candidate) => candidate.id === artifactId) : undefined,
   );
-  const addArtifacts = useArtifactStore((s) => s.addArtifacts);
+  const saveArtifactEdit = useArtifactStore((s) => s.saveArtifactEdit);
   const [editDraft, setEditDraft] = useState<string | null>(null);
   const versionCount = versionHistory?.length ?? 0;
   const shownVersionIndex = viewedVersionIndex ?? (versionCount > 0 ? versionCount - 1 : 0);
@@ -548,11 +548,11 @@ export function ArtifactFullScreen({
   const handleSaveEdit = useCallback(() => {
     if (!storedArtifact || editDraft === null) return;
     if (editDraft !== activeContent && editDraft.trim().length > 0) {
-      addArtifacts([{ ...storedArtifact, content: editDraft }]);
+      saveArtifactEdit({ ...storedArtifact, content: editDraft });
       preferredNotificationHaptic(Haptics.NotificationFeedbackType.Success);
     }
     setEditDraft(null);
-  }, [activeContent, addArtifacts, editDraft, storedArtifact]);
+  }, [activeContent, editDraft, saveArtifactEdit, storedArtifact]);
 
   const handleCopyLink = useCallback(() => {
     if (!publishedUrl) return;
