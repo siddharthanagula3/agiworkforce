@@ -234,7 +234,7 @@ fn internal_destination_refusal(command: &str) -> Option<ToolResult> {
         tool_name: "run_command".to_string(),
         success: false,
         output: format!(
-            "Command '{}' targets {}, which the sandbox blocks: a request the model composes must not reach a service on this machine or a cloud instance-metadata endpoint. Re-run with --no-sandbox only if you accept unrestricted command execution.",
+            "Command '{}' targets {}, which the sandbox blocks: a request the model composes must name a fixed external host, never a service on this machine or a cloud instance-metadata endpoint. Re-run with --no-sandbox only if you accept unrestricted command execution.",
             redact_tool_output(command),
             host,
         ),
@@ -1069,6 +1069,57 @@ mod tests {
         // a string that merely mentions a loopback URL is not refused.
         assert!(internal_destination("echo http://localhost:3000").is_some());
         assert!(!command_requests_network("echo http://localhost:3000"));
+    }
+
+    #[test]
+    fn a_quoted_loopback_operand_is_refused_like_the_plain_one() {
+        for command in [
+            "curl http://127.0.0.1:3000/",
+            "curl http://12'7.0.0.1':3000/",
+            "curl \"http://127.0.0.1\":3000/",
+        ] {
+            assert!(command_requests_network(command), "{command}");
+            let refusal = internal_destination_refusal(command).expect("refused");
+            assert!(!refusal.success);
+            assert!(
+                refusal.output.contains("targets 127.0.0.1"),
+                "{}",
+                refusal.output
+            );
+        }
+        assert!(internal_destination_refusal("curl 'https://api.example.com/v1/models'").is_none());
+    }
+
+    #[tokio::test]
+    async fn a_quoted_loopback_operand_is_refused_before_the_network_is_asked_for() {
+        if !sandbox_available() {
+            return;
+        }
+        let network_requests = Arc::new(Mutex::new(0usize));
+        let seen = Arc::clone(&network_requests);
+        let callback: ApprovalCallback = Arc::new(move |request: ApprovalRequest| {
+            if matches!(request.kind, ApprovalRequestKind::Network { .. }) {
+                *seen.lock().expect("count") += 1;
+            }
+            Box::pin(async { ApprovalDecision::AllowOnce })
+        });
+        let mut args = HashMap::new();
+        args.insert(
+            "command".to_string(),
+            "curl http://12'7.0.0.1':3000/".to_string(),
+        );
+
+        let result = execute_run_command(&args, true, Some(&callback))
+            .await
+            .expect("tool result");
+
+        assert!(!result.success, "{}", result.output);
+        assert!(
+            result.output.contains("targets 127.0.0.1"),
+            "refusal must name the destination the program would reach: {}",
+            result.output
+        );
+        assert_eq!(*network_requests.lock().expect("count"), 0);
     }
 
     /// The sandboxed execution paths are only meaningful where a backend is
