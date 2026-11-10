@@ -197,6 +197,43 @@ describe('authService.logout', () => {
   it('is a no-op when Clerk has not loaded', async () => {
     await expect(authService.logout()).resolves.toEqual({ error: null });
   });
+
+  it('ends only the named session when one is given', async () => {
+    const signOut = vi.fn().mockResolvedValue(undefined);
+    (window as unknown as Record<string, unknown>)['Clerk'] = { signOut };
+
+    await authService.logout({ sessionId: 'session-a' });
+
+    expect(signOut).toHaveBeenCalledWith({ sessionId: 'session-a' });
+  });
+
+  it('reports a session as superseded only when a different session is active', () => {
+    const clerk = (session: { id: string } | null) => {
+      (window as unknown as Record<string, unknown>)['Clerk'] = { session };
+    };
+
+    clerk({ id: 'session-a' });
+    expect(authService.isSessionSuperseded('session-a')).toBe(false);
+    clerk(null);
+    expect(authService.isSessionSuperseded('session-a')).toBe(false);
+    clerk({ id: 'session-b' });
+    expect(authService.isSessionSuperseded('session-a')).toBe(true);
+  });
+
+  it('leaves a replacement session and its local state alone', async () => {
+    const signOut = vi.fn().mockResolvedValue(undefined);
+    (window as unknown as Record<string, unknown>)['Clerk'] = {
+      signOut,
+      session: { id: 'session-b' },
+    };
+    localStorage.setItem('agi-user-profile-store', '{"name":"Grace"}');
+
+    await useAuthStore.getState().logout({ sessionId: 'session-a' });
+
+    expect(signOut).not.toHaveBeenCalled();
+    expect(localStorage.getItem('agi-user-profile-store')).toBe('{"name":"Grace"}');
+    localStorage.clear();
+  });
 });
 
 describe('common cleanup publication boundary', () => {

@@ -136,7 +136,8 @@ describe('AccountSection · delete account (useDeleteAccount, real hook)', () =>
     fireEvent.click(screen.getByTestId('delete-account-success-continue'));
 
     await waitFor(() => expect(mockLogout).toHaveBeenCalledOnce());
-    expect(mockSignOut).toHaveBeenCalledWith({ redirectUrl: '/' });
+    expect(mockLogout).toHaveBeenCalledWith({ sessionId: 'session-1' });
+    expect(mockSignOut).toHaveBeenCalledWith({ sessionId: 'session-1', redirectUrl: '/' });
     await waitFor(() => expect(mockRouterReplace).toHaveBeenCalledWith('/'));
   });
 

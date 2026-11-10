@@ -12,6 +12,7 @@ vi.mock('@shared/services/authentication-manager', () => ({
   authService: {
     getCurrentUser: vi.fn(),
     logout: vi.fn(),
+    isSessionSuperseded: vi.fn(() => false),
   },
 }));
 
@@ -89,6 +90,11 @@ describe('Authentication Store', () => {
   });
 
   describe('Logout', () => {
+    beforeEach(() => {
+      vi.mocked(mockAuthService.isSessionSuperseded).mockReset();
+      vi.mocked(mockAuthService.isSessionSuperseded).mockReturnValue(false);
+    });
+
     it('should logout and reset state', async () => {
       const mockUser: AuthUser = {
         id: 'user-123',
@@ -111,6 +117,40 @@ describe('Authentication Store', () => {
       expect(state.isAuthenticated).toBe(false);
       expect(state.isLoading).toBe(false);
       expect(state.initialized).toBe(false);
+    });
+
+    it('signs out only the session it was scoped to', async () => {
+      vi.mocked(mockAuthService.logout).mockResolvedValue({ error: null });
+
+      await useAuthStore.getState().logout({ sessionId: 'session-a' });
+
+      expect(mockAuthService.logout).toHaveBeenCalledWith({ sessionId: 'session-a' });
+      expect(logoutStoreMocks.artifactReset).toHaveBeenCalled();
+    });
+
+    it('does not sign out or clear anything when another session has replaced the scoped one', async () => {
+      vi.mocked(mockAuthService.isSessionSuperseded).mockReturnValue(true);
+      useAuthStore.getState().updateUser({ id: 'user-b', email: 'b@example.com', role: 'user' });
+
+      await useAuthStore.getState().logout({ sessionId: 'session-a' });
+
+      expect(mockAuthService.logout).not.toHaveBeenCalled();
+      expect(logoutStoreMocks.artifactReset).not.toHaveBeenCalled();
+      expect(useAuthStore.getState().isAuthenticated).toBe(true);
+      expect(useAuthStore.getState().isLoading).toBe(false);
+    });
+
+    it('stops before clearing stores when a replacement session appears during sign-out', async () => {
+      vi.mocked(mockAuthService.isSessionSuperseded)
+        .mockReturnValueOnce(false)
+        .mockReturnValueOnce(false)
+        .mockReturnValueOnce(false)
+        .mockReturnValue(true);
+      vi.mocked(mockAuthService.logout).mockResolvedValue({ error: null });
+
+      await useAuthStore.getState().logout({ sessionId: 'session-a' });
+
+      expect(logoutStoreMocks.artifactReset).not.toHaveBeenCalled();
     });
 
     it('should cleanup other stores on logout', async () => {

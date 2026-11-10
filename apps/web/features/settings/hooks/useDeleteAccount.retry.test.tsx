@@ -7,6 +7,7 @@ import { isStepUpCancelled } from '@/features/auth/step-up-fetch';
 import { queryClient as productionQueryClient } from '@shared/stores/query-client';
 import { NO_PENDING_ACCOUNT_DELETION } from '@agiworkforce/cloud-contracts';
 import { toUserMessage } from '@/lib/user-error-message';
+import { addCsrfHeaders } from '@/lib/client/csrf';
 import {
   useDeleteAccount,
   useCancelAccountDeletion,
@@ -18,16 +19,20 @@ const mocks = vi.hoisted(() => ({
   signOut: vi.fn(),
   replace: vi.fn(),
   dialog: vi.fn(),
+  sessionCurrent: true,
 }));
 
 vi.mock('@/lib/identity/useSessionSnapshot', async (importOriginal) => ({
   ...(await importOriginal<ImportedModule0>()),
-  useSessionSnapshot: () => () => ({
-    userId: 'native-user-1',
-    sessionId: 'session-1',
-    isCurrent: () => true,
-    getToken: async () => 'captured-token',
-  }),
+  useSessionSnapshot: () => () =>
+    mocks.sessionCurrent
+      ? {
+          userId: 'native-user-1',
+          sessionId: 'session-1',
+          isCurrent: () => mocks.sessionCurrent,
+          getToken: async () => 'captured-token',
+        }
+      : null,
 }));
 
 vi.mock('next/navigation', async (importOriginal) => ({
@@ -125,24 +130,35 @@ function grantCalls() {
 }
 
 function DeletionHarness() {
+  const currentStatus = useAccountDeletionStatus();
   const currentDeletion = useDeleteAccount();
   useLayoutEffect(() => {
+    statusReader = currentStatus;
     deletion = currentDeletion;
-  }, [currentDeletion]);
+  }, [currentStatus, currentDeletion]);
   return (
     <>
-      <button onClick={() => currentDeletion.mutate()}>Schedule deletion</button>
+      <button
+        onClick={() => {
+          if (currentStatus.snapshot) currentDeletion.mutate(currentStatus.snapshot);
+        }}
+      >
+        Schedule deletion
+      </button>
       {currentDeletion.stepUpDialog}
     </>
   );
 }
 
-function renderDeletion() {
+async function renderDeletion() {
+  fetchMock.mockImplementationOnce(async () => response(NO_PENDING_ACCOUNT_DELETION));
   render(
     <QueryClientProvider client={client}>
       <DeletionHarness />
     </QueryClientProvider>,
   );
+  await waitFor(() => expect(statusReader.snapshot).not.toBeNull());
+  fetchMock.mockClear();
 }
 
 function CancellationHarness() {
@@ -193,6 +209,8 @@ function expectNoSignOut() {
 beforeEach(() => {
   vi.clearAllMocks();
   fetchMock.mockReset();
+  mocks.logout.mockReset();
+  mocks.sessionCurrent = true;
   vi.stubGlobal('fetch', fetchMock);
   client = new QueryClient({
     defaultOptions: {
@@ -206,6 +224,7 @@ afterEach(() => {
   client.clear();
   vi.useRealTimers();
   vi.unstubAllGlobals();
+  delete (window as unknown as Record<string, unknown>)['Clerk'];
 });
 
 describe('useDeleteAccount retry admission', () => {
@@ -221,7 +240,7 @@ describe('useDeleteAccount retry admission', () => {
         );
       throw new Error(`Unexpected request: ${String(url)}`);
     });
-    renderDeletion();
+    await renderDeletion();
     fireEvent.click(screen.getByText('Schedule deletion'));
     fireEvent.click(await screen.findByText('Cancel identity confirmation'));
     await terminalError();
@@ -237,7 +256,7 @@ describe('useDeleteAccount retry admission', () => {
 
   it('does not replay a DELETE whose transport rejects', async () => {
     fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
-    renderDeletion();
+    await renderDeletion();
     fireEvent.click(screen.getByText('Schedule deletion'));
     await terminalError();
     await beyondRetryWindow();
@@ -260,7 +279,7 @@ describe('useDeleteAccount retry admission', () => {
       }
       throw new Error(`Unexpected request: ${String(url)}`);
     });
-    renderDeletion();
+    await renderDeletion();
     fireEvent.click(screen.getByText('Schedule deletion'));
     await terminalError();
     await beyondRetryWindow();
@@ -274,8 +293,8 @@ describe('useDeleteAccount retry admission', () => {
   });
 
   it('allows a later explicit invocation as a new action', async () => {
+    await renderDeletion();
     fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
-    renderDeletion();
     fireEvent.click(screen.getByText('Schedule deletion'));
     await terminalError();
     await beyondRetryWindow();
@@ -321,6 +340,116 @@ describe('useDeleteAccount retry admission', () => {
   });
 });
 
+describe('account deletion session authority', () => {
+  const scheduledReceipt = {
+    message: 'Account deletion scheduled.',
+    scheduledFor: '2026-11-06T12:00:00.000Z',
+    status: 'pending',
+    statusReason: 'Deletion is scheduled and has not started.',
+  };
+
+  async function scheduleSuccessfully() {
+    fetchMock.mockImplementation(async () => response(scheduledReceipt));
+    await renderDeletion();
+    fireEvent.click(screen.getByText('Schedule deletion'));
+    await waitFor(() => expect(deletion.isSuccess).toBe(true));
+  }
+
+  it('sends nothing when the session retires while the CSRF header is pending', async () => {
+    let release: (headers: Record<string, string>) => void = () => undefined;
+    vi.mocked(addCsrfHeaders).mockImplementationOnce(
+      () =>
+        new Promise<Record<string, string>>((resolve) => {
+          release = resolve;
+        }),
+    );
+    fetchMock.mockImplementation(async () => response(scheduledReceipt));
+    await renderDeletion();
+    fireEvent.click(screen.getByText('Schedule deletion'));
+    await waitFor(() => expect(addCsrfHeaders).toHaveBeenCalled());
+
+    mocks.sessionCurrent = false;
+    release({ 'x-csrf-token': 'csrf-token' });
+
+    await terminalError();
+    expect(deletionCalls()).toHaveLength(0);
+    expect(toUserMessage(deletion.error, 'fallback')).toBe(
+      'Deletion was not scheduled. Close this dialog, check the current status, and reopen the confirmation.',
+    );
+    expectNoSignOut();
+  });
+
+  it('does not replay with a fresh proof after the session retires during identity confirmation', async () => {
+    let releaseGrant: (reply: Response) => void = () => undefined;
+    fetchMock.mockImplementation(async (url) => {
+      if (String(url) === DELETE_PATH) return challenge();
+      if (String(url) === GRANT_PATH)
+        return new Promise<Response>((resolve) => {
+          releaseGrant = resolve;
+        });
+      throw new Error(`Unexpected request: ${String(url)}`);
+    });
+    await renderDeletion();
+    fireEvent.click(screen.getByText('Schedule deletion'));
+    await waitFor(() => expect(grantCalls()).toHaveLength(1));
+
+    mocks.sessionCurrent = false;
+    releaseGrant(response({ token: 'grant.signature' }));
+
+    await terminalError();
+    expect(deletionCalls()).toHaveLength(1);
+    expect(toUserMessage(deletion.error, 'fallback')).toBe(
+      'Deletion was not scheduled. Close this dialog, check the current status, and reopen the confirmation.',
+    );
+  });
+
+  it('dispatches with the confirming session credentials and no ambient cookies', async () => {
+    await scheduleSuccessfully();
+
+    const init = deletionCalls()[0]?.[1];
+    expect(init?.credentials).toBe('omit');
+    expect(new Headers(init?.headers).get('Authorization')).toBe('Bearer captured-token');
+  });
+
+  it('signs out only the session that owns the receipt', async () => {
+    await scheduleSuccessfully();
+
+    await act(async () => {
+      await deletion.signOutAfterDeletion();
+    });
+
+    expect(mocks.logout).toHaveBeenCalledWith({ sessionId: 'session-1' });
+    expect(mocks.signOut).toHaveBeenCalledWith({ sessionId: 'session-1', redirectUrl: '/' });
+    expect(mocks.replace).toHaveBeenCalledWith('/');
+  });
+
+  it('does nothing on Continue after the receipt session was replaced', async () => {
+    await scheduleSuccessfully();
+    mocks.sessionCurrent = false;
+
+    await act(async () => {
+      await deletion.signOutAfterDeletion();
+    });
+
+    expectNoSignOut();
+  });
+
+  it('stops before the identity sign-out and navigation when a replacement session appears during logout', async () => {
+    await scheduleSuccessfully();
+    mocks.logout.mockImplementation(async () => {
+      (window as unknown as Record<string, unknown>)['Clerk'] = { session: { id: 'session-2' } };
+    });
+
+    await act(async () => {
+      await deletion.signOutAfterDeletion();
+    });
+
+    expect(mocks.logout).toHaveBeenCalledTimes(1);
+    expect(mocks.signOut).not.toHaveBeenCalled();
+    expect(mocks.replace).not.toHaveBeenCalled();
+  });
+});
+
 describe('account deletion mutation receipts with production retry defaults', () => {
   it.each([
     { label: 'empty body', reply: () => new Response(null, { status: 204 }) },
@@ -349,7 +478,7 @@ describe('account deletion mutation receipts with production retry defaults', ()
     },
   ])('does not report scheduling success or replay after $label', async ({ reply }) => {
     fetchMock.mockImplementation(async () => reply());
-    renderDeletion();
+    await renderDeletion();
     fireEvent.click(screen.getByText('Schedule deletion'));
     await terminalError();
     await beyondRetryWindow();
