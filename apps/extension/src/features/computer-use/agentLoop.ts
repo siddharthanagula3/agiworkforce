@@ -1,4 +1,5 @@
 import * as cdp from './cdpDriver';
+import { DEFAULT_CALLER_TOOL_MAX_STEPS } from '@agiworkforce/cloud-contracts';
 import {
   assertDestinationAllowlisted,
   scanForInjection,
@@ -50,7 +51,7 @@ import { getBrowserToolDefinitions, isTaskTabAction } from './browserToolDefinit
 import type { TaskTabs, TaskTabPlan, TaskWindowResizePlan } from '../browser-tools/taskTabs';
 import type { BrowserAgentSiteTools, BrowserSiteToolPlan } from '../tools/browserAgentSiteTools';
 
-export const DEFAULT_MAX_AGENT_STEPS = 20;
+export const DEFAULT_MAX_AGENT_STEPS = DEFAULT_CALLER_TOOL_MAX_STEPS;
 export const MAX_RUN_GUIDANCE_CHARS = 4_096;
 export const RUN_GUIDANCE_HEADING = 'More details from me for this task';
 

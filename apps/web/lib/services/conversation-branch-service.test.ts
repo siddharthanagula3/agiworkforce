@@ -19,6 +19,8 @@ const sourceConversation = {
   id: '0190a000-0000-7000-8000-0000000000aa',
   title: 'Source chat',
   model: 'auto',
+  selected_route_id: 'auto',
+  organization_id: null,
   project_id: null,
   pinned: false,
   starred: false,
@@ -131,6 +133,14 @@ describe('conversation branch service', () => {
 
     expect(db.transaction).toHaveBeenCalledOnce();
     expect(query.mock.calls[1]![0]).toContain('for update');
+    expect(query.mock.calls[0]![0]).toContain('target.organization_id');
+    expect(query.mock.calls[0]![0]).toContain('target.selected_route_id');
+    expect(query.mock.calls[1]![0]).toContain('selected_route_id');
+    const [targetSql, targetParams] = query.mock.calls[4]!;
+    expect(targetSql).toContain('returning id,');
+    expect(targetSql).toContain('organization_id');
+    expect(targetSql).toContain('selected_route_id');
+    expect(targetParams[7]).toBe(sourceConversation.selected_route_id ?? null);
     const [relationSql, relationParams] = execute.mock.calls[0]!;
     expect(relationSql).toContain('insert into public.conversation_branches');
     expect(relationParams).toEqual([
@@ -202,6 +212,7 @@ describe('conversation branch service', () => {
       sourceConversation.project_id,
       sourceConversation.is_temporary,
       marker,
+      sourceConversation.selected_route_id ?? null,
     ]);
   });
 

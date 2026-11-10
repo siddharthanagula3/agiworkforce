@@ -31,6 +31,8 @@ import { runToolLoop, applyToolResultSecretPolicy, type ConnectorToolExecutor } 
 import { connectorToolPermissionsFromEntries } from './connector-tool-permissions';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import type { ProcessedRequest } from './request-processor';
+import { MAX_EXECUTION_OUTPUT_BYTES } from '@/lib/e2b/types';
+import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/cloud-contracts';
 
 const STRIPE_KEY = `sk_live_${'a'.repeat(30)}`;
 const ORGANIZATION_ID = '22222222-2222-4222-8222-222222222222';
@@ -232,6 +234,85 @@ function secretAuditEvents(): unknown[] {
 }
 
 describe('runToolLoop, secret handling policy applied to tool results before they are pushed', () => {
+  it.each(['redact', 'block'] as const)(
+    'applies %s before resumed caller-origin results reach a provider',
+    async (mode) => {
+      mocks.resolvePolicy.mockResolvedValue({ mode, organizationId: ORGANIZATION_ID });
+      mocks.streamRequest.mockResolvedValueOnce(finalAnswerStream('Done.'));
+      const request = makeProcessed();
+      const local = {
+        type: 'function' as const,
+        function: {
+          name: 'read_dom',
+          parameters: { type: 'object', properties: {} },
+        },
+      };
+      request.chatSurface = 'chrome';
+      request.chatRequest = {
+        model: 'test-model',
+        messages: [],
+        stream: true,
+        tools: [local],
+        caller_tool_handoff_version: AGENT_EVENT_SCHEMA_VERSION,
+      };
+      request.llmRequest.tools = [local];
+      request.llmRequest.messages = [
+        {
+          role: 'assistant',
+          content: '',
+          tool_calls: [
+            {
+              id: 'caller-secret',
+              type: 'function',
+              function: { name: 'read_dom', arguments: '{}' },
+            },
+          ],
+        },
+      ];
+      const output = await collect(
+        runToolLoop(request, {
+          userId: 'user-1',
+          onCallerToolCheckpoint: async (checkpoint) => ({ events: checkpoint.events }),
+          resume: {
+            callerResults: [{ tool_call_id: 'caller-secret', content: `key: ${STRIPE_KEY}` }],
+          },
+        }),
+      );
+      expect(mocks.streamRequest).toHaveBeenCalledTimes(1);
+      const providerRequest = mocks.streamRequest.mock
+        .calls[0]![2] as ProcessedRequest['llmRequest'];
+      const result = providerRequest.messages.find((message) => message.role === 'tool');
+      expect(result?.content).not.toContain(STRIPE_KEY);
+      expect(result?.content).toContain(mode === 'block' ? 'blocked' : '[REDACTED]');
+      expect(output).not.toContain(STRIPE_KEY);
+      expect(secretAuditEvents()).toHaveLength(1);
+    },
+  );
+  it.each(['redact', 'block'] as const)(
+    'applies %s to a complete oversized connector result before provider continuation',
+    async (mode) => {
+      mocks.resolvePolicy.mockResolvedValue({ mode, organizationId: ORGANIZATION_ID });
+      mocks.streamRequest
+        .mockResolvedValueOnce(toolCallStream(CONNECTOR_TOOL))
+        .mockResolvedValueOnce(finalAnswerStream('Done.'));
+      const token = `ghp_${'a'.repeat(36)}`;
+      const content = `${'x'.repeat(MAX_EXECUTION_OUTPUT_BYTES - token.length / 2)}${token}${'y'.repeat(20_000)}`;
+      const output = await collect(
+        runToolLoop(makeProcessed(), {
+          approvalMode: 'auto',
+          userId: 'user-1',
+          mcpTools: [connectorToolDef],
+          connectorExecutor: vi.fn(async () => ({ handled: true, content, isError: false })),
+        }),
+      );
+      const toolMessage = secondRequestMessages().find((message) => message.role === 'tool');
+      expect(toolMessage?.content.includes(token.slice(0, 20))).toBe(false);
+      expect(output.includes(token.slice(0, 20))).toBe(false);
+      expect(toolMessage?.content.includes(mode === 'block' ? 'blocked' : '[REDACTED]')).toBe(true);
+      expect(secretAuditEvents()).toHaveLength(1);
+    },
+  );
+
   it('redacts a secret a connector returns before the follow-up provider call ever sees it', async () => {
     mocks.resolvePolicy.mockResolvedValue({ mode: 'redact', organizationId: ORGANIZATION_ID });
     mocks.streamRequest

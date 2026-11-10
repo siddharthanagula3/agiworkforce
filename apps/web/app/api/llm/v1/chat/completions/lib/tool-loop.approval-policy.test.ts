@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMapSearchToolDefinition } from '@/lib/services/map-search-tool-service';
 import { webSearchToolDef } from '@/lib/web-search/web-search-tool';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
+import { e2bExecutionToolDefs } from '@/lib/e2b/execution-tools';
+import { getE2BExecutor } from '@/lib/e2b/runtime';
 
 const provider = vi.hoisted(() => ({ stream: vi.fn() }));
 vi.mock('./tool-loop-anthropic', () => ({
@@ -14,7 +16,7 @@ vi.mock('@/lib/e2b/runtime', () => ({
   pauseE2BSession: vi.fn().mockResolvedValue(undefined),
 }));
 
-import { runToolLoop } from './tool-loop';
+import { executeOfferedToolCall, runToolLoop, type ToolLoopApprovalCheckpoint } from './tool-loop';
 import type { ProcessedRequest } from './request-processor';
 
 const CONNECTOR_TOOL: WebMcpToolDef = {
@@ -113,6 +115,161 @@ async function collect(generator: AsyncGenerator<Uint8Array>): Promise<string> {
 
 describe('account-wide default tool approval policy', () => {
   beforeEach(() => provider.stream.mockReset());
+
+  it('rejects missing hosted write content before asking for approval or provisioning', async () => {
+    const processed = makeProcessed();
+    if (!processed.chatRequest) throw new Error('Missing request fixture');
+    processed.chatRequest.code_execution = true;
+    processed.llmRequest.tools = e2bExecutionToolDefs();
+    const checkpoint = vi
+      .fn<(value: ToolLoopApprovalCheckpoint) => Promise<void>>()
+      .mockResolvedValue(undefined);
+    vi.mocked(getE2BExecutor).mockClear();
+    provider.stream
+      .mockResolvedValueOnce(toolCallStream('write_file', { path: 'draft.txt' }))
+      .mockResolvedValueOnce(
+        stream([
+          {
+            choices: [
+              {
+                delta: { content: 'File contents are required.' },
+                finish_reason: 'stop',
+                index: 0,
+              },
+            ],
+          },
+        ]),
+      );
+    const output = await collect(
+      runToolLoop(processed, {
+        approvalMode: 'manual',
+        mcpTools: [],
+        toolApprovalPolicy: 'ask_every_time',
+        onApprovalCheckpoint: checkpoint,
+      }),
+    );
+    expect(output).toContain('missing required argument');
+    expect(output).not.toContain('x_tool_approval_request');
+    expect(checkpoint).not.toHaveBeenCalled();
+    expect(getE2BExecutor).not.toHaveBeenCalled();
+    expect(provider.stream).toHaveBeenCalledTimes(2);
+    expect(output).not.toContain('x_stream_error');
+    expect(provider.stream.mock.calls[1]?.[2]).toMatchObject({
+      messages: expect.arrayContaining([
+        expect.objectContaining({
+          role: 'tool',
+          tool_call_id: 'fixture-policy-call',
+          content: expect.stringContaining('missing required argument'),
+        }),
+      ]),
+    });
+  });
+
+  it('still asks before a valid explicitly empty hosted write', async () => {
+    const processed = makeProcessed();
+    if (!processed.chatRequest) throw new Error('Missing request fixture');
+    processed.chatRequest.code_execution = true;
+    processed.llmRequest.tools = e2bExecutionToolDefs();
+    const checkpoint = vi
+      .fn<(value: ToolLoopApprovalCheckpoint) => Promise<void>>()
+      .mockResolvedValue(undefined);
+    vi.mocked(getE2BExecutor).mockClear();
+    provider.stream.mockResolvedValueOnce(
+      toolCallStream('write_file', { path: 'draft.txt', content: '' }),
+    );
+    const output = await collect(
+      runToolLoop(processed, {
+        approvalMode: 'manual',
+        mcpTools: [],
+        toolApprovalPolicy: 'ask_every_time',
+        onApprovalCheckpoint: checkpoint,
+      }),
+    );
+    expect(output).toContain('x_tool_approval_request');
+    expect(checkpoint).toHaveBeenCalledOnce();
+    expect(checkpoint.mock.calls[0]?.[0].pendingToolCalls[0]?.args).toEqual({
+      path: 'draft.txt',
+      content: '',
+    });
+    expect(getE2BExecutor).not.toHaveBeenCalled();
+  });
+
+  it('rechecks hosted arguments from an already approved older checkpoint', async () => {
+    const processed = makeProcessed();
+    if (!processed.chatRequest) throw new Error('Missing request fixture');
+    processed.chatRequest.code_execution = true;
+    processed.llmRequest.tools = e2bExecutionToolDefs();
+    processed.llmRequest.messages.push({
+      role: 'assistant',
+      content: '',
+      tool_calls: [
+        {
+          id: 'older-invalid-write',
+          type: 'function',
+          function: { name: 'write_file', arguments: '{"path":"draft.txt"}' },
+        },
+      ],
+    });
+    vi.mocked(getE2BExecutor).mockClear();
+    provider.stream.mockResolvedValueOnce(
+      stream([
+        {
+          choices: [
+            { delta: { content: 'Contents are required.' }, finish_reason: 'stop', index: 0 },
+          ],
+        },
+      ]),
+    );
+    const output = await collect(
+      runToolLoop(processed, {
+        approvalMode: 'manual',
+        mcpTools: [],
+        toolApprovalPolicy: 'ask_every_time',
+        resume: { approvals: [{ toolCallId: 'older-invalid-write', decision: 'approved' }] },
+      }),
+    );
+    expect(output).toContain('missing required argument');
+    expect(getE2BExecutor).not.toHaveBeenCalled();
+    expect(output).not.toContain('x_stream_error');
+  });
+
+  it('keeps a colliding external schema from weakening hosted write requirements', async () => {
+    vi.mocked(getE2BExecutor).mockClear();
+    const result = await executeOfferedToolCall({
+      call: {
+        id: 'colliding-schema-write',
+        qualifiedName: 'write_file',
+        args: { path: 'draft.txt' },
+      },
+      offeredTools: new Set(['write_file']),
+      mcpTools: [
+        {
+          qualifiedName: 'write_file',
+          serverId: 'fixture',
+          toolName: 'write_file',
+          description: 'Reserved hosted-name fixture',
+          origin: 'connector',
+          inputSchema: {
+            type: 'object',
+            required: ['path'],
+            properties: { path: { type: 'string' } },
+          },
+        },
+      ],
+      userId: 'user-1',
+      organizationId: null,
+      conversationId: null,
+      model: 'fixture-model',
+      requestId: 'collision-request',
+      planTier: 'pro',
+      surface: 'web',
+    });
+    expect(result).toMatchObject({
+      isError: true,
+      content: expect.stringContaining('missing required argument'),
+    });
+    expect(getE2BExecutor).not.toHaveBeenCalled();
+  });
 
   it('asks for approval on a read-only tool when the account keeps the fail-closed default', async () => {
     provider.stream.mockResolvedValueOnce(mapToolCallStream());

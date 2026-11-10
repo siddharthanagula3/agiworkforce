@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { logger } from '@/lib/logger';
 import {
   getRegistryRoute,
+  getModelEffortOptions,
   listCanonicalModels,
   listManagedRoutesForModel,
 } from '@agiworkforce/types';
@@ -45,8 +47,12 @@ vi.mock('@/app/api/llm/v1/chat/completions/lib/adapter-response', () => ({
   drainToLlmResponse: (...args: unknown[]) => drainToLlmResponseMock(...args),
 }));
 
+const streamedRequests: unknown[] = [];
 const buildServerProviderAdapterMock = vi.fn((_provider: string) => ({
-  stream: () => (async function* () {})(),
+  stream: (request: unknown) => {
+    streamedRequests.push(structuredClone(request));
+    return (async function* () {})();
+  },
 }));
 
 const recordSettledProviderCostMock = vi.fn(async (..._args: unknown[]) => {});
@@ -157,6 +163,7 @@ function scheduleInput(
 
 beforeEach(() => {
   vi.clearAllMocks();
+  streamedRequests.length = 0;
   redisClient = new FakeRedis();
   resolveEntitledPlanTierMock.mockResolvedValue('pro');
   resolveAutoRouteMock.mockReturnValue(SELECTED_ROUTE);
@@ -170,6 +177,92 @@ beforeEach(() => {
 });
 
 describe('exact-response cache integration', () => {
+  it('leaves the tiny title budget for text when the selected route admits none effort', async () => {
+    const model = listCanonicalModels().find(
+      (candidate) =>
+        getModelEffortOptions(candidate.id).includes('none') &&
+        listManagedRoutesForModel(candidate.id).some((route) => route.provider === 'openai'),
+    );
+    if (!model) throw new Error('Catalog fixture with none effort is unavailable');
+    const route = listManagedRoutesForModel(model.id).find(
+      (candidate) => candidate.provider === 'openai',
+    )!;
+    const registry = getRegistryRoute(route.routeId)!;
+    resolveAutoRouteMock.mockReturnValueOnce({
+      ...SELECTED_ROUTE,
+      modelKey: registry.modelKey,
+      provider: registry.provider,
+      providerModelId: registry.providerModelId,
+      routeId: route.routeId,
+      harnessId: registry.harnessId,
+    });
+    scheduleConversationTitleGeneration(scheduleInput(fakeDb()));
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(streamedRequests[0]).toMatchObject({ effort: 'none', maxOutputTokens: 24 });
+  });
+
+  it('does not force an unregistered effort onto a route without that capability', async () => {
+    scheduleConversationTitleGeneration(scheduleInput(fakeDb()));
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(streamedRequests[0]).not.toHaveProperty('effort');
+  });
+
+  it.each(['', '   \n '])(
+    'does not cache unusable title text %j while still settling provider usage',
+    async (content) => {
+      drainToLlmResponseMock.mockResolvedValueOnce({
+        content,
+        model: 'test.model',
+        promptTokens: 64,
+        completionTokens: 24,
+        totalTokens: 88,
+        reasoningOutputTokens: 24,
+      });
+      const db = fakeDb();
+      scheduleConversationTitleGeneration(scheduleInput(db));
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(redisClient!.store.size).toBe(0);
+      expect(db.executed).toHaveLength(0);
+      expect(finalizeMock).toHaveBeenCalledTimes(1);
+      expect(finalizeMock.mock.calls[0]?.[0]).toMatchObject({ outcome: 'completed' });
+      const warning = vi.mocked(logger.warn).mock.calls.find((call) => {
+        const fields: unknown = call[0];
+        return (
+          typeof fields === 'object' &&
+          fields !== null &&
+          'event' in fields &&
+          fields.event === 'conversation_title_unusable'
+        );
+      });
+      expect(warning?.[0]).toMatchObject({
+        conversationId: CONVERSATION_ID,
+        requestId: `title:${CONVERSATION_ID}`,
+      });
+      expect(JSON.stringify(warning)).not.toContain(scheduleInput(db).content);
+    },
+  );
+
+  it('recovers a new conversation from an old empty cached result', async () => {
+    scheduleConversationTitleGeneration(scheduleInput(fakeDb()));
+    await new Promise((resolve) => setImmediate(resolve));
+    const cached = [...redisClient!.store.entries()][0];
+    if (!cached || typeof cached[1] !== 'object' || cached[1] === null)
+      throw new Error('Expected the actual stored cache record');
+    redisClient!.store.set(cached[0], { ...cached[1], content: '' });
+    const db = fakeDb();
+    drainToLlmResponseMock.mockResolvedValueOnce({
+      content: 'Recovered title',
+      model: 'test.model',
+      promptTokens: 64,
+      completionTokens: 3,
+      totalTokens: 67,
+    });
+    scheduleConversationTitleGeneration(scheduleInput(db, { conversationId: 'conv_2' }));
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(drainToLlmResponseMock).toHaveBeenCalledTimes(2);
+    expect(db.executed.some((params) => params[0] === 'Recovered title')).toBe(true);
+  });
+
   it('maps a selected OpenRouter route to the dispatch adapter key', async () => {
     const managedOpenRouterRoute = listCanonicalModels()
       .flatMap((model) => listManagedRoutesForModel(model.id))

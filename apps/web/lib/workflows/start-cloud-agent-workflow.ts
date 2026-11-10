@@ -34,6 +34,7 @@ import {
   isCloudAgentRunCancellationRequested,
   isCloudAgentRunPauseRequested,
   saveCloudAgentApprovalCheckpoint,
+  saveCloudAgentCallerCheckpoint,
   saveCloudAgentDeviceCheckpoint,
   saveCloudAgentInputCheckpoint,
   saveCloudAgentPauseCheckpoint,
@@ -390,6 +391,30 @@ function buildInlineCloudAgentTurn(input: RunCloudAgentTurnInput): ReadableStrea
         events: checkpoint.events,
       });
       pauseCheckpointSaved = true;
+    },
+    onCallerToolCheckpoint: async (checkpoint) => {
+      const saved = await saveCloudAgentCallerCheckpoint(input.db, {
+        userId: input.userId,
+        runId: input.runId,
+        sessionId: checkpoint.sessionId,
+        turnId: checkpoint.turnId,
+        nextEventSequence: checkpoint.nextEventSequence,
+        completedSteps: checkpoint.completedSteps,
+        request: buildApprovalCheckpointRequest(
+          processed.chatRequest,
+          processed.callerToolFields,
+          processed.turnAttachments,
+          processed.modelSelection,
+          processed.turnToolProhibition,
+          checkpoint.toolSchemaState,
+          processed.contextPolicySnapshot,
+        ),
+        messages: checkpoint.messages,
+        pendingToolCalls: checkpoint.pendingToolCalls,
+        events: checkpoint.events,
+      });
+      pauseCheckpointSaved = true;
+      return saved;
     },
     onApprovalCheckpoint: async (checkpoint) => {
       await saveCloudAgentApprovalCheckpoint(input.db, {

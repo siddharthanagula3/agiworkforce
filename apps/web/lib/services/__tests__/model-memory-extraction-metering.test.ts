@@ -1,4 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  getModelEffortOptions,
+  getRegistryRoute,
+  listCanonicalModels,
+  listManagedRoutesForModel,
+} from '@agiworkforce/types';
 type ScanModule0 = typeof import('@agiworkforce/routing');
 type ScanModule1 = typeof import('@agiworkforce/agent-core');
 
@@ -27,9 +33,11 @@ const SELECTED_ROUTE = {
   reason: 'preferred_slot',
 };
 
+const resolveAutoRouteMock = vi.fn(() => SELECTED_ROUTE);
+
 vi.mock('@agiworkforce/routing', async (importOriginal) => {
   const actual = await importOriginal<ScanModule0>();
-  return { ...actual, resolveAutoRoute: () => SELECTED_ROUTE };
+  return { ...actual, resolveAutoRoute: () => resolveAutoRouteMock() };
 });
 
 const runnerResult = vi.fn();
@@ -129,6 +137,7 @@ function input(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  resolveAutoRouteMock.mockReturnValue(SELECTED_ROUTE);
   streamedRequests.length = 0;
   runnerResult.mockReset();
   drainToLlmResponseMock.mockResolvedValue({
@@ -141,6 +150,29 @@ beforeEach(() => {
 });
 
 describe('extractAutoMemoryFactsWithModel metering', () => {
+  it('requests catalog-admitted none effort for the bounded utility extraction', async () => {
+    const model = listCanonicalModels().find(
+      (candidate) =>
+        getModelEffortOptions(candidate.id).includes('none') &&
+        listManagedRoutesForModel(candidate.id).some((route) => route.provider === 'openai'),
+    );
+    if (!model) throw new Error('Catalog fixture with none effort is unavailable');
+    const route = listManagedRoutesForModel(model.id).find(
+      (candidate) => candidate.provider === 'openai',
+    )!;
+    const registry = getRegistryRoute(route.routeId)!;
+    resolveAutoRouteMock.mockReturnValueOnce({
+      ...SELECTED_ROUTE,
+      modelKey: registry.modelKey,
+      provider: registry.provider,
+      providerModelId: registry.providerModelId,
+      routeId: route.routeId,
+      harnessId: registry.harnessId,
+    });
+    await extractAutoMemoryFactsWithModel(input());
+    expect(streamedRequests[0]).toMatchObject({ effort: 'none', maxOutputTokens: 256 });
+  });
+
   it('reserves and finalizes exactly once for one extraction', async () => {
     const facts = await extractAutoMemoryFactsWithModel(input());
 

@@ -35,6 +35,29 @@ export interface AutofillResult {
   errors: string[];
 }
 
+function fileFieldOutcome(
+  element: HTMLElement,
+  key: string,
+  profile: JobApplicationProfile,
+): FillOutcome {
+  if (!(element instanceof HTMLInputElement) || element.type !== 'file') {
+    return { success: false, skipped: true, reason: 'Unsupported element type' };
+  }
+  if (element.files?.length) {
+    return { success: false, skipped: true, reason: 'File already selected on the page' };
+  }
+  const requested =
+    key === 'files.resume' ? profile.files?.resumeDataUrl : profile.files?.coverLetterDataUrl;
+  return {
+    success: false,
+    skipped: true,
+    reason:
+      element.required || element.getAttribute('aria-required') === 'true' || requested
+        ? FILE_INPUT_SKIP_REASON
+        : 'No file requested for this optional field',
+  };
+}
+
 function sanitizeProfileValue(value: string): string {
   // eslint-disable-next-line no-control-regex
   let sanitized = value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
@@ -206,14 +229,11 @@ export async function autofillLinkedIn(
   const errors: string[] = [];
 
   for (const key of Object.keys(LINKEDIN_SELECTORS)) {
+    const match = resolveLinkedInSelector(key);
+    if (!match) continue;
+    const { element, selector } = match;
     if (key.startsWith('files.')) {
-      filled.push({
-        key,
-        selector: '',
-        success: false,
-        skipped: true,
-        reason: FILE_INPUT_SKIP_REASON,
-      });
+      filled.push({ key, selector, ...fileFieldOutcome(element, key, profile) });
       continue;
     }
 
@@ -221,7 +241,7 @@ export async function autofillLinkedIn(
     if (profileValue === null || profileValue === '') {
       filled.push({
         key,
-        selector: '',
+        selector,
         success: false,
         skipped: true,
         reason: 'No value in profile',
@@ -229,19 +249,6 @@ export async function autofillLinkedIn(
       continue;
     }
 
-    const match = resolveLinkedInSelector(key);
-    if (!match) {
-      filled.push({
-        key,
-        selector: '',
-        success: false,
-        skipped: true,
-        reason: 'Field not found on page',
-      });
-      continue;
-    }
-
-    const { element, selector } = match;
     const stringValue = sanitizeProfileValue(String(profileValue));
     let outcome: FillOutcome = { success: false, skipped: false };
 
@@ -276,14 +283,11 @@ export async function autofillLever(
   const errors: string[] = [];
 
   for (const key of Object.keys(LEVER_SELECTORS)) {
+    const match = resolveLeverSelector(key);
+    if (!match) continue;
+    const { element, selector } = match;
     if (key.startsWith('files.')) {
-      filled.push({
-        key,
-        selector: '',
-        success: false,
-        skipped: true,
-        reason: FILE_INPUT_SKIP_REASON,
-      });
+      filled.push({ key, selector, ...fileFieldOutcome(element, key, profile) });
       continue;
     }
 
@@ -291,7 +295,7 @@ export async function autofillLever(
     if (profileValue === null || profileValue === '') {
       filled.push({
         key,
-        selector: '',
+        selector,
         success: false,
         skipped: true,
         reason: 'No value in profile',
@@ -299,19 +303,6 @@ export async function autofillLever(
       continue;
     }
 
-    const match = resolveLeverSelector(key);
-    if (!match) {
-      filled.push({
-        key,
-        selector: '',
-        success: false,
-        skipped: true,
-        reason: 'Field not found on page',
-      });
-      continue;
-    }
-
-    const { element, selector } = match;
     const stringValue = sanitizeProfileValue(String(profileValue));
     let outcome: FillOutcome = { success: false, skipped: false };
 
@@ -395,14 +386,11 @@ export async function autofillGreenhouse(
   const errors: string[] = [];
 
   for (const key of Object.keys(GREENHOUSE_SELECTORS)) {
+    const match = resolveGreenhouseSelector(key);
+    if (!match) continue;
+    const { element, selector } = match;
     if (key.startsWith('files.')) {
-      filled.push({
-        key,
-        selector: '',
-        success: false,
-        skipped: true,
-        reason: FILE_INPUT_SKIP_REASON,
-      });
+      filled.push({ key, selector, ...fileFieldOutcome(element, key, profile) });
       continue;
     }
 
@@ -410,7 +398,7 @@ export async function autofillGreenhouse(
     if (profileValue === null || profileValue === '') {
       filled.push({
         key,
-        selector: '',
+        selector,
         success: false,
         skipped: true,
         reason: 'No value in profile',
@@ -418,19 +406,6 @@ export async function autofillGreenhouse(
       continue;
     }
 
-    const match = resolveGreenhouseSelector(key);
-    if (!match) {
-      filled.push({
-        key,
-        selector: '',
-        success: false,
-        skipped: true,
-        reason: 'Field not found on page',
-      });
-      continue;
-    }
-
-    const { element, selector } = match;
     const stringValue = sanitizeProfileValue(String(profileValue));
     let outcome: FillOutcome = { success: false, skipped: false };
 
@@ -504,14 +479,11 @@ export async function autofillAshby(
   const errors: string[] = [];
 
   for (const key of Object.keys(ASHBY_SELECTORS)) {
-    if (key.startsWith('files.') || ASHBY_ALWAYS_ESCALATE_KEYS.has(key)) {
-      filled.push({
-        key,
-        selector: '',
-        success: false,
-        skipped: true,
-        reason: 'Requires computer-use escalation',
-      });
+    const match = resolveAshbySelector(key);
+    if (!match) continue;
+    const { element, selector } = match;
+    if (key.startsWith('files.')) {
+      filled.push({ key, selector, ...fileFieldOutcome(element, key, profile) });
       continue;
     }
 
@@ -519,7 +491,7 @@ export async function autofillAshby(
     if (profileValue === null || profileValue === '') {
       filled.push({
         key,
-        selector: '',
+        selector,
         success: false,
         skipped: true,
         reason: 'No value in profile',
@@ -527,19 +499,17 @@ export async function autofillAshby(
       continue;
     }
 
-    const match = resolveAshbySelector(key);
-    if (!match) {
+    if (ASHBY_ALWAYS_ESCALATE_KEYS.has(key)) {
       filled.push({
         key,
-        selector: '',
+        selector,
         success: false,
         skipped: true,
-        reason: 'Field not found on page',
+        reason: 'Requires computer-use escalation',
       });
       continue;
     }
 
-    const { element, selector } = match;
     const stringValue = sanitizeProfileValue(String(profileValue));
     let outcome: FillOutcome = { success: false, skipped: false };
 

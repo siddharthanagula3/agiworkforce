@@ -185,3 +185,21 @@ test('status guard still refuses a missing registered document', (t) => {
   assert.equal(result.status, 1, result.stdout);
   assert.match(result.stderr, /Current doc is missing/);
 });
+
+test('registry admits the explicitly owned launch QA ledger at its required path', (t) => {
+  const f = fixture(t);
+  f.write(
+    'docs/launch/QA_LEDGER.md',
+    '# Application QA ledger\nStatus: In progress\nOwner: Application QA\n',
+  );
+  const result = f.run('check-doc-registry.mjs');
+  assert.equal(result.status, 0, result.stderr);
+});
+
+test('registering the launch QA ledger does not admit other launch documents', (t) => {
+  const f = fixture(t);
+  f.write('docs/launch/unowned.md', '# Unowned\n');
+  const result = f.run('check-doc-registry.mjs');
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /docs\/launch\/unowned\.md.*not a documentation tier/);
+});

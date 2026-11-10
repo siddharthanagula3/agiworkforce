@@ -1,10 +1,11 @@
 import { z } from 'zod';
+import { MAX_HOSTED_TOOL_CALLS_PER_STEP, TOOL_CALL_ID_MAX_LENGTH } from './tool-call-limits';
 import {
   ManagedCloudAgentRunReferenceSchema,
   type ManagedCloudAgentRunReference,
 } from './managed-cloud-agent-run-reference';
 
-export const TOOL_CALL_ID_MAX_LENGTH = 256;
+export { TOOL_CALL_ID_MAX_LENGTH } from './tool-call-limits';
 
 export const TOOL_APPROVAL_DECISIONS = [
   'approved',
@@ -31,7 +32,7 @@ export const TOOL_APPROVAL_GUIDANCE_MAX_LENGTH = 4_000;
 
 export const ToolApprovalResumeRequestSchema = z.object({
   run_id: z.string().uuid(),
-  tool_approvals: z.array(ToolApprovalDecisionSchema).min(1).max(32),
+  tool_approvals: z.array(ToolApprovalDecisionSchema).min(1).max(MAX_HOSTED_TOOL_CALLS_PER_STEP),
   guidance: z.string().trim().min(1).max(TOOL_APPROVAL_GUIDANCE_MAX_LENGTH).optional(),
   detached: z.boolean().optional(),
 });
@@ -62,7 +63,7 @@ export type ToolInputResponseWire = z.infer<typeof ToolInputResponseSchema>;
 
 export const ToolInputResumeRequestSchema = z.object({
   run_id: z.string().uuid(),
-  tool_inputs: z.array(ToolInputResponseSchema).min(1).max(32),
+  tool_inputs: z.array(ToolInputResponseSchema).min(1).max(MAX_HOSTED_TOOL_CALLS_PER_STEP),
   guidance: z.string().trim().min(1).max(TOOL_APPROVAL_GUIDANCE_MAX_LENGTH).optional(),
   detached: z.boolean().optional(),
 });
@@ -82,7 +83,7 @@ export const CloudToolApprovalProjectionSchema = z.object({
       }),
     )
     .min(1)
-    .max(32),
+    .max(MAX_HOSTED_TOOL_CALLS_PER_STEP),
 });
 export type CloudToolApprovalProjection = z.infer<typeof CloudToolApprovalProjectionSchema>;
 

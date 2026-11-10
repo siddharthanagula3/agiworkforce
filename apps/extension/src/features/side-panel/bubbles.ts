@@ -63,6 +63,7 @@ import {
   type SidePanelSource,
 } from './chat-state';
 import { FREE_TRIAL_GATEWAY, type ManagedQuotaRecovery } from '../cloud-bridge/freeTrialClient';
+import { validateAgiWebOrigin } from '../../lib/webOrigin';
 import { answerFiles, buildAnswerFiles, type AnswerFileAccess } from './generatedFiles';
 import { wirePopupMenu } from './menu';
 import { buildSourcesFooter, decorateCitations, sourceHost } from './sources';
@@ -352,13 +353,21 @@ function buildInterruptedFooter(
   return footer;
 }
 
-export function resolveManagedArtifactUrl(uri: string): string | null {
+export function resolveManagedArtifactUrl(
+  uri: string,
+  apiOrigin = FREE_TRIAL_GATEWAY,
+): string | null {
   const trimmed = uri.trim();
-  if (!trimmed) return null;
+  const origin = validateAgiWebOrigin(apiOrigin);
+  if (!trimmed || !origin) return null;
   try {
-    const resolved = new URL(trimmed, `${FREE_TRIAL_GATEWAY}/`);
-    if (resolved.protocol !== 'https:') return null;
-    if (trimmed.startsWith('/') && resolved.origin !== FREE_TRIAL_GATEWAY) return null;
+    const resolved = new URL(trimmed, `${origin}/`);
+    const configuredLocalHttp =
+      resolved.protocol === 'http:' &&
+      resolved.origin === origin &&
+      new URL(origin).protocol === 'http:';
+    if (resolved.protocol !== 'https:' && !configuredLocalHttp) return null;
+    if (trimmed.startsWith('/') && resolved.origin !== origin) return null;
     return resolved.href;
   } catch {
     return null;

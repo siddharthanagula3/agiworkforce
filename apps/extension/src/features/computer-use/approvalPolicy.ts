@@ -328,7 +328,10 @@ export function approvalRequirement(input: ActionApprovalInput): ActionApprovalR
   if (toolName === 'go_back' || toolName === 'go_forward')
     return { alwaysAsk: true, reason: 'history_navigation' };
   if (toolName === 'reload') return { alwaysAsk: true, reason: 'reload' };
-  if (isTaskTabAction(toolName)) return { alwaysAsk: true, reason: 'tab_management' };
+  if (isTaskTabAction(toolName))
+    return toolName === 'close_tab'
+      ? { alwaysAsk: true, reason: 'tab_management' }
+      : ASK_NOT_REQUIRED;
   if (toolName === 'resize_window') return { alwaysAsk: true, reason: 'window_resize' };
   if (toolName === 'call_site_tool') return { alwaysAsk: true, reason: 'site_tool' };
   if (toolName === 'discover_site_tools') return ASK_NOT_REQUIRED;

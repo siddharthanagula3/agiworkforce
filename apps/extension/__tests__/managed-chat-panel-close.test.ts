@@ -23,6 +23,7 @@ const harness = vi.hoisted(() => {
   const event = () => ({ addListener: vi.fn(), removeListener: vi.fn() });
   const localStore: Record<string, unknown> = {};
   const area = (store: Record<string, unknown>) => ({
+    QUOTA_BYTES: 10 * 1024 * 1024,
     get: vi.fn(
       (
         keys?: string | string[] | Record<string, unknown> | null,
@@ -80,6 +81,7 @@ const harness = vi.hoisted(() => {
     },
     windows: { onFocusChanged: event() },
     alarms: {
+      get: vi.fn(async () => undefined),
       clear: vi.fn(() => Promise.resolve(true)),
       getAll: vi.fn(() => Promise.resolve([])),
       create: vi.fn(),
@@ -405,6 +407,7 @@ describe('closing the side panel during a managed turn', () => {
 
     await dispatch({
       type: 'RESUME_CHAT_RUN',
+      historyConversationId: CONVERSATION,
       owner,
       clientInstanceId: REOPENED_PANEL,
       id: 'stream-resumed-again',

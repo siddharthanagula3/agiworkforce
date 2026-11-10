@@ -72,7 +72,10 @@ describe('routeExecutionTool, FAIL-CLOSED', () => {
         throw new Error('sandbox boom');
       }),
     });
-    const result = await routeExecutionTool(executor, EXECUTE_CODE_TOOL, { code: 'x' });
+    const result = await routeExecutionTool(executor, EXECUTE_CODE_TOOL, {
+      language: 'python',
+      code: 'x',
+    });
     expect(result.ok).toBe(false);
     expect(result.error).toMatch(/sandbox boom/);
   });
@@ -94,10 +97,12 @@ describe('routeExecutionTool, dispatch', () => {
     expect(executor.runCode).toHaveBeenCalledWith({ language: 'node', code: 'console.log(1)' });
   });
 
-  it('defaults execute_code language to python and code to empty string', async () => {
+  it('rejects execute_code without its advertised required arguments', async () => {
     const executor = mockExecutor();
-    await routeExecutionTool(executor, EXECUTE_CODE_TOOL, {});
-    expect(executor.runCode).toHaveBeenCalledWith({ language: 'python', code: '' });
+    const result = await routeExecutionTool(executor, EXECUTE_CODE_TOOL, {});
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/language.*code/);
+    expect(executor.runCode).not.toHaveBeenCalled();
   });
 
   it('routes write_file and create_folder to their methods', async () => {
@@ -113,7 +118,10 @@ describe('routeExecutionTool, output cap', () => {
   it('caps oversized output and marks it truncated', async () => {
     const big = 'a'.repeat(MAX_EXECUTION_OUTPUT_BYTES + 5000);
     const executor = mockExecutor({ runCode: vi.fn(async () => ({ ok: true, output: big })) });
-    const result = await routeExecutionTool(executor, EXECUTE_CODE_TOOL, { code: 'x' });
+    const result = await routeExecutionTool(executor, EXECUTE_CODE_TOOL, {
+      language: 'python',
+      code: 'x',
+    });
     expect(Buffer.byteLength(result.output, 'utf8')).toBeLessThanOrEqual(
       MAX_EXECUTION_OUTPUT_BYTES + 80,
     );
@@ -123,14 +131,20 @@ describe('routeExecutionTool, output cap', () => {
   it('hands back the redacted output beyond the cap so it can be kept', async () => {
     const big = `${'a'.repeat(MAX_EXECUTION_OUTPUT_BYTES)} tail E2B_API_KEY`;
     const executor = mockExecutor({ runCode: vi.fn(async () => ({ ok: true, output: big })) });
-    const result = await routeExecutionTool(executor, EXECUTE_CODE_TOOL, { code: 'x' });
+    const result = await routeExecutionTool(executor, EXECUTE_CODE_TOOL, {
+      language: 'python',
+      code: 'x',
+    });
     expect(result.overflow?.totalChars).toBe(big.length);
     expect(result.overflow?.kept.endsWith(' tail the sandbox credential')).toBe(true);
   });
 
   it('passes through small output unchanged', async () => {
     const executor = mockExecutor({ runCode: vi.fn(async () => ({ ok: true, output: 'small' })) });
-    const result = await routeExecutionTool(executor, EXECUTE_CODE_TOOL, { code: 'x' });
+    const result = await routeExecutionTool(executor, EXECUTE_CODE_TOOL, {
+      language: 'python',
+      code: 'x',
+    });
     expect(result.output).toBe('small');
     expect(result.overflow).toBeUndefined();
   });

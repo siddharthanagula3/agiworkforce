@@ -86,7 +86,8 @@ const chromeHarness = vi.hoisted(() => {
   return { storageSet };
 });
 
-vi.mock('../src/features/cloud-bridge/freeTrialClient', () => ({
+vi.mock('../src/features/cloud-bridge/freeTrialClient', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/features/cloud-bridge/freeTrialClient')>()),
   FREE_TRIAL_GATEWAY: 'https://agiworkforce.com',
   getAuthToken: vi.fn().mockResolvedValue(null),
   signOutOfAccount: vi.fn().mockResolvedValue({ webSessionEnded: true }),

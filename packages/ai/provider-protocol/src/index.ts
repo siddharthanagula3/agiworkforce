@@ -73,6 +73,8 @@ export {
 export { normalizeToolParameterSchema } from './tool-parameter-schema';
 export type { ToolParameterSchemaOptions } from './tool-parameter-schema';
 
+export { toolArgumentProblem, invalidToolArgumentsMessage } from './tool-argument-validation';
+
 export { cleanSchemaForGemini, GEMINI_SUPPORTED_SCHEMA_KEYWORDS } from './lib/clean-for-gemini';
 
 export {

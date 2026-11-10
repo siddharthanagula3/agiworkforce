@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { topLevelStatements } from './sql-statements.mjs';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 export const DEFAULT_MIGRATIONS_DIR = join(REPO_ROOT, 'apps', 'web', 'db', 'neon');
@@ -225,7 +226,11 @@ export function expectedTablesAfter(migrations) {
   for (const migration of migrations) {
     const statementPattern =
       /\b(create|drop)\s+table\s+(?:if\s+(?:not\s+)?exists\s+)?(?:public\.)?("[a-zA-Z_][a-zA-Z0-9_]*"|[a-zA-Z_][a-zA-Z0-9_]*)/gi;
-    for (const match of migration.sql.matchAll(statementPattern)) {
+    const code = topLevelStatements(migration.sql, {
+      preserveQuotedIdentifiers: true,
+      expandAnonymousBlocks: true,
+    }).join('; ');
+    for (const match of code.matchAll(statementPattern)) {
       const action = match[1].toLowerCase();
       const table = unquoteIdentifier(match[2]).toLowerCase();
       if (action === 'create') tables.add(table);

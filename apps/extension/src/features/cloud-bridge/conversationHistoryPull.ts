@@ -2,6 +2,7 @@ import {
   ManagedCloudAccountWorkspacesSchema,
   MANAGED_CLOUD_WORKSPACES_PATH,
   ManagedCloudCreateMessageRequestSchema,
+  ManagedCloudCreateConversationBranchRequestSchema,
   ManagedCloudChatHttpError,
   parseGeneratedFilesDelta,
   readPersistedInteractiveCards,
@@ -32,6 +33,7 @@ import {
   MAX_MESSAGES_PER_CONVERSATION,
   pendingCloudMessages,
   recordCloudSyncState,
+  upsertConversation,
   type ConversationEntry,
   type HistoryMessage,
 } from '../background/conversation-history';
@@ -232,9 +234,9 @@ export function projectPublicHistoryMessage(message: ManagedCloudMessage): Histo
   };
 }
 
-function pullSignal(options: CloudHistoryPullOptions): AbortSignal {
+export function cloudHistoryReadSignal(signal?: AbortSignal): AbortSignal {
   return AbortSignal.any([
-    ...(options.signal ? [options.signal] : []),
+    ...(signal ? [signal] : []),
     AbortSignal.timeout(HISTORY_PULL_TIMEOUT_MS),
   ]);
 }
@@ -262,9 +264,9 @@ function awaitPullOperation<T>(operation: Promise<T>, signal: AbortSignal): Prom
   });
 }
 
-async function readCurrentWorkspace(
+export async function readCurrentWorkspace(
   owner: ManagedCloudOwner,
-  options: CloudHistoryPullOptions,
+  options: Pick<CloudHistoryPullOptions, 'isCurrent'>,
   signal: AbortSignal,
 ): Promise<ManagedCloudAccountWorkspaces> {
   if (!options.isCurrent() || signal.aborted) throw new ManagedCloudOwnerChangedError();
@@ -319,7 +321,7 @@ export async function refreshManagedCloudRecentHistory(
   options: CloudHistoryPullOptions,
 ): Promise<CloudHistoryRefreshResult> {
   if (!(await readCloudMirroringEnabled())) return { status: 'disabled' };
-  const signal = pullSignal(options);
+  const signal = cloudHistoryReadSignal(options.signal);
   const workspace = await readCurrentWorkspace(owner, options, signal);
   const organizationId = workspace.activeOrganizationId;
   const page = await ownedHistoryClient(owner, options, signal).listConversations(
@@ -355,7 +357,7 @@ export async function refreshManagedCloudConversationHistory(
   const organizationId = entry.cloudSync?.organizationId;
   if (!cloudConversationId || organizationId === undefined || !(await readCloudMirroringEnabled()))
     return entry;
-  const signal = pullSignal(options);
+  const signal = cloudHistoryReadSignal(options.signal);
   const workspace = await readCurrentWorkspace(owner, options, signal);
   if (workspace.activeOrganizationId !== organizationId)
     throw new CloudHistoryWorkspaceChangedError();
@@ -446,4 +448,75 @@ export async function refreshManagedCloudConversationHistory(
   if (!imported || imported.cloudSync?.messagesLoaded === false || imported.messages.length === 0)
     throw new CloudHistoryCacheWindowError();
   return imported;
+}
+
+export async function forkManagedCloudConversationHistory(
+  owner: ManagedCloudOwner,
+  entry: ConversationEntry,
+  requestId: string,
+  options: CloudHistoryPullOptions,
+  forkPointMessageId?: string,
+): Promise<ConversationEntry> {
+  if (!sameManagedCloudOwner(entry.owner, owner)) throw new ManagedCloudOwnerChangedError();
+  if (!(await readCloudMirroringEnabled()))
+    throw new Error('Turn on chat sync before creating an account copy of this chat.');
+  const sourceId = entry.cloudSync?.conversationId;
+  const organizationId = entry.cloudSync?.organizationId;
+  if (
+    !sourceId ||
+    organizationId === undefined ||
+    entry.cloudSync?.createAcknowledged !== true ||
+    entry.cloudSync.state !== 'idle' ||
+    entry.messages.length === 0 ||
+    pendingCloudMessages(entry).length > 0 ||
+    entry.messages.some(
+      (message) =>
+        message.runtime !== 'managed-cloud' ||
+        message.streaming === true ||
+        message.streamCancellation !== undefined,
+    )
+  )
+    throw new Error('This chat has work waiting to sync. Retry the copy after it has synced.');
+  const input = ManagedCloudCreateConversationBranchRequestSchema.parse({
+    messageId: forkPointMessageId ?? entry.messages[entry.messages.length - 1]?.cloudMessageId,
+    requestId,
+  });
+  const signal = cloudHistoryReadSignal(options.signal);
+  if (!(await workspaceIsCurrent(owner, options, signal, organizationId)))
+    throw new CloudHistoryWorkspaceChangedError();
+  const branch = await ownedHistoryClient(owner, options, signal).createConversationBranch(
+    sourceId,
+    input,
+    { signal, organizationId },
+  );
+  if (branch.id !== requestId || branch.organizationId !== organizationId || branch.isTemporary)
+    throw new Error('The copied account chat could not be verified. Refresh recent chats.');
+  const imported = await refreshManagedCloudConversationHistory(
+    owner,
+    {
+      ...entry,
+      id: branch.id,
+      messages: [],
+      cloudSync: {
+        conversationId: branch.id,
+        organizationId,
+        createAcknowledged: true,
+        state: 'idle',
+        messagesLoaded: false,
+      },
+    },
+    { ...options, signal },
+  );
+  if (!imported || !options.isCurrent() || signal.aborted)
+    throw new ManagedCloudOwnerChangedError();
+  const restored = await upsertConversation(
+    owner,
+    imported.id,
+    imported.messages,
+    entry.routing,
+    imported.projectId ?? null,
+  );
+  if (!restored || !options.isCurrent() || signal.aborted)
+    throw new ManagedCloudOwnerChangedError();
+  return restored;
 }

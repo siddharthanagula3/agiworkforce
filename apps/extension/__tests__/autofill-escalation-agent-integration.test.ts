@@ -247,7 +247,7 @@ function buildGreenhouseDom(): void {
       </div>
       <div>
         <label for="resume">Resume</label>
-        <input id="resume" name="job_application[resume]" type="file" />
+        <input id="resume" name="job_application[resume]" type="file" required />
       </div>
     </form>
   `;
@@ -334,7 +334,7 @@ describe('AGI_RUN_AUTOFILL content handler → escalation decision', () => {
     const fillResults = [
       {
         key: 'files.resume',
-        selector: '',
+        selector: '#resume',
         success: false,
         skipped: true,
         reason: FILE_INPUT_SKIP_REASON,
@@ -376,17 +376,18 @@ describe('AGI_RUN_AUTOFILL content handler → escalation decision', () => {
   });
 
   it('escalates Ashby always-escalate fields only when the platform keys are passed', () => {
+    document.querySelector('form')!.insertAdjacentHTML('beforeend', '<input id="city">');
     const fillResults = [
       {
         key: 'files.resume',
-        selector: '',
+        selector: '#resume',
         success: false,
         skipped: true,
         reason: 'Requires computer-use escalation',
       },
       {
         key: 'locationCity',
-        selector: '',
+        selector: '#city',
         success: false,
         skipped: true,
         reason: 'Requires computer-use escalation',
@@ -442,6 +443,9 @@ describe('AGI_RUN_AUTOFILL content handler → escalation decision', () => {
     );
 
     expect(escalation.shouldEscalate).toBe(true);
+    expect(escalation.triggers).toContainEqual(
+      expect.objectContaining({ fieldKey: 'files.resume', reason: 'file_upload' }),
+    );
     expect(escalation.agentGoal.length).toBeGreaterThan(0);
   });
 });
@@ -612,6 +616,9 @@ describe('Full chain: AGI_RUN_AUTOFILL → shouldEscalate → AGI_START_COMPUTER
     );
 
     expect(escalation.shouldEscalate).toBe(true);
+    expect(escalation.triggers).toContainEqual(
+      expect.objectContaining({ fieldKey: 'files.resume', reason: 'file_upload' }),
+    );
 
     const cuStepKinds: string[] = [];
 

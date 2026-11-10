@@ -585,6 +585,9 @@ importers:
 
   apps/extension:
     dependencies:
+      '@agiworkforce/agent-core':
+        specifier: workspace:*
+        version: link:../../packages/ai/agent-core
       '@agiworkforce/artifacts':
         specifier: workspace:*
         version: link:../../packages/platform/artifacts
@@ -25424,7 +25427,7 @@ snapshots:
       obug: 3.0.0
       std-env: 4.3.0
       tinyrainbow: 3.2.0
-      vitest: 5.0.5(@opentelemetry/api@1.9.1)(@types/node@24.19.2)(@vitest/coverage-v8@5.0.5)(@vitest/ui@5.0.5)(jsdom@30.1.3(@noble/hashes@2.2.0))(msw@2.15.0(@types/node@24.19.2)(typescript@5.9.3))(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1))
+      vitest: 5.0.5(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(@vitest/coverage-v8@5.0.5)(@vitest/ui@5.0.5)(jsdom@30.1.3(@noble/hashes@2.2.0))(msw@2.15.0(@types/node@26.6.5)(typescript@5.9.3))(vite@8.3.5(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1))
 
   '@vitest/expect@4.1.12':
     dependencies:
@@ -25521,7 +25524,7 @@ snapshots:
       pathe: 2.0.3
       sirv: 3.0.2
       tinyrainbow: 3.2.0
-      vitest: 5.0.5(@opentelemetry/api@1.9.1)(@types/node@24.19.2)(@vitest/coverage-v8@5.0.5)(@vitest/ui@5.0.5)(jsdom@30.1.3(@noble/hashes@2.2.0))(msw@2.15.0(@types/node@24.19.2)(typescript@5.9.3))(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1))
+      vitest: 5.0.5(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(@vitest/coverage-v8@5.0.5)(@vitest/ui@5.0.5)(jsdom@30.1.3(@noble/hashes@2.2.0))(msw@2.15.0(@types/node@26.6.5)(typescript@5.9.3))(vite@8.3.5(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1))
 
   '@vitest/utils@4.1.12':
     dependencies:
@@ -28655,7 +28658,7 @@ snapshots:
       '@next/eslint-plugin-next': 16.4.2(eslint@10.12.0(jiti@2.7.0))
       eslint: 10.12.0(jiti@2.7.0)
       eslint-import-resolver-node: 0.3.10
-      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0)(eslint@10.12.0(jiti@2.7.0))
+      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0(patch_hash=cf3986d28f5b3b56ad49a764c8b2ba841ac649e6df56749d537e751ac45b218f)(@typescript-eslint/parser@8.71.2(eslint@10.12.0(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.5(eslint-plugin-import@2.32.0)(eslint@9.39.5(jiti@2.7.0)))(eslint@10.12.0(jiti@2.7.0)))(eslint@10.12.0(jiti@2.7.0))
       eslint-plugin-import: 2.32.0(patch_hash=cf3986d28f5b3b56ad49a764c8b2ba841ac649e6df56749d537e751ac45b218f)(@typescript-eslint/parser@8.71.2(eslint@10.12.0(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@10.12.0(jiti@2.7.0))
       eslint-plugin-jsx-a11y: 6.10.2(patch_hash=0a90f53c7a0f731d980e2e9b93f65a30c227df3a3d68ce42fc422c8a32f40d42)(eslint@10.12.0(jiti@2.7.0))
       eslint-plugin-react: 7.37.5(patch_hash=b5f8489de022d851ba506c06ca27c65341b8eb5c1c6c23afd96e52a218936c03)(eslint@10.12.0(jiti@2.7.0))
@@ -28689,7 +28692,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0)(eslint@10.12.0(jiti@2.7.0)):
+  eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(patch_hash=cf3986d28f5b3b56ad49a764c8b2ba841ac649e6df56749d537e751ac45b218f)(@typescript-eslint/parser@8.71.2(eslint@10.12.0(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.5(eslint-plugin-import@2.32.0)(eslint@9.39.5(jiti@2.7.0)))(eslint@10.12.0(jiti@2.7.0)))(eslint@10.12.0(jiti@2.7.0)):
     dependencies:
       '@nolyfill/is-core-module': 1.0.39
       debug: 4.4.3(supports-color@8.1.1)
@@ -28719,14 +28722,14 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-module-utils@2.14.0(@typescript-eslint/parser@8.71.2(eslint@10.12.0(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-node@0.3.10)(eslint-import-resolver-typescript@4.4.5)(eslint@10.12.0(jiti@2.7.0)):
+  eslint-module-utils@2.14.0(@typescript-eslint/parser@8.71.2(eslint@10.12.0(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-node@0.3.10)(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(patch_hash=cf3986d28f5b3b56ad49a764c8b2ba841ac649e6df56749d537e751ac45b218f)(@typescript-eslint/parser@8.71.2(eslint@10.12.0(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.5(eslint-plugin-import@2.32.0)(eslint@9.39.5(jiti@2.7.0)))(eslint@10.12.0(jiti@2.7.0)))(eslint@10.12.0(jiti@2.7.0)))(eslint@10.12.0(jiti@2.7.0)):
     dependencies:
       debug: 3.2.7
     optionalDependencies:
       '@typescript-eslint/parser': 8.71.2(eslint@10.12.0(jiti@2.7.0))(typescript@5.9.3)
       eslint: 10.12.0(jiti@2.7.0)
       eslint-import-resolver-node: 0.3.10
-      eslint-import-resolver-typescript: 4.4.5(eslint-plugin-import@2.32.0)(eslint@9.39.5(jiti@2.7.0))
+      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0(patch_hash=cf3986d28f5b3b56ad49a764c8b2ba841ac649e6df56749d537e751ac45b218f)(@typescript-eslint/parser@8.71.2(eslint@10.12.0(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.5(eslint-plugin-import@2.32.0)(eslint@9.39.5(jiti@2.7.0)))(eslint@10.12.0(jiti@2.7.0)))(eslint@10.12.0(jiti@2.7.0))
     transitivePeerDependencies:
       - supports-color
 
@@ -28752,7 +28755,7 @@ snapshots:
       doctrine: 2.1.0
       eslint: 10.12.0(jiti@2.7.0)
       eslint-import-resolver-node: 0.3.10
-      eslint-module-utils: 2.14.0(@typescript-eslint/parser@8.71.2(eslint@10.12.0(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-node@0.3.10)(eslint-import-resolver-typescript@4.4.5)(eslint@10.12.0(jiti@2.7.0))
+      eslint-module-utils: 2.14.0(@typescript-eslint/parser@8.71.2(eslint@10.12.0(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-node@0.3.10)(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(patch_hash=cf3986d28f5b3b56ad49a764c8b2ba841ac649e6df56749d537e751ac45b218f)(@typescript-eslint/parser@8.71.2(eslint@10.12.0(jiti@2.7.0))(typescript@5.9.3))(eslint-import-resolver-typescript@4.4.5(eslint-plugin-import@2.32.0)(eslint@9.39.5(jiti@2.7.0)))(eslint@10.12.0(jiti@2.7.0)))(eslint@10.12.0(jiti@2.7.0)))(eslint@10.12.0(jiti@2.7.0))
       hasown: 2.0.4
       is-core-module: 2.17.0
       is-glob: 4.0.3

@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { createHash } from 'node:crypto';
+import type { ChatRequest } from '@agiworkforce/types';
 import { getOptionalEnv } from '@shared/utils/env';
 import { releaseSha } from '@/lib/server/hosting';
 import { getKeyValueStore } from '@/lib/server/key-value';
@@ -53,6 +54,7 @@ export interface ExactResponseCacheKeyFields {
   tools?: unknown;
   temperature: number;
   responseFormat?: string;
+  generationParameters?: Pick<ChatRequest, 'maxOutputTokens' | 'effort'>;
 }
 
 export type ExactResponseCacheOutcome = 'hit' | 'miss' | 'bypassed';
@@ -85,6 +87,14 @@ function cacheKey(fields: ExactResponseCacheKeyFields): string {
       tools: fields.tools ?? null,
       temperature: fields.temperature,
       responseFormat: fields.responseFormat ?? null,
+      ...(fields.generationParameters
+        ? {
+            generationParameters: {
+              maxOutputTokens: fields.generationParameters.maxOutputTokens ?? null,
+              effort: fields.generationParameters.effort ?? null,
+            },
+          }
+        : {}),
       appVersion: resolveReleaseShaForCacheInvalidation(),
     }),
   );

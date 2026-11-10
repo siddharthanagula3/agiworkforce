@@ -14,6 +14,18 @@ const REAL_WEB_SSE_CHUNK_SEQUENCE: StreamChunk[] = [
 ];
 
 describe('streamChunkToAgentEvent / agentEventToStreamChunk round trip', () => {
+  it('keeps a caller continuation boundary out of provider output chunks', () => {
+    expect(
+      agentEventToStreamChunk({
+        type: 'caller-tools-requested',
+        nextEventSequence: 3,
+        calls: [
+          { id: 'local-call', type: 'function', function: { name: 'read_dom', arguments: '{}' } },
+        ],
+      }),
+    ).toBeNull();
+  });
+
   it('maps the real recorded web SSE chunk sequence to AgentEvent and back losslessly', () => {
     const events = REAL_WEB_SSE_CHUNK_SEQUENCE.map(streamChunkToAgentEvent);
 

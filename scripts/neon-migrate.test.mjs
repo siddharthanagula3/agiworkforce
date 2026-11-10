@@ -84,6 +84,46 @@ test('expected-table projection accounts for later DROP TABLE migrations', () =>
   assert.deepEqual(tables, ['keep_me']);
 });
 
+test('baseline table projection ignores comment prose and preserves actual declarations', () => {
+  assert.deepEqual(
+    expectedTablesAfter([
+      {
+        sql: '-- a bare CREATE TABLE hands a role privileges\nCREATE TABLE public.keep_me(id int);',
+      },
+      {
+        sql: '/* CREATE TABLE ghost(id int); /* DROP TABLE keep_me; */ still a comment */ CREATE TABLE public.also_keep(id int);',
+      },
+      {
+        sql: "COMMENT ON TABLE keep_me IS '-- CREATE TABLE ghost(id int);'; CREATE TABLE public.after_literal(id int);",
+      },
+    ]),
+    ['after_literal', 'also_keep', 'keep_me'],
+  );
+});
+
+test('baseline table projection keeps executable anonymous-block declarations', () => {
+  assert.deepEqual(
+    expectedTablesAfter([
+      {
+        sql: 'DO $body$ BEGIN /* CREATE TABLE ghost(id int); */ CREATE TABLE public.inside_block(id int); END $body$;',
+      },
+    ]),
+    ['inside_block'],
+  );
+});
+
+test('baseline table projection does not execute function bodies or quoted DDL text', () => {
+  assert.deepEqual(
+    expectedTablesAfter([
+      {
+        sql: 'SELECT $text$CREATE TABLE ghost(id int);$text$; CREATE FUNCTION f() RETURNS void AS $$ BEGIN CREATE TABLE deferred(id int); END $$ LANGUAGE plpgsql;',
+      },
+      { sql: 'CREATE TABLE public."quoted_table"(id int);' },
+    ]),
+    ['quoted_table'],
+  );
+});
+
 test('CLI accepts the pnpm separator and explicit safety confirmations', () => {
   assert.deepEqual(parseCliArgs(['--', 'apply', '--target', 'branch']), {
     command: 'apply',

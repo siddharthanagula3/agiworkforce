@@ -19,6 +19,18 @@ const AUTO_APPROVE_READ_ONLY: ToolApprovalPolicy = 'auto_approve_read_only';
  * options promises in its own copy.
  */
 describe('classifyToolLoopInputs', () => {
+  it('keeps a negotiated caller-only turn in the managed loop without bypassing its policy', () => {
+    const tools = [
+      {
+        type: 'function',
+        function: { name: 'read_dom', parameters: { type: 'object', properties: {} } },
+      },
+    ];
+    expect(classifyToolLoopInputs([], tools, ASK_EVERY_TIME).shouldRun).toBe(false);
+    expect(
+      classifyToolLoopInputs([], tools, ASK_EVERY_TIME, { callerContinuation: true }),
+    ).toMatchObject({ shouldRun: true, approvalMode: 'manual' });
+  });
   it('asks for the platform web-search tool under the fail-closed default', () => {
     expect(classifyToolLoopInputs([], [webSearchToolDef()], ASK_EVERY_TIME)).toEqual({
       hasMcpTools: false,

@@ -647,6 +647,7 @@ describe('computer-use agent loop, one round-trip', () => {
     expect(JSON.stringify(second.messages.at(-1))).toContain(
       'data:image/jpeg;base64,FAKE_BASE64_PNG',
     );
+    expect(JSON.stringify(second.messages).split('FAKE_BASE64_PNG')).toHaveLength(2);
   });
 
   it('keeps the selected model on the initial observation and every tool continuation', async () => {

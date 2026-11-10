@@ -83,7 +83,8 @@ const chromeMock = {
 };
 (globalThis as unknown as Record<string, unknown>).chrome = chromeMock;
 
-vi.mock('../src/features/cloud-bridge/freeTrialClient', () => ({
+vi.mock('../src/features/cloud-bridge/freeTrialClient', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/features/cloud-bridge/freeTrialClient')>()),
   CODE_EXECUTION_OUTPUT_MAX_CHARS: 16_000,
   FREE_TRIAL_GATEWAY: 'https://agiworkforce.com',
   getManagedCloudAuthContext: vi.fn(async () => ({

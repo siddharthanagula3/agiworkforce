@@ -1,5 +1,6 @@
 import { assistantHostWindowId } from '../surface/assistantPanel';
 import { createBrowserConversationId } from './conversation-history';
+import { UUID_PATTERN } from '../../lib/uuid';
 import {
   normalizeManagedCloudOwner,
   sameManagedCloudOwner,
@@ -15,6 +16,7 @@ interface ConversationOwnerRecord {
   conversationId: string;
   owner: ManagedCloudOwner;
   touchedAt: number;
+  pendingFork?: { sourceConversationId: string; requestId: string; messageId?: string };
 }
 
 interface ConversationOwnerStore {
@@ -25,11 +27,13 @@ interface ConversationOwnerStore {
 export interface ClaimedConversationOwner {
   conversationId: string;
   seedConversationId?: string;
+  forkPointMessageId?: string;
 }
 
 export interface SelectedConversationOwner {
   conversationId: string;
   forked: boolean;
+  forkPointMessageId?: string;
 }
 
 let mutationQueue: Promise<void> = Promise.resolve();
@@ -90,6 +94,23 @@ function normalizeOwnerStore(value: unknown): ConversationOwnerStore {
       owner,
       touchedAt: record['touchedAt'],
     };
+    const pendingFork = record['pendingFork'];
+    if (pendingFork && typeof pendingFork === 'object' && !Array.isArray(pendingFork)) {
+      const pending = pendingFork as Record<string, unknown>;
+      if (
+        isSafeIdentifier(pending['sourceConversationId']) &&
+        typeof pending['requestId'] === 'string' &&
+        UUID_PATTERN.test(pending['requestId'])
+      ) {
+        owners[scope].pendingFork = {
+          sourceConversationId: pending['sourceConversationId'],
+          requestId: pending['requestId'],
+          ...(typeof pending['messageId'] === 'string' && UUID_PATTERN.test(pending['messageId'])
+            ? { messageId: pending['messageId'] }
+            : {}),
+        };
+      }
+    }
   }
   return { version: 1, owners };
 }
@@ -171,12 +192,15 @@ export async function claimConversationOwner(
   scope: string,
   owner: ManagedCloudOwner,
   seedConversationId?: string,
+  forkPointMessageId?: string,
 ): Promise<ClaimedConversationOwner> {
   if (!isSafeIdentifier(scope)) throw new Error('Invalid browser conversation scope');
   assertManagedCloudOwner(owner);
   if (seedConversationId !== undefined && !isSafeIdentifier(seedConversationId)) {
     throw new Error('Invalid seed conversation id');
   }
+  if (forkPointMessageId !== undefined && !UUID_PATTERN.test(forkPointMessageId))
+    throw new Error('Invalid branch-point message id');
 
   return mutateOwners(async (store) => {
     const liveWindowScopes = await resolveLiveWindowScopes();
@@ -189,7 +213,16 @@ export async function claimConversationOwner(
     if (currentOwner) {
       currentOwner.touchedAt = Date.now();
       await writeOwnerStore(store);
-      return { conversationId: currentOwner.conversationId };
+      return {
+        conversationId: currentOwner.conversationId,
+        ...(currentOwner.pendingFork?.requestId === currentOwner.conversationId
+          ? { seedConversationId: currentOwner.pendingFork.sourceConversationId }
+          : {}),
+        ...(currentOwner.pendingFork?.requestId === currentOwner.conversationId &&
+        currentOwner.pendingFork.messageId
+          ? { forkPointMessageId: currentOwner.pendingFork.messageId }
+          : {}),
+      };
     }
 
     const seedHasLiveOwner = seedConversationId
@@ -200,13 +233,28 @@ export async function claimConversationOwner(
             candidate.conversationId === seedConversationId,
         )
       : false;
-    const conversationId =
-      seedConversationId && !seedHasLiveOwner ? seedConversationId : createBrowserConversationId();
-    store.owners[scope] = { conversationId, owner: { ...owner }, touchedAt: Date.now() };
+    const conversationId = seedHasLiveOwner
+      ? crypto.randomUUID()
+      : (seedConversationId ?? createBrowserConversationId());
+    store.owners[scope] = {
+      conversationId,
+      owner: { ...owner },
+      touchedAt: Date.now(),
+      ...(seedHasLiveOwner && seedConversationId
+        ? {
+            pendingFork: {
+              sourceConversationId: seedConversationId,
+              requestId: conversationId,
+              ...(forkPointMessageId ? { messageId: forkPointMessageId } : {}),
+            },
+          }
+        : {}),
+    };
     await writeOwnerStore(store);
     return {
       conversationId,
       ...(seedConversationId && seedHasLiveOwner ? { seedConversationId } : {}),
+      ...(seedHasLiveOwner && forkPointMessageId ? { forkPointMessageId } : {}),
     };
   });
 }
@@ -229,12 +277,15 @@ export async function claimSelectedConversationOwner(
   scope: string,
   owner: ManagedCloudOwner,
   selectedConversationId: string,
+  forkPointMessageId?: string,
 ): Promise<SelectedConversationOwner> {
   if (!isSafeIdentifier(scope)) throw new Error('Invalid browser conversation scope');
   assertManagedCloudOwner(owner);
   if (!isSafeIdentifier(selectedConversationId)) {
     throw new Error('Invalid selected conversation id');
   }
+  if (forkPointMessageId !== undefined && !UUID_PATTERN.test(forkPointMessageId))
+    throw new Error('Invalid branch-point message id');
 
   return mutateOwners(async (store) => {
     const liveWindowScopes = await resolveLiveWindowScopes();
@@ -245,12 +296,37 @@ export async function claimSelectedConversationOwner(
         sameManagedCloudOwner(candidate.owner, owner) &&
         candidate.conversationId === selectedConversationId,
     );
-    const conversationId = conflictingOwner
-      ? createBrowserConversationId()
+    const current = store.owners[scope];
+    const pendingFork =
+      sameManagedCloudOwner(current?.owner, owner) &&
+      current?.pendingFork?.sourceConversationId === selectedConversationId
+        ? current.pendingFork
+        : undefined;
+    const forked = conflictingOwner || pendingFork !== undefined;
+    const messageId = pendingFork?.messageId ?? forkPointMessageId;
+    const conversationId = forked
+      ? (pendingFork?.requestId ?? crypto.randomUUID())
       : selectedConversationId;
-    store.owners[scope] = { conversationId, owner: { ...owner }, touchedAt: Date.now() };
+    store.owners[scope] = {
+      conversationId,
+      owner: { ...owner },
+      touchedAt: Date.now(),
+      ...(forked
+        ? {
+            pendingFork: {
+              sourceConversationId: selectedConversationId,
+              requestId: conversationId,
+              ...(messageId ? { messageId } : {}),
+            },
+          }
+        : {}),
+    };
     await writeOwnerStore(store);
-    return { conversationId, forked: conflictingOwner };
+    return {
+      conversationId,
+      forked,
+      ...(forked && messageId ? { forkPointMessageId: messageId } : {}),
+    };
   });
 }
 
@@ -287,6 +363,7 @@ export async function restoreConversationOwnerIfCurrent(
       return false;
     }
     store.owners[scope] = {
+      ...store.owners[scope],
       conversationId: replacementConversationId,
       owner: { ...owner },
       touchedAt: Date.now(),

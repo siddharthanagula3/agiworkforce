@@ -1,3 +1,4 @@
+import ts from 'typescript';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -141,13 +142,48 @@ describe('computer-use cancellation policy', () => {
     });
   });
 
-  it('reasserts Managed Cloud owner and tab intent before credential egress', () => {
+  it('reasserts Managed Cloud owner and tab intent before credential egress', async () => {
     expect(backgroundSource).toMatch(
       /const context = await getManagedCloudAuthContext\(\)[\s\S]*sameManagedCloudOwner\(lease\.authOwner, context\.owner\)/,
     );
-    expect(backgroundSource).toMatch(
-      /resolveOwnedCredential:\s*\(\)\s*=>\s*assertComputerUseOwnership\(lease\)/,
+    const program = ts.createSourceFile(
+      'background.ts',
+      backgroundSource,
+      ts.ScriptTarget.Latest,
+      true,
     );
+    let callback: ts.Expression | undefined;
+    function find(node: ts.Node): void {
+      if (
+        ts.isPropertyAssignment(node) &&
+        node.name.getText(program) === 'resolveOwnedCredential' &&
+        node.initializer.getText(program).includes('assertComputerUseOwnership(lease)')
+      )
+        callback = node.initializer;
+      ts.forEachChild(node, find);
+    }
+    find(program);
+    if (!callback) throw new Error('The native credential ownership callback was not found.');
+    const compiled = ts.transpileModule(`return (${callback.getText(program)});`, {
+      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
+    });
+    const lease = { runId: 'run-fixture' };
+    const callerTask = { assertAuthority: vi.fn(async () => undefined) };
+    const ownership = vi.fn(async () => 'fixture-token');
+    // llm-guardrail-allow: executes the actual credential callback with isolated scope and native-ownership dependencies.
+    const run = new Function(
+      'callerTask',
+      'assertComputerUseOwnership',
+      'lease',
+      compiled.outputText,
+    )(callerTask, ownership, lease) as () => Promise<string>;
+    await expect(run()).resolves.toBe('fixture-token');
+    expect(callerTask.assertAuthority).toHaveBeenCalledOnce();
+    expect(ownership).toHaveBeenCalledExactlyOnceWith(lease);
+    ownership.mockClear();
+    callerTask.assertAuthority.mockRejectedValueOnce(new Error('The caller workspace changed.'));
+    await expect(run()).rejects.toThrow('workspace changed');
+    expect(ownership).not.toHaveBeenCalled();
     expect(backgroundSource).toMatch(/tab\.url !== lease\.tabIntentUrl[\s\S]*tab_intent_changed/);
   });
 

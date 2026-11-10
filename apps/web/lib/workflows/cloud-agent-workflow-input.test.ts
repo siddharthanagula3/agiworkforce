@@ -104,6 +104,34 @@ const tools: WebMcpToolDef[] = [
 ];
 
 describe('cloud agent workflow input', () => {
+  it('preserves a server retention pointer through serialization and rehydration', () => {
+    const processed = makeProcessed();
+    const reference = '0190a000-0000-4000-8000-000000000009';
+    processed.llmRequest.messages.push({
+      role: 'tool',
+      content: 'retained result',
+      tool_call_id: 'provider-local-id',
+      __retainedToolResultReference: reference,
+    });
+    const input = buildCloudAgentWorkflowInput({
+      runId: RUN_ID,
+      userId: 'user-1',
+      processed,
+      mcpTools: tools,
+      approvalMode: 'manual',
+    });
+    const restored = parseCloudAgentWorkflowInput(JSON.parse(JSON.stringify(input)));
+    expect(restored.processed.llmRequest.messages.at(-1)?.__retainedToolResultReference).toBe(
+      reference,
+    );
+    if (!processed.managedUsage) throw new Error('Managed billing fixture missing');
+    expect(
+      rehydrateCloudAgentWorkflowRequest(
+        restored,
+        processed.managedUsage.db,
+      ).llmRequest.messages.at(-1)?.__retainedToolResultReference,
+    ).toBe(reference);
+  });
   it('round-trips the captured managed inventory slot and trusted context through the strict transport', () => {
     const processed = makeProcessed();
     processed.managedToolInventoryVersion = 2;
@@ -476,6 +504,10 @@ describe('cloud agent workflow input', () => {
         },
       ],
       deviceResults: [{ toolCallId: 'call-3', content: 'file contents', isError: false }],
+      callerResults: [{ tool_call_id: 'call-4', content: 'browser contents' }],
+      callerObservations: [
+        { text: 'Browser observation', images: [{ base64: 'fixture', mime_type: 'image/png' }] },
+      ],
       guidance: 'Retry with the corrected input',
     };
     const fullContinuation: Required<NonNullable<CloudAgentWorkflowInput['continuation']>> = {

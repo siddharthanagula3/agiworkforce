@@ -243,6 +243,26 @@ describe('Chat Messages API', () => {
     });
 
     describe('Message Flow', () => {
+      it('persists native assistant receipts without inventing a model', async () => {
+        const content = 'Filled 7 fields from your saved profile without submitting.';
+        mockQuery.mockResolvedValueOnce([mockConversation]);
+        mockQuery.mockResolvedValueOnce([{ ...mockAssistantMessage, content, model: null }]);
+        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ role: 'assistant', content, skipLlm: true }),
+        });
+        const response = await POST(request, mockContext);
+        expect(response.status).toBe(200);
+        expect(mockQuery).toHaveBeenNthCalledWith(
+          2,
+          expect.stringContaining('insert into web_messages'),
+          [null, 'conv-1', 'assistant', content, null, '{}', null],
+        );
+        expect((await response.json()).message.model).toBeNull();
+        expect(mockFetch).not.toHaveBeenCalled();
+      });
+
       it('should save message and return it in the response', async () => {
         mockQuery.mockResolvedValueOnce([mockConversation]);
         mockQuery.mockResolvedValueOnce([mockUserMessage]);

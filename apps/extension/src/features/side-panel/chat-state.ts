@@ -53,7 +53,9 @@ export interface SidePanelChatMessage {
   agentActivity?: AgentActivityState;
   agentEvents?: AgentEventEnvelope[];
   browserActivity?: AgentActivityState;
-  browserObservation?: { tabId: number; url: string; documentId: string; formSnapshotId: string };
+  browserSource?: PageContextSource;
+  browserContext?: import('../cloud-bridge/callerBrowserContext').CallerBrowserContext;
+  browserObservation?: import('../browser-tools/documentBridge').FormObservationReference;
   browserEvents?: AgentEventEnvelope[];
   cloudAgentRun?: ManagedCloudAgentRunReference;
   cloudApprovalDecisions?: Record<string, 'approved' | 'rejected'>;
@@ -150,6 +152,7 @@ function isDisplaySafeActivityEvent(envelope: AgentEventEnvelope): boolean {
     case 'tool-use-start':
     case 'tool-use-delta':
     case 'tool-use-end':
+    case 'caller-tools-requested':
     case 'server-tool-use':
     case 'server-tool-result':
     case 'usage':
@@ -565,6 +568,7 @@ export function shouldRenderTextBubble(input: {
 /** Which page the composer's attached text was read from. */
 export interface PageContextSource {
   tabId?: number;
+  windowId?: number;
   url: string;
   title?: string;
   chosen?: boolean;

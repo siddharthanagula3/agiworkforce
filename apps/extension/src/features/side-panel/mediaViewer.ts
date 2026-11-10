@@ -2,7 +2,11 @@ import { renderIcon, X } from '../../assets/icons';
 import { t } from '../../i18n';
 import { el } from './dom';
 
-let closeOpenViewer: (() => void) | null = null;
+let closeOpenViewer: ((restoreFocus?: boolean) => void) | null = null;
+
+export function closeImageViewer(): void {
+  closeOpenViewer?.(false);
+}
 
 export function openImageViewer(src: string, alt: string, trigger?: HTMLElement | null): void {
   closeOpenViewer?.();
@@ -30,18 +34,18 @@ export function openImageViewer(src: string, alt: string, trigger?: HTMLElement 
       close.focus();
     }
   };
-  const dismiss = (): void => {
+  const dismiss = (restoreFocus = true): void => {
     if (closeOpenViewer !== dismiss) return;
     closeOpenViewer = null;
     document.removeEventListener('keydown', onKeyDown, true);
     overlay.remove();
-    if (trigger?.isConnected) trigger.focus();
+    if (restoreFocus && trigger?.isConnected) trigger.focus();
   };
 
   overlay.addEventListener('click', (event) => {
     if (event.target === overlay) dismiss();
   });
-  close.addEventListener('click', dismiss);
+  close.addEventListener('click', () => dismiss());
   document.addEventListener('keydown', onKeyDown, true);
   closeOpenViewer = dismiss;
   document.body.appendChild(overlay);

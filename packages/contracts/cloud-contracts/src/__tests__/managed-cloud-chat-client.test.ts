@@ -31,6 +31,72 @@ function response(body: unknown, status = 200): Response {
 }
 
 describe('createManagedCloudChatClient', () => {
+  it('creates an idempotent branch through the owned workspace mutation transport', async () => {
+    const requestId = '0190a000-0000-7000-8000-0000000000bb';
+    const messageId = '0190a000-0000-7000-8000-0000000000cc';
+    const organizationId = '0190a000-0000-7000-8000-0000000000dd';
+    const fetchImpl = vi.fn(async () =>
+      response(
+        {
+          conversation: { ...rawConversation, id: requestId, organization_id: organizationId },
+        },
+        201,
+      ),
+    );
+    const client = createManagedCloudChatClient({
+      getAuthToken: async () => 'fixture-token',
+      decorateMutationHeaders: (headers) => ({ ...headers, 'X-Requested-With': 'XMLHttpRequest' }),
+      fetchImpl,
+    });
+    const controller = new AbortController();
+    const branch = await client.createConversationBranch(
+      rawConversation.id,
+      { messageId, requestId },
+      { organizationId, signal: controller.signal },
+    );
+    expect(branch).toMatchObject({ id: requestId, organizationId });
+    expect(fetchImpl).toHaveBeenCalledExactlyOnceWith(
+      `/api/chat/conversations/${rawConversation.id}/branches`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: 'Bearer fixture-token',
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+          [MANAGED_CLOUD_ORGANIZATION_HEADER]: organizationId,
+        },
+        body: JSON.stringify({ messageId, requestId }),
+        signal: controller.signal,
+      },
+    );
+  });
+
+  it('rejects an invalid branch intent before authentication or mutation', async () => {
+    const fetchImpl = vi.fn();
+    const getAuthToken = vi.fn();
+    const client = createManagedCloudChatClient({ fetchImpl, getAuthToken });
+    await expect(
+      client.createConversationBranch(rawConversation.id, {
+        messageId: 'invalid',
+        requestId: 'invalid',
+      }),
+    ).rejects.toThrow();
+    expect(getAuthToken).not.toHaveBeenCalled();
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('rejects a malformed branch response rather than adopting an unknown chat', async () => {
+    const client = createManagedCloudChatClient({
+      fetchImpl: async () => response({ conversation: {} }),
+    });
+    await expect(
+      client.createConversationBranch(rawConversation.id, {
+        messageId: '0190a000-0000-7000-8000-0000000000cc',
+        requestId: '0190a000-0000-7000-8000-0000000000bb',
+      }),
+    ).rejects.toThrow(/contract/i);
+  });
+
   it('uses one encoded transport path and runtime-validates list responses', async () => {
     const fetchImpl = vi.fn(async () =>
       response({

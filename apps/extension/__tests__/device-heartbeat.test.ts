@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../src/features/cloud-bridge/freeTrialClient', () => ({
+vi.mock('../src/features/cloud-bridge/freeTrialClient', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/features/cloud-bridge/freeTrialClient')>()),
   FREE_TRIAL_GATEWAY: 'https://agiworkforce.example',
   getAuthToken: vi.fn(async () => 'clerk-session-token'),
 }));

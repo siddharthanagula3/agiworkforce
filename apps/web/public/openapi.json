@@ -346,13 +346,21 @@
         "description": "Returned when the request comes from a country or region where AGI Workforce is not offered. The list is published at /supported-countries.",
         "required": ["success", "error"],
         "properties": {
-          "success": { "type": "boolean", "enum": [false] },
+          "success": {
+            "type": "boolean",
+            "enum": [false]
+          },
           "error": {
             "type": "object",
             "required": ["code", "message"],
             "properties": {
-              "code": { "type": "string", "enum": ["REGION_UNAVAILABLE"] },
-              "message": { "type": "string" }
+              "code": {
+                "type": "string",
+                "enum": ["REGION_UNAVAILABLE"]
+              },
+              "message": {
+                "type": "string"
+              }
             }
           }
         }
@@ -697,6 +705,7 @@
           },
           "tools": {
             "type": "array",
+            "description": "Function definitions supplied by an API caller belong to that application, including names also used by hosted tools such as read_file. Their calls are returned as assistant tool_calls for the caller to execute and answer with matching tool_call_id messages; streaming preserves that handoff. Hosted tools offered through capability flags and connected accounts remain server-owned when the caller has not declared that function name.",
             "maxItems": 64,
             "items": {
               "type": "object"
@@ -799,9 +808,19 @@
                   "type": "object",
                   "required": ["url"],
                   "properties": {
-                    "url": { "type": "string", "format": "uri", "maxLength": 2000 },
-                    "title": { "type": "string", "maxLength": 500 },
-                    "snippet": { "type": "string", "maxLength": 2000 },
+                    "url": {
+                      "type": "string",
+                      "format": "uri",
+                      "maxLength": 2000
+                    },
+                    "title": {
+                      "type": "string",
+                      "maxLength": 500
+                    },
+                    "snippet": {
+                      "type": "string",
+                      "maxLength": 2000
+                    },
                     "retrieved_at": {
                       "type": "string",
                       "format": "date-time",
@@ -818,12 +837,18 @@
                   "type": "object",
                   "required": ["id", "type", "description", "status"],
                   "properties": {
-                    "id": { "type": "string", "maxLength": 100 },
+                    "id": {
+                      "type": "string",
+                      "maxLength": 100
+                    },
                     "type": {
                       "type": "string",
                       "enum": ["search", "read", "analyze", "synthesize", "verify"]
                     },
-                    "description": { "type": "string", "maxLength": 500 },
+                    "description": {
+                      "type": "string",
+                      "maxLength": 500
+                    },
                     "status": {
                       "type": "string",
                       "enum": ["pending", "running", "completed", "failed"]
@@ -839,12 +864,18 @@
                   "type": "object",
                   "required": ["id", "type", "description", "status"],
                   "properties": {
-                    "id": { "type": "string", "maxLength": 100 },
+                    "id": {
+                      "type": "string",
+                      "maxLength": 100
+                    },
                     "type": {
                       "type": "string",
                       "enum": ["search", "read", "analyze", "synthesize", "verify"]
                     },
-                    "description": { "type": "string", "maxLength": 500 },
+                    "description": {
+                      "type": "string",
+                      "maxLength": 500
+                    },
                     "status": {
                       "type": "string",
                       "enum": ["pending", "running", "completed", "failed"]
@@ -861,7 +892,10 @@
                 "type": "object",
                 "description": "What the finished report should be.",
                 "properties": {
-                  "depth": { "type": "string", "enum": ["executive-summary", "full-report"] },
+                  "depth": {
+                    "type": "string",
+                    "enum": ["executive-summary", "full-report"]
+                  },
                   "format": {
                     "type": "string",
                     "enum": ["prose", "prose-with-tables", "bullet-brief"]
@@ -924,6 +958,18 @@
             "type": "string",
             "enum": ["auto", "speed", "quality", "cost"],
             "description": "How Auto chooses a model when `model` is `auto`. `speed` routes to the quickest models your plan includes, `quality` to the most capable one your plan allows (the plan's model-access ceiling still applies), and `cost` to the lowest-cost model that can handle the task. `auto`, or leaving it out, lets Auto decide per message. Ignored when `model` names a specific model. Workspace model policy, data residency and the training opt-out still limit every choice."
+          },
+          "caller_tool_handoff_version": {
+            "type": "integer",
+            "enum": [5],
+            "description": "Opt into server-owned caller-tool continuation. Requires stream: true. Hosted siblings retain their gates and results; a caller-tools-requested event hands back only pending caller actions. Resume with the exact run/turn/cursor and result ids through resume-caller."
+          },
+          "caller_tool_max_steps": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20,
+            "description": "Cumulative provider-step budget for a negotiated caller-tool turn. Requires caller_tool_handoff_version and survives every checkpoint; a receipt cannot reset it."
           }
         }
       },
@@ -2164,6 +2210,87 @@
             "description": "`allow` runs the tool without asking, `ask` asks every time, `deny` never runs it. A saved `allow` still asks when the call would send private data out after reading untrusted content."
           }
         }
+      },
+      "CallerToolResumeRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "The complete serialized UTF-8 receipt is limited to the shared chat-completion HTTP ceiling (2,000,000 bytes). Result ids must be unique and exactly match the saved caller checkpoint. Server history, tool definitions and hosted approval decisions cannot be replaced here. Repeated claims must retain the identical receipt.",
+        "required": ["schema_version", "run_id", "turn_id", "next_event_sequence", "tool_results"],
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "enum": [5]
+          },
+          "run_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "turn_id": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "next_event_sequence": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "tool_results": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 32,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["tool_call_id", "content"],
+              "properties": {
+                "tool_call_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "pattern": "\\S",
+                  "maxLength": 256
+                },
+                "content": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "observations": {
+            "type": "array",
+            "maxItems": 32,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["text"],
+              "properties": {
+                "text": {
+                  "type": "string"
+                },
+                "images": {
+                  "type": "array",
+                  "maxItems": 8,
+                  "items": {
+                    "type": "object",
+                    "required": ["base64", "mime_type"],
+                    "properties": {
+                      "base64": {
+                        "type": "string",
+                        "maxLength": 2500000,
+                        "minLength": 1
+                      },
+                      "mime_type": {
+                        "type": "string",
+                        "enum": ["image/png", "image/jpeg"]
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     },
     "headers": {
@@ -2631,7 +2758,9 @@
             "description": "Not available in the caller's country or region",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/RegionUnavailableError" }
+                "schema": {
+                  "$ref": "#/components/schemas/RegionUnavailableError"
+                }
               }
             }
           }
@@ -5660,6 +5789,168 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/llm/v1/chat/completions/resume-caller": {
+      "post": {
+        "summary": "Return caller-owned tool results",
+        "description": "Resumes the same negotiated run from its server-owned caller checkpoint. Authentication, plan/workspace/spend gates and secret inspection run again. The exact run/turn/cursor and complete caller ids are required; hosted actions and private provider state remain on the server. Bounded screenshot observations and user text are appended after all matching results. A continuation transport failure preserves the checkpoint for an identical receipt retry.",
+        "tags": ["Inference"],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
+        "x-agi-api-key-scope": "inference:write",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CallerToolResumeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The resumed turn as an SSE stream",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "headers": {
+              "X-AGI-Agent-Run-Id": {
+                "description": "The paused run this stream continues",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "X-AGI-Agent-Run-URL": {
+                "description": "Path of the run resource",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Quota-Warning": {
+                "$ref": "#/components/headers/XQuotaWarning"
+              },
+              "X-AGI-Tool-Loop": {
+                "description": "`resume-caller`",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid receipt, mismatched caller results (caller_tool_invalid), or secret inspection refusal (caller_tool_secret_blocked)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, malformed or unknown bearer credential",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Managed usage exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "API key lacks the `inference:write` scope, the plan lacks the capability for the client surface, or a workspace policy (MFA, IP allow list) refuses the caller",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No owned pending caller checkpoint for this run, turn and cursor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The caller checkpoint is already resuming, its context policy changed, or the run was cancelled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "The caller checkpoint expired",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The agent runtime or usage accounting is unavailable; the same receipt may be retried after the claim is released",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The declared or streamed body exceeds the existing chat-completion payload ceiling",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             }

@@ -134,6 +134,7 @@ import {
   findActiveCloudAgentRunForConversation,
   isCloudAgentRunCancellationRequested,
   saveCloudAgentApprovalCheckpoint,
+  saveCloudAgentCallerCheckpoint,
   saveCloudAgentDeviceCheckpoint,
   saveCloudAgentInputCheckpoint,
   takeCloudAgentRunSteers,
@@ -876,7 +877,12 @@ async function dispatchChatCompletions(
       mcpTools,
       processed.llmRequest.tools,
       toolApprovalPolicy,
-      { requiredNativeSearch: processed.searchEnforcement?.mode === 'nudge' },
+      {
+        requiredNativeSearch: processed.searchEnforcement?.mode === 'nudge',
+        callerContinuation:
+          processed.chatRequest.caller_tool_handoff_version !== undefined &&
+          (processed.chatRequest.tools?.length ?? 0) > 0,
+      },
     );
 
     if (loopInputs.shouldRun || isAgiWorkTurn) {
@@ -1073,6 +1079,30 @@ async function dispatchChatCompletions(
             organizationId: processed.organizationId ?? null,
             runId: run.id,
           }),
+        onCallerToolCheckpoint: async (checkpoint) => {
+          const saved = await saveCloudAgentCallerCheckpoint(runDb, {
+            userId,
+            runId: run.id,
+            sessionId: checkpoint.sessionId,
+            turnId: checkpoint.turnId,
+            nextEventSequence: checkpoint.nextEventSequence,
+            completedSteps: checkpoint.completedSteps,
+            request: buildApprovalCheckpointRequest(
+              processed.chatRequest,
+              processed.callerToolFields,
+              processed.turnAttachments,
+              processed.modelSelection,
+              processed.turnToolProhibition,
+              checkpoint.toolSchemaState,
+              processed.contextPolicySnapshot,
+            ),
+            messages: checkpoint.messages,
+            pendingToolCalls: checkpoint.pendingToolCalls,
+            events: checkpoint.events,
+          });
+          approvalCheckpointSaved = true;
+          return saved;
+        },
         onApprovalCheckpoint: async (checkpoint) => {
           await saveCloudAgentApprovalCheckpoint(runDb, {
             userId,

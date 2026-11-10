@@ -1,6 +1,7 @@
 import { ScheduledTaskTransportControl } from '../background/scheduled-task-transport';
 import {
   AgentTaskStateSchema,
+  CallerToolResumeRequestSchema,
   ManagedCloudAgentRunHttpError,
   ManagedCloudAgentRunRequestIdSchema,
   ManagedCloudAgentRunReferenceSchema,
@@ -16,7 +17,11 @@ import { TERMINAL_AGENT_TASK_STATES } from '@agiworkforce/types';
 import { FREE_TRIAL_GATEWAY, getAuthToken } from './freeTrialClient';
 import { platformRequestHeaders } from '../../platformHeaders';
 import { chatBrowserToolDefinitions } from '../computer-use/chatBrowserTools';
-import { createToolUseJournal } from '../computer-use/toolHandoff';
+import {
+  createCallerToolContinuationReader,
+  type CallerToolContinuation,
+  createToolUseJournal,
+} from '../computer-use/toolHandoff';
 
 const UNCONFIRMED_CANCELLATION_MESSAGE =
   'Cancellation has not been confirmed. The run may still be working.';
@@ -32,11 +37,13 @@ export interface ChromeManagedRunDependencies {
   onText?: (text: string) => void | Promise<void>;
   onAgentEvent?: (event: AgentEventEnvelope) => void | Promise<void>;
   onRunReference?: (run: ManagedCloudAgentRunReference) => void | Promise<void>;
+  onCallerCheckpoint?: (checkpoint: CallerToolContinuation) => void | Promise<void>;
 }
 
 export interface ResumeChromeManagedRunRequest {
   run: ManagedCloudAgentRunReference;
   alreadyVisibleText: string;
+  originalCallerToolNames?: readonly string[];
   signal?: AbortSignal;
 }
 
@@ -149,7 +156,14 @@ export async function resumeChromeManagedRun(
     return { status: 'error', code: 'invalid_request', message: 'Invalid Managed Cloud run.' };
   }
 
-  const token = await resolvedDependencies.getAuthToken();
+  const originalCallerToolNames = request.originalCallerToolNames?.slice();
+  let token: string | null;
+  try {
+    token = await resolvedDependencies.getAuthToken();
+  } catch (error) {
+    return errorResult(error, request.signal, 'Sign-in could not be refreshed.');
+  }
+
   if (!token) {
     return { status: 'error', code: 'auth_required', message: 'Sign in to resume AGI Cloud.' };
   }
@@ -166,15 +180,38 @@ export async function resumeChromeManagedRun(
     await resolvedDependencies.onRunReference?.({ ...latestRun });
   };
 
-  const toolUseJournal = createToolUseJournal(chatBrowserToolDefinitions('act', true));
+  const toolUseJournal = createToolUseJournal(
+    originalCallerToolNames === undefined
+      ? chatBrowserToolDefinitions('act', true)
+      : originalCallerToolNames.map((name) => ({ function: { name } })),
+  );
+  const callerReader =
+    resolvedDependencies.onCallerCheckpoint && originalCallerToolNames?.length
+      ? createCallerToolContinuationReader(
+          originalCallerToolNames.map((name) => ({ function: { name } })),
+        )
+      : undefined;
   let askedForBrowserTool = false;
+  let sawCanonicalCaller = false;
+  let pendingCallerSequence: number | undefined;
+  let observedSequence = -1;
 
   try {
     const followed = await resolvedDependencies.createClient(token).followRun(run.runId, {
       afterSequence: -1,
       signal: request.signal,
       onEvent: async (envelope) => {
-        if (toolUseJournal.observe(envelope.event)) askedForBrowserTool = true;
+        callerReader?.observe(envelope);
+        if (envelope.sequence > observedSequence) {
+          observedSequence = envelope.sequence;
+          if (pendingCallerSequence !== undefined && envelope.sequence >= pendingCallerSequence)
+            pendingCallerSequence = undefined;
+          if (envelope.event.type === 'caller-tools-requested') {
+            sawCanonicalCaller = true;
+            pendingCallerSequence = envelope.event.nextEventSequence;
+          }
+          if (toolUseJournal.observe(envelope.event)) askedForBrowserTool = true;
+        }
         if (envelope.event.type === 'text-delta') {
           const reconciled = reconcileManagedCloudPublicText(
             pendingPublicText,
@@ -211,17 +248,76 @@ export async function resumeChromeManagedRun(
     if (followed.run.state === 'cancelled') {
       return { status: 'error', code: 'cancelled', message: 'Cancelled.' };
     }
-    if (askedForBrowserTool) {
+    if (
+      (sawCanonicalCaller ? pendingCallerSequence !== undefined : askedForBrowserTool) &&
+      followed.run.state !== 'completed'
+    ) {
+      if (
+        callerReader &&
+        followed.run.state === 'awaiting_input' &&
+        !followed.run.cancellationRequestedAt
+      ) {
+        const checkpoint = callerReader.read(run.runId);
+        if (
+          !callerReader.incomplete() &&
+          checkpoint &&
+          followed.lastSequence === checkpoint.next_event_sequence - 1 &&
+          followed.run.lastEventSequence === followed.lastSequence
+        )
+          await resolvedDependencies.onCallerCheckpoint!(checkpoint);
+      }
       return {
         status: 'error',
         code: 'server_error',
-        message: 'This resumed AGI Cloud run asked for a browser tool. Send the request again.',
+        message:
+          'This run is waiting for browser results. Its original browser context must be recovered before continuing.',
       };
     }
     return { status: 'success' };
   } catch (error) {
     return errorResult(error, request.signal);
   }
+}
+
+export async function assertChromeManagedCallerRun(
+  checkpoint: CallerToolContinuation,
+  identity: Pick<CloudAgentRun, 'requestId' | 'conversationId'>,
+  dependencies: Partial<ChromeManagedRunDependencies> = {},
+  signal?: AbortSignal,
+): Promise<void> {
+  checkpoint = structuredClone(checkpoint);
+  identity = { ...identity };
+  const { calls, ...cursor } = checkpoint;
+  if (
+    !ManagedCloudAgentRunRequestIdSchema.safeParse(identity.requestId).success ||
+    !CallerToolResumeRequestSchema.safeParse({
+      ...cursor,
+      tool_results: calls.map((call) => ({ tool_call_id: call.id, content: '' })),
+    }).success
+  )
+    throw new Error('The original browser checkpoint identity is invalid.');
+  signal?.throwIfAborted();
+  const deps = { ...DEFAULT_DEPENDENCIES, ...dependencies };
+  const token = await deps.getAuthToken();
+  signal?.throwIfAborted();
+  if (!token) throw new Error('Sign in to continue the original browser task.');
+  const snapshot = await deps.createClient(token).getRun(checkpoint.run_id, {
+    afterSequence: checkpoint.next_event_sequence - 1,
+    limit: 1,
+    signal,
+  });
+  signal?.throwIfAborted();
+  const run = snapshot.run;
+  if (
+    run.id !== checkpoint.run_id ||
+    run.requestId !== identity.requestId ||
+    run.conversationId !== identity.conversationId ||
+    run.originSurface !== 'chrome' ||
+    run.state !== 'awaiting_input' ||
+    run.cancellationRequestedAt ||
+    run.lastEventSequence !== checkpoint.next_event_sequence - 1
+  )
+    throw new Error('The browser run stopped or its checkpoint changed. No action was repeated.');
 }
 
 export async function cancelChromeManagedRun(

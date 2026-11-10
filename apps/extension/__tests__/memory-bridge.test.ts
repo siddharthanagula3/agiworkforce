@@ -32,7 +32,8 @@ const authMock = vi.hoisted(() => ({
 
 const GATEWAY = authMock.gateway;
 
-vi.mock('../src/features/cloud-bridge/freeTrialClient', () => ({
+vi.mock('../src/features/cloud-bridge/freeTrialClient', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/features/cloud-bridge/freeTrialClient')>()),
   FREE_TRIAL_GATEWAY: authMock.gateway,
   getManagedCloudAuthContext: authMock.getManagedCloudAuthContext,
 }));

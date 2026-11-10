@@ -643,6 +643,13 @@ export const PLATFORM_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Ob
     createsEgressPath: true,
     declared: true,
   },
+  browser_stop: {
+    actionClass: 'write',
+    reversible: false,
+    acceptsUntrustedContent: false,
+    createsEgressPath: false,
+    declared: true,
+  },
 });
 
 const GITHUB_TOOL_METADATA: Readonly<Record<string, ToolMetadata>> = Object.freeze({

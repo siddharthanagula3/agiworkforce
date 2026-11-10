@@ -38,7 +38,7 @@ import {
   type BackgroundUsageLease,
 } from '@/lib/services/background-usage-lease';
 import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
-import { normalizeBillingPlanTier } from '@agiworkforce/types';
+import { getModelEffortOptions, normalizeBillingPlanTier } from '@agiworkforce/types';
 import { dispatchProviderForSelectedRoute } from '@/lib/services/aggregator-routing';
 import { estimateTokens } from '@agiworkforce/routing';
 import { assertNoLeaks } from '@/lib/leak-detector';
@@ -179,6 +179,7 @@ async function generateAndPersistTitle(input: ScheduleTitleGenerationInput): Pro
     temperature: 0,
     stream: false,
   });
+  if (getModelEffortOptions(route.modelKey).includes('none')) chatRequest.effort = 'none';
   const dispatchProvider = dispatchProviderForSelectedRoute(route);
   const wireMode = resolveWireMode(dispatchProvider);
 
@@ -192,13 +193,22 @@ async function generateAndPersistTitle(input: ScheduleTitleGenerationInput): Pro
     input: source,
     temperature: 0,
     responseFormat: 'text',
+    generationParameters: {
+      maxOutputTokens: chatRequest.maxOutputTokens,
+      effort: chatRequest.effort,
+    },
   };
   const cacheBypass = await isTemporaryConversation(input.db, input.conversationId, input.userId);
   const cacheLookup = await lookupExactResponseCache(cacheFields, { bypass: cacheBypass });
 
+  const cachedTitle =
+    cacheLookup.outcome === 'hit' && cacheLookup.entry
+      ? sanitizeGeneratedTitle(cacheLookup.entry.content)
+      : null;
+  const cacheOutcome = cacheLookup.outcome === 'hit' && !cachedTitle ? 'miss' : cacheLookup.outcome;
   let title: string | null;
-  if (cacheLookup.outcome === 'hit' && cacheLookup.entry) {
-    title = sanitizeGeneratedTitle(cacheLookup.entry.content);
+  if (cachedTitle) {
+    title = cachedTitle;
   } else {
     const planTier = await resolveEntitledPlanTier(input.db, input.userId).catch(() =>
       normalizeBillingPlanTier(null),
@@ -267,30 +277,31 @@ async function generateAndPersistTitle(input: ScheduleTitleGenerationInput): Pro
         },
       });
 
-      await storeExactResponseCache(
-        cacheFields,
-        {
-          content: response.content,
-          usage: {
-            promptTokens: response.promptTokens,
-            completionTokens: response.completionTokens,
-            totalTokens: response.totalTokens,
-            ...(response.reasoningOutputTokens !== undefined
-              ? { reasoningOutputTokens: response.reasoningOutputTokens }
-              : {}),
-            ...(response.cacheCreationInputTokens !== undefined
-              ? { cacheCreationInputTokens: response.cacheCreationInputTokens }
-              : {}),
-            ...(response.cacheCreation1hInputTokens !== undefined
-              ? { cacheCreation1hInputTokens: response.cacheCreation1hInputTokens }
-              : {}),
-            ...(response.cachedInputTokens !== undefined
-              ? { cachedInputTokens: response.cachedInputTokens }
-              : {}),
+      if (title)
+        await storeExactResponseCache(
+          cacheFields,
+          {
+            content: response.content,
+            usage: {
+              promptTokens: response.promptTokens,
+              completionTokens: response.completionTokens,
+              totalTokens: response.totalTokens,
+              ...(response.reasoningOutputTokens !== undefined
+                ? { reasoningOutputTokens: response.reasoningOutputTokens }
+                : {}),
+              ...(response.cacheCreationInputTokens !== undefined
+                ? { cacheCreationInputTokens: response.cacheCreationInputTokens }
+                : {}),
+              ...(response.cacheCreation1hInputTokens !== undefined
+                ? { cacheCreation1hInputTokens: response.cacheCreation1hInputTokens }
+                : {}),
+              ...(response.cachedInputTokens !== undefined
+                ? { cachedInputTokens: response.cachedInputTokens }
+                : {}),
+            },
           },
-        },
-        { bypass: cacheBypass },
-      );
+          { bypass: cacheBypass },
+        );
     } catch (error) {
       if (!providerCompleted) {
         await lease
@@ -317,11 +328,24 @@ async function generateAndPersistTitle(input: ScheduleTitleGenerationInput): Pro
     {
       conversationId: input.conversationId,
       mechanism: EXACT_RESPONSE_CACHE_MECHANISM,
-      cacheOutcome: cacheLookup.outcome,
+      cacheOutcome,
     },
     '[conversation-title] exact-response cache outcome',
   );
-  if (!title) return;
+  if (!title) {
+    logger.warn(
+      {
+        event: 'conversation_title_unusable',
+        entryPoint: 'scheduled_conversation_title',
+        requestId: `title:${input.conversationId}`,
+        conversationId: input.conversationId,
+        model: route.modelKey,
+        cacheOutcome,
+      },
+      '[conversation-title] no usable title returned; keeping the existing title',
+    );
+    return;
+  }
 
   try {
     // Guarded to only the stage-1 truncation and its known client-side racer

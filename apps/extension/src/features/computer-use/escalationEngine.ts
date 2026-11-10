@@ -1,4 +1,4 @@
-import type { FillResult } from '../content/autofill/filler';
+import { FILE_INPUT_SKIP_REASON, type FillResult } from '../content/autofill/filler';
 import type { DetectedField } from '../content/autofill/detector';
 import { isAutocompleteField, autocompleteSelectionCommitted } from '../content/pageElements';
 import {
@@ -174,6 +174,7 @@ export function detectFieldTriggers(
   const triggers: EscalationTrigger[] = [];
 
   for (const result of fillResults) {
+    if (!result.success && (!result.selector || !document.querySelector(result.selector))) continue;
     if (result.selectionRequired) {
       triggers.push({
         reason: 'typeahead_dropdown',
@@ -182,7 +183,10 @@ export function detectFieldTriggers(
       });
       continue;
     }
-    if (alwaysEscalateKeys.has(result.key)) {
+    if (
+      alwaysEscalateKeys.has(result.key) &&
+      result.reason === 'Requires computer-use escalation'
+    ) {
       triggers.push({
         reason: 'platform_always_escalate',
         fieldKey: result.key,
@@ -191,7 +195,7 @@ export function detectFieldTriggers(
       continue;
     }
 
-    if (result.skipped && result.reason === 'File inputs cannot be filled programmatically') {
+    if (result.skipped && result.reason === FILE_INPUT_SKIP_REASON) {
       triggers.push({
         reason: 'file_upload',
         fieldKey: result.key,
@@ -211,16 +215,24 @@ export function detectFieldTriggers(
       }
       continue;
     }
+  }
 
-    if (!result.success && !result.skipped) {
-      const detected = detectedFields.find((f) => f.key === result.key);
-      if (detected?.required) {
-        triggers.push({
-          reason: 'required_field_empty',
-          fieldKey: result.key,
-          description: `Required field "${result.key}" could not be filled (${result.reason ?? 'unknown'}).`,
-        });
-      }
+  for (const field of detectedFields) {
+    if (!field.required || triggers.some((trigger) => trigger.fieldKey === field.key)) continue;
+    const element = document.querySelector(field.selector);
+    const answered =
+      element instanceof HTMLInputElement && element.type === 'file'
+        ? Boolean(element.files?.length)
+        : (element instanceof HTMLInputElement ||
+            element instanceof HTMLTextAreaElement ||
+            element instanceof HTMLSelectElement) &&
+          element.value.trim().length > 0;
+    if (!answered) {
+      triggers.push({
+        reason: 'required_field_empty',
+        fieldKey: field.key,
+        description: `Required field "${field.key}" remains unanswered after autofill.`,
+      });
     }
   }
 

@@ -9,6 +9,8 @@ import {
   ManagedCloudConversationResponseSchema,
   ManagedCloudCreateConversationRequestSchema,
   ManagedCloudCreateConversationResponseSchema,
+  ManagedCloudCreateConversationBranchRequestSchema,
+  ManagedCloudCreateConversationBranchResponseSchema,
   ManagedCloudCreateMessageRequestSchema,
   ManagedCloudCreateMessageResponseSchema,
   ManagedCloudDeleteConversationResponseSchema,
@@ -16,6 +18,7 @@ import {
   ManagedCloudUpdateConversationRequestSchema,
   ManagedCloudUpdateConversationResponseSchema,
   managedCloudConversationMessagesPath,
+  managedCloudConversationBranchesPath,
   managedCloudConversationPath,
   managedCloudMessagePath,
   normalizeManagedCloudConversation,
@@ -24,6 +27,7 @@ import {
   type ManagedCloudConversationHistoryStats,
   type ManagedCloudConversationListQuery,
   type ManagedCloudCreateConversationRequest,
+  type ManagedCloudCreateConversationBranchRequest,
   type ManagedCloudCreateMessageRequest,
   type ManagedCloudMessage,
   type ManagedCloudUpdateConversationRequest,
@@ -79,6 +83,11 @@ export interface ManagedCloudChatClient {
   ): Promise<ManagedCloudConversationPage>;
   createConversation(
     input: ManagedCloudCreateConversationRequest,
+    options?: ManagedCloudChatRequestOptions,
+  ): Promise<ManagedCloudConversation>;
+  createConversationBranch(
+    conversationId: string,
+    input: ManagedCloudCreateConversationBranchRequest,
     options?: ManagedCloudChatRequestOptions,
   ): Promise<ManagedCloudConversation>;
   getConversation(
@@ -325,6 +334,22 @@ export function createManagedCloudChatClient(
         response,
         ManagedCloudCreateConversationResponseSchema,
         'create response',
+      );
+      return normalizeManagedCloudConversation(result.conversation);
+    },
+
+    async createConversationBranch(conversationId, input, options = {}) {
+      const body = ManagedCloudCreateConversationBranchRequestSchema.parse(input);
+      const response = await request(managedCloudConversationBranchesPath(conversationId), {
+        method: 'POST',
+        headers: await mutationHeaders(true, options.signal, options.organizationId),
+        body: JSON.stringify(body),
+        ...(options.signal ? { signal: options.signal } : {}),
+      });
+      const result = await parseContract(
+        response,
+        ManagedCloudCreateConversationBranchResponseSchema,
+        'branch response',
       );
       return normalizeManagedCloudConversation(result.conversation);
     },
