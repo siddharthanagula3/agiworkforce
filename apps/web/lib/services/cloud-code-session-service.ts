@@ -470,37 +470,27 @@ function historyOutput(output: string | null): string {
   return text.slice(0, STEP_HISTORY_OUTPUT_LIMIT);
 }
 
-/**
- * Everything the Code transcript needs to redraw a session it did not run in
- * this tab: the turns, their outcome, and every tool each one ran.
- */
-export async function listCloudCodeAgentTurns(
+const TURN_COLUMNS = `id, goal, mode, state, stop_reason, steps_used, input_tokens, output_tokens,
+            cancel_requested_at, final_message, error_message, created_at`;
+
+async function attachTurnSteps(
   db: DatabaseAdapter,
   owner: CloudCodeOwner,
   sessionId: string,
+  turnRows: AgentTurnRow[],
 ): Promise<CloudCodeAgentTurnRecord[]> {
-  validateCloudCodeSessionId(sessionId);
-  const scoped = ownerSql(owner, 2);
-  const turnRows = await db.query<AgentTurnRow>(
-    `select id, goal, mode, state, stop_reason, steps_used, input_tokens, output_tokens,
-            cancel_requested_at, final_message, error_message, created_at
-       from cloud_code_agent_turns
-      where session_id = $1 and ${scoped.clause}
-      order by created_at asc
-      limit ${TURN_HISTORY_LIMIT}`,
-    [sessionId, ...scoped.params],
-  );
   if (turnRows.length === 0) return [];
 
   const scopedTurns = ownerSql(owner, 2, 't');
+  const idPlaceholders = turnRows.map((_, index) => `$${4 + index}`).join(', ');
   const stepRows = await db.query<AgentStepRow>(
     `select s.turn_id, s.step_index, s.tool_name, s.tool_args, s.output, s.is_error
        from cloud_code_agent_steps s
        join cloud_code_agent_turns t on t.id = s.turn_id
-      where t.session_id = $1 and ${scopedTurns.clause}
+      where t.session_id = $1 and ${scopedTurns.clause} and t.id in (${idPlaceholders})
       order by s.turn_id, s.step_index asc
       limit ${STEP_HISTORY_LIMIT}`,
-    [sessionId, ...scopedTurns.params],
+    [sessionId, ...scopedTurns.params, ...turnRows.map((row) => row.id)],
   );
 
   const stepsByTurn = new Map<string, CloudCodeAgentStep[]>();
@@ -530,6 +520,68 @@ export async function listCloudCodeAgentTurns(
     createdAt: iso(row.created_at),
     steps: stepsByTurn.get(row.id) ?? [],
   }));
+}
+
+export interface CloudCodeAgentTurnWindow {
+  turns: CloudCodeAgentTurnRecord[];
+  truncated: boolean;
+}
+
+/**
+ * The newest turns of a session, oldest first, and whether older ones were
+ * left out. The newest window is the one a transcript, a result verdict and a
+ * reader that wants the latest outcome all need; the oldest turns are the ones
+ * a bounded read may drop.
+ */
+export async function readCloudCodeAgentTurnWindow(
+  db: DatabaseAdapter,
+  owner: CloudCodeOwner,
+  sessionId: string,
+): Promise<CloudCodeAgentTurnWindow> {
+  validateCloudCodeSessionId(sessionId);
+  const scoped = ownerSql(owner, 2);
+  const newestFirst = await db.query<AgentTurnRow>(
+    `select ${TURN_COLUMNS}
+       from cloud_code_agent_turns
+      where session_id = $1 and ${scoped.clause}
+      order by created_at desc, id desc
+      limit ${TURN_HISTORY_LIMIT + 1}`,
+    [sessionId, ...scoped.params],
+  );
+  const truncated = newestFirst.length > TURN_HISTORY_LIMIT;
+  const window = newestFirst.slice(0, TURN_HISTORY_LIMIT).reverse();
+  return { turns: await attachTurnSteps(db, owner, sessionId, window), truncated };
+}
+
+export async function listCloudCodeAgentTurns(
+  db: DatabaseAdapter,
+  owner: CloudCodeOwner,
+  sessionId: string,
+): Promise<CloudCodeAgentTurnRecord[]> {
+  return (await readCloudCodeAgentTurnWindow(db, owner, sessionId)).turns;
+}
+
+/**
+ * One turn by id, however many turns the session has. A caller waiting on a
+ * specific turn must not look for it in the bounded transcript window.
+ */
+export async function getCloudCodeAgentTurn(
+  db: DatabaseAdapter,
+  owner: CloudCodeOwner,
+  sessionId: string,
+  turnId: string,
+): Promise<CloudCodeAgentTurnRecord | null> {
+  validateCloudCodeSessionId(sessionId);
+  if (!UUID_RE.test(turnId)) return null;
+  const scoped = ownerSql(owner, 3);
+  const rows = await db.query<AgentTurnRow>(
+    `select ${TURN_COLUMNS}
+       from cloud_code_agent_turns
+      where session_id = $1 and id = $2 and ${scoped.clause}`,
+    [sessionId, turnId, ...scoped.params],
+  );
+  const [turn] = await attachTurnSteps(db, owner, sessionId, rows.slice(0, 1));
+  return turn ?? null;
 }
 
 function validateRepositoryUrl(value: unknown): string | null {

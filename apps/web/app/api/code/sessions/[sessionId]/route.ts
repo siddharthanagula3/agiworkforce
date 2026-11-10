@@ -10,8 +10,8 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
   deleteCloudCodeSession,
   getCloudCodeSession,
-  listCloudCodeAgentTurns,
   listCloudCodeTerminalEntries,
+  readCloudCodeAgentTurnWindow,
   renameCloudCodeSession,
   setCloudCodeSessionArchived,
 } from '@/lib/services/cloud-code-session-service';
@@ -52,12 +52,12 @@ async function handleGet(request: NextRequest, context: RouteContext) {
   const { sessionId } = await context.params;
   const owner = { userId, organizationId };
   try {
-    const [session, terminalEntries, turns] = await Promise.all([
+    const [session, terminalEntries, { turns, truncated }] = await Promise.all([
       getCloudCodeSession(db, owner, sessionId),
       listCloudCodeTerminalEntries(db, owner, sessionId),
-      listCloudCodeAgentTurns(db, owner, sessionId),
+      readCloudCodeAgentTurnWindow(db, owner, sessionId),
     ]);
-    return NextResponse.json({ session, terminalEntries, turns });
+    return NextResponse.json({ session, terminalEntries, turns, turnsTruncated: truncated });
   } catch (error) {
     rethrowRouteError(error);
   }

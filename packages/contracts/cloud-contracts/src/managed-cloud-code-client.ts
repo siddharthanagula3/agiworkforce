@@ -91,6 +91,7 @@ export interface CloudCodeApi {
     session: CloudCodeSession;
     terminalEntries: CloudCodeTerminalEntry[];
     turns: CloudCodeAgentTurnRecord[];
+    turnsTruncated?: boolean;
   }>;
   create(
     input: CreateCloudCodeSessionInput,

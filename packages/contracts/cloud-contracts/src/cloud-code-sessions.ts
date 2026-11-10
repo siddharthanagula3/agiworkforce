@@ -200,6 +200,7 @@ export const CloudCodeSessionDetailSchema = z.object({
   session: CloudCodeSessionSchema,
   terminalEntries: z.array(CloudCodeTerminalEntrySchema),
   turns: z.array(CloudCodeAgentTurnRecordSchema).default([]),
+  turnsTruncated: z.boolean().default(false),
 });
 
 export const CloudCodeSessionResponseSchema = z.object({ session: CloudCodeSessionSchema });

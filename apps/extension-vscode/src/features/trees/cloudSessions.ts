@@ -24,7 +24,10 @@ export function cloudTranscript(response: ThreadReadResponse): string {
   const turns = response.messages.map(
     (message) => `**${message.role === 'user' ? 'You' : 'AGI'}**\n\n${message.text}`,
   );
-  return [`# ${response.thread.title}`, ...turns].join('\n\n');
+  const notice = response.transcriptTruncated
+    ? ['_Earlier turns of this session are not shown here._']
+    : [];
+  return [`# ${response.thread.title}`, ...notice, ...turns].join('\n\n');
 }
 
 export async function showCloudSession(response: ThreadReadResponse): Promise<void> {

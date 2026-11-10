@@ -7,14 +7,14 @@ const {
   mockGetSession,
   mockOpenDurableRun,
   mockStartWorkflow,
-  mockListTurns,
+  mockGetTurn,
   mockResolveProvider,
   mockFindPendingApproval,
 } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
   mockOpenDurableRun: vi.fn(),
   mockStartWorkflow: vi.fn(),
-  mockListTurns: vi.fn(),
+  mockGetTurn: vi.fn(),
   mockResolveProvider: vi.fn(),
   mockFindPendingApproval: vi.fn(),
 }));
@@ -44,7 +44,7 @@ vi.mock('@/lib/services/provider-adapter-service', () => ({
 }));
 vi.mock('@/lib/services/cloud-code-session-service', async (importOriginal) => {
   const actual = await importOriginal<ScanModule0>();
-  return { ...actual, getCloudCodeSession: mockGetSession, listCloudCodeAgentTurns: mockListTurns };
+  return { ...actual, getCloudCodeSession: mockGetSession, getCloudCodeAgentTurn: mockGetTurn };
 });
 vi.mock('@/lib/services/cloud-code-agent-approval-service', async (importOriginal) => {
   const actual = await importOriginal<ScanModule2>();
@@ -126,7 +126,7 @@ beforeEach(() => {
   });
   mockOpenDurableRun.mockResolvedValue({ runId: '33333333-3333-4333-8333-333333333333' });
   mockStartWorkflow.mockResolvedValue({ transport: 'durable', workflowRunId: 'workflow-run-1' });
-  mockListTurns.mockResolvedValue([finishedTurn()]);
+  mockGetTurn.mockResolvedValue(finishedTurn());
 });
 
 afterEach(() => {
@@ -169,13 +169,19 @@ describe('handing a Code turn to the durable runner', () => {
     });
   });
 
+  it('looks the turn up by its own id, not in the transcript window of a long session', async () => {
+    await startTurn(db());
+
+    expect(mockGetTurn).toHaveBeenCalledWith(expect.anything(), OWNER, SESSION_ID, TURN_ID);
+  });
+
   it('keeps waiting while the turn has not reached a stop reason', async () => {
-    mockListTurns
-      .mockResolvedValueOnce([finishedTurn({ stopReason: null })])
-      .mockResolvedValueOnce([finishedTurn()]);
+    mockGetTurn
+      .mockResolvedValueOnce(finishedTurn({ stopReason: null }))
+      .mockResolvedValueOnce(finishedTurn());
 
     await expect(startTurn(db())).resolves.toMatchObject({ stopReason: 'done' });
-    expect(mockListTurns).toHaveBeenCalledTimes(2);
+    expect(mockGetTurn).toHaveBeenCalledTimes(2);
   });
 
   it('hands the initiating request the approval a durable turn paused on', async () => {
@@ -187,7 +193,7 @@ describe('handing a Code turn to the durable runner', () => {
       command: 'rm -rf build',
       reason: 'Deletes files',
     };
-    mockListTurns.mockResolvedValue([finishedTurn({ stopReason: 'awaiting_approval' })]);
+    mockGetTurn.mockResolvedValue(finishedTurn({ stopReason: 'awaiting_approval' }));
     mockFindPendingApproval.mockResolvedValue(pendingApproval);
 
     await expect(startTurn(db())).resolves.toMatchObject({
@@ -212,7 +218,7 @@ describe('handing a Code turn to the durable runner', () => {
       command: 'npm test',
       reason: 'Runs a command',
     };
-    mockListTurns.mockResolvedValue([finishedTurn({ stopReason: 'awaiting_approval' })]);
+    mockGetTurn.mockResolvedValue(finishedTurn({ stopReason: 'awaiting_approval' }));
     mockFindPendingApproval.mockResolvedValueOnce(null).mockResolvedValueOnce(pendingApproval);
 
     await expect(startTurn(db())).resolves.toMatchObject({ pendingApproval });
@@ -220,7 +226,7 @@ describe('handing a Code turn to the durable runner', () => {
   });
 
   it('says the turn is still running rather than reporting a turn that timed out', async () => {
-    mockListTurns.mockResolvedValue([finishedTurn({ stopReason: null })]);
+    mockGetTurn.mockResolvedValue(finishedTurn({ stopReason: null }));
     const signal = AbortSignal.abort();
 
     await expect(
@@ -245,7 +251,7 @@ describe('handing a Code turn to the durable runner', () => {
     });
 
     await startTurn(db()).catch(() => undefined);
-    expect(mockListTurns).not.toHaveBeenCalled();
+    expect(mockGetTurn).not.toHaveBeenCalled();
   });
 
   it('runs the turn request-scoped when opening the run throws', async () => {
@@ -253,7 +259,7 @@ describe('handing a Code turn to the durable runner', () => {
 
     await startTurn(db()).catch(() => undefined);
     expect(mockStartWorkflow).not.toHaveBeenCalled();
-    expect(mockListTurns).not.toHaveBeenCalled();
+    expect(mockGetTurn).not.toHaveBeenCalled();
   });
 
   it('does not reach the durable runner at all when the deployment has not opted in', async () => {

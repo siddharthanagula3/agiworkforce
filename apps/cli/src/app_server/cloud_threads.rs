@@ -7,7 +7,7 @@ use agiworkforce_protocol::developer_session::{
 };
 
 use crate::cloud::code_handoff::github_full_name;
-use crate::cloud::code_sessions::{self, CodeSession};
+use crate::cloud::code_sessions::{self, CodeSession, CodeSessionDetail};
 use crate::cloud::{CloudClient, CloudError};
 use crate::platform::runtime::session::PrivacyMode;
 
@@ -116,7 +116,11 @@ async fn read_in(
             }
             other => DeveloperSessionHostError::unavailable(other.to_string()),
         })?;
-    let messages = crate::cloud::code_teleport::history(&detail)
+    Ok(thread_read(&detail))
+}
+
+fn thread_read(detail: &CodeSessionDetail) -> ThreadReadResponse {
+    let messages = crate::cloud::code_teleport::history(detail)
         .iter()
         .enumerate()
         .map(|(index, message)| DeveloperMessage {
@@ -126,16 +130,16 @@ async fn read_in(
             turn_id: None,
         })
         .collect();
-    Ok(ThreadReadResponse {
+    ThreadReadResponse {
         child_tasks: None,
         thread: summary(&detail.session),
         messages,
-        transcript_truncated: false,
+        transcript_truncated: detail.turns_truncated,
         approvals: Vec::new(),
         file_changes: Vec::new(),
         plan: Vec::new(),
         todos: Vec::new(),
-    })
+    }
 }
 
 #[cfg(test)]
@@ -160,6 +164,29 @@ mod tests {
         assert_eq!(cloud_session_id(&thread.id), Some("5f1c"));
         assert_eq!(cloud_session_id("5f1c"), None);
         assert_eq!(session_repository(&session).as_deref(), Some("acme/app"));
+    }
+
+    fn detail(truncated: bool) -> CodeSessionDetail {
+        serde_json::from_value(serde_json::json!({
+            "session": { "id": "5f1c", "title": "Fix the flaky test" },
+            "turns": [{ "goal": "fix it", "finalMessage": "fixed" }],
+            "turnsTruncated": truncated,
+        }))
+        .expect("detail")
+    }
+
+    #[test]
+    fn a_cloud_thread_read_reports_a_bounded_window_as_truncated() {
+        let read = thread_read(&detail(true));
+        assert_eq!(read.messages.len(), 2);
+        assert!(read.transcript_truncated);
+    }
+
+    #[test]
+    fn a_cloud_thread_read_of_a_whole_session_is_not_truncated() {
+        let read = thread_read(&detail(false));
+        assert_eq!(read.messages.len(), 2);
+        assert!(!read.transcript_truncated);
     }
 
     #[tokio::test]
