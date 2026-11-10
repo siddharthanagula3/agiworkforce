@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { MessageResearchState } from '@shared/stores/web-chat-store';
 
-import { ResearchActivity, parseResearchDomainList } from './ResearchActivity';
+import { ResearchActivity, parseResearchDomainList, researchDomainRules } from './ResearchActivity';
 
 function awaitingApproval(): MessageResearchState {
   return {
@@ -53,6 +53,41 @@ describe('parseResearchDomainList', () => {
       'cdc.gov',
     ]);
     expect(parseResearchDomainList('   ')).toEqual([]);
+  });
+});
+
+describe('researchDomainRules', () => {
+  it('normalizes each site to the rule the run enforces', () => {
+    expect(researchDomainRules('Nature.com., https://www.nature.com/x *.who.int')).toEqual([
+      'nature.com',
+      'who.int',
+    ]);
+  });
+
+  it('refuses the whole entry when any token is not a site', () => {
+    expect(researchDomainRules('nature.com nature')).toBeNull();
+  });
+});
+
+describe('adding a site that is not a domain', () => {
+  it('keeps Add disabled and adds nothing, so no chip promises a limit', () => {
+    const onPlanDecision = renderPlan();
+
+    addSource('web-excluded', 'nature');
+    expect(screen.getByTestId('research-plan-add-source')).toBeDisabled();
+    expect(screen.getByTestId('research-plan-add-domain')).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.queryAllByTestId('research-plan-source')).toHaveLength(0);
+
+    fireEvent.change(screen.getByTestId('research-plan-add-domain'), {
+      target: { value: 'Nature.com.' },
+    });
+    fireEvent.click(screen.getByTestId('research-plan-add-source'));
+    fireEvent.click(screen.getByTestId('research-plan-start'));
+
+    expect(onPlanDecision).toHaveBeenCalledWith(
+      'start',
+      expect.objectContaining({ allowDomains: [], denyDomains: ['nature.com'] }),
+    );
   });
 });
 

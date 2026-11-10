@@ -34,6 +34,7 @@ import {
   type ResearchSourceRequest,
   type ResearchStep,
 } from '@agiworkforce/types';
+import { normalizeWebDomain } from '@agiworkforce/cloud-contracts';
 import { cn } from '@shared/lib/utils';
 import { useModelStore } from '@shared/stores/model-store';
 import { estimateResearchCredits } from '@/lib/billing/credit-estimates';
@@ -174,6 +175,16 @@ export function parseResearchDomainList(value: string): string[] {
   return Array.from(new Set(value.split(DOMAIN_SEPARATOR).map((part) => part.trim()))).filter(
     (part) => part.length > 0,
   );
+}
+
+export function researchDomainRules(value: string): string[] | null {
+  const rules: string[] = [];
+  for (const token of parseResearchDomainList(value)) {
+    const rule = normalizeWebDomain(token);
+    if (!rule) return null;
+    if (!rules.includes(rule)) rules.push(rule);
+  }
+  return rules;
 }
 
 /** A connected app the reader may add to the run, resolved by the surface. */
@@ -401,12 +412,13 @@ export function ResearchActivity({
     (option) =>
       !sources.some((source) => source.kind === 'connector' && source.id === option.connectorId),
   );
+  const domainRules = researchDomainRules(addValue);
   const canAdd =
     addKind === 'files'
       ? !sources.some((source) => source.kind === 'files')
       : addKind === 'connector'
         ? connectorChoices.length > 0 && addValue.length > 0
-        : parseResearchDomainList(addValue).length > 0;
+        : domainRules !== null && domainRules.length > 0;
 
   const addChosenSource = () => {
     if (!canAdd) return;
@@ -427,9 +439,10 @@ export function ResearchActivity({
       setAddValue('');
       return;
     }
+    if (!domainRules) return;
     const excluded = addKind === 'web-excluded';
     setSources((current) =>
-      parseResearchDomainList(addValue).reduce(
+      domainRules.reduce(
         (next, domain) =>
           addResearchSource(next, { kind: 'web', id: domain, label: domain, excluded }),
         current,
@@ -759,6 +772,7 @@ export function ResearchActivity({
                 className="min-h-7 min-w-0 flex-1 rounded-md border border-border/40 bg-background px-2 py-1 text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 data-testid="research-plan-add-domain"
                 aria-label="Site to add"
+                aria-invalid={domainRules === null}
               />
             )}
             <button

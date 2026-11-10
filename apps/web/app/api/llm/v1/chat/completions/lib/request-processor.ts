@@ -32,6 +32,7 @@ import { z } from 'zod';
 import {
   MANAGED_OFFICE_FILE_TOOL_NAME,
   ManagedCloudMessageMetadataSchema,
+  WEB_DOMAIN_RULE_MESSAGE,
 } from '@agiworkforce/cloud-contracts';
 import type {
   ManagedMemoryCitation,
@@ -271,8 +272,8 @@ import type {
   ModelCapabilities,
   ProjectFileCitation,
   PromptCacheScope,
+  ReasoningReplayBlock,
   RoutingSlot,
-  ThinkingBlock,
   ToolApprovalPolicy,
 } from '@agiworkforce/types';
 import {
@@ -416,7 +417,9 @@ import {
 import {
   createResearchDomainPolicy,
   MAX_RESEARCH_CONNECTOR_SOURCES,
+  MAX_RESEARCH_DOMAIN_RULES,
   narrowResearchDomainPolicy,
+  normalizeResearchDomain,
   type ResearchDomainPolicy,
 } from './research-sources';
 import {
@@ -527,6 +530,23 @@ import {
   resolveTurnToolProhibition,
   type TurnToolProhibition,
 } from './turn-tool-prohibition';
+
+const ResearchDomainRulesSchema = z
+  .array(
+    z
+      .string()
+      .trim()
+      .min(1)
+      .max(253)
+      .transform((value, context) => {
+        const rule = normalizeResearchDomain(value);
+        if (rule) return rule;
+        context.addIssue({ code: 'custom', message: WEB_DOMAIN_RULE_MESSAGE });
+        return z.NEVER;
+      }),
+  )
+  .max(MAX_RESEARCH_DOMAIN_RULES)
+  .transform((rules) => Array.from(new Set(rules)));
 
 export const ChatCompletionRequestSchema = z
   .object({
@@ -669,8 +689,8 @@ export const ChatCompletionRequestSchema = z
     research_sources: z
       .object({
         files: z.boolean().optional(),
-        allow_domains: z.array(z.string().trim().min(1).max(253)).max(32).optional(),
-        deny_domains: z.array(z.string().trim().min(1).max(253)).max(32).optional(),
+        allow_domains: ResearchDomainRulesSchema.optional(),
+        deny_domains: ResearchDomainRulesSchema.optional(),
         connectors: z
           .array(z.string().trim().min(1).max(200))
           .max(MAX_RESEARCH_CONNECTOR_SOURCES)
@@ -1582,7 +1602,7 @@ export type ProcessedRequest = {
         multimodal_content?: unknown[];
         tool_calls?: unknown[];
         tool_call_id?: string;
-        __canonicalThinking?: ThinkingBlock[];
+        __canonicalThinking?: ReasoningReplayBlock[];
       }
     >;
     temperature?: number;
