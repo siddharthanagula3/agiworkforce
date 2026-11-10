@@ -37,6 +37,7 @@ import {
   carriesSurfaceClaim,
   type BoundSurface,
 } from '@/lib/free-chat-surface-policy';
+import { verifyNativeSessionToken } from '@/lib/server/native-session-token';
 import { noteSessionSighting } from '@/lib/server/session-sightings';
 import { SURFACE_TOKEN_HEADER } from '@agiworkforce/types';
 import {
@@ -392,7 +393,20 @@ async function verifyBearerToken(
     };
   }
 
-  return null;
+  const native = await verifyNativeSessionToken(token, request.headers.get(SURFACE_TOKEN_HEADER));
+  if (!native.admitted) {
+    if (native.refusal) await logAuthFailure(request, native.refusal);
+    return null;
+  }
+  const account = await accountForSubject(native.claims.subject, request);
+  if (!account) return null;
+  return {
+    auth: {
+      ...authResultFor(account, native.claims.sessionId, native.claims.email),
+      boundSurface: native.boundSurface,
+    },
+    principal: { kind: 'session', sessionId: native.claims.sessionId },
+  };
 }
 
 async function verifyApiKey(
