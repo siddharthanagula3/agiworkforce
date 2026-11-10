@@ -49,7 +49,9 @@ describe('purgeTemporaryChatFiles', () => {
 
     const [selectSql, selectParams] = query.mock.calls[1] as [string, unknown[]];
     expect(selectSql).toContain('candidate.temporary_chat');
-    expect(selectSql).toContain('legal_hold_custodians');
+    expect(selectSql).toContain(
+      'not public.legal_hold_preserves(candidate.organization_id::uuid, candidate.user_id::text, $3::text)',
+    );
     expect(selectParams[0]).toBe(temporaryFileCutoff(NOW_MS).toISOString());
     expect(deleteStoredMediaObjects).toHaveBeenCalledWith(['temp/asset-1.png']);
     const [deleteSql, deleteParams] = query.mock.calls[3] as [string, unknown[]];
@@ -65,7 +67,7 @@ describe('purgeTemporaryChatFiles', () => {
       events.push('bytes');
       return { deleted: 1, failedPathnames: [] };
     });
-    const query = vi.fn(async (sql: string) => {
+    const query = vi.fn(async (sql: string, _params?: unknown[]) => {
       if (/for update of candidate/.test(sql)) {
         events.push('lock');
         return [{ id: 'asset-1', storage_pathname: 'temp/asset-1.png' }];
@@ -83,13 +85,10 @@ describe('purgeTemporaryChatFiles', () => {
     await purgeTemporaryChatFiles(transactional(query as never), { nowMs: NOW_MS });
 
     expect(events).toEqual(['lock', 'bytes', 'delete']);
-    const locking = query.mock.calls.find(([sql]) => /for update of candidate/.test(sql)) as [
-      string,
-      unknown[],
-    ];
-    expect(locking[0]).toContain('candidate.temporary_chat');
-    expect(locking[0]).toContain('candidate.created_at < $2::timestamptz');
-    expect(locking[1][1]).toBe(temporaryFileCutoff(NOW_MS).toISOString());
+    const locking = query.mock.calls.find(([sql]) => /for update of candidate/.test(sql));
+    expect(locking?.[0]).toContain('candidate.temporary_chat');
+    expect(locking?.[0]).toContain('candidate.created_at < $2::timestamptz');
+    expect(locking?.[1]?.[1]).toBe(temporaryFileCutoff(NOW_MS).toISOString());
   });
 
   it('keeps the bytes and the row of a file saved to the Library after it was selected', async () => {

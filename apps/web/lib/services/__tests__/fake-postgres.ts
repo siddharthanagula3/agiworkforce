@@ -1,5 +1,8 @@
 // A Postgres small enough to read and large enough to judge a WHERE clause. It
-// knows nothing about holds, so dropping a scope lets the held row back in.
+// knows holds only through legal_hold_preserves, which mirrors 0415, so
+// dropping a scope from a statement still lets the held row back in.
+// `hiddenFromCaller` plays RLS: those tables read as empty to the statement
+// while the definer function still sees them.
 
 type Value = unknown;
 type Row = Record<string, Value>;
@@ -139,7 +142,34 @@ export class SqlSubsetParser {
     private readonly tokens: Token[],
     private readonly params: readonly Value[],
     private readonly tables: ReadonlyMap<string, Row[]>,
+    private readonly hidden: ReadonlySet<string> = new Set(),
   ) {}
+
+  private visibleRows(table: string): Row[] {
+    return this.hidden.has(table) ? [] : (this.tables.get(table) ?? []);
+  }
+
+  private holdPreserves(organization: Value, owner: Value, store: Value): boolean {
+    if (organization === null || organization === undefined) return false;
+    const custodians = this.tables.get('legal_hold_custodians') ?? [];
+    return (this.tables.get('legal_holds') ?? []).some((hold) => {
+      if (hold['released_at'] !== null && hold['released_at'] !== undefined) return false;
+      if (hold['organization_id'] !== organization) return false;
+      const stores = hold['resource_types'];
+      if (store !== null && store !== undefined && Array.isArray(stores)) {
+        if (!stores.includes(store)) return false;
+      }
+      if (hold['scope'] === 'organization') return true;
+      if (owner === null || owner === undefined) return false;
+      if (hold['scope'] === 'member') return hold['subject_user_id'] === owner;
+      if (hold['scope'] === 'custodian') {
+        return custodians.some(
+          (entry) => entry['hold_id'] === hold['id'] && entry['user_id'] === owner,
+        );
+      }
+      return false;
+    });
+  }
 
   private peek(offset = 0): Token | undefined {
     return this.tokens[this.position + offset];
@@ -203,6 +233,16 @@ export class SqlSubsetParser {
       const spec = this.select();
       this.expect(')');
       return (env) => this.rows(spec, env).length > 0;
+    }
+    if (this.accept('public.legal_hold_preserves')) {
+      this.expect('(');
+      const organization = this.operand();
+      this.expect(',');
+      const owner = this.operand();
+      this.expect(',');
+      const store = this.operand();
+      this.expect(')');
+      return (env) => this.holdPreserves(organization(env), owner(env), store(env));
     }
     return this.comparison();
   }
@@ -333,6 +373,7 @@ export class SqlSubsetParser {
     }
     if (this.accept('true')) return () => true;
     if (this.accept('false')) return () => false;
+    if (this.accept('null')) return () => null;
     if (this.accept('array')) {
       this.expect('[');
       const items: Operand[] = [];
@@ -412,7 +453,10 @@ export class SqlSubsetParser {
     const computed: Array<{ name: string; predicate: Predicate }> = [];
     const aggregates: Array<{ name: string; filter: Predicate | null }> = [];
     while (this.peek() && !(depth === 0 && this.peek()?.value === 'from')) {
-      if (depth === 0 && ['exists', 'not'].includes(this.peek()?.value ?? '')) {
+      if (
+        depth === 0 &&
+        ['exists', 'not', 'public.legal_hold_preserves'].includes(this.peek()?.value ?? '')
+      ) {
         const predicate = this.expression();
         this.expect('as');
         computed.push({ name: this.take().value, predicate });
@@ -488,7 +532,7 @@ export class SqlSubsetParser {
 
   /** The rows a FROM with its joins produces, filtered by WHERE. */
   rows(spec: SelectSpec, outer: Env = new Map()): Env[] {
-    let envs: Env[] = (this.tables.get(spec.table) ?? []).map((row) => {
+    let envs: Env[] = this.visibleRows(spec.table).map((row) => {
       const env: Env = new Map(outer);
       env.set(spec.alias, row);
       return env;
@@ -497,7 +541,7 @@ export class SqlSubsetParser {
     for (const join of spec.joins) {
       const next: Env[] = [];
       for (const env of envs) {
-        const candidates = (this.tables.get(join.table) ?? []).filter((row) => {
+        const candidates = this.visibleRows(join.table).filter((row) => {
           const trial: Env = new Map(env);
           trial.set(join.alias, row);
           return join.on(trial);
@@ -556,9 +600,14 @@ function splitCteChain(sql: string): { ctes: Array<[string, string]>; tail: stri
 export class FakePostgres {
   readonly tables = new Map<string, Row[]>();
   readonly statements: string[] = [];
+  private readonly hiddenFromCaller: ReadonlySet<string>;
 
-  constructor(seed: Record<string, Row[]> = {}) {
+  constructor(
+    seed: Record<string, Row[]> = {},
+    options: { hiddenFromCaller?: readonly string[] } = {},
+  ) {
     for (const [table, rows] of Object.entries(seed)) this.tables.set(table, [...rows]);
+    this.hiddenFromCaller = new Set(options.hiddenFromCaller ?? []);
   }
 
   rowsIn(table: string): Row[] {
@@ -611,7 +660,7 @@ export class FakePostgres {
     if (/^\s*update\s+/i.test(sql)) return this.runUpdate(sql, params) as T[];
     if (/^\s*delete\s+from/i.test(sql)) return this.runDelete(sql, params) as T[];
 
-    const parser = new SqlSubsetParser(tokenize(sql), params, this.tables);
+    const parser = new SqlSubsetParser(tokenize(sql), params, this.tables, this.hiddenFromCaller);
     const spec = parser.select();
     const matched = parser.rows(spec);
     if (spec.aggregates.length > 0) {
@@ -646,7 +695,12 @@ export class FakePostgres {
       .replace(/^\s*update\s+/i, 'select * from ')
       .replace(/\s+set\s+[\s\S]*?where/i, ' where')
       .replace(/returning[\s\S]*$/i, '');
-    const parser = new SqlSubsetParser(tokenize(select), params, this.tables);
+    const parser = new SqlSubsetParser(
+      tokenize(select),
+      params,
+      this.tables,
+      this.hiddenFromCaller,
+    );
     const spec = parser.select();
     const touched = parser.rows(spec).map((env) => env.get(spec.alias));
     for (const row of touched) {
@@ -663,7 +717,12 @@ export class FakePostgres {
         ' where true',
       )
       .replace(/returning[\s\S]*$/i, '');
-    const parser = new SqlSubsetParser(tokenize(select), params, this.tables);
+    const parser = new SqlSubsetParser(
+      tokenize(select),
+      params,
+      this.tables,
+      this.hiddenFromCaller,
+    );
     const spec = parser.select();
     const doomed = new Set(parser.rows(spec).map((env) => env.get(spec.alias)));
     this.tables.set(

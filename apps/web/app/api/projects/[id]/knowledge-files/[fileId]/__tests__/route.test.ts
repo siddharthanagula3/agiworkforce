@@ -286,7 +286,9 @@ describe('/api/projects/[id]/knowledge-files/[fileId]', () => {
     it('keeps the stored object while an active legal hold preserves it', async () => {
       db.query.mockImplementation(async (sql: string) => {
         if (sql.includes('select f.storage_uri')) return [{ storage_uri: 's3://b/k/report.pdf' }];
-        if (sql.includes('public.legal_holds')) return [{ storage_uri: 's3://b/k/report.pdf' }];
+        if (sql.includes('public.legal_hold_preserves(')) {
+          return [{ storage_uri: 's3://b/k/report.pdf' }];
+        }
         return [];
       });
       db.execute.mockResolvedValue(undefined);

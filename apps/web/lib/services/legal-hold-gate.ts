@@ -189,8 +189,40 @@ export function legalHoldPredicate(
     (parent
       ? qualify('hold_parent', organizationColumnOf(parent.table))
       : qualify(options.alias, resource?.organizationColumn ?? 'organization_id'));
+  const joinsParent = parent !== null && options.owner === undefined;
+
+  // RLS hides holds from ordinary members, so an inline read of legal_holds on
+  // a member's connection answers "not held". The definer function (0415) sees
+  // every hold and answers only for a row the caller may see.
+  if (options.holdId === undefined) {
+    const params: string[] = [];
+    let store = 'null::text';
+    if (options.coversParam !== undefined) {
+      store = `${options.coversParam}::text`;
+    } else if (resourceType !== null) {
+      params.push(resourceType);
+      store = `$${options.nextParamIndex}::text`;
+    }
+    const preserves = `public.legal_hold_preserves(${organization}::uuid, ${owner}::text, ${store})`;
+    return {
+      table: resource?.table ?? null,
+      params,
+      sql:
+        joinsParent && parent
+          ? `exists (
+          select 1
+            from public.${parent.table} hold_parent
+           where hold_parent.id = ${qualify(options.alias, parent.column)}
+             and ${preserves}
+        )`
+          : preserves,
+    };
+  }
+
+  // Asking about one named hold is an administrator's question, and the
+  // administrator's own connection can read every hold in the workspace.
   const join =
-    parent && options.owner === undefined
+    joinsParent && parent
       ? `\n            join public.${parent.table} hold_parent
               on hold_parent.id = ${qualify(options.alias, parent.column)}`
       : '';
@@ -208,11 +240,8 @@ export function legalHoldPredicate(
     covers = `\n             and (h.resource_types is null or $${index} = any(h.resource_types))`;
     index += 1;
   }
-  let only = '';
-  if (options.holdId !== undefined) {
-    params.push(options.holdId);
-    only = `\n             and h.id = $${index}::uuid`;
-  }
+  params.push(options.holdId);
+  const only = `\n             and h.id = $${index}::uuid`;
 
   return {
     table: resource?.table ?? null,

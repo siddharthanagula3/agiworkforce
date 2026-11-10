@@ -57,9 +57,12 @@ const FREE = 'bob';
  * window the path enforces, under a custodian hold that is the shape the old
  * member-only lists missed entirely.
  */
-function world(hold: 'custodian' | 'released' = 'custodian') {
+function world(
+  hold: 'custodian' | 'released' = 'custodian',
+  options: { hiddenFromCaller?: readonly string[] } = {},
+) {
   const old = '2020-01-01T00:00:00.000Z';
-  return new FakePostgres({
+  const seed: Record<string, Record<string, unknown>[]> = {
     legal_holds: [
       {
         id: 'hold-1',
@@ -147,7 +150,8 @@ function world(hold: 'custodian' | 'released' = 'custodian') {
       { id: 'video-held', conversation_id: 'conv-held', status: 'completed', created_at: old },
       { id: 'video-free', conversation_id: 'conv-free', status: 'completed', created_at: old },
     ],
-  });
+  };
+  return new FakePostgres(seed, options);
 }
 
 function ids(db: FakePostgres, table: string): string[] {
@@ -375,7 +379,7 @@ describe('a held row survives every path and its unheld sibling does not', () =>
 
   it('the temporary chat attachment purge, bytes included', async () => {
     const db = world();
-    const result = await purgeTemporaryChatFiles(db);
+    const result = await purgeTemporaryChatFiles(db as unknown as DatabaseAdapter);
 
     expect(ids(db, 'media_assets')).toEqual(['file-held']);
     expect(result.heldFromPurge).toBe(1);
@@ -384,7 +388,7 @@ describe('a held row survives every path and its unheld sibling does not', () =>
 
   it('the temporary chat attachment purge, once the hold is released', async () => {
     const db = world('released');
-    await purgeTemporaryChatFiles(db);
+    await purgeTemporaryChatFiles(db as unknown as DatabaseAdapter);
     expect(ids(db, 'media_assets')).toEqual([]);
   });
 
@@ -534,6 +538,67 @@ describe('a held row survives every path and its unheld sibling does not', () =>
   it('the user’s own message delete, once the hold is released', async () => {
     const db = world('released');
     await deleteMessages(db as unknown as DatabaseAdapter, 'conv-held', ['msg-held']);
+    expect(ids(db, 'web_messages')).toEqual(['msg-free']);
+  });
+});
+
+describe('an ordinary member, whose connection RLS keeps from reading any hold', () => {
+  const HIDDEN = ['legal_holds', 'legal_hold_custodians'];
+
+  it('never asks the hold tables directly, only the definer function', () => {
+    for (const store of ['file', 'message', 'conversation'] as const) {
+      const exclusion = legalHoldExclusion(store, { alias: 'target', nextParamIndex: 1 });
+      expect(exclusion.sql).not.toMatch(/legal_holds|legal_hold_custodians/u);
+      expect(exclusion.sql).toContain('public.legal_hold_preserves(');
+    }
+  });
+
+  it('cannot permanently delete their own held file', async () => {
+    const db = world('custodian', { hiddenFromCaller: HIDDEN });
+
+    await expect(
+      permanentlyDeleteMediaAsset(HELD, 'file-held', db as unknown as DatabaseAdapter),
+    ).rejects.toMatchObject({ statusCode: 403, message: HELD_DELETION_REFUSAL });
+
+    expect(ids(db, 'media_assets')).toContain('file-held');
+    expect(mocks.deleteStoredMedia).not.toHaveBeenCalled();
+  });
+
+  it('cannot hard-delete a live message in their own held chat', async () => {
+    const db = world('custodian', { hiddenFromCaller: HIDDEN });
+
+    await expect(
+      deleteMessages(db as unknown as DatabaseAdapter, 'conv-held', ['msg-held'], {
+        conversationId: 'conv-held',
+        userId: HELD,
+        organizationId: ORG,
+      }),
+    ).rejects.toMatchObject({ statusCode: 403, message: HELD_DELETION_REFUSAL });
+
+    expect(ids(db, 'web_messages')).toContain('msg-held');
+  });
+
+  it('still deletes what no hold covers', async () => {
+    const db = world('custodian', { hiddenFromCaller: HIDDEN });
+
+    await expect(
+      permanentlyDeleteMediaAsset(FREE, 'file-free', db as unknown as DatabaseAdapter),
+    ).resolves.toBe(true);
+    await deleteMessages(db as unknown as DatabaseAdapter, 'conv-free', ['msg-free']);
+
+    expect(ids(db, 'media_assets')).toEqual(['file-held']);
+    expect(ids(db, 'web_messages')).toEqual(['msg-held']);
+  });
+
+  it('deletes freely once the hold is released', async () => {
+    const db = world('released', { hiddenFromCaller: HIDDEN });
+
+    await expect(
+      permanentlyDeleteMediaAsset(HELD, 'file-held', db as unknown as DatabaseAdapter),
+    ).resolves.toBe(true);
+    await deleteMessages(db as unknown as DatabaseAdapter, 'conv-held', ['msg-held']);
+
+    expect(ids(db, 'media_assets')).toEqual(['file-free']);
     expect(ids(db, 'web_messages')).toEqual(['msg-free']);
   });
 });

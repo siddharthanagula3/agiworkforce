@@ -174,7 +174,7 @@ describe('per-domain retention sweep', () => {
 
     const candidates = calls.find((call) => /from public\.user_projects p/.test(call.sql))?.sql;
     expect(candidates).toMatch(
-      /filter \(\s*where k\.storage_uri is not null\s+and not exists \(\s*select 1 from public\.project_knowledge_files shared\s+join public\.user_projects sharer on sharer\.id = shared\.project_id\s+where shared\.storage_uri = k\.storage_uri\s+and shared\.project_id <> p\.id\s+and shared\.deleted_at is null\s+and \(sharer\.updated_at >= \$2 or exists/,
+      /filter \(\s*where k\.storage_uri is not null\s+and not exists \(\s*select 1 from public\.project_knowledge_files shared\s+join public\.user_projects sharer on sharer\.id = shared\.project_id\s+where shared\.storage_uri = k\.storage_uri\s+and shared\.project_id <> p\.id\s+and shared\.deleted_at is null\s+and \(sharer\.updated_at >= \$2 or public\.legal_hold_preserves\(\$1::uuid, sharer\.user_id::text, \$3::text\)\)/,
     );
   });
 
@@ -189,7 +189,7 @@ describe('per-domain retention sweep', () => {
 
     const candidates = calls.find((call) => /from public\.user_projects p/.test(call.sql))?.sql;
     const heldFile =
-      /not exists \(\s*select 1 from public\.project_knowledge_files held_file\s+where held_file\.project_id = p\.id[\s\S]*'project_file'::text is null or h\.resource_types is null\s+or 'project_file' = any\(h\.resource_types\)/;
+      /not exists \(\s*select 1 from public\.project_knowledge_files held_file\s+where held_file\.project_id = p\.id\s+and public\.legal_hold_preserves\(\$1::uuid, p\.user_id::text, 'project_file'::text\)/;
     expect(candidates).toMatch(heldFile);
   });
 
@@ -215,7 +215,7 @@ describe('per-domain retention sweep', () => {
     expect(deletion).toMatch(
       /and not exists \(\s*select 1 from public\.project_knowledge_files held_file/,
     );
-    expect(deletion).toMatch(/h\.organization_id = \$2/);
+    expect(deletion).toMatch(/public\.legal_hold_preserves\(\$2::uuid, target\.user_id::text/);
   });
 
   it('deletes nothing while an organization-wide legal hold is active', async () => {
@@ -246,8 +246,9 @@ describe('per-domain retention sweep', () => {
     );
 
     const deletion = calls.find((call) => /delete from public\.notifications/.test(call.sql));
-    expect(deletion?.sql).toMatch(/not exists/);
-    expect(deletion?.sql).toMatch(/legal_hold_custodians/);
+    expect(deletion?.sql).toMatch(
+      /not public\.legal_hold_preserves\(\$1::uuid, t\.user_id::text, \$3::text\)/,
+    );
     expect(deletion?.sql).toMatch(/target_kind = 'chat'/);
     // A store no hold vocabulary names, so any hold over the person suspends it.
     expect(deletion?.params[2]).toBeNull();
@@ -306,8 +307,9 @@ describe('per-domain retention sweep', () => {
       /from public\.web_conversations c\s+where c\.id = t\.conversation_id\s+and c\.user_id = t\.user_id\s+and c\.organization_id = \$1/,
     );
     expect(sql).not.toMatch(/organization_members/);
-    expect(sql).toMatch(/not exists/);
-    expect(sql).toMatch(/legal_hold_custodians/);
+    expect(sql).toMatch(
+      /not public\.legal_hold_preserves\(\$1::uuid, t\.user_id::text, \$3::text\)/,
+    );
   });
 
   it('sweeps only notifications that point at a resource of the workspace', async () => {

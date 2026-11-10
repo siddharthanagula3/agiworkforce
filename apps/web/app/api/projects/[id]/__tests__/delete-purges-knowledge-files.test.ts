@@ -76,7 +76,7 @@ beforeEach(() => {
   mocks.execute.mockResolvedValue(1);
   mocks.held.mockReturnValue([]);
   mocks.query.mockImplementation(async (sql: string) => {
-    if (sql.includes('public.legal_holds')) return mocks.held();
+    if (sql.includes('public.legal_hold_preserves(')) return mocks.held();
     return sql.includes('select distinct storage_uri')
       ? []
       : [
@@ -119,7 +119,7 @@ describe('DELETE /api/projects/[id] · knowledge-file retention', () => {
 
   it('keeps an object a duplicated project still points at', async () => {
     mocks.query.mockImplementation(async (sql: string) => {
-      if (sql.includes('public.legal_holds')) return [];
+      if (sql.includes('public.legal_hold_preserves(')) return [];
       return sql.includes('select distinct storage_uri')
         ? [{ storage_uri: 'knowledge-files/projects/proj-1/spec.pdf' }]
         : [
@@ -144,8 +144,11 @@ describe('DELETE /api/projects/[id] · knowledge-file retention', () => {
     expect(mocks.deleteProjectKnowledgeObject.mock.calls).toEqual([
       ['knowledge-files/projects/proj-1/notes.txt'],
     ]);
-    const holdQuery = knowledgeFileCalls().find(([sql]) => sql.includes('public.legal_holds'));
-    expect(holdQuery?.[0]).toContain('h.released_at is null');
+    const holdQuery = knowledgeFileCalls().find(([sql]) =>
+      sql.includes('public.legal_hold_preserves('),
+    );
+    expect(holdQuery?.[0]).toContain('select distinct r.storage_uri');
+    expect(holdQuery?.[1]).toContain('project_file');
   });
 
   it('does not purge knowledge files when no live project matched', async () => {

@@ -261,8 +261,9 @@ describe('sweepOrganizationRetention', () => {
 
     expect(isSwept(result) && result.outcome).toBe('deleted');
     expect(isSwept(result) && result.conversationsHeld).toBe(4);
-    expect(h.deletes[0]).toMatch(/not exists/);
-    expect(h.deletes[0]).toMatch(/legal_hold_custodians/);
+    expect(h.deletes[0]).toContain(
+      'not public.legal_hold_preserves(candidate.organization_id::uuid, candidate.user_id::text, $3::text)',
+    );
 
     const deleteParams = h.query.mock.calls
       .filter(([sql]) => /delete from public\.web_conversations/i.test(String(sql)))
@@ -278,9 +279,13 @@ describe('sweepOrganizationRetention', () => {
     });
     await sweepOrganizationRetention(h.db, ORG, { now: NOW });
 
-    // No list of people to get wrong: the statement reads the custodian table.
-    expect(h.deletes[0]).toMatch(/h\.scope = 'custodian' and c\.user_id/);
-    expect(h.deletes[0]).toMatch(/legal_hold_custodians/);
+    // No list of people to get wrong: the statement asks the database, which
+    // reads the custodian table itself.
+    expect(h.deletes[0]).toMatch(/public\.legal_hold_preserves\(candidate\.organization_id/);
+    expect(h.deletes[0]).not.toMatch(/'ann'|'bo'/);
+    expect(h.query.mock.calls.flatMap(([, params]) => (params as unknown[]) ?? [])).not.toEqual(
+      expect.arrayContaining(['ann']),
+    );
   });
 
   it('does not suspend the conversation sweep for a hold narrowed to files', async () => {
@@ -292,7 +297,7 @@ describe('sweepOrganizationRetention', () => {
     // The store is bound, so the database decides that a file-only hold does
     // not cover conversations.
     expect(isSwept(result) && result.outcome).toBe('deleted');
-    expect(h.deletes[0]).toMatch(/resource_types is null or \$3 = any/);
+    expect(h.deletes[0]).toMatch(/public\.legal_hold_preserves\([^)]*, \$3::text\)/);
   });
 
   it('suspends the conversation sweep for a hold that names conversations', async () => {

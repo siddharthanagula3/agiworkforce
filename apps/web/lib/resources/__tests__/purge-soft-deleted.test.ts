@@ -110,7 +110,7 @@ describe('purgeSoftDeletedResources', () => {
     };
     for (const call of calls) {
       const table = tableOf(call.sql) || /from public\.(\w+) candidate/u.exec(call.sql)?.[1] || '';
-      expect(call.sql).toContain('legal_hold_custodians');
+      expect(call.sql).toContain('public.legal_hold_preserves(');
       expect(call.params).toContain(store[table]);
     }
   });
