@@ -137,6 +137,75 @@ describe('guest chat', () => {
     expect(onSettled).toHaveBeenCalledWith({ inputTokens: 12, outputTokens: 3 });
   });
 
+  function guestStream(signal: AbortSignal, onSettled = vi.fn(async () => undefined)) {
+    const model = guestChatModel();
+    const body = streamGuestChat({
+      model,
+      chatRequest: buildGuestChatRequest(
+        model,
+        [{ role: 'user', content: 'Hi' }],
+        readGuestChatConfig({}),
+      ),
+      signal,
+      onSettled,
+    });
+    return { body, onSettled };
+  }
+
+  it('ends the response with a timeout failure when the server deadline passes', async () => {
+    const deadline = new AbortController();
+    mocks.stream.mockImplementation(async function* (_request: unknown, signal: AbortSignal) {
+      yield { type: 'text-delta', delta: 'Partial' };
+      await new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve()));
+      throw new Error('aborted');
+    });
+    const { body, onSettled } = guestStream(deadline.signal);
+    const text = new Response(body).text();
+
+    setTimeout(() => deadline.abort(), 10);
+
+    const result = await text;
+    expect(result).toContain('"content":"Partial"');
+    expect(result).toContain('took too long');
+    expect(result.trimEnd().endsWith('data: [DONE]')).toBe(true);
+    expect(onSettled).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes the response when an adapter turns the deadline into a clean end', async () => {
+    const deadline = new AbortController();
+    mocks.stream.mockImplementation(async function* (_request: unknown, signal: AbortSignal) {
+      await new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve()));
+      yield { type: 'stop', reason: 'end_turn' };
+    });
+    const { body, onSettled } = guestStream(deadline.signal);
+    const text = new Response(body).text();
+
+    setTimeout(() => deadline.abort(), 10);
+
+    const result = await text;
+    expect(result).toContain('took too long');
+    expect(result.trimEnd().endsWith('data: [DONE]')).toBe(true);
+    expect(onSettled).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops the provider and still settles when the reader goes away', async () => {
+    let providerSignal: AbortSignal | undefined;
+    mocks.stream.mockImplementation(async function* (_request: unknown, signal: AbortSignal) {
+      providerSignal = signal;
+      yield { type: 'text-delta', delta: 'Hello' };
+      await new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve()));
+      throw new Error('aborted');
+    });
+    const { body, onSettled } = guestStream(new AbortController().signal);
+    const reader = body.getReader();
+    await reader.read();
+
+    await reader.cancel();
+
+    await vi.waitFor(() => expect(onSettled).toHaveBeenCalledTimes(1));
+    expect(providerSignal?.aborted).toBe(true);
+  });
+
   it('names one spend key per day for all guests', () => {
     expect(guestSpendKey(new Date('2026-09-28T12:00:00Z'))).toBe('guest-chat:spend:2026-09-28');
   });
@@ -213,6 +282,39 @@ describe('guest spend caps', () => {
 
     expect(refused).toEqual({ ok: false, limit: 'device' });
     expect([...store.values.values()]).toEqual([800, 800, 800]);
+  });
+
+  it('gives back what it held when the store fails after counting a scope', async () => {
+    const store = memoryStore();
+    store.expire.mockRejectedValueOnce(new Error('expire failed'));
+
+    await expect(reserve(store, 400)).rejects.toThrow('expire failed');
+
+    expect([...store.values.values()]).toEqual([0]);
+  });
+
+  it('gives back the scopes already counted when a later scope fails', async () => {
+    const store = memoryStore();
+    store.expire.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('expire failed'));
+
+    await expect(reserve(store, 400)).rejects.toThrow('expire failed');
+
+    expect([...store.values.values()]).toEqual([0, 0]);
+  });
+
+  it('still refuses, and releases every other scope, when one release fails', async () => {
+    const store = memoryStore();
+    await reserve(store, 800);
+    const increment = store.increment.getMockImplementation()!;
+    store.increment.mockImplementation(async (key: string, amount = 1) => {
+      if (amount < 0 && key.includes('ip:')) throw new Error('release failed');
+      return increment(key, amount);
+    });
+
+    const refused = await reserve(store, 300);
+
+    expect(refused).toEqual({ ok: false, limit: 'device' });
+    expect([...store.values.values()]).toEqual([800, 1_100, 800]);
   });
 
   it('caps a network that rotates devices', async () => {
