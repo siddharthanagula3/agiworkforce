@@ -31,6 +31,7 @@ import { removeBankAccountsItem } from '@/lib/connectors/bank-accounts';
 import { revokeAllConnectorTokensAtProviders } from '@/lib/connectors/oauth-access';
 
 const FEEDBACK_TABLE = 'feedback';
+const FEEDBACK_SCREENSHOT_CLEANUP_TABLE = 'feedback_screenshot_cleanups';
 
 export const USER_SCOPED_TABLES: ReadonlyArray<{
   table: string;
@@ -87,6 +88,7 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{
   { table: 'user_custom_connectors', column: 'user_id' },
   { table: 'connector_tool_permissions', column: 'user_id' },
   { table: 'connector_tool_session_grants', column: 'user_id' },
+  { table: 'connector_permission_generations', column: 'user_id' },
   { table: 'connector_oauth_grants', column: 'user_id' },
   { table: 'bank_account_items', column: 'user_id' },
   { table: 'connector_oauth_authorizations', column: 'user_id' },
@@ -110,6 +112,7 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{
   { table: 'automation_audit_events', column: 'user_id' },
   { table: 'notifications', column: 'user_id' },
   { table: 'feedback', column: 'user_id' },
+  { table: 'feedback_screenshot_cleanups', column: 'user_id' },
   { table: 'api_keys', column: 'user_id' },
   { table: 'developer_projects', column: 'user_id' },
   { table: 'developer_webhook_deliveries', column: 'user_id' },
@@ -129,6 +132,7 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{
   { table: 'background_jobs', column: 'user_id' },
   { table: 'device_pairings', column: 'user_id' },
   { table: 'device_refresh_tokens', column: 'user_id' },
+  { table: 'device_refresh_token_families', column: 'user_id' },
   { table: 'revoked_jwts', column: 'user_id' },
   { table: 'sync_data', column: 'user_id' },
   { table: 'support_ticket_replies', column: 'user_id' },
@@ -364,6 +368,8 @@ export const UNDELETED_USER_TABLES: Readonly<Record<string, string>> = {
     'Cascades from profiles (0174). The provider-subject mapping is owner-only, so no scoped delete could reach it.',
   website_auto_economy_trial_usage: 'Cascades from profiles.',
   web_push_subscriptions: 'Cascades from profiles.',
+  admin_account_actions:
+    'Cascades from profiles on user_id (0404). requested_by_user_id is the platform operator who acted, not the subject; the action itself stays in security_audit_logs.',
   organization_project_access:
     'Cascades from organization_members. Grants this user issued to other members keep granted_by_user_id, which is not nullable.',
   erasure_tombstones:
@@ -783,7 +789,11 @@ async function eraseUserFeedbackScreenshots(
     `select metadata->>'screenshot_key' as screenshot_key
        from public.${FEEDBACK_TABLE}
       where user_id = $1
-        and metadata->>'screenshot_key' is not null`,
+        and metadata->>'screenshot_key' is not null
+      union
+     select storage_key as screenshot_key
+       from public.${FEEDBACK_SCREENSHOT_CLEANUP_TABLE}
+      where user_id = $1`,
     [userId],
   );
 
@@ -971,7 +981,10 @@ export async function eraseUserAccountData(
         tables[table] = { deleted: false, retainedForRetry: true };
         continue;
       }
-      if (table === FEEDBACK_TABLE && feedbackScreenshots.failed > 0) {
+      if (
+        (table === FEEDBACK_TABLE || table === FEEDBACK_SCREENSHOT_CLEANUP_TABLE) &&
+        feedbackScreenshots.failed > 0
+      ) {
         tables[table] = { deleted: false, retainedForRetry: true };
         continue;
       }

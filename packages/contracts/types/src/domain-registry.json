@@ -35,6 +35,7 @@
       "capabilities": [],
       "concepts": [],
       "tables": [
+        "admin_account_actions",
         "beta_applications",
         "beta_invites",
         "beta_redemptions",
@@ -60,7 +61,8 @@
         "account_sessions",
         "desktop_sign_in_grants",
         "device_authorization_codes",
-        "device_refresh_tokens"
+        "device_refresh_tokens",
+        "device_refresh_token_families"
       ]
     },
     {
@@ -521,6 +523,7 @@
       "tables": [
         "connector_account_states",
         "connector_call_events",
+        "connector_permission_generations",
         "connector_tool_permissions",
         "connector_tool_session_grants",
         "github_install_authorizations",
@@ -749,7 +752,7 @@
       "owner": "apps/web/app/api/feedback",
       "capabilities": [],
       "concepts": [],
-      "tables": ["feedback"]
+      "tables": ["feedback", "feedback_screenshot_cleanups"]
     },
     {
       "name": "support",

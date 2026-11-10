@@ -765,6 +765,17 @@ const ALLOWLIST = [
       'scoping the read to one of them.',
   },
   {
+    match: /lib\/server\/feedback-screenshot-cleanup\.ts$/,
+    tables: ['feedback_screenshot_cleanups'],
+    reason:
+      'the feedback screenshot cleanup records, swept only from api/cron/purge-deleted-media: ' +
+      'it lists records older than an hour across every account by date alone, then deletes ' +
+      'each by its own storage key, which names exactly one object and embeds the owning ' +
+      'account. The same delete statement is issued by the feedback route inside the ' +
+      'transaction that stores the report, under the caller-scoped connection, where the ' +
+      'owner-only policy of the table applies. There is no request subject on the sweep.',
+  },
+  {
     match: /lib\/services\/billing-reconciliation\.ts$/,
     tables: ['subscriptions'],
     reason:

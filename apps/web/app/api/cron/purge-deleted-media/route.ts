@@ -15,6 +15,10 @@ import { countHeldRows, legalHoldExclusion } from '@/lib/services/legal-hold-gat
 import { serializeDestructionWithHolds } from '@/lib/services/legal-hold-placement';
 import { purgeDerivedRecords } from '@/lib/resources/purge-soft-deleted';
 import { getObjectStore, objectStorageConfig } from '@/lib/server/object-storage-runtime';
+import {
+  sweepAbandonedFeedbackScreenshots,
+  type FeedbackScreenshotSweep,
+} from '@/lib/server/feedback-screenshot-cleanup';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -53,6 +57,20 @@ async function sweepOrphanedMultipartUploads(): Promise<Record<string, OrphanedM
     }
   }
   return swept;
+}
+
+async function sweepFeedbackScreenshots(
+  db: DatabaseAdapter,
+): Promise<FeedbackScreenshotSweep | null> {
+  try {
+    return await sweepAbandonedFeedbackScreenshots(db);
+  } catch (error) {
+    logger.error(
+      { error: error instanceof Error ? error.message : String(error) },
+      'Abandoned feedback screenshot sweep failed',
+    );
+    return null;
+  }
 }
 
 const BATCH_SIZE = 50;
@@ -162,6 +180,7 @@ export async function GET(request: NextRequest) {
   try {
     const db = getNeonDb();
     const multipart = await sweepOrphanedMultipartUploads();
+    const feedbackScreenshots = await sweepFeedbackScreenshots(db);
 
     // The hold decides candidacy before any byte is touched: one that only
     // reached the DELETE would still have lost the file it preserved.
@@ -194,6 +213,7 @@ export async function GET(request: NextRequest) {
         purged: 0,
         heldFromPurge,
         multipart,
+        feedbackScreenshots,
       });
     }
 
@@ -208,6 +228,7 @@ export async function GET(request: NextRequest) {
         ...tally,
         heldFromPurge,
         multipart,
+        feedbackScreenshots,
       },
       heldFromPurge > 0
         ? 'Purged expired soft-deleted media assets; some were preserved by an active legal hold and will be purged once it is released'
@@ -223,6 +244,7 @@ export async function GET(request: NextRequest) {
       derivedRecordsPurged: tally.derivedRecordsPurged,
       heldFromPurge,
       multipart,
+      feedbackScreenshots,
     });
   } catch (error) {
     logger.error(

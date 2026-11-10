@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   deleteStoredMediaObjects: vi.fn(),
   purgeDerivedRecords: vi.fn(),
+  sweepFeedbackScreenshots: vi.fn(),
   store: {
     current: null as ReturnType<typeof createMemoryObjectStore> | null,
     clock: { now: 0 },
@@ -46,6 +47,9 @@ vi.mock('@/lib/resources/purge-soft-deleted', () => ({
 vi.mock('@/lib/server/media-storage', () => ({
   deleteStoredMediaObjects: mocks.deleteStoredMediaObjects,
 }));
+vi.mock('@/lib/server/feedback-screenshot-cleanup', () => ({
+  sweepAbandonedFeedbackScreenshots: mocks.sweepFeedbackScreenshots,
+}));
 vi.mock('@/lib/server/object-storage-runtime', () => ({
   getObjectStore: () => mocks.store.current,
   objectStorageConfig: () => mocks.config.current,
@@ -77,6 +81,7 @@ beforeEach(() => {
   mocks.query.mockResolvedValue([]);
   mocks.deleteStoredMediaObjects.mockResolvedValue({ deleted: 0, failedPathnames: [] });
   mocks.purgeDerivedRecords.mockResolvedValue(0);
+  mocks.sweepFeedbackScreenshots.mockResolvedValue({ swept: 0, failed: 0, remaining: false });
   mocks.store.clock.now = Date.now();
   mocks.store.current = createMemoryObjectStore({ now: () => mocks.store.clock.now });
 });
@@ -129,6 +134,33 @@ describe('purge-deleted-media orphan multipart sweep', () => {
 
     expect(response.status).toBe(401);
     expect(mocks.query).not.toHaveBeenCalled();
+  });
+});
+
+describe('purge-deleted-media feedback screenshot sweep', () => {
+  it('sweeps abandoned feedback screenshots and reports the result', async () => {
+    mocks.sweepFeedbackScreenshots.mockResolvedValue({ swept: 3, failed: 1, remaining: true });
+
+    const body = await (await GET(request())).json();
+
+    expect(mocks.sweepFeedbackScreenshots).toHaveBeenCalledTimes(1);
+    expect(body.feedbackScreenshots).toEqual({ swept: 3, failed: 1, remaining: true });
+  });
+
+  it('still purges deleted media when the screenshot sweep fails', async () => {
+    mocks.sweepFeedbackScreenshots.mockRejectedValue(new Error('relation does not exist'));
+
+    const response = await GET(request());
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      message: 'No expired media to purge',
+      feedbackScreenshots: null,
+    });
+    expect(logger.error).toHaveBeenCalledWith(
+      { error: 'relation does not exist' },
+      'Abandoned feedback screenshot sweep failed',
+    );
   });
 });
 

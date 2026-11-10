@@ -653,6 +653,40 @@ describe('eraseUserAccountData', () => {
     expect(report.complete).toBe(false);
   });
 
+  it('finds an unregistered screenshot through its cleanup record as well as through a report', async () => {
+    primeDb({ feedbackScreenshotKeys: ['feedback/user-1/3_orphan.png'] });
+
+    await eraseUserAccountData('user-1');
+
+    const lookup = mocks.query.mock.calls
+      .map((call) => String(call[0]).replace(/\s+/gu, ' '))
+      .find((sql) => sql.includes("metadata->>'screenshot_key'"));
+    expect(lookup).toContain('union select storage_key as screenshot_key');
+    expect(lookup).toContain('from public.feedback_screenshot_cleanups where user_id = $1');
+    expect(mocks.deletePrivateObject).toHaveBeenCalledWith('feedback/user-1/3_orphan.png');
+    expect(executedStatements()).toContain(
+      'delete from public.feedback_screenshot_cleanups where user_id = $1',
+    );
+  });
+
+  it('keeps the cleanup records while a screenshot is still stored, so the next run finds it', async () => {
+    primeDb({ feedbackScreenshotKeys: ['feedback/user-1/3_orphan.png'] });
+    mocks.deletePrivateObject.mockRejectedValueOnce(new Error('storage unavailable'));
+
+    const report = await eraseUserAccountData('user-1');
+
+    expect(report.tables['feedback_screenshot_cleanups']).toEqual({
+      deleted: false,
+      retainedForRetry: true,
+    });
+    expect(
+      executedStatements().some((sql) =>
+        sql.includes('delete from public.feedback_screenshot_cleanups'),
+      ),
+    ).toBe(false);
+    expect(report.complete).toBe(false);
+  });
+
   it('erases every listed table, anonymizes shared rows, and removes the profile last', async () => {
     primeDb({
       knowledgeRows: [{ storage_uri: 'knowledge/doc.pdf' }],
@@ -1232,6 +1266,9 @@ describe('POST /api/auth/device/refresh', () => {
     deletionScheduledFor: string | null;
   }): void {
     mocks.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('insert into public.device_refresh_token_families (family_id, user_id)')) {
+        return [{ family_id: 'family-1', revoked_at: null }];
+      }
       if (sql.includes('FROM device_refresh_tokens')) {
         return [
           {
