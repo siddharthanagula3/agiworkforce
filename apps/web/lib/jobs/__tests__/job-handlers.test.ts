@@ -143,7 +143,35 @@ describe('notifications.schedule-completed', () => {
     );
     expect(mocks.notifyScheduleCompleted).toHaveBeenCalledWith(db, expect.anything(), {
       email: false,
+      preferences: { push: true, email: true, email_address: 'user@example.test' },
     });
+  });
+
+  it('retries instead of settling when the preferences cannot be read', async () => {
+    mocks.loadSchedulePreferences.mockRejectedValue(new Error('db down'));
+
+    const failure = await handler(context(notice)).catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(Error);
+    expect(failure).not.toBeInstanceOf(PermanentJobError);
+    expect(mocks.enqueueJob).not.toHaveBeenCalled();
+    expect(mocks.notifyScheduleCompleted).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['awaiting_approval', 'agent_approval_needed'],
+    ['failed', 'agent_failed'],
+    ['success', undefined],
+  ] as const)('judges the %s email against quiet hours as %s', async (status, expected) => {
+    mocks.loadSchedulePreferences.mockResolvedValue({
+      push: true,
+      email: true,
+      email_address: 'user@example.test',
+    });
+
+    await handler(context({ ...notice, status }));
+
+    expect(mocks.quietHoursEndFor).toHaveBeenCalledWith(db, 'user-1', expect.any(Date), expected);
   });
 
   it('queues no email for an account that did not ask for one', async () => {
@@ -190,6 +218,16 @@ describe('email.schedule-completed', () => {
     expect(mocks.sendScheduleCompletionEmail).not.toHaveBeenCalled();
   });
 
+  it('retries instead of recording an opt-out when the preferences cannot be read', async () => {
+    mocks.loadSchedulePreferences.mockRejectedValue(new Error('db down'));
+
+    const failure = await handler(context(notice)).catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(Error);
+    expect(failure).not.toBeInstanceOf(PermanentJobError);
+    expect(mocks.sendScheduleCompletionEmail).not.toHaveBeenCalled();
+  });
+
   it('defers again when quiet hours changed after the original email was queued', async () => {
     const until = new Date('2026-10-17T13:00:00.000Z');
     mocks.quietHoursEndFor.mockResolvedValue(until);
@@ -203,6 +241,22 @@ describe('email.schedule-completed', () => {
       }),
     );
     expect(mocks.sendScheduleCompletionEmail).not.toHaveBeenCalled();
+  });
+
+  it('re-checks quiet hours at send time against the notice status', async () => {
+    mocks.sendScheduleCompletionEmail.mockResolvedValue({
+      delivered: true,
+      providerMessageId: 'm',
+    });
+
+    await handler(context({ ...notice, status: 'timeout' }));
+
+    expect(mocks.quietHoursEndFor).toHaveBeenCalledWith(
+      db,
+      'user-1',
+      expect.any(Date),
+      'agent_failed',
+    );
   });
 
   it('keeps provider idempotency tied to the run, not the deferred queue attempt', async () => {

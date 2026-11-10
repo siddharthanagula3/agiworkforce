@@ -281,6 +281,63 @@ function devicePreferences(overrides: Record<string, unknown> = {}) {
   };
 }
 
+describe('sendPushToUser, quiet hours', () => {
+  const noon = new Date('2026-09-29T12:00:00Z');
+  const quietPreferences = {
+    quietHours: {
+      enabled: true,
+      days: [0, 1, 2, 3, 4, 5, 6],
+      startTime: '11:00',
+      endTime: '13:00',
+      timezone: 'UTC',
+    },
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(noon);
+    mocks.query.mockImplementation(async (sql: string) =>
+      String(sql).includes('user_settings')
+        ? [{ preferences: quietPreferences }]
+        : [{ push_token: TOKEN_A, push_preferences: null }],
+    );
+    expoReturns([{ status: 'ok' }]);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('holds a routine notice inside the account quiet hours', async () => {
+    const result = await sendPushToUser('user-1', {
+      title: 'Done',
+      body: 'x',
+      data: { type: 'schedule_run' },
+    });
+
+    expect(result.sent).toBe(0);
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+
+  it('delivers a notice whose quiet-hours type is urgent although its routing type is not', async () => {
+    const result = await sendPushToUser('user-1', {
+      title: 'Needs you',
+      body: 'x',
+      data: { type: 'schedule_run' },
+      quietHoursType: 'agent_approval_needed',
+    });
+
+    expect(result.sent).toBe(1);
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('applies the quiet-hours type to the device preference as well', () => {
+    const deviceQuiet = devicePreferences({ eventTypes: {}, ...quietPreferences });
+    expect(deviceAcceptsNotice(deviceQuiet, 'schedule_run', noon)).toBe(false);
+    expect(deviceAcceptsNotice(deviceQuiet, 'schedule_run', noon, 'agent_failed')).toBe(true);
+  });
+});
+
 describe('device push preferences', () => {
   const noon = new Date('2026-09-29T12:00:00Z');
 

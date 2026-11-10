@@ -23,6 +23,7 @@ import {
   loadSchedulePreferences,
   notifyScheduleCompleted,
   scheduleNoticeKey,
+  scheduleQuietHoursType,
 } from '@/lib/services/schedule-notification-service';
 import { quietHoursEndFor } from '@/lib/services/quiet-hours-service';
 import { fireEventTriggerJob } from '@/lib/triggers/trigger-fire';
@@ -101,7 +102,12 @@ async function announceScheduleCompletion(
   const preferences = await loadSchedulePreferences(scopedDb, userId, notice);
   let emailQueued = false;
   if (preferences.email && preferences.email_address) {
-    const heldUntil = await quietHoursEndFor(scopedDb, userId);
+    const heldUntil = await quietHoursEndFor(
+      scopedDb,
+      userId,
+      new Date(),
+      scheduleQuietHoursType(notice.status),
+    );
     await enqueueJob(context.db, {
       kind: 'email.schedule-completed',
       userId,
@@ -116,7 +122,7 @@ async function announceScheduleCompletion(
   const delivered = await notifyScheduleCompleted(
     scopedDb,
     { userId, ...notice },
-    { email: false },
+    { email: false, preferences },
   );
   await queueDeveloperWebhookEvent(
     scopedDb,
@@ -151,7 +157,12 @@ async function sendScheduleCompletionEmailJob(
   const preferences = await loadSchedulePreferences(scopedDb, userId, notice);
   if (!preferences.email || !preferences.email_address) return { skipped: 'opted_out' };
 
-  const heldUntil = await quietHoursEndFor(scopedDb, userId);
+  const heldUntil = await quietHoursEndFor(
+    scopedDb,
+    userId,
+    new Date(),
+    scheduleQuietHoursType(notice.status),
+  );
   if (heldUntil) {
     await enqueueJob(context.db, {
       kind: 'email.schedule-completed',

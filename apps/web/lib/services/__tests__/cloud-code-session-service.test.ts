@@ -72,6 +72,7 @@ import {
   CLOUD_CODE_RUN_LEASE_SECONDS,
   CloudCodeConflictError,
   CloudCodeLimitError,
+  CloudCodeUnavailableError,
   CloudCodeValidationError,
   claimCloudCodeSessionForRun,
   classifyGitFailure,
@@ -80,6 +81,7 @@ import {
   commitFileAndPushCloudCodeSession,
   createCloudCodeSession,
   getCloudCodeSession,
+  listCloudCodeNotebookFiles,
   releaseCloudCodeSessionAfterRun,
   runCloudCodeCommand,
   validateCreateCloudCodeSession,
@@ -1700,5 +1702,51 @@ describe('the branch a repository session works on', () => {
     for (const [output, kind] of cases) {
       expect(classifyGitFailure(output), output).toBe(kind);
     }
+  });
+});
+
+describe('listCloudCodeNotebookFiles', () => {
+  async function sessionWithFiles(listFiles: () => Promise<unknown>) {
+    vi.mocked(getE2BExecutor).mockResolvedValue({
+      listFiles: vi.fn(listFiles),
+      runCommand: vi.fn(async () => ({ ok: true, stdout: '', stderr: '', exitCode: 0 })),
+      pause: vi.fn(async () => {}),
+      dispose: vi.fn(async () => {}),
+    } as unknown as Awaited<ReturnType<typeof getE2BExecutor>>);
+    const db = createFakeDb();
+    const { session } = await createCloudCodeSession(db, OWNER, createInput(0), PLAN_TIER);
+    return { db, sessionId: session.id };
+  }
+
+  it('reports an unavailable provider listing instead of an empty inventory, and frees the session', async () => {
+    const { db, sessionId } = await sessionWithFiles(async () => null);
+
+    await expect(
+      listCloudCodeNotebookFiles(db, OWNER, sessionId, PLAN_TIER),
+    ).rejects.toBeInstanceOf(CloudCodeUnavailableError);
+
+    const session = await getCloudCodeSession(db, OWNER, sessionId);
+    expect(session.state).toBe('ready');
+  });
+
+  it('lists a genuinely empty workspace as no files', async () => {
+    const { db, sessionId } = await sessionWithFiles(async () => []);
+
+    const result = await listCloudCodeNotebookFiles(db, OWNER, sessionId, PLAN_TIER);
+
+    expect(result.files).toEqual([]);
+  });
+
+  it('lists files relative to the workspace and leaves directories out', async () => {
+    const { db, sessionId } = await sessionWithFiles(async () => [
+      { path: '/home/user/data.csv', name: 'data.csv', isDir: false, byteSize: 4 },
+      { path: '/home/user/sub', name: 'sub', isDir: true, byteSize: 0 },
+    ]);
+
+    const result = await listCloudCodeNotebookFiles(db, OWNER, sessionId, PLAN_TIER);
+
+    expect(result.files).toEqual([
+      { path: 'data.csv', name: 'data.csv', isDir: false, byteSize: 4 },
+    ]);
   });
 });

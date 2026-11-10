@@ -10,8 +10,13 @@ import { e2bProvisioningReady } from '@/lib/e2b/gate';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
+  CloudCodeConflictError,
+  CloudCodeNotFoundError,
+  CloudCodeUnavailableError,
+  CloudCodeValidationError,
   getCloudCodeSession,
   runCloudCodeNotebookCell,
+  validateNotebookCell,
 } from '@/lib/services/cloud-code-session-service';
 import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
 import { isManagedComputePrivateBetaEnabled } from '@/lib/managed-compute-gate';
@@ -27,6 +32,8 @@ export const runtime = 'nodejs';
 export const maxDuration = 600;
 
 const MAX_CELLS_PER_RUN = 100;
+const UNCONFIRMED_CELL_ERROR =
+  'The execution result could not be confirmed. Code may have run. Check the sandbox state before running it again.';
 
 type RouteContext = { params: Promise<{ sessionId: string }> };
 
@@ -41,6 +48,30 @@ interface RunAllCellResult {
   ok: boolean;
   outputs: NotebookCellOutput[];
   error?: string;
+}
+
+function interruptedCellMessage(error: unknown): string {
+  if (
+    error instanceof CloudCodeConflictError ||
+    error instanceof CloudCodeNotFoundError ||
+    error instanceof CloudCodeUnavailableError
+  ) {
+    return error.message;
+  }
+  return UNCONFIRMED_CELL_ERROR;
+}
+
+function assertCellsRunnable(cells: RunAllCell[]): void {
+  cells.forEach((cell, index) => {
+    try {
+      validateNotebookCell(cell);
+    } catch (error) {
+      if (error instanceof CloudCodeValidationError) {
+        throw new CloudCodeValidationError(`Cell ${index + 1}: ${error.message}`);
+      }
+      throw error;
+    }
+  });
 }
 
 async function requestObject(request: NextRequest): Promise<Record<string, unknown>> {
@@ -114,6 +145,7 @@ async function handleRunAll(request: NextRequest, context: RouteContext) {
   const runId = randomUUID();
 
   try {
+    assertCellsRunnable(cells);
     const owner = { userId, organizationId };
     const session = await getCloudCodeSession(db, owner, sessionId);
     const networkAccess = requireNotebookNetworkPolicy(
@@ -125,13 +157,37 @@ async function handleRunAll(request: NextRequest, context: RouteContext) {
     let latestSession = session;
     for (const [cellIndex, cell] of cells.entries()) {
       const startedAt = new Date().toISOString();
-      const outcome = await runCloudCodeNotebookCell(
-        db,
-        owner,
-        sessionId,
-        { code: cell.code, language: cell.language },
-        planTier,
-      );
+      let outcome: Awaited<ReturnType<typeof runCloudCodeNotebookCell>>;
+      try {
+        outcome = await runCloudCodeNotebookCell(
+          db,
+          owner,
+          sessionId,
+          { code: cell.code, language: cell.language },
+          planTier,
+        );
+      } catch (error) {
+        if (results.length === 0) throw error;
+        const message = interruptedCellMessage(error);
+        await recordNotebookRun(db, {
+          userId,
+          organizationId,
+          sessionId,
+          runId,
+          cellId: cell.id,
+          cellIndex,
+          language: cell.language,
+          code: cell.code,
+          networkAccess,
+          fromTop,
+          ok: false,
+          error: message,
+          startedAt,
+        });
+        results.push({ cellId: cell.id, ok: false, outputs: [], error: message });
+        latestSession = await getCloudCodeSession(db, owner, sessionId).catch(() => latestSession);
+        break;
+      }
       latestSession = outcome.session;
       await recordNotebookRun(db, {
         userId,

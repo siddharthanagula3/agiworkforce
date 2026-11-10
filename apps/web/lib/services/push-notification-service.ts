@@ -20,6 +20,7 @@ export interface PushMessage {
   title: string;
   body: string;
   data?: Record<string, string>;
+  quietHoursType?: string;
 }
 
 export interface PushDeliveryResult {
@@ -50,12 +51,13 @@ export function deviceAcceptsNotice(
   preferences: unknown,
   notificationType: string | undefined,
   now: Date,
+  quietHoursType: string | undefined = notificationType,
 ): boolean {
   if (preferences === null || preferences === undefined) return true;
   const parsed = MobilePushPreferencesSchema.safeParse(preferences);
   if (!parsed.success) return true;
   if (!mobilePushWantsEvent(parsed.data, notificationType)) return false;
-  if (isQuietHoursExemptNotification(notificationType)) return true;
+  if (isQuietHoursExemptNotification(quietHoursType)) return true;
   const { quietHours } = normalizeTimeFocusPreferences(
     { quietHours: parsed.data.quietHours },
     parsed.data.timezone,
@@ -67,6 +69,7 @@ export async function getPushTokensForUser(
   userId: string,
   notificationType?: string,
   now: Date = new Date(),
+  quietHoursType: string | undefined = notificationType,
 ): Promise<string[]> {
   const rows = await getNeonDb().query<{ push_token: string; push_preferences: unknown }>(
     `select push_token, push_preferences
@@ -77,7 +80,9 @@ export async function getPushTokensForUser(
     [userId],
   );
   return rows
-    .filter((row) => deviceAcceptsNotice(row.push_preferences, notificationType, now))
+    .filter((row) =>
+      deviceAcceptsNotice(row.push_preferences, notificationType, now, quietHoursType),
+    )
     .map((row) => row.push_token)
     .filter(isExpoPushToken);
 }
@@ -102,7 +107,12 @@ async function sendExpoPushToUser(
 ): Promise<PushDeliveryResult> {
   let tokens: string[];
   try {
-    tokens = await getPushTokensForUser(userId, message.data?.['type']);
+    tokens = await getPushTokensForUser(
+      userId,
+      message.data?.['type'],
+      new Date(),
+      message.quietHoursType,
+    );
   } catch (error) {
     logger.warn({ error, userId }, '[push] could not load device tokens');
     return { sent: 0, invalidated: 0, error: 'token_lookup_failed' };
@@ -217,7 +227,8 @@ export async function sendPushToUser(
   transports: PushTransports = {},
 ): Promise<PushDeliveryResult> {
   const { expo: toExpo = true, web: toWeb = true } = transports;
-  if ((toExpo || toWeb) && (await heldByQuietHours(getNeonDb(), userId, message.data?.['type']))) {
+  const quietHoursType = message.quietHoursType ?? message.data?.['type'];
+  if ((toExpo || toWeb) && (await heldByQuietHours(getNeonDb(), userId, quietHoursType))) {
     return NO_DELIVERY;
   }
   const [expo, web] = await Promise.all([

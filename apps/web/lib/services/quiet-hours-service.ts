@@ -35,7 +35,9 @@ export async function quietHoursEndFor(
   db: Pick<DatabaseAdapter, 'query'>,
   userId: string,
   now: Date = new Date(),
+  notificationType?: unknown,
 ): Promise<Date | null> {
+  if (isQuietHoursExemptNotification(notificationType)) return null;
   const quietHours = await readQuietHours(db, userId);
   return quietHours ? quietHoursEndAt(now, quietHours) : null;
 }

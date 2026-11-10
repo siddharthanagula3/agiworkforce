@@ -1646,7 +1646,10 @@ export const runCloudCodeCommand = tracedCodeAction(
   },
 );
 
-function validateNotebookCell(value: unknown): { code: string; language: NotebookCellLanguage } {
+export function validateNotebookCell(value: unknown): {
+  code: string;
+  language: NotebookCellLanguage;
+} {
   const record =
     typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
   const code = typeof record['code'] === 'string' ? record['code'] : '';
@@ -1887,8 +1890,9 @@ export async function listCloudCodeNotebookFiles(
     const entries = await executor.listFiles(claim.session.workspacePath);
     const released = await releaseCloudCodeSessionAfterRun(db, owner, sessionId, claim.leaseToken);
     if (!released) throw new CloudCodeNotFoundError();
+    if (!entries) throw new CloudCodeUnavailableError('Sandbox files are unavailable. Try again.');
     const workspacePrefix = `${claim.session.workspacePath.replace(/\/+$/, '')}/`;
-    const files = (entries ?? [])
+    const files = entries
       .filter((entry) => !entry.isDir)
       .map((entry) => ({
         path: entry.path.startsWith(workspacePrefix)

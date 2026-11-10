@@ -48,6 +48,22 @@ describe('quiet-hours delivery boundary', () => {
     expect(query).toHaveBeenCalledTimes(1);
   });
 
+  it('never delays an urgent notice and does not read preferences for it', async () => {
+    const { db, query } = database();
+    expect(
+      await quietHoursEndFor(
+        db,
+        'owner',
+        new Date('2026-03-08T06:30:00Z'),
+        'agent_approval_needed',
+      ),
+    ).toBeNull();
+    expect(
+      await quietHoursEndFor(db, 'owner', new Date('2026-03-08T06:30:00Z'), 'agent_failed'),
+    ).toBeNull();
+    expect(query).not.toHaveBeenCalled();
+  });
+
   it('keeps urgent failures exempt without reading preferences', async () => {
     const { db, query } = database();
     expect(await heldByQuietHours(db, 'owner', 'agent_failed', new Date('2026-03-08T06:30Z'))).toBe(
