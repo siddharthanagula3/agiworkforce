@@ -95,4 +95,50 @@ describe('push-token account lifecycle', () => {
     expect(accountA?.isCurrent()).toBe(false);
     expect(accountA?.signal.aborted).toBe(true);
   });
+
+  it('lets the same account register again after a session whose credential was never captured', async () => {
+    await expect(beginPushTokenAccountSession('account-a', async () => null)).resolves.toBeNull();
+
+    await expect(clearPushTokenAccountSession()).resolves.toBeUndefined();
+    expect(mockUnregisterPushToken).not.toHaveBeenCalled();
+
+    const again = await beginPushTokenAccountSession('account-a', async () => 'jwt-a');
+    expect(again?.ownerId).toBe('account-a');
+    expect(again?.isCurrent()).toBe(true);
+  });
+
+  it('does not block the next account behind a session whose credential mint failed', async () => {
+    await beginPushTokenAccountSession('account-a', async () => {
+      throw new Error('mint failed');
+    });
+
+    const accountB = await beginPushTokenAccountSession('account-b', async () => 'jwt-b');
+
+    expect(mockUnregisterPushToken).not.toHaveBeenCalled();
+    expect(accountB?.ownerId).toBe('account-b');
+  });
+
+  it('cleans up a registered session with its credential when a same-account rebind could not capture one', async () => {
+    const registered = await beginPushTokenAccountSession('account-a', async () => 'jwt-a0');
+    expect(registered).not.toBeNull();
+    await expect(beginPushTokenAccountSession('account-a', async () => null)).resolves.toBeNull();
+
+    await clearPushTokenAccountSession();
+
+    expect(mockUnregisterPushToken).toHaveBeenCalledTimes(1);
+    expect(mockUnregisterPushToken).toHaveBeenCalledWith('jwt-a0');
+  });
+
+  it('keeps a failed DELETE at the head and retries it before the next account registers', async () => {
+    await beginPushTokenAccountSession('account-a', async () => 'jwt-a');
+    mockUnregisterPushToken.mockRejectedValueOnce(new Error('offline'));
+
+    await expect(clearPushTokenAccountSession()).rejects.toThrow('offline');
+
+    const accountB = await beginPushTokenAccountSession('account-b', async () => 'jwt-b');
+
+    expect(mockUnregisterPushToken).toHaveBeenCalledTimes(2);
+    expect(mockUnregisterPushToken).toHaveBeenLastCalledWith('jwt-a');
+    expect(accountB?.ownerId).toBe('account-b');
+  });
 });

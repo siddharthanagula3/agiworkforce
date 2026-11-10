@@ -21,6 +21,8 @@ const MAX_FORGET_MATCHES = 25;
 const MEMORY_STEP_ID = 'memory-command';
 const MEMORY_OFF_MESSAGE = 'Memory is turned off in your settings.';
 const MEMORY_UNAVAILABLE_MESSAGE = 'Memory did not answer, so nothing was changed.';
+const MEMORY_UNKNOWN_OUTCOME_MESSAGE =
+  'Memory did not answer, so it is not known whether anything changed. Check Memory in Settings.';
 const NOTHING_FORGOTTEN_MESSAGE = 'Nothing was forgotten.';
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CHANGED_STATUSES: ReadonlySet<MemoryCommandStatus> = new Set([
@@ -67,6 +69,33 @@ interface CloudMemoryCommandResponse {
   memories?: MemoryCommandMatch[];
 }
 
+class LocalForgetInterruptedError extends Error {
+  constructor(
+    readonly removed: MemoryCommandMatch[],
+    readonly unresolvedCount: number,
+  ) {
+    super('Local memory stopped answering partway through a forget command.');
+    this.name = 'LocalForgetInterruptedError';
+  }
+}
+
+function interruptedForgetMessage(error: LocalForgetInterruptedError): string {
+  const forgotten = error.removed.map((memory) => `"${memory.content}"`).join(', ');
+  const rest =
+    error.unresolvedCount === 1 ? '1 other memory' : `${error.unresolvedCount} other memories`;
+  return `Forgot ${forgotten}, then memory stopped answering, so ${rest} may still be saved.`;
+}
+
+function memoryFailureMessage(error: unknown, input: MemoryCommandInput): string {
+  if (error instanceof LocalForgetInterruptedError) return interruptedForgetMessage(error);
+  if (error instanceof ApiHttpError && error.message) return error.message;
+  const command = parseExplicitMemoryCommand(input.message);
+  const mayHaveChanged = command?.kind === 'remember' || input.confirmed === true;
+  return input.executionMode === 'cloud' && mayHaveChanged
+    ? MEMORY_UNKNOWN_OUTCOME_MESSAGE
+    : MEMORY_UNAVAILABLE_MESSAGE;
+}
+
 export function hasMemoryCommand(message: string): boolean {
   return parseExplicitMemoryCommand(message) !== null;
 }
@@ -103,11 +132,16 @@ function localMemoryPorts(memoryEnabled: boolean): ExplicitMemoryPorts {
     },
     remove: async (ids) => {
       const removed: MemoryCommandMatch[] = [];
-      for (const id of ids) {
-        const row = await getMemoryFact(id);
-        if (!row) continue;
-        await deleteMemoryFact(id);
-        removed.push({ id, content: row.fact });
+      for (const [index, id] of ids.entries()) {
+        try {
+          const row = await getMemoryFact(id);
+          if (!row) continue;
+          await deleteMemoryFact(id);
+          removed.push({ id, content: row.fact });
+        } catch (error) {
+          if (removed.length === 0) throw error;
+          throw new LocalForgetInterruptedError(removed, ids.length - index);
+        }
       }
       return removed;
     },
@@ -195,12 +229,7 @@ export async function answerMemoryCommand(
   try {
     reply = await runMemoryCommand(input);
   } catch (error) {
-    report(
-      memoryStep(
-        error instanceof ApiHttpError && error.message ? error.message : MEMORY_UNAVAILABLE_MESSAGE,
-        true,
-      ),
-    );
+    report(memoryStep(memoryFailureMessage(error, input), true));
     const command = parseExplicitMemoryCommand(input.message);
     return command ? { kind: command.kind, status: 'failed' } : null;
   }
