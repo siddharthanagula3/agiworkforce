@@ -11366,6 +11366,7 @@ dependencies = [
  "tokio",
  "tray-icon",
  "url",
+ "uuid",
  "webkit2gtk",
  "webview2-com",
  "window-vibrancy",
@@ -11782,12 +11783,14 @@ version = "2.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "362ab21cd4cc713f2a02b1a9b5688198b1541cfb6907c4281e9190e0f0ef4aa3"
 dependencies = [
+ "aes-gcm",
  "anyhow",
  "brotli",
  "cargo_metadata",
  "ctor 1.0.13",
  "dom_query",
  "dunce",
+ "getrandom 0.3.4",
  "glob",
  "http 1.5.0",
  "infer",
@@ -11805,6 +11808,7 @@ dependencies = [
  "serde-untagged",
  "serde_json",
  "serde_with",
+ "serialize-to-javascript",
  "swift-rs",
  "thiserror 2.0.21",
  "toml 1.1.8+spec-1.1.0",
