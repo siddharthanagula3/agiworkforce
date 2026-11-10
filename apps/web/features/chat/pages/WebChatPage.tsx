@@ -6,6 +6,7 @@ import { StudyModeIndicator } from '@/features/study/components/StudyModeIndicat
 import { useConversationStudySession } from '@/features/study/hooks/use-conversation-study-session';
 import { retryableUserMessageId } from '@/features/chat/lib/retryable-turn';
 import { CHAT_OUTPUT_FORMAT_LABEL, type ChatOutputFormat } from '@/lib/chat-output-format';
+import { isKeepableChatMessage } from '@/lib/chat-kept-messages';
 import { clientProvisionalTitle } from '@/lib/chat-title';
 import { readPersistedRouteLane, readRouteLane } from '@/features/chat/lib/routeLane';
 import { putActiveLeafMessageId } from '@/features/chat/lib/activeLeafSelection';
@@ -4722,7 +4723,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             (message) =>
               (message.role === 'user' || message.role === 'assistant') &&
               !message.isStreaming &&
-              message.content.trim().length > 0,
+              isKeepableChatMessage(message),
           );
       if (keptMessages.length === 0) {
         return updateConversation(conversationId, { isTemporary });

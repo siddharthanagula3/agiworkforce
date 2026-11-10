@@ -246,6 +246,44 @@ describe('POST /api/chat/conversations/[id]/keep', () => {
     );
   });
 
+  it('keeps a completed generated image whose text is empty, in order, with its metadata', async () => {
+    const imageMetadata = {
+      toolType: 'image-generation',
+      imageUrl: 'https://cdn.example/a.png',
+      imageGenPrompt: 'a cat',
+    };
+    mocks.txQuery.mockReset();
+    mocks.txQuery
+      .mockResolvedValueOnce([{ id: USER_MESSAGE, role: 'user', content: 'a cat', metadata: {} }])
+      .mockResolvedValueOnce([
+        { id: ASSISTANT_MESSAGE, role: 'assistant', content: '​', metadata: imageMetadata },
+      ]);
+
+    const response = await call({
+      messages: [
+        { id: USER_MESSAGE, role: 'user', content: 'a cat' },
+        { id: ASSISTANT_MESSAGE, role: 'assistant', content: '', metadata: imageMetadata },
+        { role: 'assistant', content: '', metadata: { toolType: 'image-generation' } },
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ kept: 2, keptFiles: 2 });
+    expect(mocks.assertFreeDailyAllowance).toHaveBeenCalledWith(
+      expect.objectContaining({ requested: { message_writes: 2 } }),
+    );
+    expect(mocks.txQuery.mock.calls[1]?.[1]).toEqual([
+      ASSISTANT_MESSAGE,
+      CONVERSATION,
+      'assistant',
+      '​',
+      null,
+      JSON.stringify(imageMetadata),
+      USER_MESSAGE,
+    ]);
+    expect(mocks.setActiveLeaf).toHaveBeenCalledWith(tx, expect.anything(), ASSISTANT_MESSAGE);
+  });
+
   it('keeps files the saved messages attach even when the upload carried no conversation', async () => {
     const attached = 'b1c2d3e4-f5a6-4b7c-8d9e-0f1a2b3c4d5e';
     await call({

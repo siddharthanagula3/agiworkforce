@@ -11,6 +11,7 @@ import {
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
+import { isKeepableChatMessage, keptMessageContent } from '@/lib/chat-kept-messages';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { normalizeMessageMetadata, type ChatMessageRow } from '@/lib/server/neon-chat';
@@ -69,7 +70,7 @@ async function handleKeepTemporaryChat(request: NextRequest, context: RouteConte
   const parsed = KeepTemporaryChatSchema.safeParse(rawBody);
   if (!parsed.success) throw createError.validation('Invalid request body', parsed.error);
 
-  const messages = parsed.data.messages.filter((message) => message.content.trim().length > 0);
+  const messages = parsed.data.messages.filter(isKeepableChatMessage);
   const { db, userId, organizationId } = await getUserScopedDb(request);
   const scope = { conversationId, userId, organizationId };
 
@@ -118,7 +119,7 @@ async function handleKeepTemporaryChat(request: NextRequest, context: RouteConte
           message.id ?? null,
           conversationId,
           message.role,
-          message.content.trim(),
+          keptMessageContent(message),
           message.role === 'assistant' ? (message.model ?? null) : null,
           JSON.stringify(normalizeMessageMetadata(message.metadata) ?? {}),
           parentId,
