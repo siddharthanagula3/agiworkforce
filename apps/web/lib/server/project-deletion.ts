@@ -28,21 +28,18 @@ export async function retireProjectKnowledgeFile(
 ): Promise<boolean> {
   const held = projectContentHoldPredicate('project_file', { project: 'p.id', nextParamIndex: 5 });
   const unheld = { ...held, sql: `not ${held.sql}` };
-  const owned = `f.project_id=$1 and p.user_id=$2
-    and p.organization_id is not distinct from $3::uuid and f.id=$4
-    and p.deleted_at is null and p.is_archived=false`;
   const params = [scope.projectId, scope.userId, scope.organizationId, scope.fileId];
   const [removed] = await db.query<{ id: string }>(
     `update project_knowledge_files f set deleted_at=now(), updated_at=now()
        from user_projects p
-      where p.id=f.project_id and ${owned} and f.deleted_at is null and ${unheld.sql}
+      where p.id=f.project_id and f.project_id=$1 and p.user_id=$2 and p.organization_id is not distinct from $3::uuid and f.id=$4 and p.deleted_at is null and p.is_archived=false and f.deleted_at is null and ${unheld.sql}
     returning f.id`,
     [...params, ...unheld.params],
   );
   if (removed) return true;
   const [current] = await db.query<{ deleted_at: string | null; held: boolean }>(
     `select f.deleted_at, ${held.sql} as held from project_knowledge_files f
-       join user_projects p on p.id=f.project_id where ${owned} limit 1`,
+       join user_projects p on p.id=f.project_id where f.project_id=$1 and p.user_id=$2 and p.organization_id is not distinct from $3::uuid and f.id=$4 and p.deleted_at is null and p.is_archived=false limit 1`,
     [...params, ...held.params],
   );
   if (current?.deleted_at != null) return true;
@@ -66,11 +63,9 @@ export async function assertProjectContentUnheld(
   if (parent) throw new ProjectContentHeldError('project', parent.id);
   const held = projectContentHoldPredicate('project_file', { project: 'p.id', nextParamIndex: 4 });
   const params = [scope.projectId, scope.userId, scope.organizationId];
-  const owned = `k.project_id=$1::uuid and p.id=k.project_id and p.user_id=$2
-    and p.organization_id is not distinct from $3::uuid`;
   const [preserved] = await tx.query<{ id: string }>(
     `select k.id from project_knowledge_files k join user_projects p on p.id=k.project_id
-      where ${owned} and k.deleted_at is null and ${held.sql} limit 1`,
+      where k.project_id=$1::uuid and p.id=k.project_id and p.user_id=$2 and p.organization_id is not distinct from $3::uuid and k.deleted_at is null and ${held.sql} limit 1`,
     [...params, ...held.params],
   );
   if (preserved) throw new ProjectContentHeldError('project_file', preserved.id);
@@ -84,17 +79,15 @@ export async function releaseDeletedProjectContents(
   const held = projectContentHoldPredicate('project_file', { project: 'p.id', nextParamIndex: 4 });
   const unheld = { ...held, sql: `not ${held.sql}` };
   const params = [scope.projectId, scope.userId, scope.organizationId];
-  const owned = `k.project_id=$1::uuid and p.id=k.project_id and p.user_id=$2
-    and p.organization_id is not distinct from $3::uuid`;
   await tx.execute(
     `update project_knowledge_files k set deleted_at=now(), updated_at=now()
-       from user_projects p where ${owned} and k.deleted_at is null and ${unheld.sql}`,
+       from user_projects p where k.project_id=$1::uuid and p.id=k.project_id and p.user_id=$2 and p.organization_id is not distinct from $3::uuid and k.deleted_at is null and ${unheld.sql}`,
     [...params, ...unheld.params],
   );
   const [remaining] = await tx.query<{ id: string; held: boolean }>(
     `select k.id, ${held.sql} as held from project_knowledge_files k
        join user_projects p on p.id=k.project_id
-      where ${owned} and k.deleted_at is null limit 1`,
+      where k.project_id=$1::uuid and p.id=k.project_id and p.user_id=$2 and p.organization_id is not distinct from $3::uuid and k.deleted_at is null limit 1`,
     [...params, ...held.params],
   );
   if (remaining?.held === true) throw new ProjectContentHeldError('project_file', remaining.id);
@@ -125,15 +118,14 @@ export async function retireOwnedProjectInTransaction(
   const held = projectContentHoldPredicate('project', { project: 'p.id', nextParamIndex: 4 });
   const unheld = { ...held, sql: `not ${held.sql}` };
   const params = [scope.projectId, scope.userId, scope.organizationId];
-  const owned = `p.id=$1 and p.user_id=$2 and p.organization_id is not distinct from $3::uuid`;
   const [removed] = await tx.query<{ id: string }>(
     `update user_projects p set deleted_at=now(), updated_at=now()
-        where ${owned} and p.deleted_at is null and ${unheld.sql} returning p.id`,
+        where p.id=$1 and p.user_id=$2 and p.organization_id is not distinct from $3::uuid and p.deleted_at is null and ${unheld.sql} returning p.id`,
     [...params, ...unheld.params],
   );
   if (!removed) {
     const [current] = await tx.query<{ deleted_at: string | null; held: boolean }>(
-      `select p.deleted_at, ${held.sql} as held from user_projects p where ${owned} limit 1`,
+      `select p.deleted_at, ${held.sql} as held from user_projects p where p.id=$1 and p.user_id=$2 and p.organization_id is not distinct from $3::uuid limit 1`,
       [...params, ...held.params],
     );
     if (!current) return false;

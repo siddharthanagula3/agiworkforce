@@ -1,3 +1,5 @@
+type ProjectMembershipModule = typeof import('@/lib/services/project-membership-service');
+type OrgSharingModule = typeof import('@/lib/services/org-sharing-service');
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NextRequest } from 'next/server';
 
@@ -21,12 +23,12 @@ vi.mock('@/lib/server/rls-db', () => ({
   })),
 }));
 vi.mock('@/lib/services/org-sharing-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/org-sharing-service')>()),
+  ...(await importOriginal<OrgSharingModule>()),
   resolveProjectWriteAccess: access,
   resolveSharedProjectScope: vi.fn(async () => null),
 }));
 vi.mock('@/lib/services/project-membership-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/project-membership-service')>()),
+  ...(await importOriginal<ProjectMembershipModule>()),
   replaceProjectConversationMembership: membership,
 }));
 vi.mock('@/lib/server/project-deletion', async (importOriginal) => ({

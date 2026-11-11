@@ -1,3 +1,4 @@
+type OriginalObjectStorageModule = typeof import('@/lib/server/object-storage');
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
@@ -23,7 +24,8 @@ vi.mock('@/lib/server/rls-db', () => ({
     organizationId: await mocks.resolveActiveOrganizationId(),
   }),
 }));
-vi.mock('@/lib/server/object-storage', () => ({
+vi.mock('@/lib/server/object-storage', async (importOriginal) => ({
+  ...(await importOriginal<OriginalObjectStorageModule>()),
   createPrivateObjectWriter: vi.fn(),
   createObjectCleanupPlan: () => ({
     targets: { private: 'fixture-private', 'legacy-public': 'fixture-public' },

@@ -1,3 +1,5 @@
+type OriginalProjectKnowledgeObjectStorageModule =
+  typeof import('@/lib/server/project-knowledge-object-storage');
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { JOB_KINDS } from '../job-queues';
@@ -51,7 +53,8 @@ vi.mock('@/lib/server/scheduled-account-erasure', () => ({
   eraseScheduledAccount: mocks.eraseScheduledAccount,
   reEraseTombstonedAccount: mocks.reEraseTombstonedAccount,
 }));
-vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
+vi.mock('@/lib/server/project-knowledge-object-storage', async (importOriginal) => ({
+  ...(await importOriginal<OriginalProjectKnowledgeObjectStorageModule>()),
   createProjectKnowledgeCleanupPlan: vi.fn(),
   deleteProjectKnowledgeObject: mocks.deleteProjectKnowledgeObject,
   getProjectKnowledgeObject: vi.fn(),

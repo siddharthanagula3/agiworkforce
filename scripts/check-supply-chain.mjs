@@ -39,6 +39,7 @@ export function containerFiles(root) {
     ? execFileSync('git', ['ls-files', '-c', '-o', '--exclude-standard', '-z'], {
         cwd: root,
         encoding: 'utf8',
+        maxBuffer: 64 * 1024 * 1024,
       })
         .split('\0')
         .filter(Boolean)
@@ -309,6 +310,7 @@ export function installSteps(root) {
     ? execFileSync('git', ['ls-files', '-c', '-o', '--exclude-standard', '-z'], {
         cwd: root,
         encoding: 'utf8',
+        maxBuffer: 64 * 1024 * 1024,
       })
         .split('\0')
         .filter(Boolean)

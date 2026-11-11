@@ -1,3 +1,4 @@
+type OriginalProjectKnowledgeFilesModule = typeof import('@/lib/server/project-knowledge-files');
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
@@ -52,7 +53,8 @@ vi.mock('@/lib/server/chat-attachment-completion', () => ({
   resolveTemporaryChatUpload: vi.fn(async () => false),
   resolveUploadSourceSurface: () => 'web',
 }));
-vi.mock('@/lib/server/project-knowledge-files', () => ({
+vi.mock('@/lib/server/project-knowledge-files', async (importOriginal) => ({
+  ...(await importOriginal<OriginalProjectKnowledgeFilesModule>()),
   findProjectKnowledgeFileByChecksum: mocks.findProjectKnowledgeFileByChecksum,
   registerProjectKnowledgeFile: (...args: unknown[]) =>
     mocks.registerProjectKnowledgeFile(...(args as [])),

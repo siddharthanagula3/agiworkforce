@@ -1,3 +1,7 @@
+type OriginalObjectStorageModule = typeof import('@/lib/server/object-storage');
+type OriginalProjectKnowledgeFilesModule = typeof import('@/lib/server/project-knowledge-files');
+type OriginalProjectKnowledgeObjectStorageModule =
+  typeof import('@/lib/server/project-knowledge-object-storage');
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { createError } from '@/lib/errors';
@@ -85,7 +89,8 @@ vi.mock('@/lib/server/rls-db', () => ({
   getVerifiedBearerUserScopedDb: vi.fn(),
   getUserScopedDb: mocks.getUserScopedDb,
 }));
-vi.mock('@/lib/server/object-storage', () => ({
+vi.mock('@/lib/server/object-storage', async (importOriginal) => ({
+  ...(await importOriginal<OriginalObjectStorageModule>()),
   ObjectStorageTimeoutError: class ObjectStorageTimeoutError extends Error {},
   StoredObjectTooLargeError: class StoredObjectTooLargeError extends Error {},
   copyPrivateObjectIfUnchanged: vi.fn(),
@@ -128,7 +133,8 @@ vi.mock('@/lib/connectors/google-drive-files', () => ({
   GoogleDriveFileError: mocks.GoogleDriveFileError,
   downloadGoogleDriveFile: mocks.downloadGoogleDriveFile,
 }));
-vi.mock('@/lib/server/project-knowledge-files', () => ({
+vi.mock('@/lib/server/project-knowledge-files', async (importOriginal) => ({
+  ...(await importOriginal<OriginalProjectKnowledgeFilesModule>()),
   checkProjectKnowledgeCapacity: vi.fn(),
   findReadableProjectKnowledgeFile: vi.fn(),
   findProjectKnowledgeFileByChecksum: vi.fn(),
@@ -136,7 +142,8 @@ vi.mock('@/lib/server/project-knowledge-files', () => ({
   readIndexStates: vi.fn(),
   registerProjectKnowledgeFile: mocks.registerProjectKnowledgeFile,
 }));
-vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
+vi.mock('@/lib/server/project-knowledge-object-storage', async (importOriginal) => ({
+  ...(await importOriginal<OriginalProjectKnowledgeObjectStorageModule>()),
   assertUploadMatchesAuthorization: vi.fn(),
   createLocalProjectKnowledgeUploadUrl: vi.fn(),
   createProjectKnowledgeUploadAuthorization: vi.fn(),

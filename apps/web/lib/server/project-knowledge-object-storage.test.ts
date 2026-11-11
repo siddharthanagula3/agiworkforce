@@ -1,3 +1,4 @@
+type OriginalObjectStorageModule = typeof import('./object-storage');
 import { createHash } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -12,7 +13,8 @@ import {
   storeLocalProjectKnowledgeUpload,
 } from './project-knowledge-object-storage';
 
-vi.mock('./object-storage', () => ({
+vi.mock('./object-storage', async (importOriginal) => ({
+  ...(await importOriginal<OriginalObjectStorageModule>()),
   putPrivateObject: vi.fn(async ({ key }: { key: string }) => ({ key })),
   copyPrivateObjectIfUnchanged: vi.fn(),
   isObjectStorageConfigured: () => false,

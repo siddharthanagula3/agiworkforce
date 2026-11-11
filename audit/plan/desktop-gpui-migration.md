@@ -2542,6 +2542,20 @@ as a shipping server module. The real PostgreSQL lifecycle suite, data-layer
 boundary/runtime checks, typecheck and 243 data-layer cases pass (32 existing
 opt-in cases excluded).
 
+The commit-boundary cleanup also updates attachment coverage to read the shared
+JSON policy, preserves real exports in 33 affected test mocks, and makes project
+ownership predicates explicit in deletion SQL. Lifecycle metadata distinguishes
+irreversible retirement from restore, and the unattended-work guard recognizes
+only declared, lease-fenced deletion dispatchers. Negative cases retain the
+account and membership requirements for automation. The legal-hold ownership
+read includes retired projects so holds cannot disappear during cleanup.
+
+Migration 0398 remains unapplied. Its exact consumer exceptions follow the
+existing coordinated source-publication policy: production deployment still
+unconditionally verifies the migration ledger before building, and rejects
+pending migrations. Native removal remains disabled pending lifecycle acceptance.
+No production schema change or release cutover is included in this push.
+
 ## Remaining migration gates
 
 Native release acceptance remains incomplete. Accessibility qualification is

@@ -1,3 +1,5 @@
+type OriginalProjectKnowledgeObjectStorageModule =
+  typeof import('@/lib/server/project-knowledge-object-storage');
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
@@ -10,7 +12,8 @@ const { mockDeleteStoredMediaObjects, mockDeleteKnowledgeObject } = vi.hoisted((
 vi.mock('@/lib/server/media-storage', () => ({
   deleteStoredMediaObjects: mockDeleteStoredMediaObjects,
 }));
-vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
+vi.mock('@/lib/server/project-knowledge-object-storage', async (importOriginal) => ({
+  ...(await importOriginal<OriginalProjectKnowledgeObjectStorageModule>()),
   deleteProjectKnowledgeObject: mockDeleteKnowledgeObject,
 }));
 import { RETENTION_DAYS_MIN, RETENTION_DOMAINS, type RetentionDomain } from '@agiworkforce/types';

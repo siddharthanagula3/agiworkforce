@@ -1,3 +1,6 @@
+type OriginalObjectStorageModule = typeof import('@/lib/server/object-storage');
+type OriginalProjectKnowledgeObjectStorageModule =
+  typeof import('@/lib/server/project-knowledge-object-storage');
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
@@ -29,7 +32,8 @@ vi.mock('@/lib/server/rls-db', () => ({
     return { db: adapter, userId, organizationId };
   },
 }));
-vi.mock('@/lib/server/object-storage', () => ({
+vi.mock('@/lib/server/object-storage', async (importOriginal) => ({
+  ...(await importOriginal<OriginalObjectStorageModule>()),
   copyPrivateObjectIfUnchanged: vi.fn(),
   objectKeyFromStorageUri: (value: string) => value,
   StoredObjectTooLargeError: class StoredObjectTooLargeError extends Error {},
@@ -40,7 +44,8 @@ vi.mock('@/lib/server/object-storage', () => ({
   isObjectStorageConfigured: vi.fn(),
   isPrivateObjectStorageConfigured: vi.fn(),
 }));
-vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
+vi.mock('@/lib/server/project-knowledge-object-storage', async (importOriginal) => ({
+  ...(await importOriginal<OriginalProjectKnowledgeObjectStorageModule>()),
   deleteProjectKnowledgeObject: mocks.deleteProjectKnowledgeObject,
 }));
 vi.mock('@/lib/services/org-sharing-service', () => ({

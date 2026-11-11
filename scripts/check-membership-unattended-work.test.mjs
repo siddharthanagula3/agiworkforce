@@ -182,3 +182,76 @@ test('only an upper-case module constant is expanded, and only one level', () =>
 test('the baseline path the guard reads is the one it tells people to edit', () => {
   assert.equal(BASELINE_PATH, 'scripts/config/membership-unattended-work-baseline.json');
 });
+
+function lifecycleRun(probe, lifecycle) {
+  const root = sandbox(probe);
+  const file = path.join(root, 'packages/contracts/types/src/lifecycle-semantics.json');
+  mkdirSync(path.dirname(file), { recursive: true });
+  writeFileSync(file, JSON.stringify(lifecycle));
+  return checkMembershipUnattendedWork(root, {
+    roots: ['apps/web/lib'],
+    baseline: { ungated: [] },
+  });
+}
+
+const DELETION_PICKUP = `export async function dispatchCleanup(db) {
+  const rows = await db.query(\`select id from project_knowledge_objects
+    where cleanup_job_id is null and state in ('queued', 'deleting')
+      and lease_expires_at <= clock_timestamp()
+    order by updated_at for update skip locked\`);
+  await enqueueJob({ kind: 'data-deletion.project-knowledge-object', rows });
+}`;
+const DELETION_CONTRACT = {
+  deletionDispatchers: [
+    {
+      file: PROBE,
+      function: 'dispatchCleanup',
+      table: 'project_knowledge_objects',
+      jobKind: 'data-deletion.project-knowledge-object',
+      why: 'The deletion worker removes already retired objects after their owner has been erased; it must retain its lease and queue fences rather than requiring membership.',
+    },
+  ],
+};
+
+test('a declared fenced physical deletion dispatcher survives account removal', () => {
+  assert.deepEqual(lifecycleRun(DELETION_PICKUP, DELETION_CONTRACT).failures, []);
+});
+
+for (const [name, probe] of [
+  ['missing lease', DELETION_PICKUP.replace('and lease_expires_at <= clock_timestamp()', '')],
+  [
+    'wrong job kind',
+    DELETION_PICKUP.replace(
+      "kind: 'data-deletion.project-knowledge-object'",
+      "kind: 'automation.run'",
+    ),
+  ],
+  ['wrong function', DELETION_PICKUP.replace('function dispatchCleanup', 'function unrelated')],
+  [
+    'automation readiness',
+    DELETION_PICKUP.replace('where cleanup_job_id', 'where is_enabled = true and cleanup_job_id'),
+  ],
+]) {
+  test(`a deletion declaration cannot exempt ${name}`, () => {
+    assert.ok(lifecycleRun(probe, DELETION_CONTRACT).failures.length > 0);
+  });
+}
+
+test('retention classification requires an expiration cutoff and excludes automation', () => {
+  const lifecycle = {
+    readExemptions: [{ file: PROBE, table: 'scheduled_tasks', class: 'retention-sweep' }],
+  };
+  const expiry =
+    'export const sql = `select id from scheduled_tasks where updated_at < $1 order by updated_at for update skip locked`;';
+  assert.deepEqual(lifecycleRun(expiry, lifecycle).failures, []);
+  assert.ok(
+    lifecycleRun(
+      expiry.replace('updated_at < $1', 'is_enabled = true and updated_at < $1'),
+      lifecycle,
+    ).failures.length > 0,
+  );
+  assert.ok(
+    lifecycleRun(expiry.replace('updated_at < $1', 'id is not null'), lifecycle).failures.length >
+      0,
+  );
+});
