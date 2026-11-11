@@ -2454,6 +2454,9 @@
     "admittedHarnessIds": [
       "apps/web/lib/services/gateway-routing.ts"
     ],
+    "admittedSandboxLifetimeMs": [
+      "apps/web/lib/e2b/compute-metering.ts"
+    ],
     "admitToolResultResume": [
       "apps/web/app/api/llm/v1/chat/completions/lib/tool-result-resume.ts"
     ],
@@ -20088,6 +20091,9 @@
     "CLOUD_CODE_AGENT_TURN_REQUEST_LIMIT_MS": [
       "packages/contracts/types/src/cloud-code.ts"
     ],
+    "CLOUD_CODE_AGENT_TURN_SANDBOX_HOLD_MS": [
+      "apps/web/lib/services/cloud-code-turn-budget.ts"
+    ],
     "CLOUD_CODE_BRANCHES_PATH": [
       "packages/contracts/cloud-contracts/src/cloud-code-sessions.ts"
     ],
@@ -20189,6 +20195,9 @@
     ],
     "CLOUD_CODE_SESSION_COPY": [
       "packages/contracts/types/src/cloud-code.ts"
+    ],
+    "CLOUD_CODE_SESSION_ROUTE_FUNCTION_LIMIT_MS": [
+      "apps/web/lib/services/cloud-code-turn-budget.ts"
     ],
     "CLOUD_CODE_SESSION_STATE_LABELS": [
       "packages/contracts/types/src/cloud-code.ts"
