@@ -228,6 +228,22 @@ describe('MessageBubble model label', () => {
     expect(onSelectVariant).toHaveBeenCalledWith('answer-3');
   });
 
+  it('wraps a failed reply notice inside the reading column instead of running off screen', () => {
+    const message: ChatMessage = {
+      id: 'answer-failed',
+      role: 'assistant',
+      content: '',
+      createdAt: '2026-11-11T00:00:00.000Z',
+      metadata: {
+        streamError:
+          'Apple Intelligence could not finish this reply on this device. Try again, or choose another on-device model.',
+      },
+    };
+    const view = render(<MessageBubble message={message} onRetryMessage={jest.fn()} />);
+
+    expect(view.getByTestId('stream-failure-notice-text')).toHaveStyle({ flexShrink: 1 });
+  });
+
   it('follows the stored rating when a failed write restores the previous value', () => {
     const message: ChatMessage = {
       id: 'm-rated',
