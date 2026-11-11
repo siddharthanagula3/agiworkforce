@@ -1,9 +1,11 @@
 use std::collections::HashMap;
+use std::io::IsTerminal;
 
 use anyhow::Result;
 
 use super::common::print_tool_status;
 use super::ToolResult;
+use crate::tui::approval_broker::{ApprovalRequest, ApprovalRequestKind};
 
 // ---------------------------------------------------------------------------
 // Privacy guard for the advisor tool (M24)
@@ -20,6 +22,8 @@ use super::ToolResult;
 pub(super) async fn execute_cron_create(
     args: &HashMap<String, String>,
     privacy_mode: crate::agent::PrivacyMode,
+    require_confirm: bool,
+    approval_callback: Option<&super::ApprovalCallback>,
 ) -> Result<ToolResult> {
     let client = match hosted_schedules(privacy_mode, "cron_create") {
         Ok(client) => client,
@@ -47,6 +51,11 @@ pub(super) async fn execute_cron_create(
     let request = crate::schedules::cron_create_request(
         &name, &schedule, &prompt, enabled, &timezone, None, None,
     );
+    if require_confirm
+        && !schedule_change_approved(create_approval(&request, args), approval_callback).await
+    {
+        return Ok(not_approved("cron_create"));
+    }
     match client.create(&request).await {
         Ok(created) => {
             print_tool_status("cron_create", &format!("id={}", created.id));
@@ -63,6 +72,8 @@ pub(super) async fn execute_cron_create(
 pub(super) async fn execute_cron_delete(
     args: &HashMap<String, String>,
     privacy_mode: crate::agent::PrivacyMode,
+    require_confirm: bool,
+    approval_callback: Option<&super::ApprovalCallback>,
 ) -> Result<ToolResult> {
     let client = match hosted_schedules(privacy_mode, "cron_delete") {
         Ok(client) => client,
@@ -76,6 +87,27 @@ pub(super) async fn execute_cron_delete(
         Ok(resolved) => resolved,
         Err(error) => return Ok(schedule_failure("cron_delete", error)),
     };
+    if require_confirm {
+        let schedule = match client
+            .list(crate::schedules::DEFAULT_SCHEDULE_LIMIT, 0)
+            .await
+        {
+            Ok(schedules) => schedules
+                .into_iter()
+                .find(|schedule| schedule.id == resolved),
+            Err(error) => return Ok(schedule_failure("cron_delete", error)),
+        };
+        let Some(schedule) = schedule else {
+            return Ok(ToolResult {
+                tool_name: "cron_delete".into(),
+                success: false,
+                output: format!("Schedule '{resolved}' is no longer in this account."),
+            });
+        };
+        if !schedule_change_approved(delete_approval(&schedule, args), approval_callback).await {
+            return Ok(not_approved("cron_delete"));
+        }
+    }
     match client.delete(&resolved).await {
         Ok(()) => {
             print_tool_status("cron_delete", &format!("id={resolved}"));
@@ -136,6 +168,99 @@ fn schedule_failure(tool_name: &str, error: crate::schedules::ScheduleError) -> 
     }
 }
 
+fn not_approved(tool_name: &str) -> ToolResult {
+    ToolResult {
+        tool_name: tool_name.into(),
+        success: false,
+        output: format!("`{tool_name}` was not approved and did not run."),
+    }
+}
+
+fn create_approval(
+    request: &crate::schedules::ScheduleCreateRequest,
+    args: &HashMap<String, String>,
+) -> ApprovalRequest {
+    schedule_approval(
+        "cron_create",
+        &request.name,
+        format!(
+            "Create the scheduled task \"{}\" on your account? Its prompt runs in the cloud on this schedule, after this session ends, until the task is deleted.",
+            request.name
+        ),
+        vec![
+            format!(
+                "schedule: {} ({})",
+                request.cron_expression, request.timezone
+            ),
+            format!(
+                "starts: {}",
+                if request.is_active { "active" } else { "paused" }
+            ),
+            format!("prompt: {}", request.prompt),
+        ],
+        args,
+    )
+}
+
+fn delete_approval(
+    schedule: &crate::schedules::Schedule,
+    args: &HashMap<String, String>,
+) -> ApprovalRequest {
+    let cadence = crate::schedules::schedule_cadence(schedule);
+    schedule_approval(
+        "cron_delete",
+        &schedule.name,
+        format!(
+            "Delete the scheduled task \"{}\" from your account? The schedule and its run history are removed and cannot be recovered.",
+            schedule.name
+        ),
+        vec![
+            format!("id: {}", schedule.id),
+            format!("schedule: {cadence} ({})", schedule.timezone),
+            format!("prompt: {}", schedule.prompt.as_deref().unwrap_or_default()),
+        ],
+        args,
+    )
+}
+
+fn schedule_approval(
+    tool_name: &str,
+    name: &str,
+    summary: String,
+    detail: Vec<String>,
+    args: &HashMap<String, String>,
+) -> ApprovalRequest {
+    ApprovalRequest::new(
+        ApprovalRequestKind::Network {
+            tool_name: tool_name.to_string(),
+            destination: format!("scheduled task \"{name}\" on your account"),
+        },
+        summary,
+        detail,
+    )
+    .with_tool_subject(tool_name, serde_json::to_value(args).unwrap_or_default())
+    .requiring_explicit_decision()
+}
+
+async fn schedule_change_approved(
+    request: ApprovalRequest,
+    approval_callback: Option<&super::ApprovalCallback>,
+) -> bool {
+    let summary = request.summary.clone();
+    let detail = request.detail.join("\n");
+    match super::request_approval(approval_callback, request).await {
+        Some(decision) => super::approval_allows(decision),
+        None if !std::io::stdin().is_terminal() => false,
+        None => {
+            eprintln!("{}", crate::terminal_text::sanitize_terminal_text(&detail));
+            crate::output::confirm(
+                crate::terminal_text::sanitize_terminal_text(&summary).into_owned(),
+                false,
+            )
+        }
+    }
+}
+
 fn required_arg(
     args: &HashMap<String, String>,
     key: &str,
@@ -159,8 +284,12 @@ fn required_arg(
 mod hosted_schedule_tests {
     use std::collections::HashMap;
 
-    use super::{execute_cron_create, execute_cron_delete, execute_cron_list, required_arg};
+    use super::{
+        create_approval, delete_approval, execute_cron_create, execute_cron_delete,
+        execute_cron_list, required_arg,
+    };
     use crate::agent::PrivacyMode;
+    use crate::tui::approval_broker::ApprovalRequestKind;
 
     fn cron_args() -> HashMap<String, String> {
         HashMap::from([
@@ -178,7 +307,7 @@ mod hosted_schedule_tests {
         for mode in [PrivacyMode::Local, PrivacyMode::Byok] {
             let refusal = crate::cloud::CloudError::NotManaged(mode).to_string();
 
-            let create = execute_cron_create(&cron_args(), mode)
+            let create = execute_cron_create(&cron_args(), mode, true, None)
                 .await
                 .expect("returns Ok");
             assert!(!create.success, "{}", create.output);
@@ -193,12 +322,99 @@ mod hosted_schedule_tests {
             let delete = execute_cron_delete(
                 &HashMap::from([("id".to_string(), "anything".to_string())]),
                 mode,
+                true,
+                None,
             )
             .await
             .expect("returns Ok");
             assert!(!delete.success, "{}", delete.output);
             assert_eq!(delete.output, refusal);
         }
+    }
+
+    #[test]
+    fn a_create_approval_names_the_schedule_and_the_prompt_it_will_run() {
+        let request = crate::schedules::cron_create_request(
+            "Morning digest",
+            "0 9 * * *",
+            "Summarize my inbox",
+            true,
+            "Europe/Paris",
+            None,
+            None,
+        );
+        let approval = create_approval(&request, &cron_args());
+
+        assert_eq!(
+            approval.kind,
+            ApprovalRequestKind::Network {
+                tool_name: "cron_create".to_string(),
+                destination: "scheduled task \"Morning digest\" on your account".to_string(),
+            }
+        );
+        assert!(
+            approval.summary.contains("\"Morning digest\""),
+            "{}",
+            approval.summary
+        );
+        assert!(approval
+            .detail
+            .contains(&"schedule: 0 9 * * * (Europe/Paris)".to_string()));
+        assert!(approval
+            .detail
+            .contains(&"prompt: Summarize my inbox".to_string()));
+        assert!(approval.requires_explicit_decision);
+        assert!(!approval.saves_always_allow);
+        assert_eq!(
+            approval
+                .tool_subject
+                .as_ref()
+                .map(|(name, _)| name.as_str()),
+            Some("cron_create")
+        );
+    }
+
+    #[test]
+    fn a_delete_approval_states_that_the_schedule_and_its_history_cannot_be_recovered() {
+        let schedule = crate::schedules::Schedule {
+            id: "sch_1".to_string(),
+            name: "Morning digest".to_string(),
+            schedule_type: "cron".to_string(),
+            cron_expression: Some("0 9 * * *".to_string()),
+            execute_at: None,
+            interval_ms: None,
+            timezone: "UTC".to_string(),
+            is_enabled: true,
+            status: "active".to_string(),
+            prompt: Some("Summarize my inbox".to_string()),
+            model: None,
+            last_executed_at: None,
+            next_execution_at: None,
+            last_error: None,
+            execution_count: 3,
+            paused_reason: None,
+        };
+        let approval = delete_approval(
+            &schedule,
+            &HashMap::from([("id".to_string(), "Morning digest".to_string())]),
+        );
+
+        assert!(
+            approval.summary.contains("\"Morning digest\"")
+                && approval.summary.contains("run history")
+                && approval.summary.contains("cannot be recovered"),
+            "{}",
+            approval.summary
+        );
+        assert_eq!(
+            approval.detail,
+            vec![
+                "id: sch_1".to_string(),
+                "schedule: 0 9 * * * (UTC)".to_string(),
+                "prompt: Summarize my inbox".to_string(),
+            ]
+        );
+        assert!(approval.requires_explicit_decision);
     }
 
     #[test]

@@ -1000,10 +1000,13 @@ async fn execute_tool_with_scoped_permissions(
         _ => require_confirm,
     };
     if boundary_gated {
-        if let Some(request) = trust_boundary_approval(canonical_name, browser_args) {
+        if let Some(request) = trust_boundary_approval(canonical_name, browser_args, permissions) {
             let allowed =
                 match request_approval(opts.approval_callback.as_ref(), request.clone()).await {
-                    Some(decision) => approval_allows(decision),
+                    Some(decision) => {
+                        remember_site_approval(&request, decision);
+                        approval_allows(decision)
+                    }
                     None => crate::output::confirm(format!("{} Allow it?", request.summary), false),
                 };
             if !allowed {
@@ -1124,8 +1127,24 @@ async fn execute_tool_with_scoped_permissions(
             .await
         }
         "read_many_files" => execute_read_many_files(&call.args).await,
-        "cron_create" => execute_cron_create(&call.args, opts.privacy_mode).await,
-        "cron_delete" => execute_cron_delete(&call.args, opts.privacy_mode).await,
+        "cron_create" => {
+            execute_cron_create(
+                &call.args,
+                opts.privacy_mode,
+                require_confirm,
+                opts.approval_callback.as_ref(),
+            )
+            .await
+        }
+        "cron_delete" => {
+            execute_cron_delete(
+                &call.args,
+                opts.privacy_mode,
+                require_confirm,
+                opts.approval_callback.as_ref(),
+            )
+            .await
+        }
         "cron_list" => execute_cron_list(&call.args, opts.privacy_mode).await,
         "advisor" => execute_advisor(&call.args, opts.privacy_mode).await,
         "enter_worktree" => {
@@ -1347,6 +1366,7 @@ async fn pin_active_browser_tab(
 fn trust_boundary_approval(
     tool_name: &str,
     args: &HashMap<String, String>,
+    permissions: &crate::permissions::PermissionStore,
 ) -> Option<ApprovalRequest> {
     let argument = |key: &str| {
         args.get(key)
@@ -1421,31 +1441,62 @@ fn trust_boundary_approval(
             "The agent wants to read the network requests of the page open in your signed-in Chrome.",
         ),
         "web_fetch" => {
-            let url = argument("url").unwrap_or_default();
-            if !web::is_internal_fetch_target(&url) {
+            let url = argument("url")?;
+            let destination = reqwest::Url::parse(&url).ok()?.host_str()?.to_string();
+            if permissions.names_domain(&destination) {
                 return None;
             }
-            let destination = reqwest::Url::parse(&url)
-                .ok()
-                .and_then(|parsed| parsed.host_str().map(str::to_string))
-                .unwrap_or(url);
-            if crate::permissions::PermissionStore::load()
-                .is_ok_and(|store| store.names_domain(&destination))
-            {
-                return None;
-            }
-            Some(ApprovalRequest::new(
-                ApprovalRequestKind::Network {
-                    tool_name: tool_name.to_string(),
-                    destination: destination.clone(),
-                },
+            let summary = if web::is_internal_fetch_target(&url) {
                 format!(
                     "The agent wants to fetch {destination}, which is on this computer, its private network or a cloud metadata service."
+                )
+            } else {
+                format!(
+                    "The agent wants to fetch a page from {destination}. Anything in the address is sent to that site."
+                )
+            };
+            Some(
+                ApprovalRequest::new(
+                    ApprovalRequestKind::Network {
+                        tool_name: tool_name.to_string(),
+                        destination: destination.clone(),
+                    },
+                    summary,
+                    vec![format!("destination: {destination}"), format!("address: {url}")],
+                )
+                .saving_always_allow(
+                    crate::permissions::website_allow_error(&destination).is_none(),
                 ),
-                vec![format!("destination: {destination}")],
-            ))
+            )
         }
         _ => None,
+    }
+}
+
+fn remember_site_approval(request: &ApprovalRequest, decision: ApprovalDecision) {
+    let ApprovalRequestKind::Network {
+        tool_name,
+        destination,
+    } = &request.kind
+    else {
+        return;
+    };
+    if tool_name != "web_fetch" || !request.saves_always_allow {
+        return;
+    }
+    let rule = format!("{}{destination}", crate::permissions::DOMAIN_RULE_PREFIX);
+    let mut store = crate::permissions::PermissionStore::load_or_ask();
+    match decision {
+        ApprovalDecision::AllowSession => store.allow_session_for_process(&rule),
+        ApprovalDecision::AlwaysAllow => {
+            store.allow_always(&rule);
+            if let Err(error) = store.save() {
+                crate::output::print_warn(&format!(
+                    "The Always Allow rule was not saved: {error:#}"
+                ));
+            }
+        }
+        _ => {}
     }
 }
 
@@ -2749,12 +2800,104 @@ mod tests {
     }
 
     #[test]
-    fn public_web_fetch_and_search_carry_no_approval_in_any_mode() {
-        assert!(
-            trust_boundary_approval("web_fetch", &fetch("https://docs.rs/serde").args).is_none()
+    fn a_public_fetch_asks_for_its_site_and_a_search_does_not() {
+        let unsaved = crate::permissions::PermissionStore::default();
+        let request = trust_boundary_approval(
+            "web_fetch",
+            &fetch("https://docs.rs/serde?q=x").args,
+            &unsaved,
+        )
+        .expect("a fetch to a site with no saved rule asks first");
+        assert_eq!(
+            request.kind,
+            ApprovalRequestKind::Network {
+                tool_name: "web_fetch".to_string(),
+                destination: "docs.rs".to_string(),
+            }
         );
+        assert!(request
+            .detail
+            .contains(&"address: https://docs.rs/serde?q=x".to_string()));
+        assert!(request.saves_always_allow);
+        assert!(!request.requires_explicit_decision);
+
         let search = HashMap::from([("query".to_string(), "rust serde".to_string())]);
-        assert!(trust_boundary_approval("web_search", &search).is_none());
+        assert!(trust_boundary_approval("web_search", &search, &unsaved).is_none());
+    }
+
+    #[test]
+    fn a_saved_or_session_site_rule_lets_a_fetch_through_without_asking() {
+        let mut saved = crate::permissions::PermissionStore::default();
+        saved.allow_always("domain:example.invalid");
+        assert!(trust_boundary_approval(
+            "web_fetch",
+            &fetch("https://example.invalid/?q=x").args,
+            &saved
+        )
+        .is_none());
+        assert!(trust_boundary_approval(
+            "web_fetch",
+            &fetch("https://other.example.invalid/").args,
+            &saved
+        )
+        .is_some());
+
+        let mut session = crate::permissions::PermissionStore::default();
+        session.allow_session("domain:*.example.invalid");
+        assert!(trust_boundary_approval(
+            "web_fetch",
+            &fetch("https://docs.example.invalid/a").args,
+            &session
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn allowing_a_site_for_the_session_is_remembered_and_an_internal_one_never_is() {
+        let unsaved = crate::permissions::PermissionStore::default();
+        let public = trust_boundary_approval(
+            "web_fetch",
+            &fetch("https://session-grant.example.invalid/").args,
+            &unsaved,
+        )
+        .expect("asks");
+        remember_site_approval(&public, ApprovalDecision::AllowSession);
+        assert!(crate::permissions::PermissionStore::load_or_ask()
+            .names_domain("session-grant.example.invalid"));
+
+        let internal = trust_boundary_approval(
+            "web_fetch",
+            &fetch("http://169.254.169.254/latest/meta-data/").args,
+            &unsaved,
+        )
+        .expect("asks");
+        assert!(!internal.saves_always_allow);
+        remember_site_approval(&internal, ApprovalDecision::AllowSession);
+        assert!(!crate::permissions::PermissionStore::load_or_ask().names_domain("169.254.169.254"));
+    }
+
+    #[tokio::test]
+    async fn a_public_fetch_is_not_sent_when_its_site_is_refused() {
+        let (callback, seen) = recording_callback(ApprovalDecision::Deny);
+        let result = execute_tool_with_opts_and_permissions(
+            &fetch("https://example.invalid/?q=x"),
+            &byok_options(callback, true),
+            &crate::permissions::PermissionStore::default(),
+        )
+        .await
+        .expect("tool result");
+        assert!(!result.success);
+        assert_eq!(
+            result.output,
+            "`web_fetch` was not approved and did not run."
+        );
+        assert_eq!(
+            *seen.lock().expect("seen lock"),
+            vec![ApprovalRequestKind::Network {
+                tool_name: "web_fetch".to_string(),
+                destination: "example.invalid".to_string(),
+            }]
+        );
     }
 
     #[tokio::test]
@@ -2791,17 +2934,143 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_headless_private_fetch_is_denied_without_a_prompt_surface() {
-        let mut opts = byok_options(recording_callback(ApprovalDecision::AllowOnce).0, false);
-        opts.approval_callback = None;
-        let result = execute_tool_with_opts(&fetch("http://127.0.0.1/"), &opts)
-            .await
-            .expect("tool result");
-        assert!(!result.success);
-        assert_eq!(
-            result.output,
-            "`web_fetch` was not approved and did not run."
+    async fn a_schedule_is_neither_created_nor_deleted_without_approval() {
+        if std::env::var_os("AGI_SCHEDULE_APPROVAL_CHILD").is_none() {
+            let config = tempfile::tempdir().unwrap();
+            let output = tokio::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "features::exec::tools::tests::a_schedule_is_neither_created_nor_deleted_without_approval",
+                    "--test-threads=1",
+                ])
+                .env("AGIWORKFORCE_HOME", config.path())
+                .env("AGI_SCHEDULE_APPROVAL_CHILD", "1")
+                .output()
+                .await
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{}\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            return;
+        }
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let received = std::sync::Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+        let recorder = std::sync::Arc::clone(&received);
+        tokio::spawn(async move {
+            let body = serde_json::json!({"schedules": [{
+                "id": "sch_1",
+                "name": "Morning digest",
+                "scheduleType": "cron",
+                "cronExpression": "0 9 * * *",
+                "timezone": "UTC",
+                "isEnabled": true,
+                "status": "active",
+                "prompt": "Summarize my inbox"
+            }]})
+            .to_string();
+            while let Ok((mut stream, _)) = listener.accept().await {
+                let mut request = Vec::new();
+                let mut chunk = [0u8; 4096];
+                while !request.windows(4).any(|window| window == b"\r\n\r\n") {
+                    match stream.read(&mut chunk).await {
+                        Ok(0) | Err(_) => break,
+                        Ok(read) => request.extend_from_slice(&chunk[..read]),
+                    }
+                }
+                let line = String::from_utf8_lossy(&request)
+                    .lines()
+                    .next()
+                    .unwrap_or_default()
+                    .to_string();
+                let reply = if line.starts_with("GET ") {
+                    format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                        body.len()
+                    )
+                } else {
+                    "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}"
+                        .to_string()
+                };
+                recorder.lock().expect("record").push(line);
+                let _ = stream.write_all(reply.as_bytes()).await;
+                let _ = stream.shutdown().await;
+            }
+        });
+        std::env::set_var("AGIWORKFORCE_JWT", "header.payload.signature");
+        std::env::set_var("AGIWORKFORCE_API_BASE", format!("http://127.0.0.1:{port}"));
+
+        let create = ToolCall {
+            name: "cron_create".to_string(),
+            args: HashMap::from([
+                ("name".to_string(), "Morning digest".to_string()),
+                ("schedule".to_string(), "0 9 * * *".to_string()),
+                ("prompt".to_string(), "Summarize my inbox".to_string()),
+            ]),
+        };
+        let delete = ToolCall {
+            name: "cron_delete".to_string(),
+            args: HashMap::from([("id".to_string(), "Morning digest".to_string())]),
+        };
+        let permissions = crate::permissions::PermissionStore::default();
+        let (callback, seen) = recording_callback(ApprovalDecision::Deny);
+        let mut opts = byok_options(callback, true);
+        opts.privacy_mode = crate::agent::PrivacyMode::Managed;
+        for headless in [false, true] {
+            if headless {
+                opts.approval_callback = None;
+            }
+            for call in [&create, &delete] {
+                let result = execute_tool_with_opts_and_permissions(call, &opts, &permissions)
+                    .await
+                    .expect("tool result");
+                assert!(!result.success, "{}", result.output);
+                assert_eq!(
+                    result.output,
+                    format!("`{}` was not approved and did not run.", call.name)
+                );
+            }
+        }
+
+        let asked: Vec<String> = seen
+            .lock()
+            .expect("seen lock")
+            .iter()
+            .filter_map(|kind| match kind {
+                ApprovalRequestKind::Network { tool_name, .. } => Some(tool_name.clone()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(asked, ["cron_create", "cron_delete"]);
+        let lines = received.lock().expect("record").clone();
+        assert!(!lines.is_empty(), "the delete never looked the schedule up");
+        assert!(
+            lines
+                .iter()
+                .all(|line| line.starts_with("GET /api/schedules")),
+            "a schedule change reached the account: {lines:?}"
         );
+    }
+
+    #[tokio::test]
+    async fn a_headless_fetch_is_denied_without_a_prompt_surface() {
+        let mut opts = byok_options(recording_callback(ApprovalDecision::AllowOnce).0, true);
+        opts.approval_callback = None;
+        for url in ["http://127.0.0.1/", "https://headless.example.invalid/?q=x"] {
+            let result = execute_tool_with_opts(&fetch(url), &opts)
+                .await
+                .expect("tool result");
+            assert!(!result.success, "{url}");
+            assert_eq!(
+                result.output, "`web_fetch` was not approved and did not run.",
+                "{url}"
+            );
+        }
     }
 
     #[test]
@@ -2819,8 +3088,12 @@ mod tests {
         .map(|(key, value)| (key.to_string(), value.to_string()))
         .collect();
 
-        let request =
-            trust_boundary_approval("browser_fill_form", &args).expect("filling asks first");
+        let request = trust_boundary_approval(
+            "browser_fill_form",
+            &args,
+            &crate::permissions::PermissionStore::default(),
+        )
+        .expect("filling asks first");
         assert_eq!(request.detail[0], "tab: Checkout (https://shop.example/)");
         assert_eq!(&request.detail[1..], ["#city: Paris", "#zip: 75001"]);
 
@@ -2831,8 +3104,10 @@ mod tests {
 
     #[test]
     fn only_trust_boundary_tools_carry_a_boundary_approval() {
-        assert!(trust_boundary_approval("read_file", &HashMap::new()).is_none());
-        assert!(trust_boundary_approval("run_command", &HashMap::new()).is_none());
+        let permissions = crate::permissions::PermissionStore::default();
+        for tool in ["read_file", "run_command", "cron_list"] {
+            assert!(trust_boundary_approval(tool, &HashMap::new(), &permissions).is_none());
+        }
         let (name, args) = approval_request_tool(&ApprovalRequestKind::Network {
             tool_name: "run_command".to_string(),
             destination: "the network".to_string(),
