@@ -4,6 +4,8 @@ import { SURFACE_TOKEN_HEADER } from '@agiworkforce/types';
 
 import { createIdentityTokenSigner, serveIdentitySigningKeys } from '@/test/clerk-signed-tokens';
 
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+
 const scopedDb = vi.hoisted(() => ({ getUserScopedDb: vi.fn() }));
 
 vi.mock('@clerk/nextjs/server', () => ({
@@ -11,7 +13,7 @@ vi.mock('@clerk/nextjs/server', () => ({
 }));
 
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  ...(await importOriginal<RlsDbModule>()),
   getUserScopedDb: (...args: unknown[]) => scopedDb.getUserScopedDb(...args),
 }));
 
