@@ -4,9 +4,13 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
 const scriptPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'ios-device-dev.sh');
+const { appIosProjectName } = createRequire(import.meta.url)('../native/ios/iosProjectName.cjs');
+const projectName = appIosProjectName();
+const projectDerivedData = `${projectName}-abcdef`;
 
 function runScript({ skipReset = false } = {}) {
   const sandbox = fs.mkdtempSync(path.join(os.tmpdir(), 'agi-ios-dev-'));
@@ -16,12 +20,12 @@ function runScript({ skipReset = false } = {}) {
 
   fs.mkdirSync(binDir);
   fs.mkdirSync(derivedData, { recursive: true });
-  fs.mkdirSync(path.join(derivedData, 'AGIMobile-abcdef'), { recursive: true });
+  fs.mkdirSync(path.join(derivedData, projectDerivedData), { recursive: true });
   fs.mkdirSync(path.join(derivedData, 'SomeOtherApp-123456'), { recursive: true });
 
   fs.writeFileSync(
     path.join(binDir, 'pnpm'),
-    `#!/usr/bin/env bash\necho "pnpm $*" >> "${log}"\nls -d "${derivedData}"/AGIMobile-* >> "${log}" 2>&1 || echo "no-derived-data" >> "${log}"\n`,
+    `#!/usr/bin/env bash\necho "pnpm $*" >> "${log}"\nls -d "${derivedData}"/${projectName}-* >> "${log}" 2>&1 || echo "no-derived-data" >> "${log}"\n`,
     { mode: 0o755 },
   );
   for (const stub of ['security', 'xcrun', 'tee']) {
@@ -60,7 +64,7 @@ test('the DerivedData reset runs between prebuild and run:ios, and only touches 
   assert.ok(prebuildIndex >= 0, 'prebuild must run');
   assert.ok(runIndex > prebuildIndex, 'run:ios must follow prebuild');
 
-  assert.match(lines[prebuildIndex + 1], /AGIMobile-abcdef/);
+  assert.ok(lines[prebuildIndex + 1].endsWith(projectDerivedData));
   assert.match(lines[runIndex + 1], /No such file or directory|no-derived-data/);
 
   assert.ok(
@@ -72,5 +76,5 @@ test('the DerivedData reset runs between prebuild and run:ios, and only touches 
 test('the reset is opt-out-able for an iteration that does not need it', () => {
   const { lines } = runScript({ skipReset: true });
   const runIndex = lines.findIndex((line) => line.includes('expo run:ios'));
-  assert.match(lines[runIndex + 1], /AGIMobile-abcdef/);
+  assert.ok(lines[runIndex + 1].endsWith(projectDerivedData));
 });

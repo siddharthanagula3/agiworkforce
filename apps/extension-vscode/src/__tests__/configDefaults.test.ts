@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { Config, __CONFIG_DEFAULTS, SETTINGS_PANEL_SETTING_KEYS } from '../platform/config';
 
 interface PkgConfigContrib {
@@ -15,7 +16,7 @@ interface PkgConfigContrib {
 interface ExtensionPackageJson {
   contributes?: {
     configuration?: { properties?: Record<string, PkgConfigContrib> };
-    commands?: Array<{ command: string; title: string }>;
+    commands?: Array<{ command: string; title: string; category?: string }>;
   };
   capabilities?: {
     untrustedWorkspaces?: {
@@ -179,13 +180,16 @@ describe('Config DEFAULTS ↔ package.json parity', () => {
     ).toBe(false);
   });
 
-  it('contributes one sign-in command and one title prefix', () => {
+  it('contributes one sign-in command and one title prefix from the name registry', () => {
     const commands = readPackageJson().contributes?.commands ?? [];
 
     expect(commands.filter((entry) => /Sign In to AGI Cloud/u.test(entry.title ?? ''))).toEqual([
       expect.objectContaining({ command: 'agi-workforce.signIn' }),
     ]);
-    expect(commands.filter((entry) => !(entry.title ?? '').startsWith('AGI Code: '))).toEqual([]);
+    expect(
+      commands.filter((entry) => !(entry.title ?? '').startsWith(`${PRODUCT_NAMES.code}: `)),
+    ).toEqual([]);
+    expect(commands.filter((entry) => entry.category !== undefined)).toEqual([]);
   });
 
   it('treats agent.mode = plan as active plan mode', () => {

@@ -39,18 +39,18 @@ driven by the AGI CLI running on your own machine.
    `Ctrl+Shift+A` (`Cmd+Shift+A` on macOS).
 4. Ask a question, or type `@agi` in VS Code's own Chat view.
 
-Run **AGI Code: Show Getting Started** at any time to reopen the
+Run **Code: Show Getting Started** at any time to reopen the
 walkthrough.
 
 ## Features
 
 **Chat where you are working.** A sidebar chat view, a full-width
-`AGI Code: Open Chat in Editor` panel, and an `@agi` participant in VS
+`Code: Open Chat in Editor` panel, and an `@agi` participant in VS
 Code's native Chat with `/explain`, `/fix`, `/refactor`, `/tests`, `/docs`, and
 `/model`.
 
 **Repository context you choose.** Attach workspace files from the Context
-view or with `AGI Code: Mention File in @agi Chat`. Attachments are
+view or with `Code: Mention File in Chat`. Attachments are
 validated against path traversal, symlinks, folders, and sensitive filenames
 before anything is sent, and the current editor selection can be included as
 context.
@@ -64,11 +64,11 @@ cursor. `agiWorkforce.autoApplyFixes` is off by default.
 `auto` (the default) runs read-only work on its own while writes and commands
 still ask, `plan` proposes a plan before editing, and `bypass` skips prompts
 only after you confirm the risk. Use the composer control or
-**AGI Code: Choose Agent Mode**; normal Tab and Shift+Tab focus traversal is
+**Code: Choose Agent Mode**; normal Tab and Shift+Tab focus traversal is
 never repurposed to change authority.
 
 **Model selection that reflects what you can actually use.**
-`AGI Code: Select Model` lists the models available to the resolved plan
+`Code: Select Model` lists the models available to the resolved plan
 and providers; the default `auto` routes each turn by task. The status bar
 shows the active model and non-default agent mode.
 
@@ -86,23 +86,23 @@ later developer turns.
 
 ## Commands
 
-Every command is available from the Command Palette under **AGI Code**.
+Every command is available from the Command Palette under **Code**.
 The most used ones:
 
-| Command                         | Default keybinding                     |
-| ------------------------------- | -------------------------------------- |
-| AGI Code: Open Chat             | `Ctrl+Shift+A` / `Cmd+Shift+A`         |
-| AGI Code: Open Chat in Editor   | ,                                      |
-| AGI Code: New Conversation      | `Ctrl+Shift+Alt+N` / `Cmd+Shift+Alt+N` |
-| AGI Code: Explain Selection     | `Ctrl+Shift+Alt+E` / `Cmd+Shift+Alt+E` |
-| AGI Code: Ask About Code        | `Ctrl+Shift+Alt+A` / `Cmd+Shift+Alt+A` |
-| AGI Code: Explain Error         | `Ctrl+Shift+Alt+X` / `Cmd+Shift+Alt+X` |
-| AGI Code: Choose Agent Mode     | `Ctrl+Shift+Alt+G` / `Cmd+Shift+Alt+G` |
-| AGI Code: Run Terminal Command  | `Ctrl+Shift+Alt+T` / `Cmd+Shift+Alt+T` |
-| AGI Code: Select Model          | ,                                      |
-| AGI Code: Restart Local Runtime | ,                                      |
-| AGI Code: Account & Usage       | ,                                      |
-| AGI Code: Send Feedback         | ,                                      |
+| Command                     | Default keybinding                     |
+| --------------------------- | -------------------------------------- |
+| Code: Open Chat             | `Ctrl+Shift+A` / `Cmd+Shift+A`         |
+| Code: Open Chat in Editor   | ,                                      |
+| Code: New Conversation      | `Ctrl+Shift+Alt+N` / `Cmd+Shift+Alt+N` |
+| Code: Explain Selection     | `Ctrl+Shift+Alt+E` / `Cmd+Shift+Alt+E` |
+| Code: Ask About Code        | `Ctrl+Shift+Alt+A` / `Cmd+Shift+Alt+A` |
+| Code: Explain Error         | `Ctrl+Shift+Alt+X` / `Cmd+Shift+Alt+X` |
+| Code: Choose Agent Mode     | `Ctrl+Shift+Alt+G` / `Cmd+Shift+Alt+G` |
+| Code: Run Terminal Command  | `Ctrl+Shift+Alt+T` / `Cmd+Shift+Alt+T` |
+| Code: Select Model          | ,                                      |
+| Code: Restart Local Runtime | ,                                      |
+| Code: Account & Usage       | ,                                      |
+| Code: Send Feedback         | ,                                      |
 
 ## Settings
 
@@ -124,7 +124,7 @@ The most used ones:
 | `agiWorkforce.apiEndpoint`                  | `https://agiworkforce.com/api/llm/v1` | API base URL for cloud-backed editor utilities.                                                  |
 | `agiWorkforce.telemetryEnabled`             | `false`                               | Product usage events, also subject to VS Code's own telemetry setting.                           |
 
-Run **AGI Code: Open Settings** for the full list with inline
+Run **Code: Open Settings** for the full list with inline
 explanations.
 
 ## Privacy
@@ -156,7 +156,7 @@ choices all allow product analytics, and carry no prompt, code or file names.
 ## Support
 
 - Documentation: <https://agiworkforce.com/docs>
-- Bug reports and feature requests: run **AGI Code: Send Feedback**, which
+- Bug reports and feature requests: run **Code: Send Feedback**, which
   opens a pre-filled issue with your environment details.
 - Questions: use the Marketplace Q&A tab for this extension.
 

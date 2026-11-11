@@ -7,7 +7,6 @@ import test from 'node:test';
 import {
   MANIFEST_FIELDS,
   REGISTRY_PATH,
-  readInstalledNames,
   readRegistry,
   runProductNamesCheck,
 } from './check-product-names.mjs';
@@ -22,42 +21,29 @@ const NAMES = {
   work: 'Work',
 };
 
-const INSTALLED_NAMES = {
-  mobile: 'AGI Mobile',
-  desktop: 'AGI Desktop',
-  extension: 'AGI Extension',
-  code: 'AGI Code',
-};
-
-function registrySource(installed) {
-  const block = (name, entries) =>
-    `export const ${name} = {\n${Object.entries(entries)
-      .map(([key, value]) => `  ${key}: '${value}',`)
-      .join('\n')}\n} as const;\n`;
-  return `${block('PRODUCT_NAMES', NAMES)}\n${block('PRODUCT_INSTALLED_NAMES', installed)}`;
+function registrySource(names) {
+  return `export const PRODUCT_NAMES = {\n${Object.entries(names)
+    .map(([key, value]) => `  ${key}: '${value}',`)
+    .join('\n')}\n} as const;\n`;
 }
 
-function fixture({ desktop = 'AGI Desktop', source = '', installed = INSTALLED_NAMES } = {}) {
+function fixture({ desktop = NAMES.desktop, source = '', names = NAMES } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'product-names-'));
   const write = (relative, contents) => {
     fs.mkdirSync(path.dirname(path.join(root, relative)), { recursive: true });
     fs.writeFileSync(path.join(root, relative), contents);
   };
-  write(REGISTRY_PATH, registrySource(installed));
-  write('apps/mobile/app.config.js', "const config = {\n  name: 'AGI Mobile',\n};\n");
+  write(REGISTRY_PATH, registrySource(names));
+  write('apps/mobile/app.config.js', `const config = {\n  name: '${NAMES.mobile}',\n};\n`);
   write('apps/desktop/electron-builder.yml', `appId: x\nproductName: ${desktop}\n`);
-  write('apps/extension/manifest.json', JSON.stringify({ name: 'AGI Extension' }));
-  write('apps/extension-vscode/package.json', JSON.stringify({ displayName: 'AGI Code' }));
+  write('apps/extension/manifest.json', JSON.stringify({ name: NAMES.extension }));
+  write('apps/extension-vscode/package.json', JSON.stringify({ displayName: NAMES.code }));
   write('apps/web/app/page.tsx', source);
   return root;
 }
 
 test('reads every product from the registry', () => {
   assert.deepEqual(readRegistry(fixture()), NAMES);
-});
-
-test('reads every installed name from the registry', () => {
-  assert.deepEqual(readInstalledNames(fixture()), INSTALLED_NAMES);
 });
 
 test('checks one display field per app that cannot import the registry', () => {
@@ -69,39 +55,29 @@ test('checks one display field per app that cannot import the registry', () => {
   ]);
 });
 
-test('passes when every app shows its registry installed name', () => {
+test('passes when every app shows its registry name', () => {
   assert.deepEqual(runProductNamesCheck(fixture()), []);
 });
 
 test('fails when an app manifest drifts from the registry', () => {
-  const failures = runProductNamesCheck(fixture({ desktop: 'AGI Cloud' }));
-  assert.equal(failures.length, 1);
-  assert.match(failures[0], /electron-builder\.yml: shows "AGI Cloud"/);
-});
-
-test('fails when the registry installed name differs from the manifest', () => {
-  const failures = runProductNamesCheck(
-    fixture({ installed: { ...INSTALLED_NAMES, desktop: 'AGI Desktop Pro' } }),
-  );
-  assert.equal(failures.length, 1);
-  assert.match(
-    failures[0],
-    /electron-builder\.yml: shows "AGI Desktop", the registry installs this app as "AGI Desktop Pro"/,
-  );
-});
-
-test('fails when a manifest shows the in-product name instead of the installed name', () => {
-  const failures = runProductNamesCheck(fixture({ desktop: 'Desktop' }));
-  assert.equal(failures.length, 1);
-  assert.match(failures[0], /electron-builder\.yml: shows "Desktop"/);
-});
-
-test('fails when an installed name has no in-product counterpart', () => {
-  const failures = runProductNamesCheck(
-    fixture({ installed: { ...INSTALLED_NAMES, studio: 'AGI Studio' } }),
-  );
+  const failures = runProductNamesCheck(fixture({ desktop: 'AGI Desktop' }));
   assert.deepEqual(failures, [
-    `${REGISTRY_PATH}: PRODUCT_INSTALLED_NAMES names "studio", which PRODUCT_NAMES does not`,
+    'apps/desktop/electron-builder.yml: shows "AGI Desktop", the registry names this app "Desktop"',
+  ]);
+});
+
+test('fails when the registry renames an app its manifest still shows by the old name', () => {
+  const failures = runProductNamesCheck(fixture({ names: { ...NAMES, desktop: 'AGI Desktop' } }));
+  assert.deepEqual(failures, [
+    'apps/desktop/electron-builder.yml: shows "Desktop", the registry names this app "AGI Desktop"',
+  ]);
+});
+
+test('fails when a manifest has lost its display field', () => {
+  const root = fixture();
+  fs.writeFileSync(path.join(root, 'apps/extension-vscode/package.json'), JSON.stringify({}));
+  assert.deepEqual(runProductNamesCheck(root), [
+    'apps/extension-vscode/package.json: shows "null", the registry names this app "Code"',
   ]);
 });
 

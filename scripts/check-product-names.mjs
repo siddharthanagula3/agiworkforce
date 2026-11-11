@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// Every installed app shows the installed name the registry owns
-// (PRODUCT_INSTALLED_NAMES), and no retired spelling of a product survives in
-// shipped source. The registry is packages/contracts/types/src/product-names.ts;
-// a rename is one edit there plus the manifest fields below that cannot import it.
+// Every app shows the product name the registry owns, and no retired spelling of
+// a product survives in shipped source. The registry is
+// packages/contracts/types/src/product-names.ts; a rename is one edit there plus
+// the manifest fields below that cannot import it.
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
@@ -51,21 +51,13 @@ export const SCANNED_ROOTS = [
 const SOURCE_FILE = /\.(ts|tsx|js|jsx|mjs|cjs|rs|swift|json)$/;
 const SKIPPED_DIR = new Set(['node_modules', 'dist', '.next', 'build', 'target', '__snapshots__']);
 
-function readRegistryBlock(root, exportName) {
+export function readRegistry(root) {
   const source = fs.readFileSync(path.join(root, REGISTRY_PATH), 'utf8');
-  const block = source.match(new RegExp(`\\b${exportName}\\s*=\\s*\\{([\\s\\S]*?)\\}`));
-  if (!block) throw new Error(`${REGISTRY_PATH}: ${exportName} not found`);
+  const block = source.match(/\bPRODUCT_NAMES\s*=\s*\{([\s\S]*?)\}/);
+  if (!block) throw new Error(`${REGISTRY_PATH}: PRODUCT_NAMES not found`);
   const names = {};
   for (const [, key, value] of block[1].matchAll(/(\w+):\s*'([^']+)'/g)) names[key] = value;
   return names;
-}
-
-export function readRegistry(root) {
-  return readRegistryBlock(root, 'PRODUCT_NAMES');
-}
-
-export function readInstalledNames(root) {
-  return readRegistryBlock(root, 'PRODUCT_INSTALLED_NAMES');
 }
 
 function readField(root, field) {
@@ -95,19 +87,11 @@ function* walk(root, relative) {
 export function runProductNamesCheck(root = REPO_ROOT) {
   const failures = [];
   const names = readRegistry(root);
-  const installedNames = readInstalledNames(root);
-  for (const product of Object.keys(installedNames)) {
-    if (!(product in names)) {
-      failures.push(
-        `${REGISTRY_PATH}: PRODUCT_INSTALLED_NAMES names "${product}", which PRODUCT_NAMES does not`,
-      );
-    }
-  }
   for (const field of MANIFEST_FIELDS) {
     const value = readField(root, field);
-    if (value !== installedNames[field.product]) {
+    if (value !== names[field.product]) {
       failures.push(
-        `${field.file}: shows "${value}", the registry installs this app as "${installedNames[field.product]}"`,
+        `${field.file}: shows "${value}", the registry names this app "${names[field.product]}"`,
       );
     }
   }
@@ -134,6 +118,6 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     process.exit(1);
   }
   console.log(
-    'Product names check passed: every installed app shows its registry installed name and no retired spelling remains.',
+    'Product names check passed: every app shows its registry name and no retired spelling remains.',
   );
 }

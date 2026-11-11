@@ -7,10 +7,19 @@ import {
   MINIMUM_SUPPORTED_RUNTIME_VERSION,
   PRODUCT_NAMES,
 } from '@agiworkforce/types';
+import manifest from '../../package.json';
 import { CLI_INSTALL_COMMAND } from '../integrations/cliInstaller';
 import { cliAcquisitionHint } from '../integrations/localRuntimeClient';
 
 const REPO_ROOT = resolve(import.meta.dirname, '../../../..');
+
+function commandPaletteLabel(command: string): string {
+  const contributed: Array<{ command: string; title: string; category?: string }> =
+    manifest.contributes.commands;
+  const entry = contributed.find((candidate) => candidate.command === command);
+  expect(entry, `${command} is not contributed in package.json`).toBeDefined();
+  return entry?.category === undefined ? (entry?.title ?? '') : `${entry.category}: ${entry.title}`;
+}
 
 function readRepoFile(relativePath: string): string {
   return readFileSync(resolve(REPO_ROOT, relativePath), 'utf8');
@@ -150,7 +159,8 @@ describe('missing-CLI copy names only the distribution that exists', () => {
   it('points at the install command instead of a package manager', () => {
     const hint = cliAcquisitionHint();
 
-    expect(hint).toContain(`${PRODUCT_NAMES.code}: Install AGI CLI`);
+    expect(hint).toContain(`Run "${commandPaletteLabel('agi-workforce.installCli')}"`);
+    expect(hint).toContain(`Run "${PRODUCT_NAMES.code}: `);
     expect(hint).not.toMatch(/npm (install|i) -g/u);
     expect(hint).not.toContain('@agiworkforce/cli');
     expect(hint).not.toMatch(/brew install/u);
