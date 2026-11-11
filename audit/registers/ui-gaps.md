@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: e16594e0bfad06e8a2ce12227a8143b9aeb9e0b979e39693e45610c984b645b6 -->
+<!-- ui-gaps-csv-sha256: 0bf08cf4082653d2fbda3d4e5ae75a9813eb9b571b96d91f78aac3d4787f3f67 -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/registers/ui-gaps.csv` is the source of truth; this document is generated with
@@ -1117,11 +1117,11 @@ Not planned until Plugins is an operable account product rather than a marketing
 
 **Gap**
 
-The reference proactively scans connected accounts to derive task suggestions. agiworkforce's connector contract is narrower: a connected service makes runtime tools available after an explicit user request, but connection alone does not authorize background repository, issue, branch, message, or document inspection. There is no suggestion endpoint, scan consent, source cursor, minimization policy, or revocation/cache lifecycle. Mobile Work mode now states that connected sources remain request-scoped, that AGI does not scan repositories or accounts in the background, and links directly to connector management instead of silently showing a blank canvas or fabricated suggestions.
+The reference proactively scans connected accounts to derive task suggestions. agiworkforce's connector contract is narrower: a connected service makes runtime tools available after an explicit user request, but connection alone does not authorize background repository, issue, branch, message, or document inspection. There is no suggestion endpoint, scan consent, source cursor, minimization policy, or revocation/cache lifecycle. The Mobile Work empty state is a plain new chat: it shows no fabricated suggestions, no static example tasks and no notice card, and connector management stays one tap away in the composer's Add to chat sheet.
 
 **Evidence**
 
-WorkModeSourceNotice.tsx presents the request-scoped boundary and Manage connected services action when the Cloud composer is in agiwork mode; app/(app)/(tabs)/chat.tsx mounts it only for that state. apps/web/app/api/connectors/route.ts treats connection rows as tool enablement gates, and the chat tool loop invokes tools within a user-initiated turn. Repository searches find no authenticated connector-suggestion endpoint, scheduled scanner, scan cursor, suggestion cache, or consent record. WorkModeSourceNotice.test.tsx verifies the privacy copy and action; ChatTabModeToggle.test.tsx and AddToChat.test.tsx retain coverage of Cloud mode and the real Work mode switch.
+app/(app)/(tabs)/chat.tsx renders only the greeting for an empty new chat in Chat, Work and Local, and AddToChatSheet.tsx opens connector management. apps/web/app/api/connectors/route.ts treats connection rows as tool enablement gates, and the chat tool loop invokes tools within a user-initiated turn. Repository searches find no authenticated connector-suggestion endpoint, scheduled scanner, scan cursor, suggestion cache, or consent record. ChatTabModeToggle.test.tsx asserts that no notice, example task or suggestion renders on the empty new chat, and with AddToChat.test.tsx retains coverage of Cloud mode and the real Work mode switch.
 
 **Suggested fix**
 

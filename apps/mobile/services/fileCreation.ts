@@ -18,11 +18,7 @@ import { localDeviceManagedFile, type FileLineage, type ManagedFile } from '@agi
 import { guardedFetch, isOurCloudHost } from '@/lib/egressGuard';
 import { getAuthHeaders } from '@/services/authSession';
 import { resolveGeneratedImageUri } from '@/src/features/image/services/imagegen';
-import {
-  EXPORT_CONTENT_STYLES,
-  EXPORT_MATH_SCRIPT,
-  markdownToExportHtml,
-} from '@/services/exportMarkdownHtml';
+import { EXPORT_CONTENT_STYLES, markdownToExportHtml } from '@/services/exportMarkdownHtml';
 import { markdownToDocxBase64 } from './docxExport';
 
 export const EXPORTS_DIR = `${documentDirectory}exports/`;
@@ -76,7 +72,7 @@ function sanitizeFileName(title: string): string {
 }
 
 function markdownToHtml(content: string, title: string): string {
-  const { html, hasMath } = markdownToExportHtml(content);
+  const { html } = markdownToExportHtml(content);
 
   const timestamp = new Date().toLocaleDateString(undefined, {
     year: 'numeric',
@@ -137,7 +133,6 @@ function markdownToHtml(content: string, title: string): string {
   <div class="footer">
     Exported from AGI Workforce
   </div>
-  ${hasMath ? EXPORT_MATH_SCRIPT : ''}
 </body>
 </html>`;
 }

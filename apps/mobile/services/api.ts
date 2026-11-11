@@ -1,8 +1,6 @@
 import { Alert, Linking } from 'react-native';
-import { router } from 'expo-router';
 import { API_URL, TIMEOUTS } from '@/lib/constants';
 import { combineAbortSignals } from '@/lib/abortSignal';
-import { FEATURES } from '@/lib/v1FeatureFlags';
 import { clearAuthSession, getAuthHeaders, getAuthToken, refreshAuthSession } from './authSession';
 import { guardedFetch } from '@/lib/egressGuard';
 import {
@@ -11,7 +9,7 @@ import {
   type CloudAccountEpoch,
 } from '@/src/features/auth/services/cloudAccountSession';
 import { clearLocalCloudAccountState } from '@/src/features/auth/services/cloudAccountTeardown';
-import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
+import { oweSignInForEndedSession } from '@/src/features/auth/services/endedSession';
 import {
   createUploadTask,
   getInfoAsync,
@@ -220,45 +218,18 @@ export async function recoverStreamSession(account: CloudAccountEpoch): Promise<
   const refreshed = await tryRefreshToken();
   assertCloudAccountEpochCurrent(account);
   assertApiAccountGeneration(accountGeneration);
-  if (!refreshed) handleUnrecoverableAuth();
   return refreshed;
 }
 
-function carriesCredential(headers: Record<string, string>): boolean {
-  return Object.entries(headers).some(
-    ([name, value]) => name.toLowerCase() === 'authorization' && Boolean(value),
-  );
-}
-
-function handleUnrecoverableAuth(): void {
+// A refusal is not the end of the session: Clerk alone says when that has
+// happened, and the root layout opens sign-in when it does.
+function endRefusedAccountSession(): void {
+  oweSignInForEndedSession();
   invalidateCloudAccount();
   clearLocalCloudAccountState();
-
-  if (!FEATURES.auth) {
-    clearAuthSession().catch((err) => {
-      console.warn('[API] Sign-out cleanup failed (non-blocking):', err);
-    });
-    return;
-  }
-
   clearAuthSession().catch((err) => {
     console.warn('[API] Sign-out cleanup failed (non-blocking):', err);
   });
-
-  Alert.alert('Session Expired', 'Your session has expired. Please sign in again to continue.', [
-    { text: 'Not now', style: 'cancel' },
-    {
-      text: 'Sign In',
-      style: 'default',
-      onPress: () => {
-        try {
-          router.push(beginCloudPostAuthIntent());
-        } catch (err) {
-          if (__DEV__) console.warn('[API] login navigation failed (non-blocking):', err);
-        }
-      },
-    },
-  ]);
 }
 
 interface RequestOptions {
@@ -381,9 +352,7 @@ async function sendRequest(
         }
       }
       release();
-      if (!carriesCredential(requestHeaders)) throw new CloudCredentialUnavailableError();
-      handleUnrecoverableAuth();
-      throw new Error('HTTP 401: Session expired. Please sign in again.');
+      throw new CloudCredentialUnavailableError();
     }
 
     if (response.status === 403) {
@@ -408,7 +377,7 @@ async function sendRequest(
 
     if (response.status === 403 && isAccountIdentityPath(path)) {
       release();
-      handleUnrecoverableAuth();
+      endRefusedAccountSession();
       throw new Error('HTTP 403: This account can no longer be used on this device.');
     }
 
@@ -682,8 +651,7 @@ export const api = {
             return api.uploadFile(file, { ...options, _skipAuthRetry: true });
           }
         }
-        handleUnrecoverableAuth();
-        throw new Error('Upload failed: session expired. Please sign in again.');
+        throw new CloudCredentialUnavailableError();
       }
       if (!presignResponse.ok) {
         throw new ApiHttpError(
@@ -786,10 +754,7 @@ export const api = {
         });
       const completionToken = await getAuthToken();
       assertApiAccountGeneration(accountGeneration);
-      if (!completionToken) {
-        handleUnrecoverableAuth();
-        throw new Error('Upload failed: session expired. Please sign in again.');
-      }
+      if (!completionToken) throw new CloudCredentialUnavailableError();
       let completeResponse = await completeAttachment(completionToken);
       assertApiAccountGeneration(accountGeneration);
       if (completeResponse.status === 401) {
@@ -797,16 +762,10 @@ export const api = {
         assertApiAccountGeneration(accountGeneration);
         const refreshedToken = refreshed ? await getAuthToken() : null;
         assertApiAccountGeneration(accountGeneration);
-        if (!refreshedToken) {
-          handleUnrecoverableAuth();
-          throw new Error('Upload failed: session expired. Please sign in again.');
-        }
+        if (!refreshedToken) throw new CloudCredentialUnavailableError();
         completeResponse = await completeAttachment(refreshedToken);
         assertApiAccountGeneration(accountGeneration);
-        if (completeResponse.status === 401) {
-          handleUnrecoverableAuth();
-          throw new Error('Upload failed: session expired. Please sign in again.');
-        }
+        if (completeResponse.status === 401) throw new CloudCredentialUnavailableError();
       }
       if (!completeResponse.ok) {
         throw new ApiHttpError(

@@ -29,8 +29,9 @@ function envIsTruthy(name) {
 
 const SPLASH_BACKGROUND_LIGHT = '#ffffff';
 const SPLASH_BACKGROUND_DARK = '#000000';
-// PNGs are 4x this, so the same asset is crisp on iOS @3x and Android xxxhdpi.
-const SPLASH_IMAGE_WIDTH = 220;
+const SPLASH_SYMBOL = './assets/agi-symbol.png';
+// The symbol is at least 4x this, so the same asset is crisp on iOS @3x and Android xxxhdpi.
+const SPLASH_IMAGE_WIDTH = 72;
 
 const CAMERA_PURPOSE =
   'AGI Mobile uses the camera to scan documents and attach photos to your chats.';
@@ -237,12 +238,12 @@ const config = {
     [
       'expo-splash-screen',
       {
-        image: './assets/splash-lockup.png',
+        image: SPLASH_SYMBOL,
         imageWidth: SPLASH_IMAGE_WIDTH,
         resizeMode: 'contain',
         backgroundColor: SPLASH_BACKGROUND_LIGHT,
         dark: {
-          image: './assets/splash-lockup-dark.png',
+          image: SPLASH_SYMBOL,
           backgroundColor: SPLASH_BACKGROUND_DARK,
         },
       },

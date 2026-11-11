@@ -17,6 +17,7 @@ import NetInfo from '@react-native-community/netinfo';
 import { sha256 as nobleSha256 } from '@noble/hashes/sha256';
 import {
   ensureMultimodalArtifacts,
+  reportProgressBySteps,
   ChecksumMismatchError,
   type FileSystemDeps,
 } from '@agiworkforce/local-llm';
@@ -442,14 +443,21 @@ export async function downloadModel(opts: ModelDownloadOpts): Promise<InstalledM
 
   let startTime = Date.now();
   let lastBytes = 0;
-  const reportBytes = (written: number, total: number): void => {
+  let latest = { written: 0, total: 0 };
+  const showBytes = reportProgressBySteps(() => {
     if (!onProgress) return;
+    const { written, total } = latest;
     const now = Date.now();
     const elapsedSec = (now - startTime) / 1000;
     const speedBps = elapsedSec > 0 ? (written - lastBytes) / elapsedSec : 0;
     lastBytes = written;
     startTime = now;
     onProgress(written, total, speedBps);
+  });
+  const reportBytes = (written: number, total: number): void => {
+    if (!onProgress) return;
+    latest = { written, total };
+    showBytes(total > 0 ? written / total : 0);
   };
 
   if (opts.mmprojUrl && opts.mmprojChecksum && opts.mmprojSizeBytes) {

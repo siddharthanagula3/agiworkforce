@@ -44,7 +44,6 @@ describe('app.config.js, launch screen', () => {
 
     expect(props.image).toBeTruthy();
     expect(props.dark?.image).toBeTruthy();
-    expect(props.dark?.image).not.toBe(props.image);
     expect(props.resizeMode).toBe('contain');
   });
 
@@ -61,18 +60,30 @@ describe('app.config.js, launch screen', () => {
     expect(appConfig.expo.userInterfaceStyle).toBe('automatic');
   });
 
-  it('launches with the brand lockup, never the bare mark', () => {
-    expect(JSON.stringify(appConfig.expo)).not.toContain('splash-icon.png');
-
+  it('launches with the logo symbol alone, the same picture in both themes', () => {
     const props = getSplashPluginProps();
-    for (const image of [props.image!, props.dark!.image!]) {
-      const { width, height } = readPngSize(image);
-      expect(width / height).toBeGreaterThan(2);
-      expect(width).toBeGreaterThanOrEqual(props.imageWidth! * 3);
-    }
+
+    expect(JSON.stringify(appConfig.expo)).not.toContain('lockup');
+    expect(props.image).toBe('./assets/agi-symbol.png');
+    expect(props.dark?.image).toBe(props.image);
+
+    const { width, height } = readPngSize(props.image!);
+    expect(width).toBe(height);
+    expect(width).toBeGreaterThanOrEqual(props.imageWidth! * 4);
   });
 
-  it('renders the lockup at a fixed dp width so it cannot fill the screen', () => {
+  it('draws the onboarding symbol at the launch image size', () => {
+    const onboarding = fs.readFileSync(
+      path.join(__dirname, '..', 'app', '(public)', 'onboarding.tsx'),
+      'utf8',
+    );
+    const heroSize = Number(onboarding.match(/const HERO_SYMBOL_SIZE = (\d+);/)?.[1]);
+
+    expect(heroSize).toBe(getSplashPluginProps().imageWidth);
+    expect(onboarding).toContain('<AgiMark size={HERO_SYMBOL_SIZE} testID="hero-brand-mark" />');
+  });
+
+  it('renders the symbol at a fixed dp width so it cannot fill the screen', () => {
     const props = getSplashPluginProps();
 
     expect(typeof props.imageWidth).toBe('number');

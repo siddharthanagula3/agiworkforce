@@ -1,5 +1,9 @@
 import { api, type UploadFileInput, type UploadFileResult } from '@/services/api';
-import { ApiHttpError } from '@/services/apiErrors';
+import {
+  ApiHttpError,
+  CloudCredentialUnavailableError,
+  UPLOAD_ACCOUNT_UNCONFIRMED_MESSAGE,
+} from '@/services/apiErrors';
 import { ensureCloudSendConsent } from '@/services/llmGate';
 import {
   captureCloudAccountEpoch,
@@ -95,10 +99,10 @@ export async function uploadWithRetry(
         useUploadLifecycleStore.getState().settle(attachmentId, 'canceled');
         return null;
       }
-      if (lastError.message.includes('session expired') || lastError.message.includes('401')) {
+      if (lastError instanceof CloudCredentialUnavailableError) {
         useUploadLifecycleStore
           .getState()
-          .settle(attachmentId, 'failed', 'Your session expired. Sign in again to upload files.');
+          .settle(attachmentId, 'failed', UPLOAD_ACCOUNT_UNCONFIRMED_MESSAGE);
         throw lastError;
       }
       if (isRefusal(lastError)) {

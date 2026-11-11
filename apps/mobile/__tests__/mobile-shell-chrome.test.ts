@@ -11,13 +11,9 @@ const APP_CONFIG = readFileSync(join(MOBILE_ROOT, 'app.config.js'), 'utf8');
 const MINIMUM_TYPE_SIZE = 14;
 const SUB_FLOOR_TEXT_CLASS = /(?<![\w-])text-(?:xs|\[(\d+(?:\.\d+)?)px\])(?![\w-])/g;
 const LARGEST_BODY_TYPE_SIZE = 34;
-// The three surfaces that are a single piece of display type: the onboarding
-// wordmark, the not-found numeral and the crash screen's mark.
-const DISPLAY_TYPE_SURFACES = [
-  'app/(public)/onboarding.tsx',
-  'app/+not-found.tsx',
-  'app/error.tsx',
-];
+// The two surfaces that are a single piece of display type: the not-found
+// numeral and the crash screen's mark.
+const DISPLAY_TYPE_SURFACES = ['app/+not-found.tsx', 'app/error.tsx'];
 const FONT_SIZE = /\bfontSize:\s*(?:(\d+)|typeScale\.(\w+))\b/g;
 
 const SAFE_AREA = /SafeAreaView|useSafeAreaInsets|SettingsScreenShell|useFullScreenChrome/;

@@ -970,6 +970,9 @@
     "ACCOUNT_TOKEN": [
       "crates/agiworkforce-protocol/src/developer_session.rs"
     ],
+    "ACCOUNT_UNCONFIRMED_MESSAGE": [
+      "apps/mobile/services/apiErrors.ts"
+    ],
     "ACCOUNT_URL_CONNECTORS": [
       "apps/web/lib/connectors/account-url-connectors.ts"
     ],
@@ -3831,12 +3834,6 @@
     "AGI_WORK_DONE_TITLE": [
       "apps/web/features/chat/lib/completion-notification.ts"
     ],
-    "AGI_WORK_EXAMPLE_KEYS": [
-      "apps/mobile/src/features/chat/components/AgiWorkExamples.tsx"
-    ],
-    "AGI_WORK_EXAMPLE_PROMPT_KEYS": [
-      "apps/mobile/src/features/chat/components/AgiWorkExamples.tsx"
-    ],
     "AGI_WORK_FEEDBACK_LABEL": [
       "apps/web/features/chat/lib/agi-work.ts"
     ],
@@ -4048,9 +4045,6 @@
     ],
     "AgiWorkContextIdentity": [
       "apps/web/app/api/llm/v1/chat/completions/lib/agiwork-plan.ts"
-    ],
-    "AgiWorkExamples": [
-      "apps/mobile/src/features/chat/components/AgiWorkExamples.tsx"
     ],
     "AgiWorkExcludableTool": [
       "apps/web/app/api/llm/v1/chat/completions/lib/agiwork-plan.ts",
@@ -13225,6 +13219,9 @@
     ],
     "buildMarketplaceManifestUrl": [
       "apps/web/features/plugins/server/directory/official-marketplace.ts"
+    ],
+    "buildMathDocument": [
+      "apps/mobile/src/features/chat/components/MathBlock.tsx"
     ],
     "BuildMcpCatalogOptions": [
       "packages/tools/mcp/src/connect.ts",
@@ -40426,6 +40423,10 @@
     "download_piper": [
       "apps/desktop/src-tauri/src/features/speech/local_tts.rs"
     ],
+    "DOWNLOAD_PROGRESS_STEP": [
+      "packages/platform/local-llm/src/index.ts",
+      "packages/platform/local-llm/src/progress.ts"
+    ],
     "download_voice": [
       "apps/desktop/src-tauri/src/features/speech/local_tts.rs"
     ],
@@ -45130,9 +45131,6 @@
     "export_conversation_to_file": [
       "apps/cli/src/repl/mod.rs",
       "apps/cli/src/repl/registry.rs"
-    ],
-    "EXPORT_MATH_SCRIPT": [
-      "apps/mobile/services/exportMarkdownHtml.ts"
     ],
     "export_to_json": [
       "apps/desktop/src-tauri/src/core/agi/memory_manager.rs"
@@ -51457,9 +51455,6 @@
     "generate_agent_id": [
       "apps/cli/src/features/a2a/mod.rs"
     ],
-    "generate_agi_lockup": [
-      "apps/mobile/scripts/generate_logo_assets.py"
-    ],
     "generate_agi_logo": [
       "apps/mobile/scripts/generate_logo_assets.py"
     ],
@@ -51485,9 +51480,6 @@
     ],
     "GENERATE_IMAGE_TOOL_NAME": [
       "packages/contracts/types/src/interactive-cards.ts"
-    ],
-    "generate_lockups": [
-      "apps/mobile/scripts/generate_logo_assets.py"
     ],
     "generate_markdown": [
       "packages/tools/skills/reference-bundles/skill-creator/scripts/aggregate_benchmark.py"
@@ -57141,6 +57133,9 @@
     ],
     "hasClerkSessionCookie": [
       "apps/web/lib/clerk-session.ts"
+    ],
+    "hasCloudAccountOwner": [
+      "apps/mobile/src/features/auth/services/cloudAccountSession.ts"
     ],
     "hasCompatibleFreeErrorRecoveryModel": [
       "apps/web/features/chat/lib/free-error-model-recovery.ts"
@@ -65072,6 +65067,9 @@
     "isSignInEntryPath": [
       "packages/contracts/types/src/product-routes.ts"
     ],
+    "isSignInOwedForEndedSession": [
+      "apps/mobile/src/features/auth/services/endedSession.ts"
+    ],
     "isSingleUse": [
       "apps/desktop/electron/runtime/permissionCore.ts"
     ],
@@ -65963,12 +65961,6 @@
     ],
     "kanagawa": [
       "apps/desktop/src/themes/presets/kanagawa.ts"
-    ],
-    "KATEX_CSS_URL": [
-      "apps/mobile/src/features/chat/utils/katexAssets.ts"
-    ],
-    "KATEX_JS_URL": [
-      "apps/mobile/src/features/chat/utils/katexAssets.ts"
     ],
     "kbReadCommandFor": [
       "apps/desktop/src/features/chat/ProjectSettingsDialog.tsx"
@@ -75323,6 +75315,9 @@
     ],
     "MathFallback": [
       "apps/mobile/src/features/chat/components/MathBlock.tsx"
+    ],
+    "MathMarkup": [
+      "packages/ui/unified-chat/src/lib/math-markup.ts"
     ],
     "MATRIX_PATH": [
       "scripts/check-surface-feature-matrix.mjs"
@@ -87709,6 +87704,9 @@
     ],
     "overwriteNeedsAudit": [
       "packages/contracts/types/src/resource-metadata-contract.ts"
+    ],
+    "oweSignInForEndedSession": [
+      "apps/mobile/src/features/auth/services/endedSession.ts"
     ],
     "OWN_ROW_OPERATIONS": [
       "scripts/check-entitlement-entry-point.mjs"
@@ -101097,6 +101095,9 @@
     "readMarketingEmailUnsubscribeToken": [
       "apps/web/lib/services/billing-notice-service.ts"
     ],
+    "readMathSize": [
+      "apps/mobile/src/features/chat/components/MathBlock.tsx"
+    ],
     "readMaturities": [
       "scripts/check-surface-feature-matrix.mjs"
     ],
@@ -106023,9 +106024,6 @@
     "render_vim": [
       "apps/cli/src/claude_parity.rs"
     ],
-    "render_wordmark": [
-      "apps/mobile/scripts/generate_logo_assets.py"
-    ],
     "render_working_principles": [
       "apps/cli/src/agent/prompt.rs"
     ],
@@ -106157,6 +106155,9 @@
     ],
     "renderMarkdownInto": [
       "apps/extension/src/features/side-panel/markdown.ts"
+    ],
+    "renderMathMarkup": [
+      "packages/ui/unified-chat/src/lib/math-markup.ts"
     ],
     "renderMatrices": [
       "scripts/generate-doc-matrices.mjs"
@@ -106617,6 +106618,10 @@
     "ReportOfflinePaymentInput": [
       "apps/web/lib/services/enterprise-contracts/index.ts",
       "apps/web/lib/services/enterprise-contracts/invoicing.ts"
+    ],
+    "reportProgressBySteps": [
+      "packages/platform/local-llm/src/index.ts",
+      "packages/platform/local-llm/src/progress.ts"
     ],
     "ReportRefusal": [
       "apps/web/scripts/mobile-top-up-refund-report/report.ts"
@@ -120989,6 +120994,9 @@
     ],
     "settleSearchCall": [
       "apps/web/lib/web-search/search-budget.ts"
+    ],
+    "settleSignInForEndedSession": [
+      "apps/mobile/src/features/auth/services/endedSession.ts"
     ],
     "settleSlackRun": [
       "apps/web/lib/slack/slack-runs.ts"
@@ -137444,6 +137452,9 @@
     "Upload": [
       "packages/ui/icons/src/glyphs/Actions.tsx"
     ],
+    "UPLOAD_ACCOUNT_UNCONFIRMED_MESSAGE": [
+      "apps/mobile/services/apiErrors.ts"
+    ],
     "UPLOAD_BUSY_LABEL": [
       "packages/ui/ui/src/directory/constants.ts"
     ],
@@ -145188,9 +145199,6 @@
     "workModeLabel": [
       "packages/ui/unified-chat/src/components/tasks/task-display.ts",
       "packages/ui/unified-chat/src/index.ts"
-    ],
-    "WorkModeSourceNotice": [
-      "apps/mobile/src/features/chat/components/WorkModeSourceNotice.tsx"
     ],
     "WorkModeSwitch": [
       "apps/mobile/src/features/chat/components/WorkModeSwitch.tsx"

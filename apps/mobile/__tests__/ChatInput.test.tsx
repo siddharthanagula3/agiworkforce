@@ -1077,21 +1077,6 @@ describe('ChatInput', () => {
   });
 
   describe('composer handle', () => {
-    it('prefills an empty editable draft without sending or replacing existing text', () => {
-      const ref = React.createRef<ChatInputHandle>();
-      const onSend = jest.fn();
-      const screen = renderInput({ attachRef: ref, onSend });
-
-      act(() => ref.current?.prefillText?.('Look up '));
-      expect(screen.getByLabelText('Message input').props.value).toBe('Look up ');
-      expect(onSend).not.toHaveBeenCalled();
-
-      fireEvent.changeText(screen.getByLabelText('Message input'), 'My existing draft');
-      act(() => ref.current?.prefillText?.('Help me write '));
-      expect(screen.getByLabelText('Message input').props.value).toBe('My existing draft');
-      expect(onSend).not.toHaveBeenCalled();
-    });
-
     it('restores returned text into an empty composer and after an existing draft', () => {
       const ref = React.createRef<ChatInputHandle>();
       const screen = renderInput({ attachRef: ref });

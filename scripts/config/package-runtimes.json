@@ -274,6 +274,7 @@
       "./network-error": "universal",
       "./tabular": "universal",
       "./markdown-document": "universal",
+      "./math-markup": "universal",
       "./assistant-fence": "universal",
       "./assistant-fence-edits": "universal",
       "./continuation-seam": "universal",

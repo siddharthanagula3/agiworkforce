@@ -543,12 +543,9 @@ export default function CloudAccountScreen() {
                   );
                   return;
                 }
-                const is401 = err instanceof Error && err.message.includes('401');
                 Alert.alert(
-                  is401 ? 'Session expired' : 'Could not confirm deletion scheduling',
-                  is401
-                    ? 'Your session expired. Sign in to the original account and check deletion status before taking another action.'
-                    : 'The scheduling outcome is unknown. Check the refreshed status in this account before taking another action. A status check may not reflect a request still in progress.',
+                  'Could not confirm deletion scheduling',
+                  'The scheduling outcome is unknown. Check the refreshed status in this account before taking another action. A status check may not reflect a request still in progress.',
                 );
                 await refreshDeletionStatus(intent.owner, account);
               })

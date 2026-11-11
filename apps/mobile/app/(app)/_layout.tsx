@@ -28,11 +28,14 @@ export default function AppLayout() {
         screenOptions={{
           headerShown: false,
           drawerType: gestures.drawerType,
+          // The drawer container is animated on the UI thread. A style that changes with the theme
+          // re-commits it on a Local/Cloud switch and resets its position, leaving a closed drawer
+          // drawn open, so DrawerContent paints the themed background and border.
           drawerStyle: {
             width: drawerWidth,
-            backgroundColor: colors.background,
-            borderRightColor: colors.border,
-            borderRightWidth: 1,
+            backgroundColor: colors.transparent,
+            borderRightColor: colors.transparent,
+            borderRightWidth: 0,
           },
           overlayColor: colors.scrim,
           swipeEnabled: gestures.swipeEnabled,

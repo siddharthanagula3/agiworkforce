@@ -2,6 +2,7 @@
 
 import { Alert } from 'react-native';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
+import { PRODUCT_BRAND } from '@agiworkforce/types';
 
 const mockReplace = jest.fn();
 jest.mock('expo-router', () => ({
@@ -240,9 +241,19 @@ describe('Onboarding', () => {
       expect(getByTestId('onboarding-hero-screen')).toBeTruthy();
     });
 
-    it('shows wordmark "AGI"', () => {
-      const { getByTestId } = render(<OnboardingScreen />);
-      expect(getByTestId('hero-wordmark')).toBeTruthy();
+    it('shows the logo symbol alone, named for screen readers, with no wordmark', () => {
+      const { getByTestId, getByLabelText, queryByTestId, queryByText } = render(
+        <OnboardingScreen />,
+      );
+      expect(getByTestId('hero-brand-mark')).toBeTruthy();
+      expect(getByLabelText(PRODUCT_BRAND)).toBeTruthy();
+      expect(queryByTestId('hero-wordmark')).toBeNull();
+      expect(queryByText('AGI')).toBeNull();
+    });
+
+    it('makes the tagline the heading of the hero', () => {
+      const { getByRole } = render(<OnboardingScreen />);
+      expect(getByRole('header', { name: 'Your AI workspace for everyday work.' })).toBeTruthy();
     });
 
     it('shows the polished hero tagline', () => {
@@ -253,11 +264,6 @@ describe('Onboarding', () => {
     it('shows hero tagline testID', () => {
       const { getByTestId } = render(<OnboardingScreen />);
       expect(getByTestId('hero-tagline')).toBeTruthy();
-    });
-
-    it('shows the website AGI brand mark beside the wordmark', () => {
-      const { getByTestId } = render(<OnboardingScreen />);
-      expect(getByTestId('hero-brand-mark')).toBeTruthy();
     });
 
     it('shows locked footer copy', () => {
@@ -588,7 +594,7 @@ describe('Onboarding', () => {
     const heroIds = [
       'onboarding-root',
       'onboarding-hero-screen',
-      'hero-wordmark',
+      'hero-brand-mark',
       'hero-tagline',
       'hero-start-chatting-btn',
       'hero-footer',

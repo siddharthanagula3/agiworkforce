@@ -1,27 +1,7 @@
 import os
 import sys
 import math
-from PIL import Image, ImageDraw, ImageFont
-
-# Brand amber for the single accent spoke. Kept in sync with BRAND_AMBER in
-# apps/mobile/components/ui/AgiMark.tsx and --agi-amber in
-# apps/web/app/globals.css, so the mark is the same colour on every surface.
-BRAND_AMBER = (240, 168, 74, 255)
-
-# Foreground ink per theme. These are `textPrimary` from
-# apps/mobile/src/ui/theme/tokens.ts, the launch lockup must be the same ink
-# the first in-app frame draws the wordmark in, or the handoff visibly shifts.
-INK_LIGHT = (17, 17, 17, 255)
-INK_DARK = (244, 244, 244, 255)
-
-# Newsreader is the brand typeface (loaded app-wide in app/_layout.tsx and used
-# for the "AGI" wordmark). Read the face out of the installed package rather
-# than vendoring a copy, so the launch lockup can never drift from the runtime
-# wordmark.
-NEWSREADER_SEMIBOLD = os.path.join(
-    'apps', 'mobile', 'node_modules', '@expo-google-fonts', 'newsreader',
-    '600SemiBold', 'Newsreader_600SemiBold.ttf',
-)
+from PIL import Image, ImageDraw
 
 def draw_agi_mark(draw, cx, cy, scale, base_color, accent_color):
     """Draw the twelve-spoke AGI mark centred on (cx, cy).
@@ -76,9 +56,6 @@ def generate_agi_logo(width, height, is_opaque, output_path):
     # Scale factor mapping SVG coordinates [0, 24] to super resolution
     scale = super_w / 24.0
 
-    # Icon amber predates BRAND_AMBER and is left untouched here so a rerun does
-    # not silently repaint the shipped app icons; only the launch lockup below
-    # is on the current brand value.
     draw_agi_mark(draw, cx, cy, scale, (244, 244, 244, 255), (251, 191, 36, 255))
 
     # Resize back down to target resolution with Lanczos interpolation
@@ -92,75 +69,6 @@ def generate_agi_logo(width, height, is_opaque, output_path):
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     final_img.save(output_path, 'PNG')
     print(f"Generated logo asset: {output_path} ({width}x{height})")
-
-# Launch-lockup geometry mirrors the in-app brand lockup on the chat empty
-# state (app/(app)/(tabs)/chat.tsx): a 30pt mark, a 10pt gap, then "AGI" set at
-# 26pt in Newsreader SemiBold with 0.5pt letterspacing. The bare mark is a
-# twelve-spoke starburst and, shown alone and static, reads as a stalled
-# loading spinner, the wordmark is what disambiguates it.
-LOCKUP_MARK_UNITS = 30.0
-LOCKUP_GAP_UNITS = 10.0
-LOCKUP_FONT_UNITS = 26.0
-LOCKUP_LETTER_SPACING_UNITS = 0.5
-LOCKUP_WORDMARK = 'AGI'
-
-# Supersampling factor: pixels per layout unit before the final Lanczos
-# downscale. High enough that the 1.5-unit spoke strokes stay clean.
-LOCKUP_SUPERSAMPLE = 32.0
-
-
-def render_wordmark(px_per_unit, ink):
-    """Render the letterspaced wordmark and crop it to its ink box."""
-    font = ImageFont.truetype(NEWSREADER_SEMIBOLD, int(round(LOCKUP_FONT_UNITS * px_per_unit)))
-    tracking = LOCKUP_LETTER_SPACING_UNITS * px_per_unit
-    advances = [font.getlength(ch) for ch in LOCKUP_WORDMARK]
-
-    # Generous scratch canvas: PIL has no "measure with tracking" primitive, so
-    # we lay the glyphs out ourselves and crop to whatever ink lands.
-    canvas_w = int(math.ceil(sum(advances) + tracking * (len(LOCKUP_WORDMARK) - 1))) + 8
-    canvas_h = int(math.ceil(LOCKUP_FONT_UNITS * px_per_unit * 2.0))
-    layer = Image.new('RGBA', (canvas_w, canvas_h), (0, 0, 0, 0))
-    layer_draw = ImageDraw.Draw(layer)
-
-    x = 4.0
-    for char, advance in zip(LOCKUP_WORDMARK, advances):
-        layer_draw.text((x, canvas_h / 4.0), char, font=font, fill=ink)
-        x += advance + tracking
-
-    ink_box = layer.getbbox()
-    if ink_box is None:
-        raise RuntimeError(f'Wordmark rendered empty; check the font at {NEWSREADER_SEMIBOLD}')
-    return layer.crop(ink_box)
-
-
-def generate_agi_lockup(width, ink, output_path):
-    """Generate the horizontal mark + wordmark launch lockup on transparency."""
-    px_per_unit = LOCKUP_SUPERSAMPLE
-    mark_px = LOCKUP_MARK_UNITS * px_per_unit
-    gap_px = LOCKUP_GAP_UNITS * px_per_unit
-    wordmark = render_wordmark(px_per_unit, ink)
-
-    super_w = int(round(mark_px + gap_px + wordmark.width))
-    super_h = int(round(max(mark_px, float(wordmark.height))))
-    img = Image.new('RGBA', (super_w, super_h), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
-
-    # The mark box is square and vertically centred; the wordmark is centred on
-    # its ink box so the optical baseline matches the mark's centre, the same
-    # alignment the in-app row gets from `alignItems: 'center'`.
-    draw_agi_mark(draw, mark_px / 2.0, super_h / 2.0, mark_px / 24.0, ink, BRAND_AMBER)
-    img.alpha_composite(
-        wordmark,
-        (int(round(mark_px + gap_px)), int(round((super_h - wordmark.height) / 2.0))),
-    )
-
-    height = int(round(super_h * (width / float(super_w))))
-    final_img = img.resize((width, height), Image.Resampling.LANCZOS)
-
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    final_img.save(output_path, 'PNG')
-    print(f"Generated launch lockup: {output_path} ({width}x{height})")
-
 
 def generate_icons():
     # 1. iOS App Icon (opaque background)
@@ -199,27 +107,18 @@ def generate_notification_icon():
     print(f"Generated notification icon: {output_path} ({size}x{size})")
 
 
-def generate_lockups():
-    # Launch screen lockups. 880px wide is 4x the 220dp `imageWidth` declared by
-    # the expo-splash-screen plugin in app.config.js, so the same source is
-    # crisp on iOS @3x and Android xxxhdpi. One per theme: `userInterfaceStyle`
-    # is 'automatic', so the OS picks the variant and the launch ink must match
-    # the background it lands on.
-    generate_agi_lockup(880, INK_LIGHT, 'apps/mobile/assets/splash-lockup.png')
-    generate_agi_lockup(880, INK_DARK, 'apps/mobile/assets/splash-lockup-dark.png')
-
-
-# Run from the repository root. Pass `icons`, `lockups` or `notification` to
-# regenerate one family only, regenerating the icons rewrites shipped store artwork, so the
-# default is deliberately not "everything".
+# Run from the repository root and name the target: `icons` or `notification`.
+# Regenerating the icons rewrites shipped store artwork, so there is
+# deliberately no default.
 TARGETS = {
     'icons': generate_icons,
-    'lockups': generate_lockups,
     'notification': generate_notification_icon,
 }
 
 if __name__ == '__main__':
-    requested = sys.argv[1:] or ['lockups']
+    requested = sys.argv[1:]
+    if not requested:
+        raise SystemExit(f"Name a target: {', '.join(TARGETS)}")
     unknown = [name for name in requested if name not in TARGETS]
     if unknown:
         raise SystemExit(f"Unknown target(s): {', '.join(unknown)}. Choose from: {', '.join(TARGETS)}")

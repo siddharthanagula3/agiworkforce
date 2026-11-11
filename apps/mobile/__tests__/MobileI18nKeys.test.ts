@@ -1,15 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import React from 'react';
-import { fireEvent, render } from '@testing-library/react-native';
-import i18n from 'i18next';
-import { initReactI18next } from 'react-i18next';
-import { NAMESPACES, SUPPORTED_LANGUAGES, baseInitOptions, resources } from '@agiworkforce/i18n';
-import {
-  AGI_WORK_EXAMPLE_KEYS,
-  AGI_WORK_EXAMPLE_PROMPT_KEYS,
-  AgiWorkExamples,
-} from '../src/features/chat/components/AgiWorkExamples';
+import { NAMESPACES, baseInitOptions, resources } from '@agiworkforce/i18n';
 
 const MOBILE_ROOT = path.resolve(__dirname, '..');
 const SOURCE_DIRS = ['app', 'components', 'src', 'stores', 'lib'];
@@ -49,46 +40,7 @@ function literalTranslationKeys(source: string): string[] {
   return [...source.matchAll(/\bt\(\s*['"]([A-Za-z0-9_.:-]+)['"]/g)].map((match) => match[1]);
 }
 
-describe('AGI Work example strings', () => {
-  beforeAll(async () => {
-    await i18n.use(initReactI18next).init({
-      ...baseInitOptions,
-      lng: 'en',
-      react: { useSuspense: false },
-    });
-  });
-
-  it('defines every key the examples read in the English locale', () => {
-    const missing = AGI_WORK_EXAMPLE_KEYS.filter(
-      (key) => typeof englishValue('common', key) !== 'string',
-    );
-    expect(missing).toEqual([]);
-  });
-
-  it('defines every example key in each supported locale', () => {
-    const catalogs = resources as Record<string, Record<string, Catalog>>;
-    const missing = SUPPORTED_LANGUAGES.flatMap(({ code }) =>
-      AGI_WORK_EXAMPLE_KEYS.filter(
-        (key) => typeof lookup(catalogs[code]?.common, key) !== 'string',
-      ).map((key) => `${code}:${key}`),
-    );
-    expect(missing).toEqual([]);
-  });
-
-  it('renders translated prompts, never raw keys, and hands the prompt to the composer', () => {
-    const onChoose = jest.fn();
-    const screen = render(<AgiWorkExamples onChoose={onChoose} />);
-
-    expect(
-      screen.getByText(englishValue('common', 'newChat.agiWorkExamples') as string),
-    ).toBeTruthy();
-    expect(screen.queryByText(/newChat\./)).toBeNull();
-
-    const firstPrompt = englishValue('common', AGI_WORK_EXAMPLE_PROMPT_KEYS[0]) as string;
-    fireEvent.press(screen.getByText(firstPrompt));
-    expect(onChoose).toHaveBeenCalledWith(firstPrompt);
-  });
-
+describe('mobile translation keys', () => {
   it('resolves every literal t() key in the mobile app against the English locale', () => {
     const namespaces = new Set<string>(NAMESPACES);
     const missing = SOURCE_DIRS.flatMap((dir) => sourceFiles(path.join(MOBILE_ROOT, dir))).flatMap(

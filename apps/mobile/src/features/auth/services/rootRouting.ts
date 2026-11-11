@@ -1,3 +1,5 @@
+import { CLOUD_CHAT_POST_AUTH_INTENT, POST_AUTH_INTENT_PARAM } from './postAuthIntent';
+
 export const CLOUD_SIGN_IN_RETURN_PATH = '/(auth)/login' as const;
 
 export const APP_PATH = '/(app)' as const;
@@ -11,12 +13,18 @@ export interface RootRouteInput {
   isClerkSignedIn: boolean;
   onboardingDone: boolean;
   ageGateConfirmed: boolean;
+  signInOwedForEndedSession: boolean;
 }
 
-export type RootRedirect = {
-  pathname: typeof APP_PATH | typeof ONBOARDING_PATH | typeof AGE_GATE_PATH;
-  params?: { returnTo: typeof CLOUD_SIGN_IN_RETURN_PATH };
-};
+export type RootRedirect =
+  | {
+      pathname: typeof APP_PATH | typeof ONBOARDING_PATH | typeof AGE_GATE_PATH;
+      params?: { returnTo: typeof CLOUD_SIGN_IN_RETURN_PATH };
+    }
+  | {
+      pathname: typeof CLOUD_SIGN_IN_RETURN_PATH;
+      params: { [POST_AUTH_INTENT_PARAM]: typeof CLOUD_CHAT_POST_AUTH_INTENT };
+    };
 
 export function resolveRootRedirect(input: RootRouteInput): RootRedirect | null {
   const [group, screen] = input.segments;
@@ -41,6 +49,12 @@ export function resolveRootRedirect(input: RootRouteInput): RootRedirect | null 
     }
     if (!onboardingDone && !inPublic && !inLegal) return { pathname: ONBOARDING_PATH };
     if (onboardingDone && inPublic && !inAgeGate) return { pathname: APP_PATH };
+    if (input.signInOwedForEndedSession && onboardingDone && !inPublic && !inLegal) {
+      return {
+        pathname: CLOUD_SIGN_IN_RETURN_PATH,
+        params: { [POST_AUTH_INTENT_PARAM]: CLOUD_CHAT_POST_AUTH_INTENT },
+      };
+    }
     return null;
   }
   if (inAuthGroup) {
