@@ -31,7 +31,12 @@ import {
   type ScheduledTaskFetch,
 } from './features/background/scheduled-task-transport';
 import { renderShortcutPrompt } from './features/side-panel/pageCommands';
-import type { ChatChunkMessage, WebMCPToolInfo } from './types';
+import type {
+  BrowserContextTabReference,
+  ChatChunkMessage,
+  ChatToolHandoffMessage,
+  WebMCPToolInfo,
+} from './types';
 import type {
   ConnectionStatus,
   ExtensionMessage,
@@ -576,7 +581,7 @@ function requestChatToolHandoff(
   streamId: string,
   calls: ToolCall[],
   checkpoint?: import('./features/computer-use/toolHandoff').CallerToolContinuation,
-  recoveryContext?: import('./types').ChatToolHandoffMessage['recoveryContext'],
+  recoveryContext?: ChatToolHandoffMessage['recoveryContext'],
 ): Promise<ChromeManagedToolHandoffOutcome> {
   const callerCheckpoint = checkpoint
     ? {
@@ -1278,11 +1283,13 @@ function setDesktopPaired(paired: boolean): void {
  * throws is not a sign-out: the native session stays until the account is known.
  * Returns true when the pairing was released.
  */
-async function revokeMismatchedDesktopPairing(): Promise<boolean> {
+async function revokeMismatchedDesktopPairing(
+  clerkRead?: Promise<ManagedCloudAuthContext | null>,
+): Promise<boolean> {
   if (!isClerkExtensionAuthConfigured()) return false;
   let signedInAccountId: string | null;
   try {
-    const context = await getFreshClerkAuthContext();
+    const context = await (clerkRead ?? getFreshClerkAuthContext());
     signedInAccountId = context?.owner.accountId ?? null;
   } catch {
     return false;
@@ -4543,8 +4550,9 @@ async function handleMessageAsync(
       );
     }
     case 'GET_CLOUD_AUTH_TOKEN': {
-      await revokeMismatchedDesktopPairing();
-      const candidate = await getManagedCloudAuthContext(message.refresh);
+      const clerkRead = getFreshClerkAuthContext(message.refresh);
+      await revokeMismatchedDesktopPairing(clerkRead);
+      const candidate = await getManagedCloudAuthContext(message.refresh, clerkRead);
       const context = candidate && !isRetiredManagedCloudOwner(candidate.owner) ? candidate : null;
       cancelComputerUseIfAuthChanged(context?.owner ?? null);
       observeMaintenanceOwner(context?.owner ?? null);
@@ -5766,7 +5774,7 @@ async function handleMessageAsync(
         return failStart('AGI_START_COMPUTER_USE: superseded or cancelled before admission');
       }
 
-      let selectedTabs: readonly import('./types').BrowserContextTabReference[];
+      let selectedTabs: readonly BrowserContextTabReference[];
       let restoredTaskTabs: TaskTabScope | undefined;
       const assertStartCurrent = async (): Promise<void> => {
         if (startWasCancelled())

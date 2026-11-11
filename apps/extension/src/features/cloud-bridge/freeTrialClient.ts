@@ -353,9 +353,10 @@ async function developmentTokenOwner(token: string): Promise<ManagedCloudOwner> 
 
 export async function getManagedCloudAuthContext(
   forceRefresh = false,
+  clerkRead?: Promise<ManagedCloudAuthContext | null>,
 ): Promise<ManagedCloudAuthContext | null> {
   try {
-    const context = await getFreshClerkAuthContext(forceRefresh);
+    const context = await (clerkRead ?? getFreshClerkAuthContext(forceRefresh));
     if (context) return context;
   } catch (error) {
     if (forceRefresh) throw error;

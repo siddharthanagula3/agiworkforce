@@ -120,6 +120,20 @@ describe('Clerk Chrome Extension auth', () => {
       expect(createClerkClient).toHaveBeenCalledTimes(2);
     });
 
+    it('answers an unreachable identity provider from one shared read without reloading the SDK', async () => {
+      const failure = new Error('ClerkJS: Network error');
+      createClerkClient.mockRejectedValue(failure);
+      const auth = await importClerkAuth();
+      const { getManagedCloudAuthContext } =
+        await import('../src/features/cloud-bridge/freeTrialClient');
+
+      const clerkRead = auth.getFreshClerkAuthContext();
+      await expect(clerkRead).rejects.toBe(failure);
+      await expect(getManagedCloudAuthContext(false, clerkRead)).resolves.toBeNull();
+      await expect(getManagedCloudAuthContext(true, clerkRead)).rejects.toBe(failure);
+      expect(createClerkClient).toHaveBeenCalledTimes(1);
+    });
+
     it.each([false, true])(
       'rejects obsolete creation before reading its session (signed out: %s)',
       async (signedOut) => {

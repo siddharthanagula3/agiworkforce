@@ -330,7 +330,7 @@ describe('the worker connects to AGI Desktop only once pairing has succeeded', (
       autoConnect.indexOf('storageUtils.getItem<boolean>(DESKTOP_PAIRED_KEY, false)'),
     );
     expect(initialize).toContain('watchSyncHostSession(');
-    expect(background).toContain('await revokeMismatchedDesktopPairing();');
+    expect(background).toContain('await revokeMismatchedDesktopPairing(clerkRead);');
   });
 
   it('stops the maintenance pass re-arming its alarm for an unpaired profile', () => {

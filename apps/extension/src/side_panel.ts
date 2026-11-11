@@ -5,7 +5,10 @@ import {
   readCallerBrowserContext,
   type CallerBrowserContext,
 } from './features/cloud-bridge/callerBrowserContext';
-import { prepareChatToolResults } from './features/computer-use/chatToolResults';
+import {
+  prepareChatToolResults,
+  type ChatToolResult,
+} from './features/computer-use/chatToolResults';
 import { loadContactAutofillProfile } from './features/content/autofill/profile-storage';
 import {
   createMessageQueue,
@@ -77,6 +80,7 @@ import type {
   ComputerUseCommandResponse,
   ComputerUseApprovalResponseMessage,
   ResolveChatToolsMessage,
+  StartComputerUseMessage,
 } from './types';
 import { parseBrowserUploadBinding } from './features/computer-use/userFileUpload';
 import {
@@ -6925,7 +6929,7 @@ function startComposerBrowserTask(
   goal: string,
   nested?: {
     messageId: string;
-    callerHandoff?: import('./types').StartComputerUseMessage['callerHandoff'];
+    callerHandoff?: StartComputerUseMessage['callerHandoff'];
   },
 ): Promise<BrowserTaskOutcome> {
   const owner = _ctx.managedCloudOwner;
@@ -7879,7 +7883,7 @@ async function runHistorySearchTool(
 async function runBrowserTaskTool(
   streamId: string,
   goal: string,
-  callerHandoff?: import('./types').StartComputerUseMessage['callerHandoff'],
+  callerHandoff?: StartComputerUseMessage['callerHandoff'],
 ): Promise<string> {
   const owner = _ctx.managedCloudOwner;
   const generation = _ctx.conversationGeneration;
@@ -8157,7 +8161,7 @@ async function handleChatToolHandoff(message: ChatToolHandoffMessage): Promise<v
   }
   removeThinking();
   ensureStreamingAssistant(streamId, quickModeByStreamId.get(streamId) === true);
-  const results: import('./features/computer-use/chatToolResults').ChatToolResult[] = [];
+  const results: ChatToolResult[] = [];
   const deadline = setTimeout(() => {
     dismissPendingSiteGrants();
     void taskSiteGrants.releaseTask(streamId);
@@ -11519,11 +11523,17 @@ function buildUI(): void {
     },
     { danger: true },
   );
+  const moreFooter = el(
+    'div',
+    { class: 'sp-more-footer', role: 'none' },
+    t('spMoreVersion', [chrome.runtime.getManifest().version]),
+  );
   menuBtn.addEventListener(
     'click',
     () => {
       renderAccountBlock();
-      logOutItem.hidden = accountBlock.hidden;
+      if (accountBlock.hidden) logOutItem.remove();
+      else moreMenu.insertBefore(logOutItem, moreFooter);
       const cloudConversationId = activePersistenceEntry?.cloudSync?.conversationId;
       if (cloudConversationId && _ctx.messages.length > 0) {
         openChatInWebItem.onclick = () => {
@@ -11554,14 +11564,7 @@ function buildUI(): void {
     });
     moreMenu.appendChild(row);
   }
-  moreMenu.appendChild(logOutItem);
-  moreMenu.appendChild(
-    el(
-      'div',
-      { class: 'sp-more-footer', role: 'none' },
-      t('spMoreVersion', [chrome.runtime.getManifest().version]),
-    ),
-  );
+  moreMenu.appendChild(moreFooter);
 
   const drawerHistoryList = el('div', { id: 'sp-drawer-history-list' });
   const drawerHistorySearch = el('input', {

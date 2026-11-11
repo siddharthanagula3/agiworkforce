@@ -18,6 +18,7 @@ import type {
 import type { SiteToolEffect } from './features/tools/siteToolRegistry';
 import type { ChatBrowserToolTier } from './features/computer-use/chatBrowserTools';
 import type { ToolCall } from './features/computer-use/toolHandoff';
+import type { ChatToolResult } from './features/computer-use/chatToolResults';
 import type {
   BrowserUploadBinding,
   BrowserUploadedFileMetadata,
@@ -501,7 +502,7 @@ export interface ResolveChatToolsMessage extends BaseMessage {
   id: string;
   handoffId: string;
   cancelled?: boolean;
-  results?: import('./features/computer-use/chatToolResults').ChatToolResult[];
+  results?: ChatToolResult[];
   browserToolTier?: ChatBrowserToolTier;
   browserHistory?: boolean;
 }
