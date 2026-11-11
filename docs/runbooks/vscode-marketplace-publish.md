@@ -68,14 +68,14 @@ a published policy.
    Until the first signed CLI release exists
    (`audit/blockers/14-desktop-and-vscode-need-unpublished-cli.md`), a
    Marketplace install has no working chat.
-2. **Owner. Decide the listing name.** The Marketplace requires a unique
-   display name, the manifest's `displayName` is `Code`, and an extension
-   already lists as `code` (`lixinyu.codexxy`, Marketplace search 2026-11-11).
-   The store-facing rule in `scripts/check-product-names.mjs` is the copyright
-   name plus the product name, which the Chrome item already follows with
-   `AGI Extension`; the same rule gives `AGI Code`, the name the README,
-   Activity Bar and chat participant already use. Applying it is one manifest
-   field and `copyrightPrefix: true` on the `code` entry of that script.
+2. **Listing name.** The Marketplace requires a unique display name, and an
+   extension already lists as `code` (`lixinyu.codexxy`, Marketplace search
+   2026-11-11). The manifest's `displayName` is therefore `AGI Code`: the
+   store-facing rule in `scripts/check-product-names.mjs` is the copyright name
+   plus the product name, which the Chrome item follows with `AGI Extension`,
+   and it is the name the README, Activity Bar and chat participant already
+   use. The owner may choose another name before the first upload; it is that
+   one manifest field, and the guard fails until the registry agrees.
 3. **Owner, with counsel. Update the privacy policy.** `/privacy` still says
    the VS Code extension and VS Code BYOK are coming soon, while the README
    describes Local, provider-key and Managed Cloud paths, account memory,
