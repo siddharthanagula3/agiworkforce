@@ -286,7 +286,7 @@ exports[`ArtifactFullScreen markdown rendering (PAR-M08) locks the rendered docu
           >
             A 
             <Text
-              className="text-sm text-white "
+              className=" "
               style={
                 {
                   "color": "#111111",
