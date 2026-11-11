@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   BILLING_PLAN_PRICING,
+  DOWNLOAD_COST_SHARE_CEILING_OF_PRICE,
   DOWNLOAD_COST_SHARE_OF_PRICE,
   FEATURE_RATE_CARD,
   FREE_DAILY_CAPS,
@@ -37,23 +38,39 @@ const db = {} as never;
 const usdPerGib = (feature: 'network_egress_gib' | 'object_storage_gib_month') =>
   (FEATURE_RATE_CARD[feature].providerCogsMicrousd as number) / 1_000_000;
 
-const PAID = ['basic', 'pro', 'max', 'max_15x', 'team', 'team_premium'] as const;
-
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.countUnits.mockResolvedValue(0);
 });
 
 describe('per-plan download and storage caps', () => {
-  it.each(PAID)('caps %s downloads at the download share of its price', (plan) => {
-    const cap = getBillingPlanProductLimits(plan)?.monthlyDownloadBytes;
-    expect(typeof cap).toBe('number');
-    const expected =
-      ((BILLING_PLAN_PRICING[plan].monthlyPriceUsd * DOWNLOAD_COST_SHARE_OF_PRICE) /
-        usdPerGib('network_egress_gib')) *
-      GIB;
-    expect(Math.abs((cap as number) - expected)).toBeLessThan(1);
-  });
+  it.each(['team', 'team_premium'] as const)(
+    'caps %s downloads at the download share of its price',
+    (plan) => {
+      const cap = getBillingPlanProductLimits(plan)?.monthlyDownloadBytes;
+      expect(typeof cap).toBe('number');
+      const expected =
+        ((BILLING_PLAN_PRICING[plan].monthlyPriceUsd * DOWNLOAD_COST_SHARE_OF_PRICE) /
+          usdPerGib('network_egress_gib')) *
+        GIB;
+      expect(Math.abs((cap as number) - expected)).toBeLessThan(1);
+    },
+  );
+
+  it.each(['basic', 'pro', 'max', 'max_15x'] as const)(
+    'gives %s a whole-GiB download allowance funded within the cost share ceiling',
+    (plan) => {
+      const cap = getBillingPlanProductLimits(plan)?.monthlyDownloadBytes;
+      expect(typeof cap).toBe('number');
+      const price = BILLING_PLAN_PRICING[plan].monthlyPriceUsd;
+      const rate = usdPerGib('network_egress_gib');
+      const allowanceGib = (cap as number) / GIB;
+      const fundedGib = Math.floor((price * DOWNLOAD_COST_SHARE_OF_PRICE) / rate);
+      expect(Number.isInteger(allowanceGib)).toBe(true);
+      expect(allowanceGib).toBeGreaterThanOrEqual(fundedGib);
+      expect(allowanceGib * rate).toBeLessThanOrEqual(price * DOWNLOAD_COST_SHARE_CEILING_OF_PRICE);
+    },
+  );
 
   it.each(['max', 'max_15x', 'team_premium'] as const)(
     'gives %s a finite storage quota no larger than its price funds',
