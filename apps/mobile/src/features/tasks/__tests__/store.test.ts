@@ -380,6 +380,32 @@ describe('list requests that no longer own the list', () => {
     expect(state.nextCursor).toBe('blocked-cursor');
   });
 
+  it('keeps the latest request when the filter returns to the one it started on', async () => {
+    activateCloudAccount('user_1');
+    const firstAll = deferred<Page>();
+    const blocked = deferred<Page>();
+    const secondAll = deferred<Page>();
+    mockListRuns
+      .mockReturnValueOnce(firstAll.promise)
+      .mockReturnValueOnce(blocked.promise)
+      .mockReturnValueOnce(secondAll.promise);
+
+    const pending = useCloudTaskStore.getState().load('initial');
+    useCloudTaskStore.getState().setFilter('blocked');
+    useCloudTaskStore.getState().setFilter('all');
+    secondAll.resolve({ runs: [cloudRun({ id: 'all-new' })], nextCursor: 'all-new-cursor' });
+    await settle();
+    firstAll.resolve({ runs: [cloudRun({ id: 'all-old' })], nextCursor: 'all-old-cursor' });
+    blocked.resolve({ runs: [cloudRun({ id: 'blocked-1' })], nextCursor: 'blocked-cursor' });
+    await pending;
+    await settle();
+
+    const state = useCloudTaskStore.getState();
+    expect(state.filter).toBe('all');
+    expect(state.runs.map((run) => run.id)).toEqual(['all-new']);
+    expect(state.nextCursor).toBe('all-new-cursor');
+  });
+
   it('drops a continuation page that was requested before the filter changed', async () => {
     activateCloudAccount('user_1');
     mockListRuns.mockResolvedValueOnce({
