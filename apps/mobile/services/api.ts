@@ -11,6 +11,7 @@ import {
   type CloudAccountEpoch,
 } from '@/src/features/auth/services/cloudAccountSession';
 import { clearLocalCloudAccountState } from '@/src/features/auth/services/cloudAccountTeardown';
+import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import {
   createUploadTask,
   getInfoAsync,
@@ -245,7 +246,7 @@ function handleUnrecoverableAuth(): void {
       style: 'default',
       onPress: () => {
         try {
-          router.push('/(auth)/login');
+          router.push(beginCloudPostAuthIntent());
         } catch (err) {
           if (__DEV__) console.warn('[API] login navigation failed (non-blocking):', err);
         }

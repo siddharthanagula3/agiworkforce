@@ -921,9 +921,10 @@ export function AccountSection({
                 <AlertDialogDescription>
                   This schedules your account and Cloud chats, projects, memory and artifacts for
                   permanent deletion. You can cancel before the deadline shown after scheduling.
-                  Erasure is processed after that deadline and may take longer. Choose Continue
-                  after scheduling to sign out. If you change your mind, sign back in and cancel
-                  from Settings &gt; Account before the cancellation deadline.
+                  Erasure is processed after that deadline and may take longer. Anything the law or
+                  an active legal hold requires us to keep is kept. Choose Continue after scheduling
+                  to sign out. If you change your mind, sign back in and cancel from Settings &gt;
+                  Account before the cancellation deadline.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <div className="py-1">

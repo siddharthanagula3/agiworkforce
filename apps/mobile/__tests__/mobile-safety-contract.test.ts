@@ -126,7 +126,7 @@ describe('deleting an account', () => {
     );
     expect(DELETE_ACCOUNT_CONFIRMATION.message).toMatch(/cannot be undone/);
     expect(DELETE_ACCOUNT_CONFIRMATION.message).toMatch(
-      /Anything the law or a legal hold requires us to keep is kept/,
+      /Anything the law or an active legal hold requires us to keep is kept/,
     );
     expect(DELETE_ACCOUNT_CONFIRMATION.message).toMatch(
       /already cancelled ends when erasure runs, and its unused time is not refunded/,

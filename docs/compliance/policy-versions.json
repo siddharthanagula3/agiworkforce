@@ -91,6 +91,12 @@
           "date": "2026-10-08",
           "digest": "18f2e500d0cd48ff",
           "note": "Editorial, recorded 2026-11-10. Product-name change in commit 3a0d329bb4 (2026-11-08): the hosted mode is now called Cloud, the label PRIVACY_MODE_DISPLAY.managed carries in packages/contracts/types/src/suite-contracts.ts since 330ef6c0b9. Every Managed Cloud, AGI Managed Cloud and AGI Cloud on this page now reads Cloud: the page description, the defined term and the Provider definition, the opening paragraph, section 04, the providers paragraph of section 05, and the heading and body of section 06. No other word changed. The defined term keeps its definition and no right, obligation, party, period or price changes, so the date does not move and no new terms acceptance version opens."
+        },
+        {
+          "date": "2026-11-11",
+          "digest": "a4e5ebd956a7e336",
+          "note": "Substantive: section 12 said an account deletion request schedules permanent erasure 24 hours later and that a daily job then removes the account's records. eraseUserAccountData in apps/web/lib/server/account-erasure.ts erases nothing while an active member, custodian or organization legal hold covers the account (isSubjectUnderLegalHold; test erases nothing and never seals the profile fence while a legal hold is active in apps/web/lib/server/account-erasure.test.ts), so the paragraph now says erasure waits until such a hold is released. Treated as a change that takes effect when posted under the Changes row, because the text now describes behaviour the product already had, so MIN_REQUIRED_TERMS_VERSION in apps/web/lib/server/terms.ts stays null and no account has to accept again. The version this replaces, 2026-10-08, was served by production, as the 2026-11-10 publications record shows. Recorded by audit batch mr-account2 on 2026-11-11.",
+          "summary": "Corrects what happens to your data when you delete your account. Erasure is scheduled 24 hours after the request and carried out by a daily job, and if an active legal hold covers your account, erasure waits until the hold is released. The terms used to say the request schedules permanent erasure 24 hours later without that exception. The product already worked this way, and you do not need to accept the terms again."
         }
       ]
     },
@@ -230,6 +236,12 @@
           "digest": "b406c1cf63a22764",
           "note": "Substantive: it changes what the policy says about where Desktop sends a request. The policy said the Desktop and web apps use Cloud and do not expose Local inference, and that Desktop has no user-key path. Desktop chat does use Cloud, but a Desktop local coding session runs the AGI CLI as an app-server (apps/desktop/electron/runtime/developerSessionService.ts), offers the models that CLI can reach (readDeveloperModels, apps/web/features/code/local-code.ts localModelChoices), and that list includes models Ollama or LM Studio serve on the machine and routes on provider keys set up in the CLI (apps/cli/src/model_reachability.rs, apps/cli/src/app_server/developer_host.rs list_local_models). The three sentences now say so. The lead decided on 2026-11-10, after the owner did not answer, to correct the claims and move the date to 2026-11-10. The version this replaces was served by production on 2026-11-01, as the publications record shows.",
           "summary": "Corrects what the policy says about Desktop. Desktop chat uses Cloud, as before. A local coding session in Desktop runs the CLI on your computer and can use a model that Ollama or LM Studio serves there, or a provider key you set up in the CLI; the policy used to say Desktop was cloud-only with no user-key path. The hosted mode is also called Cloud throughout, where it said Managed Cloud."
+        },
+        {
+          "date": "2026-11-11",
+          "digest": "eadb7d10fbe76381",
+          "summary": "Corrects what the policy says about deleting your account. Erasure is scheduled 24 hours after the request and carried out by a daily job, and if an active legal hold covers your account, erasure waits until the hold is released. The policy used to say the account was permanently erased 24 hours after the request. This version also carries the 2026-11-10 corrections about Desktop and the Cloud name, which were not published on their own.",
+          "note": "Substantive. The Account and its content retention row said Permanently erased 24 hours after a deletion request, and the Delete your account row and the rights table said erasure is scheduled 24 hours out and then performed. Erasure is scheduled 24 hours out (apps/web/app/api/user/delete-account/route.ts) and carried out by the daily purge (apps/web/app/api/cron/purge-deleted-accounts/route.ts through apps/web/lib/server/scheduled-account-erasure.ts), and eraseUserAccountData in apps/web/lib/server/account-erasure.ts erases nothing while an active member, custodian or organization legal hold covers the account (isSubjectUnderLegalHold; test erases nothing and never seals the profile fence while a legal hold is active in apps/web/lib/server/account-erasure.test.ts). The three sentences now say so. It replaces the 2026-11-10 version, which production had not served when this was written: the 2026-11-10 publications record shows production serving the 2026-10-18 policy. Recorded by audit batch mr-account2 on 2026-11-11."
         }
       ]
     },
@@ -304,6 +316,12 @@
           "date": "2026-10-08",
           "digest": "1c7d1c5af74cf999",
           "note": "Editorial, recorded 2026-11-10. Product-name change in commit 3a0d329bb4 (2026-11-08): the hosted mode is now called Cloud, the label PRIVACY_MODE_DISPLAY.managed carries in packages/contracts/types/src/suite-contracts.ts since 330ef6c0b9. Managed Cloud and AGI Managed Cloud now read Cloud or AGI Cloud in the scope statement, the alpha notice, the Annex I processing description, which also says sandbox where it said managed sandbox, the DPDP section and the processor-role statement. The service the addendum covers, the parties, their roles and the processing are unchanged, so the date does not move."
+        },
+        {
+          "date": "2026-11-11",
+          "digest": "19bda3eaa7d527a1",
+          "note": "Substantive: the Duration row, the Deletion measure and section 09 said account erasure is scheduled 24 hours out and then performed by a daily job. eraseUserAccountData in apps/web/lib/server/account-erasure.ts erases nothing while an active member, custodian or organization legal hold covers the account (isSubjectUnderLegalHold), and those holds are placed from workspace settings (apps/web/app/api/settings/organization/legal-holds/route.ts), so the three passages now say erasure waits until such a hold is released, including one the Customer places on its workspace. No processing, sub-processor, role or transfer changes. The version this replaces, 2026-10-08, was served by production, as the 2026-11-10 publications record shows. Recorded by audit batch mr-account2 on 2026-11-11.",
+          "summary": "Corrects the deletion terms. Erasure after an account deletion request or termination is scheduled 24 hours out and carried out by a daily job, and if an active legal hold covers the account, including one the Customer places on its workspace, erasure waits until the hold is released. The agreement used to say erasure is performed without that exception."
         }
       ]
     },
@@ -1077,6 +1095,12 @@
           "digest": "1049cb2f8c7e6687",
           "note": "Substantive: it changes what the notice says about where Desktop sends a request. The Local row said the current Desktop and web apps use Cloud and do not expose Local inference. A Desktop local coding session runs the CLI as an app-server (apps/desktop/electron/runtime/developerSessionService.ts) and can use a model Ollama or LM Studio serves on the machine (apps/cli/src/model_reachability.rs, apps/cli/src/app_server/developer_host.rs list_local_models), so the row now says so. The lead decided on 2026-11-10, after the owner did not answer, to correct the claim and move the date. The version this replaces was served by production on 2026-11-01.",
           "summary": "Corrects what the notice says about Desktop. Desktop chat uses Cloud, as before. A local coding session in Desktop runs the CLI on your computer and can use a model that Ollama or LM Studio serves there; the notice used to say the Desktop app does not expose Local inference. The hosted mode is also called Cloud throughout, where it said Managed Cloud, and the install-notice purpose names the apps without the AGI prefix."
+        },
+        {
+          "date": "2026-11-11",
+          "digest": "e0226f1b2dc6ecfb",
+          "summary": "Corrects what the notice says about deleting your account. Erasure is scheduled 24 hours after the request and carried out by a daily job, and if an active legal hold covers your account, erasure waits until the hold is released. The notice used to say the account was permanently erased 24 hours after the request. This version also carries the 2026-11-10 corrections about Desktop and the Cloud name, which were not published on their own.",
+          "note": "Substantive. The Account and its content retention row said Permanently erased 24 hours after a deletion request, and the Erasure row said erasure is scheduled 24 hours later and then performed. Erasure is scheduled 24 hours out (apps/web/app/api/user/delete-account/route.ts) and carried out by the daily purge (apps/web/lib/server/scheduled-account-erasure.ts), and eraseUserAccountData in apps/web/lib/server/account-erasure.ts erases nothing while an active legal hold covers the account (isSubjectUnderLegalHold). Both rows now say so. It replaces the 2026-11-10 version, which production had not served when this was written: the 2026-11-10 publications record shows production serving the 2026-10-15 notice. Recorded by audit batch mr-account2 on 2026-11-11."
         }
       ]
     },
@@ -1103,6 +1127,12 @@
           "date": "2026-10-08",
           "digest": "0a1c2081240d2bbb",
           "note": "Editorial revision approved by the owner on 2026-10-16 after an external review of the public site, which found wording addressed to the page’s writers, rhetoric about the page’s own honesty and unqualified claims. The lede said everything on the page is a control, not a description of one, and tells you exactly what happens when you press the button; it now says each control says whether it is self-serve or needs a person and what happens when you use it. No control or route changed. No provider, recipient, retention period, right, limitation or commitment was added or removed, so the date stays."
+        },
+        {
+          "date": "2026-11-11",
+          "digest": "f6979dc58e4bd8e7",
+          "note": "Substantive: the Delete your account row said erasure is scheduled 24 hours out and then performed by a daily job. eraseUserAccountData in apps/web/lib/server/account-erasure.ts erases nothing while an active legal hold covers the account (isSubjectUnderLegalHold), so the row now says erasure waits until such a hold is released. The version this replaces, 2026-10-08, was served by production, as the 2026-11-10 publications record shows. Recorded by audit batch mr-account2 on 2026-11-11.",
+          "summary": "Corrects the account deletion row. Erasure is scheduled 24 hours after the request and carried out by a daily job, and if an active legal hold covers your account, erasure waits until the hold is released. The page used to say erasure is then performed without that exception."
         }
       ]
     },
@@ -1151,6 +1181,12 @@
           "digest": "95652604180e123d",
           "note": "Substantive: it changes the answer on where a request goes. The answer said web and Desktop are cloud-only. A Desktop local coding session runs the CLI and can use Local or BYOK routes (apps/desktop/electron/runtime/developerSessionService.ts, apps/cli/src/model_reachability.rs), so it now says web and Desktop chat use Cloud and a Desktop local coding session can also use Local or BYOK. The lead decided on 2026-11-10, after the owner did not answer, to correct the claim and move the date. The version this replaces was served by production on 2026-11-01.",
           "summary": "Corrects the answer on whether it depends on how you run AGI. Web and Desktop chat use Cloud, and a local coding session in Desktop runs the CLI and can also use Local or BYOK; the page used to say web and Desktop are cloud-only. The hosted mode is also called Cloud throughout, where it said Managed Cloud."
+        },
+        {
+          "date": "2026-11-11",
+          "digest": "d88911c75a50a9dc",
+          "summary": "Corrects the answer on deleting everything. Deletion is scheduled 24 hours out and carried out by a daily job, and if an active legal hold covers your account, it waits until the hold is released. The answer used to say deletion is then performed without that exception. This version also carries the 2026-11-10 correction about Desktop and the Cloud name, which was not published on its own.",
+          "note": "Substantive. The answer on getting your data out said deletion is scheduled 24 hours out and then performed. eraseUserAccountData in apps/web/lib/server/account-erasure.ts erases nothing while an active legal hold covers the account (isSubjectUnderLegalHold), so the answer now says erasure is carried out by a daily job unless such a hold covers the account, in which case it waits until the hold is released. It replaces the 2026-11-10 version, which production had not served when this was written: the 2026-11-10 publications record shows production serving the 2026-10-15 page. Recorded by audit batch mr-account2 on 2026-11-11."
         }
       ]
     },

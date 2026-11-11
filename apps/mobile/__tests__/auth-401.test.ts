@@ -9,6 +9,11 @@ jest.mock('react-native', () => ({
   Alert: { alert: jest.fn() },
 }));
 
+const mockRouterPush = jest.fn();
+jest.mock('expo-router', () => ({
+  router: { push: (...args: unknown[]) => mockRouterPush(...args) },
+}));
+
 jest.mock('../lib/constants', () => ({
   API_URL: 'https://api.test.local',
   TIMEOUTS: { DEFAULT: 8_000 },
@@ -217,6 +222,24 @@ describe('failed refresh triggers local cloud-session cleanup', () => {
       expect.stringContaining('sign in'),
       expect.any(Array),
     );
+  });
+
+  it('signs back in to Cloud from the expired-session alert instead of resetting to Local Mode', async () => {
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(makeResponse(401, {}));
+    mockRefreshAuthSession.mockResolvedValueOnce(false);
+
+    await expect(api.get('/api/expired')).rejects.toThrow();
+
+    const buttons = (Alert.alert as jest.Mock).mock.lastCall?.[2] as Array<{
+      text?: string;
+      onPress?: () => void;
+    }>;
+    buttons.find((button) => button.text === 'Sign In')?.onPress?.();
+
+    expect(mockRouterPush).toHaveBeenCalledWith({
+      pathname: '/(auth)/login',
+      params: { postAuthIntent: 'cloud-chat' },
+    });
   });
 
   it('throws with a descriptive message after failed refresh', async () => {

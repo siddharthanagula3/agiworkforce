@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '@/src/features/auth/store';
+import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 
@@ -20,7 +21,7 @@ export function useCloudCodeAccess(): CloudCodeAccess {
 
   const activate = useCallback(() => {
     if (!cloudUnlocked) {
-      router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
+      router.push(beginCloudPostAuthIntent('cloud-code'));
       return;
     }
     setAppMode('cloud');
