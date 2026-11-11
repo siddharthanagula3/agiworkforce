@@ -13,7 +13,8 @@ import { REDIS_OUTAGE_POLICY_ENV, checkRateLimit } from '@/lib/rate-limit';
 import { checkIdempotency } from '@/app/api/stripe-webhook/lib/idempotency';
 import { createFailoverPlan } from '@/app/api/llm/v1/chat/completions/lib/managed-failover';
 import type { ProcessedRequest } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
-import { SANDBOX_MAX_AGE_MS, reclaimAbandonedE2BSandboxes } from '@/lib/e2b/reclaim';
+import { reclaimAbandonedE2BSandboxes } from '@/lib/e2b/reclaim';
+import { SANDBOX_MAX_AGE_MS } from '@/lib/e2b/reclaim-schedule';
 import { trimMessagesToContextWindow } from '@/app/api/llm/v1/chat/completions/lib/context-window';
 import { FAILURE_MODES } from './failure-modes';
 
