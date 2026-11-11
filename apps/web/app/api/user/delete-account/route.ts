@@ -22,8 +22,15 @@ import { recordAuditEvent } from '@/lib/security-audit';
 import { pseudonymizeIdentifier } from '@/lib/server/pseudonymize';
 import { CONTACT_EMAIL } from '@/lib/legal-constants';
 import { SubscriptionService, type SubscriptionInfo } from '@/lib/services/subscription-service';
-import { hasLiveBillingRelationship } from '@/lib/services/subscription-access-policy';
-import { isFreeBillingPlanTier } from '@agiworkforce/types';
+import {
+  hasLiveBillingRelationship,
+  subscriptionAccessRank,
+} from '@/lib/services/subscription-access-policy';
+import {
+  BILLING_PLAN_PRICING,
+  isBillingPlanTier,
+  isFreeBillingPlanTier,
+} from '@agiworkforce/types';
 import { handleError } from '@/lib/error-handler';
 import { isStepUpRequiredError, requireStepUp } from '@/lib/server/step-up-auth';
 
@@ -56,11 +63,13 @@ function scheduledDeletionResponse(
   request: NextRequest,
   scheduledFor: string,
   alreadyScheduled = false,
+  endingPlan: SubscriptionInfo | null = null,
 ): NextResponse {
   const outcome = resolveDeletionStatus(scheduledDeletionProgress(scheduledFor));
+  const planNotice = endingPlan ? ` ${endingPlanNotice(endingPlan)}` : '';
   return NextResponse.json(
     {
-      message: `Account deletion ${alreadyScheduled ? 'is already scheduled' : 'scheduled'}. Cancellation deadline: ${scheduledFor}. Sign back in and cancel from Settings > Account before this deadline to keep your account. Erasure is processed after the deadline and may take longer.`,
+      message: `Account deletion ${alreadyScheduled ? 'is already scheduled' : 'scheduled'}. Cancellation deadline: ${scheduledFor}. Sign back in and cancel from Settings > Account before this deadline to keep your account. Erasure is processed after the deadline and may take longer.${planNotice}`,
       scheduledFor,
       status: outcome.status,
       statusReason: deletionReceiptReason(outcome),
@@ -76,6 +85,26 @@ function isPaidSubscription(
   const planTier = (subscription.plan_tier || 'free').trim().toLowerCase();
   if (isFreeBillingPlanTier(planTier)) return false;
   return hasLiveBillingRelationship(subscription.status);
+}
+
+/**
+ * A plan already set to end with nothing left to collect cannot charge again,
+ * so deleting gives up only its remaining paid time. Erasure ends it through
+ * the same Stripe cancellation every due deletion runs before any row goes.
+ */
+function isEndingPaidPlan(subscription: SubscriptionInfo): boolean {
+  return (
+    subscription.cancel_at_period_end === true && subscriptionAccessRank(subscription.status) === 2
+  );
+}
+
+function planLabel(subscription: SubscriptionInfo): string {
+  const tier = subscription.plan_tier.trim().toLowerCase();
+  return isBillingPlanTier(tier) ? BILLING_PLAN_PRICING[tier].label : subscription.plan_tier;
+}
+
+function endingPlanNotice(subscription: SubscriptionInfo): string {
+  return `Your ${planLabel(subscription)} plan, already cancelled, ends when erasure runs instead of on ${periodEndLabel(subscription)}. Deleting does not refund the unused time, and you will not be charged again.`;
 }
 
 function periodEndLabel(subscription: SubscriptionInfo): string {
@@ -135,12 +164,20 @@ function soleOwnerMessage(workspaces: SoleOwnedWorkspace[]): string {
   return `You are the only owner of ${subject}. Nothing was deleted. Make someone else an owner in Settings > Organization, or delete the workspace there first, then delete your account.`;
 }
 
-function activeSubscriptionMessage(subscription: SubscriptionInfo): string {
-  const plan = subscription.plan_tier;
-  if (subscription.cancel_at_period_end) {
-    return `Your ${plan} plan is already cancelled and stays active until ${periodEndLabel(subscription)}. Nothing was deleted, you can delete your account once the plan has ended, or email ${CONTACT_EMAIL} to have it removed sooner.`;
+function cancellationPlace(subscription: SubscriptionInfo): string {
+  if (subscription.apple_original_transaction_id) {
+    return 'in the subscription settings of your Apple account';
   }
-  return `Cancel your ${plan} plan before deleting your account. Nothing was deleted, and billing continues until you cancel in Settings > Billing. Email ${CONTACT_EMAIL} if you need help.`;
+  if (subscription.google_purchase_token) return 'in your Google Play subscriptions';
+  return 'on the web in Settings > Billing';
+}
+
+function activeSubscriptionMessage(subscription: SubscriptionInfo): string {
+  const plan = planLabel(subscription);
+  if (subscription.cancel_at_period_end) {
+    return `A payment for your ${plan} plan is still being collected, so nothing was deleted. Delete your account once it is settled, or email ${CONTACT_EMAIL} for help.`;
+  }
+  return `Your ${plan} plan renews automatically, so nothing was deleted. Cancel it ${cancellationPlace(subscription)} first: it then stays active until ${periodEndLabel(subscription)} and is not charged again. After that you can delete your account right away, without waiting for the plan to end.`;
 }
 
 const DeletionScheduleRowsSchema = z
@@ -256,7 +293,10 @@ async function handleDelete(request: NextRequest) {
     );
   }
 
-  if (isPaidSubscription(subscription)) {
+  const endingPlan =
+    isPaidSubscription(subscription) && isEndingPaidPlan(subscription) ? subscription : null;
+
+  if (isPaidSubscription(subscription) && !endingPlan) {
     logger.warn(
       { userId, planTier: subscription.plan_tier, status: subscription.status },
       'Account deletion refused while a paid subscription is active',
@@ -363,6 +403,7 @@ async function handleDelete(request: NextRequest) {
               request,
               existingDeadline instanceof Date ? existingDeadline.toISOString() : existingDeadline,
               true,
+              endingPlan,
             );
           }
           return NextResponse.json(
@@ -388,7 +429,10 @@ async function handleDelete(request: NextRequest) {
       );
     }
 
-    logger.info({ userId }, 'Account deletion scheduled');
+    logger.info(
+      { userId, endsCancelledPaidPlan: endingPlan !== null },
+      'Account deletion scheduled',
+    );
 
     const scheduledOutcome = resolveDeletionStatus(scheduledDeletionProgress(scheduledFor));
     await recordAuditEvent({
@@ -404,7 +448,7 @@ async function handleDelete(request: NextRequest) {
       },
     });
 
-    return scheduledDeletionResponse(request, scheduledFor);
+    return scheduledDeletionResponse(request, scheduledFor, false, endingPlan);
   } catch (err) {
     logger.error({ userId, err }, 'Unexpected error during account deletion');
     return NextResponse.json(

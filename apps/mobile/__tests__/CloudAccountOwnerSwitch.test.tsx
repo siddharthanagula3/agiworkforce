@@ -562,10 +562,11 @@ describe('Cloud Account destructive action ownership', () => {
     expect(mockDeleteAccount).toHaveBeenCalledTimes(1);
   });
 
-  it('shows why a paid plan blocks deletion and offers Billing', async () => {
+  it('shows why a renewing paid plan blocks deletion and offers the plan view', async () => {
     const refusal =
-      'Cancel your pro plan before deleting your account. Nothing was deleted, and billing ' +
-      'continues until you cancel in Settings > Billing. Email support@agiworkforce.com if you need help.';
+      'Your Premium plan renews automatically, so nothing was deleted. Cancel it on the web in ' +
+      'Settings > Billing first: it then stays active until 2026-09-01 and is not charged again. ' +
+      'After that you can delete your account right away, without waiting for the plan to end.';
     mockDeleteAccount.mockRejectedValueOnce(
       httpErrorFrom(
         409,
@@ -590,13 +591,13 @@ describe('Cloud Account destructive action ownership', () => {
 
     expect(Alert.alert).toHaveBeenLastCalledWith('Could not delete account', refusal, [
       { text: 'OK', style: 'cancel' },
-      { text: 'Open Billing', onPress: expect.any(Function) },
+      { text: 'View plan', onPress: expect.any(Function) },
     ]);
     const buttons = (Alert.alert as jest.Mock).mock.lastCall?.[2] as Array<{
       text?: string;
       onPress?: () => void;
     }>;
-    buttons.find((button) => button.text === 'Open Billing')?.onPress?.();
+    buttons.find((button) => button.text === 'View plan')?.onPress?.();
     expect(router.push).toHaveBeenCalledWith('/(app)/settings/cloud-billing');
     expect(mockSignOut).not.toHaveBeenCalled();
   });

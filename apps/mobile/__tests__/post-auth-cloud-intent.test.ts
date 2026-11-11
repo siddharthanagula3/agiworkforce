@@ -55,6 +55,7 @@ describe('post-auth Cloud intent', () => {
     ['/(app)/settings/cloud-privacy', 'cloud-privacy'],
     ['/(app)/settings/cloud-usage', 'cloud-usage'],
     ['/(app)/settings/cloud-connectors', 'cloud-connectors'],
+    ['/(app)/support', 'cloud-support'],
   ] as const)('returns to %s after Cloud sign-in', (destination, intent) => {
     expect(beginCloudPostAuthIntentForDestination(destination).params.postAuthIntent).toBe(intent);
     useWaitlistStore.getState().setCloudAccess(true);

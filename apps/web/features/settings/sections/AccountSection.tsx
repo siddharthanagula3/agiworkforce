@@ -23,7 +23,10 @@ import {
   isBillingPlanTier,
   isFreeBillingPlanTier,
 } from '@agiworkforce/types';
-import { hasLiveBillingRelationship } from '@/lib/services/subscription-access-policy';
+import {
+  hasLiveBillingRelationship,
+  subscriptionAccessRank,
+} from '@/lib/services/subscription-access-policy';
 import { formatBillingDateFromSeconds } from '@/features/billing/lib/billing-format';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { TimeoutPresets } from '@shared/lib/error-utils';
@@ -396,7 +399,10 @@ export function AccountSection({
   const livePlanEnds = livePaidPlan?.cancel_at_period_end
     ? formatBillingDateFromSeconds(livePaidPlan.current_period_end ?? null)
     : null;
-  const deleteBlockedByPlan = livePaidPlan !== null;
+  const endingPaidPlan =
+    livePaidPlan?.cancel_at_period_end === true &&
+    subscriptionAccessRank(livePaidPlan.status) === 2;
+  const deleteBlockedByPlan = livePaidPlan !== null && !endingPaidPlan;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
@@ -489,7 +495,7 @@ export function AccountSection({
                   deleteBlockedByPlan ? (
                     <span data-testid="delete-account-plan-note">
                       {livePaidPlan?.cancel_at_period_end ? (
-                        `You can delete your account once your ${livePlanLabel} plan ends${livePlanEnds ? ` on ${livePlanEnds}` : ''}.`
+                        `A payment for your ${livePlanLabel} plan is still being collected. You can delete your account once it is settled.`
                       ) : (
                         <>
                           {`Cancel your ${livePlanLabel} plan in `}
@@ -506,6 +512,10 @@ export function AccountSection({
                           {' before deleting your account.'}
                         </>
                       )}
+                    </span>
+                  ) : endingPaidPlan ? (
+                    <span data-testid="delete-account-plan-note">
+                      {`Your ${livePlanLabel} plan is already cancelled. Deleting your account ends it when erasure runs${livePlanEnds ? ` instead of on ${livePlanEnds}` : ''}, and the unused time is not refunded. You can cancel the deletion before the cancellation deadline.`}
                     </span>
                   ) : (
                     'Schedule permanent account deletion. You can cancel before the cancellation deadline.'

@@ -9,9 +9,13 @@ let mockAuth: { isClerkLoaded: boolean; isClerkSignedIn: boolean; clerkUserId: s
   clerkUserId: 'user_a',
 };
 
+const mockPush = jest.fn();
+const mockSetAppMode = jest.fn();
+let mockAppMode = 'cloud';
+
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
-  useRouter: () => ({ push: jest.fn() }),
+  useRouter: () => ({ push: mockPush }),
 }));
 
 jest.mock('lucide-react-native', () => {
@@ -43,14 +47,30 @@ jest.mock('@/src/features/auth/store', () => ({
 }));
 
 jest.mock('@/src/features/chat/store/appModeStore', () => ({
-  useChatAppModeStore: (selector: (state: { appMode: string }) => unknown) =>
-    selector({ appMode: 'cloud' }),
+  useChatAppModeStore: (
+    selector: (state: { appMode: string; setAppMode: typeof mockSetAppMode }) => unknown,
+  ) => selector({ appMode: mockAppMode, setAppMode: mockSetAppMode }),
 }));
 
 jest.mock('@/src/features/settings/Common', () => {
   const { Pressable, Text, View } = require('react-native');
   return {
-    CloudAccountRequired: () => null,
+    CloudAccountRequired: ({ onSignIn }: { onSignIn: () => void }) => (
+      <Pressable accessibilityLabel="Sign in to AGI Cloud" onPress={onSignIn}>
+        <Text>Sign in to AGI Cloud</Text>
+      </Pressable>
+    ),
+    CloudSyncBlockedBanner: ({
+      message,
+      onSwitchToCloud,
+    }: {
+      message: string;
+      onSwitchToCloud: () => void;
+    }) => (
+      <Pressable accessibilityLabel="Switch to AGI Cloud" onPress={onSwitchToCloud}>
+        <Text>{message}</Text>
+      </Pressable>
+    ),
     SettingsGroup: ({ children }: { children: React.ReactNode }) => <View>{children}</View>,
     SettingsInfo: ({ body }: { body: string }) => <Text>{body}</Text>,
     SettingsScreenShell: ({ children }: { children: React.ReactNode }) => <View>{children}</View>,
@@ -93,6 +113,32 @@ describe('SupportTicketsScreen ticket history', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockAuth = { isClerkLoaded: true, isClerkSignedIn: true, clerkUserId: 'user_a' };
+    mockAppMode = 'cloud';
+  });
+
+  it('offers a signed-in Local Mode account a switch to Cloud instead of another sign-in', () => {
+    mockAppMode = 'local';
+    const screen = render(<SupportTicketsScreen />);
+
+    expect(screen.queryByLabelText('Sign in to AGI Cloud')).toBeNull();
+    fireEvent.press(screen.getByLabelText('Switch to AGI Cloud'));
+
+    expect(mockSetAppMode).toHaveBeenCalledWith('cloud');
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(mockListSupportTickets).not.toHaveBeenCalled();
+  });
+
+  it('signs a signed-out person in with a Cloud intent that returns to Support', () => {
+    mockAuth = { isClerkLoaded: true, isClerkSignedIn: false, clerkUserId: null };
+    const screen = render(<SupportTicketsScreen />);
+
+    fireEvent.press(screen.getByLabelText('Sign in to AGI Cloud'));
+
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/(auth)/login',
+      params: { postAuthIntent: 'cloud-support' },
+    });
+    expect(mockListSupportTickets).not.toHaveBeenCalled();
   });
 
   it('reaches tickets beyond the first window through the page continuation', async () => {

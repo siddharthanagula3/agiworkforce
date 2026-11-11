@@ -44,7 +44,7 @@ describe('temporary chat toggle', () => {
 
     expect(alert).toHaveBeenCalledWith(
       'Turn on temporary chat?',
-      expect.stringContaining('deleted after 30 days'),
+      expect.stringContaining('normally deleted after 30 days'),
       expect.any(Array),
     );
     expect(useSettingsStore.getState().isTemporaryChat).toBe(false);

@@ -70,6 +70,19 @@ describe('model-training privacy policy', () => {
     expect(getByText('Only use models that do not train on your chats')).toBeTruthy();
     expect(queryByText(/without explicit consent/i)).toBeNull();
   });
+
+  it('states chat retention with the legal-hold exception the purge applies', () => {
+    const { getByText, queryByText } = render(<CloudPrivacyScreen />);
+
+    expect(
+      getByText(
+        'Deleted and temporary chats are normally deleted for good after 30 days. A workspace legal hold can keep them longer.',
+      ),
+    ).toBeTruthy();
+    expect(
+      queryByText('Deleted and temporary chats are erased for good after 30 days.'),
+    ).toBeNull();
+  });
 });
 
 type ImportedModule0 = typeof import('zustand');

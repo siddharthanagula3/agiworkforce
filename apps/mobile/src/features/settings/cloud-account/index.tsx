@@ -485,7 +485,7 @@ export default function CloudAccountScreen() {
                       ? [
                           { text: 'OK', style: 'cancel' },
                           {
-                            text: 'Open Billing',
+                            text: 'View plan',
                             onPress: () =>
                               router.push(
                                 '/(app)/settings/cloud-billing' as Parameters<
