@@ -28,12 +28,8 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { SITE_URL } from '@/lib/seo/site';
 import { recordAuditEvent } from '@/lib/security-audit';
-import {
-  getIdentityProvider,
-  getIdentityUser,
-  getRequestIdentity,
-  verifyIdentitySessionToken,
-} from '@/lib/server/identity';
+import { getIdentityProvider, getIdentityUser, getRequestIdentity } from '@/lib/server/identity';
+import { verifyRequestSessionToken } from '@/lib/server/native-session-token';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { revokeEveryDeviceRefreshCredential } from '@/lib/server/refresh-token-family';
 import type { UserScopedDb } from '@/lib/server/rls-db';
@@ -120,7 +116,7 @@ async function currentSessionId(request: NextRequest): Promise<string | null> {
   if (authorization?.startsWith(BEARER_PREFIX)) {
     const token = authorization.slice(BEARER_PREFIX.length).trim();
     if (API_KEY_PREFIXES.some((prefix) => token.startsWith(prefix))) return null;
-    const claims = await verifyIdentitySessionToken(token).catch(() => null);
+    const claims = await verifyRequestSessionToken(request, token).catch(() => null);
     return claims?.sessionId ?? null;
   }
   return (await getRequestIdentity()).sessionId;

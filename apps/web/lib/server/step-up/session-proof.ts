@@ -1,7 +1,8 @@
 import 'server-only';
 
 import type { IdentityFactorAge } from '@agiworkforce/identity';
-import { getRequestIdentity, verifyIdentitySessionToken } from '@/lib/server/identity';
+import { getRequestIdentity } from '@/lib/server/identity';
+import { verifyRequestSessionToken } from '@/lib/server/native-session-token';
 import { stepUpActionSpec, type StepUpAction, type StepUpLevel } from './actions';
 
 const BEARER_PREFIX = 'Bearer ';
@@ -10,7 +11,8 @@ const SECONDS_PER_MINUTE = 60;
 export async function readSessionFactorAge(request: Request): Promise<IdentityFactorAge | null> {
   const authorization = request.headers.get('authorization');
   if (authorization?.startsWith(BEARER_PREFIX)) {
-    const claims = await verifyIdentitySessionToken(
+    const claims = await verifyRequestSessionToken(
+      request,
       authorization.slice(BEARER_PREFIX.length).trim(),
     );
     return claims?.factorAge ?? null;
