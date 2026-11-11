@@ -38,6 +38,43 @@ describe('Clerk native pending-session policy', () => {
     expect(bridge).toMatch(/useEffect\(\(\) => \{\s+if \(!isLoaded\) return;\s+if \(isSignedIn\)/);
   });
 
+  it('holds credentials while Clerk loads and answers for them when it never does', () => {
+    const source = fs.readFileSync(path.join(__dirname, '..', 'app', '_layout.tsx'), 'utf8');
+    const bridge = source.slice(
+      source.indexOf('function ClerkTokenBridge()'),
+      source.indexOf('export default function RootLayout()'),
+    );
+    const loadingEffect = bridge.slice(
+      bridge.indexOf('if (isLoaded) return;'),
+      bridge.indexOf('if (!isLoaded) return;'),
+    );
+
+    expect(loadingEffect).toMatch(/if \(isLoaded\) return;\s+holdTokensUntilClerkAnswers\(\);/);
+    expect(loadingEffect).toMatch(
+      /setTimeout\(\(\) => \{[\s\S]*setClerkTokenMinter\(null, null\);[\s\S]*\}, CLERK_LOAD_SETTLE_MS\)/,
+    );
+  });
+
+  it('does not report a signed-in session as loaded and signed out while its Terms answer is in flight', () => {
+    const source = fs.readFileSync(path.join(__dirname, '..', 'app', '_layout.tsx'), 'utf8');
+    const bridge = source.slice(
+      source.indexOf('function ClerkTokenBridge()'),
+      source.indexOf('export default function RootLayout()'),
+    );
+    const notAccepted = bridge.slice(
+      bridge.indexOf("termsStatus !== 'accepted'"),
+      bridge.indexOf('const owner = activateCloudAccount(userId);'),
+    );
+
+    expect(notAccepted).toMatch(
+      /setClerkSignedIn\(false\);\s+if \(!isTermsAnswerPending\(\{ userId: termsUserId, status: termsStatus \}, userId\)\) \{\s+setClerkLoaded\(true\);\s+\}\s+return;/,
+    );
+    expect(notAccepted.match(/setClerkLoaded\(true\)/g)).toHaveLength(1);
+    expect(bridge).toMatch(
+      /if \(!termsAnswerPending\) return;\s+const settle = setTimeout\(\(\) => setClerkLoaded\(true\), CLERK_LOAD_SETTLE_MS\);/,
+    );
+  });
+
   it('returns to Local only after Clerk definitively resolves signed out', () => {
     const source = fs.readFileSync(path.join(__dirname, '..', 'app', '_layout.tsx'), 'utf8');
     const bridge = source.slice(
