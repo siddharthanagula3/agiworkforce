@@ -925,7 +925,7 @@
         "remove my data"
       ],
       "description": "How account deletion works, how to cancel a scheduled deletion and how to delete conversations without deleting the account.",
-      "updated": "2026-09-19",
+      "updated": "2026-11-11",
       "source": "content/support/delete-your-account.md",
       "chunks": [
         {
@@ -933,7 +933,7 @@
           "ordinal": 0,
           "heading": "How deletion works",
           "headingPath": "Delete your account, or cancel a scheduled deletion › How deletion works",
-          "text": "Settings, Account carries **Delete account**, marked \"This cannot be undone.\"\nConfirming requires typing `DELETE` into the dialog. The dialog states what\nhappens: your account and all associated data are permanently deleted, you are\nsigned out now, and erasure runs 24 hours after you confirm.\n\nIn the AGI Mobile app for iPhone and Android, Settings, Cloud Account carries\n**Delete Account**.\n\nAfter you confirm, the dialog shows the date and time the 24 hours are up, and\nyou are signed out when you continue. That is the earliest moment erasure can\nbegin, not the moment it finishes: the job that erases accounts runs once a day,\nso the work starts on the first daily run after that deadline passes."
+          "text": "Settings, Account carries **Delete account**, marked \"This cannot be undone.\"\nConfirming requires typing `DELETE` into the dialog. The dialog states what\nhappens: your account and its Cloud data are scheduled for permanent deletion,\nand erasure starts after a cancellation deadline 24 hours later. It also says\nthat anything the law or an active legal hold requires us to keep is kept.\n\nIn the AGI Mobile app for iPhone and Android, Settings, Cloud Account carries\n**Delete Account**.\n\nAfter you confirm, the dialog shows the date and time the 24 hours are up, and\nyou are signed out when you continue. That is the earliest moment erasure can\nbegin, not the moment it finishes: the job that erases accounts runs once a day,\nso the work starts on the first daily run after that deadline passes.\n\nIf an active legal hold covers your account, for example one your workspace has\nplaced, nothing is erased until the hold is released."
         },
         {
           "id": "delete-your-account#1",
@@ -947,7 +947,7 @@
           "ordinal": 2,
           "heading": "Before you confirm",
           "headingPath": "Delete your account, or cancel a scheduled deletion › Before you confirm",
-          "text": "Export your conversations first. The export is a self-service download from\nSettings, Privacy, and it cannot be run once the account is gone.\n\nIf a paid subscription is attached, cancel or let it lapse separately; billing\nis handled in the billing portal, not by the deletion flow.\n\nIf you are the only owner of a workspace, the request is refused and nothing is\nscheduled. The message names every workspace you own alone, so hand each one to\nanother owner or delete it first, then try again."
+          "text": "Export your conversations first. The export is a self-service download from\nSettings, Privacy, and it cannot be run once the account is gone.\n\nIf your paid plan still renews, the request is refused and nothing is\nscheduled. Cancel the plan first, on the web in Settings, Billing, or with Apple\nor Google if you bought it there, and then you can delete your account straight\naway, without waiting for the plan to end. A plan you have already cancelled does not block deletion: it ends when\nerasure runs, and its unused time is not refunded.\n\nIf you are the only owner of a workspace, the request is refused and nothing is\nscheduled. The message names every workspace you own alone, so hand each one to\nanother owner or delete it first, then try again."
         },
         {
           "id": "delete-your-account#3",
@@ -1422,7 +1422,7 @@
         "windows"
       ],
       "description": "How to get the CLI binary, run it for the first time and work with sessions and trust boundaries.",
-      "updated": "2026-10-12",
+      "updated": "2026-11-11",
       "source": "content/support/install-the-cli.md",
       "chunks": [
         {
@@ -1451,7 +1451,7 @@
           "ordinal": 3,
           "heading": "Running work",
           "headingPath": "Install and set up the CLI › Running work",
-          "text": "`agi exec` runs a one-shot prompt and is the form to use in CI. `agi review`\nreviews changes, `agi apply` applies the latest diff as a git patch, and\n`agi sandbox` runs work under the platform sandbox (Seatbelt, bubblewrap,\nLandlock or a Windows restricted token, depending on the OS).\n\nA fallback chain is a comma-separated model list, tried in order, so a cloud\nmodel can fall back to a local one."
+          "text": "`agi exec` runs a one-shot prompt and is the form to use in CI. `agi review`\nreviews changes, `agi apply` applies the latest diff as a git patch, and\n`agi sandbox` runs a command under the operating system's sandbox: Seatbelt on\nmacOS, and bubblewrap on Linux, where the `bubblewrap` package must be\ninstalled. Without that sandbox it refuses to run the command, and `agi doctor`\nsays what to install. Windows has no sandbox, so commands the agent runs there\nhave your full user rights: approve each one, or use the CLI inside WSL.\n\nA fallback chain is a comma-separated model list, tried in order, so a cloud\nmodel can fall back to a local one."
         },
         {
           "id": "install-the-cli#4",
@@ -2621,7 +2621,7 @@
           "ordinal": 9,
           "heading": "Search did not run",
           "headingPath": "Troubleshooting: when something does not work › Search did not run",
-          "text": "A web search that could not run shows as a failed search step in the reply, and\nthe answer is written without live results. The model is told the search did\nnot run and why, and is instructed to say which parts it could not confirm, so\ncheck the step before relying on anything time-sensitive. If the composer shows\nsearch as off for the model you picked, that model has no search path here, so\npick one that has.\n\nSearching your own conversations with Cmd/Ctrl+K reports a failed request as\n\"Search failed. Please try again.\" If the search window itself cannot open, it\nshows \"Search unavailable\" instead; close it and open it again.\n\nThe help centre's search tells an index that could not be loaded apart from a\nquery that matched nothing, so \"nothing matched\" really means nothing matched."
+          "text": "A web search that could not run shows as a failed search step in the reply, and\nthe answer is written without live results. The model is told the search did\nnot run and why, and is instructed to say which parts it could not confirm, so\ncheck the step before relying on anything time-sensitive. If the composer shows\nsearch as off for the model you picked, that model has no search path here, so\npick one that has.\n\nSearching your own conversations with Cmd/Ctrl+K reports a failed request as\n\"Search could not be completed\" with a Retry button and never as no matches; if\nthe search window itself cannot open, it shows \"Search unavailable\" instead, so\nclose it and open it again.\n\nThe help centre's search tells an index that could not be loaded apart from a\nquery that matched nothing, so \"nothing matched\" really means nothing matched."
         },
         {
           "id": "troubleshooting#10",

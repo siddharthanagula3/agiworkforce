@@ -46,6 +46,7 @@ jest.mock('@/src/features/settings/Common', () => {
   const { Text, View } = require('react-native');
   return {
     CloudAccountRequired: () => <Text>Sign in required</Text>,
+    CloudSyncBlockedBanner: ({ message }: { message: string }) => <Text>{message}</Text>,
     SettingsScreenShell: ({ children }: { children: React.ReactNode }) => <View>{children}</View>,
   };
 });
@@ -110,6 +111,8 @@ describe('SupportTicketScreen account custody', () => {
     screen.rerender(<SupportTicketScreen ticketId="t1" />);
 
     expect(screen.queryByText('Private text')).toBeNull();
+    expect(screen.getByText('Support tickets are kept in your Cloud account.')).toBeTruthy();
+    expect(screen.queryByText('Sign in required')).toBeNull();
   });
 
   it('does not show the previous account thread to a replacement account', async () => {

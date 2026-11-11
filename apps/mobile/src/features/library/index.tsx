@@ -383,6 +383,12 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
   }, []);
 
   const router = useRouter();
+  const handleOpenArtifact = useCallback(
+    (artifact: MobileArtifact) => {
+      router.push({ pathname: '/(app)/artifacts', params: { artifactId: artifact.id } });
+    },
+    [router],
+  );
   const handleAddToChat = useCallback(
     (asset: LibraryAsset) => {
       stageComposerAttachments('new-chat', [
@@ -585,7 +591,14 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
     ({ item, index }: { item: LibraryRow; index: number }) => {
       const style = index % gridColumns !== 0 ? { marginLeft: CARD_GAP } : undefined;
       if (item.row === 'artifact') {
-        return <LibraryArtifactCard artifact={item.artifact} width={cardWidth} style={style} />;
+        return (
+          <LibraryArtifactCard
+            artifact={item.artifact}
+            width={cardWidth}
+            style={style}
+            onPress={handleOpenArtifact}
+          />
+        );
       }
       const asset = item.asset;
       const onLongPress = () =>
@@ -639,6 +652,7 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
       cardWidth,
       gridColumns,
       handleAssetActions,
+      handleOpenArtifact,
       handleOpenImage,
       handlePlayVideo,
       handleShareAsset,
@@ -823,6 +837,8 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
               query={search}
               signedOut={library.signedOut}
               showDeleted={showDeleted}
+              failed={Boolean(library.error)}
+              onRetry={library.refresh}
             />
           )
         }
@@ -993,13 +1009,50 @@ function LibraryEmptyState({
   query,
   signedOut,
   showDeleted,
+  failed,
+  onRetry,
 }: {
   filter: LibraryFilter;
   query: string;
   signedOut: boolean;
   showDeleted: boolean;
+  failed: boolean;
+  onRetry: () => void;
 }) {
   const c = useThemeColors();
+  if (failed && !signedOut) {
+    return (
+      <View testID="library-load-failed" className="flex-1 items-center justify-center py-20 px-8">
+        <View
+          className="w-16 h-16 rounded-full items-center justify-center mb-5"
+          style={{ backgroundColor: c.surfaceElevated }}
+        >
+          <BookImage size={28} color={c.textSecondary} />
+        </View>
+        <Text
+          className="text-[18px] font-semibold text-center mb-2"
+          style={{ color: c.textPrimary }}
+        >
+          {query.trim() ? 'Search could not be completed' : 'Library could not be loaded'}
+        </Text>
+        <Text
+          className="text-[14px] text-center leading-[20px] mb-4"
+          style={{ color: c.textMuted }}
+        >
+          Check your connection and try again.
+        </Text>
+        <Pressable
+          testID="library-retry"
+          accessibilityRole="button"
+          accessibilityLabel="Retry"
+          onPress={onRetry}
+          style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 16 }}
+        >
+          <Text style={{ color: c.teal, fontWeight: '600' }}>Retry</Text>
+        </Pressable>
+      </View>
+    );
+  }
   const copy = signedOut
     ? 'Sign in to see the images, videos, and files saved to your account.'
     : showDeleted
@@ -1269,18 +1322,23 @@ function LibraryArtifactCard({
   artifact,
   width,
   style,
+  onPress,
 }: {
   artifact: MobileArtifact;
   width: number;
   style?: object;
+  onPress: (artifact: MobileArtifact) => void;
 }) {
   const c = useThemeColors();
   const previewHeight = Math.max(120, Math.round(width * 0.72));
   return (
-    <View
+    <Pressable
       testID={`library-artifact-card-${artifact.id}`}
+      onPress={() => onPress(artifact)}
+      className="active:opacity-80"
       style={[{ width, marginBottom: 20 }, style]}
-      accessibilityLabel={`Artifact ${artifact.title}`}
+      accessibilityLabel={`Open artifact ${artifact.title}, ${artifact.ageLabel}`}
+      accessibilityRole="button"
     >
       <View
         className="rounded-2xl border overflow-hidden justify-end px-3 pb-3 pt-10"
@@ -1314,7 +1372,7 @@ function LibraryArtifactCard({
       <Text className="text-sm mt-1" style={{ color: c.textMuted }} numberOfLines={1}>
         {artifact.ageLabel}
       </Text>
-    </View>
+    </Pressable>
   );
 }
 

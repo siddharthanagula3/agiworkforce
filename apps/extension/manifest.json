@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Extension",
+  "name": "AGI Extension",
   "version": "0.0.1",
-  "description": "Managed Cloud chat, approved-site browser context, and automation for AGI",
+  "description": "An AI side panel that reads the page you are on and, on sites you approve, clicks and types for you.",
   "author": "agiworkforce",
   "default_locale": "en",
   "homepage_url": "https://agiworkforce.com",

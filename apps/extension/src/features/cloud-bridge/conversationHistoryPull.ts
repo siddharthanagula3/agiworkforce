@@ -30,6 +30,7 @@ import {
   MAX_CONVERSATIONS,
   MAX_CONVERSATION_STORE_BYTES,
   MAX_HISTORY_CONTENT_CHARS,
+  MAX_HISTORY_ERROR_TEXT_CHARS,
   MAX_MESSAGES_PER_CONVERSATION,
   pendingCloudMessages,
   recordCloudSyncState,
@@ -47,6 +48,7 @@ import {
 import { sameManagedCloudOwner, type ManagedCloudOwner } from './managedCloudAuthority';
 import { readCloudMirroringEnabled } from '../privacy/cloudMirroring';
 import { platformRequestHeaders } from '../../platformHeaders';
+import { t } from '../../i18n';
 
 const HISTORY_PULL_TIMEOUT_MS = 20_000;
 
@@ -225,6 +227,15 @@ export function projectPublicHistoryMessage(message: ManagedCloudMessage): Histo
     ...(metadata['managedQuickMode'] === true ? { managedQuickMode: true } : {}),
     ...(message.role === 'assistant' && metadata['agiWorkPlanDeclined'] === true
       ? { agiWorkPlanDeclined: true }
+      : {}),
+    ...(message.role === 'assistant' && metadata['error'] === true
+      ? {
+          error: true,
+          errorText:
+            typeof metadata['errorText'] === 'string' && metadata['errorText'].trim()
+              ? metadata['errorText'].slice(0, MAX_HISTORY_ERROR_TEXT_CHARS)
+              : t('spStoredReplyFailed'),
+        }
       : {}),
     ...(message.role === 'user' && Object.prototype.hasOwnProperty.call(metadata, 'attachments')
       ? { attachments }

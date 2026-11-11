@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { View } from 'react-native';
+import { AppState, View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from 'expo-router';
@@ -121,24 +121,30 @@ export default function PermissionsScreen() {
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
+      let sequence = 0;
       async function pollAll() {
+        const current = ++sequence;
         let failed = false;
         await Promise.all(
           PERMISSION_KINDS.map(async (kind) => {
             const entry = PERMISSION_REGISTRY[kind];
             try {
               const status = await entry.getStatus();
-              if (!cancelled) setObservedStatus(kind, status);
+              if (!cancelled && current === sequence) setObservedStatus(kind, status);
             } catch {
               failed = true;
             }
           }),
         );
-        if (!cancelled) setReadFailed(failed);
+        if (!cancelled && current === sequence) setReadFailed(failed);
       }
       void pollAll();
+      const subscription = AppState.addEventListener('change', (state) => {
+        if (state === 'active') void pollAll();
+      });
       return () => {
         cancelled = true;
+        subscription.remove();
       };
     }, [setObservedStatus]),
   );

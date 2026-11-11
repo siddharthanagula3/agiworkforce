@@ -7,19 +7,26 @@
     "2026-10-13",
     "2026-10-18",
     "2026-11-01",
-    "2026-11-10"
+    "2026-11-10",
+    "2026-11-11"
   ],
   "policies": {
     "terms": {
       "route": "/terms",
       "slug": "terms",
-      "current": "2026-10-08",
+      "current": "2026-11-11",
       "versions": [
+        {
+          "date": "2026-11-11",
+          "summary": "Corrects what happens to your data when you delete your account. Erasure is scheduled 24 hours after the request and carried out by a daily job, and if an active legal hold covers your account, erasure waits until the hold is released. The terms used to say the request schedules permanent erasure 24 hours later without that exception. The product already worked this way, and you do not need to accept the terms again.",
+          "status": "current",
+          "published": null
+        },
         {
           "date": "2026-10-08",
           "summary": "The date moves to 2026-10-08, the public launch day. Corrects three statements without changing your rights or obligations. The CLI is no longer described as released, and the terms say it keeps provider keys in owner-only files on Linux or when the keyring is turned off. Deleting an account still sends no confirmation email; the terms no longer say that is because the product sends no account email, which was not true. The appeal route for a suspended account is in section 04 of the acceptable use policy, not section 05. The age rule changes: you must be at least 13 to create an account, and if you are under 18 you need permission from a parent or guardian, who accepts the terms on your behalf. It used to require an account holder to be 18, with younger users only under a supervised account. Sign-up asks for your age and refuses anyone under 13; we do not verify the age or the permission, and the age is not kept. Four additions. You need our written permission to use our names and logos, and may not use them to suggest we endorse you. While a subscription payment is overdue, paid features are switched off and the account runs with the Free plan’s limits; there is no grace period, and a failed payment does not delete your content. The sanctions section now names the United States Office of Foreign Assets Control. A material change to these terms takes effect no sooner than 30 days after it is posted. Also states that on the Free plan a chat on the default model goes to a provider AGI chooses, not one you pick: Alibaba Cloud Model Studio, at its international endpoint in Singapore, or OpenRouter’s free router, depending on what is available for that turn. Section 13 now says you may not use AGI from a country or region where it is not offered, or use a VPN or other means to get around that, and that an organisation based in or controlled from one of those places may not use it from anywhere. The supported countries page lists those places.",
-          "status": "current",
-          "published": null
+          "status": "archived",
+          "published": true
         },
         {
           "date": "2026-09-23",
@@ -44,13 +51,19 @@
     "privacy": {
       "route": "/privacy",
       "slug": "privacy",
-      "current": "2026-11-10",
+      "current": "2026-11-11",
       "versions": [
+        {
+          "date": "2026-11-11",
+          "summary": "Corrects what the policy says about deleting your account. Erasure is scheduled 24 hours after the request and carried out by a daily job, and if an active legal hold covers your account, erasure waits until the hold is released. The policy used to say the account was permanently erased 24 hours after the request. It also names three more things the Chrome extension handles: the titles, addresses and last visit times of up to 20 matching pages when you turn on Browsing history and allow a search; a tab's console messages and network request lines, never their bodies or headers, during browser control; and the record of each action it takes and the website it acted on. This version also carries the 2026-11-10 corrections about Desktop and the Cloud name, which were not published on their own.",
+          "status": "current",
+          "published": null
+        },
         {
           "date": "2026-11-10",
           "summary": "Corrects what the policy says about Desktop. Desktop chat uses Cloud, as before. A local coding session in Desktop runs the CLI on your computer and can use a model that Ollama or LM Studio serves there, or a provider key you set up in the CLI; the policy used to say Desktop was cloud-only with no user-key path. The hosted mode is also called Cloud throughout, where it said Managed Cloud.",
-          "status": "current",
-          "published": null
+          "status": "archived",
+          "published": false
         },
         {
           "date": "2026-10-18",
@@ -136,13 +149,19 @@
     "dpa": {
       "route": "/dpa",
       "slug": "dpa",
-      "current": "2026-10-08",
+      "current": "2026-11-11",
       "versions": [
+        {
+          "date": "2026-11-11",
+          "summary": "Corrects the deletion terms. Erasure after an account deletion request or termination is scheduled 24 hours out and carried out by a daily job, and if an active legal hold covers the account, including one the Customer places on its workspace, erasure waits until the hold is released. The agreement used to say erasure is performed without that exception.",
+          "status": "current",
+          "published": null
+        },
         {
           "date": "2026-10-08",
           "summary": "Corrects two statements about email. Deleting an account sends no confirmation email, and the addendum no longer gives as the reason that the product sends no account email. The breach-notice paragraph now says the product emails one account at a time and that no procedure for emailing a set of affected users has been built or exercised. The age rule changes: the children row no longer says accounts are for adults. Sign-up asks for an age and refuses anyone under 13, anyone under 18 needs permission from a parent or guardian, and we still perform no age verification and no verifiable parental consent. Annex I now says the ban on submitting health records applies to what a business customer submits under the DPA, and that the HealthEx connector is a separate personal feature, offered only in the United States and not inside an organisation workspace, which the DPA does not cover. Also states that on the Free plan a chat on the default model goes to a provider AGI chooses, not one you pick: Alibaba Cloud Model Studio, at its international endpoint in Singapore, or OpenRouter’s free router, depending on what is available for that turn.",
-          "status": "current",
-          "published": null
+          "status": "archived",
+          "published": true
         },
         {
           "date": "2026-08-17",
@@ -473,13 +492,19 @@
     "indiaPrivacy": {
       "route": "/privacy/india",
       "slug": "privacy-india",
-      "current": "2026-11-10",
+      "current": "2026-11-11",
       "versions": [
+        {
+          "date": "2026-11-11",
+          "summary": "Corrects what the notice says about deleting your account. Erasure is scheduled 24 hours after the request and carried out by a daily job, and if an active legal hold covers your account, erasure waits until the hold is released. The notice used to say the account was permanently erased 24 hours after the request. This version also carries the 2026-11-10 corrections about Desktop and the Cloud name, which were not published on their own.",
+          "status": "current",
+          "published": null
+        },
         {
           "date": "2026-11-10",
           "summary": "Corrects what the notice says about Desktop. Desktop chat uses Cloud, as before. A local coding session in Desktop runs the CLI on your computer and can use a model that Ollama or LM Studio serves there; the notice used to say the Desktop app does not expose Local inference. The hosted mode is also called Cloud throughout, where it said Managed Cloud, and the install-notice purpose names the apps without the AGI prefix.",
-          "status": "current",
-          "published": null
+          "status": "archived",
+          "published": false
         },
         {
           "date": "2026-10-15",
@@ -504,13 +529,19 @@
     "dataRights": {
       "route": "/privacy/requests",
       "slug": "privacy-requests",
-      "current": "2026-10-08",
+      "current": "2026-11-11",
       "versions": [
+        {
+          "date": "2026-11-11",
+          "summary": "Corrects the account deletion row. Erasure is scheduled 24 hours after the request and carried out by a daily job, and if an active legal hold covers your account, erasure waits until the hold is released. The page used to say erasure is then performed without that exception.",
+          "status": "current",
+          "published": null
+        },
         {
           "date": "2026-10-08",
           "summary": "Re-issued on the public launch date, 2026-10-08. No change to the text.",
-          "status": "current",
-          "published": null
+          "status": "archived",
+          "published": true
         },
         {
           "date": "2026-08-13",
@@ -523,13 +554,19 @@
     "dataUse": {
       "route": "/data-use",
       "slug": "data-use",
-      "current": "2026-11-10",
+      "current": "2026-11-11",
       "versions": [
+        {
+          "date": "2026-11-11",
+          "summary": "Corrects the answer on deleting everything. Deletion is scheduled 24 hours out and carried out by a daily job, and if an active legal hold covers your account, it waits until the hold is released. The answer used to say deletion is then performed without that exception. This version also carries the 2026-11-10 correction about Desktop and the Cloud name, which was not published on its own.",
+          "status": "current",
+          "published": null
+        },
         {
           "date": "2026-11-10",
           "summary": "Corrects the answer on whether it depends on how you run AGI. Web and Desktop chat use Cloud, and a local coding session in Desktop runs the CLI and can also use Local or BYOK; the page used to say web and Desktop are cloud-only. The hosted mode is also called Cloud throughout, where it said Managed Cloud.",
-          "status": "current",
-          "published": null
+          "status": "archived",
+          "published": false
         },
         {
           "date": "2026-10-15",
@@ -573,13 +610,19 @@
     "agentPermissions": {
       "route": "/agent-permissions",
       "slug": "agent-permissions",
-      "current": "2026-11-01",
+      "current": "2026-11-11",
       "versions": [
+        {
+          "date": "2026-11-11",
+          "summary": "Adds a Browsing history row to Computer use in Chrome. The search is off until you turn it on in the extension's settings and accept Chrome's permission prompt, the extension asks before every search, and it sends the titles, addresses and last visit times of at most 20 matching pages, with secret-looking parts of each address removed and blocked sites left out.",
+          "status": "current",
+          "published": null
+        },
         {
           "date": "2026-11-01",
           "summary": "Corrects connector availability for selective release and describes the local metadata loader. Connecting still depends on plan, region and provider setup. Provider scopes, consent, revocation and per-tool approval rules are unchanged.",
-          "status": "current",
-          "published": null
+          "status": "archived",
+          "published": true
         },
         {
           "date": "2026-10-08",

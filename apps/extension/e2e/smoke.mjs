@@ -1,14 +1,13 @@
-import { chromium } from 'playwright';
-import { createHash } from 'node:crypto';
-import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import { createServer } from 'node:http';
-import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
+import { launchExtension, resolveExtensionDirectory } from './extension-harness.mjs';
 
 const extensionRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const requestedPackage = process.argv[2];
+const smokeArguments = process.argv.slice(2);
+const firstDraftPackage = smokeArguments.includes('--first-draft');
+const requestedPackage = smokeArguments.find((argument) => !argument.startsWith('--'));
 const requestedScreenshotDirectory = process.env.AGI_E2E_SCREENSHOT_DIR?.trim();
 
 if (requestedScreenshotDirectory && !requestedPackage) {
@@ -89,59 +88,9 @@ async function measureComposerContrast(page) {
   });
 }
 
-function runChecked(command, args, failureMessage) {
-  const result = spawnSync(command, args, {
-    cwd: extensionRoot,
-    encoding: 'utf8',
-    env: process.env,
-    maxBuffer: 16 * 1024 * 1024,
-  });
-  if (result.error?.code === 'ENOENT') {
-    throw new Error(`${failureMessage}: ${command} is required`);
-  }
-  if (result.status !== 0) {
-    throw new Error(
-      `${failureMessage}: ${result.stderr?.trim() || result.stdout?.trim() || `exit ${result.status}`}`,
-    );
-  }
-  return result.stdout;
-}
-
-function resolveExtensionDirectory() {
-  if (!requestedPackage) {
-    return { directory: resolve(extensionRoot, 'dist'), cleanup: undefined };
-  }
-
-  const packagePath = resolve(process.cwd(), requestedPackage);
-  runChecked(
-    process.execPath,
-    [resolve(extensionRoot, 'scripts', 'verify-package.mjs'), packagePath],
-    'packaged extension verification failed',
-  );
-
-  const extractedRoot = fs.mkdtempSync(join(os.tmpdir(), 'agi-extension-package-'));
-  try {
-    runChecked(
-      'unzip',
-      ['-q', packagePath, '-d', extractedRoot],
-      'packaged extension extraction failed',
-    );
-  } catch (error) {
-    fs.rmSync(extractedRoot, { recursive: true, force: true });
-    throw error;
-  }
-
-  const sha256 = createHash('sha256').update(fs.readFileSync(packagePath)).digest('hex');
-  console.log(
-    `packaged artifact: ${packagePath} (${fs.statSync(packagePath).size} bytes, sha256 ${sha256})`,
-  );
-  return {
-    directory: extractedRoot,
-    cleanup: () => fs.rmSync(extractedRoot, { recursive: true, force: true }),
-  };
-}
-
-const extensionBundle = resolveExtensionDirectory();
+const extensionBundle = resolveExtensionDirectory(extensionRoot, requestedPackage, {
+  firstDraft: firstDraftPackage,
+});
 const DIST = extensionBundle.directory;
 const extensionManifest = JSON.parse(fs.readFileSync(resolve(DIST, 'manifest.json'), 'utf8'));
 const usesNonRoutableAuthFixture = (extensionManifest.host_permissions ?? []).some((permission) => {
@@ -181,16 +130,11 @@ const hostResolverRules = [
 let context;
 
 try {
-  context = await chromium.launchPersistentContext('', {
-    channel: 'chromium',
-    args: [
-      `--disable-extensions-except=${DIST}`,
-      `--load-extension=${DIST}`,
-      `--host-resolver-rules=${hostResolverRules}`,
-    ],
-  });
-  let [sw] = context.serviceWorkers();
-  if (!sw) sw = await context.waitForEvent('serviceworker', { timeout: 20000 });
+  let sw;
+  ({ context, serviceWorker: sw } = await launchExtension({
+    directory: DIST,
+    hostResolverRules,
+  }));
   sw.on('console', (message) => {
     if (message.type() === 'error' || message.type() === 'warning') {
       console.log(

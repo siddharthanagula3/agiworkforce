@@ -9,6 +9,11 @@ jest.mock('react-native', () => ({
   Alert: { alert: jest.fn() },
 }));
 
+const mockRouterPush = jest.fn();
+jest.mock('expo-router', () => ({
+  router: { push: (...args: unknown[]) => mockRouterPush(...args) },
+}));
+
 jest.mock('../lib/constants', () => ({
   API_URL: 'https://api.test.local',
   TIMEOUTS: { DEFAULT: 8_000 },

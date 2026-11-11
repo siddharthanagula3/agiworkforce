@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { encodeKeysetCursor } from '@/lib/identity/pagination';
 import {
   ResearchReportValidationError,
   getResearchReportByRequestId,
@@ -260,8 +261,8 @@ describe('listResearchReports', () => {
     });
 
     const [sql, params] = db.query.mock.calls[0] as [string, unknown[]];
-    expect(sql).toContain('and conversation_id = $2');
-    expect(params).toEqual(['user-1', 'conv-1', 100]);
+    expect(sql).toContain('report.conversation_id = $2');
+    expect(params).toEqual(['user-1', 'conv-1', 101]);
   });
 
   it('falls back to the active workspace list with a default limit', async () => {
@@ -272,7 +273,79 @@ describe('listResearchReports', () => {
     const [sql, params] = db.query.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain('conversation.is_temporary');
     expect(sql).toContain('conversation.organization_id is not distinct from $2::uuid');
-    expect(params).toEqual(['user-1', null, 20]);
+    expect(params).toEqual(['user-1', null, 21]);
+  });
+});
+
+describe('listResearchReports paging', () => {
+  const CURSOR = { sortValue: '2026-08-05T10:00:00.123456Z', id: ROW.id };
+
+  it('resumes after the cursor in a stable newest-first order that breaks timestamp ties by id', async () => {
+    const db = database();
+
+    await listResearchReports(db, {
+      userId: 'user-1',
+      organizationId: null,
+      limit: 50,
+      cursor: CURSOR,
+    });
+
+    const [sql, params] = db.query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('(created_at, id) < ($3, $4)');
+    expect(sql).toContain('order by created_at desc, id desc');
+    expect(sql).not.toContain('offset');
+    expect(params).toEqual(['user-1', null, CURSOR.sortValue, CURSOR.id, 51]);
+  });
+
+  it('numbers the cursor parameters after the conversation filter', async () => {
+    const db = database();
+
+    await listResearchReports(db, {
+      userId: 'user-1',
+      organizationId: null,
+      conversationId: 'conv-1',
+      cursor: CURSOR,
+    });
+
+    const [sql, params] = db.query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('(created_at, id) < ($3, $4)');
+    expect(params).toEqual(['user-1', 'conv-1', CURSOR.sortValue, CURSOR.id, 21]);
+  });
+
+  it('returns a cursor only when a further row exists, and never the extra row', async () => {
+    const rows = ['1', '2', '3'].map((suffix) => ({
+      ...ROW,
+      id: `0190a000-0000-7000-8000-00000000000${suffix}`,
+      page_sort_key: '2026-08-05T10:00:00.123456Z',
+    }));
+
+    const more = await listResearchReports(database(rows), {
+      userId: 'user-1',
+      organizationId: null,
+      limit: 2,
+    });
+    expect(more.reports.map((report) => report.id)).toEqual([rows[0]!.id, rows[1]!.id]);
+    expect(more.nextCursor).toBe(
+      encodeKeysetCursor({ sortValue: '2026-08-05T10:00:00.123456Z', id: rows[1]!.id }),
+    );
+
+    const last = await listResearchReports(database(rows.slice(0, 2)), {
+      userId: 'user-1',
+      organizationId: null,
+      limit: 2,
+    });
+    expect(last.reports).toHaveLength(2);
+    expect(last.nextCursor).toBeNull();
+  });
+
+  it('reads nothing for a caller without a user', async () => {
+    const db = database();
+
+    expect(await listResearchReports(db, { userId: '', organizationId: null })).toEqual({
+      reports: [],
+      nextCursor: null,
+    });
+    expect(db.query).not.toHaveBeenCalled();
   });
 });
 

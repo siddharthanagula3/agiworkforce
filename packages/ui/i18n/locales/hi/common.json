@@ -207,5 +207,32 @@
       "dismiss": "ऐप सुझाव छिपाएँ",
       "optionalLink": "अपने ऐप कनेक्ट करें (वैकल्पिक)"
     }
+  },
+  "drawer": {
+    "publishedSites": "प्रकाशित साइट्स",
+    "schedules": "शेड्यूल",
+    "reports": "रिपोर्ट",
+    "customize": "कस्टमाइज़ करें",
+    "organizeChats": "चैट व्यवस्थित करें",
+    "newChat": "नई चैट",
+    "openProfile": "प्रोफ़ाइल खोलें",
+    "inOneList": "एक ही सूची में",
+    "byProject": "प्रोजेक्ट के अनुसार",
+    "recents": "हाल की",
+    "noRecentChats": "कोई हाल की चैट नहीं",
+    "seeAllChats": "सभी चैट देखें",
+    "seeAll": "सभी देखें",
+    "seeAllChatsIn": "{{name}} की सभी चैट देखें",
+    "openProject": "प्रोजेक्ट खोलें: {{name}}",
+    "openConversation": "चैट खोलें: {{title}}",
+    "openConversationUnread": "चैट खोलें: {{title}}, अपठित",
+    "showChatsIn": "{{name}} की चैट दिखाएँ",
+    "hideChatsIn": "{{name}} की चैट छिपाएँ",
+    "notifications": "सूचनाएँ",
+    "helpAndAbout": "सहायता और जानकारी",
+    "usageRemaining": "शेष उपयोग",
+    "usageRemainingValue": "शेष उपयोग · {{value}}",
+    "usageRemainingChecking": "शेष उपयोग · जाँच हो रही है…",
+    "usageRemainingUnavailable": "शेष उपयोग · अनुपलब्ध"
   }
 }

@@ -4,6 +4,7 @@ type ScanModule0 = typeof import('../request-context-cache');
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   openErasureTombstone: vi.fn(),
+  advanceErasureTombstone: vi.fn(),
   closeErasureTombstone: vi.fn(),
   eraseUserAccountData: vi.fn(),
   eraseProfileRow: vi.fn(),
@@ -44,6 +45,10 @@ vi.mock('../account-erasure', () => ({
     mocks.calls.push('open');
     return mocks.openErasureTombstone(...args);
   },
+  advanceErasureTombstone: (...args: unknown[]) => {
+    mocks.calls.push('advance');
+    return mocks.advanceErasureTombstone(...args);
+  },
   closeErasureTombstone: (...args: unknown[]) => {
     mocks.calls.push('close');
     return mocks.closeErasureTombstone(...args);
@@ -76,6 +81,7 @@ beforeEach(() => {
       : [{ id: 'user-1' }];
   });
   mocks.openErasureTombstone.mockResolvedValue({ recorded: true });
+  mocks.advanceErasureTombstone.mockResolvedValue({ recorded: true });
   mocks.closeErasureTombstone.mockResolvedValue({ recorded: true });
   mocks.eraseUserAccountData.mockResolvedValue(completeReport());
   mocks.eraseProfileRow.mockResolvedValue(undefined);
@@ -381,9 +387,29 @@ describe('reEraseTombstonedAccount', () => {
       resurrected: false,
     });
 
-    expect(mocks.calls).toEqual(['open', 'erase', 'close']);
+    expect(mocks.calls).toEqual(['advance', 'erase', 'close']);
+    expect(mocks.eraseUserAccountData).toHaveBeenCalledWith('ghost-1', {
+      retainProfile: true,
+      scope: 'tombstone',
+    });
+    expect(mocks.openErasureTombstone).not.toHaveBeenCalled();
     expect(mocks.deleteUser).not.toHaveBeenCalled();
     expect(mocks.eraseProfileRow).not.toHaveBeenCalled();
+  });
+
+  it('erases nothing for a profile-less subject that no tombstone records', async () => {
+    mocks.query.mockResolvedValue([]);
+    mocks.advanceErasureTombstone.mockResolvedValue({
+      recorded: false,
+      error: 'No erasure tombstone records this subject',
+    });
+
+    await expect(reEraseTombstonedAccount('stranger-1')).resolves.toMatchObject({
+      status: 'failed',
+      stage: 'tombstone',
+    });
+    expect(mocks.calls).toEqual(['advance']);
+    expect(mocks.openErasureTombstone).not.toHaveBeenCalled();
   });
 });
 

@@ -17,7 +17,9 @@ import {
 import {
   applyCanonicalAgentEvent,
   isEmptyAssistantTurn,
+  projectCanonicalAgentActivity,
   reconcileManagedRunActivity,
+  settleBrowserActivity,
   type SidePanelChatMessage,
 } from '../src/features/side-panel/chat-state';
 import { applyResolvedRoute, resolvedRouteFrom } from '../src/features/side-panel/answeredModel';
@@ -48,6 +50,7 @@ const names = new Set([
   'saveStreamCheckpoint',
   'activityRequiresRender',
   'finishVisibleChatTurn',
+  'settleChatToolActivity',
 ]);
 const functions = program.statements
   .filter((node) => ts.isFunctionDeclaration(node) && names.has(node.name?.text ?? ''))
@@ -123,6 +126,8 @@ function harness() {
     applyResolvedRoute,
     applyCanonicalAgentEvent,
     reconcileManagedRunActivity,
+    settleBrowserActivity,
+    composerBrowserRun: null,
     messageKindForAgentEvent,
     TERMINAL_AGENT_TASK_STATES,
     isEmptyAssistantTurn,
@@ -245,6 +250,36 @@ describe('stream history work is bounded by checkpoints', () => {
     });
     expect(h.saveMessages.mock.calls.length).toBeGreaterThan(before);
     expect(h.context.messages[0]?.agentActivity?.status).toBe('awaiting-approval');
+  });
+
+  it('records a page read finished when its reply ends without a terminal run', () => {
+    const h = harness();
+    h.receive({ text: 'The page says hello.' });
+    const turn = h.context.messages[0]!;
+    turn.browserEvents = [
+      {
+        schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+        sessionId: `browser:${turn.id}`,
+        turnId: `browser:${turn.id}`,
+        sequence: 0,
+        emittedAtMs: 1,
+        event: {
+          type: 'tool-execution-start',
+          toolCallId: 'read-1',
+          name: 'browser_read_page',
+          category: 'computer-use',
+          summary: 'Reading example.com',
+          input: null,
+        },
+      },
+    ];
+    turn.browserActivity = projectCanonicalAgentActivity(turn.browserEvents);
+    expect(turn.browserActivity?.status).toBe('running');
+
+    h.receive({ done: true });
+
+    expect(turn.browserActivity?.status).toBe('completed');
+    expect(turn.browserEvents.at(-1)?.event).toEqual({ type: 'stop', reason: 'end-turn' });
   });
 
   it('rejects updates from another account before scheduling history or UI work', () => {

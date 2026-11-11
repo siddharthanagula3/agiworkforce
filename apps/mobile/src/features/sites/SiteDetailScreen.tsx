@@ -53,7 +53,9 @@ interface SiteState {
   site: ManagedCloudPublishedArtifact;
   hasWorkspace: boolean;
   versions: ManagedCloudPublishedArtifactVersion[];
+  versionsFailed: boolean;
   data: ManagedCloudPublishedArtifactDataResponse | null;
+  dataFailed: boolean;
 }
 
 async function loadSite(view: SiteDetailLifetime): Promise<SiteState | null> {
@@ -64,18 +66,31 @@ async function loadSite(view: SiteDetailLifetime): Promise<SiteState | null> {
   authority.assertCurrent();
   if (!detail) return null;
   const { site, workspace } = detail;
-  const [versions, data] = await Promise.all([
-    listSiteVersions(token, signal, authority).catch(() => {
-      authority.assertCurrent();
-      return [];
-    }),
-    readSiteData(token, signal, authority).catch(() => {
-      authority.assertCurrent();
-      return null;
-    }),
+  const [versionsRead, dataRead] = await Promise.all([
+    listSiteVersions(token, signal, authority).then(
+      (versions) => ({ versions, failed: false }),
+      () => {
+        authority.assertCurrent();
+        return { versions: [], failed: true };
+      },
+    ),
+    readSiteData(token, signal, authority).then(
+      (data) => ({ data, failed: false }),
+      () => {
+        authority.assertCurrent();
+        return { data: null, failed: true };
+      },
+    ),
   ]);
   authority.assertCurrent();
-  return { site, hasWorkspace: workspace !== null, versions, data };
+  return {
+    site,
+    hasWorkspace: workspace !== null,
+    versions: versionsRead.versions,
+    versionsFailed: versionsRead.failed,
+    data: dataRead.data,
+    dataFailed: dataRead.failed,
+  };
 }
 
 export function SiteDetailScreen() {
@@ -352,7 +367,11 @@ function SiteDetailBody({
           />
         </SectionCard>
 
-        {state.versions.length > 0 ? (
+        {state.versionsFailed ? (
+          <SectionCard title="Publish history">
+            <ErrorBanner message="Could not load the publish history." onRetry={refresh} />
+          </SectionCard>
+        ) : state.versions.length > 0 ? (
           <SectionCard title="Publish history">
             {state.versions.map((version) => (
               <View
@@ -387,7 +406,11 @@ function SiteDetailBody({
           </SectionCard>
         ) : null}
 
-        {data?.supported ? (
+        {state.dataFailed ? (
+          <SectionCard title="Data">
+            <ErrorBanner message="Could not load what visitors saved." onRetry={refresh} />
+          </SectionCard>
+        ) : data?.supported ? (
           <SectionCard title="Data" description="What visitors saved through this page.">
             <MetaText>
               {`${data.shared.entryCount} shared ${data.shared.entryCount === 1 ? 'entry' : 'entries'}, ${siteSizeLabel(data.shared.totalBytes)} of ${siteSizeLabel(data.shared.limitBytes)}`}

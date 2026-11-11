@@ -60,7 +60,11 @@ jest.mock('../lib/mmkv', () => ({
   },
 }));
 
+import { Alert } from 'react-native';
 import { streamChat, type StreamCallbacks } from '../services/streaming';
+import { ensureCloudSendConsent } from '../services/llmGate';
+import { useSettingsStore } from '../stores/settingsStore';
+import { REDUCED_SENSITIVE_CONTENT_REFUSAL } from '../lib/contentFilter';
 import { managedCloudChat } from '../services/managedCloudChat';
 import {
   deleteCloudMessagesRemote,
@@ -78,6 +82,9 @@ import {
 } from '../src/features/auth/services/cloudAccountSession';
 import type { ChatMessage, ConversationSummary } from '../types/chat';
 
+const mockEnsureConsent = ensureCloudSendConsent as jest.MockedFunction<
+  typeof ensureCloudSendConsent
+>;
 const mockStreamChat = streamChat as jest.MockedFunction<typeof streamChat>;
 const mockSaveMessage = managedCloudChat.saveMessage as jest.MockedFunction<
   typeof managedCloudChat.saveMessage
@@ -162,6 +169,7 @@ beforeEach(() => {
     isEditing: false,
   });
   useChatAppModeStore.getState().setAppMode('local');
+  useSettingsStore.setState({ reduceSensitiveContent: false });
   mockSaveMessage.mockResolvedValue({ id: 'saved' });
   mockStreamChat.mockImplementation(async (_body, callbacks: StreamCallbacks) => {
     callbacks.onDelta({ content: 'regenerated answer' });
@@ -327,10 +335,12 @@ describe('a pre-threading server keeps the replacing behaviour', () => {
     expect(mockSaveMessage).not.toHaveBeenCalled();
   });
 
-  it('does not resend or trim another account after a pending edit delete completes', async () => {
+  it('sends the model only the trimmed history while the old tail still exists on the server', async () => {
     seedConversation({}, [
-      message(U1, 'user', 'first account prompt', '2026-06-01T00:00:00.000Z'),
-      message(A1, 'assistant', 'first account answer', '2026-06-01T00:00:01.000Z'),
+      message(U1, 'user', 'first question', '2026-06-01T00:00:00.000Z'),
+      message(A1, 'assistant', 'first answer', '2026-06-01T00:00:01.000Z'),
+      message(U2, 'user', 'second question', '2026-06-01T00:00:02.000Z'),
+      message(A2, 'assistant', 'second answer', '2026-06-01T00:00:03.000Z'),
     ]);
     let finishDelete: (() => void) | undefined;
     mockDeleteRemote.mockImplementationOnce(
@@ -340,8 +350,31 @@ describe('a pre-threading server keeps the replacing behaviour', () => {
         }),
     );
 
+    useChatExecutionStore.getState().editMessage(CONV_ID, U2, 'revised question');
+    await waitFor(() => mockStreamChat.mock.calls.length > 0);
+
+    const sent = (mockStreamChat.mock.calls[0]?.[0].messages ?? []).map((m) => m.content);
+    expect(sent).toEqual(['first question', 'first answer', 'revised question']);
+    expect(mockDeleteRemote).toHaveBeenCalledWith(CONV_ID, [U2, A2], expect.anything());
+    finishDelete?.();
+    await waitFor(() => !useChatExecutionStore.getState().isEditing);
+  });
+
+  it('does not resend or restore into another account when the account changes before the replacement is admitted', async () => {
+    seedConversation({}, [
+      message(U1, 'user', 'first account prompt', '2026-06-01T00:00:00.000Z'),
+      message(A1, 'assistant', 'first account answer', '2026-06-01T00:00:01.000Z'),
+    ]);
+    let admit: (() => void) | undefined;
+    mockEnsureConsent.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          admit = resolve;
+        }),
+    );
+
     useChatExecutionStore.getState().editMessage(CONV_ID, U1, 'old account revision');
-    await waitFor(() => finishDelete !== undefined);
+    await waitFor(() => admit !== undefined);
 
     activateCloudAccount('cloud-variants-second-user');
     clearCloudExecutionState();
@@ -350,16 +383,44 @@ describe('a pre-threading server keeps the replacing behaviour', () => {
       message(U2, 'user', 'second account prompt', '2026-06-01T00:00:02.000Z'),
       message(A2, 'assistant', 'second account answer', '2026-06-01T00:00:03.000Z'),
     ]);
-    finishDelete?.();
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    admit?.();
+    await new Promise((resolve) => setTimeout(resolve, 20));
 
     expect(rows().map((row) => row.content)).toEqual([
       'second account prompt',
       'second account answer',
     ]);
     expect(mockStreamChat).not.toHaveBeenCalled();
+    expect(mockDeleteRemote).not.toHaveBeenCalled();
     expect(useChatExecutionStore.getState().error).toBeNull();
     expect(useChatExecutionStore.getState().isEditing).toBe(false);
+  });
+
+  it('keeps the original question and the turns after it, and deletes nothing remotely, when the replacement is refused', async () => {
+    const original = [
+      message(U1, 'user', 'first question', '2026-06-01T00:00:00.000Z'),
+      message(A1, 'assistant', 'first answer', '2026-06-01T00:00:01.000Z'),
+      message(U2, 'user', 'second question', '2026-06-01T00:00:02.000Z'),
+      message(A2, 'assistant', 'second answer', '2026-06-01T00:00:03.000Z'),
+    ];
+    seedConversation({}, original);
+    useSettingsStore.setState({ reduceSensitiveContent: true });
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+
+    try {
+      useChatExecutionStore.getState().editMessage(CONV_ID, U1, 'What does NSFW stand for?');
+      await waitFor(() => !useChatExecutionStore.getState().isEditing);
+
+      expect(alertSpy).toHaveBeenCalledWith(
+        'Content not available',
+        REDUCED_SENSITIVE_CONTENT_REFUSAL,
+      );
+      expect(rows()).toEqual(original);
+      expect(mockDeleteRemote).not.toHaveBeenCalled();
+      expect(mockStreamChat).not.toHaveBeenCalled();
+    } finally {
+      alertSpy.mockRestore();
+    }
   });
 
   it('leaves another account alone when it signs in while the replaced response is being deleted', async () => {

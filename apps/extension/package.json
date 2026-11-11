@@ -1,7 +1,7 @@
 {
   "name": "@agiworkforce/extension",
   "version": "0.0.1",
-  "description": "Managed Cloud chat, approved-site browser context, and automation for AGI",
+  "description": "An AI side panel that reads the page you are on and, on sites you approve, clicks and types for you.",
   "private": true,
   "type": "module",
   "author": "AGI",
@@ -31,6 +31,7 @@
     "clean": "rm -rf dist",
     "package": "pnpm build && node scripts/prepare-package.mjs && cd dist && zip -r ../extension.zip . -x '*.map' && cd .. && node scripts/verify-package.mjs",
     "verify:package": "node scripts/verify-package.mjs",
+    "store:assets": "node scripts/capture-store-screenshots.mjs",
     "lint": "eslint src --ext .ts,.js --cache --cache-strategy content --cache-location .cache/eslint --max-warnings=0",
     "format": "prettier --write \"src/**/*.{js,html}\"",
     "check:no-hex": "node scripts/check-no-hex-colors.mjs",

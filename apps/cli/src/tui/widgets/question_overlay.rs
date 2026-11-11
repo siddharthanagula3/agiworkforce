@@ -366,7 +366,7 @@ impl InteractiveView for QuestionOverlayState {
             }
             KeyAction::Char(digit) if digit.is_ascii_digit() => {
                 let picked = digit.to_digit(10).unwrap_or(0) as usize;
-                if picked >= 1 && picked <= self.options.len() {
+                if (1..=self.options.len()).contains(&picked) {
                     self.cursor = picked - 1;
                     if self.row_was_painted(self.cursor) {
                         let chosen = self.options.get(self.cursor).cloned().unwrap_or_default();

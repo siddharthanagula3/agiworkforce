@@ -1417,13 +1417,53 @@
       "doc": "delete-your-account",
       "section": "How deletion works",
       "kind": "prose",
-      "sentence": "The dialog states what happens: your account and all associated data are permanently deleted, you are signed out now, and erasure runs 24 hours after you confirm.",
+      "sentence": "The dialog states what happens: your account and its Cloud data are scheduled for permanent deletion, and erasure starts after a cancellation deadline 24 hours later.",
       "implementation": ["apps/web/app/api/user/delete-account/route.ts"],
       "proof": [
         {
           "kind": "test",
           "file": "apps/web/app/api/user/delete-account/__tests__/route.test.ts",
           "name": "schedules deletion when the update touches the profile row"
+        }
+      ]
+    },
+    {
+      "id": "delete-dialog-says-what-is-kept",
+      "doc": "delete-your-account",
+      "section": "How deletion works",
+      "kind": "prose",
+      "sentence": "It also says that anything the law or an active legal hold requires us to keep is kept.",
+      "implementation": ["apps/web/features/settings/sections/AccountSection.tsx"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/web/features/settings/sections/AccountSection.tsx",
+          "text": "an active legal hold requires us to keep is kept"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/settings/sections/AccountSection.delete.test.tsx",
+          "name": "says before confirming that what the law or a legal hold requires is kept"
+        }
+      ]
+    },
+    {
+      "id": "delete-waits-for-legal-hold",
+      "doc": "delete-your-account",
+      "section": "How deletion works",
+      "kind": "prose",
+      "sentence": "If an active legal hold covers your account, for example one your workspace has placed, nothing is erased until the hold is released.",
+      "implementation": ["apps/web/lib/server/account-erasure.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/account-erasure.test.ts",
+          "name": "erases nothing and never seals the profile fence while a legal hold is active"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/account-erasure.test.ts",
+          "name": "applies the same organization-scoped hold semantics as retention"
         }
       ]
     },
@@ -1492,6 +1532,64 @@
           "kind": "test",
           "file": "apps/web/app/api/user/delete-account/__tests__/route.test.ts",
           "name": "refuses while the account is the only owner of a workspace, and deletes nothing"
+        }
+      ]
+    },
+    {
+      "id": "delete-renewing-plan-is-refused",
+      "doc": "delete-your-account",
+      "section": "Before you confirm",
+      "kind": "prose",
+      "sentence": "If your paid plan still renews, the request is refused and nothing is scheduled.",
+      "implementation": ["apps/web/app/api/user/delete-account/route.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/user/delete-account/__tests__/route.test.ts",
+          "name": "refuses deletion with 409 while a paid subscription is %s"
+        }
+      ]
+    },
+    {
+      "id": "delete-after-cancelling-is-immediate",
+      "doc": "delete-your-account",
+      "section": "Before you confirm",
+      "kind": "prose",
+      "sentence": "Cancel the plan first, on the web in Settings, Billing, or with Apple or Google if you bought it there, and then you can delete your account straight away, without waiting for the plan to end.",
+      "implementation": ["apps/web/app/api/user/delete-account/route.ts"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/user/delete-account/__tests__/route.test.ts",
+          "name": "tells a renewing web subscriber where to cancel and that deletion is then immediate"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/user/delete-account/__tests__/route.test.ts",
+          "name": "sends an App Store subscriber to Apple to cancel"
+        }
+      ]
+    },
+    {
+      "id": "delete-cancelled-plan-ends-at-erasure",
+      "doc": "delete-your-account",
+      "section": "Before you confirm",
+      "kind": "prose",
+      "sentence": "A plan you have already cancelled does not block deletion: it ends when erasure runs, and its unused time is not refunded.",
+      "implementation": [
+        "apps/web/app/api/user/delete-account/route.ts",
+        "apps/web/lib/server/scheduled-account-erasure.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/user/delete-account/__tests__/route.test.ts",
+          "name": "schedules deletion at once for a %s plan that is already cancelled, and says what ends"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/server/__tests__/scheduled-account-erasure.test.ts",
+          "name": "cancels the live Stripe subscription before any row is touched"
         }
       ]
     },
@@ -3161,13 +3259,13 @@
       "doc": "troubleshooting",
       "section": "Search did not run",
       "kind": "prose",
-      "sentence": "Searching your own conversations with Cmd/Ctrl+K reports a failed request as \"Search failed. Please try again.\" If the search window itself cannot open, it shows \"Search unavailable\" instead; close it and open it again.",
+      "sentence": "Searching your own conversations with Cmd/Ctrl+K reports a failed request as \"Search could not be completed\" with a Retry button and never as no matches; if the search window itself cannot open, it shows \"Search unavailable\" instead, so close it and open it again.",
       "implementation": ["apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx"],
       "proof": [
         {
           "kind": "copy",
           "file": "apps/web/features/chat/components/dialogs/GlobalSearchDialog.tsx",
-          "text": "toast.error('Search failed. Please try again.')"
+          "text": "<p className=\"text-sm text-muted-foreground\">Search could not be completed</p>"
         },
         {
           "kind": "copy",
@@ -3387,7 +3485,7 @@
         {
           "kind": "copy",
           "file": "apps/extension/manifest.json",
-          "text": "\"name\": \"Extension\""
+          "text": "\"name\": \"AGI Extension\""
         },
         {
           "kind": "test",
@@ -6047,6 +6145,53 @@
           "kind": "test",
           "file": "apps/web/features/settings/sections/__tests__/PrivacySection.training.test.tsx",
           "name": "states that no training opt-in exists"
+        }
+      ]
+    },
+    {
+      "id": "cli-sandbox-uses-seatbelt-or-bubblewrap",
+      "doc": "install-the-cli",
+      "section": "Running work",
+      "kind": "prose",
+      "sentence": "`agi review` reviews changes, `agi apply` applies the latest diff as a git patch, and `agi sandbox` runs a command under the operating system's sandbox: Seatbelt on macOS, and bubblewrap on Linux, where the `bubblewrap` package must be installed.",
+      "implementation": [
+        "apps/cli/src/sandbox.rs#SandboxType::MacosSeatbelt",
+        "apps/cli/src/sandbox.rs#SandboxType::LinuxBubblewrap",
+        "apps/cli/src/sandbox.rs#missing_sandbox_message"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/cli/src/sandbox.rs",
+          "name": "missing_linux_sandbox_message_names_bubblewrap_and_how_to_install_it"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/cli/src/sandbox.rs",
+          "text": "Sandboxed exec is unsupported on Windows"
+        }
+      ]
+    },
+    {
+      "id": "cli-sandbox-refuses-without-a-backend",
+      "doc": "install-the-cli",
+      "section": "Running work",
+      "kind": "prose",
+      "sentence": "Without that sandbox it refuses to run the command, and `agi doctor` says what to install.",
+      "implementation": [
+        "apps/cli/src/sandbox.rs#missing_sandbox_message",
+        "apps/cli/src/doctor.rs#crate::sandbox::missing_sandbox_message(std::env::consts::OS)"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/cli/src/sandbox.rs",
+          "name": "exec_without_a_detected_sandbox_tells_the_user_what_to_install"
+        },
+        {
+          "kind": "test",
+          "file": "apps/cli/src/sandbox.rs",
+          "name": "a_wrapped_program_refuses_an_unavailable_backend"
         }
       ]
     },

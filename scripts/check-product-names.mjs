@@ -2,7 +2,8 @@
 // Every app shows the product name the registry owns, and no retired spelling of
 // a product survives in shipped source. The registry is
 // packages/contracts/types/src/product-names.ts; a rename is one edit there plus
-// the manifest fields below that cannot import it.
+// the manifest fields below that cannot import it. A store-facing name is the
+// copyright name plus the product name (copyrightPrefix).
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
@@ -18,7 +19,12 @@ export const MANIFEST_FIELDS = [
     file: 'apps/desktop/electron-builder.yml',
     pattern: /^productName:\s*(.+)$/m,
   },
-  { product: 'extension', file: 'apps/extension/manifest.json', json: ['name'] },
+  {
+    product: 'extension',
+    file: 'apps/extension/manifest.json',
+    json: ['name'],
+    copyrightPrefix: true,
+  },
   { product: 'code', file: 'apps/extension-vscode/package.json', json: ['displayName'] },
 ];
 
@@ -60,6 +66,13 @@ export function readRegistry(root) {
   return names;
 }
 
+export function readCopyrightName(root) {
+  const source = fs.readFileSync(path.join(root, REGISTRY_PATH), 'utf8');
+  const name = source.match(/\bPRODUCT_COPYRIGHT_NAME\s*=\s*'([^']+)'/)?.[1];
+  if (!name) throw new Error(`${REGISTRY_PATH}: PRODUCT_COPYRIGHT_NAME not found`);
+  return name;
+}
+
 function readField(root, field) {
   const source = fs.readFileSync(path.join(root, field.file), 'utf8');
   if (field.json) {
@@ -87,12 +100,14 @@ function* walk(root, relative) {
 export function runProductNamesCheck(root = REPO_ROOT) {
   const failures = [];
   const names = readRegistry(root);
+  const copyrightName = readCopyrightName(root);
   for (const field of MANIFEST_FIELDS) {
     const value = readField(root, field);
-    if (value !== names[field.product]) {
-      failures.push(
-        `${field.file}: shows "${value}", the registry names this app "${names[field.product]}"`,
-      );
+    const expected = field.copyrightPrefix
+      ? `${copyrightName} ${names[field.product]}`
+      : names[field.product];
+    if (value !== expected) {
+      failures.push(`${field.file}: shows "${value}", the registry names this app "${expected}"`);
     }
   }
   const retired = new RegExp(

@@ -2427,7 +2427,7 @@
       "path": "apps/extension",
       "name": "@agiworkforce/extension",
       "kind": "app",
-      "purpose": "Managed Cloud chat, approved-site browser context, and automation for AGI",
+      "purpose": "An AI side panel that reads the page you are on and, on sites you approve, clicks and types for you.",
       "owner": "Extension lead",
       "trustBoundary": null,
       "status": null,
@@ -2458,15 +2458,15 @@
       "lanes": [
         "chrome-extension"
       ],
-      "files": 558,
+      "files": 577,
       "roles": {
-        "asset": 5,
-        "config": 5,
+        "asset": 12,
+        "config": 6,
         "doc": 3,
-        "other": 29,
-        "source": 226,
-        "style": 2,
-        "test": 288
+        "other": 31,
+        "source": 229,
+        "style": 3,
+        "test": 293
       }
     },
     {
@@ -2552,16 +2552,16 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 1662,
+      "files": 1683,
       "roles": {
         "asset": 4,
         "config": 11,
         "doc": 4,
         "generated": 1,
         "other": 46,
-        "source": 906,
+        "source": 913,
         "style": 1,
-        "test": 689
+        "test": 703
       }
     },
     {
@@ -2616,17 +2616,17 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 8290,
+      "files": 8299,
       "roles": {
         "asset": 57,
-        "config": 76,
+        "config": 83,
         "doc": 51,
         "generated": 2,
         "migration": 740,
         "other": 37,
         "source": 3515,
         "style": 35,
-        "test": 3777
+        "test": 3779
       }
     },
     {
@@ -2695,11 +2695,11 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 224,
+      "files": 225,
       "roles": {
         "asset": 1,
         "config": 19,
-        "doc": 158,
+        "doc": 159,
         "generated": 45,
         "other": 1
       }

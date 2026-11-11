@@ -1,5 +1,5 @@
 import React from 'react';
-import { render } from '@testing-library/react-native';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import type { MeSubscriptionSource } from '@agiworkforce/cloud-contracts';
 
 const mockPush = jest.fn();
@@ -76,8 +76,15 @@ function signInAs(input: {
     billingSource: input.source,
     billingPeriodEnd: input.periodEnd ?? null,
     billingCancelsAtPeriodEnd: false,
-    refreshTier: jest.fn().mockResolvedValue(undefined),
+    isRefreshing: false,
+    lastRefreshedAt: '2026-11-11T00:00:00.000Z',
+    refreshTier: jest.fn().mockResolvedValue(true),
   });
+}
+
+function signInWithUnconfirmedPlan(refreshTier: jest.Mock, isRefreshing: boolean) {
+  signInAs({ tier: 'free', status: 'none', source: 'none' });
+  useTierStore.setState({ lastRefreshedAt: null, isRefreshing, refreshTier });
 }
 
 function visibleText(json: unknown): string {
@@ -141,6 +148,58 @@ describe('a build that sells nothing', () => {
     expect(screen.getByText('Renews')).toBeTruthy();
     expect(visibleText(screen.toJSON())).not.toMatch(PURCHASE_WORDS);
     expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it('does not call a plan Free while the first check is still running', () => {
+    signInWithUnconfirmedPlan(
+      jest.fn(() => new Promise<boolean>(() => {})),
+      true,
+    );
+    const screen = render(<CloudBillingScreen />);
+
+    expect(screen.getByText('Checking your plan…')).toBeTruthy();
+    expect(screen.getByText('Checking…')).toBeTruthy();
+    expect(screen.queryByText(/Free/)).toBeNull();
+    expect(screen.queryByText('Try again')).toBeNull();
+    expect(visibleText(screen.toJSON())).not.toMatch(PURCHASE_WORDS);
+  });
+
+  it('says the plan could not be read when the check fails, and checks again on request', async () => {
+    const refreshTier = jest.fn().mockResolvedValue(false);
+    signInWithUnconfirmedPlan(refreshTier, false);
+    const screen = render(<CloudBillingScreen />);
+
+    expect(
+      await screen.findByText(
+        'We couldn’t read your plan just now. Your subscription has not changed.',
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText('Not confirmed')).toBeTruthy();
+    expect(screen.queryByText(/Free/)).toBeNull();
+    expect(visibleText(screen.toJSON())).not.toMatch(PURCHASE_WORDS);
+
+    fireEvent.press(screen.getByText('Try again'));
+    await waitFor(() => expect(refreshTier).toHaveBeenCalledTimes(2));
+  });
+
+  it('shows the plan once a check confirms it', async () => {
+    const refreshTier = jest.fn(async () => {
+      useTierStore.setState({ lastRefreshedAt: '2026-11-11T00:00:00.000Z' });
+      return true;
+    });
+    signInWithUnconfirmedPlan(refreshTier, false);
+    const screen = render(<CloudBillingScreen />);
+
+    expect(await screen.findByText('You are on the Free plan.')).toBeTruthy();
+    expect(screen.queryByText('Try again')).toBeNull();
+  });
+
+  it('does not describe any plan as the account’s own before it is confirmed', () => {
+    signInWithUnconfirmedPlan(jest.fn().mockResolvedValue(false), false);
+    const screen = render(<PlansScreen />);
+
+    expect(screen.queryByText('Free')).toBeNull();
+    expect(screen.getByText(/couldn’t read your plan just now/)).toBeTruthy();
   });
 
   it('lists only the plan the account holds', () => {

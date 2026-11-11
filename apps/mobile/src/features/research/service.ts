@@ -113,15 +113,33 @@ export function researchReportLabel(report: MobileResearchReport): string {
   return report.title.trim() || report.query.trim() || 'Untitled report';
 }
 
+export interface MobileResearchReportsPage {
+  reports: MobileResearchReport[];
+  nextCursor: string | null;
+}
+
 export async function fetchResearchReports(
-  options: { conversationId?: string; limit?: number; signal?: AbortSignal } = {},
-): Promise<MobileResearchReport[]> {
+  options: {
+    conversationId?: string;
+    limit?: number;
+    cursor?: string;
+    signal?: AbortSignal;
+  } = {},
+): Promise<MobileResearchReportsPage> {
   const params = new URLSearchParams({
     limit: String(options.limit ?? RESEARCH_REPORTS_LIMIT),
   });
+  if (options.cursor) params.set('cursor', options.cursor);
   if (options.conversationId) params.set('conversationId', options.conversationId);
   const response = await api.get<unknown>(`/api/research/reports?${params.toString()}`, {
     ...(options.signal ? { signal: options.signal } : {}),
   });
-  return mapResearchReportsResponse(response);
+  const nextCursor =
+    response && typeof response === 'object'
+      ? (response as { nextCursor?: unknown }).nextCursor
+      : null;
+  return {
+    reports: mapResearchReportsResponse(response),
+    nextCursor: typeof nextCursor === 'string' && nextCursor.length > 0 ? nextCursor : null,
+  };
 }

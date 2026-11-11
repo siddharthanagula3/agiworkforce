@@ -39,3 +39,24 @@ export const DataExportArchiveResponseSchema = z.object({
   archive: DataExportArchiveSchema.nullable(),
 });
 export type DataExportArchiveResponse = z.infer<typeof DataExportArchiveResponseSchema>;
+
+export const DATA_EXPORT_COMPLETENESS_STATUSES = ['complete', 'partial'] as const;
+export type DataExportCompletenessStatus = (typeof DATA_EXPORT_COMPLETENESS_STATUSES)[number];
+
+export const DataExportCompletenessSchema = z.object({
+  status: z.enum(DATA_EXPORT_COMPLETENESS_STATUSES),
+  unavailable_sections: z.array(z.string()),
+  skipped_rows: z.array(z.object({ section: z.string(), count: z.number().int().nonnegative() })),
+  truncated_sections: z.array(
+    z.object({ section: z.string(), limit: z.number().int().positive() }),
+  ),
+  retry: z.string(),
+});
+export type DataExportCompleteness = z.infer<typeof DataExportCompletenessSchema>;
+
+export const DataExportResponseSchema = z.object({
+  success: z.boolean(),
+  status: z.enum(DATA_EXPORT_COMPLETENESS_STATUSES).optional(),
+  data: z.record(z.string(), z.unknown()),
+});
+export type DataExportResponse = z.infer<typeof DataExportResponseSchema>;

@@ -46,7 +46,7 @@ const ANNEX_I: readonly LedgerRow[] = [
   {
     label: 'Duration',
     value:
-      'For the term of the Customer’s subscription. On termination or an account deletion request, erasure is scheduled 24 hours out and then performed by a daily job, see section 09.',
+      'For the term of the Customer’s subscription. On termination or an account deletion request, erasure is scheduled 24 hours out and then carried out by a daily job, unless an active legal hold covers the account, see section 09.',
   },
   {
     label: 'Nature and purpose',
@@ -226,9 +226,10 @@ const ANNEX_II: readonly LedgerRow[] = [
     label: 'Deletion',
     value: (
       <>
-        <strong>In place:</strong> account deletion is scheduled 24 hours out and then performed by
-        a daily job that removes user-scoped rows and the associated stored objects, and deletes the
-        identity at the authentication provider.
+        <strong>In place:</strong> account deletion is scheduled 24 hours out and then carried out
+        by a daily job that removes user-scoped rows and the associated stored objects, and deletes
+        the identity at the authentication provider. The job erases nothing while an active legal
+        hold covers the account.
         <br />
         <strong>Limit:</strong> vendor-side backup snapshots are governed by the vendors&rsquo; own
         retention configuration and are not separately purged by AGI. See section 09.
@@ -717,9 +718,11 @@ export default function DpaPage() {
                     <strong>Deletion.</strong> An account deletion request records a deletion
                     timestamp and schedules erasure 24 hours later. A daily job then erases
                     user-scoped records and the stored objects belonging to that account and deletes
-                    the identity at the authentication provider. No confirmation email is sent.
-                    Cancellation is self-serve: a user who changes their mind can sign back in and
-                    cancel from Settings &gt; Account any time within the 24-hour window.
+                    the identity at the authentication provider. If an active legal hold covers the
+                    account, including one the Customer places on its workspace, erasure waits until
+                    the hold is released. No confirmation email is sent. Cancellation is self-serve:
+                    a user who changes their mind can sign back in and cancel from Settings &gt;
+                    Account any time within the 24-hour window.
                   </Prose>
                   <Prose>
                     <strong>Backups.</strong> Database and object-storage snapshots are governed by

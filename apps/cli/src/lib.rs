@@ -1026,7 +1026,7 @@ enum Command {
         #[command(subcommand)]
         action: Option<KeysSubcommand>,
     },
-    /// Print your referral link. Friends who join with it get a Pro trial, and you both earn bonus credits.
+    /// Print your referral link. Friends who join with it get a free trial, and you both earn bonus credits.
     Invite {
         /// Emit the link as JSON.
         #[arg(long)]

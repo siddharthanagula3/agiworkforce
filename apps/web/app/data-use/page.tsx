@@ -106,10 +106,11 @@ const QUESTIONS = [
     body: (
       <>
         Both are self-serve in account settings: export returns your data as a download, and
-        deletion is scheduled 24 hours out and then performed. You get no confirmation email, but
-        cancellation is self-serve too: sign back in and cancel from Settings &gt; Account any time
-        before the 24 hours are up. Everything else (access, correction, deleting an address we hold
-        without an account) goes through{' '}
+        deletion is scheduled 24 hours out and then carried out by a daily job, unless an active
+        legal hold covers your account, in which case it waits until the hold is released. You get
+        no confirmation email, but cancellation is self-serve too: sign back in and cancel from
+        Settings &gt; Account any time before the 24 hours are up. Everything else (access,
+        correction, deleting an address we hold without an account) goes through{' '}
         <Link href={CANONICAL_POLICY_ROUTES.dataRights} className="agi-ds-link">
           /privacy/requests
         </Link>

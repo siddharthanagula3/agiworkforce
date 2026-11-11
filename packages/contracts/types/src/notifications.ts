@@ -59,6 +59,7 @@ export interface NotificationFeedItem {
 export interface NotificationFeedResponse {
   notifications: NotificationFeedItem[];
   unreadCount: number;
+  nextCursor?: string | null;
 }
 
 export function isNotificationCategory(value: unknown): value is NotificationCategory {

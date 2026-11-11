@@ -1,7 +1,7 @@
 import { URL } from 'node:url';
 import { TextDecoder } from 'node:util';
 import { Buffer } from 'node:buffer';
-import { createPublicKey } from 'node:crypto';
+import { createHash, createPublicKey } from 'node:crypto';
 
 function normalizeChromeExtensionPublicKey(value) {
   const publicKey = value?.trim();
@@ -189,16 +189,31 @@ export function configureChromeManifest(sourceManifest, configuration) {
   return manifest;
 }
 
-export function validateReleaseManifest(manifest, configuration) {
-  if (configuration.artifactSandboxOrigin)
-    normalizeOrigin(configuration.artifactSandboxOrigin, 'VITE_ARTIFACT_SANDBOX_ORIGIN');
+export const FIRST_DRAFT_ARCHIVE_SUFFIX = '-first-draft.zip';
 
-  const frontendApi = normalizeOrigin(configuration.clerkFrontendApi, 'CLERK_FRONTEND_API');
-  const syncHost = normalizeOrigin(configuration.clerkSyncHost, 'CLERK_SYNC_HOST');
-  if (!frontendApi) throw new Error('CLERK_FRONTEND_API is required for a production package.');
-  if (!syncHost) throw new Error('CLERK_SYNC_HOST is required for a production package.');
-  validateLiveClerkPublishableKey(configuration.clerkPublishableKey, frontendApi);
+export function chromeExtensionIdFromPublicKey(publicKey) {
+  const digest = createHash('sha256').update(Buffer.from(publicKey, 'base64')).digest('hex');
+  return [...digest.slice(0, 32)]
+    .map((nibble) => String.fromCharCode(97 + Number.parseInt(nibble, 16)))
+    .join('');
+}
+
+function validateStoreIdentity(manifest, configuration, firstDraft) {
   const publicKey = normalizeChromeExtensionPublicKey(configuration.chromeExtensionPublicKey);
+  const extensionId = configuration.chromeExtensionId?.trim();
+  if (firstDraft) {
+    if (publicKey || extensionId) {
+      throw new Error(
+        'CHROME_EXTENSION_PUBLIC_KEY or CWS_EXTENSION_ID is set, so the store item already exists; build the release package, not a first draft.',
+      );
+    }
+    if (manifest.key !== undefined) {
+      throw new Error(
+        'A first-draft package must not carry a manifest key; the store assigns the item ID on upload.',
+      );
+    }
+    return;
+  }
   if (!publicKey) {
     throw new Error(
       'CHROME_EXTENSION_PUBLIC_KEY is required so the production CRX ID remains stable.',
@@ -207,6 +222,24 @@ export function validateReleaseManifest(manifest, configuration) {
   if (manifest.key !== publicKey) {
     throw new Error('The built manifest does not contain the configured stable CRX public key.');
   }
+  const derivedId = chromeExtensionIdFromPublicKey(publicKey);
+  if (extensionId && extensionId !== derivedId) {
+    throw new Error(
+      `CHROME_EXTENSION_PUBLIC_KEY belongs to extension ${derivedId}, not CWS_EXTENSION_ID ${extensionId}; copy both from the same store item.`,
+    );
+  }
+}
+
+export function validateReleaseManifest(manifest, configuration, { firstDraft = false } = {}) {
+  if (configuration.artifactSandboxOrigin)
+    normalizeOrigin(configuration.artifactSandboxOrigin, 'VITE_ARTIFACT_SANDBOX_ORIGIN');
+
+  const frontendApi = normalizeOrigin(configuration.clerkFrontendApi, 'CLERK_FRONTEND_API');
+  const syncHost = normalizeOrigin(configuration.clerkSyncHost, 'CLERK_SYNC_HOST');
+  if (!frontendApi) throw new Error('CLERK_FRONTEND_API is required for a production package.');
+  if (!syncHost) throw new Error('CLERK_SYNC_HOST is required for a production package.');
+  validateLiveClerkPublishableKey(configuration.clerkPublishableKey, frontendApi);
+  validateStoreIdentity(manifest, configuration, firstDraft);
   for (const origin of [frontendApi, syncHost]) {
     if (!manifest.host_permissions?.includes(`${origin}/*`)) {
       throw new Error(`The built manifest is missing required host permission ${origin}/*.`);
@@ -220,6 +253,7 @@ export function readChromeBuildConfiguration(env) {
     clerkFrontendApi: env.CLERK_FRONTEND_API,
     clerkSyncHost: env.CLERK_SYNC_HOST,
     chromeExtensionPublicKey: env.CHROME_EXTENSION_PUBLIC_KEY,
+    chromeExtensionId: env.CWS_EXTENSION_ID,
     artifactSandboxOrigin: normalizeOrigin(
       env.VITE_ARTIFACT_SANDBOX_ORIGIN,
       'VITE_ARTIFACT_SANDBOX_ORIGIN',

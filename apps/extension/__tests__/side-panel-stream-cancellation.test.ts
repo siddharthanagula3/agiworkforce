@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { TERMINAL_AGENT_TASK_STATES } from '@agiworkforce/types';
+import { AGENT_EVENT_SCHEMA_VERSION, TERMINAL_AGENT_TASK_STATES } from '@agiworkforce/types';
 import type { ManagedCloudAgentRunReference } from '@agiworkforce/cloud-contracts';
 import { MANAGED_RUN_CANCELLATION_TIMEOUT_MS } from '../src/features/cloud-bridge/managedRunControl';
 import { withTimeout } from '../src/utils';
@@ -12,8 +12,10 @@ import { BrowserTaskSiteGrants } from '../src/features/computer-use/taskSiteGran
 import {
   applyStreamFailure,
   hydrateStoredChatMessage,
+  projectCanonicalAgentActivity,
   reconcileManagedRunActivity,
   resolveComposerPrompt,
+  settleBrowserActivity,
   type SidePanelChatMessage,
 } from '../src/features/side-panel/chat-state';
 
@@ -31,6 +33,7 @@ const names = [
   'retryFailedMessage',
   'serializeMessagesForHistory',
   'resetConversationView',
+  'settleChatToolActivity',
 ];
 const functions = program.statements
   .filter((node) => ts.isFunctionDeclaration(node) && names.includes(node.name?.text ?? ''))
@@ -88,6 +91,7 @@ function harness() {
     sameManagedCloudOwner,
     applyStreamFailure,
     reconcileManagedRunActivity,
+    settleBrowserActivity,
     saveMessages,
     renderMessages,
     updateSendButton: vi.fn(),
@@ -267,6 +271,37 @@ describe('side panel Stop admission and recovery', () => {
     expect(test.canAdmitComposerMessage('Next step')).toBe(true);
     expect(test.assistant.content).toBe('The partial reply stays visible.');
     expect(test.assistant.errorText).toBeUndefined();
+  });
+
+  it('records a page read the user stopped as cancelled, so a reload does not show it working', async () => {
+    const test = harness();
+    test.assistant.browserEvents = [
+      {
+        schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+        sessionId: `browser:${test.assistant.id}`,
+        turnId: `browser:${test.assistant.id}`,
+        sequence: 0,
+        emittedAtMs: 1,
+        event: {
+          type: 'tool-execution-start',
+          toolCallId: 'read-1',
+          name: 'browser_read_page',
+          category: 'computer-use',
+          summary: 'Reading example.com',
+          input: null,
+        },
+      },
+    ];
+    test.assistant.browserActivity = projectCanonicalAgentActivity(test.assistant.browserEvents);
+    expect(test.assistant.browserActivity?.status).toBe('running');
+    test.stop();
+    test.responses[0]!.settle({ success: true, cancellationConfirmed: true });
+    await vi.waitFor(() => expect(test.assistant.streamCancellation).toBeUndefined());
+    expect(test.assistant.browserActivity?.status).toBe('cancelled');
+    expect(test.assistant.browserEvents.at(-1)?.event).toEqual({
+      type: 'stop',
+      reason: 'cancelled',
+    });
   });
 
   it('persists a refusal and makes Retry retry Stop without resending the prompt', async () => {

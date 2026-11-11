@@ -57,6 +57,45 @@ describe('docParser, CSV', () => {
     expect(result.metadata.columns).toBe(3);
   });
 
+  it('keeps a quoted newline inside one record and counts it once', async () => {
+    setFileContent('id,note,amount\n1,"first\nsecond",10');
+    const result = await parseDocument('file:///tmp/rows.csv');
+    expect(result.text).toBe(
+      'Columns: id, note, amount\nid: 1; note: "first\\nsecond"; amount: 10',
+    );
+    expect(result.metadata.rows).toBe(1);
+    expect(result.metadata.columns).toBe(3);
+    expect(result.metadata.partial).toBeUndefined();
+  });
+
+  it('keeps the literal quotes of a doubled-quote escape', async () => {
+    setFileContent('id,note\n1,"Say ""hello"""');
+    const result = await parseDocument('file:///tmp/quotes.csv');
+    expect(result.text).toBe('Columns: id, note\nid: 1; note: "Say \\"hello\\""');
+  });
+
+  it('keeps a quoted comma in its own value and reads CRLF records after a BOM', async () => {
+    setFileContent('﻿name,city\r\n"Smith, John",Paris\r\nLee,Rome\r\n');
+    const result = await parseDocument('file:///tmp/crlf.csv');
+    expect(result.text).toBe(
+      'Columns: name, city\nname: Smith, John; city: Paris\nname: Lee; city: Rome',
+    );
+    expect(result.metadata.rows).toBe(2);
+  });
+
+  it('keeps an empty quoted field empty and shows a value beyond the header by position', async () => {
+    setFileContent('a,b\n"",x,extra');
+    const result = await parseDocument('file:///tmp/wide.csv');
+    expect(result.text).toBe('Columns: a, b\na: ; b: x; column 3: extra');
+  });
+
+  it('flags the file as partly read when a quote is never closed', async () => {
+    setFileContent('a,b\n1,"open');
+    const result = await parseDocument('file:///tmp/open.csv');
+    expect(result.metadata.partial).toBe(true);
+    expect(result.text).toContain('b: open');
+  });
+
   it('throws EMPTY_DOCUMENT on CSV with only a header', async () => {
     setFileContent('name,age');
     const result = await parseDocument('file:///tmp/empty.csv');

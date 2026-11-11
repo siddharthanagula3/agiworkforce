@@ -73,6 +73,7 @@ vi.mock('@/lib/services/subscription-service', () => ({
   },
 }));
 
+import { BILLING_PLAN_PRICING } from '@agiworkforce/types';
 import { recordAuditEvent } from '@/lib/security-audit';
 
 import { STEP_UP_TOKEN_HEADER } from '@/lib/server/step-up-auth';
@@ -504,15 +505,90 @@ describe('DELETE /api/user/delete-account', () => {
     },
   );
 
-  it('tells a user whose plan is already cancelled when it ends instead of asking again', async () => {
+  it('tells a renewing web subscriber where to cancel and that deletion is then immediate', async () => {
+    mockGetSubscription.mockResolvedValue(subscription({ stripe_subscription_id: 'sub_live_1' }));
+
+    const body = await (await DELETE(deleteRequest())).json();
+
+    expect(body.reason).toBe('active_subscription');
+    expect(body.error).toContain(BILLING_PLAN_PRICING.pro.label);
+    expect(body.error).toContain('on the web in Settings > Billing');
+    expect(body.error).toContain('2026-09-01');
+    expect(body.error).toContain('without waiting for the plan to end');
+    expect(body.error).not.toContain('@');
+  });
+
+  it('sends an App Store subscriber to Apple to cancel', async () => {
+    mockGetSubscription.mockResolvedValue(
+      subscription({ apple_original_transaction_id: '2000000000000001' }),
+    );
+
+    const body = await (await DELETE(deleteRequest())).json();
+
+    expect(body.reason).toBe('active_subscription');
+    expect(body.error).toContain('Apple account');
+  });
+
+  it.each(['active', 'trialing'])(
+    'schedules deletion at once for a %s plan that is already cancelled, and says what ends',
+    async (status) => {
+      mockExecute.mockResolvedValue(1);
+      mockGetSubscription.mockResolvedValue(subscription({ status, cancel_at_period_end: true }));
+
+      const response = await DELETE(deleteRequest());
+      const body = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(body.scheduledFor).toBeTruthy();
+      expect(body.message).toContain(`${BILLING_PLAN_PRICING.pro.label} plan, already cancelled`);
+      expect(body.message).toContain('instead of on 2026-09-01');
+      expect(body.message).toContain('does not refund the unused time');
+      expect(body.message).toContain('will not be charged again');
+      expect(mockExecute).toHaveBeenCalledWith(
+        expect.stringContaining('deletion_requested_at'),
+        expect.anything(),
+      );
+      expect(mockEraseUserAccountData).not.toHaveBeenCalled();
+    },
+  );
+
+  it('keeps step-up for a cancelled paid plan before scheduling anything', async () => {
+    mockExecute.mockResolvedValue(1);
     mockGetSubscription.mockResolvedValue(subscription({ cancel_at_period_end: true }));
+
+    const response = await DELETE(
+      new Request('http://localhost:3000/api/user/delete-account', { method: 'DELETE' }) as never,
+    );
+
+    expect(response.status).toBe(403);
+    expect(mockExecute).not.toHaveBeenCalledWith(
+      expect.stringContaining('deletion_requested_at'),
+      expect.anything(),
+    );
+  });
+
+  it('keeps the sole-owner guard for a cancelled paid plan', async () => {
+    mockGetSubscription.mockResolvedValue(subscription({ cancel_at_period_end: true }));
+    ownsAlone({ id: 'org-1', name: 'Acme' });
+
+    const response = await DELETE(deleteRequest());
+
+    expect(response.status).toBe(409);
+    expect((await response.json()).reason).toBe('sole_organization_owner');
+  });
+
+  it('still refuses a cancelled plan whose payment is outstanding', async () => {
+    mockGetSubscription.mockResolvedValue(
+      subscription({ status: 'past_due', cancel_at_period_end: true }),
+    );
 
     const response = await DELETE(deleteRequest());
     const body = await response.json();
 
     expect(response.status).toBe(409);
-    expect(body.cancelAtPeriodEnd).toBe(true);
-    expect(body.error).toContain('2026-09-01');
+    expect(body.reason).toBe('active_subscription');
+    expect(body.error).toContain('still being collected');
+    expect(mockExecute).not.toHaveBeenCalled();
   });
 
   it.each([

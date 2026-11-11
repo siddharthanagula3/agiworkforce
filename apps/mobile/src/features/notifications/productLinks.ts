@@ -14,7 +14,12 @@ const NATIVE_DESTINATION: Record<
 > = {
   chat: { pathname: '/(app)/chat', flag: 'cloudChat', perItem: true, idParam: null },
   work: { pathname: '/(app)/tasks', flag: 'cloudTasks', perItem: false, idParam: 'runId' },
-  'browser-task': { pathname: '/(app)/tasks', flag: 'cloudTasks', perItem: false, idParam: null },
+  'browser-task': {
+    pathname: '/(app)/tasks',
+    flag: 'cloudTasks',
+    perItem: false,
+    idParam: 'runId',
+  },
   research: { pathname: '/(app)/reports', flag: 'research', perItem: false, idParam: null },
   schedule: { pathname: '/(app)/schedules', flag: 'schedules', perItem: false, idParam: null },
   artifact: { pathname: '/(app)/artifacts', flag: null, perItem: false, idParam: null },

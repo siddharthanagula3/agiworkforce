@@ -198,7 +198,10 @@ vi.mock('../src/features/cloud-bridge/capabilityDocument', async (importOriginal
   }),
 }));
 import { getRoutingSlotModel, parseManagedUsageSummaryResponse } from '@agiworkforce/types';
-import { MAX_CHAT_ATTACHMENT_MESSAGE_BYTES } from '@agiworkforce/cloud-contracts';
+import {
+  MAX_CHAT_ATTACHMENT_BYTES,
+  MAX_CHAT_ATTACHMENT_MESSAGE_BYTES,
+} from '@agiworkforce/cloud-contracts';
 import {
   deleteConversation,
   saveConversation,
@@ -773,5 +776,210 @@ describe('image intake stays with its admitted account epoch', () => {
     await refreshAccount();
     (document.getElementById('sp-attach-screenshot-item') as HTMLButtonElement).click();
     expect(chromeMock.screenshotReplies).toHaveLength(requests);
+  });
+});
+
+describe('document attachments through the `+` menu picker', () => {
+  const defaultFetch = vi.mocked(fetch).getMockImplementation()!;
+  const assetIdByName = new Map<string, string>();
+
+  function acceptingUploads(): void {
+    assetIdByName.clear();
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const url = String(input);
+      const jsonResponse = (body: unknown): Response =>
+        new Response(JSON.stringify(body), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      if (url.endsWith('/api/uploads/presign')) {
+        const request = JSON.parse(String(init?.body)) as { fileName: string };
+        return jsonResponse({
+          storageKey: `uploads/${request.fileName}`,
+          uploadUrl: `https://storage.example.test/${encodeURIComponent(request.fileName)}`,
+          uploadMethod: 'PUT',
+          uploadHeaders: {},
+        });
+      }
+      if (init?.method === 'PUT') return new Response(null, { status: 200 });
+      if (url.endsWith('/api/uploads/chat-attachment/complete')) {
+        const request = JSON.parse(String(init?.body)) as {
+          fileName: string;
+          mimeType: string;
+          byteCount: number;
+        };
+        const id = crypto.randomUUID();
+        assetIdByName.set(request.fileName, id);
+        return jsonResponse({
+          attachment: {
+            id,
+            name: request.fileName,
+            mimeType: request.mimeType,
+            byteCount: request.byteCount,
+            type: 'file',
+            url: `/api/files/${id}`,
+          },
+        });
+      }
+      return new Response('{}', { status: 503 });
+    });
+  }
+
+  function documentFile(name: string, type: string, bytes = 32): File {
+    return new File([new Uint8Array(bytes).fill(66)], name, { type });
+  }
+
+  function noticeTexts(): string[] {
+    return Array.from(attachmentBar().querySelectorAll('.sp-attachment-notice')).map(
+      (node) => node.textContent ?? '',
+    );
+  }
+
+  function documentNames(): string[] {
+    return Array.from(attachmentBar().querySelectorAll('.sp-attachment-doc-name')).map(
+      (node) => node.textContent ?? '',
+    );
+  }
+
+  async function sendDraft(text: string): Promise<Record<string, unknown>> {
+    const input = document.getElementById('sp-input') as HTMLTextAreaElement;
+    input.value = text;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    const before = chromeMock.runtime.sendMessage.mock.calls.filter(
+      ([message]) => message.type === 'CHAT_MESSAGE',
+    ).length;
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await vi.waitFor(() => {
+      expect(
+        chromeMock.runtime.sendMessage.mock.calls.filter(
+          ([message]) => message.type === 'CHAT_MESSAGE',
+        ),
+      ).toHaveLength(before + 1);
+    });
+    return chromeMock.runtime.sendMessage.mock.calls
+      .filter(([message]) => message.type === 'CHAT_MESSAGE')
+      .at(-1)![0] as Record<string, unknown>;
+  }
+
+  beforeEach(() => {
+    document.getElementById('sp-new-chat-btn')!.click();
+    acceptingUploads();
+    return () => {
+      vi.mocked(fetch).mockImplementation(defaultFetch);
+    };
+  });
+
+  it('uploads a PDF, a text file and a Markdown file and sends each as a file part with an asset id', async () => {
+    pickFiles([
+      documentFile('report.pdf', 'application/pdf'),
+      documentFile('notes.txt', 'text/plain'),
+      documentFile('readme.md', 'text/markdown'),
+    ]);
+
+    await vi.waitFor(() => {
+      expect(documentNames()).toEqual(['report.pdf', 'notes.txt', 'readme.md']);
+      expect(assetIdByName.size).toBe(3);
+      expect(
+        document.querySelector<HTMLButtonElement>('[aria-label="Send message"]')?.disabled,
+      ).toBe(false);
+    });
+    expect(noticeText()).toBe('');
+
+    const sent = await sendDraft('summarize these');
+    const fileAttachments = sent.fileAttachments as Array<{ assetId: string; mimeType: string }>;
+    expect(fileAttachments).toEqual([
+      { assetId: assetIdByName.get('report.pdf'), mimeType: 'application/pdf' },
+      { assetId: assetIdByName.get('notes.txt'), mimeType: 'text/plain' },
+      { assetId: assetIdByName.get('readme.md'), mimeType: 'text/markdown' },
+    ]);
+    expect(sent.attachments).toBeUndefined();
+
+    const parts = createMultimodalUserContent('summarize these', [], fileAttachments);
+    expect(parts).toEqual([
+      { type: 'text', text: 'summarize these' },
+      ...fileAttachments.map(({ assetId }) => ({ type: 'file', file: { asset_id: assetId } })),
+    ]);
+  });
+
+  it('admits a Markdown file the browser reports without a type', async () => {
+    pickFiles([documentFile('changelog.md', '')]);
+
+    await vi.waitFor(() => expect(assetIdByName.has('changelog.md')).toBe(true));
+    expect(noticeText()).toBe('');
+    const sent = await sendDraft('what changed');
+    expect(sent.fileAttachments).toEqual([
+      { assetId: assetIdByName.get('changelog.md'), mimeType: expect.stringMatching(/^text\//) },
+    ]);
+  });
+
+  it('refuses types the composer does not carry and names the file', async () => {
+    pickFiles([
+      documentFile('data.csv', 'text/csv'),
+      documentFile('bundle.zip', 'application/zip'),
+      documentFile('diagram.svg', 'image/svg+xml'),
+    ]);
+
+    await vi.waitFor(() => {
+      expect(noticeTexts()).toEqual(
+        ['data.csv', 'bundle.zip', 'diagram.svg'].map((name) =>
+          catalogMessage('spAttachmentUnsupported', [name]),
+        ),
+      );
+    });
+    expect(documentNames()).toEqual([]);
+    expect(assetIdByName.size).toBe(0);
+  });
+
+  it('refuses a document over the per-file limit and says how large the limit is', async () => {
+    pickFiles([documentFile('huge.pdf', 'application/pdf', MAX_CHAT_ATTACHMENT_BYTES + 1)]);
+
+    await vi.waitFor(() => {
+      expect(noticeText()).toBe(
+        catalogMessage('spAttachmentFileTooLarge', [
+          'huge.pdf',
+          `${Math.round((MAX_CHAT_ATTACHMENT_BYTES / (1024 * 1024)) * 10) / 10} MB`,
+        ]),
+      );
+    });
+    expect(documentNames()).toEqual([]);
+  });
+
+  it('refuses a document that would take the message past the combined size limit', async () => {
+    const half = Math.floor(MAX_CHAT_ATTACHMENT_MESSAGE_BYTES / 2) + 1;
+    pickFiles([
+      documentFile('first.txt', 'text/plain', half),
+      documentFile('second.txt', 'text/plain', half),
+    ]);
+
+    await vi.waitFor(() => {
+      expect(noticeText()).toBe(
+        catalogMessage('spAttachmentOverBudget', [
+          'second.txt',
+          `${Math.round((MAX_CHAT_ATTACHMENT_MESSAGE_BYTES / (1024 * 1024)) * 10) / 10} MB`,
+        ]),
+      );
+    });
+    expect(documentNames()).toEqual(['first.txt']);
+  });
+
+  it('refuses a document past the file count limit and names the limit', async () => {
+    pickFiles(
+      Array.from({ length: MANAGED_CHAT_MAX_ATTACHMENTS }, (_, i) =>
+        documentFile(`part-${i}.txt`, 'text/plain'),
+      ),
+    );
+    await vi.waitFor(() => expect(documentNames()).toHaveLength(MANAGED_CHAT_MAX_ATTACHMENTS));
+
+    pickFiles([documentFile('one-too-many.pdf', 'application/pdf')]);
+
+    await vi.waitFor(() => {
+      expect(noticeText()).toBe(
+        catalogMessage('spAttachmentTooMany', [
+          'one-too-many.pdf',
+          String(MANAGED_CHAT_MAX_ATTACHMENTS),
+        ]),
+      );
+    });
+    expect(documentNames()).not.toContain('one-too-many.pdf');
   });
 });

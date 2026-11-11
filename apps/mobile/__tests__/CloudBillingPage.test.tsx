@@ -142,6 +142,8 @@ const mockTierState = {
   billingStatus: 'none',
   billingSource: 'none',
   billingCancelsAtPeriodEnd: false,
+  isRefreshing: false,
+  lastRefreshedAt: '2026-11-11T00:00:00.000Z' as string | null,
   refreshTier: mockRefreshTier,
 };
 jest.mock('@/src/features/billing/store', () => ({
@@ -173,11 +175,28 @@ describe('Cloud Billing screen, Local-mode-blocked tier refresh (2026-07-05)', (
       billingStatus: 'none',
       billingSource: 'none',
       billingCancelsAtPeriodEnd: false,
+      isRefreshing: false,
+      lastRefreshedAt: '2026-11-11T00:00:00.000Z',
     });
     Object.assign(mockAuthState, {
       isClerkLoaded: true,
       isClerkSignedIn: true,
     });
+  });
+
+  it('offers no plan change while the plan the account holds is unconfirmed', async () => {
+    mockRefreshTier.mockResolvedValue(false);
+    Object.assign(mockTierState, { lastRefreshedAt: null });
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+
+    const { findByText, getByLabelText, queryByText } = render(<CloudBillingScreen />);
+
+    expect(await findByText('Plan not confirmed')).toBeTruthy();
+    expect(queryByText('Free plan')).toBeNull();
+    expect(queryByText('You are on the Free plan.')).toBeNull();
+    expect(queryByText('Upgrade plan')).toBeNull();
+    fireEvent.press(getByLabelText('Try again'));
+    await waitFor(() => expect(mockRefreshTier).toHaveBeenCalledTimes(2));
   });
 
   it('keeps free-plan recovery honest instead of routing Billing back to itself', () => {

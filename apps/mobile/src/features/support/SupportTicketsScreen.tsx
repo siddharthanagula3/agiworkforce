@@ -6,8 +6,10 @@ import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import {
   CloudAccountRequired,
+  CloudSyncBlockedBanner,
   SettingsGroup,
   SettingsInfo,
   SettingsRow,
@@ -37,13 +39,25 @@ export function SupportTicketsScreen() {
   const isClerkSignedIn = useAuthStore((state) => state.isClerkSignedIn);
   const clerkUserId = useAuthStore((state) => state.clerkUserId);
   const appMode = useChatAppModeStore((state) => state.appMode);
+  const setAppMode = useChatAppModeStore((state) => state.setAppMode);
 
-  if (!isClerkLoaded || !isClerkSignedIn || appMode !== 'cloud') {
+  if (!isClerkLoaded || !isClerkSignedIn) {
     return (
       <SettingsScreenShell title="Support" backHref="/(app)/about">
         <CloudAccountRequired
           isLoading={!isClerkLoaded}
-          onSignIn={() => router.push('/(auth)/login' as Parameters<typeof router.push>[0])}
+          onSignIn={() => router.push(beginCloudPostAuthIntent('cloud-support'))}
+        />
+      </SettingsScreenShell>
+    );
+  }
+
+  if (appMode !== 'cloud') {
+    return (
+      <SettingsScreenShell title="Support" backHref="/(app)/about">
+        <CloudSyncBlockedBanner
+          message="Support tickets are kept in your Cloud account."
+          onSwitchToCloud={() => setAppMode('cloud')}
         />
       </SettingsScreenShell>
     );

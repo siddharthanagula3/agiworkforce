@@ -152,6 +152,7 @@ import {
   type ImageEditTurnRequest,
 } from '@/src/features/chat/actions/runImageGenerationTurn';
 import { runVideoGenerationTurn } from '@/src/features/chat/actions/runVideoGenerationTurn';
+import { resolveImageRetryFallback } from '@/src/features/chat/actions/imageRetryFallback';
 import {
   MediaGenerationAdmissionError,
   mediaGenerationFailureMessage,
@@ -1519,7 +1520,12 @@ export default function ChatScreen() {
         }
         const original = conversationMessages[messageIndex - 1];
         if (original?.role === 'user') {
-          void Promise.resolve(handleSend(original.content));
+          const fallback = resolveImageRetryFallback(original);
+          if (fallback.kind === 'reference_unavailable') {
+            setSendError(fallback.message);
+            return;
+          }
+          void Promise.resolve(handleSend(fallback.text));
           return;
         }
       }

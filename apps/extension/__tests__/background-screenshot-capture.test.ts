@@ -243,6 +243,21 @@ describe('CAPTURE_SCREENSHOT names the tab it captured', () => {
     expect(response['data']).toBe(`data:image/png;base64,pixels-of-${SENDER_TAB_ID}`);
   });
 
+  it('captures the page that asked even when its message names another tab', async () => {
+    const tab = harness.tabs.get(SENDER_TAB_ID);
+    harness.tabs.set(OTHER_TAB_ID, { ...harness.tabs.get(OTHER_TAB_ID)!, windowId: 99 });
+    harness.tabs.get(OTHER_TAB_ID)!.active = true;
+
+    const response = await dispatch(
+      { type: 'CAPTURE_SCREENSHOT', format: 'png', tabId: OTHER_TAB_ID, windowId: 99 },
+      { id: EXTENSION_ID, url: tab?.url, origin: SITE, frameId: 0, tab: { ...tab, active: true } },
+    );
+
+    expect(response['success'], String(response['error'])).toBe(true);
+    expect(response['tabId']).toBe(SENDER_TAB_ID);
+    expect(harness.captureVisibleTab).toHaveBeenCalledWith(WINDOW_ID, { format: 'png' });
+  });
+
   it('refuses rather than label another tab with the page that asked', async () => {
     harness.activate(OTHER_TAB_ID);
 
@@ -306,5 +321,24 @@ describe('CAPTURE_SCREENSHOT names the tab it captured', () => {
 
     expect(response['success']).toBe(false);
     expect(response['error']).toBe('spScreenshotTabAccessRequired');
+  });
+});
+
+describe('the capture-page shortcut without AGI Desktop', () => {
+  it('tells the user with a notification whose icon resolves from the extension root', async () => {
+    const chromeMock = (globalThis as unknown as { chrome: typeof chrome }).chrome;
+    const create = chromeMock.notifications.create as unknown as ReturnType<typeof vi.fn>;
+    create.mockClear();
+    const onCommand = (
+      chromeMock.commands.onCommand.addListener as unknown as ReturnType<typeof vi.fn>
+    ).mock.calls[0]![0] as (command: string) => void;
+
+    onCommand('capture_page');
+
+    await vi.waitFor(() => expect(create).toHaveBeenCalledOnce());
+    expect(create.mock.calls[0]![1]).toMatchObject({
+      iconUrl: chromeMock.runtime.getURL('icons/icon128.png'),
+    });
+    expect(create.mock.calls[0]![1].iconUrl).not.toBe('icons/icon128.png');
   });
 });

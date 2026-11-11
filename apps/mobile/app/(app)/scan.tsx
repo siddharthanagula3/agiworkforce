@@ -244,7 +244,9 @@ export default function ScanScreen() {
     );
   }
 
-  if (!permission) {
+  const showingImage = capturedUri !== null && phase !== 'camera';
+
+  if (!showingImage && !permission) {
     return (
       <View style={styles.centered}>
         <LoadingIndicator />
@@ -252,7 +254,7 @@ export default function ScanScreen() {
     );
   }
 
-  if (!permission.granted) {
+  if (!showingImage && !permission?.granted) {
     return (
       <SafeAreaView style={styles.permissionContainer}>
         <View style={styles.permissionContent}>

@@ -31,6 +31,7 @@ jest.mock('@/services/streaming', () => ({
 
 import {
   ManagedCloudAgentRunApprovalExpiredError,
+  ManagedCloudAgentRunHttpError,
   type CloudAgentRun,
   type CloudAgentRunSnapshotPage,
   AGENT_EVENT_SCHEMA_VERSION,
@@ -251,6 +252,19 @@ describe('following one cloud run', () => {
     expect(useCloudTaskStore.getState().detail?.status).toBe('error');
     expect(useCloudTaskStore.getState().detail?.error).toBe('This task could not be opened');
   });
+
+  it.each([403, 404, 410])(
+    'says plainly that a run answering %i is no longer available',
+    async (status) => {
+      activateCloudAccount('user_1');
+      mockFollowRun.mockRejectedValueOnce(new ManagedCloudAgentRunHttpError('gone', status));
+
+      await useCloudTaskStore.getState().openRun(RUN_ID);
+
+      expect(useCloudTaskStore.getState().detail?.status).toBe('error');
+      expect(useCloudTaskStore.getState().detail?.error).toBe('This task is no longer available');
+    },
+  );
 });
 
 describe('resolving the approval blocking a run', () => {
@@ -378,6 +392,32 @@ describe('list requests that no longer own the list', () => {
     expect(state.filter).toBe('blocked');
     expect(state.runs.map((run) => run.id)).toEqual(['blocked-1']);
     expect(state.nextCursor).toBe('blocked-cursor');
+  });
+
+  it('keeps the latest request when the filter returns to the one it started on', async () => {
+    activateCloudAccount('user_1');
+    const firstAll = deferred<Page>();
+    const blocked = deferred<Page>();
+    const secondAll = deferred<Page>();
+    mockListRuns
+      .mockReturnValueOnce(firstAll.promise)
+      .mockReturnValueOnce(blocked.promise)
+      .mockReturnValueOnce(secondAll.promise);
+
+    const pending = useCloudTaskStore.getState().load('initial');
+    useCloudTaskStore.getState().setFilter('blocked');
+    useCloudTaskStore.getState().setFilter('all');
+    secondAll.resolve({ runs: [cloudRun({ id: 'all-new' })], nextCursor: 'all-new-cursor' });
+    await settle();
+    firstAll.resolve({ runs: [cloudRun({ id: 'all-old' })], nextCursor: 'all-old-cursor' });
+    blocked.resolve({ runs: [cloudRun({ id: 'blocked-1' })], nextCursor: 'blocked-cursor' });
+    await pending;
+    await settle();
+
+    const state = useCloudTaskStore.getState();
+    expect(state.filter).toBe('all');
+    expect(state.runs.map((run) => run.id)).toEqual(['all-new']);
+    expect(state.nextCursor).toBe('all-new-cursor');
   });
 
   it('drops a continuation page that was requested before the filter changed', async () => {

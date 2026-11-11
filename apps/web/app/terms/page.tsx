@@ -632,13 +632,15 @@ export default function TermsPage() {
                   </Prose>
                   <Prose>
                     You can export your data at any time while your account is active. An account
-                    deletion request schedules permanent erasure 24 hours later; a daily job then
-                    removes your user-scoped records and stored files and deletes your identity at
-                    our authentication provider. No confirmation email is sent, but cancellation is
-                    self-serve: sign back in and cancel from Settings &gt; Account any time within
-                    the 24-hour window. Sections that by their nature survive (licence restrictions,
-                    your content representations, intellectual property, disclaimers, limitation of
-                    liability, indemnification, governing law and disputes) survive termination.
+                    deletion request schedules erasure 24 hours later; a daily job then removes your
+                    user-scoped records and stored files and deletes your identity at our
+                    authentication provider. If an active legal hold covers your account, erasure
+                    waits until the hold is released. No confirmation email is sent, but
+                    cancellation is self-serve: sign back in and cancel from Settings &gt; Account
+                    any time within the 24-hour window. Sections that by their nature survive
+                    (licence restrictions, your content representations, intellectual property,
+                    disclaimers, limitation of liability, indemnification, governing law and
+                    disputes) survive termination.
                   </Prose>
                 </Stack>
               </Section>

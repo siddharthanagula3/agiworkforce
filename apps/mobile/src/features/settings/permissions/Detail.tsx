@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { View, ScrollView, Linking, Alert } from 'react-native';
+import { View, ScrollView, Linking, Alert, AppState } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -57,20 +57,26 @@ export default function PermissionDetailScreen() {
       if (!registryEntry) return undefined;
       const readStatus = registryEntry.getStatus;
       let cancelled = false;
+      let sequence = 0;
       async function poll() {
+        const current = ++sequence;
         try {
           const status = await readStatus();
-          if (cancelled) return;
+          if (cancelled || current !== sequence) return;
           setOsStatus(status);
           setObservedStatus(kind, status);
           setFailureMessage(null);
         } catch {
-          if (!cancelled) setFailureMessage(PERMISSION_READ_FAILURE);
+          if (!cancelled && current === sequence) setFailureMessage(PERMISSION_READ_FAILURE);
         }
       }
       void poll();
+      const subscription = AppState.addEventListener('change', (state) => {
+        if (state === 'active') void poll();
+      });
       return () => {
         cancelled = true;
+        subscription.remove();
       };
     }, [entry, kind, setObservedStatus]),
   );

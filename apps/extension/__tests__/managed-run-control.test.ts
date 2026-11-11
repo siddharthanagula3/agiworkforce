@@ -17,6 +17,7 @@ import type {
 import {
   ALL_MANAGED_RUN_STATES,
   MANAGED_RUN_CANCELLATION_CONFIRMATION_TIMEOUT_MS,
+  RESUMED_RUN_BROWSER_STEP_MESSAGE,
   cancelChromeManagedRun,
   cancelAndConfirmChromeManagedRun,
   findChromeManagedRunByRequestId,
@@ -212,7 +213,54 @@ describe('Chrome managed run control', () => {
         },
       },
     );
-    expect(result).toMatchObject({ status: 'error', code: 'server_error' });
+    expect(result).toEqual({
+      status: 'error',
+      code: 'protocol_error',
+      message: RESUMED_RUN_BROWSER_STEP_MESSAGE,
+    });
+  });
+
+  it('settles a resumed run that stopped for a browser step with a one-line Retry explanation', async () => {
+    const events = [
+      { type: 'tool-use-start', toolUseId: 'call-1', name: 'browser_read_page' },
+      { type: 'tool-use-delta', toolUseId: 'call-1', deltaJson: '{}' },
+      { type: 'tool-use-end', toolUseId: 'call-1' },
+      { type: 'stop', reason: 'tool-use' },
+    ];
+    const client: ManagedCloudAgentRunClient = {
+      listRuns: vi.fn(),
+      getRun: vi.fn(),
+      cancelRun: vi.fn(),
+      followRun: vi.fn(async (_id, options) => {
+        for (const [sequence, event] of events.entries())
+          await options?.onEvent?.(
+            AgentEventEnvelopeSchema.parse({
+              schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+              sessionId: 'session-1',
+              turnId: 'turn-1',
+              emittedAtMs: 1000 + sequence,
+              sequence,
+              event,
+            }),
+          );
+        return {
+          run: { ...completedRun(), state: 'awaiting_input', completedAt: null },
+          lastSequence: 3,
+        };
+      }),
+    };
+
+    const result = await resumeChromeManagedRun(
+      { run: reference, alreadyVisibleText: '' },
+      dependencies(client),
+    );
+
+    expect(result).toEqual({
+      status: 'error',
+      code: 'protocol_error',
+      message: RESUMED_RUN_BROWSER_STEP_MESSAGE,
+    });
+    expect(RESUMED_RUN_BROWSER_STEP_MESSAGE).not.toContain('\n');
   });
 
   it('returns a structured failure when recovery credentials cannot refresh', async () => {

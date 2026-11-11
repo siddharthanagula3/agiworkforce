@@ -658,6 +658,37 @@ describe('CloudCodePage', () => {
     },
   );
 
+  it('does not open or start the task of a session created after the person moved to another session', async () => {
+    const user = userEvent.setup();
+    const creation = codeDeferred<Awaited<ReturnType<CloudCodeApi['create']>>>();
+    const other: CloudCodeSession = {
+      ...session,
+      id: '44444444-4444-4444-8444-444444444444',
+      title: 'Other session',
+    };
+    const api = createApi({
+      create: vi.fn(() => creation.promise),
+      list: vi.fn(async () => ({ availability, sessions: [other], runtimes: [] })),
+      get: vi.fn(async (id: string) => ({
+        session: id === other.id ? other : session,
+        terminalEntries: [],
+        turns: [],
+      })),
+    });
+    const { rerender } = render(<CloudCodePage api={api} />);
+    const field = await screen.findByRole('textbox', { name: CODE_COPY.composerPlaceholder });
+    await user.type(field, 'Original task');
+    await user.click(screen.getByRole('button', { name: CODE_COPY.send }));
+    await waitFor(() => expect(api.create).toHaveBeenCalledTimes(1));
+
+    rerender(<CloudCodePage api={api} sessionId={other.id} />);
+    await screen.findByRole('heading', { name: other.title });
+    await act(async () => creation.resolve({ session, terminalEntries: [] }));
+
+    expect(push).not.toHaveBeenCalledWith(`/code/${session.id}`);
+    expect(api.startAgentTurn).not.toHaveBeenCalled();
+  });
+
   it.each([
     ['delete', 'selection'],
     ['close', 'selection'],

@@ -22,7 +22,9 @@ describe('product links on mobile', () => {
   });
 
   it('opens the native screen when this build ships it', () => {
-    expect(nativeRouteForProductLink({ target: 'browser-task', id: 'run-1' })).toBe('/(app)/tasks');
+    expect(nativeRouteForProductLink({ target: 'browser-task', id: 'run-1' })).toBe(
+      '/(app)/tasks?runId=run-1',
+    );
     expect(nativeRouteForProductLink({ target: 'file', id: 'asset-1' })).toBe('/(app)/library');
   });
 

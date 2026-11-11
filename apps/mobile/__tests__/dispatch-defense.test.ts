@@ -303,6 +303,7 @@ import {
   getRiskBadgeColor,
   startHealthChecks,
   stopHealthChecks,
+  stopReconnectRecovery,
 } from '../services/companion';
 
 import {
@@ -389,6 +390,7 @@ beforeEach(() => {
 
 afterEach(() => {
   stopHealthChecks();
+  stopReconnectRecovery();
   jest.useRealTimers();
 });
 
@@ -574,16 +576,30 @@ describe('Connection Store, sendControl delegation', () => {
     );
   });
 
-  it('sendAgentCommand is a no-op when status is disconnected', () => {
+  it('sendAgentCommand reports unavailable and sends nothing when status is disconnected', async () => {
     setConnectionStatus('disconnected');
-    sendAgentCommand('agent-xyz', 'pause');
+    await expect(sendAgentCommand('agent-xyz', 'pause')).resolves.toBe('unavailable');
     expect(mockSendControl).not.toHaveBeenCalled();
   });
 
-  it('sendAgentCommand is a no-op when status is error', () => {
+  it('sendAgentCommand reports unavailable and sends nothing when status is error', async () => {
     setConnectionStatus('error');
-    sendAgentCommand('agent-xyz', 'pause');
+    await expect(sendAgentCommand('agent-xyz', 'pause')).resolves.toBe('unavailable');
     expect(mockSendControl).not.toHaveBeenCalled();
+  });
+
+  it('sendAgentCommand reports unavailable while reconnecting instead of queueing a stale command', async () => {
+    setConnectionStatus('reconnecting');
+    await expect(sendAgentCommand('agent-xyz', 'cancel')).resolves.toBe('unavailable');
+    expect(mockSendControl).not.toHaveBeenCalled();
+  });
+
+  it('sendAgentCommand reports sent only when the transport accepted the command', async () => {
+    setConnectionStatus('connected');
+    mockSendControl.mockResolvedValueOnce(true);
+    await expect(sendAgentCommand('agent-xyz', 'pause')).resolves.toBe('sent');
+    mockSendControl.mockResolvedValueOnce(false);
+    await expect(sendAgentCommand('agent-xyz', 'pause')).resolves.toBe('rejected');
   });
 
   it('sendDispatchTask creates a versioned new-task request while connected', async () => {
@@ -650,32 +666,30 @@ describe('Connection Store, sendControl delegation', () => {
     expect(mockSendControl).not.toHaveBeenCalled();
   });
 
-  it('sendEmergencyStop fires when connected', () => {
+  it('sendEmergencyStop reports sent when the transport accepted it', async () => {
     setConnectionStatus('connected');
-    sendEmergencyStop();
+    mockSendControl.mockResolvedValueOnce(true);
+    await expect(sendEmergencyStop()).resolves.toBe('sent');
     expect(mockSendControl).toHaveBeenCalledWith(
       'cancel',
       expect.objectContaining({ scope: 'all', sentAt: expect.any(String) }),
     );
   });
 
-  it('sendEmergencyStop fires when status is stale (partial connectivity)', () => {
-    setConnectionStatus('stale');
-    sendEmergencyStop();
-    expect(mockSendControl).toHaveBeenCalledWith('cancel', expect.any(Object));
+  it('sendEmergencyStop reports rejected when the transport refused it', async () => {
+    setConnectionStatus('connected');
+    mockSendControl.mockResolvedValueOnce(false);
+    await expect(sendEmergencyStop()).resolves.toBe('rejected');
   });
 
-  it('sendEmergencyStop is a no-op when disconnected', () => {
-    setConnectionStatus('disconnected');
-    sendEmergencyStop();
-    expect(mockSendControl).not.toHaveBeenCalled();
-  });
-
-  it('sendEmergencyStop is a no-op when error', () => {
-    setConnectionStatus('error');
-    sendEmergencyStop();
-    expect(mockSendControl).not.toHaveBeenCalled();
-  });
+  it.each(['disconnected', 'error', 'stale', 'reconnecting', 'session_expired'])(
+    'sendEmergencyStop reports unavailable and queues nothing when status is %s',
+    async (status) => {
+      setConnectionStatus(status);
+      await expect(sendEmergencyStop()).resolves.toBe('unavailable');
+      expect(mockSendControl).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe('Connection Store, manualReconnect', () => {
@@ -1328,6 +1342,107 @@ describe('startHealthChecks / stopHealthChecks', () => {
     expect(mockSendControl).not.toHaveBeenCalledWith('heartbeat', expect.any(Object));
 
     stopHealthChecks();
+  });
+});
+
+describe('reconnect countdown ownership', () => {
+  const mocks = connectionMod.__mocks;
+  const state = connectionMod.__state;
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    mocks.markStale.mockImplementation(() => {
+      state.status = 'stale';
+    });
+    mocks.beginReconnecting.mockImplementation((seconds: number) => {
+      state.status = 'reconnecting';
+      state.reconnectCountdown = seconds;
+    });
+    mocks.tickReconnectCountdown.mockImplementation(() => {
+      state.reconnectCountdown = Math.max(0, (state.reconnectCountdown as number) - 1);
+    });
+    state.lastHeartbeatAt = Date.now();
+  });
+
+  afterEach(() => {
+    mocks.markStale.mockReset();
+    mocks.beginReconnecting.mockReset();
+    mocks.tickReconnectCountdown.mockReset();
+  });
+
+  function startCountdown(): void {
+    setConnectionStatus('connected');
+    startHealthChecks();
+    jest.advanceTimersByTime(96_000);
+    expect(mocks.beginReconnecting).toHaveBeenCalledTimes(1);
+    expect(state.status).toBe('reconnecting');
+  }
+
+  it('keeps the countdown running when the health checks stop on the status change', () => {
+    startCountdown();
+    stopHealthChecks();
+
+    jest.advanceTimersByTime(3_000);
+
+    expect(mocks.tickReconnectCountdown).toHaveBeenCalledTimes(3);
+  });
+
+  it('reconnects once after the countdown even though the health checks stopped', () => {
+    startCountdown();
+    stopHealthChecks();
+    stopHealthChecks();
+    startHealthChecks();
+    stopHealthChecks();
+
+    jest.advanceTimersByTime(15_000 + 3_000 + 60_000);
+
+    expect(mockConnect).toHaveBeenCalledTimes(1);
+    expect(mockConnect).toHaveBeenCalledWith('TESTCODE');
+  });
+
+  it('does not reconnect once the owner stops the recovery', () => {
+    startCountdown();
+    stopHealthChecks();
+    stopReconnectRecovery();
+
+    jest.advanceTimersByTime(120_000);
+
+    expect(mockConnect).not.toHaveBeenCalled();
+    expect(mocks.tickReconnectCountdown).not.toHaveBeenCalled();
+  });
+
+  it('does not reconnect after an explicit disconnect clears the pairing', () => {
+    startCountdown();
+    stopHealthChecks();
+    jest.advanceTimersByTime(10_000);
+    setConnectionStatus('disconnected');
+    setConnectionPairingCode(null);
+
+    jest.advanceTimersByTime(120_000);
+
+    expect(mockConnect).not.toHaveBeenCalled();
+  });
+
+  it('does not reconnect when a late heartbeat restores the connection first', () => {
+    startCountdown();
+    stopHealthChecks();
+    jest.advanceTimersByTime(10_000);
+    setConnectionStatus('connected');
+
+    jest.advanceTimersByTime(120_000);
+
+    expect(mockConnect).not.toHaveBeenCalled();
+  });
+
+  it('lets a manual reconnect replace the pending automatic reconnect', () => {
+    startCountdown();
+    stopHealthChecks();
+    jest.advanceTimersByTime(16_000);
+
+    manualReconnect();
+    jest.advanceTimersByTime(120_000);
+
+    expect(mockConnect).toHaveBeenCalledTimes(1);
   });
 });
 

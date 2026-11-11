@@ -181,13 +181,62 @@ describe('projects shared with the member', () => {
           }
         : overview(),
     );
+    activateCloudAccount(ME);
     render(<SharedProjectScreen projectId="p-open" />);
 
     expect(await screen.findByTestId('shared-project-access')).toHaveTextContent(
       'Shared with you by Dana · Can view',
     );
     expect(screen.getByText('Use the brand voice.')).toBeTruthy();
-    expect(screen.getByText('No files in this project.')).toBeTruthy();
+    expect(await screen.findByText('No files in this project.')).toBeTruthy();
+  });
+
+  it('says the files could not be loaded, not that the project is empty, and retries in place', async () => {
+    (managedCloudProjects.getProject as jest.Mock).mockResolvedValue({
+      id: 'p-open',
+      ownerUserId: OWNER,
+      name: 'Brand book',
+      sharedAccess: 'read',
+      isOrgShared: true,
+      defaultPrivacyMode: 'managed',
+      defaultProviderMode: 'ManagedGateway',
+      allowedSurfaces: ['web'],
+      createdAt: '2026-10-01T00:00:00.000Z',
+      updatedAt: '2026-10-01T00:00:00.000Z',
+    });
+    let filesFail = true;
+    (api.get as jest.Mock).mockImplementation(async (path: string) => {
+      if (!path.includes('knowledge')) return overview();
+      if (filesFail) throw new ApiHttpError('files unavailable', 500);
+      return {
+        files: [
+          {
+            id: 'f-1',
+            projectId: 'p-open',
+            fileName: 'brand-guide.pdf',
+            mimeType: 'application/pdf',
+            byteCount: 10,
+            checksumSha256: 'a'.repeat(64),
+            sourceSurface: 'web',
+            addedByUserId: OWNER,
+            addedAt: '2026-10-01T00:00:00.000Z',
+            storageUri: 'storage://f-1',
+          },
+        ],
+      };
+    });
+    activateCloudAccount(ME);
+    render(<SharedProjectScreen projectId="p-open" />);
+
+    expect(await screen.findByText('Could not load this project’s files.')).toBeTruthy();
+    expect(screen.getByTestId('shared-project-access')).toBeTruthy();
+    expect(screen.queryByText('No files in this project.')).toBeNull();
+
+    filesFail = false;
+    fireEvent.press(screen.getByLabelText('Retry loading project files'));
+
+    expect(await screen.findByText('brand-guide.pdf')).toBeTruthy();
+    expect(screen.queryByText('Could not load this project’s files.')).toBeNull();
   });
 
   it('lists chats, artifacts and connectors others shared with me and opens them', async () => {

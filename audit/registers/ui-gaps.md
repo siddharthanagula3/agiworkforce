@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: 04f236c6f5dc22db52d9e04dc6f6572587e5e6eb6c6d12ecd4f7e0e0671d25ec -->
+<!-- ui-gaps-csv-sha256: 0bf08cf4082653d2fbda3d4e5ae75a9813eb9b571b96d91f78aac3d4787f3f67 -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/registers/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 52 P1, 105 P2, 34 P3.
+- Unresolved: 0 P0, 51 P1, 103 P2, 34 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -33,12 +33,12 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 
 | Status      | Gaps |
 | ----------- | ---: |
-| Open        |  181 |
+| Open        |  178 |
 | In Progress |   10 |
 | Blocked     |    0 |
 | Deferred    |    0 |
-| Done        |  123 |
-| Not Planned |   27 |
+| Done        |  125 |
+| Not Planned |   28 |
 
 ## P0
 
@@ -2810,24 +2810,24 @@ Completed for the current voice runtime. Add persona, Model, Intelligence, Langu
 
 - `chatgpt_reference/131-chatgpt-web-settings-voice-spruce-voice-model-picker.png`
 
-### GAP-122, Chrome keeps the attach menu image-only until file and agent-mode contracts exist
+### GAP-122, Chrome attach menu offers images, PDFs, text and Markdown files beside page, tabs, link, skills and connectors
 
-- **Status:** Open
-- **Owner:** extension-attachment-upload
+- **Status:** Done
+- **Owner:** Extension
 - **Surface/type:** extension · missing-control
 - **Reference:** ChatGPT · Chrome extension · Composer '+' attach menu
 
 **Gap**
 
-Chrome exposes only the two attachment actions its Managed Chat contract can execute: a current-tab screenshot and user-selected images. The transport runtime-validates base64 PNG, JPEG, WebP, or GIF data URLs and has no generic-file asset upload, folder authorization, durable goal, plan-mode flag, or extension plugin registry. Adding the reference entries would either discard selected bytes, persist an objective no runner pursues, or imply Web catalogue capabilities run inside the browser extension.
+The '+' menu in the side panel offers Upload from device (PNG, JPEG, WebP, GIF, PDF, plain text and Markdown), Take a screenshot, Add the browser page, Attach tabs, link, video mode, Skills, Connectors and a temporary-chat toggle. Every picked file, screenshot included, is uploaded to the signed-in account's file store (presign, then complete) and the message carries only the asset reference; the server reads a PDF to text and fences extracted text as untrusted data before the model sees it. Limits are five files per message, 12 MiB per file and 12 MiB per message, and the file entry is hidden when the account's capability document denies uploads. The earlier image-only reading no longer holds. The reference's folders, goals and plan mode are not documented for either leader's Chrome extension (checked 2026-11-11), and plugins map to the existing Skills and Connectors entries.
 
 **Evidence**
 
-apps/extension/src/side_panel.ts builds Take a screenshot and Add an image and applies the eight-image attachment cap. managedChatHandler.ts and freeTrialClient.ts validate and serialize image-only attachments. chat-state.ts supplies image-specific fallback prompt copy. Repository searches find no Chrome generic-asset, folder-grant, background-goal, plan-mode, or plugin-runtime contract; the extension README keeps Chrome conversations browser-local and browser actions explicitly scoped.
+apps/extension/src/side_panel.ts: COMPOSER_ATTACHMENT_MIME_TYPES and COMPOSER_DOCUMENT_MIME_TYPES (lines 9673-9689), acceptIncomingComposerFiles (9895), admitComposerDocument (9762), uploadComposerDocument (9821), takeComposerDocuments (9879), the menu items (13817-14361) and the canUploadFiles gate (14364). The send path passes fileAttachments {assetId, mimeType} (9122); freeTrialClient.ts createMultimodalUserContent turns each into a file part with asset_id (line 510) and caps the count at MANAGED_CHAT_MAX_ATTACHMENTS = 5 (line 97). apps/web/app/api/llm/v1/chat/completions/lib/chat-attachment-hydration.ts resolves the asset to the model (test 'gives a PDF to the model as text'; 'fences extracted text as untrusted data'). apps/extension/**tests**/side_panel-attachment-caps.test.ts covers upload, caps, byte budget and denied uploads for images; no extension test admits a PDF, text or Markdown file through the picker. Leader pages read 2026-11-11: https://learn.chatgpt.com/docs/chrome-extension.md describes no attach menu and mentions file upload only as an allow-file-URLs troubleshooting step; https://support.claude.com/en/articles/12012173-get-started-with-claude-in-chrome.md describes image upload, screenshots, shortcuts via '/', and skills, plugins and connectors in the side panel, and no folders, goals or plan mode (documented).
 
 **Suggested fix**
 
-Not planned on the current Chrome contract. Add generic files only with typed upload, MIME/size, ownership, retention/deletion, preview, and provider-admission support; add goals or plan mode only with a persisted runner and visible lifecycle; add plugins only after an extension-owned capability registry and permission review exist. Keep the menu limited to executable actions meanwhile.
+Completed for the shipped menu. Keep the menu limited to executable actions. Add goals or plan mode only with a persisted runner and visible lifecycle, and folders only with typed folder authorization, if a leader's Chrome extension documents them. Follow-up: add an extension test that admits a PDF, a text and a Markdown file through the picker and checks the notice for an unsupported type.
 
 **Reference screenshot(s)**
 
@@ -6492,47 +6492,47 @@ Add an 'Advanced' popover to the composer bar (next to the autonomy chip) with a
 
 - `chatgpt_reference/153-chatgpt-web-extension-advanced-settings-effort-slider.png`
 
-### GAP-282, Full DevTools-Protocol browser control has no elevated-risk gate or disclosure
+### GAP-282, Full DevTools-Protocol browser control is gated per site with an explicit risk disclosure; a developer-mode toggle is declined
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Not Planned
+- **Owner:** Extension
 - **Surface/type:** extension · missing-copy
 - **Reference:** Codex · macOS desktop · Settings › Browser (developer mode / CDP)
 
 **Gap**
 
-Reference isolates full CDP access behind a 'Developer mode' section marked 'Elevated risk', default off, with copy explaining CDP lets the model inspect and control sensitive browser internals. UPDATED 2026-08-21: the 'no risk disclosure anywhere' half of this row's evidence is no longer accurate -- the Permissions section now has a 'Browser control boundary' row with real explanatory copy, and access is gated by a per-site approved-sites list the user must opt into once per site, with 'ask before acting' on by default. What is still genuinely missing is the reference's specific pattern: a single, explicitly labelled 'Developer mode: Elevated risk' toggle, default off, rather than prose plus a site allowlist.
+The reference is a desktop app's developer-mode toggle labelled 'Elevated risk', default off. The extension reaches the same user outcome by a different pattern that fits a browser extension: no site is controlled until the user approves it, granting full control to a site is a separate confirmation headed 'This grants full DevTools-Protocol control' whose body says what the debugger can do (click, type, navigate, read the DOM, take screenshots inside the signed-in session), that Chrome shows a debugging banner, that Chrome asks for site access, how to withdraw it and that the user should grant it only on trusted sites. In the side panel a one-time or always choice card repeats the risk when a run first needs a site. A run refuses an origin without that confirmation and fails closed when the record cannot be read. Neither ChatGPT's nor Claude's Chrome extension offers a developer-mode CDP toggle, so no global switch is planned.
 
 **Evidence**
 
-apps/extension/src/options.ts lines ~1056-1069 (permSection's 'Browser control boundary' row: 'Computer use uses Chrome DevTools Protocol (CDP) only after you start a run on an approved site that you have separately granted full browser control, once, in the approved-sites list below... AGI does not expose an unrestricted CDP developer mode.'), followed by createSitePermissionPolicySection (the approved-sites list). No 'Elevated risk' badge or dedicated Developer-mode toggle exists anywhere in the file.
+apps/extension/src/features/computer-use/browserControlConsent.ts lines 7-15 (headline and body); apps/extension/src/options.ts: 'Browser access' row (1291-1302), 'How browser access works' details naming CDP and stating there is no unrestricted CDP developer mode (1304-1313), the consent prompt with the 'Grant full browser control' button (line 1376) and the approved-sites list with Remove. apps/extension/src/features/side-panel/bubbles.ts line 1381 renders spBrowserAccessActBody (_locales/en/messages.json line 4105: debugger, Chrome banner, screenshots and text sent to AGI Cloud, Auto and Ask first, one-time access ends with the task). apps/extension/**tests**/computer-use-browser-control-consent.test.ts: 'names the elevated risk and the exact place to grant it' (line 144), 'withholds consent for an origin that was never confirmed' (59), 'computer-use start refuses an unconfirmed origin' (153-167). The Chrome permission list itself is frozen by **tests**/manifest-contract.test.ts.
 
 **Suggested fix**
 
-Narrow scope: disclosure copy and a site-scoped access gate already exist. What remains is purely presentational -- add an 'Elevated risk' badge to the existing Browser control boundary row (or promote the approved-sites list into a labelled 'Developer mode' subsection) so the risk framing matches the reference, rather than building new gating logic from scratch.
+Not planned. A single global Developer-mode toggle belongs to a desktop settings pattern; the per-site confirmation, the side-panel access card and Chrome's own debugging banner already let a user understand, grant and withdraw the risk site by site. Reconsider only if a leader's Chrome extension ships a global CDP switch.
 
 **Reference screenshot(s)**
 
 - `chatgpt_reference/114-codex-macos-settings-browser-permissions-developer-mode-cdp.png`
 
-### GAP-283, Conversation history is two clicks deep with no search, vs. one-click searchable dropdown
+### GAP-283, Recent chats are one click from the side panel header, with search
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** Extension
 - **Surface/type:** extension · missing-ia
 - **Reference:** ChatGPT · Chrome extension · Side panel recent tasks dropdown
 
 **Gap**
 
-ChatGPT's side panel puts recent tasks directly under a 'New task' dropdown with an inline 'Search recent tasks' box, visible in one click. UPDATED 2026-08-21: the 'no search/filter input' half of this row shipped, predating this CSV's 2026-08-11 last edit by nine days -- there is now a real, wired 'Search recent chats' input that filters the history list live, with distinct empty states ('No saved conversations' vs 'No matching conversations'). The 'two clicks deep' half is unchanged: the search input and history list are still nested inside the same overflow drawer (chatActionsSection -> drawerHistoryBtn -> drawerHistoryList/drawerHistorySearch), so reaching either still requires opening the drawer first, unlike the reference's one-click 'New task' dropdown.
+The side panel header carries a Recent chats button (clock icon, accessible name 'Recent chats') that opens a modal sheet listing saved conversations directly; the history list no longer needs the overflow drawer. The sheet has a close button, an Archived toggle, Escape to close, a focus trap and focus return to the header button, and it moves focus to the search box when it is shown. The 'Search recent chats' input filters live and is shown once the list has more than ten conversations (RECENTS_SEARCH_THRESHOLD), so a short list shows no empty search box. The conversation title menu next to the title also offers rename, pin, move, archive and delete for the open chat.
 
 **Evidence**
 
-Search shipped in commit 7548314e7 (2026-08-02). apps/extension/src/side_panel.ts lines ~6269-6283 (drawerHistorySearch input, type=search, placeholder 'Search recent chats', wired via filterConversations(entries, drawerHistorySearch.value) in renderDrawerHistory, lines ~6285-6294). Lines ~6261-6421 confirm drawerHistoryBtn/drawerHistoryList/drawerHistorySearch are all children of chatActionsSection inside the drawer body, unchanged nesting from the original row.
+apps/extension/src/side_panel.ts: historyBtn is created in the header beside New chat and the more menu (lines 10986-10993), historyBtn.addEventListener('click', openRecents) (12317), the recents sheet with role=dialog and aria-modal (12319-12342), openRecents and closeRecents (12347-12372), the Tab focus trap and Escape handling (12394-12413), RECENTS_SEARCH_THRESHOLD = 10 (1095) and the search visibility rule (12151). Test path: apps/extension/**tests**/side-panel-chrome.test.ts opens a saved conversation by clicking #sp-history-btn and restoring the row (line 231), and checks the header buttons (276). Search shipped in commit 7548314e7 (2026-08-02).
 
 **Suggested fix**
 
-Narrow scope: search/filter is done. What remains is purely structural -- surface drawerHistoryList/drawerHistorySearch (or a subset) directly under a top-level 'New task'-style control instead of requiring the overflow drawer to be opened first.
+Completed. The reference's inline dropdown under a New task control is a different layout; the header button reaches the same list in one click.
 
 **Reference screenshot(s)**
 

@@ -1,5 +1,5 @@
 import { LoadingIndicator } from '@/components/ui/LoadingIndicator';
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { View, ScrollView, Alert } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -37,7 +37,12 @@ import { useAgentStore } from '@/stores/agentStore';
 import { getDisplayName } from '@/src/features/model-picker/service';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useThemeColors, motion } from '@/src/ui/theme';
-import { sendAgentCommand, requestAgentRefresh } from '@/services/companion';
+import {
+  AGENT_COMMAND_NOT_SENT_MESSAGES,
+  sendAgentCommand,
+  requestAgentRefresh,
+} from '@/services/companion';
+import { useConnectionStore } from '@/stores/connectionStore';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 
@@ -80,6 +85,8 @@ export default function AgentDetailScreen() {
   const router = useRouter();
   const agent = useAgentStore((s) => s.agents.find((a) => a.id === id));
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
+  const connected = useConnectionStore((s) => s.status === 'connected');
+  const [commandError, setCommandError] = useState<string | null>(null);
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) router.back();
@@ -87,15 +94,20 @@ export default function AgentDetailScreen() {
   }, [router]);
 
   const handleCommand = useCallback(
-    (command: 'pause' | 'resume' | 'cancel') => {
+    async (command: 'pause' | 'resume' | 'cancel') => {
       if (!agent) return;
       if (hapticsEnabled) {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
-      sendAgentCommand(agent.id, command);
+      const result = await sendAgentCommand(agent.id, command);
+      setCommandError(result === 'sent' ? null : AGENT_COMMAND_NOT_SENT_MESSAGES[result]);
     },
     [agent, hapticsEnabled],
   );
+
+  const handleReconnect = useCallback(() => {
+    router.push('/(app)/companion' as Parameters<typeof router.push>[0]);
+  }, [router]);
 
   const handleCancelWithConfirm = useCallback(() => {
     if (!agent) return;
@@ -104,7 +116,7 @@ export default function AgentDetailScreen() {
       {
         text: 'Cancel Task',
         style: 'destructive',
-        onPress: () => handleCommand('cancel'),
+        onPress: () => void handleCommand('cancel'),
       },
     ]);
   }, [agent, handleCommand]);
@@ -259,26 +271,60 @@ export default function AgentDetailScreen() {
         {isControllable && (
           <Animated.View entering={FadeIn.duration(motion.quick).delay(60)} className="mb-4">
             <Text className="text-sm text-white/40 uppercase tracking-wider mb-2">Controls</Text>
-            <View className="flex-row gap-3">
+            {!connected ? (
+              <View
+                testID="agent-controls-offline"
+                className="mb-3 flex-row items-center gap-3 rounded-xl px-3 py-2.5"
+                style={{ backgroundColor: colors.accentSurface }}
+              >
+                <Text className="flex-1 text-sm" style={{ color: colors.textSecondary }}>
+                  Your computer is not connected, so this agent cannot be controlled from here.
+                </Text>
+                <PressableBox
+                  onPress={handleReconnect}
+                  accessibilityRole="button"
+                  accessibilityLabel="Reconnect to your computer"
+                  className="px-3 py-1.5 rounded-lg"
+                >
+                  <Text className="text-sm font-medium" style={{ color: colors.teal }}>
+                    Reconnect
+                  </Text>
+                </PressableBox>
+              </View>
+            ) : null}
+            {commandError ? (
+              <Text
+                accessibilityRole="alert"
+                className="mb-3 text-sm"
+                style={{ color: colors.agentError }}
+              >
+                {commandError}
+              </Text>
+            ) : null}
+            <View className="flex-row gap-3" style={{ opacity: connected ? 1 : 0.5 }}>
               {agent.status === 'running' ? (
                 <PressableBox
-                  onPress={() => handleCommand('pause')}
+                  onPress={() => void handleCommand('pause')}
+                  disabled={!connected}
                   className="flex-1 flex-row items-center justify-center gap-2 py-3 rounded-xl bg-amber-500/10 active:bg-amber-500/20"
                   accessibilityLabel="Pause agent"
                   accessibilityRole="button"
+                  accessibilityState={{ disabled: !connected }}
                 >
                   <Pause size={14} color={colors.agentWarning} />
                   <Text className="text-sm text-amber-400 font-medium">Pause</Text>
                 </PressableBox>
               ) : (
                 <PressableBox
-                  onPress={() => handleCommand('resume')}
+                  onPress={() => void handleCommand('resume')}
+                  disabled={!connected}
                   className="flex-1 flex-row items-center justify-center gap-2 py-3 rounded-xl"
                   style={({ pressed }) => ({
                     backgroundColor: pressed ? colors.accentBorder : colors.accentSurface,
                   })}
                   accessibilityLabel="Resume agent"
                   accessibilityRole="button"
+                  accessibilityState={{ disabled: !connected }}
                 >
                   <Play size={14} color={colors.teal} />
                   <Text className="text-sm font-medium" style={{ color: colors.teal }}>
@@ -288,9 +334,11 @@ export default function AgentDetailScreen() {
               )}
               <PressableBox
                 onPress={handleCancelWithConfirm}
+                disabled={!connected}
                 className="flex-1 flex-row items-center justify-center gap-2 py-3 rounded-xl bg-red-500/10 active:bg-red-500/20"
                 accessibilityLabel="Cancel agent"
                 accessibilityRole="button"
+                accessibilityState={{ disabled: !connected }}
               >
                 <Square size={14} color={colors.agentError} />
                 <Text className="text-sm text-red-400 font-medium">Cancel</Text>

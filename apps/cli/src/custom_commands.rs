@@ -110,10 +110,10 @@ fn expand_command_body(content: &str, args: &str) -> String {
     while let Some(offset) = rest.find('$') {
         out.push_str(&rest[..offset]);
         let tail = &rest[offset..];
-        if tail.starts_with(ALL_ARGUMENTS) {
+        if let Some(after_all_arguments) = tail.strip_prefix(ALL_ARGUMENTS) {
             out.push_str(args);
             substituted = true;
-            rest = &tail[ALL_ARGUMENTS.len()..];
+            rest = after_all_arguments;
             continue;
         }
         let digit = tail[1..]

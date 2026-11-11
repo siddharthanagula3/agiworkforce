@@ -1,10 +1,16 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import * as Clipboard from 'expo-clipboard';
+import { Alert } from 'react-native';
+import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import { renderMarkdownContent } from '../MessageContentRenderer';
 import {
   MIXED_ASSISTANT_REPLY,
   MIXED_REPLY_THROUGH_EMAIL,
 } from '@agiworkforce/unified-chat/assistant-fence';
+
+jest.mock('@/lib/safeOpenURL', () => ({
+  openUntrustedUrlInAppBrowser: jest.fn(async () => true),
+}));
 
 function renderReply(content: string, onFollowUp?: (text: string) => void) {
   return render(<>{renderMarkdownContent(content, undefined, onFollowUp ? { onFollowUp } : {})}</>);
@@ -114,5 +120,62 @@ describe('mobile mixed assistant reply', () => {
     expect(screen.getByText('2 of 2')).toBeTruthy();
     fireEvent.press(screen.getByRole('button', { name: 'Show the document' }));
     expect(onFollowUp).toHaveBeenCalledWith('Show the document');
+  });
+});
+
+describe('mobile citation and gallery fences keep their resources reachable', () => {
+  beforeEach(() => {
+    jest.mocked(openUntrustedUrlInAppBrowser).mockClear();
+  });
+
+  it('opens a citation source through the approved link policy', () => {
+    renderReply(
+      '```citation\ntitle: Annual report\nsource: Example Corp\nurl: https://example.com/report\nsummary: Revenue grew.\n```',
+    );
+
+    const link = screen.getByRole('link', { name: 'https://example.com/report' });
+    fireEvent.press(link);
+
+    expect(openUntrustedUrlInAppBrowser).toHaveBeenCalledWith('https://example.com/report');
+  });
+
+  it('asks before handing a mailto citation to Mail', () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    renderReply('```citation\ntitle: Contact\nurl: mailto:team@example.com\n```');
+
+    fireEvent.press(screen.getByRole('link', { name: 'mailto:team@example.com' }));
+
+    expect(alertSpy).toHaveBeenCalledWith('Open in Mail?', 'mailto:team@example.com', [
+      expect.objectContaining({ text: 'Cancel' }),
+      expect.objectContaining({ text: 'Open' }),
+    ]);
+    expect(openUntrustedUrlInAppBrowser).not.toHaveBeenCalled();
+    alertSpy.mockRestore();
+  });
+
+  it('offers each gallery image behind a load control instead of dropping the resource', () => {
+    renderReply(
+      [
+        '```gallery',
+        'Reference photo | https://example.com/photo.png',
+        '![Chart](https://example.com/chart.png)',
+        'Brand colour | #ff8800',
+        '```',
+      ].join('\n'),
+    );
+
+    expect(screen.getAllByText('Reference photo').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Chart').length).toBeGreaterThan(0);
+    expect(screen.getByText('Brand colour')).toBeTruthy();
+    expect(screen.getByText('#ff8800')).toBeTruthy();
+    expect(screen.getAllByLabelText('Load image from example.com')).toHaveLength(2);
+    expect(openUntrustedUrlInAppBrowser).not.toHaveBeenCalled();
+  });
+
+  it('shows no image link for an unsafe or missing source and loads nothing by itself', () => {
+    renderReply(['```gallery', 'Bad | javascript:alert(1)', 'Plain | #123456', '```'].join('\n'));
+
+    expect(screen.queryByRole('link')).toBeNull();
+    expect(openUntrustedUrlInAppBrowser).not.toHaveBeenCalled();
   });
 });

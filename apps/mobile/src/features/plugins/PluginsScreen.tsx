@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshControl, ScrollView, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -200,6 +200,7 @@ export function PluginsScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
+  const pagingRequest = useRef<AbortController | null>(null);
 
   const query = useMemo(
     () => ({
@@ -217,6 +218,9 @@ export function PluginsScreen() {
     const account = captureCloudAccountEpoch();
     if (!account) return;
     const controller = new AbortController();
+    pagingRequest.current?.abort();
+    pagingRequest.current = null;
+    setLoadingMore(false);
     setLoading(true);
     setError(null);
     const timer = setTimeout(
@@ -259,20 +263,34 @@ export function PluginsScreen() {
     return () => {
       clearTimeout(timer);
       controller.abort();
+      pagingRequest.current?.abort();
+      pagingRequest.current = null;
     };
   }, [access.ready, query, reload]);
 
   const loadMore = useCallback(async () => {
     if (!nextCursor || loadingMore) return;
+    const account = captureCloudAccountEpoch();
+    if (!account) return;
+    const controller = new AbortController();
+    pagingRequest.current = controller;
     setLoadingMore(true);
     try {
-      const page = await fetchPluginDirectory({ ...query, cursor: nextCursor });
-      setEntries((current) => [...current, ...page.entries]);
+      const page = await fetchPluginDirectory({ ...query, cursor: nextCursor }, controller.signal);
+      if (controller.signal.aborted || !isCloudAccountEpochCurrent(account)) return;
+      setEntries((current) => {
+        const known = new Set(current.map((entry) => entry.id));
+        return [...current, ...page.entries.filter((entry) => !known.has(entry.id))];
+      });
       setNextCursor(page.nextCursor);
     } catch (moreError) {
+      if (controller.signal.aborted || !isCloudAccountEpochCurrent(account)) return;
       setError(pluginActionError(moreError, 'Could not load more plugins.'));
     } finally {
-      setLoadingMore(false);
+      if (pagingRequest.current === controller) {
+        pagingRequest.current = null;
+        setLoadingMore(false);
+      }
     }
   }, [loadingMore, nextCursor, query]);
 
