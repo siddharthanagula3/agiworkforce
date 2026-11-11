@@ -1522,6 +1522,9 @@
     "acknowledge_outbox": [
       "apps/desktop/src-tauri/src/automation/audit.rs"
     ],
+    "acknowledgeCompletedCallerRun": [
+      "apps/extension/src/features/cloud-bridge/callerToolCustody.ts"
+    ],
     "acknowledgeContinuityOnboarding": [
       "apps/mobile/src/features/continuity/continuity-onboarding.ts",
       "apps/mobile/src/features/continuity/index.ts"
@@ -2451,6 +2454,9 @@
     "admittedHarnessIds": [
       "apps/web/lib/services/gateway-routing.ts"
     ],
+    "admitToolResultResume": [
+      "apps/web/app/api/llm/v1/chat/completions/lib/tool-result-resume.ts"
+    ],
     "admitVisualFrame": [
       "packages/contracts/types/src/visual-session.ts"
     ],
@@ -2893,6 +2899,16 @@
       "apps/mobile/src/features/agents/components/AgentAvatar.tsx",
       "apps/web/features/agents/components/AgentAvatar.tsx"
     ],
+    "AgentCallerToolCall": [
+      "crates/agiworkforce-protocol/bindings/AgentCallerToolCall.ts",
+      "crates/agiworkforce-protocol/src/agent_events.rs",
+      "packages/contracts/types/src/generated/protocol/AgentCallerToolCall.ts"
+    ],
+    "AgentCallerToolFunction": [
+      "crates/agiworkforce-protocol/bindings/AgentCallerToolFunction.ts",
+      "crates/agiworkforce-protocol/src/agent_events.rs",
+      "packages/contracts/types/src/generated/protocol/AgentCallerToolFunction.ts"
+    ],
     "agentCanChat": [
       "apps/web/features/agents/lib/agent-display.ts",
       "packages/contracts/cloud-contracts/src/agent-drafts.ts"
@@ -3077,6 +3093,11 @@
       "crates/agiworkforce-protocol/bindings/AgentEventArtifactProduced.ts",
       "crates/agiworkforce-protocol/src/agent_events.rs",
       "packages/contracts/types/src/generated/protocol/AgentEventArtifactProduced.ts"
+    ],
+    "AgentEventCallerToolsRequested": [
+      "crates/agiworkforce-protocol/bindings/AgentEventCallerToolsRequested.ts",
+      "crates/agiworkforce-protocol/src/agent_events.rs",
+      "packages/contracts/types/src/generated/protocol/AgentEventCallerToolsRequested.ts"
     ],
     "AgentEventCommandStarted": [
       "crates/agiworkforce-protocol/bindings/AgentEventCommandStarted.ts",
@@ -6017,7 +6038,8 @@
       "apps/desktop/src/stores/chat/agentWorkflowEvents.ts"
     ],
     "applyToolResultSecretPolicy": [
-      "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts"
+      "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts",
+      "apps/web/lib/security/tool-result-secret-policy.ts"
     ],
     "applyTurnToolProhibition": [
       "apps/web/app/api/llm/v1/chat/completions/lib/turn-tool-prohibition.ts"
@@ -7952,11 +7974,20 @@
     "assertAttachmentSizeAllowed": [
       "apps/web/lib/server/attachment-allowance.ts"
     ],
+    "assertCallerConversationAuthority": [
+      "apps/extension/src/features/cloud-bridge/callerConversationAuthority.ts"
+    ],
+    "assertCallerConversationLink": [
+      "apps/extension/src/features/cloud-bridge/callerConversationAuthority.ts"
+    ],
     "assertCapabilityAvailable": [
       "apps/web/lib/feature-flags/capability-gate.ts"
     ],
     "assertChildDeadline": [
       "apps/desktop/src/api/deadlines.ts"
+    ],
+    "assertChromeManagedCallerRun": [
+      "apps/extension/src/features/cloud-bridge/managedRunControl.ts"
     ],
     "assertClaimableDomain": [
       "apps/web/lib/server/sso/idp-metadata.ts"
@@ -14233,14 +14264,80 @@
     "callCloud": [
       "apps/extension/src/features/computer-use/cloudAgentClient.ts"
     ],
+    "CALLER_TOOL_BOUNDARY_EVENT_COUNT": [
+      "packages/contracts/cloud-contracts/src/caller-tool-handoff.ts"
+    ],
+    "CALLER_TOOL_CUSTODY_KEY": [
+      "apps/extension/src/features/cloud-bridge/callerToolCustody.ts"
+    ],
+    "CALLER_TOOL_RESUME_PATH": [
+      "packages/contracts/cloud-contracts/src/caller-tool-handoff.ts"
+    ],
+    "CallerBrowserContext": [
+      "apps/extension/src/features/cloud-bridge/callerBrowserContext.ts"
+    ],
     "callerByteReads": [
       "scripts/lib/upload-ingest.mjs"
+    ],
+    "CallerConversationContext": [
+      "apps/extension/src/features/cloud-bridge/callerToolCustody.ts"
     ],
     "callerIsEnrolled": [
       "apps/web/lib/server/account-security/service.ts"
     ],
+    "CallerToolCall": [
+      "packages/contracts/cloud-contracts/src/caller-tool-handoff.ts"
+    ],
+    "CallerToolCallSchema": [
+      "packages/contracts/cloud-contracts/src/caller-tool-handoff.ts"
+    ],
+    "CallerToolContinuation": [
+      "apps/extension/src/features/computer-use/toolHandoff.ts"
+    ],
+    "CallerToolContinuationError": [
+      "apps/extension/src/features/computer-use/toolHandoff.ts"
+    ],
+    "CallerToolCustodyBinding": [
+      "apps/extension/src/features/cloud-bridge/callerToolCustody.ts"
+    ],
+    "CallerToolCustodyError": [
+      "apps/extension/src/features/cloud-bridge/callerToolCustody.ts"
+    ],
+    "CallerToolCustodyStorage": [
+      "apps/extension/src/features/cloud-bridge/callerToolCustody.ts"
+    ],
     "CallerToolFields": [
       "apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts"
+    ],
+    "CallerToolHandoffDelta": [
+      "packages/contracts/cloud-contracts/src/caller-tool-handoff.ts"
+    ],
+    "CallerToolObservation": [
+      "packages/contracts/cloud-contracts/src/caller-tool-handoff.ts"
+    ],
+    "CallerToolObservationSchema": [
+      "packages/contracts/cloud-contracts/src/caller-tool-handoff.ts"
+    ],
+    "CallerToolObservationsSchema": [
+      "packages/contracts/cloud-contracts/src/caller-tool-handoff.ts"
+    ],
+    "CallerToolResultSchema": [
+      "packages/contracts/cloud-contracts/src/caller-tool-handoff.ts"
+    ],
+    "CallerToolResultsSchema": [
+      "packages/contracts/cloud-contracts/src/caller-tool-handoff.ts"
+    ],
+    "CallerToolResultWire": [
+      "packages/contracts/cloud-contracts/src/caller-tool-handoff.ts"
+    ],
+    "CallerToolResumeRequest": [
+      "packages/contracts/cloud-contracts/src/caller-tool-handoff.ts"
+    ],
+    "CallerToolResumeRequestSchema": [
+      "packages/contracts/cloud-contracts/src/caller-tool-handoff.ts"
+    ],
+    "CallerToolStepBudgetSchema": [
+      "packages/contracts/cloud-contracts/src/caller-tool-handoff.ts"
     ],
     "callSupportModel": [
       "apps/web/lib/support/agent/answer/model-route.ts"
@@ -15192,6 +15289,12 @@
     ],
     "captureArtifactsFromMessage": [
       "apps/mobile/stores/chat/chatExecutionStore.ts"
+    ],
+    "captureCallerBrowserContext": [
+      "apps/extension/src/features/cloud-bridge/callerBrowserContext.ts"
+    ],
+    "captureCallerConversationContext": [
+      "apps/extension/src/features/cloud-bridge/callerConversationAuthority.ts"
     ],
     "captureCloudAccountEpoch": [
       "apps/mobile/src/features/auth/services/cloudAccountSession.ts"
@@ -16727,6 +16830,9 @@
     "ChatTextSize": [
       "apps/web/shared/stores/web-settings-store.ts"
     ],
+    "ChatToolCursor": [
+      "apps/extension/src/features/computer-use/chatToolResults.ts"
+    ],
     "ChatToolExposure": [
       "apps/desktop/src-tauri/src/sys/commands/chat/tools.rs"
     ],
@@ -16734,7 +16840,8 @@
       "apps/extension/src/types.ts"
     ],
     "ChatToolResult": [
-      "apps/desktop/src-tauri/src/sys/commands/chat/tools.rs"
+      "apps/desktop/src-tauri/src/sys/commands/chat/tools.rs",
+      "apps/extension/src/features/computer-use/chatToolResults.ts"
     ],
     "ChatToolScope": [
       "apps/desktop/src-tauri/src/sys/commands/chat/types.rs"
@@ -17742,6 +17849,9 @@
     "chromeArtifactParentOrigin": [
       "infrastructure/sandbox/configure.mjs"
     ],
+    "ChromeCallerToolCustody": [
+      "apps/extension/src/features/cloud-bridge/callerToolCustody.ts"
+    ],
     "ChromeExtensionAuthCompletePage": [
       "apps/web/app/auth/chrome-extension/page.tsx"
     ],
@@ -17761,6 +17871,12 @@
       "apps/extension/src/features/cloud-bridge/managedChatHandler.ts"
     ],
     "ChromeManagedApprovalResult": [
+      "apps/extension/src/features/cloud-bridge/managedChatHandler.ts"
+    ],
+    "ChromeManagedCallerResumeDependencies": [
+      "apps/extension/src/features/cloud-bridge/managedChatHandler.ts"
+    ],
+    "ChromeManagedCallerResumeRequest": [
       "apps/extension/src/features/cloud-bridge/managedChatHandler.ts"
     ],
     "ChromeManagedChatDependencies": [
@@ -18108,6 +18224,9 @@
     "claimCloudAgentApprovalCheckpoint": [
       "apps/web/lib/services/cloud-agent-run-service.ts"
     ],
+    "claimCloudAgentCallerCheckpoint": [
+      "apps/web/lib/services/cloud-agent-run-service.ts"
+    ],
     "claimCloudAgentDeviceCheckpoint": [
       "apps/web/lib/services/cloud-agent-run-service.ts"
     ],
@@ -18139,6 +18258,9 @@
       "apps/web/lib/workflows/durable-stream-liveness.ts"
     ],
     "ClaimedCloudAgentApprovalCheckpoint": [
+      "apps/web/lib/services/cloud-agent-run-service.ts"
+    ],
+    "ClaimedCloudAgentCallerCheckpoint": [
       "apps/web/lib/services/cloud-agent-run-service.ts"
     ],
     "ClaimedCloudAgentDeviceCheckpoint": [
@@ -18860,6 +18982,9 @@
     ],
     "clearAllQueued": [
       "apps/web/lib/offline/offlineQueue.ts"
+    ],
+    "clearAnswerFilePreviews": [
+      "apps/extension/src/features/side-panel/generatedFiles.ts"
     ],
     "clearApiKey": [
       "apps/extension-vscode/src/utils/api.ts"
@@ -19828,6 +19953,9 @@
     "closeIdleConnectedSessions": [
       "apps/web/lib/support/handoff/store.ts"
     ],
+    "closeImageViewer": [
+      "apps/extension/src/features/side-panel/mediaViewer.ts"
+    ],
     "closeLocalPreview": [
       "apps/desktop/electron/previewWindow.ts"
     ],
@@ -20416,6 +20544,9 @@
     ],
     "CloudAgentBudgetRefusalCode": [
       "apps/web/lib/services/cloud-agent-budget.ts"
+    ],
+    "CloudAgentCallerResultError": [
+      "apps/web/lib/services/cloud-agent-run-service.ts"
     ],
     "CloudAgentCapabilityRefusedError": [
       "apps/web/lib/workflows/cloud-agent-capability-refusal.ts"
@@ -21463,6 +21594,9 @@
       "apps/mobile/stores/chat/cloudHistoryLoad.ts"
     ],
     "CloudHistoryPullOptions": [
+      "apps/extension/src/features/cloud-bridge/conversationHistoryPull.ts"
+    ],
+    "cloudHistoryReadSignal": [
       "apps/extension/src/features/cloud-bridge/conversationHistoryPull.ts"
     ],
     "CloudHistoryRefreshResult": [
@@ -28092,6 +28226,9 @@
     "ContinueSharedSessionPage": [
       "apps/web/app/chat/from-share/[token]/page.tsx"
     ],
+    "continueToolResultResume": [
+      "apps/web/app/api/llm/v1/chat/completions/lib/tool-result-resume.ts"
+    ],
     "ContinueWithCurrentTerms": [
       "apps/web/app/signup/complete/RecordTermsAcceptance.tsx"
     ],
@@ -28270,9 +28407,6 @@
       "apps/web/lib/services/enterprise-contracts/index.ts",
       "apps/web/lib/services/enterprise-contracts/stripe-metadata.ts"
     ],
-    "contractPredicateReads": [
-      "scripts/lib/workspace-policy-enforcement.mjs"
-    ],
     "contracts": [
       "scripts/env-doctor.mjs"
     ],
@@ -28342,6 +28476,9 @@
     ],
     "controlPayloadSchema": [
       "services/signaling-server/src/control-payload.ts"
+    ],
+    "controlPredicateReads": [
+      "scripts/lib/workspace-policy-enforcement.mjs"
     ],
     "ControlReceiptEvent": [
       "packages/contracts/types/src/cross-device.ts"
@@ -29701,6 +29838,12 @@
     "CreateByokForkRequest": [
       "apps/desktop/src/api/byok.ts"
     ],
+    "createCallerToolContinuationReader": [
+      "apps/extension/src/features/computer-use/toolHandoff.ts"
+    ],
+    "createCallerToolHandoffDelta": [
+      "packages/contracts/cloud-contracts/src/caller-tool-handoff.ts"
+    ],
     "createCapabilityHealthStore": [
       "packages/ai/routing/src/capability-health.ts",
       "packages/ai/routing/src/index.ts"
@@ -29728,7 +29871,13 @@
     "createChatStreamDedupe": [
       "apps/mobile/src/lib/chat-stream-dedupe.ts"
     ],
+    "createChromeCallerToolCustody": [
+      "apps/extension/src/features/cloud-bridge/callerToolCustody.ts"
+    ],
     "createChromeManagedApprovalDependencies": [
+      "apps/extension/src/features/cloud-bridge/managedChatHandler.ts"
+    ],
+    "createChromeManagedCallerResumeDependencies": [
       "apps/extension/src/features/cloud-bridge/managedChatHandler.ts"
     ],
     "createChromeManagedChatDependencies": [
@@ -30751,6 +30900,9 @@
     ],
     "createToolCallAccumulator": [
       "apps/mobile/src/features/chat/utils/toolCallAccumulator.ts"
+    ],
+    "createToolResultReference": [
+      "apps/web/app/api/llm/v1/chat/completions/lib/tool-result-store.ts"
     ],
     "createToolSchemaState": [
       "apps/web/app/api/llm/v1/chat/completions/lib/tool-schema-state.ts"
@@ -33140,6 +33292,7 @@
       "apps/web/app/login/not-me/page.tsx",
       "apps/web/app/login/page.tsx",
       "apps/web/app/login/verify/page.tsx",
+      "apps/web/app/maintenance/loading.tsx",
       "apps/web/app/maintenance/page.tsx",
       "apps/web/app/manifest.ts",
       "apps/web/app/mobile/legal/page.tsx",
@@ -33460,6 +33613,10 @@
     "DEFAULT_BROWSER_PERMISSION_MODE": [
       "apps/extension/src/features/computer-use/askBeforeActing.ts"
     ],
+    "DEFAULT_CALLER_TOOL_MAX_STEPS": [
+      "packages/contracts/cloud-contracts/src/index.ts",
+      "packages/contracts/cloud-contracts/src/tool-call-limits.ts"
+    ],
     "default_capabilities": [
       "apps/desktop/src-tauri/src/core/llm/capability_detection.rs"
     ],
@@ -33478,6 +33635,10 @@
     ],
     "DEFAULT_CHAT_STYLE": [
       "apps/mobile/stores/chat/chatViewStore.ts"
+    ],
+    "DEFAULT_CHAT_TOOL_MAX_STEPS": [
+      "packages/contracts/cloud-contracts/src/index.ts",
+      "packages/contracts/cloud-contracts/src/tool-call-limits.ts"
     ],
     "DEFAULT_CHECKOUT_CURRENCY": [
       "apps/web/lib/pricing.ts"
@@ -33994,6 +34155,10 @@
     ],
     "DEFAULT_WINDOW_WIDTH": [
       "apps/desktop/electron/windowState.ts"
+    ],
+    "DEFAULT_WORK_TOOL_MAX_STEPS": [
+      "packages/contracts/cloud-contracts/src/index.ts",
+      "packages/contracts/cloud-contracts/src/tool-call-limits.ts"
     ],
     "DEFAULT_WORKSPACE_CODE_CONTROLS": [
       "packages/contracts/types/src/enterprise/workspace-controls.ts"
@@ -39934,6 +40099,9 @@
     "DocxHeader": [
       "apps/web/features/chat/services/export-docx.ts"
     ],
+    "DOLLAR_TAG": [
+      "scripts/lib/sql-statements.mjs"
+    ],
     "dollars": [
       "apps/cli/src/cost_ledger.rs"
     ],
@@ -39953,7 +40121,8 @@
       "apps/desktop/src-tauri/src/automation/browser/mod.rs"
     ],
     "DOM_SUMMARY_HEADING": [
-      "apps/extension/src/features/computer-use/historyBudget.ts"
+      "apps/extension/src/features/computer-use/historyBudget.ts",
+      "packages/client/client-runtime/src/observation-history.ts"
     ],
     "DOMAIN_ERROR_CODE_TO_HTTP_STATUS": [
       "packages/contracts/types/src/errors.ts"
@@ -40229,6 +40398,9 @@
     ],
     "DOWNLOAD_COMPLETION_TIMEOUT_MS": [
       "apps/extension/src/features/browser-tools/downloads.ts"
+    ],
+    "DOWNLOAD_COST_SHARE_CEILING_OF_PRICE": [
+      "packages/contracts/types/src/billing-catalog.ts"
     ],
     "DOWNLOAD_COST_SHARE_OF_PRICE": [
       "packages/contracts/types/src/billing-catalog.ts"
@@ -41502,7 +41674,8 @@
       "apps/extension/src/features/computer-use/cdpDriver.ts"
     ],
     "ELEMENT_LIST_HEADING": [
-      "apps/extension/src/features/computer-use/cdpDriver.ts"
+      "apps/extension/src/features/computer-use/cdpDriver.ts",
+      "packages/client/client-runtime/src/observation-history.ts"
     ],
     "element_pid": [
       "apps/desktop/src-tauri/src/automation/computer_use/target_app.rs",
@@ -43542,6 +43715,9 @@
     "evaluateSpendLimit": [
       "apps/web/lib/services/spend-limit-service.ts"
     ],
+    "evaluateToolResultSecretPolicy": [
+      "apps/web/lib/security/tool-result-secret-policy.ts"
+    ],
     "evaluateWorkspaceCodeAccess": [
       "apps/web/lib/services/organization-policy-code-gate.ts"
     ],
@@ -44333,6 +44509,9 @@
     "executeChromeManagedApproval": [
       "apps/extension/src/features/cloud-bridge/managedChatHandler.ts"
     ],
+    "executeChromeManagedCallerResume": [
+      "apps/extension/src/features/cloud-bridge/managedChatHandler.ts"
+    ],
     "executeChromeManagedChat": [
       "apps/extension/src/features/cloud-bridge/managedChatHandler.ts"
     ],
@@ -44404,6 +44583,9 @@
     "ExecuteOptions": [
       "apps/desktop/src-tauri/src/automation/browser/advanced.rs",
       "packages/platform/utils/src/circuitBreaker.ts"
+    ],
+    "executeOwnedCallerToolCalls": [
+      "apps/extension/src/features/cloud-bridge/callerToolExecution.ts"
     ],
     "executePersistedAgentTurn": [
       "apps/web/lib/services/cloud-code-agent-service.ts"
@@ -44571,6 +44753,9 @@
     "ExecutionStreamProps": [
       "apps/mobile/src/features/companion/components/ExecutionStream.tsx"
     ],
+    "executionToolArgumentProblem": [
+      "apps/web/lib/e2b/execution-tools.ts"
+    ],
     "ExecutionToolsPlane": [
       "packages/contracts/types/src/sessions/execution-profile.ts"
     ],
@@ -44711,6 +44896,9 @@
     ],
     "expandOrganizationPermissions": [
       "packages/contracts/types/src/enterprise/permissions.ts"
+    ],
+    "expandProjectReadScope": [
+      "scripts/lib/project-scope-sql.mjs"
     ],
     "expandPromptShortcut": [
       "apps/extension/src/features/side-panel/pageCommands.ts"
@@ -48784,6 +48972,9 @@
     "forked_from_id": [
       "crates/agiworkforce-protocol/src/protocol.rs"
     ],
+    "forkManagedCloudConversationHistory": [
+      "apps/extension/src/features/cloud-bridge/conversationHistoryPull.ts"
+    ],
     "Form": [
       "apps/web/shared/ui/Form.tsx"
     ],
@@ -49508,6 +49699,9 @@
     ],
     "formObservationReference": [
       "apps/extension/src/features/side-panel/pageObservation.ts"
+    ],
+    "FormObservationReference": [
+      "apps/extension/src/features/browser-tools/documentBridge.ts"
     ],
     "formUtils": [
       "apps/extension/src/utils.ts"
@@ -58294,6 +58488,9 @@
     "HostedAdoption": [
       "apps/cli/src/sessions.rs"
     ],
+    "HostedCallerToolBatchSchema": [
+      "packages/contracts/cloud-contracts/src/caller-tool-handoff.ts"
+    ],
     "hostedCodeExecutionEvidence": [
       "apps/web/lib/services/managed-usage-accounting-service.ts"
     ],
@@ -61479,7 +61676,9 @@
       "apps/web/lib/support/tickets/service.ts"
     ],
     "invalidToolArgumentsMessage": [
-      "apps/web/app/api/llm/v1/chat/completions/lib/tool-argument-validation.ts"
+      "apps/web/app/api/llm/v1/chat/completions/lib/tool-argument-validation.ts",
+      "packages/ai/provider-protocol/src/index.ts",
+      "packages/ai/provider-protocol/src/tool-argument-validation.ts"
     ],
     "invalidUploadResponse": [
       "apps/web/features/plugins/server/directory/archive-upload.ts"
@@ -61605,6 +61804,9 @@
       "apps/desktop/src-tauri/src/core/llm/llm_router.rs"
     ],
     "invokedCodeActs": [
+      "scripts/lib/workspace-policy-enforcement.mjs"
+    ],
+    "invokedControlPredicateKeys": [
       "scripts/lib/workspace-policy-enforcement.mjs"
     ],
     "invokeDesktopRuntime": [
@@ -62627,6 +62829,9 @@
     ],
     "isBrowserCommandResult": [
       "packages/contracts/types/src/browser-bridge.ts"
+    ],
+    "isBrowserDomObservationText": [
+      "packages/client/client-runtime/src/observation-history.ts"
     ],
     "isBrowserSessionKind": [
       "packages/contracts/types/src/browser-session.ts",
@@ -64124,6 +64329,9 @@
     ],
     "isOwnerlessOrganizationError": [
       "apps/web/lib/services/organization-seat-service.ts"
+    ],
+    "isPageDocumentId": [
+      "apps/extension/src/features/browser-tools/documentBridge.ts"
     ],
     "isPageRoute": [
       "scripts/lib/route-tests.mjs"
@@ -69903,9 +70111,6 @@
     "LoadUserConnectorToolOptions": [
       "apps/web/lib/user-connector-tools.ts"
     ],
-    "loadVideoObjectUrl": [
-      "apps/extension/src/features/side-panel/generatedFiles.ts"
-    ],
     "loadVoiceSamples": [
       "apps/mobile/src/features/voice/services/voiceSamples.ts"
     ],
@@ -71580,6 +71785,9 @@
     ],
     "MaintenanceAlarmPort": [
       "apps/extension/src/features/background/maintenance-alarm.ts"
+    ],
+    "MaintenanceLoading": [
+      "apps/web/app/maintenance/loading.tsx"
     ],
     "MaintenancePage": [
       "apps/web/app/maintenance/page.tsx"
@@ -75232,6 +75440,10 @@
     "MAX_BYPASS_CONFIRM_ACTION": [
       "apps/extension-vscode/src/features/permissions/agentModeConsent.ts"
     ],
+    "MAX_CALLER_TOOL_STEPS": [
+      "packages/contracts/cloud-contracts/src/index.ts",
+      "packages/contracts/cloud-contracts/src/tool-call-limits.ts"
+    ],
     "MAX_CANDIDATES": [
       "apps/cli/src/mentions.rs"
     ],
@@ -75256,6 +75468,10 @@
     ],
     "MAX_CHAT_BROWSER_TASK_GOAL_CHARS": [
       "apps/extension/src/features/computer-use/chatBrowserTools.ts"
+    ],
+    "MAX_CHAT_COMPLETION_REQUEST_BYTES": [
+      "packages/contracts/cloud-contracts/src/index.ts",
+      "packages/contracts/cloud-contracts/src/tool-call-limits.ts"
     ],
     "MAX_CHAT_TOOL_CALLS_PER_HANDOFF": [
       "apps/extension/src/features/computer-use/chatBrowserTools.ts"
@@ -75551,6 +75767,10 @@
     ],
     "MAX_HISTORY_QUERY_CHARS": [
       "apps/extension/src/features/computer-use/historySearch.ts"
+    ],
+    "MAX_HOSTED_TOOL_CALLS_PER_STEP": [
+      "packages/contracts/cloud-contracts/src/caller-tool-handoff.ts",
+      "packages/contracts/cloud-contracts/src/tool-call-limits.ts"
     ],
     "MAX_ICE_CANDIDATE_SIZE": [
       "services/signaling-server/src/constants.ts"
@@ -76174,6 +76394,7 @@
       "apps/web/app/api/health/route.ts",
       "apps/web/app/api/llm/v1/chat/completions/approve/route.ts",
       "apps/web/app/api/llm/v1/chat/completions/guest/route.ts",
+      "apps/web/app/api/llm/v1/chat/completions/resume-caller/route.ts",
       "apps/web/app/api/llm/v1/chat/completions/resume-device/route.ts",
       "apps/web/app/api/llm/v1/chat/completions/resume-input/route.ts",
       "apps/web/app/api/llm/v1/chat/completions/route.ts",
@@ -78001,9 +78222,6 @@
     ],
     "MEMORY_COMMAND_CLIENT_SURFACES": [
       "apps/web/lib/services/memory-commands.ts"
-    ],
-    "MEMORY_COMMAND_HINT": [
-      "apps/extension/src/features/cloud-bridge/memoryClient.ts"
     ],
     "MEMORY_COMMAND_KINDS": [
       "apps/extension/src/features/cloud-bridge/memoryClient.ts",
@@ -86502,6 +86720,7 @@
       "apps/web/app/api/library/route.ts",
       "apps/web/app/api/llm/v1/audio/transcriptions/route.ts",
       "apps/web/app/api/llm/v1/chat/completions/approve/route.ts",
+      "apps/web/app/api/llm/v1/chat/completions/resume-caller/route.ts",
       "apps/web/app/api/llm/v1/chat/completions/resume-device/route.ts",
       "apps/web/app/api/llm/v1/chat/completions/resume-input/route.ts",
       "apps/web/app/api/llm/v1/chat/completions/route.ts",
@@ -87634,10 +87853,12 @@
       "apps/extension/src/features/background/page-capture.ts"
     ],
     "PAGE_CONTENT_FENCE_BEGIN": [
-      "apps/extension/src/features/computer-use/cdpDriver.ts"
+      "apps/extension/src/features/computer-use/cdpDriver.ts",
+      "packages/client/client-runtime/src/observation-history.ts"
     ],
     "PAGE_CONTENT_FENCE_END": [
-      "apps/extension/src/features/computer-use/cdpDriver.ts"
+      "apps/extension/src/features/computer-use/cdpDriver.ts",
+      "packages/client/client-runtime/src/observation-history.ts"
     ],
     "PAGE_CONTEXT_MAX_AGE_MS": [
       "apps/desktop/src-tauri/src/sys/commands/chat/state.rs"
@@ -88442,6 +88663,9 @@
     "parseBrowserUploadedFilesMetadata": [
       "apps/extension/src/features/computer-use/userFileUpload.ts"
     ],
+    "parseCallerBrowserContext": [
+      "apps/extension/src/features/cloud-bridge/callerBrowserContext.ts"
+    ],
     "parseCanonicalCodes": [
       "scripts/lib/error-vocabulary.mjs"
     ],
@@ -88832,6 +89056,9 @@
     ],
     "parseFormFillPlan": [
       "apps/extension/src/features/content/formFillPlan.ts"
+    ],
+    "parseFormObservationReference": [
+      "apps/extension/src/features/browser-tools/documentBridge.ts"
     ],
     "parseFreeLaneMode": [
       "apps/web/lib/services/free-lane/mode.ts"
@@ -89440,6 +89667,9 @@
     "parseTabular": [
       "packages/ui/unified-chat/src/index.ts",
       "packages/ui/unified-chat/src/lib/tabular.ts"
+    ],
+    "parseTaskTabScope": [
+      "apps/extension/src/features/browser-tools/taskTabScope.ts"
     ],
     "parseTestSummary": [
       "packages/contracts/types/src/remote-code.ts"
@@ -94280,6 +94510,7 @@
       "apps/web/app/api/llm/v1/audio/transcriptions/route.ts",
       "apps/web/app/api/llm/v1/chat/completions/approve/route.ts",
       "apps/web/app/api/llm/v1/chat/completions/guest/route.ts",
+      "apps/web/app/api/llm/v1/chat/completions/resume-caller/route.ts",
       "apps/web/app/api/llm/v1/chat/completions/resume-device/route.ts",
       "apps/web/app/api/llm/v1/chat/completions/resume-input/route.ts",
       "apps/web/app/api/llm/v1/chat/completions/route.ts",
@@ -94749,6 +94980,9 @@
     ],
     "prepareChatAttachments": [
       "apps/web/features/chat/lib/attachment-metadata.ts"
+    ],
+    "prepareChatToolResults": [
+      "apps/extension/src/features/computer-use/chatToolResults.ts"
     ],
     "prepareChunks": [
       "apps/web/lib/services/retrieval-index-service.ts"
@@ -95582,9 +95816,6 @@
       "apps/web/features/desktop-host/index.ts",
       "apps/web/features/desktop-host/lib/deep-links.ts"
     ],
-    "PRODUCT_INSTALLED_NAMES": [
-      "packages/contracts/types/src/product-names.ts"
-    ],
     "PRODUCT_LINK_PATH_PREFIX": [
       "packages/contracts/types/src/index.ts",
       "packages/contracts/types/src/product-links.ts"
@@ -96099,6 +96330,9 @@
     ],
     "project_path": [
       "apps/cli/src/cloud/mod.rs"
+    ],
+    "PROJECT_READ_SCOPE_OWNER": [
+      "scripts/lib/project-scope-sql.mjs"
     ],
     "project_registry": [
       "apps/cli/src/lib.rs"
@@ -97938,7 +98172,8 @@
       "apps/web/lib/jobs/job-service.ts"
     ],
     "pruneObservationHistory": [
-      "apps/extension/src/features/computer-use/historyBudget.ts"
+      "apps/extension/src/features/computer-use/historyBudget.ts",
+      "packages/client/client-runtime/src/observation-history.ts"
     ],
     "pseudonymizeEmail": [
       "apps/web/lib/server/email-pseudonym.ts"
@@ -100051,6 +100286,12 @@
     "readCachedProviderProxyAccess": [
       "apps/web/lib/e2b/provider-proxy-access-cache.ts"
     ],
+    "readCallerBrowserContext": [
+      "apps/extension/src/features/cloud-bridge/callerBrowserContext.ts"
+    ],
+    "readCallerToolHandoff": [
+      "packages/contracts/cloud-contracts/src/caller-tool-handoff.ts"
+    ],
     "readCanonicalCodes": [
       "scripts/check-error-model.mjs"
     ],
@@ -100080,6 +100321,9 @@
     ],
     "readChromeBuildConfiguration": [
       "apps/extension/scripts/manifest-config.mjs"
+    ],
+    "readChromeCallerToolCustody": [
+      "apps/extension/src/features/cloud-bridge/callerToolCustody.ts"
     ],
     "readChromeLinkedPage": [
       "apps/extension/src/features/cloud-bridge/pageContextClient.ts"
@@ -100169,6 +100413,9 @@
     ],
     "readCommunityPluginFile": [
       "apps/web/lib/services/plugin-submission-service.ts"
+    ],
+    "readCompleteCallerToolCalls": [
+      "packages/contracts/cloud-contracts/src/caller-tool-handoff.ts"
     ],
     "readCompleteToolCalls": [
       "apps/extension/src/features/computer-use/toolHandoff.ts"
@@ -100260,6 +100507,9 @@
     "readCurrentCommercialAgreement": [
       "apps/web/lib/services/enterprise-contracts/agreement-store.ts",
       "apps/web/lib/services/enterprise-contracts/index.ts"
+    ],
+    "readCurrentWorkspace": [
+      "apps/extension/src/features/cloud-bridge/conversationHistoryPull.ts"
     ],
     "readDataExportArchive": [
       "apps/web/lib/server/data-export-archive.ts"
@@ -100659,9 +100909,6 @@
     ],
     "readingSystemFailures": [
       "scripts/check-ui-typography.mjs"
-    ],
-    "readInstalledNames": [
-      "scripts/check-product-names.mjs"
     ],
     "readInstalledSkills": [
       "apps/web/features/plugins/server/directory/snapshot-cache.ts"
@@ -103098,6 +103345,9 @@
     "recover_superseded": [
       "apps/desktop/src-tauri/src/sys/commands/chat/superseded.rs"
     ],
+    "recoverCallerToolCheckpoint": [
+      "apps/extension/src/features/cloud-bridge/callerToolExecution.ts"
+    ],
     "RecoverLoading": [
       "apps/web/app/recover/loading.tsx"
     ],
@@ -103440,6 +103690,9 @@
     ],
     "referenceAnswers": [
       "tools/evals/__tests__/fixtures/harness.ts"
+    ],
+    "ReferencedToolResult": [
+      "apps/web/app/api/llm/v1/chat/completions/lib/tool-result-store.ts"
     ],
     "referenceForSubmission": [
       "apps/web/lib/server/data-rights-requests.ts"
@@ -104592,6 +104845,9 @@
       "apps/web/lib/feature-flags/flag-definition.ts"
     ],
     "releaseCloudAgentApprovalCheckpoint": [
+      "apps/web/lib/services/cloud-agent-run-service.ts"
+    ],
+    "releaseCloudAgentCallerCheckpoint": [
       "apps/web/lib/services/cloud-agent-run-service.ts"
     ],
     "releaseCloudAgentDeviceCheckpoint": [
@@ -110649,7 +110905,8 @@
       "apps/cli/src/mcp/consent.rs"
     ],
     "RETAINED_OBSERVATIONS": [
-      "apps/extension/src/features/computer-use/historyBudget.ts"
+      "apps/extension/src/features/computer-use/historyBudget.ts",
+      "packages/client/client-runtime/src/observation-history.ts"
     ],
     "retainFrames": [
       "apps/web/features/skill-recorder/lib/recorder-store.ts"
@@ -114581,6 +114838,9 @@
     "saveCloudAgentApprovalCheckpoint": [
       "apps/web/lib/services/cloud-agent-run-service.ts"
     ],
+    "saveCloudAgentCallerCheckpoint": [
+      "apps/web/lib/services/cloud-agent-run-service.ts"
+    ],
     "saveCloudAgentDeviceCheckpoint": [
       "apps/web/lib/services/cloud-agent-run-service.ts"
     ],
@@ -114644,6 +114904,9 @@
     ],
     "SavedAuditDestinationResult": [
       "apps/web/features/workspace-console/hooks/use-audit-destination.ts"
+    ],
+    "SavedCloudAgentCallerCheckpoint": [
+      "apps/web/lib/services/cloud-agent-run-service.ts"
     ],
     "SavedConversation": [
       "apps/cli/src/conversations.rs"
@@ -114781,9 +115044,6 @@
     ],
     "SaveShortcutMessage": [
       "apps/extension/src/types.ts"
-    ],
-    "saveShortcuts": [
-      "apps/extension/src/features/background/shortcuts.ts"
     ],
     "saveSkillCapture": [
       "apps/desktop/electron/runtime/skillCapture.ts",
@@ -123710,6 +123970,9 @@
     "skip_missed_run": [
       "apps/desktop/src-tauri/src/sys/commands/scheduler.rs"
     ],
+    "skipDelimited": [
+      "scripts/lib/sql-statements.mjs"
+    ],
     "SkipLinks": [
       "apps/web/shared/components/accessibility/SkipLinks.tsx"
     ],
@@ -126960,6 +127223,9 @@
     "StreamingToolCall": [
       "apps/desktop/src-tauri/src/core/llm/sse_parser.rs"
     ],
+    "streamManagedCallerReceipt": [
+      "apps/extension/src/features/cloud-bridge/freeTrialClient.ts"
+    ],
     "streamManagedChatApproval": [
       "apps/extension/src/features/cloud-bridge/freeTrialClient.ts"
     ],
@@ -130112,6 +130378,9 @@
     "TaskTabs": [
       "apps/extension/src/features/browser-tools/taskTabs.ts"
     ],
+    "TaskTabScope": [
+      "apps/extension/src/features/browser-tools/taskTabScope.ts"
+    ],
     "TaskType": [
       "apps/desktop/src-tauri/src/core/llm/mod.rs",
       "apps/desktop/src-tauri/src/data/db/mod.rs",
@@ -130137,6 +130406,9 @@
     ],
     "TauriAttachmentPayload": [
       "packages/ui/unified-chat/src/lib/runtime.ts"
+    ],
+    "tauriCargoFeatureMismatches": [
+      "scripts/lib/tauri-cargo-features.mjs"
     ],
     "tauriConfigFeatures": [
       "apps/desktop/scripts/check-no-devtools.mjs"
@@ -132537,7 +132809,8 @@
       "apps/web/app/api/llm/v1/chat/completions/lib/tool-call-gate.ts"
     ],
     "TOOL_CALL_ID_MAX_LENGTH": [
-      "packages/contracts/cloud-contracts/src/tool-approval-resume.ts"
+      "packages/contracts/cloud-contracts/src/tool-approval-resume.ts",
+      "packages/contracts/cloud-contracts/src/tool-call-limits.ts"
     ],
     "TOOL_CALL_STATUS_LABELS": [
       "packages/contracts/types/src/conversation.ts"
@@ -132894,7 +133167,9 @@
       "apps/web/lib/tool-approval-view.ts"
     ],
     "toolArgumentProblem": [
-      "apps/web/app/api/llm/v1/chat/completions/lib/tool-argument-validation.ts"
+      "apps/web/app/api/llm/v1/chat/completions/lib/tool-argument-validation.ts",
+      "packages/ai/provider-protocol/src/index.ts",
+      "packages/ai/provider-protocol/src/tool-argument-validation.ts"
     ],
     "ToolArtifact": [
       "crates/agiworkforce-protocol/bindings/ToolArtifact.ts",
@@ -133272,6 +133547,9 @@
     "ToolLoopApprovalMode": [
       "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop-routing.ts"
     ],
+    "ToolLoopCallerCheckpoint": [
+      "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts"
+    ],
     "ToolLoopDeviceCheckpoint": [
       "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts"
     ],
@@ -133344,6 +133622,9 @@
     ],
     "ToolNodeData": [
       "packages/contracts/types/src/workflow.ts"
+    ],
+    "ToolOfferingReference": [
+      "apps/extension/src/features/computer-use/toolHandoff.ts"
     ],
     "ToolParameter": [
       "apps/desktop/src-tauri/src/core/agi/tools/mod.rs",
@@ -133438,6 +133719,18 @@
     ],
     "toolResultReaderToolDef": [
       "apps/web/app/api/llm/v1/chat/completions/lib/tool-result-store.ts"
+    ],
+    "ToolResultResumeClaim": [
+      "apps/web/app/api/llm/v1/chat/completions/lib/tool-result-resume.ts"
+    ],
+    "toolResultResumeError": [
+      "apps/web/app/api/llm/v1/chat/completions/lib/tool-result-resume.ts"
+    ],
+    "toolResultResumeOptions": [
+      "apps/web/app/api/llm/v1/chat/completions/lib/tool-result-resume.ts"
+    ],
+    "ToolResultSecretPolicyResult": [
+      "apps/web/lib/security/tool-result-secret-policy.ts"
     ],
     "ToolResultStatus": [
       "crates/agiworkforce-protocol/bindings/ToolResultStatus.ts",
@@ -133727,7 +134020,8 @@
       "scripts/check-ui-motion.mjs"
     ],
     "topLevelStatements": [
-      "scripts/check-neon-migrations.mjs"
+      "scripts/check-neon-migrations.mjs",
+      "scripts/lib/sql-statements.mjs"
     ],
     "toPluginDetail": [
       "apps/web/features/directory/services/plugins-directory.ts"
@@ -140797,6 +141091,9 @@
     ],
     "validators": [
       "apps/extension/src/utils.ts"
+    ],
+    "validChatToolResults": [
+      "apps/extension/src/features/computer-use/chatToolResults.ts"
     ],
     "VALUE_DIGEST_PREFIX": [
       "crates/agiworkforce-sandbox-policy/src/launch_env.rs",

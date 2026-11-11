@@ -219,6 +219,12 @@
     },
     {
       "from": "apps/extension",
+      "to": "packages/ai/agent-core",
+      "type": "depends_on",
+      "via": "typescript"
+    },
+    {
+      "from": "apps/extension",
       "to": "packages/ai/provider-protocol",
       "type": "depends_on",
       "via": "typescript"

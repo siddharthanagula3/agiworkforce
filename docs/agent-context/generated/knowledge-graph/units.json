@@ -2438,6 +2438,7 @@
         "pnpm lint:extension"
       ],
       "dependsOn": [
+        "packages/ai/agent-core",
         "packages/ai/provider-protocol",
         "packages/ai/provider-runtime",
         "packages/ai/routing",
@@ -2457,15 +2458,15 @@
       "lanes": [
         "chrome-extension"
       ],
-      "files": 540,
+      "files": 558,
       "roles": {
         "asset": 5,
         "config": 5,
         "doc": 3,
         "other": 29,
-        "source": 220,
+        "source": 226,
         "style": 2,
-        "test": 276
+        "test": 288
       }
     },
     {
@@ -2551,14 +2552,14 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 1639,
+      "files": 1640,
       "roles": {
         "asset": 6,
         "config": 10,
         "doc": 4,
         "generated": 1,
         "other": 46,
-        "source": 895,
+        "source": 896,
         "style": 1,
         "test": 676
       }
@@ -2615,17 +2616,17 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 8273,
+      "files": 8286,
       "roles": {
         "asset": 57,
         "config": 76,
         "doc": 51,
         "generated": 2,
-        "migration": 738,
+        "migration": 740,
         "other": 37,
-        "source": 3509,
+        "source": 3513,
         "style": 35,
-        "test": 3768
+        "test": 3775
       }
     },
     {
@@ -2671,12 +2672,12 @@
       "lanes": [
         "rust-runtime-protocol"
       ],
-      "files": 659,
+      "files": 662,
       "roles": {
         "config": 13,
         "generated": 4,
         "other": 1,
-        "source": 607,
+        "source": 610,
         "test": 34
       }
     },
@@ -2793,6 +2794,7 @@
         "packages/contracts/types"
       ],
       "dependents": [
+        "apps/extension",
         "apps/extension-vscode",
         "apps/mobile",
         "apps/web",
@@ -2885,11 +2887,11 @@
       "lanes": [
         "provider-routing"
       ],
-      "files": 35,
+      "files": 37,
       "roles": {
         "config": 3,
-        "source": 18,
-        "test": 14
+        "source": 19,
+        "test": 15
       }
     },
     {
@@ -3812,6 +3814,7 @@
       "entry": [
         ".",
         "./node",
+        "./observation-history",
         "./offline-queue",
         "./offline-sync",
         "./plugins",
@@ -3836,12 +3839,12 @@
         "packages/ui/unified-chat"
       ],
       "lanes": [],
-      "files": 66,
+      "files": 68,
       "roles": {
         "config": 5,
         "doc": 2,
-        "source": 39,
-        "test": 20
+        "source": 40,
+        "test": 21
       }
     },
     {
@@ -4004,11 +4007,11 @@
       "lanes": [
         "contracts-types"
       ],
-      "files": 166,
+      "files": 169,
       "roles": {
         "config": 7,
-        "source": 100,
-        "test": 59
+        "source": 102,
+        "test": 60
       }
     },
     {
@@ -4264,10 +4267,10 @@
       "lanes": [
         "contracts-types"
       ],
-      "files": 815,
+      "files": 818,
       "roles": {
         "config": 27,
-        "generated": 485,
+        "generated": 488,
         "source": 173,
         "test": 130
       }
@@ -5024,13 +5027,13 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 720,
+      "files": 724,
       "roles": {
         "config": 67,
         "doc": 1,
         "other": 21,
-        "source": 375,
-        "test": 256
+        "source": 378,
+        "test": 257
       }
     },
     {

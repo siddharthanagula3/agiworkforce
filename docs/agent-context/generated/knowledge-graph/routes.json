@@ -5788,6 +5788,24 @@
     {
       "surface": "web",
       "kind": "endpoint",
+      "url": "/api/llm/v1/chat/completions/resume-caller",
+      "file": "apps/web/app/api/llm/v1/chat/completions/resume-caller/route.ts",
+      "segments": [
+        "api",
+        "llm",
+        "v1",
+        "chat",
+        "completions",
+        "resume-caller"
+      ],
+      "methods": [
+        "POST",
+        "OPTIONS"
+      ]
+    },
+    {
+      "surface": "web",
+      "kind": "endpoint",
       "url": "/api/llm/v1/chat/completions/resume-device",
       "file": "apps/web/app/api/llm/v1/chat/completions/resume-device/route.ts",
       "segments": [
@@ -12389,6 +12407,15 @@
       "file": "apps/web/app/login/page.tsx",
       "segments": [
         "login"
+      ]
+    },
+    {
+      "surface": "web",
+      "kind": "loading",
+      "url": "/maintenance",
+      "file": "apps/web/app/maintenance/loading.tsx",
+      "segments": [
+        "maintenance"
       ]
     },
     {

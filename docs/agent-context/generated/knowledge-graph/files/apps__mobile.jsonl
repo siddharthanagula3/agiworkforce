@@ -674,7 +674,7 @@
 {"path":"apps/mobile/components/ui/Switch.tsx","unit":"apps/mobile","role":"source","exports":["Switch"],"imports":["apps/mobile/src/ui/theme/index.ts","spec:react-native"],"lanes":["mobile-app"]}
 {"path":"apps/mobile/components/ui/Text.tsx","unit":"apps/mobile","role":"source","exports":["Text"],"imports":["spec:react-native"],"lanes":["mobile-app"]}
 {"path":"apps/mobile/detox.config.js","unit":"apps/mobile","role":"source","imports":["spec:./detox.env"]}
-{"path":"apps/mobile/detox.env.js","unit":"apps/mobile","role":"source"}
+{"path":"apps/mobile/detox.env.js","unit":"apps/mobile","role":"source","imports":["apps/mobile/native/ios/iosProjectName.cjs"]}
 {"path":"apps/mobile/eas.json","unit":"apps/mobile","role":"config","unparsed":"notCode"}
 {"path":"apps/mobile/global.css","unit":"apps/mobile","role":"style","unparsed":"notCode"}
 {"path":"apps/mobile/hooks/useNetworkStatus.ts","unit":"apps/mobile","role":"source","exports":["isReachableNetworkState","NetworkStatus","useNetworkStatus"],"imports":["apps/mobile/services/offlineQueue.ts","apps/mobile/src/features/auth/services/cloudAccountSession.ts","apps/mobile/stores/chatStore.ts","spec:@react-native-community/netinfo","spec:react"],"lanes":["mobile-app"]}
@@ -753,8 +753,9 @@
 {"path":"apps/mobile/native/ios/AGIWidgets/AGIWidgets-Info.plist","unit":"apps/mobile","role":"other","lanes":["mobile-native-store"],"unparsed":"notCode"}
 {"path":"apps/mobile/native/ios/AGIWidgets/AGIWidgets.entitlements","unit":"apps/mobile","role":"other","lanes":["mobile-native-store"],"unparsed":"notCode"}
 {"path":"apps/mobile/native/ios/AGIWidgets/AGIWidgets.swift","unit":"apps/mobile","role":"source","lanes":["mobile-native-store"]}
+{"path":"apps/mobile/native/ios/iosProjectName.cjs","unit":"apps/mobile","role":"source","imports":["spec:expo/config-plugins"],"lanes":["mobile-native-store"]}
 {"path":"apps/mobile/native/ios/withAGIDevEntitlements.cjs","unit":"apps/mobile","role":"source","imports":["spec:expo/config-plugins"],"lanes":["mobile-native-store"]}
-{"path":"apps/mobile/native/ios/withAGINativeModulesIOS.cjs","unit":"apps/mobile","role":"source","imports":["spec:expo/config-plugins","spec:fs","spec:path"],"lanes":["mobile-native-store"]}
+{"path":"apps/mobile/native/ios/withAGINativeModulesIOS.cjs","unit":"apps/mobile","role":"source","imports":["apps/mobile/native/ios/iosProjectName.cjs","spec:expo/config-plugins","spec:fs","spec:path"],"lanes":["mobile-native-store"]}
 {"path":"apps/mobile/native/ios/withAGIShareExtension.cjs","unit":"apps/mobile","role":"source","imports":["spec:expo/config-plugins","spec:fs","spec:path"],"lanes":["mobile-native-store"]}
 {"path":"apps/mobile/native/ios/withAGIWidgets.cjs","unit":"apps/mobile","role":"source","imports":["apps/mobile/native/ios/withAGIShareExtension.cjs","spec:expo/config-plugins","spec:fs","spec:path"],"lanes":["mobile-native-store"]}
 {"path":"apps/mobile/native/ios/withClerkModularHeaders.cjs","unit":"apps/mobile","role":"source","imports":["spec:expo/config-plugins","spec:fs","spec:path"],"lanes":["mobile-native-store"]}
@@ -771,7 +772,7 @@
 {"path":"apps/mobile/scripts/generate_logo_assets.py","unit":"apps/mobile","role":"source","exports":["draw_agi_mark","generate_agi_lockup","generate_agi_logo","generate_icons","generate_lockups","render_wordmark"],"imports":["spec:math","spec:os","spec:PIL","spec:sys"]}
 {"path":"apps/mobile/scripts/generate-oss-licenses.mjs","unit":"apps/mobile","role":"source","imports":["scripts/lib/third-party-notices.mjs","spec:node:fs","spec:node:path","spec:node:process","spec:node:url"]}
 {"path":"apps/mobile/scripts/ios-device-dev.sh","unit":"apps/mobile","role":"other","unparsed":"notCode"}
-{"path":"apps/mobile/scripts/ios-device-dev.test.mjs","unit":"apps/mobile","role":"test","imports":["spec:node:assert/strict","spec:node:child_process","spec:node:fs","spec:node:os","spec:node:path","spec:node:test","spec:node:url"]}
+{"path":"apps/mobile/scripts/ios-device-dev.test.mjs","unit":"apps/mobile","role":"test","imports":["spec:node:assert/strict","spec:node:child_process","spec:node:fs","spec:node:module","spec:node:os","spec:node:path","spec:node:test","spec:node:url"]}
 {"path":"apps/mobile/scripts/release/_lib.sh","unit":"apps/mobile","role":"other","unparsed":"notCode"}
 {"path":"apps/mobile/scripts/release/android-beta.sh","unit":"apps/mobile","role":"other","unparsed":"notCode"}
 {"path":"apps/mobile/scripts/release/android-prod.sh","unit":"apps/mobile","role":"other","unparsed":"notCode"}
