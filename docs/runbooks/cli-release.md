@@ -33,7 +33,9 @@ release after the first.
 - The binaries themselves carry no platform code signature: no Apple Developer
   ID or notarization, no Windows Authenticode. The signed manifest is the
   integrity check, and the installer and `agi update --install` refuse anything
-  it does not cover. Because the installer downloads with `curl`, macOS
+  it does not cover. The manifest names archives, not versions, so the
+  installer also runs the unpacked `agi --version` and refuses a build that
+  is not the version it was asked for before replacing anything. Because the installer downloads with `curl`, macOS
   Gatekeeper and Windows SmartScreen do not quarantine the files; a user who
   downloads an archive in a browser instead will see those warnings.
 - A manual run of the workflow (Actions tab, or `gh workflow run`) validates
@@ -41,6 +43,21 @@ release after the first.
   publishes, and needs no signing key. It builds the archives even when the
   source validation job is red, so a failing test does not hide whether they
   compile; a tag builds only source that passed validation.
+- The signing job and the release job both run in the protected `cli-release`
+  environment, so a tag run waits twice for the owner's approval: once before
+  the key is read, once before the release is published. The key is an
+  environment secret of `cli-release`; a repository secret would be readable
+  by a workflow on any pushed branch. Sentry registration runs afterwards in a
+  job of its own with a read-only token.
+- The settings this relies on, read 2026-11-11 from GitHub's documentation:
+  environments, required reviewers, administrator bypass and deployment tag
+  policies
+  (<https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments>,
+  <https://docs.github.com/en/rest/deployments/environments>,
+  <https://docs.github.com/en/rest/deployments/branch-policies>), tag rulesets
+  (<https://docs.github.com/en/rest/repos/rules>), and the OIDC subject an
+  environment job presents
+  (<https://docs.github.com/en/actions/reference/security/oidc>).
 
 ## Install channels
 
@@ -92,20 +109,97 @@ decision. **Lead** steps can be run from this repository.
    and release jobs skipped. A red Windows arm64 or Linux arm64 build is fixed
    here, before any key exists. The workflow has not yet completed a run.
 
-2. **Owner. Create the release signing key**, offline, and keep the private
+2. **Owner. Protect the release environments and tags, before any signing
+   key, publish identity or store credential exists.** This one step covers
+   the CLI, VS Code, Open VSX and Chrome releases. A workflow that names a
+   missing environment creates it with no protection, and an environment
+   secret is only as safe as the rules in front of it. Each of the four
+   environments gets the owner as required reviewer and a deployment policy
+   that admits only its release tags, so neither a branch push nor a
+   `workflow_dispatch` from a branch can reach it:
+
+   ```bash
+   REPO=siddharthanagula3/agiworkforce
+   REVIEWER_ID=$(gh api users/siddharthanagula3 --jq .id)
+   for entry in 'cli-release:v-cli-*' 'vscode-marketplace:v-vscode-*' 'open-vsx:v-vscode-*' 'chrome-web-store:v-ext-*'; do
+     name="${entry%%:*}" tag="${entry#*:}"
+     printf '{"wait_timer":0,"prevent_self_review":false,"reviewers":[{"type":"User","id":%s}],"deployment_branch_policy":{"protected_branches":false,"custom_branch_policies":true}}' "$REVIEWER_ID" \
+       | gh api --method PUT "repos/$REPO/environments/$name" --input -
+     gh api --method POST "repos/$REPO/environments/$name/deployment-branch-policies" \
+       -f name="$tag" -f type=tag
+   done
+   ```
+
+   "Prevent self-review" stays off while the owner is the only reviewer, or he
+   could never approve a tag he pushed. Then, for each of the four, open
+   Settings > Environments > the environment, deselect **Allow administrators
+   to bypass configured protection rules** and click **Save protection
+   rules**; the REST reference lists no field for that setting.
+
+   Restrict who may create, move or delete the release tags with a tag
+   ruleset. `actor_id` 5 is the Repository admin role; the REST reference
+   does not list role ids, so if GitHub refuses the request, create the same
+   ruleset under Settings > Rules > Rulesets > New ruleset > New tag ruleset,
+   with Repository admin in the bypass list, the three target patterns below,
+   and Restrict creations, Restrict updates, Restrict deletions and Block
+   force pushes ticked.
+
+   ```bash
+   gh api --method POST "repos/$REPO/rulesets" --input - <<'JSON'
+   {
+     "name": "release-tags",
+     "target": "tag",
+     "enforcement": "active",
+     "conditions": {
+       "ref_name": {
+         "include": ["refs/tags/v-cli-*", "refs/tags/v-vscode-*", "refs/tags/v-ext-*"],
+         "exclude": []
+       }
+     },
+     "rules": [
+       { "type": "creation" },
+       { "type": "update", "parameters": { "update_allows_fetch_and_merge": false } },
+       { "type": "deletion" },
+       { "type": "non_fast_forward" }
+     ],
+     "bypass_actors": [{ "actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "always" }]
+   }
+   JSON
+   ```
+
+   The ruleset leaves out `v-desktop-*`: a manual desktop release creates its
+   tag with the Actions token when it publishes the draft release, which a
+   creation rule would refuse.
+
+3. **Owner. Prove the protection** with the read-only probe. It makes only
+   `gh api` GET calls and fails when any of the four environments is missing,
+   has no required reviewer, lets administrators bypass it, or admits anything
+   but its tags; when `AGI_CLI_RELEASE_SIGNING_KEY` is a repository secret;
+   and when no active tag ruleset restricts the release tags.
+
+   ```bash
+   node scripts/release/check-release-environments.mjs
+   ```
+
+   Run it again after every change to these settings. Do not create a key or
+   an identity until it prints `OK`.
+
+4. **Owner. Create the release signing key**, offline, and keep the private
    half in the password manager. It is never committed and never leaves the
-   machine except into the secret below.
+   machine except into the environment secret below.
 
    ```bash
    openssl ecparam -name prime256v1 -genkey -noout -out agi-cli-release.key
    openssl ec -in agi-cli-release.key -pubout -out agi-cli-release.pub
    ```
 
-3. **Owner. Store the private key as a repository secret.** The signing job
-   runs in no environment, so it reads the repository secret.
+5. **Owner. Store the private key as an environment secret of `cli-release`**,
+   never as a repository secret. Only a job that declares `cli-release`, runs
+   for a `v-cli-*` tag and has the owner's approval can read it.
 
    ```bash
-   gh secret set AGI_CLI_RELEASE_SIGNING_KEY --repo siddharthanagula3/agiworkforce < agi-cli-release.key
+   gh secret set AGI_CLI_RELEASE_SIGNING_KEY --env cli-release --repo siddharthanagula3/agiworkforce < agi-cli-release.key
+   node scripts/release/check-release-environments.mjs
    ```
 
    Optional, for crash reports: secret `SENTRY_DSN_CLI` (baked into the
@@ -113,7 +207,7 @@ decision. **Lead** steps can be run from this repository.
    `SENTRY_PROJECT_CLI` (release registration). Without them the release
    still publishes and logs a warning.
 
-4. **Lead. Pin the public key** by putting the contents of
+6. **Lead. Pin the public key** by putting the contents of
    `agi-cli-release.pub` between the quotes of `RELEASE_SIGNING_KEY=''` in
    `apps/web/public/install.sh`, then run
    `node scripts/release/check-pinned-release-key.mjs`. Commit it to `main`.
@@ -121,12 +215,12 @@ decision. **Lead** steps can be run from this repository.
    so `agi update --install` trusts only the keys pinned in the commit it was
    built from: the pin must land before the tag.
 
-5. **Owner. Deploy the web app** from that commit, so
+7. **Owner. Deploy the web app** from that commit, so
    `https://agiworkforce.com/install.sh` serves the pinned key. Check with
    `curl -fsSL https://agiworkforce.com/install.sh | grep -c 'BEGIN PUBLIC KEY'`
    (expect `1`).
 
-6. **Owner. Tag the release** on the commit from step 4 or later. The version
+8. **Owner. Tag the release** on the commit from step 6 or later. The version
    is the one in `apps/cli/Cargo.toml` (`0.0.1` today); to release another,
    change it there in a commit first and let Cargo update `Cargo.lock`.
 
@@ -136,7 +230,11 @@ decision. **Lead** steps can be run from this repository.
    gh run watch "$(gh run list --workflow release-cli.yml --limit 1 --json databaseId --jq '.[0].databaseId')"
    ```
 
-7. **Lead. Verify what users get**, on a Mac, a Linux machine and Windows Git
+   Approve `cli-release` twice in the run: for "Sign CLI release assets"
+   after the six builds are green, and for "Create GitHub Release" after
+   checking the signed `SHA256SUMS` in the signing job's artifact.
+
+9. **Lead. Verify what users get**, on a Mac, a Linux machine and Windows Git
    Bash:
 
    ```bash
@@ -153,18 +251,18 @@ decision. **Lead** steps can be run from this repository.
    Managed mode, and the same command is refused after `/privacy-mode local`
    or `/privacy-mode byok` in the terminal UI.
 
-8. **Lead. Mark the CLI released** in `apps/web/lib/surface-status.ts` and its
-   test, so `/cli`, `/download` and the support article show the install
-   command; the owner deploys it.
+10. **Lead. Mark the CLI released** in `apps/web/lib/surface-status.ts` and its
+    test, so `/cli`, `/download` and the support article show the install
+    command; the owner deploys it.
 
-9. **Lead. Close the audit items**: delete
-   `audit/blockers/14-desktop-and-vscode-need-unpublished-cli.md` and mark
-   S72.35 `cli` done in `audit/ledger/ecosystem-capability-ledger.jsonl`.
+11. **Lead. Close the audit items**: delete
+    `audit/blockers/14-desktop-and-vscode-need-unpublished-cli.md` and mark
+    S72.35 `cli` done in `audit/ledger/ecosystem-capability-ledger.jsonl`.
 
 ## Every later release
 
 Bump the version in `apps/cli/Cargo.toml`, merge, run step 1 if the build
-changed, then steps 6 and 7. A prerelease version (`0.1.0-beta.1`) is
+changed, then steps 8 and 9. A prerelease version (`0.1.0-beta.1`) is
 published as a GitHub prerelease, which the release feed and the installer's
 default ignore.
 
@@ -181,6 +279,7 @@ possible.
 ## Rotating the signing key
 
 Pin the new public key beside the old one in `install.sh`, release once signed
-with the old key, switch the `AGI_CLI_RELEASE_SIGNING_KEY` secret, release
+with the old key, replace the `AGI_CLI_RELEASE_SIGNING_KEY` secret in the
+`cli-release` environment (step 5), release
 again, then drop the old key. Builds before the rotation trust only the keys
 pinned when they were built.

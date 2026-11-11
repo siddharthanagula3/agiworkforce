@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder
-Last updated: 2026-11-01
+Last updated: 2026-11-11
 
 Only actions that need the founder: an account, a credential, a signature, a
 paid decision, or a call the founder reserves. Engineering work is never listed
@@ -158,24 +158,25 @@ Each line is one approval; engineering edits the page and its claim test after i
 
 **Why founder assistance is required**
 Every release workflow is correct but reads configuration that does not exist: environments `macos-release`,
-`vscode-marketplace` and `chrome-web-store` are missing (`mobile-store-release` and `production-fly` exist as of
-2026-11-10), the only repository variables are the mobile ones, and repository secrets cannot be listed with the
+`cli-release`, `vscode-marketplace`, `open-vsx` and `chrome-web-store` are missing and no tag ruleset exists
+(`gh api` GETs, 2026-11-11; `mobile-store-release` and `production-fly` exist), the only repository variables are the mobile ones, and repository secrets cannot be listed with the
 agent token. This entry is the configuration half of
 "Cut signed releases", "Chrome Web Store public key", "Signed CLI release before the Marketplace listing" and the mobile store entry.
-**Exact action**
+**Exact action** In this order: protection before any credential, because a workflow that names a missing environment creates it unprotected, and a repository secret is readable by a workflow on any pushed branch.
 
 1. Run `gh secret list` with admin rights and share the names present.
-2. Create the five environments above, each allowing its tag pattern (`v-cloud-desktop-*`/`v-desktop-*`, `v-vscode-*`, `v-ext-*`, `v-mobile-*`).
-3. `macos-release`: `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_API_KEY`, `APPLE_API_ISSUER`, `APPLE_API_PRIVATE_KEY`; repository `VITE_CLERK_PUBLISHABLE_KEY`.
-4. Windows signing variables `AZURE_ARTIFACT_SIGNING_ENDPOINT`, `AZURE_ARTIFACT_SIGNING_ACCOUNT`, `AZURE_ARTIFACT_SIGNING_CERTIFICATE_PROFILE` and secrets `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`.
-5. `vscode-marketplace`: `VSCODE_MARKETPLACE_AZURE_CLIENT_ID`, `VSCODE_MARKETPLACE_AZURE_TENANT_ID`. Open VSX needs no token: it uses trusted publishing through an `open-vsx` environment and the repository variable `OPEN_VSX_PUBLISH` (`docs/runbooks/vscode-marketplace-publish.md`).
-6. Repository variables `CLERK_PUBLISHABLE_KEY`, `CLERK_FRONTEND_API`, `CLERK_SYNC_HOST`, `CHROME_EXTENSION_PUBLIC_KEY`; `chrome-web-store`: `CWS_PUBLISHER_ID`, `CWS_EXTENSION_ID`, `GCP_WORKLOAD_IDENTITY_PROVIDER`, `CWS_SERVICE_ACCOUNT`.
-7. `mobile-store-release`: still missing secret `EXPO_TOKEN` and variable `ANDROID_APP_LINKS_SHA256_CERT_FINGERPRINTS`; the App Store Connect and Play secrets, `ASC_APP_ID` and the live `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY` are set (checked 2026-11-10). Steps: `docs/runbooks/mobile-store-first-release.md`.
-8. CLI: repository secret `AGI_CLI_RELEASE_SIGNING_KEY` (a P-256 key whose public half is pinned in `apps/web/public/install.sh`); optional `SENTRY_DSN_CLI`. The CLI ships only through the signed install script, so it needs no npm token or Homebrew tap. Steps: `docs/runbooks/cli-release.md`.
+2. Before any signing key, publish identity or store credential exists, protect the four store and CLI release environments `cli-release`, `vscode-marketplace`, `open-vsx` and `chrome-web-store`: each with the owner as required reviewer, "Allow administrators to bypass configured protection rules" deselected, and a deployment policy of its tags only (`v-cli-*`, `v-vscode-*`, `v-vscode-*`, `v-ext-*`; no branch, so a `workflow_dispatch` from a branch cannot reach them). In the same step add the `release-tags` tag ruleset that lets only a repository admin create, move or delete `v-cli-*`, `v-vscode-*` and `v-ext-*` tags. Exact `gh api` commands: `docs/runbooks/cli-release.md`, "First release" step 2. Then run `node scripts/release/check-release-environments.mjs` (read-only `gh api` GETs) and continue only when it prints `OK`.
+3. Create `macos-release` allowing `v-cloud-desktop-*` and `v-desktop-*` (`mobile-store-release` already allows `v-mobile-*`); `.github/rulesets/README.md` walks `.github/rulesets/environments.json` for it. That walk rewrites every listed environment, and the file still gives `vscode-marketplace` and `chrome-web-store` a `main` branch policy, so until it lists the four release environments tag-only, create `macos-release` with the same `PUT` and tag `POST` as step 2 instead, and rerun the probe after any walk.
+4. `macos-release`: `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_API_KEY`, `APPLE_API_ISSUER`, `APPLE_API_PRIVATE_KEY`; repository `VITE_CLERK_PUBLISHABLE_KEY`.
+5. Windows signing variables `AZURE_ARTIFACT_SIGNING_ENDPOINT`, `AZURE_ARTIFACT_SIGNING_ACCOUNT`, `AZURE_ARTIFACT_SIGNING_CERTIFICATE_PROFILE` and secrets `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_TENANT_ID`.
+6. `vscode-marketplace`, only after step 2: an Entra federated credential whose subject is exactly `repo:siddharthanagula3/agiworkforce:environment:vscode-marketplace` (bound to the environment, and through its tag-only policy to `v-vscode-*` tags), then `VSCODE_MARKETPLACE_AZURE_CLIENT_ID`, `VSCODE_MARKETPLACE_AZURE_TENANT_ID`. Open VSX needs no token: its trusted publisher names repository, workflow and environment `open-vsx`, plus the repository variable `OPEN_VSX_PUBLISH`. Commands: `docs/runbooks/vscode-marketplace-publish.md`, "First submission".
+7. Repository variables `CLERK_PUBLISHABLE_KEY`, `CLERK_FRONTEND_API`, `CLERK_SYNC_HOST`, `CHROME_EXTENSION_PUBLIC_KEY`; `chrome-web-store`, only after step 2: a Google workload-identity provider whose condition admits only this repository's `chrome-web-store` environment on a tag, and `CWS_PUBLISHER_ID`, `CWS_EXTENSION_ID`, `GCP_WORKLOAD_IDENTITY_PROVIDER`, `CWS_SERVICE_ACCOUNT`. Commands: `docs/runbooks/chrome-web-store-publish.md`, "First submission" step 6.
+8. `mobile-store-release`: still missing secret `EXPO_TOKEN` and variable `ANDROID_APP_LINKS_SHA256_CERT_FINGERPRINTS`; the App Store Connect and Play secrets, `ASC_APP_ID` and the live `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY` are set (checked 2026-11-10). Steps: `docs/runbooks/mobile-store-first-release.md`.
+9. CLI, only after step 2: `AGI_CLI_RELEASE_SIGNING_KEY` (a P-256 key whose public half is pinned in `apps/web/public/install.sh`) as an environment secret of `cli-release`, never a repository secret (`gh secret set AGI_CLI_RELEASE_SIGNING_KEY --env cli-release`); the probe fails if a repository secret of that name exists. Optional `SENTRY_DSN_CLI`. The CLI ships only through the signed install script, so it needs no npm token or Homebrew tap. Steps: `docs/runbooks/cli-release.md`.
 
 **Where** GitHub repository settings (environments, secrets, variables); Apple, Azure, Microsoft Entra, Google Cloud, Expo, npm.
 **Needed input** Accounts and about two hours.
-**How to verify completion** Tags `v-cli-0.0.1`, `v-cloud-desktop-1.2.0`, `v-desktop-1.2.1`, `v-vscode-<version in apps/extension-vscode/package.json>`, `v-ext-1.2.0`, `v-mobile-0.0.1` each produce a green release run.
+**How to verify completion** `node scripts/release/check-release-environments.mjs` prints `OK`, then tags `v-cli-0.0.1`, `v-cloud-desktop-1.2.0`, `v-desktop-1.2.1`, `v-vscode-<version in apps/extension-vscode/package.json>`, `v-ext-1.2.0`, `v-mobile-0.0.1` each produce a green release run.
 **What remains after founder action** Pushing the tags and verifying each release (agent).
 **Impact** RELEASE-BLOCKING (CLI, both desktops, VS Code, Chrome, mobile)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED

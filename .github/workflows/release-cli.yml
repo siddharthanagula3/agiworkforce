@@ -8,7 +8,8 @@ name: Release CLI
 # every archive, then stops: it never signs, tags or publishes. It proves the
 # matrix before a tag exists. Procedure: docs/runbooks/cli-release.md.
 #
-# Required GitHub Secrets:
+# Required secret, stored in the cli-release environment and never at
+# repository level (scripts/release/check-release-environments.mjs checks it):
 #   AGI_CLI_RELEASE_SIGNING_KEY, the PEM EC P-256 private key whose public half
 #   is pinned in RELEASE_SIGNING_KEY in apps/web/public/install.sh
 #
@@ -45,6 +46,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       # The release gates themselves are tested first: a guard whose fixtures no
       # longer fail it is a step that passes without checking anything.
@@ -52,6 +54,7 @@ jobs:
         run: |
           node --test scripts/lib/rollout/release-guards.test.mjs
           node --test scripts/lib/rollout/channels.test.mjs
+          node --test scripts/release/install-script.test.mjs
 
       - name: Require a pinned release signing key
         if: github.event_name == 'push'
@@ -133,6 +136,8 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install Rust
         uses: actions-rust-lang/setup-rust-toolchain@a188e68d0fd2bd36ad51dccb2b07ba6e75105f30 # v2.0.1
@@ -217,6 +222,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable @ 2026-10-16
@@ -237,12 +244,17 @@ jobs:
         run: cargo install cross --version 0.2.5 --locked
 
       # Generated on the fly so it never applies to local cargo invocations.
+      # cross 0.2.5 otherwise pulls ghcr.io/cross-rs/<target>:0.2.5, a tag that
+      # can be moved; the digest is that tag's image index as of 2026-11-11.
       - name: Configure cross
         if: matrix.cross
         run: |
           cat > Cross.toml <<'EOF'
           [build.env]
           passthrough = ["AGI_CLI_SENTRY_DSN"]
+
+          [target.aarch64-unknown-linux-gnu]
+          image = "ghcr.io/cross-rs/aarch64-unknown-linux-gnu@sha256:7f8308a8734d9fcd2ebbe9a3e4bdea74af293f0799d80c3cc341e340cda49a4c"
           EOF
 
       - name: Build (cross)
@@ -347,11 +359,14 @@ jobs:
     if: github.event_name == 'push'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    environment: cli-release
     permissions:
       contents: read
       id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Download archives
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -424,14 +439,13 @@ jobs:
     needs: [validate-version, sign-release-assets]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    environment: cli-release
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # set-commits below reads the range between the previous tag and this
-          # one out of the local clone.
-          fetch-depth: 0
+          persist-credentials: false
 
       - name: Download signed release assets
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -487,6 +501,23 @@ jobs:
           draft: false
           prerelease: ${{ needs.validate-version.outputs.prerelease }}
 
+  # npm resolves this install fresh from the registry, so it runs in a job of
+  # its own, after the release is published, holding only a read token.
+  sentry-release:
+    name: Register the CLI release in Sentry
+    needs: [validate-version, github-release]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # set-commits below reads the range between the previous tag and this
+          # one out of the local clone.
+          fetch-depth: 0
+          persist-credentials: false
+
       # apps/cli/src/crash_reports.rs sends `agiworkforce-cli@<CARGO_PKG_VERSION>`
       # as the release, so that exact string is what a crash arrives under and
       # what has to exist here for the version to mean anything in Sentry.
@@ -500,7 +531,7 @@ jobs:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: ${{ vars.SENTRY_ORG }}
           SENTRY_PROJECT: ${{ vars.SENTRY_PROJECT_CLI }}
-          SENTRY_RELEASE: agiworkforce-cli@${{ steps.version.outputs.VERSION }}
+          SENTRY_RELEASE: agiworkforce-cli@${{ needs.validate-version.outputs.version }}
         shell: bash
         run: |
           set -euo pipefail

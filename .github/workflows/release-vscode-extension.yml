@@ -44,6 +44,7 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+          persist-credentials: false
 
       # The Marketplace has two channels and rejects a semver prerelease
       # identifier in the manifest, so the channel lives in the tag suffix while
@@ -179,6 +180,7 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ needs.package.outputs.tag }}
+          persist-credentials: false
 
       - name: Setup pnpm
         uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
@@ -189,8 +191,11 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
 
+      # This job holds id-token: write, so every step can mint the publish
+      # identity's token. Only the extension's own tooling is installed, with no
+      # lifecycle script: verify-vsix.mjs, vsce and ovsx need none.
       - name: Install pinned publisher tooling
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --ignore-scripts --filter agi-workforce
 
       - name: Download the verified VSIX
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -259,6 +264,7 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ needs.package.outputs.tag }}
+          persist-credentials: false
 
       - name: Setup pnpm
         uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
@@ -269,8 +275,11 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
 
+      # This job holds id-token: write, so every step can mint the publish
+      # identity's token. Only the extension's own tooling is installed, with no
+      # lifecycle script: verify-vsix.mjs, vsce and ovsx need none.
       - name: Install pinned publisher tooling
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --ignore-scripts --filter agi-workforce
 
       - name: Download the verified VSIX
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2

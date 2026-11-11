@@ -82,8 +82,9 @@ done
 Every reviewer in the file is a user; a team reviewer would need
 `orgs/{org}/teams/{slug}` and `type: "Team"` instead.
 
-The branch policies are custom (`main`, plus the release tag patterns) rather
-than `protected_branches: true`, so they hold whether or not the ruleset above
+The branch policies are custom (`main` for deploys, the release tag pattern
+alone for the store and CLI release environments) rather than
+`protected_branches: true`, so they hold whether or not the ruleset above
 has been applied yet and the two can be applied in either order.
 
 ## Verify

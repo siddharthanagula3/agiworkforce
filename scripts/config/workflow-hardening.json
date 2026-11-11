@@ -7,8 +7,27 @@
     "staging-web",
     "macos-release",
     "chrome-web-store",
-    "vscode-marketplace"
+    "vscode-marketplace",
+    "open-vsx",
+    "cli-release"
   ],
+  "releaseEnvironments": {
+    "cli-release": {
+      "tags": ["v-cli-*"]
+    },
+    "vscode-marketplace": {
+      "tags": ["v-vscode-*"]
+    },
+    "open-vsx": {
+      "tags": ["v-vscode-*"]
+    },
+    "chrome-web-store": {
+      "tags": ["v-ext-*"]
+    }
+  },
+  "signingSecrets": {
+    "AGI_CLI_RELEASE_SIGNING_KEY": "cli-release"
+  },
   "allowedWriteScopes": [
     {
       "id": "cleanup-production-queue.yml:cleanup:actions",
@@ -200,6 +219,30 @@
       }
     ],
     "deployWithoutEnvironment": [],
-    "runInterpolatesUntrustedInput": []
+    "runInterpolatesUntrustedInput": [],
+    "releaseJobGlobalInstall": [
+      {
+        "id": "release-desktop.yml:prepare-release",
+        "reason": "npm install --global @sentry/cli runs in the job that creates the draft release with a contents: write token",
+        "fix": "move the Sentry release registration into its own job with contents: read that needs prepare-release"
+      },
+      {
+        "id": "release-desktop.yml:build-linux",
+        "reason": "npm install --global @sentry/cli runs before the Tauri build in the job that uploads the Linux artifacts with a contents: write token; the renderer sourcemaps it uploads exist only inside this job, so the split needs a sourcemaps artifact and is not mechanical",
+        "fix": "upload apps/desktop/dist as its own artifact and run the Sentry upload in a contents: read job that needs build-linux"
+      },
+      {
+        "id": "release-desktop.yml:publish-release",
+        "reason": "npm install --global @sentry/cli runs in the job that publishes the release with a contents: write token",
+        "fix": "move the Sentry finalize step into its own job with contents: read that needs publish-release"
+      }
+    ],
+    "oidcJobRunsInstallScripts": [
+      {
+        "id": "deploy-signaling-server.yml:test",
+        "reason": "the test job inherits the workflow-level id-token: write grant although it builds and writes nothing, and runs pnpm install with lifecycle scripts; the workflow is outside the release change that added this rule",
+        "fix": "permissions: contents: read on the test job, which also retires its three allowedWriteScopes entries"
+      }
+    ]
   }
 }
