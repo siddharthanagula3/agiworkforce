@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { View, type StyleProp, type ViewStyle } from 'react-native';
 import { Button } from '@/components/ui/Button';
@@ -16,6 +16,29 @@ import {
 export type { PreviewableKind } from './sandboxedArtifactHtml';
 
 import { isAllowedPreviewNavigation } from './previewNavigationPolicy';
+import { loadMermaidRuntime } from './mermaidRuntime';
+
+type MermaidRuntimeState = { runtime: string } | { failed: string } | null;
+
+function useMermaidRuntime(enabled: boolean): MermaidRuntimeState {
+  const [state, setState] = useState<MermaidRuntimeState>(null);
+  useEffect(() => {
+    if (!enabled) return;
+    let live = true;
+    loadMermaidRuntime().then(
+      (runtime) => {
+        if (live) setState({ runtime });
+      },
+      (error: unknown) => {
+        if (live) setState({ failed: error instanceof Error ? error.message : '' });
+      },
+    );
+    return () => {
+      live = false;
+    };
+  }, [enabled]);
+  return state;
+}
 
 export interface SafeArtifactPreviewProps {
   content: string;
@@ -43,13 +66,13 @@ export function SafeArtifactPreview({
   const runsScripts = kind === 'html';
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
-  const html = useMemo(
-    () =>
-      isMermaid
-        ? buildMermaidPreviewHtml(content, appearance)
-        : buildSandboxedArtifactHtml(content, kind === 'svg' ? 'svg' : 'html'),
-    [content, kind, isMermaid, appearance],
-  );
+  const mermaidRuntime = useMermaidRuntime(isMermaid);
+  const html = useMemo(() => {
+    if (!isMermaid) return buildSandboxedArtifactHtml(content, kind === 'svg' ? 'svg' : 'html');
+    return mermaidRuntime && 'runtime' in mermaidRuntime
+      ? buildMermaidPreviewHtml(content, mermaidRuntime.runtime, appearance)
+      : null;
+  }, [content, kind, isMermaid, appearance, mermaidRuntime]);
   const reportsDiagram = isMermaid && Boolean(onDiagramRendered || onDiagramFailed);
 
   const handleMessage = useCallback(
@@ -61,6 +84,11 @@ export function SafeArtifactPreview({
     [onDiagramRendered, onDiagramFailed],
   );
   const handleLoadError = useCallback(() => onDiagramFailed?.(''), [onDiagramFailed]);
+  const runtimeFailure =
+    mermaidRuntime && 'failed' in mermaidRuntime ? mermaidRuntime.failed : null;
+  useEffect(() => {
+    if (runtimeFailure !== null) onDiagramFailed?.(runtimeFailure);
+  }, [runtimeFailure, onDiagramFailed]);
   const handleRuntimeMessage = useCallback((event: WebViewMessageEvent) => {
     const report = parseArtifactPreviewError(event.nativeEvent.data);
     if (report) setRuntimeError(report.message);
@@ -101,6 +129,8 @@ export function SafeArtifactPreview({
     );
   }
 
+  if (html === null) return <View style={style} />;
+
   return (
     <WebView
       key={attempt}
@@ -114,7 +144,7 @@ export function SafeArtifactPreview({
       allowsInlineMediaPlayback={false}
       mediaPlaybackRequiresUserAction
       setSupportMultipleWindows={false}
-      onShouldStartLoadWithRequest={(req) => isAllowedPreviewNavigation(req.url, isMermaid)}
+      onShouldStartLoadWithRequest={(req) => isAllowedPreviewNavigation(req.url)}
       overScrollMode="never"
       accessibilityRole="image"
       accessibilityLabel={`${kind.toUpperCase()} artifact preview`}

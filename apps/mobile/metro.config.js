@@ -7,6 +7,8 @@ const monorepoRoot = path.resolve(projectRoot, '../..');
 
 const config = getDefaultConfig(projectRoot);
 
+config.resolver.assetExts = [...config.resolver.assetExts, 'mermaidjs'];
+
 config.watchFolders = Array.from(new Set([monorepoRoot, ...(config.watchFolders ?? [])]));
 
 config.resolver.nodeModulesPaths = [

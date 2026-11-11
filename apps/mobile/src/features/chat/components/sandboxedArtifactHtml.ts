@@ -27,14 +27,18 @@ const MAX_FAILURE_REASON_LENGTH = 200;
 const PREVIEW_SURFACE = lightColors.background;
 const PREVIEW_TEXT = lightColors.textPrimary;
 
-const MERMAID_CDN = 'https://cdn.jsdelivr.net';
-const MERMAID_SRC_URL = `${MERMAID_CDN}/npm/mermaid@11.17.2/dist/mermaid.min.js`;
+const MERMAID_CONTENT_SECURITY_POLICY =
+  "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:;";
 
-export function buildMermaidPreviewHtml(source: string, appearance?: MermaidAppearance): string {
+export function buildMermaidPreviewHtml(
+  source: string,
+  runtime: string,
+  appearance?: MermaidAppearance,
+): string {
   const encoded = JSON.stringify(source).replace(/</g, '\\u003c');
   const background = appearance?.background ?? PREVIEW_SURFACE;
   const theme = appearance?.dark ? 'dark' : 'default';
-  const csp = `default-src 'none'; script-src ${MERMAID_CDN} 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:;`;
+  const csp = MERMAID_CONTENT_SECURITY_POLICY;
   return [
     '<!DOCTYPE html>',
     '<html><head>',
@@ -44,7 +48,7 @@ export function buildMermaidPreviewHtml(source: string, appearance?: MermaidAppe
     `<style>html{margin:0;padding:0;background:${background};}body{margin:0;padding:12px;background:${background};}#c{display:flex;justify-content:center;}</style>`,
     '</head><body>',
     '<div id="c"></div>',
-    `<script src="${MERMAID_SRC_URL}"></script>`,
+    `<script>${runtime}</script>`,
     '<script>',
     `var src = ${encoded};`,
     'function post(m){ if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify(m)); }',

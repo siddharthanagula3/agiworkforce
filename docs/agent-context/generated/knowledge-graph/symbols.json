@@ -33078,6 +33078,7 @@
       "apps/mobile/app/legal/article-50.tsx",
       "apps/mobile/app/legal/index.tsx",
       "apps/mobile/components/ui/PressableBox.tsx",
+      "apps/mobile/mermaidjs.d.ts",
       "apps/mobile/png.d.ts",
       "apps/mobile/src/features/artifacts/index.tsx",
       "apps/mobile/src/features/chat/ChatsListScreen.tsx",
@@ -60588,6 +60589,9 @@
       "apps/mobile/src/features/conversation-actions/index.ts",
       "apps/mobile/src/features/conversation-actions/RenameConversationModal.tsx"
     ],
+    "inlineScriptSource": [
+      "apps/mobile/src/features/chat/components/mermaidRuntime.ts"
+    ],
     "InlineToolCall": [
       "packages/ui/unified-chat/src/components/InlineToolCall.tsx",
       "packages/ui/unified-chat/src/index.ts"
@@ -69996,6 +70000,9 @@
     ],
     "loadMemoryWritePolicies": [
       "apps/web/lib/services/managed-memory-context-service.ts"
+    ],
+    "loadMermaidRuntime": [
+      "apps/mobile/src/features/chat/components/mermaidRuntime.ts"
     ],
     "loadMigrationInventory": [
       "scripts/lib/neon-migrations.mjs"
