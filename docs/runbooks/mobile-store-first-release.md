@@ -14,12 +14,12 @@ Signing and link files are covered in `mobile-eas-signing.md`. Selling plans
 later is covered in `mobile-store-products.md`; nothing in that runbook is
 needed for version 1.
 
-## One date and one hold before a submission
+## One date and one fact before a submission
 
 Neither is a console step.
 
 1. **No store build can start before 2026-11-12** (step 7, item 1).
-2. **The next web release from `main` must carry the phone sign-in fix.**
+2. **Production accepts phone sessions, and `main` carries the same fix.**
    Until 2026-11-10 production refused every phone session: sign-in
    succeeded, then the app's first call to `agiworkforce.com` was refused and
    the app showed "Session Expired". The server checked the phone's token
@@ -28,13 +28,10 @@ Neither is a console step.
    day: an email-and-code sign-in in the iPhone simulator reached the Cloud
    chat screen. What production runs is a hotfix, commit `a8e278c62e` on the
    local branch `hotfix/mobile-native-session`, which is the previous
-   production commit plus only that change. `main` does not have the change
-   yet. It waits as commit `568584454a` on the branch
-   `Fix/vigilant-chaum-deb202`. A production release from `main` before that
-   commit is merged brings "Session Expired" back for every phone, and App
-   Review and Play review both sign in. `https://agiworkforce.com/api/version`
-   names the commit production runs. The item is
-   `MOBILE-CLOUD-SIGNIN-AZP-2026-11-10` in `audit/registers/known-flaws.md`.
+   production commit plus only that change. `main` carries the same change
+   as commit `568584454a`, so a production release from `main` keeps phone
+   sign-in working. App Review and Play review both sign in.
+   `https://agiworkforce.com/api/version` names the commit production runs.
 
 Fixed on 2026-11-10 and worth knowing: the Google and GitHub buttons failed
 in every build because the app never declared `expo-auth-session`. It is now

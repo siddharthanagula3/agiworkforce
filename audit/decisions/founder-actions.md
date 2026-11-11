@@ -83,10 +83,9 @@ Undecided calls from that round are in [`open-questions.md`](open-questions.md).
   and the test is green again. Every remaining console, credential, device and decision step is in
   `docs/runbooks/mobile-store-first-release.md`, in order.
 - Phone sign-in to Cloud has worked in production since 2026-11-10 through a hotfix (`a8e278c62e`,
-  local branch `hotfix/mobile-native-session`, not on `main`). The same change waits for `main` as
-  `568584454a` on `Fix/vigilant-chaum-deb202`. Merge it before you order the next production release
-  from `main`, or that release brings the refusal back and neither store can review the app
-  (`MOBILE-CLOUD-SIGNIN-AZP-2026-11-10`).
+  local branch `hotfix/mobile-native-session`, not pushed). `main` carries the same change
+  (`568584454a`), so the next production release from `main` keeps phone sign-in working and
+  replaces the hotfix.
 - No store build can start before 2026-11-12: the Expo patch update the release check requires is
   held by the seven-day package-age rule until then (`MOBILE-EXPO-PATCH-LAG-2026-11-10`, runbook
   step 7 item 1).
