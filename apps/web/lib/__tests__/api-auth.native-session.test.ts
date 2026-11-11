@@ -6,6 +6,9 @@ import { resetSessionStartCache } from '@/lib/auth/session-age';
 import { createIdentityTokenSigner, serveIdentitySigningKeys } from '@/test/clerk-signed-tokens';
 
 type DataLayerModule = typeof import('@agiworkforce/data-layer');
+type LoggerModule = typeof import('@/lib/logger');
+type NeonDbModule = typeof import('@/lib/server/neon-db');
+type SessionSightingsModule = typeof import('@/lib/server/session-sightings');
 type FakeRow = Record<string, unknown>;
 
 const fakes = vi.hoisted(() => {
@@ -24,12 +27,12 @@ const fakes = vi.hoisted(() => {
 });
 
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<LoggerModule>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
 vi.mock('@/lib/server/session-sightings', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/session-sightings')>()),
+  ...(await importOriginal<SessionSightingsModule>()),
   noteSessionSighting: vi.fn(),
 }));
 
@@ -49,7 +52,7 @@ vi.mock('@clerk/nextjs/server', () => ({
 }));
 
 vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+  ...(await importOriginal<NeonDbModule>()),
   getNeonDb: vi.fn(() => fakes.adapter),
 }));
 
