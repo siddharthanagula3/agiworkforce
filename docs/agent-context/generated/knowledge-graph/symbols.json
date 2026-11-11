@@ -90617,6 +90617,10 @@
       "apps/desktop/src-tauri/src/sys/commands/chat/mod.rs",
       "apps/desktop/src-tauri/src/sys/commands/chat/pending.rs"
     ],
+    "peekConversationSend": [
+      "packages/client/client-runtime/src/conversationSendHandoff.ts",
+      "packages/client/client-runtime/src/index.ts"
+    ],
     "peekGroundingPool": [
       "apps/web/lib/web-search/grounding-pool.ts"
     ],
@@ -90772,6 +90776,9 @@
     ],
     "PendingSelectedContextHandoff": [
       "apps/desktop/src-tauri/src/integrations/native_messaging/mod.rs"
+    ],
+    "PendingSendBubble": [
+      "apps/mobile/src/features/chat/components/PendingSendBubble.tsx"
     ],
     "pendingSiteIconSource": [
       "apps/web/lib/connectors/directory/favicon-probe.ts",
@@ -102703,6 +102710,12 @@
     ],
     "reconcileGroupMembers": [
       "apps/web/lib/server/scim/scim-provisioning-service.ts"
+    ],
+    "reconcileLoadedCloudMessages": [
+      "apps/mobile/stores/chat/reconcileCloudMessages.ts"
+    ],
+    "ReconcileLoadedCloudMessagesInput": [
+      "apps/mobile/stores/chat/reconcileCloudMessages.ts"
     ],
     "reconcileManagedCloudPublicText": [
       "packages/contracts/cloud-contracts/src/managed-cloud-agent-runs-client.ts"

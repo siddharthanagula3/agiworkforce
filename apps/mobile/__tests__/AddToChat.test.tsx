@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 
 import React from 'react';
-import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 
 const mockVideoSlot: { modelId: string | undefined } = { modelId: undefined };
 
@@ -605,6 +605,32 @@ describe('AddToChatSheet', () => {
       const { queryByText } = renderSheet();
 
       expect(queryByText('Video')).toBeNull();
+    });
+
+    it('gives each Output row its file-type icon, like every other row in the sheet', () => {
+      const features = FEATURES as { codeExecution: boolean };
+      const previous = features.codeExecution;
+      features.codeExecution = true;
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+      useModelStore.setState({ selectedModel: SEARCH_CAPABLE_MODEL_ID });
+      useTierStore.setState({
+        tier: 'max',
+        grantedCapabilities: ['canUseImages', 'canUseCloudExecution'],
+        codeExecutionAvailable: true,
+      } as never);
+
+      try {
+        const { getByLabelText } = renderSheet({ offersOutputFormat: true });
+        for (const [label, icon] of [
+          ['Document', 'icon-FileText'],
+          ['Presentation', 'icon-MonitorPlay'],
+          ['Spreadsheet', 'icon-FileSpreadsheet'],
+        ] as const) {
+          expect(within(getByLabelText(label)).getByTestId(icon)).toBeTruthy();
+        }
+      } finally {
+        features.codeExecution = previous;
+      }
     });
 
     it('never offers Run code in the + sheet, even fully entitled in Cloud', () => {

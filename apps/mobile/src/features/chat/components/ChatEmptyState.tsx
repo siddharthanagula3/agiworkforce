@@ -120,7 +120,11 @@ export function ChatEmptyState({ showPairingBanner, onPairDesktop }: ChatEmptySt
         </Animated.View>
       )}
 
-      <Animated.View entering={reducedMotion ? undefined : FadeIn.duration(motion.reveal)}>
+      <Animated.View
+        testID="chat-empty-greeting-frame"
+        entering={reducedMotion ? undefined : FadeIn.duration(motion.reveal)}
+        style={{ alignSelf: 'stretch' }}
+      >
         <Text
           style={{
             fontSize: typeScale.title1,
@@ -139,6 +143,7 @@ export function ChatEmptyState({ showPairingBanner, onPairDesktop }: ChatEmptySt
       {!displayName && (
         <Animated.View
           entering={reducedMotion ? undefined : FadeIn.duration(motion.reveal).delay(150)}
+          style={{ alignSelf: 'stretch' }}
         >
           <Text
             style={{

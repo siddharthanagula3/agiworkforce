@@ -2427,7 +2427,7 @@
       "path": "apps/extension",
       "name": "@agiworkforce/extension",
       "kind": "app",
-      "purpose": "An AI side panel that reads the page you are on and, on sites you approve, clicks and types for you.",
+      "purpose": "Managed Cloud chat, approved-site browser context, and automation for AGI",
       "owner": "Extension lead",
       "trustBoundary": null,
       "status": null,
@@ -2458,15 +2458,15 @@
       "lanes": [
         "chrome-extension"
       ],
-      "files": 577,
+      "files": 558,
       "roles": {
-        "asset": 12,
-        "config": 6,
+        "asset": 5,
+        "config": 5,
         "doc": 3,
-        "other": 31,
-        "source": 229,
-        "style": 3,
-        "test": 293
+        "other": 29,
+        "source": 226,
+        "style": 2,
+        "test": 288
       }
     },
     {
@@ -2552,16 +2552,16 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 1680,
+      "files": 1662,
       "roles": {
         "asset": 4,
         "config": 11,
         "doc": 4,
         "generated": 1,
         "other": 46,
-        "source": 911,
+        "source": 906,
         "style": 1,
-        "test": 702
+        "test": 689
       }
     },
     {
@@ -2616,17 +2616,17 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 8299,
+      "files": 8290,
       "roles": {
         "asset": 57,
-        "config": 83,
+        "config": 76,
         "doc": 51,
         "generated": 2,
         "migration": 740,
         "other": 37,
         "source": 3515,
         "style": 35,
-        "test": 3779
+        "test": 3777
       }
     },
     {

@@ -115,6 +115,11 @@ describe('ChatEmptyState', () => {
   });
 
   describe('headline', () => {
+    it('gives the greeting the column width so a long greeting wraps instead of running off screen', () => {
+      const { getByTestId } = render(<ChatEmptyState />);
+      expect(getByTestId('chat-empty-greeting-frame')).toHaveStyle({ alignSelf: 'stretch' });
+    });
+
     it('shows "Ask anything" when no display name is set', () => {
       const { getByText } = render(<ChatEmptyState />);
       expect(getByText(greeting())).toBeTruthy();

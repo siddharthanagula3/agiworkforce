@@ -82,6 +82,14 @@ describe('mobile markdown blocks', () => {
     expect(allText()).not.toContain('[^');
   });
 
+  it('draws list markers and links in the text colour and keeps the square bullet as text', () => {
+    renderMarkdown('- one\n  - two\n    - three\n\nSee [docs](https://example.com).');
+
+    expect(screen.getByText('▪︎')).toBeTruthy();
+    expect(screen.getByText('•')).toHaveStyle({ color: colors.textPrimary });
+    expect(screen.getByRole('link', { name: 'docs' })).toHaveStyle({ color: colors.textPrimary });
+  });
+
   it('draws spaced thematic breaks as a rule rather than bullets', () => {
     renderMarkdown('Above\n\n* * *\n\nBelow');
     expect(screen.queryByText('•')).toBeNull();

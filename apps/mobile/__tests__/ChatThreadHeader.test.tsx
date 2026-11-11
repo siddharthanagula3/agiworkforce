@@ -98,6 +98,7 @@ jest.mock('@/lib/mmkv', () => {
 });
 
 import ChatScreen from '../app/(app)/chat/[id]';
+import { handOffConversationSend, takeConversationSend } from '@agiworkforce/client-runtime';
 import { useChatStore } from '../stores/chatStore';
 import { useProjectStore } from '../src/features/projects/store';
 
@@ -152,6 +153,25 @@ describe('Thread header', () => {
         name: 'A conversation title with more detail. Open conversation menu',
       }),
     ).toHaveStyle({ minWidth: 44, minHeight: 44 });
+  });
+
+  it('shows the message being handed to a new chat instead of a blank skeleton while history loads', () => {
+    seedThread();
+    useChatStore.setState({ isLoadingMessages: true, loadMessages: jest.fn() } as never);
+    handOffConversationSend('thread-1', 'Teach me fractions');
+
+    const screen = render(<ChatScreen />);
+
+    expect(screen.getByText('Teach me fractions')).toBeTruthy();
+    expect(screen.getByLabelText('Your message: Teach me fractions. Sending')).toBeTruthy();
+    takeConversationSend('thread-1');
+  });
+
+  it('clips the thread to its own frame so a reply never draws over the composer controls', () => {
+    seedThread();
+    const screen = render(<ChatScreen />);
+
+    expect(screen.getByTestId('chat.thread-frame')).toHaveStyle({ flex: 1, overflow: 'hidden' });
   });
 
   it('shows the conversation title and opens the conversation menu from it', () => {
