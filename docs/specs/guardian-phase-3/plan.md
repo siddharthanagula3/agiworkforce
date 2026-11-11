@@ -2,7 +2,7 @@
 
 Status: Active
 Owner: Guardian
-Last updated: 2026-08-28
+Last updated: 2026-11-11
 
 The two maps below are file-path-level design for work that is not written yet.
 They were verified against the tree on 2026-08-09; re-verify before relying on a
@@ -12,7 +12,7 @@ path, because nothing regenerates them.
 
 Concrete attachment points so Phase 3 starts from file paths, not re-mapping:
 
-- **Capability gate**: add a Guardian key (or reuse `agi_work`, Pro+) to
+- **Capability gate**: add a Guardian key (or reuse `agi_work`, Premium and higher) to
   `BillingPlanCapability` + `BILLING_PLAN_CAPABILITY_TIERS` in
   `packages/contracts/types/src/billing-catalog.ts`. Gate server-side in two
   steps, both required: `effectivePlanTier(planTier, status)`

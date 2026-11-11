@@ -2,7 +2,7 @@
 
 Status: Current
 Owner role: Platform lead
-Last updated: 2026-09-04
+Last updated: 2026-11-11
 Kind: ts-package
 Criticality: high
 
@@ -90,6 +90,8 @@ definitions:
   `AGI_MODEL_LOCKOUT_TRIP_WINDOW_MS`, and the five other
   `AGI_MODEL_LOCKOUT_*` thresholds.
 - Credential cooldown: the seven `AGI_CREDENTIAL_COOLDOWN_*` values.
+- Route reliability: `AGI_ROUTE_RELIABILITY_FLOOR` (default 0.9) and
+  `AGI_ROUTE_RELIABILITY_MIN_SAMPLES` (default 20).
 - Capability health: `AGI_CAPABILITY_HEALTH_WINDOW_MS` and
   `AGI_CAPABILITY_HEALTH_MISS_THRESHOLD`.
 

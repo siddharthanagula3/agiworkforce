@@ -478,8 +478,8 @@ Each implementation agent should:
 2. Inspect the listed AGI paths before editing.
 3. Verify competitor behavior from the listed source or the reference libraries at
    `/Users/siddhartha/Desktop/references-2`,
-   `/Users/siddhartha/Desktop/claude_reference`, and
-   `/Users/siddhartha/Desktop/chatgpt_reference` when the row depends on UI
+   `/Users/siddhartha/Desktop/AGI/reference-screenshots/claude_reference`, and
+   `/Users/siddhartha/Desktop/AGI/reference-screenshots/chatgpt_reference` when the row depends on UI
    parity.
 4. Implement the smallest end-to-end slice: UI control, state/store, backend/runtime path, persistence, permission/trust label, and test.
 5. Mark incomplete behavior as a tracked gap. Do not claim parity from placeholder UI or passing typecheck alone.
@@ -1102,11 +1102,11 @@ Anthropic official sources:
 
 Local evidence:
 
-- `/Users/siddhartha/Desktop/claude_reference/CLAUDE_REFERENCE.md`
-- `/Users/siddhartha/Desktop/claude_reference/COMPARISON.md`
-- `/Users/siddhartha/Desktop/claude_reference/claude/2026-05-13/manifest.md`
-- `/Users/siddhartha/Desktop/claude_reference/claude/2026-05-15/claude-desktop-post-update-notes.md`
-- `/Users/siddhartha/Desktop/claude_reference/**`
+- `/Users/siddhartha/Desktop/AGI/reference-screenshots/claude_reference/CLAUDE_REFERENCE.md`
+- `/Users/siddhartha/Desktop/AGI/reference-screenshots/claude_reference/COMPARISON.md`
+- `/Users/siddhartha/Desktop/AGI/reference-screenshots/claude_reference/claude/2026-05-13/manifest.md`
+- `/Users/siddhartha/Desktop/AGI/reference-screenshots/claude_reference/claude/2026-05-15/claude-desktop-post-update-notes.md`
+- `/Users/siddhartha/Desktop/AGI/reference-screenshots/claude_reference/**`
 
 Do not copy proprietary source, screenshots, icons, text, or layouts exactly. Use these references to define AGI-owned feature parity and implementation requirements.
 

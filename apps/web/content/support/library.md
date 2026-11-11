@@ -4,7 +4,7 @@ title: Find your files and artifacts in the Library
 path: /chat/library
 category: files
 tags: library, files, my files, artifacts, generated files, documents, uploads, recently deleted, restore file, download, grid view, list view, search files
-updated: 2026-10-06
+updated: 2026-11-11
 description: How to find, open, delete and restore your uploads, generated files and artifacts in the Library.
 scope: public
 ---
@@ -22,7 +22,7 @@ Select a file to preview it. The viewer carries an **Ask about this file** box:
 type a question there and it opens a new chat with the file attached and your
 question already written. From the item's own menu you can:
 
-- **Add to chat** or **Add to AGI Work**, which stages it for the next session.
+- **Add to chat** or **Add to Work**, which stages it for the next session.
 - Add it to a project's knowledge. Relevant extracted passages can be used
   when answering in that project.
 - Create a share link for an artifact.

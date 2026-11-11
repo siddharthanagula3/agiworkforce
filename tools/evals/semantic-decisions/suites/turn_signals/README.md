@@ -27,19 +27,19 @@ production `code_execution` flag is actually trying to answer.
 
 ## Production call sites
 
-- `family`: `classifyTaskLocally` in `packages/ai/routing/src/classify.ts:99`, a
+- `family`: `classifyTaskLocally` in `packages/ai/routing/src/classify.ts`, a
   priority-ordered list of eleven regexes with a length-and-word-count fallback.
 - `needs_current_info`: `resolveWebSearchRequirement` in
-  `apps/web/lib/web-search/required-search.ts:109`, which combines the explicit-intent
+  `apps/web/lib/web-search/required-search.ts`, which combines the explicit-intent
   phrase lists in `packages/ai/search/src/explicit-search-intent.ts` with 26 freshness
   phrases, 10 volatile subjects and a year pattern.
 - `needs_external_tools` and `needs_code`: `applyImplicitManagedToolIntent` in
-  `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:516`, four regex
+  `apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts`, four regex
   pairs setting `web_search`, `web_fetch`, `office_creation` and `code_execution`.
 - `complexity`: nothing. No production component produces it.
 
 `baseline.mts` imports and calls all three real functions, with `researchTask` derived
-from the classifier exactly as `request-processor.ts:4049` derives it. No regex was
+from the classifier exactly as `request-processor.ts` derives it. No regex was
 copied into the script.
 
 ## What a wrong answer costs

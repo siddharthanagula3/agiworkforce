@@ -14,14 +14,16 @@ so they are excluded here.
 
 ## Production call site
 
-`isMemoryExtractionWorthwhile(message)` in `packages/ai/agent-core/src/memory.ts:384`.
-It gates the per-turn generative extraction in
-`packages/ai/agent-core/src/model-memory-extraction.ts:161`. The gate is three rules:
+`isMemoryExtractionWorthwhile(message)` in `packages/ai/agent-core/src/memory.ts:459`.
+It gates the per-turn generative extraction in `extractMemoryFactsWithModel`, in the
+same file. The gate is four rules:
 
 1. trimmed length at least 8 characters,
-2. at least one sentence that does not end in a question mark, and
-3. that sentence contains an English self-reference pronoun (`i`, `me`, `my`, `we`,
-   `us`, ...) or one of four intent phrases (`remember`, `note that`,
+2. at least one sentence that does not end in a question mark,
+3. that sentence is not a task-scoped reminder, a sentence opening with "remember" that
+   names a tab, window, frame, element or snapshot id, and
+4. that sentence contains an English self-reference pronoun (`i`, `me`, `my`, `we`,
+   `us`, ...) or one of five intent phrases (`remember`, `note that`,
    `for future reference`, `keep in mind`, `call me`).
 
 The input to a case is therefore one string, which is exactly the argument the

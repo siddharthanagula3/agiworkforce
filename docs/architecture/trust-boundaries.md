@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-11-10
+Last updated: 2026-11-11
 
 The authoritative per-surface definition of which **trust modes** (Local / BYOK / Managed Cloud) and **model sources** each surface exposes, and which surfaces **share cloud chats**. Founder-stated 2026-06-20. This refines the Local / BYOK / Managed Cloud boundaries in `AGENTS.md` section 6 into exact per-surface rules. When a surface's code disagrees with this table, the code is the bug.
 
@@ -15,7 +15,7 @@ Vocabulary:
   that crosses into AGI Cloud. Managed Free is public alpha and enabled after
   sign-in (2026-06-27, CLOUD-01). Paid-only routes require an existing paid
   entitlement; new paid acquisition on Web remains waitlist/access-code gated
-  (2026-09-21), while Mobile store in-app purchase has neither (2026-10-19). Metering and abuse controls keep pace with Free usage, and
+  (2026-09-21), while Mobile store in-app purchase has neither (2026-10-19) once it is enabled; the current Mobile build sells nothing (`nativePurchases: false` in `apps/mobile/src/features/billing/storePurchases.json`). Metering and abuse controls keep pace with Free usage, and
   commercial controls gate paid launch. `AGI_MANAGED_COMPUTE_PRIVATE_BETA` is an
   incident-response kill-switch only.
 

@@ -3,7 +3,7 @@
 Status: Current
 Owner: Founder + platform lead
 Last reviewed: 2026-09-22
-Last updated: 2026-10-18
+Last updated: 2026-11-11
 
 This is the conflict-resolution index for current product and architecture decisions. It is intentionally shorter than the archived PRD corpus.
 
@@ -22,6 +22,19 @@ Current sources of truth:
 - `PLAN.md` - active transition plan.
 - `audit/plan/waves.md` - the execution order for all open work (root `TODO.md` was retired in commit `906fe5cda`).
 - `ARCHITECTURE.md` - the compact repository map.
+
+Dated decision records in this folder (each is a record of what was decided on
+its date; a later record or the code can supersede it):
+
+- `0001-guardian-architecture.md`
+- `2026-07-30-enterprise-local-verifier-retention.md`
+- `2026-09-04-region-neutral-data-residency.md`
+- `2026-09-05-living-decision-model.md`
+- `2026-09-10-managed-gateway-routes.md` (decided by `2026-09-15-founder-decisions.md`)
+- `2026-09-15-founder-decisions.md`
+- `2026-09-27-founder-decisions.md`
+- `2026-11-10-founder-decisions.md`
+- `wire-or-cut.md`
 
 Archived source material:
 

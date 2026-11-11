@@ -16,12 +16,16 @@ author labels (there is one author, and that is recorded), but remove the other 
 suites/
   README.md                 this file
   split.mts                 the deterministic split, and the CLI that stamps it
+  score.mts                 scoring of a baseline against the author labels
+  adjudicate.mjs            builds labels.final.json from the blind label files
   server-only-noop.ts       empty module so a baseline script can import server code
   tsconfig.baseline.json    path mapping used by every baseline.mts
   <suite>/
     README.md               the decision, its call site, the cost of each error, sourcing
     cases.json              inputs only, no labels
     labels.author.json      one label and one rationale per case
+    labels.independent.json a second, blind labeller's labels
+    labels.final.json       the adjudicated labels the benchmark scores against
     baseline.mts            runs the real production function over cases.json
     baseline.json           what the production function answered, per case
 ```
@@ -113,10 +117,14 @@ defend. Those cases are reported as their own bucket. Counting them as errors wo
 make a suite punish a decision for the suite's own vagueness; hiding them would make
 the accuracy number look cleaner than the decision is.
 
-These labels are the author's. They are not independent review, and the audit's
-requirement for independently reviewed sets is not met by this directory. What is met
-is the rest of it: held-out split, inputs that do not share vocabulary with the
-question, measured baselines rather than assumed ones.
+`labels.author.json` is the author's. Each suite also holds `labels.independent.json`,
+written blind by a second labeller (named in the file's `labeller` field), and
+`turn_signals` a third, `labels.second.json`. `adjudicate.mjs` builds `labels.final.json`
+from them: a case is scored only where the independent labellers agree, and a case that
+is ambiguous or contested is left unscored. The benchmark in `../bench.mts` scores
+against `labels.final.json`; `score.mts` and the per-suite `baseline.mts` read
+`labels.author.json`. Run `node tools/evals/semantic-decisions/suites/adjudicate.mjs`
+to rebuild the final files.
 
 ## Baselines
 

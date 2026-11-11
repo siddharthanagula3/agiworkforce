@@ -88,7 +88,8 @@ decision. **Lead** steps can be run from this repository.
 
    Expect "Validate CLI source" and all six "Build" jobs green, and the signing
    and release jobs skipped. A red Windows arm64 or Linux arm64 build is fixed
-   here, before any key exists. The workflow has not yet completed a run.
+   here, before any key exists. The workflow has never completed successfully: its latest run, a manual one
+   on 2026-11-11, failed.
 
 2. **Owner. Create the release signing key**, offline, and keep the private
    half in the password manager. It is never committed and never leaves the

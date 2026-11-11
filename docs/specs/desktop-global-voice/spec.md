@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Desktop dictation
-Last updated: 2026-10-23
+Last updated: 2026-11-11
 
 An OS-global dictation shortcut for the desktop product, and the ledger that
 says why system-wide dictation is still refused in the native shell. Replaces
@@ -24,13 +24,19 @@ still refuses every global-source session, so the hook only ever emits honest
 Shell settings live in `settings.json` under Electron's `userData` directory
 and are edited from the tray's Shortcuts submenu.
 
-| Key                  | Default                    | What it does                                     |
-| -------------------- | -------------------------- | ------------------------------------------------ |
-| `quickAskShortcut`   | `Alt+Shift+Space`          | Raises the Quick Ask surface                     |
-| `screenshotShortcut` | `CommandOrControl+Shift+2` | Captures a screen into the composer              |
-| `voiceShortcut`      | `Alt+Shift+V`              | Starts or stops dictation with the app unfocused |
+| Key                  | Default                    | Label (`SHORTCUT_LABELS`) |
+| -------------------- | -------------------------- | ------------------------- |
+| `quickAskShortcut`   | `Alt+Shift+Space`          | Quick Ask                 |
+| `newChatShortcut`    | `Alt+Shift+N`              | New Chat Window           |
+| `screenshotShortcut` | `CommandOrControl+Shift+2` | Screenshot to Chat        |
+| `windowShotShortcut` | `CommandOrControl+Shift+1` | Window to Chat            |
+| `voiceShortcut`      | `Alt+Shift+V`              | Dictation                 |
+| `stopShortcut`       | `CommandOrControl+Alt+.`   | Stop Agents               |
 
-The three defaults and their preset lists are owned by `defaultHostShortcut` in
+`voiceShortcut` starts or stops dictation with the app unfocused. Labels are in
+`apps/desktop/electron/garnishCore.ts`; Stop Agents cannot be set to none.
+
+The defaults and their preset lists are owned by `HOST_SHORTCUT_CHOICES` and `defaultHostShortcut` in
 `packages/contracts/local-runtime/src/host-bridge.ts`, and
 `apps/desktop/src/lib/globalVoiceShortcut.ts` reads the dictation one from it.
 Both shells read that contract, so the chord does not drift between them.

@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Web surface maintainers
-Last updated: 2026-10-06
+Last updated: 2026-11-11
 
 `pnpm --filter @agiworkforce/web test:e2e` runs the specs in this directory
 against a server Playwright starts from `playwright.config.ts`. That server is
@@ -53,8 +53,11 @@ in the push gate or the test is red.
   pages at the same eight widths in both themes, 48 cases at about 42 seconds
   each. Its capture helpers live in `lib/public-footer-capture.ts`, and their
   self-tests stay in `landing-keyboard.spec.ts`, in the push gate.
+- `matrix/public-runtime-proof.spec.ts` is the cold public runtime proof. It
+  needs an app image, a PostgreSQL image, an exact revision and an artifact
+  destination, and writes a proof artifact for that revision.
 
-Both run on demand from `.github/workflows/web-public-matrix.yml`, and the same
+All three run on demand from `.github/workflows/web-public-matrix.yml`, and the same
 test pins which specs may live in the folder. Locally, narrow them before
 running them:
 

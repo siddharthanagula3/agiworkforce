@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-08-05
+Last updated: 2026-11-11
 Purpose: the shipped behaviour of the SCIM 2.0 service provider behind the Enterprise page's "user and group provisioning from your IdP" claim.
 
 ## What is implemented
@@ -48,10 +48,13 @@ SCIM vendor dependency exists either.
 ## The pending-user model, stated plainly
 
 SCIM's contract is "create a user". **This product cannot create one.** There is
-no Clerk user-creation call anywhere in the codebase, there is no invitation
-table, no invitation email is ever sent, and `profiles` rows are minted lazily
-on a person's first authenticated request. `/api/settings/team` already refuses
-unknown emails for exactly this reason.
+no Clerk user-creation call anywhere in the codebase, and `profiles` rows are
+minted lazily on a person's first authenticated request. `/api/settings/team`
+refuses unknown emails for this reason and points to
+`POST /api/settings/team/invitations`, which emails the invitation and returns
+its link (`0085_organization_seats_lifecycle.sql`,
+`app/api/settings/team/invitations/invitation-email.ts`). SCIM does not create
+invitations.
 
 So provisioning is modelled honestly:
 
@@ -137,10 +140,14 @@ Every SCIM request and every directory-sync admin call is gated on
 enterprise-only and fails closed on an unknown or missing tier. No tier-order
 comparison is used anywhere.
 
-Subscriptions are per-user (`subscriptions.user_id` is unique) and there is no
-org-level plan, so a machine request has no natural billing subject. The subject
-is pinned at mint time: `scim_tokens.created_by_user_id` is the admin who issued
-the credential, and their entitlement is re-evaluated **on every request**.
+The plan is the organization's, re-evaluated **on every request** by
+`resolveOrganizationEntitlementPlan` (`apps/web/lib/services/org-entitlements.ts`):
+the subscription linked to the organization through
+`organizations.stripe_subscription_id`, otherwise the owner's own subscription,
+and Free when there is none. The credential is also pinned to a person at mint
+time: `scim_tokens.created_by_user_id` is the admin who issued it, and that
+person's role in the organization is checked on every request
+(`apps/web/lib/server/scim/scim-auth.ts`).
 
 Consequences, by design:
 

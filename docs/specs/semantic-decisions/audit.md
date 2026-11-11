@@ -3,7 +3,7 @@
 Status: In progress; foundation, managed host, four shadow consumers and a held-out live
 benchmark implemented; every decision kind is disabled and no production request evaluates one
 Owner: AI platform maintainers
-Last updated: 2026-10-18
+Last updated: 2026-11-11
 
 ## Decision
 
@@ -188,14 +188,16 @@ question version, candidate version and input identity; cost alone does not just
 
 `apps/web/lib/services/semantic-decisions/` is the one service a managed request asks
 through. `kinds.ts` is the closed registry of decision kinds, each with an owner, a question
-version and a failure policy; `turn_signals` is the only member. `config.ts` turns four
+version and a failure policy: `turn_signals`, `connector_tool_shortlist`, `memory_relevance` and
+`memory_worth_extracting`. `config.ts` turns four
 environment keys into typed configuration and reports the transport unconfigured when any is
 missing, when the base URL names a host outside the decision-transport allowlist in
-`provider-runtime/base-url.ts`, or when the price is unusable. It never throws.
+`packages/ai/provider-runtime/src/base-url.ts`, or when the price is unusable. It never throws.
 `eligibility.ts` is the three-part AND. `policy.ts` maps the flag to a `DecisionPolicy` and a
 cohort. `host.ts` holds one provider and one evaluator per kind per process, reading the
 in-flight policy from request-scoped storage so two subjects do not share one. `trace-service.ts`
-persists the comparison and sweeps it. `questions.ts` is the versioned question module.
+persists the comparison and sweeps it. `questions/` holds the versioned question module for
+each kind.
 
 Rollout is a new reserved, server-only flag namespace. `decision.<kind>` serves `off`,
 `shadow` or `enabled` and defaults to `off`; `decision.kill` forces every kind to disabled.

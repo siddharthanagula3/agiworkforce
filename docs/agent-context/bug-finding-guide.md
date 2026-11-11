@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform + security
-Last updated: 2026-05-20
+Last updated: 2026-11-11
 
 ## Workflow
 
@@ -23,12 +23,12 @@ Last updated: 2026-05-20
 - Security randomness: `rg "Math\\.random|Date\\.now\\(\\).*id|nonce|token" apps packages services`
 - Provider/model drift: `rg "gpt-|claude-|gemini-|sonnet|opus|haiku" apps packages services crates`
 - Privacy boundary drift: `rg "privacy_mode|PrivacyMode|BYOK|Managed|Local" apps packages crates services`
-- Cloud database secret: `rg "SERVICE_ROLE|service_role|getServiceClient|createClient" apps services packages apps/web/db/neon`
+- Cloud database credential: `rg "AGI_DATABASE_URL|NEON_DATABASE_URL|DATABASE_URL" apps services packages scripts`
 - Unsafe rendering: `rg "dangerouslySetInnerHTML|srcDoc|Blob\\(|text/html|iframe" apps packages`
 - Tool execution: `rg "Bash|Read|Write|Edit|apply_patch|shell|command" apps/cli apps/desktop crates packages`
 - Generated files/artifacts: `rg "Artifact|GeneratedFile|ComputeSession|download|preview" apps packages crates`
 
 ## Do Not Trust Blindly
 
-- Historical archived planning files unless a current doc cites them.
-- Stale claims inside `AGENTS.md` or `CLAUDE.md` if they conflict with this folder.
+- Historical planning files unless a current doc cites them.
+- Any prose that disagrees with code, schemas, guards or tests: `AGENTS.md` section 2 ranks them, and the code wins.

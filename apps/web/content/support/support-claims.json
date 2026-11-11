@@ -1113,7 +1113,7 @@
       "doc": "workspace-policy",
       "section": "What policy controls",
       "kind": "prose",
-      "sentence": "All are on by default.",
+      "sentence": "All are on by default except Fast mode, which stays off until an administrator turns it on.",
       "implementation": [
         "packages/contracts/types/src/enterprise/workspace-controls.ts#DEFAULT_WORKSPACE_FEATURE_ACCESS"
       ],
@@ -1122,6 +1122,11 @@
           "kind": "test",
           "file": "packages/contracts/types/src/__tests__/workspace-controls.test.ts",
           "name": "returns the workspace defaults when nothing overrides them"
+        },
+        {
+          "kind": "test",
+          "file": "packages/contracts/types/src/__tests__/workspace-controls.test.ts",
+          "name": "holds fast mode off until the workspace turns it on"
         }
       ]
     },

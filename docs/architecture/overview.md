@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-11-10
+Last updated: 2026-11-11
 
 ## Monorepo Shape
 
@@ -81,7 +81,7 @@ explicit handoff rather than background sync.
 
 ## Provider Strategy
 
-OpenAI, Anthropic, Vercel AI SDK, and provider SDKs are adapter dependencies, not AGI architecture. AGI owns:
+OpenAI, Anthropic, and other provider SDKs are adapter dependencies, not AGI architecture. AGI owns:
 
 - runtime event schema,
 - privacy modes,

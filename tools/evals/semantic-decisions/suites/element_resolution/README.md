@@ -7,7 +7,7 @@ is the element, or `none`?
 
 ## Production call site
 
-The `find` tool in `apps/extension/src/features/computer-use/agentLoop.ts:320`. Today it
+The `find` tool in `apps/extension/src/features/computer-use/agentLoop.ts`. Today it
 does not resolve anything. It waits for the page to settle, calls
 `readGuardedPageContent`, and returns:
 
@@ -23,7 +23,7 @@ entire run history attached, which is the expensive call G1 in `.jev-work/RANKIN
 proposes to remove.
 
 The element list in `pages.json` is the exact text `getPageContent` emits
-(`apps/extension/src/features/computer-use/cdpDriver.ts:450`): a `URL:` line, a `TITLE:`
+(`apps/extension/src/features/computer-use/cdpDriver.ts`): a `URL:` line, a `TITLE:`
 line, an `INTERACTABLE ELEMENTS (N addressable of M found):` header, one line per
 element of the form
 

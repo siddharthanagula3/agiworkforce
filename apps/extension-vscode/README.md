@@ -1,13 +1,13 @@
 <!--
   This file is the VS Code Marketplace "Details" page, it ships byte-identical
   inside the VSIX. Keep it user-facing; every claim here must be true of the
-  packaged extension. Contributor and architecture notes live in AGENTS.md,
-  which .vscodeignore excludes from the VSIX.
+  packaged extension. Contributor and architecture notes live in
+  docs/CONTRIBUTING-NOTES.md, which .vscodeignore excludes from the VSIX.
 
   Status: Current
   Owner: Extension lead
   Purpose: Marketplace listing copy for AGI Code.
-  Last updated: 2026-10-18
+  Last updated: 2026-11-11
 -->
 
 # AGI Code for VS Code
@@ -28,7 +28,7 @@ driven by the AGI CLI running on your own machine.
   disabled and trust-boundary, endpoint, CLI-path, and Desktop-bridge settings
   cannot be overridden by workspace settings.
 - An AGI Cloud account only when you choose Managed Cloud or cloud-backed
-  editor extras such as inline completions. Local models and provider BYOK stay
+  editor extras such as inline completions and memory. Local models and provider BYOK stay
   available through the AGI CLI without an AGI subscription.
 
 ## Quick start
@@ -80,9 +80,10 @@ generate docs, code review with diagnostics, explain error, terminal command
 suggestion and output explanation, hover actions, CodeLens actions, and a token
 counter. Hover, CodeLens, and inline completions are each opt-in.
 
-**Workspace memory.** Curate short facts in the Memory view; they are stored
-only in this VS Code workspace and injected as bounded, untrusted context on
-later developer turns.
+**Account memory.** Curate short facts in the Memory view; they are saved to
+your AGI Cloud account, shared with the web app, the CLI and mobile, and
+injected as bounded, untrusted context on later developer turns while memory
+is on.
 
 ## Commands
 
@@ -111,7 +112,7 @@ The most used ones:
 | `agiWorkforce.cliPath`                      | `agi`                                 | Executable used to start the local `app-server`. Changing it restarts running runtimes.          |
 | `agiWorkforce.model`                        | `auto`                                | Default model. `auto` routes each turn by task across the models your plan can reach.            |
 | `agiWorkforce.agent.mode`                   | `auto`                                | `ask`, `auto`, `plan`, or `bypass` for new conversations.                                        |
-| `agiWorkforce.agent.effort`                 | `medium`                              | Reasoning effort (`low`–`max`) for providers with an explicit effort axis.                       |
+| `agiWorkforce.agent.effort`                 | `medium`                              | Reasoning effort (`none`–`max`) for providers with an explicit effort axis.                      |
 | `agiWorkforce.agent.thinking`               | `false`                               | Extended thinking for cloud-backed editor utilities only.                                        |
 | `agiWorkforce.composer.followUpBehavior`    | `queue`                               | Whether a message sent mid-turn queues or steers. `Ctrl/Cmd+Enter` uses the other behavior once. |
 | `agiWorkforce.contextLines`                 | `50`                                  | Surrounding lines included as context.                                                           |
@@ -141,7 +142,7 @@ explanations.
   code to AGI Cloud, and files matching the sensitive-file denylist (`.env`,
   `.pem`, `.ssh/`, credentials, `secrets.json`, and similar) are excluded.
 - Credentials from browser sign-in are stored in VS Code `SecretStorage` and
-  can be revoked with **AGI: Sign out of AGI Cloud**.
+  can be revoked with **Code: Sign Out of AGI Cloud**.
 - The chat header always names the boundary in use, Local, BYOK, or Managed
   Cloud, and switching a live session across a provider boundary starts a new
   thread instead of forwarding the earlier transcript.

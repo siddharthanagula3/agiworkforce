@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-09-21
+Last updated: 2026-11-11
 
 Neon's point-in-time branch is the recovery mechanism today; there is no
 separate `pg_dump` schedule, and until this document existed no restore had
@@ -267,7 +267,7 @@ AGI_RESTORE_DRILL_PG_BIN_DIR="/opt/homebrew/opt/postgresql@17/bin" \
 
 `.github/workflows/db-restore-drill.yml` runs the logical drill weekly
 (Monday 05:13 UTC) and on demand through `workflow_dispatch`, against a fresh
-`postgres:17` service container: it applies every migration under
+`pgvector/pgvector:pg17` service container: it applies every migration under
 `apps/web/db/neon` through `pnpm db:migrate -- apply --target ci`, then runs
 the drill with that same container as both source and target. It does not
 touch the Neon drill's triggers or the Neon drill itself.
@@ -340,7 +340,7 @@ scratch database. Record every real run here.
 The first Neon drill ran through an authenticated operator session on
 2026-09-19. The project reported a 21,600-second history-retention window at
 that time. The logical drill runs weekly in CI against a disposable
-`postgres:17` container.
+`pgvector/pgvector:pg17` container.
 
 ## Object storage backups
 
@@ -356,10 +356,13 @@ anything the backup already holds at the same size.
 | Variable                               | Meaning                                      |
 | -------------------------------------- | -------------------------------------------- |
 | `AGI_STORAGE_BACKUP_ENDPOINT`          | S3-compatible endpoint for the backup bucket |
-| `AGI_STORAGE_BACKUP_REGION`            | Region the backup bucket lives in            |
+| `AGI_STORAGE_BACKUP_REGION`            | Region the backup bucket lives in; optional  |
 | `AGI_STORAGE_BACKUP_BUCKET`            | Backup bucket name                           |
 | `AGI_STORAGE_BACKUP_ACCESS_KEY_ID`     | Credential for the backup bucket only        |
 | `AGI_STORAGE_BACKUP_SECRET_ACCESS_KEY` | Its secret                                   |
+
+Endpoint, bucket and both credentials are required; without any of them the
+backup counts as unconfigured. `AGI_STORAGE_BACKUP_FORCE_PATH_STYLE` is also read.
 
 **Cross-region is a configuration fact, not a claim.** The replication report
 carries `crossRegion`, which is true only when the backup endpoint or region

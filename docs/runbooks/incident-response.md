@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-10-03
+Last updated: 2026-11-11
 
 Until 2026-08-09 nothing in this repository could reach a human when production
 broke. `/api/health` was correct and public, and no scheduled job, uptime
@@ -16,9 +16,9 @@ detection gaps that are still open.
 | ------------------------------------- | ---------------------------------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------- |
 | `/api/cron/health-probe`              | `apps/web/app/api/cron/health-probe/route.ts`              | every 10 minutes       | yes, through the dispatcher below                                                           |
 | `/api/cron/evaluate-slo-burn`         | `apps/web/app/api/cron/evaluate-slo-burn/route.ts`         | :05 and :35 every hour | yes, when an error budget is burning                                                        |
-| `/api/cron/page-security-anomalies`   | `apps/web/app/api/cron/page-security-anomalies/route.ts`   | every 15 minutes       | yes, on a triggered security alert                                                          |
-| `/api/cron/reconcile-credits`         | `apps/web/app/api/cron/reconcile-credits/route.ts`         | daily, 00:30 UTC       | yes, by email, only on terminal settlements                                                 |
-| `/api/cron/remind-free-quota-renewal` | `apps/web/app/api/cron/remind-free-quota-renewal/route.ts` | hourly at :22          | yes, by email and pager, when a free quota gate is about to lapse, has lapsed or is missing |
+| `/api/cron/page-security-anomalies`   | `apps/web/app/api/cron/page-security-anomalies/route.ts`   | every 30 minutes       | yes, on a triggered security alert                                                          |
+| `/api/cron/reconcile-credits`         | `apps/web/app/api/cron/reconcile-credits/route.ts`         | daily, 00:07 UTC       | yes, by email, only on terminal settlements                                                 |
+| `/api/cron/remind-free-quota-renewal` | `apps/web/app/api/cron/remind-free-quota-renewal/route.ts` | hourly at :05          | yes, by email and pager, when a free quota gate is about to lapse, has lapsed or is missing |
 | `/api/health`                         | `apps/web/app/api/health/route.ts`                         | on request             | only if something polls it                                                                  |
 | `/status` page                        | `apps/web/app/status/page.tsx`                             | on request             | only if a human opens it                                                                    |
 
@@ -144,9 +144,10 @@ without it.
 
 If production broke because of what was deployed rather than a dependency,
 revert first and diagnose after. The path does not live inside the run that
-deployed: dispatch **Deploy Production Surfaces** with `rollback` set, or run
-`node scripts/release/rollback.mjs --reason "..."` from a laptop when Actions is
-itself unavailable. `/admin/releases` shows what production is serving, what it
+deployed: dispatch **Deploy Production Surfaces** with `rollback` set (the
+workflow is disabled in GitHub Actions as of 2026-11-11, so enable it first), or
+run `node scripts/release/rollback.mjs --reason "..."` from a laptop when Actions
+is itself unavailable or the workflow is disabled. `/admin/releases` shows what production is serving, what it
 last rolled back to, and when the rollback path was last drilled. Full procedure
 and limits: `docs/runbooks/release-rollback.md`.
 
@@ -227,7 +228,7 @@ never names, do not expect the alert to tell you which variable is missing.
 `STRIPE_SECRET_KEY` is unset, `stripe.products.list` failed, or one of the
 canonical `STRIPE_PRICE_*` objects is unreachable, non-recurring, or inactive
 while still on sale under that key. A Price for a withdrawn interval
-(`WITHDRAWN_BILLING_INTERVALS`, for example Pro yearly, withdrawn 2026-09-27) is
+(`WITHDRAWN_BILLING_INTERVALS`, for example Premium yearly, internal id `pro`, withdrawn 2026-09-27) is
 expected to be archived and does not fail the check. The public payload stays
 `unavailable`; the `Stripe health check failed` log line carries a `step` field
 (`client`, `products.list`, `prices.retrieve` or `price.usable`) naming where it

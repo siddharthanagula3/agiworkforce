@@ -2,7 +2,7 @@
 
 Status: Current; mechanical restructure complete, website launch remediation active
 Owner: Founder + platform lead
-Last updated: 2026-11-10
+Last updated: 2026-11-11
 Detailed plan: retired. `docs/plans/monorepo-restructure-2026-07-08.md` was
 deleted once its phases landed; the mechanical restructure it described is
 complete (see the phase note below) and `docs/architecture/overview.md`
@@ -87,7 +87,7 @@ services/        independently deployed backend processes only
 apps/web/db/neon canonical database migrations
 infrastructure/  deployment, environment definitions, and isolated sandbox renderer
 scripts/         supported repository automation
-tests/           genuinely cross-surface and system-level verification
+tools/           internal tooling: evals, load tests, skill vetting
 docs/            durable knowledge; see docs/README.md for the tier map
 ```
 

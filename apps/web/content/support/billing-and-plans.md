@@ -4,7 +4,7 @@ title: Plans, upgrading, and cancelling
 path: /pricing
 category: billing
 tags: billing, plan, upgrade, downgrade, waitlist, access code, cancel, cancel subscription, invoice, receipt, payment method, card, billing portal, app store, google play, seats, renewal
-updated: 2026-10-15
+updated: 2026-11-11
 description: Where billing lives, and how to upgrade, switch between monthly and yearly billing, cancel and find invoices.
 scope: public
 ---
@@ -80,8 +80,7 @@ toward future invoices.
 
 On a plan billed through the web, **Cancel plan** in Settings, Billing opens the
 billing portal at the cancellation flow. Once cancellation is scheduled the
-period row changes from "Renews on" to "Cancels on", and access continues to
-that date.
+period row is relabelled and access continues to the date it shows.
 
 ## Subscriptions bought in an app store
 

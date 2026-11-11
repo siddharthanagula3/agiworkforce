@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-10-19
+Last updated: 2026-11-11
 
 `pnpm dev:accounts` makes a named set of accounts on the local stack, one per
 plan and one per lane, so a feature can be tried on any plan without touching
@@ -27,15 +27,15 @@ reset; only what an account has used, bought and chosen goes back.
 `apps/web/scripts/dev-accounts/catalog.ts` from the plan catalog, so a plan
 added there gets an account.
 
-- One per plan: `free`, `basic`, `pro`, `max-5x`, `max-20x`, and `team`, which
+- One per plan: `free`, `basic`, `premium`, `max`, `ultra`, and `team`, which
   owns a two-seat workspace, with `team-member` holding the second seat.
-- `extra-usage`: Pro, extra usage on, the smallest top-up of usage credits as
+- `extra-usage`: Premium, extra usage on, the smallest top-up of usage credits as
   its cap, auto-reload off.
-- `window-nearly-full`: Pro with the five-hour window at the critical warning
-  threshold, so the next turns reach the limit.
-- `stripe-pro`: Pro billed by a real Stripe test-mode subscription.
+- `window-nearly-full`: Premium with the five-hour window 95% used, so the next
+  turns reach the limit.
+- `stripe-premium`: Premium billed by a real Stripe test-mode subscription.
 - `lane-chrome`, `lane-vscode`, `lane-desktop`, `lane-cli`, `lane-mobile`: the
-  top individual plan, one per lane. `lane-credits` is Pro billed in Stripe
+  top individual plan, one per lane. `lane-credits` is Premium billed in Stripe
   test mode, so upgrades, top-ups and the billing portal run end to end.
 
 Each account is a Clerk development-instance user with a `+clerk_test` address

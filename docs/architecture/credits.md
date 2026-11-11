@@ -26,18 +26,20 @@ allowance costs at most half its monthly price.
 
 ## Plan allowances
 
-| plan       | 5-hour   | weekly   | monthly          |
-| ---------- | -------- | -------- | ---------------- |
-| Free       | 2        | 15       | 20               |
-| Basic      | 10       | 100      | 400              |
-| Pro        | 50       | 500      | 2,000            |
-| Max 5x     | 250      | 2,500    | 10,000           |
-| Max 20x    | 1,000    | 5,000    | 20,000           |
-| Team       | 50       | 500      | 2,000 (per seat) |
-| Enterprise | contract | contract | contract         |
+| plan         | 5-hour   | weekly   | monthly           |
+| ------------ | -------- | -------- | ----------------- |
+| Free         | 2        | 15       | 20                |
+| Basic        | 10       | 100      | 400               |
+| Premium      | 50       | 500      | 2,000             |
+| Max          | 250      | 2,500    | 10,000            |
+| Ultra        | none     | 5,000    | 20,000            |
+| Team         | 50       | 500      | 2,000 (per seat)  |
+| Team Premium | 250      | 2,500    | 10,000 (per seat) |
+| Enterprise   | contract | contract | contract          |
 
-The 5-hour window is 10% of the week, and 20% on Max 20x. Flagship models may
-use at most 30% of the weekly allowance.
+Where a plan has a 5-hour window it is 10% of the week, except Free (about 13%).
+Ultra has no 5-hour window. Premium, Max, Ultra and both team plans may use
+flagship models for at most 30% of the weekly allowance.
 
 ## Consumption order
 

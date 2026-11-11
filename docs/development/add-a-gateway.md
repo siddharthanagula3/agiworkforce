@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-10-23
+Last updated: 2026-11-11
 
 A gateway is any OpenAI Chat Completions, OpenAI Responses, or Anthropic
 Messages compatible endpoint: a self-hosted proxy, an aggregator, a corporate
@@ -88,12 +88,14 @@ That single field is the last step between a cheaper route and live managed
 traffic; everything above it is already wired.
 
 The live examples: `cheaperinference`, `cheaperinference_anthropic`,
-`experientiallabs`, `experientiallabs_anthropic`, `deepinfra`, `together` and
-`novita` are gateway-backed harnesses in the `managed-text` group, refused
-today only by that commercial field and by the flag. `workers_ai` is the one
-gateway definition whose routes ship `agi_direct`: Cloudflare Workers AI is
-the company's own account on a first-party cloud, so only the flag and the
-two env names stand between it and managed traffic.
+`experientiallabs`, `experientiallabs_anthropic`, `deepinfra`, `together`,
+`novita` and `workers_ai` are gateway-backed harnesses in the `managed-text`
+group. The first four ship their routes as `authorized_marketplace`, and
+`workers_ai` ships `agi_direct`: Cloudflare Workers AI is the company's own
+account on a first-party cloud. For those five, only the flag and the env names
+stand between the route and managed traffic. `deepinfra`, `together` and
+`novita` still ship `experimental_only`, so the commercial field refuses them as
+well.
 
 ## Discount policies
 

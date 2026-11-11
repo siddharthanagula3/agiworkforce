@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-10-15
+Last updated: 2026-11-11
 
 What is deployable, in what order, from what artifact, with what credential, and
 what happens when a release is wrong. The policy behind the web gate is
@@ -13,21 +13,37 @@ so nobody has to reconstruct it from the workflow files.
 Every fact here is read from `.github/workflows/` and the registries those
 workflows use. Where a surface has no path for something, the row says so.
 
+## Current state
+
+The `Deploy Production Surfaces` (`deploy-production.yml`) and `Deploy Staging
+Web` (`deploy-staging.yml`) workflows exist and are disabled in GitHub, and
+`vercel.json` sets `git.deploymentEnabled` to false, so neither a merge nor a
+push deploys. Production web is deployed manually with the pinned Vercel CLI
+from a clean worktree, and `/api/version` on the production origin reports the
+commit and the migration state it serves. The Tauri `Release Desktop` workflow
+(`release-desktop.yml`) is disabled. The Electron `Release Desktop Cloud Shell`
+workflow (`release-desktop-cloud.yml`) is active and has not run. `Deploy
+Signaling Server` is active. Sections 1 to 4, 8 and 9 describe the contract the web
+workflows enforce when enabled, not the path production takes today; the
+`production-drift` alarm is a job in `deploy-production.yml` and does not run
+while that workflow is disabled.
+`docs/development/ci-and-deploys.md` carries the same statement.
+
 ## 1. Deployable components
 
-| Component          | Released by                                      | Trigger                                    | Artifact                                                       |
-| ------------------ | ------------------------------------------------ | ------------------------------------------ | -------------------------------------------------------------- |
-| Web application    | `.github/workflows/deploy-production.yml`        | Green CI on `main`                         | A Vercel deployment of one commit                              |
-| Artifact sandbox   | The same workflow, as a separate surface         | Green CI on `main`                         | A second Vercel deployment                                     |
-| Staging web        | `.github/workflows/deploy-staging.yml`           | Green CI on `main`                         | The same artifact, promoted first                              |
-| CLI                | `.github/workflows/release-cli.yml`              | Tag `v-cli-*`                              | Signed release archives                                        |
-| Public Desktop     | `.github/workflows/release-desktop-cloud.yml`    | Tag `v-cloud-desktop-*` or manual dispatch | Signed/notarized Electron macOS installers and update archives |
-| Retained Tauri     | `.github/workflows/release-desktop.yml`          | Tag `v-desktop-*`                          | Signed Tauri bundles; retained internal scope                  |
-| Mobile             | `.github/workflows/release-mobile.yml`           | Tag `v-mobile-*`                           | Store builds through Expo                                      |
-| VS Code extension  | `.github/workflows/release-vscode-extension.yml` | Tag `v-vscode-*`                           | A vsix                                                         |
-| Chrome extension   | `.github/workflows/release-chrome-extension.yml` | Tag `v-ext-*`                              | A packaged extension                                           |
-| Signaling server   | `.github/workflows/deploy-signaling-server.yml`  | Its own workflow                           | A Fly.io deployment                                            |
-| Background workers | Deployed with the web application                | Green CI on `main`                         | Cron routes inside the one Next.js service                     |
+| Component          | Released by                                                             | Trigger                                    | Artifact                                                       |
+| ------------------ | ----------------------------------------------------------------------- | ------------------------------------------ | -------------------------------------------------------------- |
+| Web application    | `.github/workflows/deploy-production.yml` (disabled; deployed manually) | Green CI on `main` when enabled            | A Vercel deployment of one commit                              |
+| Artifact sandbox   | The same workflow, as a separate surface                                | Green CI on `main`                         | A second Vercel deployment                                     |
+| Staging web        | `.github/workflows/deploy-staging.yml` (disabled)                       | Green CI on `main`                         | The same artifact, promoted first                              |
+| CLI                | `.github/workflows/release-cli.yml`                                     | Tag `v-cli-*`                              | Signed release archives                                        |
+| Public Desktop     | `.github/workflows/release-desktop-cloud.yml`                           | Tag `v-cloud-desktop-*` or manual dispatch | Signed/notarized Electron macOS installers and update archives |
+| Retained Tauri     | `.github/workflows/release-desktop.yml` (disabled)                      | Tag `v-desktop-*`                          | Signed Tauri bundles; retained internal scope                  |
+| Mobile             | `.github/workflows/release-mobile.yml`                                  | Tag `v-mobile-*`                           | Store builds through Expo                                      |
+| VS Code extension  | `.github/workflows/release-vscode-extension.yml`                        | Tag `v-vscode-*`                           | A vsix                                                         |
+| Chrome extension   | `.github/workflows/release-chrome-extension.yml`                        | Tag `v-ext-*`                              | A packaged extension                                           |
+| Signaling server   | `.github/workflows/deploy-signaling-server.yml`                         | Its own workflow                           | A Fly.io deployment                                            |
+| Background workers | Deployed with the web application                                       | Green CI on `main`                         | Cron routes inside the one Next.js service                     |
 
 The public Electron shell uses the hosted Web renderer by default. Its signed
 installers and its arm64 and x64 zip update archives have a separate tag and

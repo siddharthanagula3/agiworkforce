@@ -16,7 +16,7 @@ contents, requesting site access or calling a model.
 
 Unhandled errors and rejections from the background service worker and the
 side panel can be reported for crash diagnosis. Reporting is off by default
-and requires the "Share crash and usage telemetry" toggle in the options
+and requires the "Share crash reports" toggle in the options
 page. Every report is scrubbed before it leaves the browser: message text,
 file names, and URLs are dropped, leaving only the error's type name and the
 bare function names from its stack. See

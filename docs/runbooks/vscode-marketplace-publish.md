@@ -2,13 +2,13 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-10-23
+Last updated: 2026-11-11
 
 Canonical release procedure for `agiworkforce.agi-workforce`.
 
 ## Release boundary
 
-- Tags for this product use `v-vscode-<semver>`.
+- Tags for this product use `v-vscode-<semver>` for the stable channel and `v-vscode-<semver>-<channel>.<n>` (`alpha`, `beta`, `rc`, `nightly` or `canary`) for the Marketplace pre-release channel. `package.json` keeps the plain `X.Y.Z` both channels share, and `scripts/release/resolve-channel.mjs` derives the channel from the tag.
 - Build the exact tagged source and publish the resulting `.vsix`; never rebuild from `main` after approval.
 - The repository-pinned `@vscode/vsce` is authoritative. Do not depend on a globally installed `vsce`.
 - Global Azure DevOps Personal Access Tokens are retired on **December 1, 2026**. Production automation must use Microsoft Entra ID workload identity and `vsce publish --azure-credential`; do not add a long-lived Marketplace token to GitHub secrets.
@@ -58,16 +58,7 @@ Reject the package if it contains source maps, local credentials, fixture secret
 
 ## 3. Verify listing assets
 
-Listing screenshots live in `apps/extension-vscode/media/` and are referenced from the Marketplace README. Refresh any screenshot that no longer matches the shipped UI.
-
-| Asset                      | Expected evidence                                |
-| -------------------------- | ------------------------------------------------ |
-| `sidebar-chat.png`         | Working multi-turn local developer session       |
-| `at-mention-quickpick.png` | File-context selection                           |
-| `chat-in-editor.png`       | Editor chat panel                                |
-| `model-picker.png`         | Current registry-backed model picker             |
-| `sessions-history.png`     | Local workspace session history                  |
-| `inline-completion.png`    | Inline completion in a non-sensitive source file |
+The package declares `media/icon.png` as its icon, and `media/walkthrough/` holds the getting-started walkthrough. `README.md` embeds no screenshots and `media/` holds none, so there is nothing to refresh until listing screenshots are added; capture them from the tagged build when they are.
 
 Do not claim a cloud, BYOK, tool, or session capability in listing copy unless the tagged implementation and release checks prove it.
 

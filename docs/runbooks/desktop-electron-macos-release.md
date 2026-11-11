@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-10-24
+Last updated: 2026-11-11
 
 How to build, sign, notarize and verify the public AGI Desktop (Electron)
 installers for macOS. The retained Tauri app has its own procedure in
@@ -50,7 +50,8 @@ a separate, owner-approved step.
 `.github/workflows/release-desktop-cloud.yml` runs on a `v-cloud-desktop-<semver>`
 tag and needs the `macos-release` environment with `APPLE_CERTIFICATE`,
 `APPLE_CERTIFICATE_PASSWORD`, `APPLE_API_KEY`, `APPLE_API_ISSUER` and
-`APPLE_API_PRIVATE_KEY`. On a private repository, environment secrets need a
+`APPLE_API_PRIVATE_KEY`. The environment must allow deployments from
+`v-cloud-desktop-*` tags as well as `v-desktop-*`. On a private repository, environment secrets need a
 paid GitHub plan; without one, release from this Mac instead.
 
 ## After a release

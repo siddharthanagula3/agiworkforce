@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-10-23
+Last updated: 2026-11-11
 
 ## Goal
 
@@ -17,7 +17,7 @@ The repo must be easy for humans and LLM coding agents to navigate, split, audit
 - `audit/prior-audits/parity-implementation-matrix.md` is the first feature/component implementation read.
 - `docs/architecture/byok-provider-strategy.md` is the first BYOK/open-model provider read.
 - `PLAN.md` is the active strategy and transition plan.
-- `docs/work/` holds the dated execution queues.
+- `docs/work/` holds temporary operational material; open work lives in `audit/` (`audit/README.md` indexes it).
 - `CHANGELOG.md` records completed work.
 - `docs/README.md` maps the documentation taxonomy; every tier is current by default.
 - `docs/agent-context/` is the machine-readable agent map.
@@ -49,7 +49,7 @@ The repo must be easy for humans and LLM coding agents to navigate, split, audit
 
 ## Naming Rules
 
-- Product names come from `packages/contracts/types/src/product-names.ts`: the brand is `AGI`, and `AGI Workforce` names the company and site only.
+- Product names come from `packages/contracts/types/src/product-names.ts`: `PRODUCT_BRAND` is `AGIWORKFORCE`, `PRODUCT_COPYRIGHT_NAME` is `AGI`, and `AGI Workforce` names the company and site only.
 - User-facing CLI examples use `agi`; `agiworkforce` is kept only as a compatibility alias or internal package/path identifier.
 - New docs and evidence use lowercase kebab-case filenames, with `YYYY-MM-DD` suffixes only when the date is part of the artifact identity.
 - Do not add new root `TASKS.md`, `FIXME.md`, `PRD.md`, `ROADMAP.md`, or ad hoc report files.

@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder
-Last updated: 2026-11-10
+Last updated: 2026-11-11
 
 Version 1 of AGI Mobile ships to the App Store and Google Play as a free app
 with no in-app purchases. The code side of that is done and checked in; this
@@ -460,7 +460,7 @@ Tell the repository, because the app and the website read it:
 
 - `apps/mobile/src/features/release-state/mobileReleaseState.json`: each
   store's `status`, `listingId` and `listingUrl`.
-- `apps/web/lib/marketing-constants.ts`: `SURFACE_STATUS.mobile`.
+- `apps/web/lib/surface-status.ts`: `SURFACE_STATUS.mobile`.
 
 Then release the iOS version manually in App Store Connect and raise the Play
 rollout.
