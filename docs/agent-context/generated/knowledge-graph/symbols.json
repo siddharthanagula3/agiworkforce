@@ -8421,8 +8421,6 @@
       "apps/extension/src/features/surface/assistantPanel.ts"
     ],
     "AssistantSurface": [
-      "apps/mobile/src/features/chat/components/AssistantSurface.tsx",
-      "apps/mobile/src/features/chat/components/AssistantSurface.tsx",
       "apps/mobile/src/features/chat/components/AssistantSurface.tsx"
     ],
     "AssistantTurnAttribution": [
@@ -14771,8 +14769,6 @@
       "packages/platform/files/src/index.ts"
     ],
     "canRenderAssistantSurface": [
-      "apps/mobile/src/features/chat/components/AssistantSurface.tsx",
-      "apps/mobile/src/features/chat/components/AssistantSurface.tsx",
       "apps/mobile/src/features/chat/components/AssistantSurface.tsx"
     ],
     "canRenderLivePreview": [
@@ -75021,8 +75017,6 @@
       "apps/cli/src/markdown.rs"
     ],
     "MarkdownRenderOptions": [
-      "apps/mobile/src/features/chat/components/MessageContentRenderer.tsx",
-      "apps/mobile/src/features/chat/components/MessageContentRenderer.tsx",
       "apps/mobile/src/features/chat/components/MessageContentRenderer.tsx"
     ],
     "MarkdownString": [
@@ -95437,8 +95431,6 @@
     ],
     "PreviewableKind": [
       "apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx",
-      "apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx",
-      "apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx",
       "apps/mobile/src/features/chat/components/sandboxedArtifactHtml.ts"
     ],
     "previewAutoRoute": [
@@ -106370,8 +106362,6 @@
       "apps/extension/src/features/side-panel/markdown.ts"
     ],
     "renderMarkdownContent": [
-      "apps/mobile/src/features/chat/components/MessageContentRenderer.tsx",
-      "apps/mobile/src/features/chat/components/MessageContentRenderer.tsx",
       "apps/mobile/src/features/chat/components/MessageContentRenderer.tsx"
     ],
     "renderMarkdownInto": [
@@ -114439,13 +114429,9 @@
       "apps/cli/src/safety/dangerous_commands.rs"
     ],
     "SafeArtifactPreview": [
-      "apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx",
-      "apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx",
       "apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx"
     ],
     "SafeArtifactPreviewProps": [
-      "apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx",
-      "apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx",
       "apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx"
     ],
     "safeClipboard": [
@@ -144207,8 +144193,6 @@
       "apps/desktop/src-tauri/src/automation/action_router/dom.rs"
     ],
     "wideTableOverflow": [
-      "apps/mobile/src/features/chat/components/MessageContentRenderer.tsx",
-      "apps/mobile/src/features/chat/components/MessageContentRenderer.tsx",
       "apps/mobile/src/features/chat/components/MessageContentRenderer.tsx"
     ],
     "widgets": [
