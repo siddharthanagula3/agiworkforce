@@ -38,3 +38,23 @@ describe('markdownToExportHtml links', () => {
     expect(html).not.toContain('javascript:');
   });
 });
+
+describe('markdownToExportHtml math', () => {
+  it('writes inline and display math as MathML, so the export loads no script', () => {
+    const { html } = markdownToExportHtml(
+      'Energy is $E = mc^2$.\n\n$$\nx = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}\n$$',
+    );
+
+    expect(html).toContain('<span class="math rendered"><span class="katex"><math');
+    expect(html).toContain('<div class="math display rendered">');
+    expect(html).toContain('display="block"');
+    expect(html).not.toMatch(/<script|<link|\b(?:src|href)=|url\(/i);
+  });
+
+  it('keeps LaTeX it cannot parse as escaped source text', () => {
+    const { html } = markdownToExportHtml('Broken $\\frac{1}{<b>$ here');
+
+    expect(html).toContain('<span class="math">\\frac{1}{&lt;b&gt;</span>');
+    expect(html).not.toContain('<b>');
+  });
+});

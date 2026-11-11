@@ -38,6 +38,19 @@ describe('authenticated drawer route contract', () => {
     );
   });
 
+  it('keeps theme colours off the animated drawer container and paints them in the drawer content', () => {
+    const containerStyle = layoutSource.match(/drawerStyle:\s*\{([^}]*)\}/)?.[1] ?? '';
+    const themedTokens = Array.from(
+      containerStyle.matchAll(/colors\.(\w+)/g),
+      (match) => match[1],
+    ).filter((token) => token !== 'transparent');
+
+    expect(containerStyle).toContain('width: drawerWidth');
+    expect(themedTokens).toEqual([]);
+    expect(drawerSource).toContain('backgroundColor: colors.background');
+    expect(drawerSource).toContain('borderRightColor: colors.border');
+  });
+
   it('backs every drawer primary destination with a registered route', () => {
     const drawerRoutes = Array.from(
       drawerSource.matchAll(/route: '\/\(app\)\/([^']+)'/g),

@@ -335,3 +335,53 @@ describe('cancelling a download', () => {
     }
   });
 });
+
+describe('download progress', () => {
+  it('reports once per percent while the file system reports every chunk', async () => {
+    onNetwork('wifi');
+    mockFreeSpace.mockResolvedValue(64 * GB);
+    const totalBytes = 20_000;
+    (createDownloadResumable as jest.Mock).mockImplementation(
+      (
+        _url: string,
+        _dest: string,
+        _options: unknown,
+        onChunk?: (data: { totalBytesWritten: number; totalBytesExpectedToWrite: number }) => void,
+      ) => ({
+        downloadAsync: async () => {
+          for (let written = 1; written <= totalBytes; written += 1) {
+            onChunk?.({ totalBytesWritten: written, totalBytesExpectedToWrite: totalBytes });
+          }
+          return { status: 200 };
+        },
+        pauseAsync: jest.fn(async () => ({})),
+        savable: jest.fn(async () => ({})),
+      }),
+    );
+    (getInfoAsync as jest.Mock).mockImplementation(async (path: string) => ({
+      exists: path.endsWith('/model.gguf'),
+      size: 0,
+    }));
+    const shown: number[] = [];
+
+    try {
+      await downloadModel({
+        modelId: 'model-progress',
+        displayName: 'Progress fixture',
+        downloadUrl: 'https://models.example/model-progress.gguf',
+        checksum: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+        fileSizeBytes: totalBytes,
+        runtime: 'local',
+        format: 'gguf',
+        wifiOnly: true,
+        onProgress: (written, total) => shown.push(written / total),
+      });
+    } finally {
+      (getInfoAsync as jest.Mock).mockReset().mockResolvedValue({ exists: false });
+      (createDownloadResumable as jest.Mock).mockReset();
+    }
+
+    expect(shown.length).toBeLessThanOrEqual(101);
+    expect(shown[shown.length - 1]).toBe(1);
+  });
+});

@@ -128,7 +128,6 @@ export interface ChatInputHandle {
     executionMode: 'local' | 'cloud',
   ) => ComposerAttachmentOperation | null;
   focus?: () => void;
-  prefillText?: (starter: string) => void;
   restoreText?: (text: string) => void;
 }
 
@@ -353,9 +352,6 @@ export function ChatInput({
     () => ({
       focus: () => {
         inputRef.current?.focus();
-      },
-      prefillText: (starter: string) => {
-        setText((current) => (current.trim() ? current : starter));
       },
       restoreText: (restored: string) => {
         setText((current) => (current.trim() ? `${current}\n\n${restored}` : restored));

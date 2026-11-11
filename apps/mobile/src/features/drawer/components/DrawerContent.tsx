@@ -38,6 +38,7 @@ import {
   MOBILE_REMOTE_SCREEN_LABEL,
 } from '@agiworkforce/types';
 import { Text } from '@/components/ui/Text';
+import { AgiMark } from '@/components/ui/AgiMark';
 import { useChatStore } from '@/stores/chatStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useNotificationCenter } from '@/services/notifications';
@@ -199,6 +200,7 @@ const PRIMARY_ITEMS: PrimaryItem[] = [
   },
 ];
 
+const BRAND_SYMBOL_SIZE = 28;
 const DRAWER_RECENT_LIMIT = 8;
 const DRAWER_PROJECT_CHAT_LIMIT = 5;
 
@@ -576,7 +578,15 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   );
 
   return (
-    <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: colors.background }}>
+    <SafeAreaView
+      edges={['top', 'bottom']}
+      style={{
+        flex: 1,
+        backgroundColor: colors.background,
+        borderRightColor: colors.border,
+        borderRightWidth: 1,
+      }}
+    >
       <View style={{ flex: 1, paddingHorizontal: 14 }}>
         <View
           style={{
@@ -587,21 +597,9 @@ export function DrawerContent(props: DrawerContentComponentProps) {
             gap: 10,
           }}
         >
-          {/* Newsreader, the brand typeface, same as the chat empty state and
-              web's var(--font-newsreader). The weight is carried by the family
-              name, so no fontWeight: setting one makes iOS synthesise a bolder
-              face on top of an already-semibold cut. */}
-          <Text
-            style={{
-              color: colors.textPrimary,
-              fontSize: typeScale.title3,
-              fontFamily: 'Newsreader_600SemiBold',
-              letterSpacing: 0.4,
-              flex: 1,
-            }}
-          >
-            AGI
-          </Text>
+          <View style={{ flex: 1, alignItems: 'flex-start' }}>
+            <AgiMark size={BRAND_SYMBOL_SIZE} testID="drawer.brand-symbol" />
+          </View>
           {/* Icon-only at a fixed 34pt so search never widens the header. */}
           <HeaderIconButton label="Search" icon={Search} onPress={handleOpenSearch} />
           {/* New-chat sits in the header beside the profile symbol (its original,
@@ -619,14 +617,12 @@ export function DrawerContent(props: DrawerContentComponentProps) {
           />
         </View>
 
-        <View style={{ marginBottom: 10 }}>
-          <ModeToggle
-            mode={appMode}
-            cloudUnlocked={cloudUnlocked}
-            onTapLocal={() => handleSelectMode('local')}
-            onTapCloud={() => handleSelectMode('cloud')}
-          />
-        </View>
+        <ModeToggle
+          mode={appMode}
+          cloudUnlocked={cloudUnlocked}
+          onTapLocal={() => handleSelectMode('local')}
+          onTapCloud={() => handleSelectMode('cloud')}
+        />
 
         <ShellCapabilityShortcuts onOpen={(route) => navigate(route)} />
 

@@ -17,6 +17,7 @@
     "./assistant-fence-edits": "./src/components/markdown/assistantFenceEdits.ts",
     "./continuation-seam": "./src/lib/continuation-seam.ts",
     "./markdown-document": "./src/components/markdown/markdownDocument.ts",
+    "./math-markup": "./src/lib/math-markup.ts",
     "./shiki-highlighter": "./src/components/markdown/shikiHighlighter.ts",
     "./composer-editor": "./src/composer-editor/index.ts",
     "./composer-editor.css": "./src/composer-editor/composer-editor.css",
