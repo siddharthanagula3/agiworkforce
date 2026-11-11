@@ -105,6 +105,45 @@ describe('Clerk native pending-session policy', () => {
     expect(bridge).not.toContain('useAuthStore.getState().signOut(');
   });
 
+  it('owes a sign-in only for a session that ended while its Cloud owner was still recorded', () => {
+    const source = fs.readFileSync(path.join(__dirname, '..', 'app', '_layout.tsx'), 'utf8');
+    const bridge = source.slice(
+      source.indexOf('function ClerkTokenBridge()'),
+      source.indexOf('export default function RootLayout()'),
+    );
+    const signedOut = bridge.slice(bridge.indexOf('} else {', bridge.indexOf('if (isSignedIn)')));
+    const owedIndex = signedOut.indexOf('if (hasCloudAccountOwner()) oweSignInForEndedSession();');
+    const ownerRetiredIndex = signedOut.indexOf('invalidateCloudAccount();');
+
+    expect(owedIndex).toBeGreaterThan(-1);
+    expect(ownerRetiredIndex).toBeGreaterThan(owedIndex);
+
+    const routing = source.slice(source.indexOf('const redirect = resolveRootRedirect({'));
+    expect(routing).toContain('signInOwedForEndedSession: isSignInOwedForEndedSession(),');
+    expect(routing).toContain(
+      'if (redirect?.pathname === CLOUD_SIGN_IN_RETURN_PATH) settleSignInForEndedSession();',
+    );
+  });
+
+  it('retires the Cloud owner before every sign-out a person chooses', () => {
+    const layout = fs.readFileSync(path.join(__dirname, '..', 'app', '_layout.tsx'), 'utf8');
+    const appLockReset = layout.slice(layout.indexOf("'Reset and sign out'"));
+    expect(appLockReset.indexOf('invalidateCloudAccount();')).toBeGreaterThan(-1);
+    expect(appLockReset.indexOf('invalidateCloudAccount();')).toBeLessThan(
+      appLockReset.indexOf('await clearAuthSession();'),
+    );
+
+    const store = fs.readFileSync(
+      path.join(__dirname, '..', 'src', 'features', 'auth', 'store.ts'),
+      'utf8',
+    );
+    const signOut = store.slice(store.indexOf('signOut: async () => {'));
+    expect(signOut.indexOf('invalidateCloudAccount();')).toBeGreaterThan(-1);
+    expect(signOut.indexOf('invalidateCloudAccount();')).toBeLessThan(
+      signOut.indexOf('await clearAuthSession();'),
+    );
+  });
+
   it('binds caches to Clerk userId and clears on a direct account A-to-B switch', () => {
     const source = fs.readFileSync(path.join(__dirname, '..', 'app', '_layout.tsx'), 'utf8');
     const bridge = source.slice(
@@ -115,7 +154,7 @@ describe('Clerk native pending-session policy', () => {
     const signedInIndex = bridge.indexOf('setClerkSignedIn(true);');
 
     expect(source).toContain(
-      "import {\n  activateCloudAccount,\n  invalidateCloudAccount,\n} from '@/src/features/auth/services/cloudAccountSession';",
+      "import {\n  activateCloudAccount,\n  hasCloudAccountOwner,\n  invalidateCloudAccount,\n} from '@/src/features/auth/services/cloudAccountSession';",
     );
     expect(activateIndex).toBeGreaterThan(bridge.indexOf('if (isSignedIn)'));
     expect(activateIndex).toBeLessThan(signedInIndex);

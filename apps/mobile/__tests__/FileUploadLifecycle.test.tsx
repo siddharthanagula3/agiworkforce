@@ -55,6 +55,7 @@ jest.mock('../src/features/auth/services/cloudAccountSession', () => ({
 }));
 
 import { api } from '@/services/api';
+import { CloudCredentialUnavailableError } from '@/services/apiErrors';
 import {
   AttachmentPreview,
   type Attachment,
@@ -329,16 +330,16 @@ describe('resume and retry', () => {
     expect(uploadStatusLabel(entry(NOTES_TXT.id))).toBe('Upload failed');
   });
 
-  it('stops on an expired session rather than burning the budget on a retry that cannot work', async () => {
-    mockUploadFile.mockRejectedValue(new Error('Upload failed: session expired.'));
+  it('stops when the account cannot be confirmed rather than burning the budget on a retry', async () => {
+    mockUploadFile.mockRejectedValue(new CloudCredentialUnavailableError());
 
     await expect(
       uploadWithRetry(fileInputFor(NOTES_TXT), NOTES_TXT.fileName, NOTES_TXT.id),
-    ).rejects.toThrow('session expired');
+    ).rejects.toBeInstanceOf(CloudCredentialUnavailableError);
     expect(mockUploadFile).toHaveBeenCalledTimes(1);
     expect(entry(NOTES_TXT.id)).toMatchObject({
       phase: 'failed',
-      error: 'Your session expired. Sign in again to upload files.',
+      error: 'Could not confirm your account to upload files. Try again.',
     });
   });
 

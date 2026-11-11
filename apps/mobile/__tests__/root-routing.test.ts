@@ -11,6 +11,7 @@ const base: RootRouteInput = {
   isClerkSignedIn: false,
   onboardingDone: true,
   ageGateConfirmed: false,
+  signInOwedForEndedSession: false,
 };
 
 const at = (segments: string[], overrides: Partial<RootRouteInput> = {}): RootRouteInput => ({
@@ -101,5 +102,43 @@ describe('resolveRootRedirect', () => {
         at(['(app)', '(tabs)', 'chat'], { authEnabled: false, onboardingDone: false }),
       ),
     ).toEqual({ pathname: '/(public)/onboarding' });
+  });
+
+  describe('a session that ended without the person signing out', () => {
+    const owed = { signInOwedForEndedSession: true, ageGateConfirmed: true };
+
+    it('opens sign-in with the way back to Cloud chat', () => {
+      expect(resolveRootRedirect(at(['(app)', '(tabs)', 'chat'], owed))).toEqual({
+        pathname: CLOUD_SIGN_IN_RETURN_PATH,
+        params: { postAuthIntent: 'cloud-chat' },
+      });
+    });
+
+    it('stays on sign-in once it is open', () => {
+      expect(resolveRootRedirect(at(['(auth)', 'login'], owed))).toBeNull();
+    });
+
+    it('waits for Clerk and yields to a session that is signed in again', () => {
+      expect(
+        resolveRootRedirect(at(['(app)', '(tabs)', 'chat'], { ...owed, isClerkLoaded: false })),
+      ).toBeNull();
+      expect(
+        resolveRootRedirect(at(['(app)', '(tabs)', 'chat'], { ...owed, isClerkSignedIn: true })),
+      ).toBeNull();
+    });
+
+    it('leaves first-run, legal and public screens to their own rules', () => {
+      expect(
+        resolveRootRedirect(at(['(app)', '(tabs)', 'chat'], { ...owed, onboardingDone: false })),
+      ).toEqual({ pathname: '/(public)/onboarding' });
+      expect(resolveRootRedirect(at(['legal', 'privacy'], owed))).toBeNull();
+      expect(resolveRootRedirect(at(['(public)', 'age-gate'], owed))).toBeNull();
+    });
+
+    it('is not opened for a person who chose to sign out', () => {
+      expect(
+        resolveRootRedirect(at(['(app)', '(tabs)', 'chat'], { ageGateConfirmed: true })),
+      ).toBeNull();
+    });
   });
 });
