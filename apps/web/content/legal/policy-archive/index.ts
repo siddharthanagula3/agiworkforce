@@ -57,6 +57,7 @@ import agentPermissions_2026_09_02 from './agentPermissions/2026-09-02.json';
 import agentPermissions_2026_09_22 from './agentPermissions/2026-09-22.json';
 import agentPermissions_2026_09_27 from './agentPermissions/2026-09-27.json';
 import agentPermissions_2026_10_08 from './agentPermissions/2026-10-08.json';
+import agentPermissions_2026_11_01 from './agentPermissions/2026-11-01.json';
 
 export const ARCHIVED_POLICY_TEXT = {
   terms: {
@@ -159,5 +160,6 @@ export const ARCHIVED_POLICY_TEXT = {
     '2026-09-22': agentPermissions_2026_09_22,
     '2026-09-27': agentPermissions_2026_09_27,
     '2026-10-08': agentPermissions_2026_10_08,
+    '2026-11-01': agentPermissions_2026_11_01,
   },
 } as const;

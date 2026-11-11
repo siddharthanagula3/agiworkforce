@@ -610,13 +610,19 @@
     "agentPermissions": {
       "route": "/agent-permissions",
       "slug": "agent-permissions",
-      "current": "2026-11-01",
+      "current": "2026-11-11",
       "versions": [
+        {
+          "date": "2026-11-11",
+          "summary": "Adds a Browsing history row to Computer use in Chrome. The search is off until you turn it on in the extension's settings and accept Chrome's permission prompt, the extension asks before every search, and it sends the titles, addresses and last visit times of at most 20 matching pages, with secret-looking parts of each address removed and blocked sites left out.",
+          "status": "current",
+          "published": null
+        },
         {
           "date": "2026-11-01",
           "summary": "Corrects connector availability for selective release and describes the local metadata loader. Connecting still depends on plan, region and provider setup. Provider scopes, consent, revocation and per-tool approval rules are unchanged.",
-          "status": "current",
-          "published": null
+          "status": "archived",
+          "published": true
         },
         {
           "date": "2026-10-08",
