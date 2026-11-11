@@ -22,19 +22,40 @@ function joinedText(view: { toJSON: () => unknown }): string {
 }
 
 describe('mobile mixed assistant reply', () => {
-  it.each([
-    ['form', 'title: Choices\ntext: Name | Sample\nsubmit: Apply'],
-    ['card', 'title: Project\n\nA readable body.'],
-    ['stats', 'Requests | 120 | This month'],
-    ['carousel', 'One | First description\nTwo | Second description'],
-  ])('keeps unsupported %s content readable and copyable', async (language, source) => {
-    const onFollowUp = jest.fn();
-    const view = renderReply(`\`\`\`${language}\n${source}\n\`\`\``, onFollowUp);
-    expect(joinedText(view)).toContain(language);
-    expect(screen.queryByTestId('answer-surface-tool')).toBeNull();
-    await act(async () => fireEvent.press(screen.getByRole('button', { name: 'Copy code' })));
-    expect(Clipboard.setStringAsync).toHaveBeenLastCalledWith(source);
-    expect(onFollowUp).not.toHaveBeenCalled();
+  it('draws a card with its title, tags and a Markdown body', () => {
+    renderReply(
+      '```card\ntitle: Project\nsubtitle: Spring plan\ntags: Design, Mobile\n\nA **readable** body.\n```',
+    );
+    expect(screen.getByTestId('answer-surface-card')).toBeTruthy();
+    expect(screen.getByRole('header', { name: 'Project' })).toBeTruthy();
+    expect(screen.getByText('Spring plan')).toBeTruthy();
+    expect(screen.getByText('Mobile')).toBeTruthy();
+    expect(screen.getByText('readable')).toBeTruthy();
+    expect(screen.queryByText(/\*\*/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Copy code' })).toBeNull();
+  });
+
+  it('draws stats as label and value tiles', () => {
+    renderReply('```stats\nRequests | 120 | This month\nErrors | 3 | Down from 9\n```');
+    expect(screen.getByTestId('answer-surface-stats')).toBeTruthy();
+    expect(screen.getByLabelText('Requests, 120, This month')).toBeTruthy();
+    expect(screen.getByText('3')).toBeTruthy();
+  });
+
+  it('draws a carousel with one slide per item and a position', () => {
+    renderReply('```carousel\nOne | First description\nTwo | Second description\n```');
+    expect(screen.getByTestId('answer-surface-carousel')).toBeTruthy();
+    expect(screen.getByText('First description')).toBeTruthy();
+    expect(screen.getByLabelText('2 of 2: Two')).toBeTruthy();
+    expect(screen.getByText('1 of 2')).toBeTruthy();
+  });
+
+  it('draws a form whose fields hold the values from the reply', () => {
+    renderReply('```form\ntitle: Choices\ntext: Name | Sample\nsubmit: Apply\n```');
+    expect(screen.getByTestId('answer-surface-form')).toBeTruthy();
+    expect(screen.getByLabelText('Name').props.value).toBe('Sample');
+    expect(screen.getByRole('button', { name: 'Apply' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Copy code' })).toBeNull();
   });
 
   it('renders one mixed reply in order, with chart values, fallbacks, copy, follow-up, and one email after growth', async () => {
@@ -73,8 +94,7 @@ describe('mobile mixed assistant reply', () => {
     }
 
     expect(screen.getAllByTestId('answer-surface-email')).toHaveLength(1);
-    expect(screen.getByLabelText('Jan 10')).toBeTruthy();
-    expect(screen.getByLabelText('Feb 30')).toBeTruthy();
+    expect(screen.getByLabelText(/Jan 10, Feb 30/)).toBeTruthy();
     const fallbacks = screen.getAllByTestId('answer-fallback');
     expect(fallbacks).toHaveLength(2);
     expect(screen.getByText('title: Missing the address')).toBeTruthy();
@@ -133,7 +153,7 @@ describe('mobile citation and gallery fences keep their resources reachable', ()
     alertSpy.mockRestore();
   });
 
-  it('offers a link for each gallery image instead of dropping the resource', () => {
+  it('offers each gallery image behind a load control instead of dropping the resource', () => {
     renderReply(
       [
         '```gallery',
@@ -144,12 +164,12 @@ describe('mobile citation and gallery fences keep their resources reachable', ()
       ].join('\n'),
     );
 
-    expect(screen.getByText('Reference photo')).toBeTruthy();
-    expect(screen.getByText('Brand colour #ff8800')).toBeTruthy();
-    expect(screen.getAllByRole('link')).toHaveLength(2);
-
-    fireEvent.press(screen.getByRole('link', { name: 'Open image: Chart' }));
-    expect(openUntrustedUrlInAppBrowser).toHaveBeenCalledWith('https://example.com/chart.png');
+    expect(screen.getAllByText('Reference photo').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Chart').length).toBeGreaterThan(0);
+    expect(screen.getByText('Brand colour')).toBeTruthy();
+    expect(screen.getByText('#ff8800')).toBeTruthy();
+    expect(screen.getAllByLabelText('Load image from example.com')).toHaveLength(2);
+    expect(openUntrustedUrlInAppBrowser).not.toHaveBeenCalled();
   });
 
   it('shows no image link for an unsafe or missing source and loads nothing by itself', () => {

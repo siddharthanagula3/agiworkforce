@@ -4947,6 +4947,9 @@
       "packages/ai/routing/src/index.ts",
       "packages/ai/routing/src/response-budget.ts"
     ],
+    "AnswerFormSurface": [
+      "apps/mobile/src/features/chat/components/AnswerFormSurface.tsx"
+    ],
     "AnswerGallery": [
       "packages/ui/unified-chat/src/components/markdown/AnswerGallery.tsx"
     ],
@@ -8418,6 +8421,8 @@
       "apps/extension/src/features/surface/assistantPanel.ts"
     ],
     "AssistantSurface": [
+      "apps/mobile/src/features/chat/components/AssistantSurface.tsx",
+      "apps/mobile/src/features/chat/components/AssistantSurface.tsx",
       "apps/mobile/src/features/chat/components/AssistantSurface.tsx"
     ],
     "AssistantTurnAttribution": [
@@ -14766,6 +14771,8 @@
       "packages/platform/files/src/index.ts"
     ],
     "canRenderAssistantSurface": [
+      "apps/mobile/src/features/chat/components/AssistantSurface.tsx",
+      "apps/mobile/src/features/chat/components/AssistantSurface.tsx",
       "apps/mobile/src/features/chat/components/AssistantSurface.tsx"
     ],
     "canRenderLivePreview": [
@@ -15493,6 +15500,12 @@
     ],
     "cargoRuntimeClosure": [
       "scripts/lib/third-party-notices.mjs"
+    ],
+    "CarouselSpec": [
+      "packages/ui/unified-chat/src/components/markdown/assistantFence.ts"
+    ],
+    "CarouselSurface": [
+      "apps/mobile/src/features/chat/components/AnswerMediaSurfaces.tsx"
     ],
     "carriedChoiceMustBeAskedAgain": [
       "apps/web/app/signup/signupAttemptMarkers.ts"
@@ -17790,6 +17803,9 @@
     ],
     "Choice": [
       "apps/desktop/src-tauri/src/integrations/api_integrations/perplexity.rs"
+    ],
+    "ChoiceRow": [
+      "apps/mobile/src/features/chat/components/AnswerSurfaceKit.tsx"
     ],
     "choose_image_model": [
       "apps/cli/src/cloud/image.rs"
@@ -33126,6 +33142,7 @@
       "apps/mobile/app/legal/article-50.tsx",
       "apps/mobile/app/legal/index.tsx",
       "apps/mobile/components/ui/PressableBox.tsx",
+      "apps/mobile/mermaid-build.d.ts",
       "apps/mobile/png.d.ts",
       "apps/mobile/src/features/artifacts/index.tsx",
       "apps/mobile/src/features/chat/ChatsListScreen.tsx",
@@ -48850,6 +48867,9 @@
     "footerSourceSnapshot": [
       "apps/web/e2e/lib/public-footer-capture.ts"
     ],
+    "footnoteMarker": [
+      "apps/mobile/src/features/chat/components/MarkdownInline.tsx"
+    ],
     "for_account": [
       "crates/agiworkforce-protocol/src/developer_session.rs"
     ],
@@ -49747,10 +49767,18 @@
       "apps/cli/src/tui/widgets/elicitation_overlay.rs",
       "apps/desktop/src-tauri/src/automation/browser/advanced.rs",
       "apps/extension/src/types.ts",
-      "apps/web/shared/ui/Form.tsx"
+      "apps/web/shared/ui/Form.tsx",
+      "packages/ui/unified-chat/src/components/markdown/assistantFence.ts"
     ],
     "FormFieldContext": [
       "apps/web/shared/ui/form-hooks.ts"
+    ],
+    "formFieldError": [
+      "packages/ui/unified-chat/src/components/markdown/answerFormModel.ts"
+    ],
+    "formFieldErrors": [
+      "packages/ui/unified-chat/src/components/markdown/answerFormModel.ts",
+      "packages/ui/unified-chat/src/components/markdown/assistantFence.ts"
     ],
     "FormFieldType": [
       "apps/desktop/src-tauri/src/automation/browser/advanced.rs"
@@ -49782,8 +49810,23 @@
     "FormObservationReference": [
       "apps/extension/src/features/browser-tools/documentBridge.ts"
     ],
+    "FormSpec": [
+      "packages/ui/unified-chat/src/components/markdown/assistantFence.ts"
+    ],
+    "formSubmissionText": [
+      "packages/ui/unified-chat/src/components/markdown/answerFormModel.ts",
+      "packages/ui/unified-chat/src/components/markdown/assistantFence.ts"
+    ],
     "formUtils": [
       "apps/extension/src/utils.ts"
+    ],
+    "FormValue": [
+      "packages/ui/unified-chat/src/components/markdown/answerFormModel.ts",
+      "packages/ui/unified-chat/src/components/markdown/assistantFence.ts"
+    ],
+    "formValueText": [
+      "packages/ui/unified-chat/src/components/markdown/answerFormModel.ts",
+      "packages/ui/unified-chat/src/components/markdown/assistantFence.ts"
     ],
     "FORTHCOMING": [
       "apps/web/app/release-notes/release-notes-data.ts"
@@ -51236,6 +51279,9 @@
     ],
     "GalleryPage": [
       "apps/web/app/gallery/page.tsx"
+    ],
+    "GallerySurface": [
+      "apps/mobile/src/features/chat/components/AnswerMediaSurfaces.tsx"
     ],
     "GalleryTemplateLoading": [
       "apps/web/app/gallery/[templateId]/loading.tsx"
@@ -60424,6 +60470,10 @@
     "initialConnectorSection": [
       "apps/web/features/directory/services/connectors-directory.ts"
     ],
+    "initialFormValue": [
+      "packages/ui/unified-chat/src/components/markdown/answerFormModel.ts",
+      "packages/ui/unified-chat/src/components/markdown/assistantFence.ts"
+    ],
     "InitialHistory": [
       "crates/agiworkforce-protocol/src/protocol.rs"
     ],
@@ -60600,6 +60650,9 @@
     "InlineChart": [
       "packages/ui/unified-chat/src/components/markdown/AnswerSurface.tsx"
     ],
+    "inlineCodeStyle": [
+      "apps/mobile/src/features/chat/components/MarkdownInline.tsx"
+    ],
     "InlineCommand": [
       "apps/extension-vscode/src/core/runInlineCommand.ts"
     ],
@@ -60632,6 +60685,9 @@
     "InlineRenameField": [
       "apps/mobile/src/features/conversation-actions/index.ts",
       "apps/mobile/src/features/conversation-actions/RenameConversationModal.tsx"
+    ],
+    "inlineScriptSource": [
+      "apps/mobile/src/features/chat/components/mermaidRuntime.ts"
     ],
     "InlineToolCall": [
       "packages/ui/unified-chat/src/components/InlineToolCall.tsx",
@@ -70054,6 +70110,9 @@
     "loadMemoryWritePolicies": [
       "apps/web/lib/services/managed-memory-context-service.ts"
     ],
+    "loadMermaidRuntime": [
+      "apps/mobile/src/features/chat/components/mermaidRuntime.ts"
+    ],
     "loadMigrationInventory": [
       "scripts/lib/neon-migrations.mjs"
     ],
@@ -74933,6 +74992,9 @@
       "packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx",
       "packages/ui/unified-chat/src/index.ts"
     ],
+    "MarkdownImage": [
+      "apps/mobile/src/features/chat/components/MarkdownImage.tsx"
+    ],
     "markdownImageSource": [
       "packages/ui/unified-chat/src/components/markdown/markdownImageSources.ts"
     ],
@@ -74959,6 +75021,8 @@
       "apps/cli/src/markdown.rs"
     ],
     "MarkdownRenderOptions": [
+      "apps/mobile/src/features/chat/components/MessageContentRenderer.tsx",
+      "apps/mobile/src/features/chat/components/MessageContentRenderer.tsx",
       "apps/mobile/src/features/chat/components/MessageContentRenderer.tsx"
     ],
     "MarkdownString": [
@@ -79465,6 +79529,9 @@
       "apps/mobile/src/features/chat/components/MessageList.tsx",
       "packages/ui/unified-chat/src/components/MessageList.tsx",
       "packages/ui/unified-chat/src/index.ts"
+    ],
+    "MessageListRow": [
+      "apps/mobile/src/features/chat/components/MessageListRow.tsx"
     ],
     "messageListVariants": [
       "apps/web/features/chat/components/messages/MessageBubble.tsx"
@@ -86121,7 +86188,7 @@
       "apps/extension-vscode/src/features/surfaces/index.ts"
     ],
     "openAssistantLink": [
-      "apps/mobile/src/features/chat/components/assistantLink.ts"
+      "apps/mobile/src/features/chat/components/MarkdownInline.tsx"
     ],
     "openAssistantPanel": [
       "apps/extension/src/features/surface/assistantPanel.ts"
@@ -88355,6 +88422,9 @@
     "PanelAggregation": [
       "apps/web/lib/observability/dashboards.ts"
     ],
+    "PanelHeader": [
+      "apps/mobile/src/features/chat/components/AnswerSurfaceKit.tsx"
+    ],
     "PanelLeft": [
       "packages/ui/icons/src/glyphs/Actions.tsx"
     ],
@@ -88363,6 +88433,9 @@
     ],
     "panelQuery": [
       "apps/web/lib/observability/dashboards.ts"
+    ],
+    "PanelSection": [
+      "apps/mobile/src/features/chat/components/AnswerSurfaceKit.tsx"
     ],
     "PanelsTopLeft": [
       "packages/ui/icons/src/glyphs/Account.tsx"
@@ -95364,6 +95437,8 @@
     ],
     "PreviewableKind": [
       "apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx",
+      "apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx",
+      "apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx",
       "apps/mobile/src/features/chat/components/sandboxedArtifactHtml.ts"
     ],
     "previewAutoRoute": [
@@ -97571,6 +97646,9 @@
     ],
     "ProtectedResourceMetadata": [
       "crates/agiworkforce-mcp/src/oauth/flow.rs"
+    ],
+    "protectEscapes": [
+      "apps/mobile/src/features/chat/components/MarkdownInline.tsx"
     ],
     "protocol": [
       "apps/cli/src/features/a2a/mod.rs",
@@ -106271,10 +106349,10 @@
       "scripts/generate-agent-context-indexes.mjs"
     ],
     "renderInlineMarkdown": [
-      "apps/mobile/src/features/chat/components/MessageContentRenderer.tsx"
+      "apps/mobile/src/features/chat/components/MarkdownInline.tsx"
     ],
     "renderInlineMath": [
-      "apps/mobile/src/features/chat/components/MessageContentRenderer.tsx"
+      "apps/mobile/src/features/chat/components/MarkdownInline.tsx"
     ],
     "renderKnowledgeGraph": [
       "scripts/knowledge-graph.mjs"
@@ -106292,6 +106370,8 @@
       "apps/extension/src/features/side-panel/markdown.ts"
     ],
     "renderMarkdownContent": [
+      "apps/mobile/src/features/chat/components/MessageContentRenderer.tsx",
+      "apps/mobile/src/features/chat/components/MessageContentRenderer.tsx",
       "apps/mobile/src/features/chat/components/MessageContentRenderer.tsx"
     ],
     "renderMarkdownInto": [
@@ -110881,6 +110961,9 @@
     "restoreDeletedConversation": [
       "apps/web/features/settings/services/conversation-data-service.ts"
     ],
+    "restoreEscapes": [
+      "apps/mobile/src/features/chat/components/MarkdownInline.tsx"
+    ],
     "restoreFlagDefinition": [
       "apps/web/lib/feature-flags/flag-store.ts"
     ],
@@ -112069,6 +112152,9 @@
     ],
     "RichBlocksProbe": [
       "apps/web/app/dev/rich-blocks-probe/page.tsx"
+    ],
+    "RichCardSpec": [
+      "packages/ui/unified-chat/src/components/markdown/assistantFence.ts"
     ],
     "right": [
       "apps/desktop/src-tauri/src/automation/computer_use/types.rs"
@@ -114353,9 +114439,13 @@
       "apps/cli/src/safety/dangerous_commands.rs"
     ],
     "SafeArtifactPreview": [
+      "apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx",
+      "apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx",
       "apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx"
     ],
     "SafeArtifactPreviewProps": [
+      "apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx",
+      "apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx",
       "apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx"
     ],
     "safeClipboard": [
@@ -118129,6 +118219,9 @@
       "packages/ui/ui/src/index.ts",
       "packages/ui/ui/src/primitives/index.ts",
       "packages/ui/ui/src/primitives/Select.tsx"
+    ],
+    "SelectControl": [
+      "apps/mobile/src/features/chat/components/AnswerSurfaceKit.tsx"
     ],
     "selectConversationAllRows": [
       "apps/web/shared/stores/web-chat-store.ts"
@@ -124630,6 +124723,9 @@
       "packages/ui/ui/src/primitives/index.ts",
       "packages/ui/ui/src/primitives/Slider.tsx"
     ],
+    "SliderControl": [
+      "apps/mobile/src/features/chat/components/AnswerSurfaceKit.tsx"
+    ],
     "SlidersHorizontal": [
       "packages/ui/icons/src/glyphs/Actions.tsx"
     ],
@@ -126389,6 +126485,9 @@
     "stats": [
       "apps/desktop/src-tauri/src/data/cache/llm_responses.rs"
     ],
+    "StatsSpec": [
+      "packages/ui/unified-chat/src/components/markdown/assistantFence.ts"
+    ],
     "status": [
       "apps/cli/src/platform/runtime/git.rs",
       "apps/cli/src/sync.rs",
@@ -126467,6 +126566,9 @@
     ],
     "StatusPage": [
       "apps/web/app/status/page.tsx"
+    ],
+    "StatusPill": [
+      "apps/mobile/src/features/chat/components/AnswerSurfaceKit.tsx"
     ],
     "StatusStep": [
       "apps/mobile/src/features/chat/components/StatusStep.tsx",
@@ -129318,6 +129420,9 @@
     "SurfaceName": [
       "apps/web/features/marketing/components/landing/landing-content.ts"
     ],
+    "SurfacePanel": [
+      "apps/mobile/src/features/chat/components/AnswerSurfaceKit.tsx"
+    ],
     "surfaceQuickAsk": [
       "apps/desktop/electron/quickAsk.ts"
     ],
@@ -129409,6 +129514,9 @@
     ],
     "SurfaceTitleAction": [
       "apps/extension-vscode/src/features/surfaces/treeQuickPick.ts"
+    ],
+    "SurfaceTone": [
+      "apps/mobile/src/features/chat/components/AnswerSurfaceKit.tsx"
     ],
     "SurfaceTreeSource": [
       "apps/extension-vscode/src/features/surfaces/treeQuickPick.ts"
@@ -144099,6 +144207,8 @@
       "apps/desktop/src-tauri/src/automation/action_router/dom.rs"
     ],
     "wideTableOverflow": [
+      "apps/mobile/src/features/chat/components/MessageContentRenderer.tsx",
+      "apps/mobile/src/features/chat/components/MessageContentRenderer.tsx",
       "apps/mobile/src/features/chat/components/MessageContentRenderer.tsx"
     ],
     "widgets": [

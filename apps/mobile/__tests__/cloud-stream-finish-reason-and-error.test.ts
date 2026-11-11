@@ -721,7 +721,11 @@ describe('cloud send: canonical agent activity', () => {
     const state = useChatExecutionStore.getState();
     expect(state.error).toBe(sentence);
     expect(state.failureCode).toEqual({ message: sentence, code: 'provider_billing_exhausted' });
-    expect(lastAssistantMessage()?.content).toBe(sentence);
+    expect(lastAssistantMessage()?.content).toBe('');
+    expect(lastAssistantMessage()?.metadata?.streamError).toEqual({
+      message: sentence,
+      code: 'provider_billing_exhausted',
+    });
 
     state.clearError();
     expect(useChatExecutionStore.getState().failureCode).toBeNull();

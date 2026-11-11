@@ -831,6 +831,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
             store.stopStreaming(convId);
             break;
           }
+          const failureShownInTurn = Boolean(assistantMessageIdRef.current);
           if (assistantMessageIdRef.current) {
             const failingId = assistantMessageIdRef.current;
             const current = store.messagesByConversation[convId]?.find((m) => m.id === failingId);
@@ -872,7 +873,9 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           }
           assistantMessageIdRef.current = null;
           store.stopStreaming(convId);
-          toast.error(toUserMessage(event.error, 'Failed to get response'));
+          if (!failureShownInTurn) {
+            toast.error(toUserMessage(event.error, 'Failed to get response'));
+          }
           break;
         }
       }
@@ -1262,6 +1265,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
             : failedStore.messagesByConversation[convId]?.find(
                 (candidate) => candidate.id === assistantMessageId,
               );
+          const failureShownInTurn = Boolean(failedAssistant?.isStreaming);
           if (failedAssistant?.isStreaming) {
             const currentActivity = failedAssistant.metadata?.['agentActivity'] as
               AgentActivityState | undefined;
@@ -1290,10 +1294,12 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           if (assistantMessageIdsRef.current.get(convId) === assistantMessageId) {
             assistantMessageIdsRef.current.delete(convId);
           }
-          toast.error(
-            message ||
-              (replacement ? 'Could not regenerate this response' : 'Failed to send message'),
-          );
+          if (!failureShownInTurn) {
+            toast.error(
+              message ||
+                (replacement ? 'Could not regenerate this response' : 'Failed to send message'),
+            );
+          }
         })
         .finally(() => {
           if (useChatStore.getState().streamingConversationIds[convId]) {

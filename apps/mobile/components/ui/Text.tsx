@@ -1,7 +1,7 @@
 import { StyleSheet, Text as RNText, type TextProps as RNTextProps } from 'react-native';
 
 interface TextProps extends RNTextProps {
-  variant?: 'default' | 'heading' | 'subheading' | 'caption' | 'mono';
+  variant?: 'default' | 'heading' | 'subheading' | 'caption' | 'mono' | 'inline';
 }
 
 const variantClasses: Record<NonNullable<TextProps['variant']>, string> = {
@@ -10,6 +10,7 @@ const variantClasses: Record<NonNullable<TextProps['variant']>, string> = {
   subheading: 'text-base font-medium text-white',
   caption: 'text-sm text-white',
   mono: 'text-sm font-mono text-white',
+  inline: '',
 };
 
 const HEADER_VARIANTS: ReadonlySet<NonNullable<TextProps['variant']>> = new Set([

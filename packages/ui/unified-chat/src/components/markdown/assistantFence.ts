@@ -38,6 +38,14 @@ import { emailPlainText, parseEmailBlock, WRITING_KIND_LANGUAGES } from './richB
 import { parseChartArtifact } from '@agiworkforce/types/chart-spec';
 
 export { checklistProgress };
+export {
+  formFieldErrors,
+  formSubmissionText,
+  formValueText,
+  initialFormValue,
+  type FormValue,
+} from './answerFormModel';
+export type { FormField, FormSpec, RichCardSpec, StatsSpec, CarouselSpec } from './answerSurfaces';
 export type { AssistantFenceEdit } from './assistantFenceEdits';
 
 export const UNKNOWN_STRUCTURED_LANGUAGE = 'unknown';

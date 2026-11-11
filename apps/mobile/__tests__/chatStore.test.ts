@@ -171,6 +171,7 @@ import {
 } from '../src/features/auth/services/cloudAccountSession';
 import { storage } from '../lib/mmkv';
 import { MINOR_SAFE_REFUSAL, REDUCED_SENSITIVE_CONTENT_REFUSAL } from '../lib/contentFilter';
+import { streamFailureNoticeText } from '../src/features/chat/utils/messageStreamError';
 
 const AUTO_MODEL_ID = requireAutoMode().id;
 const mockStreamChat = streamChat as jest.MockedFunction<typeof streamChat>;
@@ -2724,7 +2725,11 @@ describe('chatStore, streaming state', () => {
       const assistantMsg = msgs.find((m) => m.role === 'assistant');
       expect(assistantMsg).toBeDefined();
       expect(assistantMsg?.isStreaming).toBe(false);
-      expect(assistantMsg?.content).toBe('Something went wrong. Please try again.');
+      expect(assistantMsg?.content).toBe('');
+      expect(assistantMsg?.metadata?.streamError).toEqual({
+        message: 'Something went wrong. Please try again.',
+      });
+      expect(streamFailureNoticeText(assistantMsg)).toBe('Something went wrong. Please try again.');
       expect(getState().error).toBe('Something went wrong. Please try again.');
     });
 

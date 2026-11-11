@@ -2552,16 +2552,16 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 1664,
+      "files": 1688,
       "roles": {
         "asset": 4,
         "config": 11,
         "doc": 4,
         "generated": 1,
         "other": 46,
-        "source": 903,
+        "source": 917,
         "style": 1,
-        "test": 694
+        "test": 704
       }
     },
     {
@@ -2695,12 +2695,12 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 224,
+      "files": 232,
       "roles": {
         "asset": 1,
         "config": 19,
         "doc": 158,
-        "generated": 45,
+        "generated": 53,
         "other": 1
       }
     },
@@ -4985,12 +4985,12 @@
       "lanes": [
         "chat-artifacts"
       ],
-      "files": 447,
+      "files": 450,
       "roles": {
         "config": 3,
-        "source": 207,
+        "source": 208,
         "style": 3,
-        "test": 234
+        "test": 236
       }
     },
     {
