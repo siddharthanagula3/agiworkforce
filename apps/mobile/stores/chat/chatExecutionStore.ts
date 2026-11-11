@@ -4481,20 +4481,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         return;
       }
 
-      if (isCloudEdit) {
-        await deleteCloudMessagesRemote(
-          conversationId,
-          msgs.slice(msgIndex).map((message) => message.id),
-          accountEpoch,
-        );
-        if (!isEditCurrent()) return;
-        msgStore.setState((s) => ({
-          messages: { ...s.messages, [conversationId]: trimmedMsgs },
-        }));
-        await get().sendMessage(conversationId, newContent, userModel, editedAttachments);
-        return;
-      }
-
       const removedTail = msgs.slice(msgIndex);
       msgStore.setState((s) => ({
         messages: { ...s.messages, [conversationId]: trimmedMsgs },
@@ -4504,10 +4490,23 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         await get().sendMessage(conversationId, newContent, userModel, editedAttachments, {
           onAccepted: () => {
             accepted = true;
+            if (!isCloudEdit) return;
+            void deleteCloudMessagesRemote(
+              conversationId,
+              removedTail.map((message) => message.id),
+              accountEpoch,
+            ).catch(() => {
+              if (isEditCurrent()) {
+                set({
+                  error:
+                    'The earlier Cloud messages could not be removed. They may reappear after the next sync.',
+                });
+              }
+            });
           },
         });
       } finally {
-        if (!accepted) {
+        if (!accepted && isEditCurrent()) {
           msgStore.setState((s) => ({
             messages: {
               ...s.messages,

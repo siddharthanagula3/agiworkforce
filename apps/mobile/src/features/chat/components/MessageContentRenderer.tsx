@@ -145,8 +145,10 @@ export function renderInlineMarkdown(
 ): React.ReactNode[] {
   const text = protectEscapes(source);
   const parts: React.ReactNode[] = [];
-  const inlineRegex =
-    /(\*\*(.+?)\*\*|\*(.+?)\*|~~(.+?)~~|`([^`]+)`|\[([^\]]+)\]\(([^)]+)\)|\[(\d{1,3})\](?!\())/g;
+  const inlineRegex = new RegExp(
+    `(\\*\\*(.+?)\\*\\*|\\*(.+?)\\*|~~(.+?)~~|\`([^\`]+)\`|\\[([^\\]]+)\\]\\(([^)]+)\\)|\\[(\\d{1,3})\\](?!\\()|${INLINE_MATH.source})`,
+    'g',
+  );
   let lastIdx = 0;
   let inlineMatch: RegExpExecArray | null;
   let inlineKey = 0;
@@ -233,6 +235,8 @@ export function renderInlineMarkdown(
       } else {
         parts.push(inlineMatch[0]);
       }
+    } else if (inlineMatch[9]) {
+      parts.push(...renderInlineMath(inlineMatch[0], `${keyBase}-math-${inlineKey++}`));
     }
 
     lastIdx = inlineMatch.index + inlineMatch[0].length;

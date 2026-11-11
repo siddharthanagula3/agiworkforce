@@ -52,6 +52,37 @@ describe('inline math inside emphasised Markdown', () => {
     expect(queryByText(/math:/)).toBeNull();
   });
 
+  it('keeps asterisks inside an equation instead of reading them as italics', () => {
+    const { getByText, queryByText } = renderMarkdown('so $a*b*c$ holds');
+
+    expect(getByText('math:inline:a*b*c')).toBeTruthy();
+    expect(queryByText('b')).toBeNull();
+  });
+
+  it('renders an equation with a lone asterisk next to real emphasis in the same paragraph', () => {
+    const { getByText } = renderMarkdown('Let $x_1 * y$ be *important* and **final**.');
+
+    expect(getByText('math:inline:x_1 * y')).toBeTruthy();
+    expect(getByText('important').props.style).toEqual(
+      expect.objectContaining({ fontStyle: 'italic' }),
+    );
+    expect(getByText('final').props.style).toEqual(expect.objectContaining({ fontWeight: '700' }));
+  });
+
+  it('does not pair two dollar amounts around emphasis into an equation', () => {
+    const { getByText, queryByText } = renderMarkdown('It costs $5, is *great*, and then $6 more.');
+
+    expect(queryByText(/math:/)).toBeNull();
+    expect(getByText('great')).toBeTruthy();
+  });
+
+  it('does not read an equation inside a code span as math', () => {
+    const { getByText, queryByText } = renderMarkdown('run `$a*b*c$` now');
+
+    expect(getByText(/\$a\*b\*c\$/)).toBeTruthy();
+    expect(queryByText(/math:/)).toBeNull();
+  });
+
   it('still renders an equation in ordinary text as math', () => {
     const { getByText } = renderMarkdown('plain $x^2$ text');
 
