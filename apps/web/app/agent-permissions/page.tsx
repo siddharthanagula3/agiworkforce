@@ -311,6 +311,11 @@ export default function AgentPermissionsPage() {
                           "The extension reads a page's console messages and the requests it makes, but only while a run is active or you turn the watch on yourself, and only on a site carrying both grants. Message text passes the same redaction as page text. A request line keeps the URL, method, status, type and timing; it drops credentials in the URL and never reads a request body or a header.",
                       },
                       {
+                        label: 'Browsing history',
+                        value:
+                          "Off until you turn on Browsing history in the extension's settings and accept Chrome's own permission prompt; after that the extension asks before every search, which you can allow or decline, and sends the titles, addresses and last visit times of at most 20 matching pages, with sign-in details and secret-looking parts of each address removed and leaving out sites you have blocked or your organization's site policy does not allow.",
+                      },
+                      {
                         label: 'Downloads',
                         value:
                           'A download starts only when you ask for one, saves to your own downloads folder, and must come from the page\u2019s own origin or another origin already on your allowlist. Chrome picks the filename.',

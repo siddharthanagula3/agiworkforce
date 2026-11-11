@@ -90,7 +90,7 @@ export const POLICY_LAST_UPDATED = {
   dataRights: '2026-11-11',
   dataUse: '2026-11-11',
   disclaimer: '2026-10-08',
-  agentPermissions: '2026-11-01',
+  agentPermissions: '2026-11-11',
   modelLicenses: '2026-10-08',
   supportedCountries: '2026-10-08',
   governmentRequests: '2026-10-08',

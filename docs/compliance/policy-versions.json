@@ -1268,6 +1268,12 @@
           "date": "2026-11-01",
           "digest": "c3c00ae513247cae",
           "note": "Editorial, recorded 2026-11-10. Product-name change in commit 3a0d329bb4 (2026-11-08): the hosted mode is now called Cloud, the label PRIVACY_MODE_DISPLAY.managed carries in packages/contracts/types/src/suite-contracts.ts since 330ef6c0b9. Managed Cloud now reads Cloud in the two section labels for default authority and approval required, the screenshot and computer-use inference paragraphs and the connector credentials heading. No default, approval rule or permission changes, so the date does not move."
+        },
+        {
+          "date": "2026-11-11",
+          "digest": "2408219e5a5e702d",
+          "note": "Substantive: the Computer use in Chrome section gains a Browsing history row, a permission the page did not list. The extension asks for the optional history permission through Chrome's own prompt from its settings row (apps/extension/manifest.json optional_permissions; apps/extension/src/features/options/history-access-row.ts; requestHistoryPermission in apps/extension/src/features/computer-use/historySearch.ts), refuses without it and asks before every search (runHistorySearchTool in apps/extension/src/side_panel.ts), and returns at most HISTORY_SEARCH_MAX_RESULTS = 20 entries of title, address with credentials, fragment and secret-named parameters removed (redactHistoryUrl), and last visit time, skipping origins on the user's blocklist and those the site policy refuses (searchBrowsingHistory). /privacy describes the same search since commit 6ade64b7b9. The version this replaces, 2026-11-01, was served by production, as the 2026-11-11 publications record shows. Recorded by batch ext-permissions-page on 2026-11-11.",
+          "summary": "Adds a Browsing history row to Computer use in Chrome. The search is off until you turn it on in the extension's settings and accept Chrome's permission prompt, the extension asks before every search, and it sends the titles, addresses and last visit times of at most 20 matching pages, with secret-looking parts of each address removed and blocked sites left out."
         }
       ]
     },
