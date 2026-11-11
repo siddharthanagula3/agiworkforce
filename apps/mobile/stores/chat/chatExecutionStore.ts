@@ -1325,6 +1325,19 @@ export function captureArtifactsFromMessage(
   }
 }
 
+function reinsertRemovedTail(
+  current: ChatMessage[],
+  keptPrefix: ChatMessage[],
+  removedTail: ChatMessage[],
+): ChatMessage[] {
+  const removedIds = new Set(removedTail.map((message) => message.id));
+  const remaining = current.filter((message) => !removedIds.has(message.id));
+  const lastKept = keptPrefix[keptPrefix.length - 1];
+  const keptIndex = lastKept ? remaining.findIndex((message) => message.id === lastKept.id) : -1;
+  const insertAt = lastKept ? (keptIndex < 0 ? remaining.length : keptIndex + 1) : 0;
+  return [...remaining.slice(0, insertAt), ...removedTail, ...remaining.slice(insertAt)];
+}
+
 function flushDeferredSend(conversationId: string): void {
   const waiting = deferredSends.get(conversationId);
   const next = waiting?.[0];
@@ -4474,12 +4487,39 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           msgs.slice(msgIndex).map((message) => message.id),
           accountEpoch,
         );
+        if (!isEditCurrent()) return;
+        msgStore.setState((s) => ({
+          messages: { ...s.messages, [conversationId]: trimmedMsgs },
+        }));
+        await get().sendMessage(conversationId, newContent, userModel, editedAttachments);
+        return;
       }
-      if (!isEditCurrent()) return;
+
+      const removedTail = msgs.slice(msgIndex);
       msgStore.setState((s) => ({
         messages: { ...s.messages, [conversationId]: trimmedMsgs },
       }));
-      await get().sendMessage(conversationId, newContent, userModel, editedAttachments);
+      let accepted = false;
+      try {
+        await get().sendMessage(conversationId, newContent, userModel, editedAttachments, {
+          onAccepted: () => {
+            accepted = true;
+          },
+        });
+      } finally {
+        if (!accepted) {
+          msgStore.setState((s) => ({
+            messages: {
+              ...s.messages,
+              [conversationId]: reinsertRemovedTail(
+                s.messages[conversationId] ?? [],
+                trimmedMsgs,
+                removedTail,
+              ),
+            },
+          }));
+        }
+      }
     })()
       .catch((err) => {
         if (!isEditCurrent()) return;

@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import { render } from '@testing-library/react-native';
+import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 
 jest.mock('@shopify/flash-list', () => {
   const React = require('react');
@@ -101,6 +102,16 @@ describe('the thread on a wide pane', () => {
 
     expect(getByTestId('chat.empty-state')).toBeTruthy();
     expect(queryByTestId('chat.message-list')).toBeNull();
+  });
+
+  it('gives the jump-to-latest control a 44 point touch target', () => {
+    const { getByLabelText } = render(<MessageList messages={[message('a')]} />);
+
+    const style = StyleSheet.flatten(
+      getByLabelText('Scroll to bottom').props.style as StyleProp<ViewStyle>,
+    );
+    expect(style.width).toBeGreaterThanOrEqual(44);
+    expect(style.height).toBeGreaterThanOrEqual(44);
   });
 
   it('anchors the jump-to-latest control to the column without blocking the pane', () => {

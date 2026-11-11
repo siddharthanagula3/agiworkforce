@@ -6,6 +6,7 @@ import { copyControlLabel, useCopyAction } from '@/src/shared/hooks/useCopyActio
 import type { ColorScheme } from '@/src/ui/theme';
 import { chatTypography, radii, spacing, typeScale } from '@/src/ui/theme/tokens';
 import { checklistProgress, type AssistantFence } from '@agiworkforce/unified-chat/assistant-fence';
+import { openAssistantLink } from './assistantLink';
 
 const PREVIEW_EDIT_NOTICE = 'Edits stay in this preview. Copy or share to keep them.';
 
@@ -21,6 +22,19 @@ export function canRenderAssistantSurface(fence: AssistantFence): fence is Mobil
     fence.kind !== 'stats' &&
     fence.kind !== 'form' &&
     fence.kind !== 'carousel'
+  );
+}
+
+function SourceLink({ url, label, colors }: { url: string; label: string; colors: ColorScheme }) {
+  return (
+    <PressableBox
+      onPress={() => openAssistantLink(url)}
+      accessibilityRole="link"
+      accessibilityLabel={label}
+      style={{ minHeight: 44, justifyContent: 'center' }}
+    >
+      <Text style={{ color: colors.teal, textDecorationLine: 'underline' }}>{label}</Text>
+    </PressableBox>
   );
 }
 
@@ -360,7 +374,7 @@ export function AssistantSurface({
         <Text style={{ color: colors.textPrimary, fontWeight: '600' }}>{fence.title}</Text>
         <Text style={{ color: colors.textSecondary }}>{fence.source}</Text>
         <Text style={{ color: colors.textPrimary }}>{fence.summary}</Text>
-        <Text style={{ color: colors.textSecondary }}>{fence.href}</Text>
+        <SourceLink url={fence.href} label={fence.href} colors={colors} />
       </View>
     );
   }
@@ -417,11 +431,16 @@ export function AssistantSurface({
   if (fence.kind === 'gallery') {
     return (
       <View testID="answer-surface-gallery" accessibilityLabel="Gallery">
-        {fence.items.map((item) => (
-          <Text key={item.caption} style={{ color: colors.textPrimary }}>
-            {item.caption}
-            {item.color ? ` ${item.color}` : ''}
-          </Text>
+        {fence.items.map((item, index) => (
+          <View key={`${index}-${item.caption}`}>
+            <Text style={{ color: colors.textPrimary }}>
+              {item.caption}
+              {item.color ? ` ${item.color}` : ''}
+            </Text>
+            {item.src ? (
+              <SourceLink url={item.src} label={`Open image: ${item.caption}`} colors={colors} />
+            ) : null}
+          </View>
         ))}
       </View>
     );

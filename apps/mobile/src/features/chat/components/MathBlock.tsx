@@ -1,12 +1,12 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { View, StyleSheet, useColorScheme } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { WebView } from 'react-native-webview';
 import type { WebViewMessageEvent } from 'react-native-webview';
 import { agiPalette } from '@agiworkforce/design-tokens';
-import { useThemeColors } from '@/src/ui/theme';
+import { useTheme, useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
-import { colors as darkTokens } from '@/src/ui/theme/tokens';
+import { colors as darkTokens, type ColorScheme } from '@/src/ui/theme/tokens';
 import { KATEX_CSS_URL, KATEX_JS_URL } from '@/src/features/chat/utils/katexAssets';
 
 interface MathBlockProps {
@@ -23,11 +23,30 @@ function escapeHtml(s: string): string {
     .replace(/'/g, '&#39;');
 }
 
-function buildHtml(latex: string, display: boolean, isDark: boolean): string {
-  const bg = isDark ? agiPalette.dark.surface.base : agiPalette.light.surface.base;
-  const fg = isDark ? agiPalette.dark.text.primary : agiPalette.light.text.primary;
-  const accentColor = isDark ? agiPalette.dark.accent.primary : agiPalette.light.accent.primary;
-  const errorColor = isDark ? agiPalette.dark.stateText.danger : agiPalette.light.stateText.danger;
+export function mathPalette(isDark: boolean, isHighContrast: boolean, colors: ColorScheme) {
+  if (isHighContrast) {
+    return {
+      bg: colors.background,
+      fg: colors.textPrimary,
+      accentColor: colors.teal,
+      errorColor: colors.agentError,
+    };
+  }
+  const scheme = isDark ? agiPalette.dark : agiPalette.light;
+  return {
+    bg: scheme.surface.base,
+    fg: scheme.text.primary,
+    accentColor: scheme.accent.primary,
+    errorColor: scheme.stateText.danger,
+  };
+}
+
+export function buildHtml(
+  latex: string,
+  display: boolean,
+  palette: ReturnType<typeof mathPalette>,
+): string {
+  const { bg, fg, accentColor, errorColor } = palette;
 
   const latexEscaped = escapeHtml(latex);
 
@@ -99,20 +118,18 @@ function buildHtml(latex: string, display: boolean, isDark: boolean): string {
 }
 
 export function MathBlock({ latex, display }: MathBlockProps) {
-  const colors = useThemeColors();
-  const systemScheme = useColorScheme();
-  const isDark = systemScheme !== 'light';
+  const { colors, isDark, isHighContrast } = useTheme();
   const [height, setHeight] = useState<number>(display ? 60 : 32);
   const [webViewError, setWebViewError] = useState(false);
   const renderedRef = useRef(false);
 
-  const html = buildHtml(latex, display, isDark);
+  const html = buildHtml(latex, display, mathPalette(isDark, isHighContrast, colors));
 
   useEffect(() => {
     renderedRef.current = false;
     setWebViewError(false);
     setHeight(display ? 60 : 32);
-  }, [latex, display, isDark]);
+  }, [latex, display, isDark, isHighContrast]);
 
   const onMessage = useCallback(
     (event: WebViewMessageEvent) => {

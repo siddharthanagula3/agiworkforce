@@ -311,15 +311,11 @@ export function MessageList({
               onPress={scrollToBottom}
               accessibilityLabel="Scroll to bottom"
               accessibilityRole="button"
-              style={({ pressed }) => [
-                styles.fabButton,
-                {
-                  backgroundColor: colors.teal,
-                  opacity: pressed ? 0.82 : 1,
-                },
-              ]}
+              style={({ pressed }) => [styles.fabTarget, { opacity: pressed ? 0.82 : 1 }]}
             >
-              <ChevronDown size={20} color={colors.accentText} strokeWidth={2.5} />
+              <View style={[styles.fabButton, { backgroundColor: colors.teal }]}>
+                <ChevronDown size={20} color={colors.accentText} strokeWidth={2.5} />
+              </View>
             </Pressable>
           </Animated.View>
         </View>
@@ -344,8 +340,14 @@ const styles = StyleSheet.create({
   },
   fab: {
     position: 'absolute',
-    bottom: 12,
+    bottom: 8,
     alignSelf: 'center',
+  },
+  fabTarget: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   timeDivider: {
     alignItems: 'center',

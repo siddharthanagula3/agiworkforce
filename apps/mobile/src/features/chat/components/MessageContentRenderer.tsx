@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { View, Linking, ScrollView, Alert, type LayoutChangeEvent } from 'react-native';
+import { View, ScrollView, Alert, type LayoutChangeEvent } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
 import { CodeBlockCopyButton } from './CodeBlockCopyButton';
@@ -10,15 +10,11 @@ import { parseMermaidChart } from '@/src/features/chat/utils/mermaidChart';
 import { colors as defaultColors, type ColorScheme } from '@/src/ui/theme';
 import { chatTypography, typeScale } from '@/src/ui/theme/tokens';
 import {
-  classifyExternalLink,
-  getSystemIntentPrompt,
-} from '@/src/features/chat/utils/externalUrls';
-import {
   tokenizeCode,
   syntaxTokenColor,
   type SyntaxToken,
 } from '@/src/features/chat/utils/syntaxHighlight';
-import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
+import { openAssistantLink } from './assistantLink';
 import { normalizeMarkdownSource } from '@agiworkforce/utils/markdown-source';
 import { classifyAssistantFence } from '@agiworkforce/unified-chat/assistant-fence';
 import { AssistantSurface, canRenderAssistantSurface } from './AssistantSurface';
@@ -95,21 +91,6 @@ function restoreEscapes(text: string, keepBackslash = false): string {
   });
 }
 
-function openAssistantLink(url: string): void {
-  const kind = classifyExternalLink(url);
-  if (kind === 'http') {
-    void openUntrustedUrlInAppBrowser(url);
-    return;
-  }
-  if (kind !== 'system-intent') return;
-  const prompt = getSystemIntentPrompt(url);
-  if (!prompt) return;
-  Alert.alert(prompt.title, prompt.message, [
-    { text: 'Cancel', style: 'cancel' },
-    { text: 'Open', onPress: () => Linking.openURL(url).catch(() => undefined) },
-  ]);
-}
-
 export function renderInlineMath(text: string, keyBase: string): React.ReactNode[] {
   const parts: React.ReactNode[] = [];
   const mathRegex = new RegExp(INLINE_MATH);
@@ -134,6 +115,25 @@ export function renderInlineMath(text: string, keyBase: string): React.ReactNode
   if (lastIdx < text.length) {
     parts.push(restoreEscapes(text.slice(lastIdx)));
   }
+  return parts;
+}
+
+function renderEmphasisContent(content: string, keyBase: string): React.ReactNode[] {
+  const parts: React.ReactNode[] = [];
+  let textStart = 0;
+  let idx = 0;
+  while (idx < content.length) {
+    const spanEnd = content[idx] === '`' ? codeSpanEnd(content, idx) : -1;
+    if (spanEnd === -1) {
+      idx += 1;
+      continue;
+    }
+    parts.push(...renderInlineMath(content.slice(textStart, idx), `${keyBase}-${idx}`));
+    parts.push(restoreEscapes(content.slice(idx, spanEnd + 1)));
+    idx = spanEnd + 1;
+    textStart = idx;
+  }
+  parts.push(...renderInlineMath(content.slice(textStart), `${keyBase}-end`));
   return parts;
 }
 
@@ -163,7 +163,7 @@ export function renderInlineMarkdown(
           key={`bold-${keyBase}-${inlineKey++}`}
           style={{ color: renderColors.textPrimary, fontWeight: '700' }}
         >
-          {restoreEscapes(inlineMatch[2])}
+          {renderEmphasisContent(inlineMatch[2], `${keyBase}-bold-${inlineKey}`)}
         </Text>,
       );
     } else if (inlineMatch[3]) {
@@ -172,7 +172,7 @@ export function renderInlineMarkdown(
           key={`italic-${keyBase}-${inlineKey++}`}
           style={{ color: renderColors.textPrimary, fontStyle: 'italic' }}
         >
-          {restoreEscapes(inlineMatch[3])}
+          {renderEmphasisContent(inlineMatch[3], `${keyBase}-italic-${inlineKey}`)}
         </Text>,
       );
     } else if (inlineMatch[4]) {
@@ -181,7 +181,7 @@ export function renderInlineMarkdown(
           key={`strike-${keyBase}-${inlineKey++}`}
           style={{ textDecorationLine: 'line-through', color: renderColors.textMuted }}
         >
-          {restoreEscapes(inlineMatch[4])}
+          {renderEmphasisContent(inlineMatch[4], `${keyBase}-strike-${inlineKey}`)}
         </Text>,
       );
     } else if (inlineMatch[5]) {

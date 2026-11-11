@@ -43,6 +43,12 @@ export function SafeArtifactPreview({
   const runsScripts = kind === 'html';
   const [runtimeError, setRuntimeError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const [shown, setShown] = useState({ content, kind });
+  if (shown.content !== content || shown.kind !== kind) {
+    setShown({ content, kind });
+    setRuntimeError(null);
+    setAttempt((value) => value + 1);
+  }
   const html = useMemo(
     () =>
       isMermaid
