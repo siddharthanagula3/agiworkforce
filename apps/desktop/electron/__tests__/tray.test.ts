@@ -6,6 +6,9 @@ import {
   type GarnishShortcuts,
 } from '../garnishCore';
 
+type NativeSurfaceModule = typeof import('../runtime/nativeSurface');
+type ShortcutsModule = typeof import('../shortcuts');
+
 type MenuTemplate = Electron.MenuItemConstructorOptions[];
 
 const contextMenus: MenuTemplate[] = [];
@@ -48,7 +51,7 @@ vi.mock('../settingsStore', () => ({
 const shownNotifications: { title: string; body: string }[] = [];
 
 vi.mock('../runtime/nativeSurface', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../runtime/nativeSurface')>()),
+  ...(await importOriginal<NativeSurfaceModule>()),
   createNativeNotification: (options: { title: string; body: string }) => ({
     show: () => {
       shownNotifications.push(options);
@@ -64,7 +67,7 @@ const changeGarnishShortcuts = vi.fn((patch: Partial<GarnishShortcuts>, _handler
 let statuses: { key: keyof GarnishShortcuts; accelerator: string; status: string }[] = [];
 
 vi.mock('../shortcuts', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../shortcuts')>()),
+  ...(await importOriginal<ShortcutsModule>()),
   changeGarnishShortcuts: (patch: Partial<GarnishShortcuts>, handlers: unknown) =>
     changeGarnishShortcuts(patch, handlers),
   shortcutRegistrations: () => statuses,

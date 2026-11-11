@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+type ComputerUseServiceModule = typeof import('../runtime/computerUseService');
+type ComputerUseSessionModule = typeof import('../runtime/computerUseSession');
+type PermissionManagerModule = typeof import('../runtime/permissionManager');
+type DevicePromptsModule = typeof import('../runtime/devicePrompts');
+type NativeSurfaceModule = typeof import('../runtime/nativeSurface');
+
 const mocks = vi.hoisted(() => ({
   front: { name: 'Notes', bundleId: 'com.apple.Notes', pid: 4001 } as {
     name: string;
@@ -17,7 +23,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('electron', () => ({}));
 vi.mock('../runtime/computerUseService', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../runtime/computerUseService')>()),
+  ...(await importOriginal<ComputerUseServiceModule>()),
   ComputerUseRefused: class extends Error {
     readonly reason: string;
     constructor(reason: string, message: string) {
@@ -30,7 +36,7 @@ vi.mock('../runtime/computerUseService', async (importOriginal) => ({
   readFrontWindow: vi.fn(async () => ({ front: null, secureInput: false })),
 }));
 vi.mock('../runtime/computerUseSession', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../runtime/computerUseSession')>()),
+  ...(await importOriginal<ComputerUseSessionModule>()),
   askUserDuringRun: vi.fn(async (_window: unknown, ask: () => Promise<unknown>) => ask()),
   computerUsePhase: vi.fn(() => 'active'),
   computerUseStatus: vi.fn(),
@@ -39,7 +45,7 @@ vi.mock('../runtime/computerUseSession', async (importOriginal) => ({
   withoutInputWatch: vi.fn(async (action: () => Promise<unknown>) => action()),
 }));
 vi.mock('../runtime/permissionManager', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../runtime/permissionManager')>()),
+  ...(await importOriginal<PermissionManagerModule>()),
   getPermissionState: vi.fn(
     (capability: string, scope: { target?: string }) =>
       mocks.states.get(`${capability}:${scope.target ?? ''}`) ?? 'prompt',
@@ -54,14 +60,14 @@ vi.mock('../runtime/permissionManager', async (importOriginal) => ({
   consumeSingleUse: vi.fn(),
 }));
 vi.mock('../runtime/devicePrompts', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../runtime/devicePrompts')>()),
+  ...(await importOriginal<DevicePromptsModule>()),
   showDevicePrompt: vi.fn(async () => {
     mocks.whileAsking?.();
     return { response: 1 };
   }),
 }));
 vi.mock('../runtime/nativeSurface', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../runtime/nativeSurface')>()),
+  ...(await importOriginal<NativeSurfaceModule>()),
   showNativeMessage: vi.fn(),
 }));
 

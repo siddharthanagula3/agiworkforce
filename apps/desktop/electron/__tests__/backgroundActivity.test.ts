@@ -4,25 +4,25 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const roots = [{ id: 'root-1', path: '/work/project', name: 'project' }];
 
 vi.mock('node:child_process', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('node:child_process')>()),
+  ...(await importOriginal<ChildProcessModule>()),
   spawn: vi.fn(() => new EventEmitter()),
 }));
 vi.mock('../browser/bridgeServer', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../browser/bridgeServer')>()),
+  ...(await importOriginal<BridgeServerModule>()),
   pairingState: () => ({ paired: false }),
 }));
 vi.mock('../remote/remoteControlService', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../remote/remoteControlService')>()),
+  ...(await importOriginal<RemoteControlServiceModule>()),
   remoteControlState: () => ({ status: 'idle' }),
   stopRemoteControl: vi.fn(),
 }));
 vi.mock('../runtime/computerUseSession', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../runtime/computerUseSession')>()),
+  ...(await importOriginal<ComputerUseSessionModule>()),
   computerUsePhase: () => 'idle',
   stopComputerUse: vi.fn(),
 }));
 vi.mock('../runtime/developerSessionService', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../runtime/developerSessionService')>()),
+  ...(await importOriginal<DeveloperSessionServiceModule>()),
   answerDeveloperApproval: vi.fn(),
   interruptDeveloperTurn: vi.fn(),
   listDeveloperSessions: vi.fn(),
@@ -33,12 +33,12 @@ vi.mock('../runtime/developerSessionService', async (importOriginal) => ({
   stopDeveloperRuntime: vi.fn(),
 }));
 vi.mock('../runtime/shellService', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../runtime/shellService')>()),
+  ...(await importOriginal<ShellServiceModule>()),
   cancelShellRun: vi.fn(),
   listShellRuns: () => [],
 }));
 vi.mock('../runtime/workspaceStore', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../runtime/workspaceStore')>()),
+  ...(await importOriginal<WorkspaceStoreModule>()),
   WorktreeRootRefused: class WorktreeRootRefused extends Error {},
   admitWorktreeRoot: vi.fn(),
   forgetWorktreeRoot: vi.fn(),
@@ -51,6 +51,14 @@ import {
   readBackgroundActivity,
   spawnTrackedDeveloperRuntime,
 } from '../runtime/backgroundActivity';
+
+type ChildProcessModule = typeof import('node:child_process');
+type BridgeServerModule = typeof import('../browser/bridgeServer');
+type RemoteControlServiceModule = typeof import('../remote/remoteControlService');
+type ComputerUseSessionModule = typeof import('../runtime/computerUseSession');
+type DeveloperSessionServiceModule = typeof import('../runtime/developerSessionService');
+type ShellServiceModule = typeof import('../runtime/shellService');
+type WorkspaceStoreModule = typeof import('../runtime/workspaceStore');
 
 function workingTurns(): number | undefined {
   return readBackgroundActivity().codingRuntimes[0]?.workingTurns;
