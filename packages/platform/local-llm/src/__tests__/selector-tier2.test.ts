@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { getDefaultModel, getLiteModeModel } from '../catalog.js';
 import { tier2Generate, tier2LoadModel, tier2Release, _setLLMModuleForTesting } from '../tier2.js';
@@ -109,10 +108,19 @@ describe('tier2Generate with mocked LLMModule produces a real offline response',
     expect(messages[3]).toEqual({ role: 'user', content: 'Follow up' });
   });
 
-  it('tier2LoadModel passes the progress callback to fromModelName', async () => {
+  it('tier2LoadModel reports download progress once per percent, ending at 100', async () => {
     const preset = getDefaultModel().executorchPreset!;
     const progressCb = vi.fn();
+    mockFromModelName.mockImplementationOnce(
+      async (_config: unknown, onProgress?: (fraction: number) => void) => {
+        for (let chunk = 1; chunk <= 5_000; chunk += 1) onProgress?.(chunk / 5_000);
+        return mockInstance;
+      },
+    );
+
     await tier2LoadModel(preset, progressCb);
-    expect(mockFromModelName).toHaveBeenCalledWith(expect.any(Object), progressCb);
+
+    expect(progressCb.mock.calls.length).toBeLessThanOrEqual(101);
+    expect(progressCb).toHaveBeenLastCalledWith(1);
   });
 });

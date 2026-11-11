@@ -1,5 +1,6 @@
 import type { ExecutorchPreset } from '@agiworkforce/types';
 import { getLocalModelCatalog } from './catalog';
+import { reportProgressBySteps } from './progress';
 import type { GenerateOptions, GenerateResult } from './types';
 
 interface LLMModuleInstance {
@@ -129,7 +130,7 @@ async function loadModel(
       tokenizerConfigSource: preset.tokenizerConfigSource,
       ...(vlmInfo ? { capabilities: vlmInfo.capabilities } : {}),
     },
-    onDownloadProgress,
+    onDownloadProgress ? reportProgressBySteps(onDownloadProgress) : undefined,
   );
   if (loadGeneration !== _loadGeneration) {
     nextInstance.delete();

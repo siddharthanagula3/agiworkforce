@@ -16,15 +16,9 @@
     },
     {
       "file": "apps/mobile/src/features/chat/components/MathBlock.tsx",
-      "kind": "inner-html-assignment",
-      "count": 1,
-      "reason": "Inside the KaTeX WebView document: the value is JSON.stringify of errorHtml with a fixed 'Math error' message, interpolated when the document is built, never model text."
-    },
-    {
-      "file": "apps/mobile/src/features/chat/components/MathBlock.tsx",
       "kind": "webview-html-document",
-      "count": 2,
-      "reason": "The KaTeX document renders in a WebView whose navigation is refused for everything except about:blank and about:srcdoc, with DOM storage off and media autoplay off, so the page cannot leave the view or reach app state."
+      "count": 1,
+      "reason": "The math document is built from KaTeX MathML output rendered on the device with trust off, so \\href, \\url and the \\html* commands cannot emit links, classes or styles. It renders in a WebView under a default-src 'none' policy whose only script reports the size, with navigation refused for everything except about:blank and about:srcdoc and DOM storage off."
     },
     {
       "file": "apps/mobile/src/features/chat/components/SafeArtifactPreview.tsx",

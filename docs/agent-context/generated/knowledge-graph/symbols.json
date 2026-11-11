@@ -13217,6 +13217,9 @@
     "buildMarketplaceManifestUrl": [
       "apps/web/features/plugins/server/directory/official-marketplace.ts"
     ],
+    "buildMathDocument": [
+      "apps/mobile/src/features/chat/components/MathBlock.tsx"
+    ],
     "BuildMcpCatalogOptions": [
       "packages/tools/mcp/src/connect.ts",
       "packages/tools/mcp/src/index.ts"
@@ -40417,6 +40420,10 @@
     "download_piper": [
       "apps/desktop/src-tauri/src/features/speech/local_tts.rs"
     ],
+    "DOWNLOAD_PROGRESS_STEP": [
+      "packages/platform/local-llm/src/index.ts",
+      "packages/platform/local-llm/src/progress.ts"
+    ],
     "download_voice": [
       "apps/desktop/src-tauri/src/features/speech/local_tts.rs"
     ],
@@ -45121,9 +45128,6 @@
     "export_conversation_to_file": [
       "apps/cli/src/repl/mod.rs",
       "apps/cli/src/repl/registry.rs"
-    ],
-    "EXPORT_MATH_SCRIPT": [
-      "apps/mobile/services/exportMarkdownHtml.ts"
     ],
     "export_to_json": [
       "apps/desktop/src-tauri/src/core/agi/memory_manager.rs"
@@ -65949,12 +65953,6 @@
     "kanagawa": [
       "apps/desktop/src/themes/presets/kanagawa.ts"
     ],
-    "KATEX_CSS_URL": [
-      "apps/mobile/src/features/chat/utils/katexAssets.ts"
-    ],
-    "KATEX_JS_URL": [
-      "apps/mobile/src/features/chat/utils/katexAssets.ts"
-    ],
     "kbReadCommandFor": [
       "apps/desktop/src/features/chat/ProjectSettingsDialog.tsx"
     ],
@@ -75308,6 +75306,9 @@
     ],
     "MathFallback": [
       "apps/mobile/src/features/chat/components/MathBlock.tsx"
+    ],
+    "MathMarkup": [
+      "packages/ui/unified-chat/src/lib/math-markup.ts"
     ],
     "MATRIX_PATH": [
       "scripts/check-surface-feature-matrix.mjs"
@@ -101082,6 +101083,9 @@
     "readMarketingEmailUnsubscribeToken": [
       "apps/web/lib/services/billing-notice-service.ts"
     ],
+    "readMathSize": [
+      "apps/mobile/src/features/chat/components/MathBlock.tsx"
+    ],
     "readMaturities": [
       "scripts/check-surface-feature-matrix.mjs"
     ],
@@ -106140,6 +106144,9 @@
     "renderMarkdownInto": [
       "apps/extension/src/features/side-panel/markdown.ts"
     ],
+    "renderMathMarkup": [
+      "packages/ui/unified-chat/src/lib/math-markup.ts"
+    ],
     "renderMatrices": [
       "scripts/generate-doc-matrices.mjs"
     ],
@@ -106599,6 +106606,10 @@
     "ReportOfflinePaymentInput": [
       "apps/web/lib/services/enterprise-contracts/index.ts",
       "apps/web/lib/services/enterprise-contracts/invoicing.ts"
+    ],
+    "reportProgressBySteps": [
+      "packages/platform/local-llm/src/index.ts",
+      "packages/platform/local-llm/src/progress.ts"
     ],
     "ReportRefusal": [
       "apps/web/scripts/mobile-top-up-refund-report/report.ts"

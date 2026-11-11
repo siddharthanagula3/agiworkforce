@@ -1,9 +1,18 @@
 import { normalizeMarkdownSource } from '@agiworkforce/utils/markdown-source';
 import { lightColors } from '@/src/ui/theme/tokens';
-import { KATEX_JS_URL } from '@/src/features/chat/utils/katexAssets';
+import { renderMathMarkup } from '@agiworkforce/unified-chat/math-markup';
 
 const ESCAPABLE_PUNCTUATION = /[!-/:-@[-`{-~]/;
 const SAFE_LINK = /^(?:https?:|mailto:)/i;
+
+function renderExportMath(tex: string, display: boolean): string {
+  const tag = display ? 'div' : 'span';
+  const classes = display ? 'math display' : 'math';
+  const math = renderMathMarkup(tex, display);
+  return math.ok
+    ? `<${tag} class="${classes} rendered">${math.markup}</${tag}>`
+    : `<${tag} class="${classes}">${escapeHtml(tex)}</${tag}>`;
+}
 
 export function isSafeExportLink(url: string): boolean {
   return SAFE_LINK.test(url);
@@ -110,7 +119,7 @@ function renderInline(text: string): string {
     if (ch === '$') {
       const close = inlineMathEnd(text, idx);
       if (close !== -1) {
-        plain += hold(`<span class="math">${escapeHtml(text.slice(idx + 1, close).trim())}</span>`);
+        plain += hold(renderExportMath(text.slice(idx + 1, close).trim(), false));
         idx = close + 1;
         continue;
       }
@@ -262,7 +271,7 @@ function renderBlocks(lines: readonly string[]): string {
         .join('\n')
         .trim();
       const tex = source.slice(DISPLAY_MATH.length, source.lastIndexOf(DISPLAY_MATH));
-      out.push(`<div class="math display">${escapeHtml(tex.trim())}</div>`);
+      out.push(renderExportMath(tex.trim(), true));
       idx = mathEnd + 1;
       continue;
     }
@@ -341,21 +350,6 @@ function renderBlocks(lines: readonly string[]): string {
   return out.join('\n');
 }
 
-export function markdownToExportHtml(markdown: string): { html: string; hasMath: boolean } {
-  const html = renderBlocks(normalizeMarkdownSource(markdown).split('\n'));
-  return { html, hasMath: html.includes('class="math') };
+export function markdownToExportHtml(markdown: string): { html: string } {
+  return { html: renderBlocks(normalizeMarkdownSource(markdown).split('\n')) };
 }
-
-export const EXPORT_MATH_SCRIPT = [
-  `<script src="${KATEX_JS_URL}"></script>`,
-  '<script>',
-  "document.querySelectorAll('.math').forEach(function (node) {",
-  '  try {',
-  "    katex.render(node.textContent || '', node, { displayMode: node.classList.contains('display'), output: 'mathml', throwOnError: false });",
-  "    node.classList.add('rendered');",
-  '  } catch (error) {',
-  "    node.setAttribute('data-math-error', String(error));",
-  '  }',
-  '});',
-  '</script>',
-].join('\n');

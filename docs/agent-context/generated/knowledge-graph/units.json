@@ -2559,9 +2559,9 @@
         "doc": 4,
         "generated": 1,
         "other": 46,
-        "source": 895,
+        "source": 894,
         "style": 1,
-        "test": 679
+        "test": 680
       }
     },
     {
@@ -4539,11 +4539,11 @@
         "apps/mobile"
       ],
       "lanes": [],
-      "files": 20,
+      "files": 22,
       "roles": {
         "config": 3,
-        "source": 9,
-        "test": 8
+        "source": 10,
+        "test": 9
       }
     },
     {
@@ -4949,6 +4949,7 @@
         "./continuation-seam",
         "./ime-composition",
         "./markdown-document",
+        "./math-markup",
         "./model-picker",
         "./network-error",
         "./shiki-highlighter",
@@ -4984,12 +4985,12 @@
       "lanes": [
         "chat-artifacts"
       ],
-      "files": 445,
+      "files": 447,
       "roles": {
         "config": 3,
-        "source": 206,
+        "source": 207,
         "style": 3,
-        "test": 233
+        "test": 234
       }
     },
     {

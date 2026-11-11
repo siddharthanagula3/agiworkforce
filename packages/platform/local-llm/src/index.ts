@@ -10,6 +10,7 @@ export {
 } from './selector';
 export { detectCapabilities, isThermallyThrottled } from './capabilities';
 export { tier1Generate } from './tier1';
+export { DOWNLOAD_PROGRESS_STEP, reportProgressBySteps } from './progress';
 export {
   tier2LoadModel,
   tier2Generate,
