@@ -1100,7 +1100,14 @@ export const getE2BExecutor = tracedCodeAction(
       }
     }
 
-    const activeSinceMs = Date.now();
+    // A caller that reuses an open interval continues it: its seconds are billed
+    // from when it was admitted, at the rate its hold was priced at, and what the
+    // hold still funds is measured from that same start.
+    const continuedInterval =
+      computeReservation && !reservationAdmittedForThisAttempt ? existingSession : null;
+    const activeSinceMs = continuedInterval?.activeSinceMs ?? Date.now();
+    const intervalMicrousdPerSecond =
+      continuedInterval?.computeMicrousdPerSecond ?? computeMicrousdPerSecond;
     let intervalHandedToPause = false;
     async function persistSession(): Promise<void> {
       if (!scope || intervalHandedToPause) return;
@@ -1111,7 +1118,9 @@ export const getE2BExecutor = tracedCodeAction(
         ...(scope.networkAccess ? { networkAccess: scope.networkAccess } : {}),
         ...(extraHosts && extraHosts.length > 0 ? { extraHosts } : {}),
         ...(template ? { templateId: template } : {}),
-        ...(computeMicrousdPerSecond === undefined ? {} : { computeMicrousdPerSecond }),
+        ...(intervalMicrousdPerSecond === undefined
+          ? {}
+          : { computeMicrousdPerSecond: intervalMicrousdPerSecond }),
         ...(computeReservation === undefined ? {} : { computeReservation }),
       };
       await saveE2BSession(scope, session);
