@@ -283,8 +283,15 @@ const COLLECT_LEDGER: readonly LedgerRow[] = [
         <Link href={CANONICAL_POLICY_ROUTES.agentPermissions} className="agi-ds-link">
           /agent-permissions
         </Link>
-        . The use of information the Chrome extension receives, including page text, addresses and
-        screenshots of the tabs you choose, will adhere to the{' '}
+        . When you turn on Browsing history in the Chrome extension and allow a search, it sends the
+        titles, addresses and last visit times of at most 20 matching pages for that answer, with
+        sign-in details and secret-looking parts of each address removed; during browser control on
+        a site you have allowed, the assistant can also read that tab&rsquo;s console messages and
+        the address, method, status, type, timing and size of its network requests, never their
+        bodies or headers; and the extension records in your account each action it takes, when it
+        took it, whether it worked and the website it acted on, but not the page. The use of
+        information the Chrome extension receives, including page text, addresses and screenshots of
+        the tabs you choose, will adhere to the{' '}
         <a
           href="https://developer.chrome.com/docs/webstore/program-policies/policies"
           className="agi-ds-link"
