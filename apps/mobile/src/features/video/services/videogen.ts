@@ -113,6 +113,16 @@ export async function cancelVideoGeneration(taskId: string): Promise<VideoGenCan
   return api.post<VideoGenCancelResponse>('/api/media/video/cancel', { task_id: taskId });
 }
 
+export function generatedVideoFromStatus(status: VideoGenStatusResponse): GeneratedVideo {
+  if (!status.video_url) throw new Error('Video finished with no URL');
+  const videoUrl = resolveGeneratedVideoUri(status.video_url);
+  if (!videoUrl) throw new Error('Video finished with an address this app cannot open');
+  return {
+    videoUrl,
+    ...(status.thumbnail_url ? { thumbnailUrl: status.thumbnail_url } : {}),
+  };
+}
+
 export interface GenerateVideoOptions {
   operationId?: string;
   onTaskCreated?: (taskId: string) => void;
@@ -140,15 +150,7 @@ export async function generateVideo(
     const status = await getVideoStatus(started.task_id);
     options.onProgress?.(status.progress, status.status);
 
-    if (status.status === 'completed') {
-      if (!status.video_url) throw new Error('Video finished with no URL');
-      const videoUrl = resolveGeneratedVideoUri(status.video_url);
-      if (!videoUrl) throw new Error('Video finished with an address this app cannot open');
-      return {
-        videoUrl,
-        ...(status.thumbnail_url ? { thumbnailUrl: status.thumbnail_url } : {}),
-      };
-    }
+    if (status.status === 'completed') return generatedVideoFromStatus(status);
     if (status.status === 'failed' || status.status === 'timeout') {
       throw new Error(status.error || `Video generation ${status.status}`);
     }
