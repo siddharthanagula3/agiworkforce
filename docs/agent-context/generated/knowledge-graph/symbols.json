@@ -19179,6 +19179,9 @@
     "CLERK_DEVELOPMENT_HOST": [
       "apps/desktop/electron/config.ts"
     ],
+    "CLERK_LOAD_SETTLE_MS": [
+      "apps/mobile/src/integrations/clerk.ts"
+    ],
     "clerk_native": [
       "apps/desktop/src-tauri/src/sys/account/mod.rs"
     ],
@@ -30324,6 +30327,9 @@
     ],
     "createIdentifierSignIn": [
       "apps/desktop/src/services/clerkNativeAuth.ts"
+    ],
+    "createIdentityTokenSigner": [
+      "apps/web/test/clerk-signed-tokens.ts"
     ],
     "createImageGenerationJob": [
       "apps/web/lib/server/image-generation-jobs.ts"
@@ -57971,6 +57977,9 @@
     "holdsLivePaidSubscription": [
       "apps/web/lib/server/billing-waitlist-access.ts"
     ],
+    "holdTokensUntilClerkAnswers": [
+      "apps/mobile/src/integrations/clerk.ts"
+    ],
     "home": [
       "apps/cli/src/tui/widgets/interactive.rs"
     ],
@@ -59152,6 +59161,9 @@
     ],
     "IdentityTicketSignIn": [
       "apps/web/features/auth/IdentityAuthAdapter.tsx"
+    ],
+    "IdentityTokenSigner": [
+      "apps/web/test/clerk-signed-tokens.ts"
     ],
     "IdentityUser": [
       "packages/platform/identity/src/index.ts",
@@ -65329,6 +65341,9 @@
     ],
     "isTerminalToolStatus": [
       "packages/contracts/types/src/tool-status.ts"
+    ],
+    "isTermsAnswerPending": [
+      "apps/mobile/src/features/auth/store/termsAcceptanceStore.ts"
     ],
     "isTest": [
       "packages/client/client-runtime/src/desktop-index.ts",
@@ -82256,6 +82271,12 @@
     ],
     "nativeSessionFor": [
       "apps/web/lib/identity/native-session-authority.ts"
+    ],
+    "NativeSessionRefusal": [
+      "apps/web/lib/server/native-session-token.ts"
+    ],
+    "NativeSessionVerification": [
+      "apps/web/lib/server/native-session-token.ts"
     ],
     "NativeSignInCard": [
       "apps/desktop/src/features/auth/NativeSignInCard.tsx"
@@ -119058,6 +119079,9 @@
     "serveFreeQuotaTurn": [
       "apps/web/lib/server/free-quota-turn.ts"
     ],
+    "serveIdentitySigningKeys": [
+      "apps/web/test/clerk-signed-tokens.ts"
+    ],
     "server": [
       "apps/cli/src/features/a2a/mod.rs",
       "apps/desktop/src-tauri/src/core/mcp/config.rs",
@@ -122632,6 +122656,9 @@
     ],
     "SignedOutSurfaceProps": [
       "apps/web/shared/components/marketing/SignedOutSurface.tsx"
+    ],
+    "SignedTokenOptions": [
+      "apps/web/test/clerk-signed-tokens.ts"
     ],
     "signEmailLinkToken": [
       "apps/web/lib/services/signed-email-link.ts"
@@ -141538,6 +141565,9 @@
       "apps/mobile/src/features/billing/mobileIapService.ts",
       "apps/web/lib/server/mobile-iap-store-verification.ts"
     ],
+    "verifyNativeSessionToken": [
+      "apps/web/lib/server/native-session-token.ts"
+    ],
     "VerifyOk": [
       "apps/desktop/src-tauri/src/sys/security/dispatch_hmac.rs"
     ],
@@ -141592,6 +141622,9 @@
     "verifyReleaseIntegrity": [
       "apps/mobile/scripts/release/verify-release-integrity.mjs"
     ],
+    "verifyRequestSessionToken": [
+      "apps/web/lib/server/native-session-token.ts"
+    ],
     "VerifyResult": [
       "apps/mobile/lib/dispatchHmac.ts"
     ],
@@ -141601,6 +141634,9 @@
     "VerifySessionTokenOptions": [
       "packages/platform/identity/src/index.ts",
       "packages/platform/identity/src/types.ts"
+    ],
+    "verifySessionTokenWithSurfaceProof": [
+      "apps/web/lib/server/native-session-token.ts"
     ],
     "verifySignature": [
       "apps/web/lib/services/audit-streaming-proxy.ts"
