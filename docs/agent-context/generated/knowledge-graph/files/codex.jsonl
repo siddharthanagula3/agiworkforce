@@ -1,5 +1,2 @@
 {"$generated":"GENERATED FILE, do not edit. Run `node scripts/generate-agent-context-indexes.mjs` after tracked files change; it renders from git ls-files, so a file that is not committed is not in the graph, and `pnpm check:agent-context-indexes` byte-compares this against a fresh render."}
 {"path":".codex/config.toml","unit":".codex","role":"config","unparsed":"notCode"}
-{"path":".codex/hooks.json","unit":".codex","role":"config","unparsed":"notCode"}
-{"path":".codex/hooks/launch.py","unit":".codex","role":"source","exports":["atomic","completion_current","config_fingerprint","coverage","diagnostic","digest","evaluate","evidence_current","evidence_view","local","locked","main","read_json","read_json_stdin","validate_state"],"imports":["spec:argparse","spec:contextlib","spec:fcntl","spec:hashlib","spec:json","spec:math","spec:os","spec:pathlib","spec:sys","spec:tempfile","spec:time"]}
-{"path":".codex/hooks/test_launch.py","unit":".codex","role":"source","exports":["LaunchHookTests"],"imports":["spec:concurrent.futures","spec:copy","spec:importlib.util","spec:json","spec:pathlib","spec:shutil","spec:subprocess","spec:tempfile","spec:time","spec:unittest"]}

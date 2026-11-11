@@ -329,7 +329,6 @@
 {"path":"audit/prior-audits/product-gaps-register.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/prior-audits/public-comparison-2026-10-04.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/prior-audits/public-website-audit-2026-10-03.md","unit":"audit","role":"doc","unparsed":"notCode"}
-{"path":"audit/prior-audits/qa-execution-ledger.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/prior-audits/release-readiness-2026-08-25.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/prior-audits/signed-in-web-audit-2026-10-03.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/prior-audits/teams-enterprise-2026-08-22.md","unit":"audit","role":"doc","unparsed":"notCode"}
@@ -352,5 +351,6 @@
 {"path":"audit/registers/capability-gaps.csv","unit":"audit","role":"other","unparsed":"notCode"}
 {"path":"audit/registers/code-reachability-inventory.json","unit":"audit","role":"config","unparsed":"notCode"}
 {"path":"audit/registers/known-flaws.md","unit":"audit","role":"doc","unparsed":"oversize"}
+{"path":"audit/registers/mobile-store-feature-justification.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/registers/ui-gaps.csv","unit":"audit","role":"other","unparsed":"notCode"}
 {"path":"audit/registers/ui-gaps.md","unit":"audit","role":"doc","unparsed":"notCode"}

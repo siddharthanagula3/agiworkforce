@@ -67,7 +67,7 @@ and signed order forms before card top-ups.
   app: `apps/mobile/src/features/billing/storePurchases.json` holds
   `nativePurchases: false` (owner deferral 2026-11-10). When store purchase is
   turned on it opens with no waitlist or access code (owner decision 2026-10-19,
-  `docs/compliance/mobile-store-feature-justification.md` O2).
+  `audit/registers/mobile-store-feature-justification.md` O2).
 - When the founder opens self-serve upgrades, one policy switch and its audited
   rollout state replace the waitlist decision; clients do not fork the rule.
 

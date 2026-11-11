@@ -8485,9 +8485,6 @@
     "ATOM_MEDIA_TYPE": [
       "apps/web/app/release-notes/changelog-feed.ts"
     ],
-    "atomic": [
-      ".codex/hooks/launch.py"
-    ],
     "AtsHostRule": [
       "apps/extension/src/features/content/autofill/hosts.ts"
     ],
@@ -24135,9 +24132,6 @@
     "Completion": [
       "crates/agiworkforce-agent-core/src/lib.rs"
     ],
-    "completion_current": [
-      ".codex/hooks/launch.py"
-    ],
     "COMPLETION_SPELLINGS_RESERVED_AS_ALIASES": [
       "packages/contracts/types/src/lifecycle-status.ts"
     ],
@@ -25032,9 +25026,6 @@
     ],
     "config_dir": [
       "apps/cli/src/config.rs"
-    ],
-    "config_fingerprint": [
-      ".codex/hooks/launch.py"
     ],
     "config_for_display": [
       "apps/cli/src/repl/mod.rs",
@@ -29455,7 +29446,6 @@
       "apps/web/features/chat/types/message-metadata.ts"
     ],
     "coverage": [
-      ".codex/hooks/launch.py",
       "scripts/check-attachment-class-coverage.mjs"
     ],
     "CoverageError": [
@@ -38086,9 +38076,6 @@
     "diagnoseMemberPolicy": [
       "apps/web/lib/services/organization-policy-gate.ts"
     ],
-    "diagnostic": [
-      ".codex/hooks/launch.py"
-    ],
     "Diagnostic": [
       "apps/cli/src/platform/lsp/mod.rs",
       "apps/cli/src/platform/lsp/types.rs",
@@ -38499,7 +38486,6 @@
       "apps/web/features/marketing/components/ShowcaseScenes.tsx"
     ],
     "digest": [
-      ".codex/hooks/launch.py",
       "scripts/public-runtime/proof.mjs",
       "scripts/run-semgrep.py"
     ],
@@ -43624,7 +43610,6 @@
       "tools/evals/src/types.ts"
     ],
     "evaluate": [
-      ".codex/hooks/launch.py",
       "apps/cli/src/platform/policy/engine.rs",
       "apps/desktop/src-tauri/src/automation/browser/cdp_client.rs",
       "scripts/check-document-classes.mjs",
@@ -43958,12 +43943,6 @@
     "evictOrgSharedConnectorCaches": [
       "apps/web/lib/connectors/org-shared-catalog-cache.ts",
       "apps/web/lib/user-connector-tools.ts"
-    ],
-    "evidence_current": [
-      ".codex/hooks/launch.py"
-    ],
-    "evidence_view": [
-      ".codex/hooks/launch.py"
     ],
     "EvidenceSpan": [
       "apps/web/features/security-scan/server/findings.ts"
@@ -66898,9 +66877,6 @@
     "launchExtension": [
       "apps/extension/e2e/extension-harness.mjs"
     ],
-    "LaunchHookTests": [
-      ".codex/hooks/test_launch.py"
-    ],
     "LaunchScope": [
       "apps/desktop/src-tauri/src/core/mcp/config.rs"
     ],
@@ -70286,7 +70262,6 @@
       "packages/ui/unified-chat/src/lib/writingStyle.ts"
     ],
     "local": [
-      ".codex/hooks/launch.py",
       "apps/desktop/src-tauri/src/sys/account/app_mode.rs",
       "crates/agiworkforce-protocol/src/code_domain.rs"
     ],
@@ -71517,9 +71492,6 @@
     "lockdownTenantForErasure": [
       "apps/web/lib/feature-flags/tenant-lockdown.ts"
     ],
-    "locked": [
-      ".codex/hooks/launch.py"
-    ],
     "LOCKED_CLOUD_MODELS": [
       "apps/mobile/src/features/model-picker/service.ts"
     ],
@@ -71914,7 +71886,6 @@
       ".agents/skills/antislop-human/contrast-check.py",
       ".agents/skills/antislop-human/contrast-mcp.py",
       ".claude/hooks/heavy-job-gate.py",
-      ".codex/hooks/launch.py",
       "apps/desktop/scripts/check-wiring.mjs",
       "apps/mobile/scripts/release/parse-privacy-manifest.py",
       "apps/mobile/scripts/release/setup-privacy-parser.py",
@@ -100172,12 +100143,6 @@
     ],
     "read_installed_versions": [
       "apps/desktop/src-tauri/src/upgrade/installed.rs"
-    ],
-    "read_json": [
-      ".codex/hooks/launch.py"
-    ],
-    "read_json_stdin": [
-      ".codex/hooks/launch.py"
     ],
     "read_keep": [
       "crates/agiworkforce-worktree/src/managed.rs"
@@ -141084,9 +141049,6 @@
     ],
     "validate_standard_headers": [
       "crates/agiworkforce-mcp/src/server.rs"
-    ],
-    "validate_state": [
-      ".codex/hooks/launch.py"
     ],
     "validate_stdio_command": [
       "apps/cli/src/mcp/registry.rs"

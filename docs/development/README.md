@@ -30,9 +30,6 @@ the process, not the rules.
 
 - [`audit/README.md`](../../audit/README.md), the index of open work: blockers,
   gaps, the plan and the live-validation queue.
-- [`audit/prior-audits/qa-execution-ledger.md`](../../audit/prior-audits/qa-execution-ledger.md), a historical snapshot of
-  2026-09-06 (objective, blockers, surfaces audited, dead UI, flows, CI); it is
-  not current state.
 - [`audit/prior-audits/product-gaps-register.md`](../../audit/prior-audits/product-gaps-register.md), the product completeness
   register: every route, control and state gap across the six surfaces, with
   what it connects to and whether it is complete.

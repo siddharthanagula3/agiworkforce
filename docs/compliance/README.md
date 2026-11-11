@@ -155,9 +155,9 @@ reappears.
 - Compliance posture and regulatory notes.
 - License review notes for copied or adapted open-source code.
 - Trademark risk notes and naming decisions.
-- App Store and Google Play justification for each mobile feature, option and permission: [mobile-store-feature-justification.md](mobile-store-feature-justification.md).
 
 ## What Does Not Belong Here
 
 - Secrets, signed contracts, private customer data, or privileged legal communications.
 - Third-party source code; license obligations belong in `THIRD_PARTY_LICENSES.md` and package-level notices.
+- Open fix lists. The App Store and Google Play justification for each mobile feature, option and permission is [`audit/registers/mobile-store-feature-justification.md`](../../audit/registers/mobile-store-feature-justification.md).

@@ -119,8 +119,7 @@ Archived source material:
     shared prerequisite work. D-2026-09-15-04 makes Electron the sole public
     Desktop; retained Tauri work is not part of the public Desktop completion
     claim.
-    Evidence: `docs/product/definition.md`, `docs/product/requirements.md`,
-    `docs/specs/website-launch/AGENT_GOAL.md`.
+    Evidence: `docs/product/definition.md`, `docs/product/requirements.md`.
 
 21. BYOK tool orchestration defaults to Native First when BYOK is active and the selected provider/model supports native tools, but only with visible provider/model/tool labels, retention/cost disclosure, and consent for risky payloads. Native First never applies to Local mode.
     Evidence: `docs/product/requirements.md`, `docs/architecture/byok-provider-strategy.md`.

@@ -5,7 +5,7 @@ Status: Open work: documents to correct
 When a listed document is corrected (or deleted), remove its entries; delete this file when none are left.
 Owner: Repository maintainers
 Code: `21d439536dde221fe072757ac939c3eb6fccbe6d` · Rubric `530601c0db44` · Generated 2026-09-27
-Re-checked 2026-11-11 against the current tree: entries for deleted documents and for contradictions the current text no longer makes were removed (CR-001 to CR-004, CR-007, CR-008, CR-025, CR-026, section 3.7 and the rows of removed entries). Section 2.H adds the contradictions that the 2026-11-11 documentation audit left open (CR-049 to CR-059). Entries that cite code lines were not all re-read, and the computed counts in §1 and §4 were not recomputed after the removals; paths below point at where each document lives now.
+Re-checked 2026-11-11 against the current tree: entries for deleted documents and for contradictions the current text no longer makes were removed (CR-001 to CR-004, CR-007, CR-008, CR-025, CR-026, section 3.7 and the rows of removed entries). Section 2.H adds the contradictions that the 2026-11-11 documentation audit left open (CR-049 to CR-059; CR-052 was fixed on 2026-11-11). Entries that cite code lines were not all re-read, and the computed counts in §1 and §4 were not recomputed after the removals; paths below point at where each document lives now.
 
 Every place where an earlier audit, tracker, ledger, decision record or product
 page disagrees with the code at `21d4395`. Counts and every table in §1, §3
@@ -362,13 +362,6 @@ Found while bringing the documentation up to date on 2026-11-11. Each entry need
 - **Code shows:** the server cap is 30 days, but the Clerk Hobby instance ends every session after 7 days. The owner chose on 2026-11-11 to stay on Hobby.
 - **Verdict:** Contradicted in effect.
 - **Doc to update:** `account-security.md` (living) and its claim entry together, or the owner changes the Clerk plan.
-
-#### CR-052 · The download page lists Windows and Linux for Desktop
-
-- **Source:** `apps/web/lib/surface-status.ts:38` gives Desktop, CLI, VS Code and Chrome the platforms macOS, Windows and Linux.
-- **Code shows:** `apps/desktop/electron-builder.yml:70` packages the Electron Desktop for macOS only. The Windows workflow builds the internal Tauri app.
-- **Verdict:** Contradicted for Desktop. CLI, VS Code and Chrome were not checked per platform.
-- **Doc to update:** `surface-status.ts` (code), after the owner says whether Windows and Linux are planned.
 
 #### CR-053 · AGI-prefixed product names against the registry
 

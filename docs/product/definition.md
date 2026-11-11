@@ -371,7 +371,7 @@ on Web remain waitlist/access-code gated. Mobile v1 sells nothing in the app:
 `apps/mobile/src/features/billing/storePurchases.json` holds
 `nativePurchases: false` (owner deferral 2026-11-10). When store purchase is
 turned on it carries no waitlist or access code (owner decision 2026-10-19,
-`docs/compliance/mobile-store-feature-justification.md` O2). Existing paid
+`audit/registers/mobile-store-feature-justification.md` O2). Existing paid
 entitlements resolve on Mobile and Desktop, although those clients are not
 publicly obtainable until their verified releases are published. Free and Basic do not include managed-cloud
 CLI, Chrome, or VS Code access; Local/BYOK developer use remains available

@@ -2296,10 +2296,9 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 4,
+      "files": 1,
       "roles": {
-        "config": 2,
-        "source": 2
+        "config": 1
       }
     },
     {
@@ -2695,11 +2694,11 @@
       "dependsOn": [],
       "dependents": [],
       "lanes": [],
-      "files": 225,
+      "files": 222,
       "roles": {
         "asset": 1,
         "config": 19,
-        "doc": 159,
+        "doc": 156,
         "generated": 45,
         "other": 1
       }
