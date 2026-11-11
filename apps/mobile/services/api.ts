@@ -665,6 +665,11 @@ export const api = {
           const refreshed = await tryRefreshToken();
           assertApiAccountGeneration(accountGeneration);
           if (refreshed) {
+            if (options?.signal?.aborted) {
+              const abortError = new Error('Attachment upload aborted');
+              abortError.name = 'AbortError';
+              throw abortError;
+            }
             return api.uploadFile(file, { ...options, _skipAuthRetry: true });
           }
         }

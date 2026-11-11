@@ -703,6 +703,27 @@ describe('Cloud account request isolation', () => {
     expect(mockInvalidateCloudAccount).toHaveBeenCalledTimes(1);
   });
 
+  it('starts no second presign when the upload is canceled while the session refreshes', async () => {
+    const controller = new AbortController();
+    mockRefreshAuthSession.mockImplementationOnce(async () => {
+      controller.abort();
+      return true;
+    });
+    const fetchMock = jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(makeResponse(401, { error: 'expired' }));
+
+    await expect(
+      api.uploadFile(
+        { name: 'attachment.txt', type: 'text/plain', uri: 'file:///attachment.txt' },
+        { signal: controller.signal },
+      ),
+    ).rejects.toThrow('Upload timed out');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(mockCreateUploadTask).not.toHaveBeenCalled();
+  });
+
   it('refreshes an expired session at attachment completion without uploading the file again', async () => {
     mockGetAuthToken
       .mockResolvedValueOnce('old-token')
