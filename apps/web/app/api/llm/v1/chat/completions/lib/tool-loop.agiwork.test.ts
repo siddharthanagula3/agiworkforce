@@ -151,6 +151,18 @@ describe('runToolLoop AGI Work planning turn', () => {
     expect(output.includes('[DONE]')).toBe(true);
   });
 
+  it('starts no work steps when explicit plan review cannot produce a plan', async () => {
+    mockBuildToolLoopStream.mockResolvedValueOnce(
+      sseStreamFrom([chunk({ content: 'No usable steps.' }, 'stop')]),
+    );
+    const processed = makeAgiWorkProcessed({ goal: 'Prepare the report' });
+    processed.chatRequest.agi_work_plan_approval = true;
+    const output = await drain(runToolLoop(processed, { approvalMode: 'auto' }));
+    expect(mockBuildToolLoopStream).toHaveBeenCalledTimes(1);
+    expect(output).toContain('agi_work_plan_unavailable');
+    expect(output).toContain('No work steps were started');
+  });
+
   it('does not run a plan turn when the run carries no goal', async () => {
     const workTurn = sseStreamFrom([chunk({ content: 'Done.' }), chunk({}, 'stop')]);
     mockBuildToolLoopStream.mockResolvedValueOnce(workTurn);

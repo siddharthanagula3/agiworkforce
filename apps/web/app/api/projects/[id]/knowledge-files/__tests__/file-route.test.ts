@@ -24,6 +24,15 @@ vi.mock('@/lib/server/rls-db', () => ({
   }),
 }));
 vi.mock('@/lib/server/object-storage', () => ({
+  createPrivateObjectWriter: vi.fn(),
+  createObjectCleanupPlan: () => ({
+    targets: { private: 'fixture-private', 'legacy-public': 'fixture-public' },
+    remove: async ({ name, objectKey }: { name: string; objectKey: string }) => {
+      if (name === 'private') await mocks.deletePrivateObject(objectKey);
+      else if (name === 'legacy-public') await mocks.deleteObject(objectKey);
+      else throw new Error('Unexpected cleanup fixture target');
+    },
+  }),
   putPrivateObject: vi.fn(async ({ key }: { key: string }) => ({ key })),
   copyPrivateObjectIfUnchanged: vi.fn(),
   objectKeyFromStorageUri: (value: string) => value,
@@ -144,23 +153,8 @@ describe('project knowledge file bytes and deletion', () => {
     expect(response.headers.get('content-disposition')).toBe('attachment; filename="notes.txt"');
   });
 
-  function noOtherRowSharesTheObject() {
-    const owned = mocks.query.getMockImplementation();
-    mocks.query.mockImplementation(async (sql: string, params: unknown[]) =>
-      sql.includes('where storage_uri = $1') ? [] : owned?.(sql, params),
-    );
-  }
-
-  it('soft-deletes metadata before removing the backing object', async () => {
-    noOtherRowSharesTheObject();
-    const order: string[] = [];
-    mocks.execute.mockImplementation(async () => {
-      order.push('metadata');
-      return 1;
-    });
-    mocks.deleteObject.mockImplementation(async () => {
-      order.push('object');
-    });
+  it('retires metadata without issuing a storage request', async () => {
+    mocks.query.mockResolvedValueOnce([{ id: 'file-1' }]);
 
     const response = await DELETE(
       new NextRequest('https://agiworkforce.com/api/projects/project-1/knowledge-files/file-1', {
@@ -170,12 +164,13 @@ describe('project knowledge file bytes and deletion', () => {
     );
 
     expect(response.status).toBe(200);
-    expect(order).toEqual(['metadata', 'object']);
+    expect(mocks.query.mock.calls[0]?.[0]).toContain('set deleted_at=now()');
+    expect(mocks.deleteObject).not.toHaveBeenCalled();
+    expect(mocks.deletePrivateObject).not.toHaveBeenCalled();
   });
 
-  it('restores visible metadata when backing-object deletion fails', async () => {
-    noOtherRowSharesTheObject();
-    mocks.deleteObject.mockRejectedValueOnce(new Error('R2 unavailable'));
+  it('fails before acknowledging when metadata retirement is unavailable', async () => {
+    mocks.query.mockRejectedValueOnce(new Error('Database unavailable'));
 
     const response = await DELETE(
       new NextRequest('https://agiworkforce.com/api/projects/project-1/knowledge-files/file-1', {
@@ -185,11 +180,13 @@ describe('project knowledge file bytes and deletion', () => {
     );
 
     expect(response.status).toBe(500);
-    expect(mocks.execute).toHaveBeenCalledTimes(2);
-    expect(String(mocks.execute.mock.calls[1]?.[0])).toContain('set deleted_at = null');
+    expect(mocks.query).toHaveBeenCalledTimes(1);
+    expect(mocks.execute).not.toHaveBeenCalled();
+    expect(mocks.deletePrivateObject).not.toHaveBeenCalled();
   });
 
-  it('keeps the backing object while a duplicated project still points at it', async () => {
+  it('does not scan committed references or remove bytes inline', async () => {
+    mocks.query.mockResolvedValueOnce([{ id: 'file-1' }]);
     const response = await DELETE(
       new NextRequest('https://agiworkforce.com/api/projects/project-1/knowledge-files/file-1', {
         method: 'DELETE',
@@ -200,5 +197,6 @@ describe('project knowledge file bytes and deletion', () => {
     expect(response.status).toBe(200);
     expect(mocks.deletePrivateObject).not.toHaveBeenCalled();
     expect(mocks.deleteObject).not.toHaveBeenCalled();
+    expect(mocks.query).toHaveBeenCalledTimes(1);
   });
 });

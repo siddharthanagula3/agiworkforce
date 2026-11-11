@@ -18,8 +18,20 @@ import type {
   WorktreeStartPoint,
 } from '@agiworkforce/types/protocol';
 import type { MessageKind } from '@agiworkforce/types';
+import developerSessionLimits from './developer-session-limits.json' with { type: 'json' };
 
-export const DEVELOPER_SESSION_MAX_FRAME_BYTES = 4 * 1024 * 1024;
+export const DEVELOPER_SESSION_MAX_FRAME_BYTES = developerSessionLimits.maxFrameBytes;
+
+export const GUARD_LIFTING_ENVIRONMENT: readonly string[] = [
+  'AGIWORKFORCE_NO_SANDBOX',
+  'AGIWORKFORCE_SANDBOX_HOOKS',
+  'AGIWORKFORCE_SANDBOX_MCP',
+  'AGI_POWERSHELL_ALLOW_UNSAFE',
+  'AGI_A2A_ALLOW_PRIVATE',
+  'AGI_A2A_ALLOW_FILE_READS',
+  'AGIWORKFORCE_NO_KEYRING',
+  'AGIWORKFORCE_VOICE_ALLOW_CLOUD',
+];
 
 export const DEVELOPER_SESSION_COMMANDS = [
   'developer_runtime_status',

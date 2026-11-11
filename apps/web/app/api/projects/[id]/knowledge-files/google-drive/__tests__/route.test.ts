@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { createError } from '@/lib/errors';
+import { getBillingPlanPricing, getPlanMaxAttachmentBytes } from '@agiworkforce/types';
 
 const connectorRelease = vi.hoisted(() => ({ released: true }));
 const mockAdmitAttachmentUpload = vi.hoisted(() => vi.fn(async (_input: unknown) => undefined));
@@ -307,8 +308,8 @@ describe('POST /api/projects/[id]/knowledge-files/google-drive', () => {
     expect(mocks.downloadGoogleDriveFile).toHaveBeenCalledWith(
       'ya29.token',
       DRIVE_A,
-      25 * 1024 * 1024,
-      'is too large. Pro accounts can upload files up to 25 MB each.',
+      getPlanMaxAttachmentBytes('pro'),
+      `is too large. ${getBillingPlanPricing('pro').label} accounts can upload files up to ${Math.round(getPlanMaxAttachmentBytes('pro') / (1024 * 1024))} MB each.`,
     );
     expect(mockAdmitAttachmentUpload).toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'knowledge-file', byteCount: 3 }),

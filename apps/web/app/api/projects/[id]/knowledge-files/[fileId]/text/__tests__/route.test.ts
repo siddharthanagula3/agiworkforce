@@ -43,6 +43,8 @@ vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: mocks.getUserScopedDb,
 }));
 vi.mock('@/lib/server/object-storage', () => ({
+  createPrivateObjectWriter: vi.fn(),
+  createObjectCleanupPlan: vi.fn(),
   ObjectStorageTimeoutError: class ObjectStorageTimeoutError extends Error {},
   StoredObjectTooLargeError: class StoredObjectTooLargeError extends Error {},
   copyPrivateObjectIfUnchanged: vi.fn(),

@@ -1,3 +1,4 @@
+import uploadContract from './upload-contract.json';
 import { MAX_PLAN_ATTACHMENT_BYTES } from '@agiworkforce/types';
 import { z } from 'zod';
 import { MAX_CHAT_ATTACHMENT_BYTES, ManagedCloudChatAttachmentSchema } from './chat-attachments';
@@ -6,7 +7,7 @@ import {
   ManagedCloudProjectKnowledgeRegisterRequestSchema,
 } from './project-knowledge';
 
-export const MANAGED_CLOUD_RESUMABLE_UPLOADS_PATH = '/api/files/uploads';
+export const MANAGED_CLOUD_RESUMABLE_UPLOADS_PATH = uploadContract.resumablePath;
 
 export function managedCloudResumableUploadPath(uploadId: string): string {
   return `${MANAGED_CLOUD_RESUMABLE_UPLOADS_PATH}/${encodeURIComponent(uploadId)}`;
@@ -22,7 +23,7 @@ export function managedCloudResumableUploadSessionPath(uploadId: string, session
   return `${managedCloudResumableUploadPath(uploadId)}?${RESUMABLE_UPLOAD_SESSION_PARAM}=${encodeURIComponent(session)}`;
 }
 
-export const RESUMABLE_UPLOAD_PART_BYTES = 5 * 1024 * 1024;
+export const RESUMABLE_UPLOAD_PART_BYTES = uploadContract.partBytes;
 
 export const RESUMABLE_UPLOAD_KINDS = ['chat-attachment', 'knowledge-file'] as const;
 export type ResumableUploadKind = (typeof RESUMABLE_UPLOAD_KINDS)[number];

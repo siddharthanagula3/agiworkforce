@@ -246,7 +246,7 @@ fn list_directory_capability(root: Dir, limit: usize) -> Result<CloudHandoffFold
         }
     }
 
-    matches.sort_by(|left, right| right.modified_secs.cmp(&left.modified_secs));
+    matches.sort_by_key(|left| std::cmp::Reverse(left.modified_secs));
     matches.truncate(limit);
     Ok(CloudHandoffFolderListing { matches, truncated })
 }

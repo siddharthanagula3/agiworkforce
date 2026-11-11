@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { DEFAULT_DATA_REGION, type DataRegionId } from '@agiworkforce/compliance';
 
 import { logger } from '@/lib/logger';
 import { OBSERVABILITY_ATTRIBUTE } from '@/lib/observability/attributes';
@@ -68,6 +69,7 @@ export interface DrainBackgroundJobsOptions {
   budgetMs: number;
   maxInFlight: number;
   now?: () => number;
+  region?: DataRegionId;
 }
 
 function jobTimeoutError(job: BackgroundJob): Error {
@@ -233,7 +235,11 @@ export async function drainBackgroundJobs(
       if (eligibleQueues.length === 0) {
         outOfBudget = true;
       } else {
-        const claimed = await claimJobs(options.db, { queues: eligibleQueues, limit: available });
+        const claimed = await claimJobs(options.db, {
+          queues: eligibleQueues,
+          limit: available,
+          region: options.region ?? DEFAULT_DATA_REGION,
+        });
         summary.claimed += claimed.length;
         nothingClaimable = claimed.length === 0;
         const claimedAt = now();

@@ -444,13 +444,14 @@ function checkExampleContracts() {
   const tracked = execFileSync('git', ['ls-files'], {
     cwd: REPO_ROOT,
     encoding: 'utf8',
+    maxBuffer: 64 * 1024 * 1024,
   })
     .split(/\r?\n/)
     .filter(Boolean);
   const scannable = execFileSync(
     'git',
     ['ls-files', '--cached', '--others', '--exclude-standard'],
-    { cwd: REPO_ROOT, encoding: 'utf8' },
+    { cwd: REPO_ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
   )
     .split(/\r?\n/)
     .filter(Boolean);

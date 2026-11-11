@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-type ScanModule0 = typeof import('@/lib/server/object-storage');
 
 vi.mock('server-only', () => ({}));
 
@@ -14,11 +13,6 @@ vi.mock('@/lib/server/media-storage', () => ({
 vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
   deleteProjectKnowledgeObject: mockDeleteKnowledgeObject,
 }));
-vi.mock('@/lib/server/object-storage', async (importOriginal) => ({
-  ...(await importOriginal<ScanModule0>()),
-  objectKeyFromStorageUri: (uri: string) => (uri.startsWith('s3://') ? uri.slice(5) : null),
-}));
-
 import { RETENTION_DAYS_MIN, RETENTION_DOMAINS, type RetentionDomain } from '@agiworkforce/types';
 import {
   DOMAIN_RETENTION_BATCH,
@@ -33,16 +27,21 @@ type Handler = (sql: string, params: unknown[]) => unknown[] | Promise<unknown[]
 
 function fakeDb(handler: Handler) {
   const calls: Array<{ sql: string; params: unknown[] }> = [];
+  const adapter = {
+    query: vi.fn(async (sql: string, params: unknown[] = []) => {
+      calls.push({ sql, params });
+      return handler(sql, params);
+    }),
+    execute: vi.fn(async (sql: string, params: unknown[] = []) => {
+      calls.push({ sql, params });
+      await handler(sql, params);
+      return 1;
+    }),
+    transaction: vi.fn(async (work: (tx: typeof adapter) => unknown) => work(adapter)),
+  };
   return {
     calls,
-    db: {
-      query: vi.fn(async (sql: string, params: unknown[] = []) => {
-        calls.push({ sql, params });
-        return handler(sql, params);
-      }),
-      execute: vi.fn(),
-      transaction: vi.fn(),
-    } as never,
+    db: adapter as never,
   };
 }
 
@@ -143,11 +142,10 @@ describe('per-domain retention sweep', () => {
     expect(result.error).toMatch(/could not be deleted/);
   });
 
-  it('deletes project knowledge objects by their storage key', async () => {
-    const { db } = fakeDb((sql) => {
-      if (/from public\.user_projects p/.test(sql)) {
-        return [{ id: 'p1', object_keys: ['s3://knowledge/p1/doc.pdf'] }];
-      }
+  it('retires project references before deleting records without performing object I/O', async () => {
+    const { db, calls } = fakeDb((sql) => {
+      if (/select p.id, p.user_id/.test(sql)) return [{ id: 'p1', user_id: 'user-a' }];
+      if (/update user_projects p/.test(sql)) return [{ id: 'p1' }];
       if (/delete from public\.user_projects/.test(sql)) return [{ id: 'p1' }];
       if (/count\(\*\)/.test(sql)) return [{ count: 0 }];
       return [];
@@ -159,8 +157,58 @@ describe('per-domain retention sweep', () => {
       { now: NOW, readHolds: async () => [] },
     );
 
-    expect(mockDeleteKnowledgeObject).toHaveBeenCalledWith('knowledge/p1/doc.pdf');
-    expect(result.recordsDeleted).toBe(1);
+    expect(mockDeleteKnowledgeObject).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ recordsDeleted: 1, objectsDeleted: 0, objectsFailed: 0 });
+    const selection = calls.find((call) => /select p.id, p.user_id/.test(call.sql));
+    expect(selection?.sql).toContain('for update of p skip locked');
+    expect(selection?.params).toEqual([
+      ORG,
+      result.cutoff,
+      'project',
+      'project_file',
+      DOMAIN_RETENTION_BATCH,
+    ]);
+    const release = calls.findIndex((call) => /update project_knowledge_files/.test(call.sql));
+    const deletion = calls.findIndex((call) => /delete from public\.user_projects/.test(call.sql));
+    expect(release).toBeGreaterThanOrEqual(0);
+    expect(deletion).toBeGreaterThan(release);
+    expect(calls[deletion]?.params).toEqual(['p1', 'user-a', ORG, 'project', 'project_file']);
+  });
+
+  it('does not report a deletion when project retirement fails', async () => {
+    const { db } = fakeDb((sql) => {
+      if (/select p.id, p.user_id/.test(sql)) return [{ id: 'p1', user_id: 'user-a' }];
+      if (/update user_projects p/.test(sql)) throw new Error('source release rejected');
+      return [];
+    });
+    const result = await sweepOrganizationDomain(
+      db,
+      { organizationId: ORG, domain: 'projects', retentionDays: 90 },
+      { now: NOW, readHolds: async () => [] },
+    );
+    expect(result).toMatchObject({
+      outcome: 'failed',
+      recordsDeleted: 0,
+      objectsDeleted: 0,
+      error: 'source release rejected',
+    });
+    expect(mockDeleteKnowledgeObject).not.toHaveBeenCalled();
+  });
+
+  it('counts project-file holds without suspending projects that have no sources', async () => {
+    const { db, calls } = fakeDb((sql) => (/count\(\*\)/.test(sql) ? [{ count: 1 }] : []));
+    const result = await sweepOrganizationDomain(
+      db,
+      { organizationId: ORG, domain: 'projects', retentionDays: 90 },
+      {
+        now: NOW,
+        readHolds: async () => [{ ...hold('organization'), resourceTypes: ['project_file'] }],
+      },
+    );
+    expect(result).toMatchObject({ outcome: 'nothing_due', recordsHeld: 1, activeHolds: 1 });
+    const selection = calls.find((call) => /select p.id, p.user_id/.test(call.sql));
+    expect(selection?.sql).toContain('exists');
+    expect(selection?.params).toContain('project_file');
   });
 
   it('deletes nothing while an organization-wide legal hold is active', async () => {

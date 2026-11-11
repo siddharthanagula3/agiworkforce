@@ -3,7 +3,11 @@ import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { PassThrough } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LocalRuntimeClient, type SpawnLocalRuntime } from '../integrations/localRuntimeClient';
-import { AGENT_EVENT_SCHEMA_VERSION, MINIMUM_SUPPORTED_RUNTIME_VERSION } from '@agiworkforce/types';
+import {
+  AGENT_EVENT_SCHEMA_VERSION,
+  MINIMUM_SUPPORTED_RUNTIME_VERSION,
+  PRODUCT_NAMES,
+} from '@agiworkforce/types';
 import {
   SYNTHETIC_LOCAL_MODEL_ID,
   SYNTHETIC_LOCAL_MODEL_ID_SECONDARY,
@@ -518,7 +522,7 @@ describe('LocalRuntimeClient', () => {
 
   it.each([
     [[7], 7, 'Update the AGI CLI or set agiWorkforce.cliPath to a current binary.'],
-    [[10, 9], 9, 'Update AGI Code.'],
+    [[10, 9], 9, `Update ${PRODUCT_NAMES.code}.`],
   ])(
     'turns a structured version refusal from a server speaking %j into the side to update',
     async (supportedProtocolVersions, minimumProtocolVersion, action) => {
@@ -551,7 +555,7 @@ describe('LocalRuntimeClient', () => {
   // is a contract change, and this suite should follow it rather than pin a
   // number that quietly becomes the wrong one.
   it.each([
-    [AGENT_EVENT_SCHEMA_VERSION + 1, 'Update AGI Code.'],
+    [AGENT_EVENT_SCHEMA_VERSION + 1, `Update ${PRODUCT_NAMES.code}.`],
     [AGENT_EVENT_SCHEMA_VERSION - 1, 'Update the AGI CLI'],
   ])('refuses a handshake declaring agent event schema %i', async (schemaVersion, action) => {
     const runtime = fakeRuntime(8, { initializeExtra: { agentEventSchemaVersion: schemaVersion } });

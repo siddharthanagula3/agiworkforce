@@ -14,6 +14,8 @@ vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(nu
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn().mockResolvedValue(null) }));
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mockGetUserScopedDb }));
 vi.mock('@/lib/server/object-storage', () => ({
+  createPrivateObjectWriter: vi.fn(),
+  createObjectCleanupPlan: vi.fn(),
   copyPrivateObjectIfUnchanged: vi.fn(),
   isPrivateObjectStorageConfigured: vi.fn(() => true),
   isObjectStorageConfigured: vi.fn(() => true),

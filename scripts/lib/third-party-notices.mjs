@@ -60,7 +60,7 @@ export function readNoticeFiles(dir, extraFile) {
     .map((name) =>
       fs
         .readFileSync(path.join(dir, name), 'utf8')
-        .replace(/^﻿/, '')
+        .replace(/^\uFEFF/, '')
         .replace(/\r\n?/g, '\n')
         .trim(),
     )
@@ -214,6 +214,7 @@ export function packageRootOfModule(modulePath) {
 export function cargoRuntimeClosure(metadata, rootName) {
   const packages = new Map(metadata.packages.map((pkg) => [pkg.id, pkg]));
   const nodes = new Map(metadata.resolve.nodes.map((node) => [node.id, node]));
+  const workspace = new Set(metadata.workspace_members);
   const root = metadata.packages.find((pkg) => pkg.name === rootName && pkg.source === null);
   if (!root) throw new Error(`cargo metadata has no workspace package ${rootName}`);
   const reached = new Set([root.id]);
@@ -222,12 +223,15 @@ export function cargoRuntimeClosure(metadata, rootName) {
     const node = nodes.get(queue.shift());
     for (const dep of node?.deps ?? []) {
       const runtime = (dep.dep_kinds ?? []).some((kind) => kind.kind === null);
-      if (!runtime || reached.has(dep.pkg)) continue;
+      const runtimeSource =
+        packages.get(dep.pkg)?.metadata?.agiworkforce?.['runtime-source'] === true &&
+        (dep.dep_kinds ?? []).some((kind) => kind.kind === 'build');
+      if ((!runtime && !runtimeSource) || reached.has(dep.pkg)) continue;
       reached.add(dep.pkg);
       queue.push(dep.pkg);
     }
   }
-  return [...reached].map((id) => packages.get(id)).filter((pkg) => pkg && pkg.source !== null);
+  return [...reached].map((id) => packages.get(id)).filter((pkg) => pkg && !workspace.has(pkg.id));
 }
 
 export function addCargoPackage(records, pkg, source) {

@@ -75,7 +75,7 @@ impl Default for ManagedTrustSection {
 pub enum ManagedPolicyState {
     Absent,
     Loaded {
-        document: ManagedDocument,
+        document: Box<ManagedDocument>,
         source: PathBuf,
     },
     Invalid(String),
@@ -155,7 +155,7 @@ pub fn load_managed_policy_from(path: &Path) -> ManagedPolicyState {
             ManagedPolicyState::Absent
         }
         Ok(document) => ManagedPolicyState::Loaded {
-            document,
+            document: Box::new(document),
             source: path.to_path_buf(),
         },
         Err(error) => ManagedPolicyState::Invalid(format!("{}: {error}", path.display())),

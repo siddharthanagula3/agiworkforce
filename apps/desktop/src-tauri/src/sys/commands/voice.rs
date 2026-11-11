@@ -691,7 +691,9 @@ fn decode_audio_to_samples(audio_bytes: &[u8]) -> Result<(Vec<f32>, u32), String
             // Convert to f32 samples
             let samples: Vec<f32> = match bits_per_sample {
                 16 => audio_data
-                    .chunks_exact(2)
+                    .as_chunks::<2>()
+                    .0
+                    .iter()
                     .map(|chunk| {
                         let sample = i16::from_le_bytes([chunk[0], chunk[1]]);
                         sample as f32 / 32768.0
@@ -702,7 +704,9 @@ fn decode_audio_to_samples(audio_bytes: &[u8]) -> Result<(Vec<f32>, u32), String
                     .map(|&b| (b as f32 - 128.0) / 128.0)
                     .collect(),
                 32 => audio_data
-                    .chunks_exact(4)
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
                     .map(|chunk| f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]))
                     .collect(),
                 _ => return Err(format!("Unsupported bits per sample: {}", bits_per_sample)),

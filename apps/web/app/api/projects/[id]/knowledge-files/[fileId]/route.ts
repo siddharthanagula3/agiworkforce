@@ -7,10 +7,9 @@ import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { objectKeyFromStorageUri } from '@/lib/server/object-storage';
-import {
-  deleteProjectKnowledgeObject,
-  getProjectKnowledgeObject,
-} from '@/lib/server/project-knowledge-object-storage';
+import { getProjectKnowledgeObject } from '@/lib/server/project-knowledge-object-storage';
+import { retireProjectKnowledgeFile, ProjectContentHeldError } from '@/lib/server/project-deletion';
+import { refuseHeldDeletion } from '@/lib/services/legal-hold-gate';
 import { servedByteHeaders } from '@/lib/security/served-bytes';
 import {
   findReadableProjectKnowledgeFile,
@@ -70,68 +69,22 @@ async function handleDeleteKnowledgeFile(request: NextRequest, context: RouteCon
   if (rateLimitResponse) return rateLimitResponse;
 
   const { id: projectId, fileId } = await context.params;
-  const [file] = await db.query<{ storage_uri: string | null }>(
-    `select f.storage_uri
-       from project_knowledge_files f
-       join user_projects p on p.id = f.project_id
-      where f.id = $1
-        and f.project_id = $2
-        and f.deleted_at is null
-        and p.user_id = $3
-        and p.organization_id is not distinct from $4::uuid
-        and p.is_archived = false
-        and p.deleted_at is null
-      limit 1`,
-    [fileId, projectId, userId, organizationId],
-  );
-  if (!file) throw createError.notFound('Knowledge file not found');
-
-  const objectKey = file.storage_uri ? objectKeyFromStorageUri(file.storage_uri) : null;
-  let objectStillReferenced = false;
+  let removed: boolean;
   try {
-    await db.execute(
-      `update project_knowledge_files
-          set deleted_at = now()
-        where id = $1 and project_id = $2 and deleted_at is null`,
-      [fileId, projectId],
-    );
-    // A duplicated project copies storage_uri rather than the object, so the
-    // object stays while any live row still points at it.
-    if (objectKey) {
-      const [sharer] = await db.query<{ id: string }>(
-        `select id from project_knowledge_files
-          where storage_uri = $1 and deleted_at is null
-          limit 1`,
-        [file.storage_uri],
-      );
-      objectStillReferenced = sharer !== undefined;
-    }
+    removed = await retireProjectKnowledgeFile(db, { projectId, fileId, userId, organizationId });
   } catch (error) {
+    if (error instanceof ProjectContentHeldError) {
+      return refuseHeldDeletion({
+        resourceType: error.resourceType,
+        resourceId: error.resourceId,
+        userId,
+        organizationId,
+      });
+    }
     logger.error({ error, projectId, fileId }, 'Failed to delete knowledge file');
     throw createError.internal('Failed to delete knowledge file');
   }
-
-  if (objectKey && !objectStillReferenced) {
-    try {
-      await deleteProjectKnowledgeObject(objectKey);
-    } catch (error) {
-      logger.error({ error, projectId, fileId, objectKey }, 'Failed to delete knowledge object');
-      try {
-        await db.execute(
-          `update project_knowledge_files
-              set deleted_at = null
-            where id = $1 and project_id = $2 and deleted_at is not null`,
-          [fileId, projectId],
-        );
-      } catch (restoreError) {
-        logger.error(
-          { restoreError, projectId, fileId, objectKey },
-          'Failed to restore knowledge metadata after object deletion failure',
-        );
-      }
-      throw createError.internal('Could not remove the stored source');
-    }
-  }
+  if (!removed) throw createError.notFound('Knowledge file not found');
 
   return NextResponse.json({ success: true });
 }

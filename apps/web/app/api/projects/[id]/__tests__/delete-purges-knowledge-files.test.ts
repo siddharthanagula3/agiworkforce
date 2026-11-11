@@ -63,8 +63,8 @@ function callDelete() {
 }
 
 function knowledgeFileCalls(): [string, unknown[]][] {
-  return (mocks.query.mock.calls as [string, unknown[]][]).filter(([sql]) =>
-    sql.includes('project_knowledge_files'),
+  return ([...mocks.query.mock.calls, ...mocks.execute.mock.calls] as [string, unknown[]][]).filter(
+    ([sql]) => sql.includes('project_knowledge_files'),
   );
 }
 
@@ -74,13 +74,7 @@ beforeEach(() => {
   mocks.resolveActiveOrganizationId.mockResolvedValue(null);
   mocks.execute.mockResolvedValue(1);
   mocks.query.mockImplementation(async (sql: string) =>
-    sql.includes('select distinct storage_uri')
-      ? []
-      : [
-          { storage_uri: 'knowledge-files/projects/proj-1/notes.txt' },
-          { storage_uri: 'knowledge-files/projects/proj-1/spec.pdf' },
-          { storage_uri: null },
-        ],
+    sql.includes('update user_projects') ? [{ id: PROJECT_ID }] : [],
   );
   mocks.deleteProjectKnowledgeObject.mockResolvedValue(undefined);
 });
@@ -97,42 +91,31 @@ describe('DELETE /api/projects/[id] · knowledge-file retention', () => {
     expect(purge).toHaveLength(1);
     const [sql, params] = purge[0]!;
     expect(sql).toContain('update project_knowledge_files');
-    expect(sql).toContain('deleted_at = now()');
+    expect(sql).toContain('deleted_at=now()');
     expect(sql).toContain('deleted_at is null');
-    expect(params).toEqual([PROJECT_ID, 'user-abc', null]);
+    expect(params).toEqual([PROJECT_ID, 'user-abc', null, 'project_file']);
   });
 
-  it('deletes every stored knowledge object so the bytes do not outlive the project', async () => {
+  it('commits source retirement without issuing object-storage requests', async () => {
     await callDelete();
 
     const deletedKeys = (mocks.deleteProjectKnowledgeObject.mock.calls as [string][]).map(
       ([key]) => key,
     );
-    expect(deletedKeys).toEqual([
-      'knowledge-files/projects/proj-1/notes.txt',
-      'knowledge-files/projects/proj-1/spec.pdf',
-    ]);
+    expect(deletedKeys).toEqual([]);
   });
 
-  it('keeps an object a duplicated project still points at', async () => {
-    mocks.query.mockImplementation(async (sql: string) =>
-      sql.includes('select distinct storage_uri')
-        ? [{ storage_uri: 'knowledge-files/projects/proj-1/spec.pdf' }]
-        : [
-            { storage_uri: 'knowledge-files/projects/proj-1/notes.txt' },
-            { storage_uri: 'knowledge-files/projects/proj-1/spec.pdf' },
-          ],
-    );
-
+  it('leaves reference accounting to the transaction and outbox', async () => {
     await callDelete();
 
-    expect(mocks.deleteProjectKnowledgeObject.mock.calls).toEqual([
-      ['knowledge-files/projects/proj-1/notes.txt'],
-    ]);
+    expect(mocks.deleteProjectKnowledgeObject).not.toHaveBeenCalled();
+    expect(knowledgeFileCalls().some(([sql]) => sql.includes('select distinct storage_uri'))).toBe(
+      false,
+    );
   });
 
   it('does not purge knowledge files when no live project matched', async () => {
-    mocks.execute.mockResolvedValue(0);
+    mocks.query.mockResolvedValue([]);
 
     const res = await callDelete();
 
@@ -142,11 +125,11 @@ describe('DELETE /api/projects/[id] · knowledge-file retention', () => {
   });
 
   it('fails the delete instead of leaving knowledge files behind when their cleanup errors', async () => {
-    mocks.query.mockImplementation(async (sql: string) => {
+    mocks.execute.mockImplementation(async (sql: string) => {
       if (sql.includes('project_knowledge_files')) {
         throw Object.assign(new Error('relation does not exist'), { code: '42P01' });
       }
-      return [];
+      return 1;
     });
 
     const res = await callDelete();
@@ -161,6 +144,6 @@ describe('DELETE /api/projects/[id] · knowledge-file retention', () => {
     const res = await callDelete();
 
     expect(res.status).toBe(200);
-    expect(mocks.deleteProjectKnowledgeObject).toHaveBeenCalledTimes(2);
+    expect(mocks.deleteProjectKnowledgeObject).not.toHaveBeenCalled();
   });
 });

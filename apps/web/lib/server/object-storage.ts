@@ -7,8 +7,10 @@ import {
   OBJECT_STORAGE_PRIVATE_BUCKET_ENV,
   OBJECT_STORAGE_PUBLIC_BASE_URL_ENV,
   type ObjectStorageConfig,
+  type ObjectStore,
 } from '@agiworkforce/object-storage';
 import type { Readable } from 'node:stream';
+import { createHash } from 'node:crypto';
 import { getObjectStore, objectStorageConfig } from './object-storage-runtime';
 
 export { ObjectStorageTimeoutError } from '@agiworkforce/object-storage';
@@ -118,8 +120,12 @@ interface PutObjectParams {
   contentLength?: number;
 }
 
-function putObjectInBucket(bucket: string, params: PutObjectParams): Promise<void> {
-  return getObjectStore().put({
+function putObjectInBucket(
+  bucket: string,
+  params: PutObjectParams,
+  store: ObjectStore = getObjectStore(),
+): Promise<void> {
+  return store.put({
     bucket,
     key: params.key,
     body: params.data,
@@ -134,8 +140,36 @@ export async function putObject(params: PutObjectParams): Promise<{ url: string 
 }
 
 export async function putPrivateObject(params: PutObjectParams): Promise<{ key: string }> {
-  await putObjectInBucket(privateBucketName(), params);
+  await createPrivateObjectWriter().put(params);
   return { key: params.key };
+}
+
+function objectBucketIdentity(config: ObjectStorageConfig, bucket: string): string {
+  return createHash('sha256')
+    .update(
+      JSON.stringify([
+        'object-cleanup-v1',
+        config.provider,
+        config.endpoint,
+        config.region,
+        config.forcePathStyle,
+        bucket,
+      ]),
+    )
+    .digest('hex');
+}
+
+export function createPrivateObjectWriter(): {
+  target: string;
+  put(params: PutObjectParams): Promise<void>;
+} {
+  const config = objectStorageConfig();
+  const bucket = privateBucketName(config);
+  const store = getObjectStore();
+  return Object.freeze({
+    target: objectBucketIdentity(config, bucket),
+    put: (params: PutObjectParams) => putObjectInBucket(bucket, params, store),
+  });
 }
 
 async function getObjectFromBucket(
@@ -257,6 +291,37 @@ export function deleteObject(key: string): Promise<void> {
 
 export function deletePrivateObject(key: string): Promise<void> {
   return getObjectStore().delete(privateBucketName(), key);
+}
+
+export interface ObjectCleanupPlan {
+  targets: Readonly<Record<string, string>>;
+  remove(target: { name: string; location: string; objectKey: string }): Promise<void>;
+}
+
+export function createObjectCleanupPlan(): ObjectCleanupPlan {
+  const config = objectStorageConfig();
+  const buckets = new Map([['private', privateBucketName(config)]]);
+  if (config.publicBucket) buckets.set('legacy-public', publicBucketName(config));
+  const store = getObjectStore();
+  const targets = Object.freeze(
+    Object.fromEntries(
+      [...buckets].map(([name, bucket]) => [name, objectBucketIdentity(config, bucket)]),
+    ),
+  );
+  return {
+    targets,
+    async remove({ name, location, objectKey }) {
+      const bucket = buckets.get(name);
+      if (
+        !bucket ||
+        targets[name] !== location ||
+        objectKeyFromStorageUri(objectKey) !== objectKey
+      ) {
+        throw new Error('Object cleanup does not match its pinned storage target.');
+      }
+      await store.delete(bucket, objectKey);
+    },
+  };
 }
 
 interface PresignUploadParams {

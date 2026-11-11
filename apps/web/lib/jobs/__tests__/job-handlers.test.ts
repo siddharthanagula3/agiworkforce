@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { JOB_KINDS } from '../job-queues';
 type ScanModule0 = typeof import('@/lib/device-steps/device-registry');
 type ScanModule1 = typeof import('../job-service');
 type ScheduleNotificationModule = typeof import('@/lib/services/schedule-notification-service');
@@ -51,6 +52,7 @@ vi.mock('@/lib/server/scheduled-account-erasure', () => ({
   reEraseTombstonedAccount: mocks.reEraseTombstonedAccount,
 }));
 vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
+  createProjectKnowledgeCleanupPlan: vi.fn(),
   deleteProjectKnowledgeObject: mocks.deleteProjectKnowledgeObject,
   getProjectKnowledgeObject: vi.fn(),
 }));
@@ -398,22 +400,9 @@ describe('the registry', () => {
   });
 
   it('registers a handler for every kind a producer can enqueue', () => {
-    expect(Object.keys(BACKGROUND_JOB_HANDLERS).sort()).toEqual(
-      [
-        'data-deletion.scheduled-account-erasure',
-        'data-export.build-archive',
-        'data-export.expire-archive',
-        'email.data-export-ready',
-        'email.schedule-completed',
-        'event-triggers.fire',
-        'file-processing.purge-upload-object',
-        'media-generation.image-attempt',
-        'notifications.schedule-completed',
-        'research.settle-report-cost',
-        'webhooks.audit-stream-delivery',
-        'webhooks.developer-delivery',
-        'webhooks.signaling-device-revoke',
-      ].sort(),
-    );
+    expect(Object.keys(BACKGROUND_JOB_HANDLERS).sort()).toEqual(Object.keys(JOB_KINDS).sort());
+    expect(
+      Object.values(BACKGROUND_JOB_HANDLERS).every((handler) => typeof handler === 'function'),
+    ).toBe(true);
   });
 });

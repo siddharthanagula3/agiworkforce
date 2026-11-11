@@ -113,7 +113,7 @@ pub fn list() -> Result<Vec<BackgroundRun>> {
         .filter_map(|entry| entry.file_name().to_str().map(str::to_string))
         .filter_map(|id| load(&id).ok())
         .collect();
-    runs.sort_by(|a, b| b.started_at.cmp(&a.started_at));
+    runs.sort_by_key(|run| std::cmp::Reverse(run.started_at));
     Ok(runs)
 }
 

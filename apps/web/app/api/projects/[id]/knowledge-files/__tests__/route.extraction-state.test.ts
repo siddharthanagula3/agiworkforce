@@ -109,9 +109,10 @@ describe('POST knowledge-files records why a file has no extracted text', () => 
   beforeEach(() => {
     mockNeonQuery.mockReset();
     mockExtractProjectKnowledgeFile.mockReset();
-    mockSealProjectKnowledgeObject.mockResolvedValue(
-      'knowledge-files/projects/proj-1/sealed/source.txt',
-    );
+    mockSealProjectKnowledgeObject.mockResolvedValue({
+      key: 'knowledge-files/projects/proj-1/sealed/source.txt',
+      targets: { private: 'fixture-private' },
+    });
   });
 
   it('stores an image-specific not-readable summary instead of a bare null', async () => {

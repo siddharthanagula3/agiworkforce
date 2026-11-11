@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { topLevelStatements } from './lib/sql-statements.mjs';
 import { test } from 'node:test';
 import {
   MIGRATION_RUNNER_VERSION,
@@ -16,6 +17,28 @@ import {
   missingRouteTableMigrations,
 } from './lib/route-table-contract.mjs';
 import { migrationConnectionString, parseCliArgs } from './neon-migrate.mjs';
+
+test('literal-preserving statements keep executable function bodies and ignore commented decoys', () => {
+  const source = `-- CREATE FUNCTION public.decoy() RETURNS boolean AS $$ SELECT false $$;
+    /* CREATE FUNCTION public.other_decoy() RETURNS boolean AS $$ SELECT false $$; */
+    CREATE FUNCTION public.actual() RETURNS text LANGUAGE sql AS $fn$
+      SELECT 'Keep Case; -- literal';
+    $fn$;
+    SELECT 'Trailing';`;
+  const actual = topLevelStatements(source, {
+    preserveLiterals: true,
+    preserveQuotedIdentifiers: true,
+  });
+  assert.equal(actual.length, 2);
+  assert.match(actual[0], /^CREATE FUNCTION public\.actual/);
+  assert(actual[0].includes("'Keep Case; -- literal'"));
+  assert(!actual[0].includes('decoy'));
+  assert.equal(actual[1], "SELECT 'Trailing'");
+  assert.deepEqual(topLevelStatements(source), [
+    'create function public.actual() returns text language sql as $body$',
+    "select ''",
+  ]);
+});
 
 function ledgerRow(migration, overrides = {}) {
   return {

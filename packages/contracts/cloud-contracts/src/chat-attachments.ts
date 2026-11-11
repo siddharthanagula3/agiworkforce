@@ -1,3 +1,4 @@
+import attachmentPolicy from './chat-attachment-policy.json' with { type: 'json' };
 import {
   createFileReference,
   isTextLikeFileMediaType,
@@ -12,65 +13,21 @@ import { z } from 'zod';
 export const MANAGED_CLOUD_CHAT_ATTACHMENT_PRESIGN_PATH = '/api/uploads/presign';
 export const MANAGED_CLOUD_CHAT_ATTACHMENT_COMPLETE_PATH = '/api/uploads/chat-attachment/complete';
 
-export const MAX_CHAT_ATTACHMENT_BYTES = 12 * 1024 * 1024;
-export const MAX_CHAT_ATTACHMENT_MESSAGE_BYTES = 12 * 1024 * 1024;
-export const MAX_CHAT_ATTACHMENT_COUNT = 10;
-
-export const CHAT_ATTACHMENT_NEEDS_PROJECT_MESSAGE =
-  'Files over 12 MB go into a project, where AGI reads and searches them.';
+export const MAX_CHAT_ATTACHMENT_BYTES = attachmentPolicy.maxBytes;
+export const MAX_CHAT_ATTACHMENT_MESSAGE_BYTES = attachmentPolicy.maxMessageBytes;
+export const MAX_CHAT_ATTACHMENT_COUNT = attachmentPolicy.maxCount;
 
 const BYTES_PER_MEBIBYTE = 1024 * 1024;
+
+export const CHAT_ATTACHMENT_NEEDS_PROJECT_MESSAGE = `Files over ${MAX_CHAT_ATTACHMENT_BYTES / BYTES_PER_MEBIBYTE} MB go into a project, where AGI reads and searches them.`;
 
 export function chatAttachmentSizeLabel(bytes: number): string {
   return `${Math.round((bytes / BYTES_PER_MEBIBYTE) * 10) / 10} MiB`;
 }
 
-export const CHAT_ATTACHMENT_MIME_TYPES = [
-  'image/png',
-  'image/jpeg',
-  'image/gif',
-  'image/webp',
-  'application/pdf',
-  'text/plain',
-  'text/markdown',
-  'text/csv',
-  'text/javascript',
-  'text/typescript',
-  'text/html',
-  'text/css',
-  'application/json',
-  'application/x-ipynb+json',
-  'application/xml',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-] as const;
+export const CHAT_ATTACHMENT_MIME_TYPES: readonly string[] = attachmentPolicy.mimeTypes;
 
-const CHAT_ATTACHMENT_EXTENSIONS = [
-  '.txt',
-  '.md',
-  '.csv',
-  '.json',
-  '.ipynb',
-  '.xml',
-  '.html',
-  '.css',
-  '.js',
-  '.jsx',
-  '.ts',
-  '.tsx',
-  '.py',
-  '.rs',
-  '.go',
-  '.rb',
-  '.sh',
-  '.yml',
-  '.yaml',
-  '.toml',
-  '.docx',
-  '.xlsx',
-  '.pptx',
-] as const;
+const CHAT_ATTACHMENT_EXTENSIONS: readonly string[] = attachmentPolicy.extensions;
 
 export function chatAttachmentAcceptAttribute(): string {
   return [...CHAT_ATTACHMENT_MIME_TYPES, ...CHAT_ATTACHMENT_EXTENSIONS].join(',');
@@ -111,9 +68,7 @@ export function resolveChatAttachmentMimeType(fileName: string, mimeType: string
 }
 
 export function isChatImageMimeType(mimeType: string): boolean {
-  return ['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(
-    mimeType.trim().toLowerCase(),
-  );
+  return attachmentPolicy.imageMimeTypes.includes(mimeType.trim().toLowerCase());
 }
 
 /**
@@ -139,8 +94,8 @@ export function normalizeChatDocumentMimeType(mimeType: string): string {
 
 export const ManagedCloudChatAttachmentPresignRequestSchema = z.object({
   kind: z.literal('chat-attachment'),
-  fileName: z.string().min(1).max(255),
-  mimeType: z.string().min(1).max(255),
+  fileName: z.string().min(1).max(attachmentPolicy.fileNameMaxLength),
+  mimeType: z.string().min(1).max(attachmentPolicy.mimeTypeMaxLength),
   byteCount: z.number().int().positive().max(MAX_CHAT_ATTACHMENT_BYTES),
 });
 
@@ -153,8 +108,8 @@ export const ManagedCloudChatAttachmentPresignResponseSchema = z.object({
 
 export const ManagedCloudChatAttachmentCompleteRequestSchema = z.object({
   storageKey: z.string().min(1).max(600),
-  fileName: z.string().min(1).max(255),
-  mimeType: z.string().min(1).max(255),
+  fileName: z.string().min(1).max(attachmentPolicy.fileNameMaxLength),
+  mimeType: z.string().min(1).max(attachmentPolicy.mimeTypeMaxLength),
   byteCount: z.number().int().positive().max(MAX_CHAT_ATTACHMENT_BYTES),
   /**
    * The conversation the file is being attached to, when it already exists.
@@ -172,7 +127,7 @@ export const ManagedCloudChatAttachmentSchema = z.object({
   mimeType: z.string().min(1),
   byteCount: z.number().int().positive(),
   type: z.enum(['image', 'file']),
-  url: z.string().startsWith('/api/files/'),
+  url: z.string().startsWith(attachmentPolicy.filePathPrefix),
 });
 
 export const ManagedCloudChatAttachmentCompleteResponseSchema = z.object({
@@ -194,15 +149,15 @@ export const ManagedCloudUploadedChatAttachmentsSchema = z
       bytes += attachment.byteCount;
       if (
         ids.has(attachment.id) ||
-        attachment.url !== `/api/files/${attachment.id}` ||
-        attachment.name.length > 255 ||
+        attachment.url !== `${attachmentPolicy.filePathPrefix}${attachment.id}` ||
+        attachment.name.length > attachmentPolicy.fileNameMaxLength ||
         attachment.name.includes('/') ||
         attachment.name.includes('\\') ||
         Array.from(attachment.name).some((character) => {
           const code = character.charCodeAt(0);
           return code <= 31 || code === 127;
         }) ||
-        attachment.mimeType.length > 255 ||
+        attachment.mimeType.length > attachmentPolicy.mimeTypeMaxLength ||
         !isSupportedChatAttachment(attachment.name, attachment.mimeType) ||
         (attachment.type === 'image') !== isChatImageMimeType(attachment.mimeType)
       )

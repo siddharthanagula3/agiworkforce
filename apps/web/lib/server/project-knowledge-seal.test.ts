@@ -22,6 +22,7 @@ vi.mock('./object-storage-runtime', () => ({
 
 const {
   createProjectKnowledgeUploadAuthorization,
+  createProjectKnowledgeCleanupPlan,
   getProjectKnowledgeObject,
   isSealedProjectKnowledgeKey,
   sealProjectKnowledgeObject,
@@ -51,14 +52,17 @@ describe('sealing an inspected project knowledge object', () => {
     await putUploaded(INSPECTED);
     const inspected = await getProjectKnowledgeObject(UPLOAD_KEY, INSPECTED.byteLength);
 
-    const sealedKey = await sealProjectKnowledgeObject({
+    const sealed = await sealProjectKnowledgeObject({
       key: UPLOAD_KEY,
       etag: inspected?.etag,
       bytes: Buffer.from(INSPECTED),
       contentType: 'text/plain',
     });
 
-    expect(sealedKey).toBe(SEALED_KEY);
+    expect(sealed).toEqual({
+      key: SEALED_KEY,
+      targets: { private: createProjectKnowledgeCleanupPlan().targets['private'] },
+    });
     expect(isSealedProjectKnowledgeKey(SEALED_KEY)).toBe(true);
     expect(sealedProjectKnowledgeKey(SEALED_KEY)).toBeNull();
     await expect(
@@ -88,7 +92,10 @@ describe('sealing an inspected project knowledge object', () => {
         bytes: Buffer.from(INSPECTED),
         contentType: 'text/plain',
       }),
-    ).resolves.toBe(SEALED_KEY);
+    ).resolves.toEqual({
+      key: SEALED_KEY,
+      targets: { private: createProjectKnowledgeCleanupPlan().targets['private'] },
+    });
     await expect(
       getProjectKnowledgeObject(SEALED_KEY, INSPECTED.byteLength),
     ).resolves.toMatchObject({ data: Buffer.from(INSPECTED), contentType: 'text/plain' });
