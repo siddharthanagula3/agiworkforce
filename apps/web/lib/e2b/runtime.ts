@@ -844,8 +844,9 @@ export const getE2BExecutor = tracedCodeAction(
       }
     }
 
+    const planLifetimeMs = planTtlMs || E2B_CONVERSATION_TIMEOUT_MS;
     const plannedTimeoutMs = scope
-      ? admittedSandboxLifetimeMs(planTtlMs || E2B_CONVERSATION_TIMEOUT_MS, scope.releaseByMs)
+      ? admittedSandboxLifetimeMs(planLifetimeMs, scope.releaseByMs)
       : E2B_SANDBOX_TIMEOUT_MS;
     let sandboxTimeoutMs = plannedTimeoutMs;
     let lifetimeNotice: string | null = null;
@@ -882,8 +883,10 @@ export const getE2BExecutor = tracedCodeAction(
     const computeMicrousdPerSecond = provisioningRate > 0 ? provisioningRate : undefined;
 
     // A reconnect restarts the provider's timeout, so a resumed interval may only
-    // run for what its hold still funds; one that funds less than a minimum run
-    // is settled here and the sandbox is admitted again below.
+    // run for what its hold still funds. One that funds less than a minimum run,
+    // or ends before this caller releases the sandbox, is settled here and the
+    // sandbox is admitted again below: an interval a short caller left open must
+    // not time the sandbox out under a longer one.
     const resumed = existingSession;
     if (scope && resumed?.activeSinceMs !== undefined && resumed.computeReservation) {
       const rate = resumed.computeMicrousdPerSecond ?? provisioningRate;
@@ -894,11 +897,13 @@ export const getE2BExecutor = tracedCodeAction(
             )
           : 0;
       const leftMs = fundedMs - (Date.now() - resumed.activeSinceMs);
-      if (leftMs < SANDBOX_MINIMUM_FUNDED_RUN_MS) {
+      const neededMs =
+        scope.releaseByMs === undefined ? SANDBOX_MINIMUM_FUNDED_RUN_MS : plannedTimeoutMs;
+      if (leftMs < neededMs) {
         await closeBillableInterval(scope, resumed, 'pause');
         existingSession = await getE2BSession(scope);
       } else {
-        sandboxTimeoutMs = Math.min(plannedTimeoutMs, leftMs);
+        sandboxTimeoutMs = Math.min(planLifetimeMs, leftMs);
       }
     }
 

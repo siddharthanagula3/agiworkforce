@@ -52,7 +52,8 @@ import {
   listCloudCodeRuntimes,
 } from '@/lib/e2b/templates';
 import { providerProxyBaseUrl } from '@/lib/e2b/provider-proxy';
-import { managedCloudCodeSessionScope } from '@/lib/e2b/session-store';
+import { managedCloudCodeSessionScope, type E2BSessionScope } from '@/lib/e2b/session-store';
+import { CLOUD_CODE_SESSION_ROUTE_FUNCTION_LIMIT_MS } from './cloud-code-turn-budget';
 import {
   GitHubPullRequestError,
   createGitHubPullRequest,
@@ -145,6 +146,20 @@ const WORKING_BRANCH_SUFFIX_LENGTH = 8;
  * their session is usable again, bounded, instead of permanent.
  */
 export const CLOUD_CODE_RUN_LEASE_SECONDS = 420;
+
+/**
+ * The sandbox scope of one Code session operation. The operation pauses the
+ * sandbox before it returns, so its hold and timeout end when its route could
+ * no longer be running rather than at the plan's longest sandbox run.
+ */
+function cloudCodeOperationScope(
+  ...scope: Parameters<typeof managedCloudCodeSessionScope>
+): E2BSessionScope {
+  return {
+    ...managedCloudCodeSessionScope(...scope),
+    releaseByMs: Date.now() + CLOUD_CODE_SESSION_ROUTE_FUNCTION_LIMIT_MS,
+  };
+}
 
 export interface CloudCodeRunClaim {
   session: CloudCodeSession;
@@ -1300,7 +1315,7 @@ export const createCloudCodeSession = tracedCodeAction(
     }
 
     const sessionId = row.id;
-    const scope = managedCloudCodeSessionScope(
+    const scope = cloudCodeOperationScope(
       owner.userId,
       sessionId,
       validated.networkAccess,
@@ -1627,7 +1642,7 @@ export const runCloudCodeCommand = tracedCodeAction(
     if (!claim) {
       throw new CloudCodeConflictError('Code session is busy; wait and try again');
     }
-    const scope = managedCloudCodeSessionScope(
+    const scope = cloudCodeOperationScope(
       owner.userId,
       sessionId,
       claim.session.networkAccess,
@@ -1780,7 +1795,7 @@ export const runCloudCodeNotebookCell = tracedCodeAction(
     if (!claim) {
       throw new CloudCodeConflictError('Code session is busy; wait and try again');
     }
-    const scope = managedCloudCodeSessionScope(
+    const scope = cloudCodeOperationScope(
       owner.userId,
       sessionId,
       claim.session.networkAccess,
@@ -1864,7 +1879,7 @@ export async function writeCloudCodeNotebookFile(
   if (!claim) {
     throw new CloudCodeConflictError('Code session is busy; wait and try again');
   }
-  const scope = managedCloudCodeSessionScope(
+  const scope = cloudCodeOperationScope(
     owner.userId,
     sessionId,
     claim.session.networkAccess,
@@ -1933,7 +1948,7 @@ export async function listCloudCodeNotebookFiles(
   if (!claim) {
     throw new CloudCodeConflictError('Code session is busy; wait and try again');
   }
-  const scope = managedCloudCodeSessionScope(
+  const scope = cloudCodeOperationScope(
     owner.userId,
     sessionId,
     claim.session.networkAccess,
@@ -2010,7 +2025,7 @@ export async function readCloudCodeNotebookFile(
   if (!claim) {
     throw new CloudCodeConflictError('Code session is busy; wait and try again');
   }
-  const scope = managedCloudCodeSessionScope(
+  const scope = cloudCodeOperationScope(
     owner.userId,
     sessionId,
     claim.session.networkAccess,
@@ -2114,7 +2129,7 @@ export const commitAndPushCloudCodeSession = tracedCodeAction(
     if (!claim) {
       throw new CloudCodeConflictError('Code session is busy; wait and try again');
     }
-    const scope = managedCloudCodeSessionScope(
+    const scope = cloudCodeOperationScope(
       owner.userId,
       sessionId,
       claim.session.networkAccess,
@@ -2224,7 +2239,7 @@ export const commitFileAndPushCloudCodeSession = tracedCodeAction(
     let executor: Awaited<ReturnType<typeof getE2BExecutor>> = null;
     try {
       executor = await getE2BExecutor(
-        managedCloudCodeSessionScope(
+        cloudCodeOperationScope(
           owner.userId,
           sessionId,
           claim.session.networkAccess,
@@ -2311,7 +2326,7 @@ export const discardCloudCodeSessionChanges = tracedCodeAction(
     if (!claim) {
       throw new CloudCodeConflictError('Code session is busy; wait and try again');
     }
-    const scope = managedCloudCodeSessionScope(
+    const scope = cloudCodeOperationScope(
       owner.userId,
       sessionId,
       claim.session.networkAccess,
@@ -2558,7 +2573,7 @@ export const readCloudCodeSessionChanges = tracedCodeAction(
     if (!claim) {
       throw new CloudCodeConflictError('Code session is busy; wait and try again');
     }
-    const scope = managedCloudCodeSessionScope(
+    const scope = cloudCodeOperationScope(
       owner.userId,
       sessionId,
       claim.session.networkAccess,

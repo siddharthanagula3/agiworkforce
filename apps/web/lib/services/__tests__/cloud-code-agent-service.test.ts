@@ -55,8 +55,8 @@ vi.mock('@/lib/services/cloud-code-session-service', async (importOriginal) => {
   };
 });
 
-import { existsSync, readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { dirname, join, sep } from 'node:path';
 
 import { SLOT_REGISTRY, listCanonicalModels } from '@agiworkforce/types';
 import { getE2BExecutor } from '@/lib/e2b/runtime';
@@ -78,7 +78,11 @@ import type {
   CloudCodeAgentStopReason,
   CloudCodeTurnUsage,
 } from '@/lib/services/cloud-code-agent-loop';
-import { CLOUD_CODE_AGENT_TURN_BUDGET_MS } from '@/lib/services/cloud-code-turn-budget';
+import {
+  CLOUD_CODE_AGENT_TURN_BUDGET_MS,
+  CLOUD_CODE_AGENT_TURN_SANDBOX_HOLD_MS,
+  CLOUD_CODE_SESSION_ROUTE_FUNCTION_LIMIT_MS,
+} from '@/lib/services/cloud-code-turn-budget';
 import { executePersistedAgentTurn } from '@/lib/services/cloud-code-agent-service';
 
 const FLAT_RESERVATION_CENTS = 25;
@@ -559,6 +563,38 @@ describe('Cloud Code loop budget fits inside the platform ceiling', () => {
     await runTurnOn(trackedDb(), 'done');
     const passed = vi.mocked(runCloudCodeAgentTurn).mock.calls.at(-1)?.[0];
     expect(passed?.maxDurationMs).toBe(CLOUD_CODE_AGENT_TURN_BUDGET_MS);
+  });
+
+  it('holds the sandbox for the turn and its unwind, never past the route ceiling', async () => {
+    const startedMs = Date.now();
+    await runTurnOn(trackedDb(), 'done');
+    const endedMs = Date.now();
+
+    const { releaseByMs } = vi.mocked(getE2BExecutor).mock.calls.at(-1)![0] as {
+      releaseByMs: number;
+    };
+    expect(releaseByMs).toBeGreaterThanOrEqual(startedMs + CLOUD_CODE_AGENT_TURN_SANDBOX_HOLD_MS);
+    expect(releaseByMs).toBeLessThanOrEqual(endedMs + CLOUD_CODE_AGENT_TURN_SANDBOX_HOLD_MS);
+    expect(CLOUD_CODE_AGENT_TURN_SANDBOX_HOLD_MS).toBeLessThanOrEqual(
+      routeMaxDurationSeconds('[sessionId]/agent/route.ts') * 1000,
+    );
+  });
+
+  it('runs every other Code session route within the hold its sandbox operations take', () => {
+    const sessionsRoot = join(webAppRoot(), 'app/api/code/sessions');
+    const routes = (readdirSync(sessionsRoot, { recursive: true }) as string[]).filter(
+      (path) => path.endsWith('route.ts') && !path.split(sep).includes('agent'),
+    );
+    expect(routes.length).toBeGreaterThan(5);
+    for (const route of routes) {
+      const declared = /export const maxDuration = (\d+)/.exec(
+        readFileSync(join(sessionsRoot, route), 'utf8'),
+      );
+      if (!declared?.[1]) continue;
+      expect(Number(declared[1]) * 1000, route).toBeLessThanOrEqual(
+        CLOUD_CODE_SESSION_ROUTE_FUNCTION_LIMIT_MS,
+      );
+    }
   });
 });
 

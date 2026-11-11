@@ -139,7 +139,7 @@ vi.mock('@/lib/services/managed-compute-access', async () => {
   };
 });
 
-const { POST } = await import('./route');
+const { POST, maxDuration } = await import('./route');
 
 const CONVERSATION_ID = '11111111-1111-4111-8111-111111111111';
 const context = { params: Promise.resolve({ id: CONVERSATION_ID }) };
@@ -173,6 +173,16 @@ describe('POST /api/chat/conversations/[id]/code-runs', () => {
       expect.objectContaining({ language: 'python', code: 'print(1)' }),
     );
     expect(mocks.dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it('holds the conversation sandbox only until this function could still be running the cell', async () => {
+    const startedMs = Date.now();
+    await POST(request(), context);
+    const endedMs = Date.now();
+
+    const { releaseByMs } = mocks.getExecutor.mock.calls[0]![0] as { releaseByMs: number };
+    expect(releaseByMs).toBeGreaterThanOrEqual(startedMs + maxDuration * 1_000);
+    expect(releaseByMs).toBeLessThanOrEqual(endedMs + maxDuration * 1_000);
   });
 
   it('records the rerun as a tool execution by name, never the code or its output', async () => {

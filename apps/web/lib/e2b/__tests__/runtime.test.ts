@@ -1277,6 +1277,55 @@ describe('getE2BExecutor, per-user sandbox quota', () => {
     expect(reserveSandboxComputeInterval).toHaveBeenCalledTimes(1);
   });
 
+  it('settles an interval a shorter caller left open and holds the sandbox until this caller releases it', async () => {
+    const conversation = scope('conv-rerun-then-turn', 'user-rerun-then-turn', 'team');
+    const rate = getSandboxComputeMicrousdPerSecond();
+    sessions.set(scopeKey(conversation), {
+      sandboxId: 'sbx-rerun-then-turn',
+      contexts: {},
+      activeSinceMs: Date.now() - 60_000,
+      computeMicrousdPerSecond: rate,
+      computeReservation: { ...COMPUTE_RESERVATION, estimatedCostMicrousd: rate * 300 },
+    });
+    const turnLeftMs = 6 * 60_000;
+    const { getE2BExecutor } = await import('../runtime');
+
+    await getE2BExecutor({ ...conversation, releaseByMs: Date.now() + turnLeftMs });
+
+    expect(meterSandboxComputeInterval).toHaveBeenCalledWith(
+      expect.objectContaining({ sandboxId: 'sbx-rerun-then-turn', reason: 'pause' }),
+    );
+    expect(reserveSandboxComputeInterval).toHaveBeenCalledTimes(1);
+    const held = (reserveSandboxComputeInterval.mock.calls[0] as unknown[])[0] as {
+      ttlMs: number;
+    };
+    expect(held.ttlMs).toBeLessThanOrEqual(turnLeftMs);
+    expect(held.ttlMs).toBeGreaterThan(turnLeftMs - 5_000);
+    const opts = (connect.mock.calls[0] as unknown[])[1] as { timeoutMs: number };
+    expect(opts.timeoutMs).toBe(held.ttlMs);
+  });
+
+  it('never shortens an open interval for a caller that releases before it ends', async () => {
+    const conversation = scope('conv-turn-then-rerun', 'user-turn-then-rerun', 'team');
+    const rate = getSandboxComputeMicrousdPerSecond();
+    sessions.set(scopeKey(conversation), {
+      sandboxId: 'sbx-turn-then-rerun',
+      contexts: {},
+      activeSinceMs: Date.now() - 60_000,
+      computeMicrousdPerSecond: rate,
+      computeReservation: { ...COMPUTE_RESERVATION, estimatedCostMicrousd: rate * 300 },
+    });
+    const { getE2BExecutor } = await import('../runtime');
+
+    await getE2BExecutor({ ...conversation, releaseByMs: Date.now() + 2 * 60_000 });
+
+    expect(reserveSandboxComputeInterval).not.toHaveBeenCalled();
+    expect(meterSandboxComputeInterval).not.toHaveBeenCalled();
+    const opts = (connect.mock.calls[0] as unknown[])[1] as { timeoutMs: number };
+    expect(opts.timeoutMs).toBeLessThanOrEqual(240_000);
+    expect(opts.timeoutMs).toBeGreaterThan(230_000);
+  });
+
   it('does not run the quota check for ephemeral (no-scope) callers', async () => {
     const { getE2BExecutor } = await import('../runtime');
     await getE2BExecutor();
