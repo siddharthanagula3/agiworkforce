@@ -5,6 +5,7 @@ jest.mock('@shopify/flash-list', () => {
   const React = require('react');
   const { View } = require('react-native');
   return {
+    useFlashListContext: () => undefined,
     FlashList: ({
       data,
       renderItem,

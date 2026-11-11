@@ -338,13 +338,14 @@ export function renderInlineMarkdown(
   const nested = (inner: string, style: TextStyle) => {
     const key = `${keyBase}-n${inlineKey++}`;
     return (
-      <Text key={key} style={{ color: renderColors.textPrimary, ...style }}>
+      <Text variant="inline" key={key} style={{ color: renderColors.textPrimary, ...style }}>
         {renderInlineMarkdown(inner, key, renderColors, citations)}
       </Text>
     );
   };
   const link = (label: string, url: string) => (
     <Text
+      variant="inline"
       key={`${keyBase}-link-${inlineKey++}`}
       style={{ color: renderColors.teal, textDecorationLine: 'underline' }}
       onPress={() => openAssistantLink(url)}
@@ -355,7 +356,11 @@ export function renderInlineMarkdown(
     </Text>
   );
   const code = (value: string) => (
-    <Text key={`${keyBase}-code-${inlineKey++}`} style={inlineCodeStyle(renderColors)}>
+    <Text
+      variant="inline"
+      key={`${keyBase}-code-${inlineKey++}`}
+      style={inlineCodeStyle(renderColors)}
+    >
       {` ${restoreEscapes(value, true)} `}
     </Text>
   );
@@ -404,6 +409,7 @@ export function renderInlineMarkdown(
         const label = restoreEscapes(first);
         parts.push(
           <Text
+            variant="inline"
             key={`${keyBase}-fn-${inlineKey++}`}
             style={{ color: renderColors.textPrimary }}
             accessibilityLabel={`Footnote ${label}`}
@@ -419,6 +425,7 @@ export function renderInlineMarkdown(
         if (citation && canPreviewCitation(citation)) {
           parts.push(
             <Text
+              variant="inline"
               key={`${keyBase}-cite-${inlineKey++}`}
               style={{ color: renderColors.teal, fontWeight: '600' }}
               onPress={() => previewCitation(citation)}

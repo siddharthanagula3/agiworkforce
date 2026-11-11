@@ -90,7 +90,7 @@ import { copyControlLabel, useCopyAction } from '@/src/shared/hooks/useCopyActio
 import { storage } from '@/lib/mmkv';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useThemeColors, radii } from '@/src/ui/theme';
-import { motion, typeScale } from '@/src/ui/theme/tokens';
+import { chatTypography, motion, typeScale } from '@/src/ui/theme/tokens';
 import { getDisplayName, getModelById, isAutoMode } from '@/src/features/model-picker/service';
 import {
   hasMessageStreamError,
@@ -1192,15 +1192,27 @@ export const MessageBubble = memo(function MessageBubble({
   const skillUsed = isUser ? sentSkillName(message.metadata) : null;
   const bodyContent = quotedReply ? quotedReply.body : displayContent;
   const inlineCitations = research ? researchSources : message.citations;
-  const contentElements = useMemo(
-    () =>
-      renderMarkdownContent(bodyContent, themeColors, {
-        highlightCode: !isStreamingRow,
-        ...(inlineCitations ? { citations: inlineCitations } : {}),
-        ...(onFollowUp ? { onFollowUp } : {}),
-      }),
-    [bodyContent, themeColors, isStreamingRow, inlineCitations, onFollowUp],
-  );
+  const contentElements = useMemo(() => {
+    if (isUser) {
+      return bodyContent
+        ? [
+            <Text
+              key="user-text"
+              testID="user-message-text"
+              selectable
+              style={{ ...chatTypography.body, color: themeColors.textPrimary }}
+            >
+              {bodyContent}
+            </Text>,
+          ]
+        : [];
+    }
+    return renderMarkdownContent(bodyContent, themeColors, {
+      highlightCode: !isStreamingRow,
+      ...(inlineCitations ? { citations: inlineCitations } : {}),
+      ...(onFollowUp ? { onFollowUp } : {}),
+    });
+  }, [isUser, bodyContent, themeColors, isStreamingRow, inlineCitations, onFollowUp]);
 
   const imageWidth = Math.min(width - 80, 320);
   const isGroupedMessage = !isAssistant && !canonicalActivity;

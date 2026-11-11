@@ -33081,7 +33081,7 @@
       "apps/mobile/app/legal/article-50.tsx",
       "apps/mobile/app/legal/index.tsx",
       "apps/mobile/components/ui/PressableBox.tsx",
-      "apps/mobile/mermaidjs.d.ts",
+      "apps/mobile/mermaid-build.d.ts",
       "apps/mobile/png.d.ts",
       "apps/mobile/src/features/artifacts/index.tsx",
       "apps/mobile/src/features/chat/ChatsListScreen.tsx",
@@ -79421,6 +79421,9 @@
       "apps/mobile/src/features/chat/components/MessageList.tsx",
       "packages/ui/unified-chat/src/components/MessageList.tsx",
       "packages/ui/unified-chat/src/index.ts"
+    ],
+    "MessageListRow": [
+      "apps/mobile/src/features/chat/components/MessageListRow.tsx"
     ],
     "messageListVariants": [
       "apps/web/features/chat/components/messages/MessageBubble.tsx"
