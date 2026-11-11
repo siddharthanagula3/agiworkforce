@@ -254,14 +254,14 @@ last report to the meter behind `overage_stripe_price_id` via
 `stripe.billing.meterEvents.create`. Each report is first claimed as pending in
 the contract's `overage_*` columns (0367), so a retry resends the same
 identifier and value, and is committed once Stripe accepts it. The pending
-report also stores the customer and overage price it was claimed for (0400),
+report also stores the customer and overage price it was claimed for (0401),
 and a retry sends to those, not to the contract's current values.
 A contract with no overage price configured is skipped and logged once, not
 retried daily.
 
 When a contract ends, the overage it used before `ended_at` that was never
 reported is forgiven, never billed. The same cron closes out each ended
-contract once per `ended_at` (0401): it sends nothing to Stripe, records the
+contract once per `ended_at` (0402): it sends nothing to Stripe, records the
 written-off amount, time and reason (`contract_ended`) in the contract's
 `overage_closeout_*` and `overage_written_off_*` columns, clears any pending
 report and keeps its identifier in

@@ -3,14 +3,14 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const read = (name: string) => readFileSync(resolve(import.meta.dirname, name), 'utf8');
-const closeoutUp = read('0401_overage_contract_closeout.sql');
-const closeoutDown = read('down/0401_overage_contract_closeout.down.sql');
+const closeoutUp = read('0402_overage_contract_closeout.sql');
+const closeoutDown = read('down/0402_overage_contract_closeout.down.sql');
 const reporter = readFileSync(
   resolve(import.meta.dirname, '../../lib/services/enterprise-usage-metering.ts'),
   'utf8',
 );
 
-describe('0401 overage contract closeout', () => {
+describe('0402 overage contract closeout', () => {
   it('adds the nullable closeout record the reporter writes for an ended contract', () => {
     expect(closeoutUp).toContain('NOT YET APPLIED');
     for (const column of [
@@ -46,6 +46,6 @@ describe('0401 overage contract closeout', () => {
     ]) {
       expect(closeoutDown).toContain(name);
     }
-    expect(closeoutDown).toContain("where filename = '0401_overage_contract_closeout.sql';");
+    expect(closeoutDown).toContain("where filename = '0402_overage_contract_closeout.sql';");
   });
 });

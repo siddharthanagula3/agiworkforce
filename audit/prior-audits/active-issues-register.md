@@ -12840,7 +12840,7 @@ regression, not the correction proposed here. This plan concerns persisted
 allowance resurrection, not instantaneous cancellation of already authorized
 in-memory execution. No implementation or runtime acceptance is represented.
 
-Update 2026-11-10: `f3ce0fd085` binds each remembered approval to a per-connector permission generation (`connector-tool-permissions.ts:129-178`, `approve/route.ts:391-416`) and refuses a stale card with 409. It requires migration 0410, an unapplied draft, applied before deploy; without it permission changes and disconnect fail. Checkpoints written before the change can approve once only. Not runtime accepted.
+Update 2026-11-10: `f3ce0fd085` binds each remembered approval to a per-connector permission generation (`connector-tool-permissions.ts:129-178`, `approve/route.ts:391-416`) and refuses a stale card with 409. It requires migration 0411, an unapplied draft, applied before deploy; without it permission changes and disconnect fail. Checkpoints written before the change can approve once only. Not runtime accepted.
 
 ## CONNECTOR-DISCONNECT-GRANT-CLEANUP-01
 
@@ -12877,7 +12877,7 @@ Preserve directory `target.serverId` for permissions versus `target.connectorId`
 for OAuth. Include failure, partial-loop, retry and reconnect coverage, and the
 permission-generation contract above. No source patch was accepted for this gap.
 
-Update 2026-11-10: `4c7a0cb704` makes `clearConnectorToolPermissions` (`apps/web/lib/connectors/mcp-custom-connections.ts:403`) revoke conversation grants and delete standing rows in one transaction and return whether it succeeded; `apps/web/app/api/connectors/route.ts` reports a failed clear in its notice. The custom-connector DELETE (`app/api/connectors/custom/route.ts:194`) and plugin uninstall (`lib/connectors/plugin-connectors.ts:97`) still discard the result. The transaction also advances the permission generation of migration 0410, an unapplied draft; without it the clear fails and nothing is cleared. Fixtures not re-run here.
+Update 2026-11-10: `4c7a0cb704` makes `clearConnectorToolPermissions` (`apps/web/lib/connectors/mcp-custom-connections.ts:403`) revoke conversation grants and delete standing rows in one transaction and return whether it succeeded; `apps/web/app/api/connectors/route.ts` reports a failed clear in its notice. The custom-connector DELETE (`app/api/connectors/custom/route.ts:194`) and plugin uninstall (`lib/connectors/plugin-connectors.ts:97`) still discard the result. The transaction also advances the permission generation of migration 0411, an unapplied draft; without it the clear fails and nothing is cleared. Fixtures not re-run here.
 
 ## SUPPORT-CONNECTOR-REVOCATION-LIFECYCLE-01
 
@@ -12911,7 +12911,7 @@ user confirmation intact. Integrate with the permission-generation fence and
 exercise upstream failure, absent targets, mixed states, permission failure and
 retry before representing successful disconnect. No live service was contacted.
 
-Update 2026-11-10: `4c7a0cb704` makes support revoke run `disconnectConnectorOAuthGrant`, evict OAuth caches, uninstall the GitHub App at GitHub before forgetting it, and stop claiming permissions were cleared when clearing failed (`apps/web/lib/support/actions/executors/revoke-connector.ts:62-100`, `revoke-connector.test.ts`). Still missing against `app/api/connectors/route.ts`: the vendor-revocation outcome is not reported, MCP response caches are not purged, and the GitHub path skips its OAuth grant disconnect. The permission clear needs migration 0410, an unapplied draft.
+Update 2026-11-10: `4c7a0cb704` makes support revoke run `disconnectConnectorOAuthGrant`, evict OAuth caches, uninstall the GitHub App at GitHub before forgetting it, and stop claiming permissions were cleared when clearing failed (`apps/web/lib/support/actions/executors/revoke-connector.ts:62-100`, `revoke-connector.test.ts`). Still missing against `app/api/connectors/route.ts`: the vendor-revocation outcome is not reported, MCP response caches are not purged, and the GitHub path skips its OAuth grant disconnect. The permission clear needs migration 0411, an unapplied draft.
 
 ## CONNECTOR-OAUTH-PARTIAL-CREDENTIAL-01
 
@@ -13136,7 +13136,7 @@ not real provider ownership, unique counts, token rollback, database or browser
 acceptance. Deferred cases settle their gates; no product tests, lint, typechecks,
 builds, installs, live services or migration actions were run.
 
-Update 2026-11-10: `212ede787b` records each emailed-undo cleanup step durably (`lib/server/account-security/undo.ts:57-166`, `undo.test.ts`, `undo-cleanup-store.test.ts`), so reopening the same link finishes only the unfinished steps and never repeats a settled one, until the link's original expiry. It writes columns added by migration 0406, an unapplied draft that must be applied before this code deploys. Cleanup after the link expires remains open.
+Update 2026-11-10: `212ede787b` records each emailed-undo cleanup step durably (`lib/server/account-security/undo.ts:57-166`, `undo.test.ts`, `undo-cleanup-store.test.ts`), so reopening the same link finishes only the unfinished steps and never repeats a settled one, until the link's original expiry. It writes columns added by migration 0407, an unapplied draft that must be applied before this code deploys. Cleanup after the link expires remains open.
 
 ## WEB-DEVELOPER-WEBHOOK-QUEUE-ATOMICITY-01
 

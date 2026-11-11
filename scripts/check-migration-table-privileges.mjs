@@ -4,7 +4,7 @@
  * TABLES TO app_rls, so every table a later migration creates starts with full
  * DML for the application role. A migration that revokes from public only, or
  * grants app_rls a subset, leaves the rest in place while its text says
- * otherwise: 0410, 0411 and 0417 shipped that way as drafts and only a real
+ * otherwise: 0411, 0412 and 0418 shipped that way as drafts and only a real
  * database showed it. This guard reads every migration above the applied
  * watermark and requires each new table to name every privilege app_rls ends
  * up with, and to put any table app_rls can reach behind row-level security

@@ -3,14 +3,14 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const read = (name: string) => readFileSync(resolve(import.meta.dirname, name), 'utf8');
-const up = read('0417_feedback_screenshot_cleanups.sql');
-const down = read('down/0417_feedback_screenshot_cleanups.down.sql');
+const up = read('0418_feedback_screenshot_cleanups.sql');
+const down = read('down/0418_feedback_screenshot_cleanups.down.sql');
 const cleanup = readFileSync(
   resolve(import.meta.dirname, '../../lib/server/feedback-screenshot-cleanup.ts'),
   'utf8',
 );
 
-describe('0417 feedback screenshot cleanups', () => {
+describe('0418 feedback screenshot cleanups', () => {
   it('creates the table the route, the sweep and erasure read and write', () => {
     expect(up).toContain('create table if not exists public.feedback_screenshot_cleanups');
     expect(up).toContain('storage_key text primary key');
@@ -50,7 +50,7 @@ describe('0417 feedback screenshot cleanups', () => {
 
   it('rolls back what it adds', () => {
     expect(down).toContain('drop table if exists public.feedback_screenshot_cleanups;');
-    expect(down).toContain("where filename = '0417_feedback_screenshot_cleanups.sql';");
+    expect(down).toContain("where filename = '0418_feedback_screenshot_cleanups.sql';");
     expect(down).toContain('WHAT THIS COSTS');
   });
 });

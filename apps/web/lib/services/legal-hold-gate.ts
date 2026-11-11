@@ -192,7 +192,7 @@ export function legalHoldPredicate(
   const joinsParent = parent !== null && options.owner === undefined;
 
   // RLS hides holds from ordinary members, so an inline read of legal_holds on
-  // a member's connection answers "not held". The definer function (0415) sees
+  // a member's connection answers "not held". The definer function (0416) sees
   // every hold and answers only for a row the caller may see.
   if (options.holdId === undefined) {
     const params: string[] = [];

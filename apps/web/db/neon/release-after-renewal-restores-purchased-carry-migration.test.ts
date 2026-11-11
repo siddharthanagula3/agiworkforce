@@ -4,11 +4,11 @@ import { describe, expect, it } from 'vitest';
 
 const DIR = import.meta.dirname;
 const read = (name: string) => fs.readFileSync(path.join(DIR, name), 'utf8');
-const UP_NAME = '0414_release_after_renewal_restores_purchased_carry.sql';
+const UP_NAME = '0415_release_after_renewal_restores_purchased_carry.sql';
 const UP = read(UP_NAME);
 const DOWN = read(`down/${UP_NAME.replace(/\.sql$/, '.down.sql')}`);
 const PRIOR = read('0182_managed_usage_microusd_ledger.sql');
-const RESET = read('0413_renewal_expires_due_purchases_before_carry.sql');
+const RESET = read('0414_renewal_expires_due_purchases_before_carry.sql');
 
 const OPENING = 'create or replace function public.settle_managed_usage_credits_microusd(';
 
@@ -52,7 +52,7 @@ function withoutThisMigration(definition: string): string {
   return withoutDeclarations.replace(crossingBlock(withoutDeclarations), '');
 }
 
-describe('0414 release after renewal restores purchased carry', () => {
+describe('0415 release after renewal restores purchased carry', () => {
   const next = settleDefinition(UP);
   const block = crossingBlock(next);
 

@@ -1161,7 +1161,7 @@ const ALLOWLIST = [
     tables: ['stripe_cogs_import_coverage'],
     reason:
       'single service-owned row keyed by source; it holds no user or workspace data, so there ' +
-      'is no owner to constrain by. 0398 enables RLS with no policy and revokes app_rls, so only ' +
+      'is no owner to constrain by. 0399 enables RLS with no policy and revokes app_rls, so only ' +
       'the owner connection the reconcile-credits cron uses can reach it',
   },
 ];

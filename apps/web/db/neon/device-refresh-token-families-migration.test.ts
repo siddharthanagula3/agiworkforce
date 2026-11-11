@@ -3,8 +3,8 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const read = (name: string) => readFileSync(resolve(import.meta.dirname, name), 'utf8');
-const up = read('0411_device_refresh_token_families.sql');
-const down = read('down/0411_device_refresh_token_families.down.sql');
+const up = read('0412_device_refresh_token_families.sql');
+const down = read('down/0412_device_refresh_token_families.down.sql');
 const family = readFileSync(
   resolve(import.meta.dirname, '../../lib/server/refresh-token-family.ts'),
   'utf8',
@@ -14,7 +14,7 @@ const admission = readFileSync(
   'utf8',
 );
 
-describe('0411 device refresh token families', () => {
+describe('0412 device refresh token families', () => {
   it('creates one row per family with a revoked_at that the code fences on', () => {
     expect(up).toContain('NOT YET APPLIED : draft only, pending explicit approval before running.');
     expect(up).toContain('create table if not exists public.device_refresh_token_families (');
@@ -55,7 +55,7 @@ describe('0411 device refresh token families', () => {
     expect(down).toContain(
       'drop function if exists public.device_refresh_token_families_stay_ended();',
     );
-    expect(down).toContain("where filename = '0411_device_refresh_token_families.sql';");
+    expect(down).toContain("where filename = '0412_device_refresh_token_families.sql';");
     expect(down).toMatch(/begin;[\s\S]*commit;/);
   });
 });

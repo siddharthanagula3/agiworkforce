@@ -1,5 +1,5 @@
 // A Postgres small enough to read and large enough to judge a WHERE clause. It
-// knows holds only through legal_hold_preserves, which mirrors 0415, so
+// knows holds only through legal_hold_preserves, which mirrors 0416, so
 // dropping a scope from a statement still lets the held row back in.
 // `hiddenFromCaller` plays RLS: those tables read as empty to the statement
 // while the definer function still sees them.

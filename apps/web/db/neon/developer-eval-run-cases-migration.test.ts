@@ -3,14 +3,14 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const read = (name: string) => readFileSync(resolve(import.meta.dirname, name), 'utf8');
-const up = read('0407_developer_eval_run_cases.sql');
-const down = read('down/0407_developer_eval_run_cases.down.sql');
+const up = read('0408_developer_eval_run_cases.sql');
+const down = read('down/0408_developer_eval_run_cases.down.sql');
 const service = readFileSync(
   resolve(import.meta.dirname, '../../lib/services/developer-prompt-service.ts'),
   'utf8',
 );
 
-describe('0407 developer eval run cases', () => {
+describe('0408 developer eval run cases', () => {
   it('freezes one row per admitted case, keyed by run and case, without a case foreign key', () => {
     expect(up).toContain('create table if not exists public.developer_eval_run_cases');
     expect(up).toContain(
@@ -48,6 +48,6 @@ describe('0407 developer eval run cases', () => {
     expect(down).toContain('drop table if exists public.developer_eval_run_cases;');
     expect(down).toContain('alter table public.developer_eval_results');
     expect(down).toContain('drop column if exists expected_output;');
-    expect(down).toContain("where filename = '0407_developer_eval_run_cases.sql';");
+    expect(down).toContain("where filename = '0408_developer_eval_run_cases.sql';");
   });
 });

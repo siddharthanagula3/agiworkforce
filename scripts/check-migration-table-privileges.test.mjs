@@ -61,15 +61,15 @@ create policy connector_permission_generations_owner
 commit;
 `;
 
-const PRE_FIX_0410 = draft(
-  '0410_connector_permission_generations.sql',
+const PRE_FIX_0411 = draft(
+  '0411_connector_permission_generations.sql',
   `${GENERATIONS_TABLE}
 revoke all on public.connector_permission_generations from public;
 grant select, insert, update on public.connector_permission_generations to app_rls;
 ${GENERATIONS_POLICY}`,
 );
-const FIXED_0410 = draft(
-  '0410_connector_permission_generations.sql',
+const FIXED_0411 = draft(
+  '0411_connector_permission_generations.sql',
   `${GENERATIONS_TABLE}
 revoke all on public.connector_permission_generations from public, app_rls;
 grant select, insert, update on public.connector_permission_generations to app_rls;
@@ -88,8 +88,8 @@ create table if not exists public.device_refresh_token_families (
 create index if not exists idx_device_refresh_token_families_user
   on public.device_refresh_token_families (user_id);
 `;
-const PRE_FIX_0411 = draft(
-  '0411_device_refresh_token_families.sql',
+const PRE_FIX_0412 = draft(
+  '0412_device_refresh_token_families.sql',
   `${FAMILIES_TABLE}
 revoke all on public.device_refresh_token_families from public;
 comment on table public.device_refresh_token_families is
@@ -97,8 +97,8 @@ comment on table public.device_refresh_token_families is
 commit;
 `,
 );
-const FIXED_0411 = draft(
-  '0411_device_refresh_token_families.sql',
+const FIXED_0412 = draft(
+  '0412_device_refresh_token_families.sql',
   `${FAMILIES_TABLE}
 revoke all on public.device_refresh_token_families from public, app_rls;
 grant select, insert, update on public.device_refresh_token_families to app_rls;
@@ -116,7 +116,7 @@ commit;
 );
 const FAMILIES_ENTRY = {
   table: 'device_refresh_token_families',
-  migration: '0411_device_refresh_token_families.sql',
+  migration: '0412_device_refresh_token_families.sql',
   reason:
     'its sibling device_refresh_tokens carries no row-level security and an admin deprovision ends another member family through app_rls',
 };
@@ -140,12 +140,12 @@ create policy feedback_screenshot_cleanups_owner
   with check (user_id = (select public.current_app_user_id()));
 commit;
 `;
-const PRE_FIX_0417 = draft(
-  '0417_feedback_screenshot_cleanups.sql',
+const PRE_FIX_0418 = draft(
+  '0418_feedback_screenshot_cleanups.sql',
   `${CLEANUPS_TABLE}${CLEANUPS_RLS}`,
 );
-const FIXED_0417 = draft(
-  '0417_feedback_screenshot_cleanups.sql',
+const FIXED_0418 = draft(
+  '0418_feedback_screenshot_cleanups.sql',
   `${CLEANUPS_TABLE}
 revoke all on public.feedback_screenshot_cleanups from public, app_rls;
 ${CLEANUPS_RLS}`,
@@ -173,18 +173,18 @@ test('the default privileges are read from the real chain, not assumed', () => {
   }
 });
 
-test('0410 before the fix fails: revoking from public leaves app_rls DELETE', () => {
-  const result = analyze([PRE_FIX_0410]);
+test('0411 before the fix fails: revoking from public leaves app_rls DELETE', () => {
+  const result = analyze([PRE_FIX_0411]);
   assert.equal(result.violations.length, 1, result.violations.join('\n'));
   assert.match(
     result.violations[0],
     /connector_permission_generations and leaves app_rls with DELETE that/,
   );
-  assert.deepEqual(analyze([FIXED_0410]).violations, []);
+  assert.deepEqual(analyze([FIXED_0411]).violations, []);
 });
 
-test('0411 before the fix fails: app_rls keeps full DML on a table with no row-level security', () => {
-  const result = analyze([PRE_FIX_0411]);
+test('0412 before the fix fails: app_rls keeps full DML on a table with no row-level security', () => {
+  const result = analyze([PRE_FIX_0412]);
   assert.equal(result.violations.length, 2, result.violations.join('\n'));
   assert.match(
     result.violations[0],
@@ -196,32 +196,32 @@ test('0411 before the fix fails: app_rls keeps full DML on a table with no row-l
   );
 });
 
-test('0411 after the fix still needs its stated reason, because app_rls reaches every row', () => {
-  const unregistered = analyze([FIXED_0411]);
+test('0412 after the fix still needs its stated reason, because app_rls reaches every row', () => {
+  const unregistered = analyze([FIXED_0412]);
   assert.equal(unregistered.violations.length, 1, unregistered.violations.join('\n'));
   assert.match(
     unregistered.violations[0],
     /grants app_rls SELECT, INSERT, UPDATE but has no row-level/,
   );
 
-  const registered = analyze([FIXED_0411], { schemaVersion: 1, entries: [FAMILIES_ENTRY] });
+  const registered = analyze([FIXED_0412], { schemaVersion: 1, entries: [FAMILIES_ENTRY] });
   assert.deepEqual(registered.violations, []);
 });
 
-test('0417 before the fix fails: a grant list alone leaves app_rls UPDATE', () => {
-  const result = analyze([PRE_FIX_0417]);
+test('0418 before the fix fails: a grant list alone leaves app_rls UPDATE', () => {
+  const result = analyze([PRE_FIX_0418]);
   assert.equal(result.violations.length, 1, result.violations.join('\n'));
   assert.match(
     result.violations[0],
     /feedback_screenshot_cleanups and leaves app_rls with UPDATE that/,
   );
-  assert.deepEqual(analyze([FIXED_0417]).violations, []);
+  assert.deepEqual(analyze([FIXED_0418]).violations, []);
 });
 
-test('a revoke from app_rls in its own statement states the privileges (0404 shape)', () => {
+test('a revoke from app_rls in its own statement states the privileges (0405 shape)', () => {
   const result = analyze([
     draft(
-      '0404_admin_account_actions.sql',
+      '0405_admin_account_actions.sql',
       [
         'create table if not exists public.admin_account_actions (id uuid primary key);',
         'alter table public.admin_account_actions enable row level security;',
@@ -310,13 +310,13 @@ test('temporary tables and tables in another schema are out of scope', () => {
 });
 
 test('registry entries must be needed, current and explained', () => {
-  const stale = analyze([FIXED_0410], {
+  const stale = analyze([FIXED_0411], {
     schemaVersion: 1,
     entries: [
       {
         ...FAMILIES_ENTRY,
         table: 'connector_permission_generations',
-        migration: FIXED_0410.fileName,
+        migration: FIXED_0411.fileName,
       },
     ],
   });
@@ -328,19 +328,19 @@ test('registry entries must be needed, current and explained', () => {
   const unknown = analyze([], { schemaVersion: 1, entries: [FAMILIES_ENTRY] });
   assert.match(unknown.violations.join('\n'), /is not a table created above the applied watermark/);
 
-  const terse = analyze([FIXED_0411], {
+  const terse = analyze([FIXED_0412], {
     schemaVersion: 1,
     entries: [{ ...FAMILIES_ENTRY, reason: 'internal' }],
   });
   assert.match(terse.violations.join('\n'), new RegExp(`${REGISTRY_PATH}: .* needs a reason`));
 
-  const misfiled = analyze([FIXED_0411], {
+  const misfiled = analyze([FIXED_0412], {
     schemaVersion: 1,
     entries: [{ ...FAMILIES_ENTRY, migration: '0412_other.sql' }],
   });
   assert.match(
     misfiled.violations.join('\n'),
-    /is created by 0411_device_refresh_token_families\.sql/,
+    /is created by 0412_device_refresh_token_families\.sql/,
   );
 });
 

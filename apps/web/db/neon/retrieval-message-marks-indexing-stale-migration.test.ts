@@ -3,8 +3,8 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const read = (name: string) => readFileSync(resolve(import.meta.dirname, name), 'utf8');
-const up = read('0409_retrieval_message_marks_indexing_stale.sql');
-const down = read('down/0409_retrieval_message_marks_indexing_stale.down.sql');
+const up = read('0410_retrieval_message_marks_indexing_stale.sql');
+const down = read('down/0410_retrieval_message_marks_indexing_stale.down.sql');
 const original = read('0202_retrieval_index.sql');
 
 const header = (sql: string) =>
@@ -12,7 +12,7 @@ const header = (sql: string) =>
     sql,
   );
 
-describe('0409 retrieval message marks indexing stale', () => {
+describe('0410 retrieval message marks indexing stale', () => {
   it('keeps the signature and security of the 0202 function', () => {
     expect(header(original)).toBe(true);
     expect(header(up)).toBe(true);
@@ -39,7 +39,7 @@ describe('0409 retrieval message marks indexing stale', () => {
   it('restores the 0202 body and retracts its ledger row', () => {
     expect(down).toContain("and status in ('indexed', 'failed');");
     expect(down).not.toContain("'indexing'");
-    expect(down).toContain("where filename = '0409_retrieval_message_marks_indexing_stale.sql';");
+    expect(down).toContain("where filename = '0410_retrieval_message_marks_indexing_stale.sql';");
     expect(down).toMatch(/WHAT THIS COSTS/);
     expect(down).toMatch(/^begin;$/m);
     expect(down.trimEnd()).toMatch(/commit;$/);

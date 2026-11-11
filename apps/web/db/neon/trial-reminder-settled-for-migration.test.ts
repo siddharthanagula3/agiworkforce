@@ -3,14 +3,14 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const read = (name: string) => readFileSync(resolve(import.meta.dirname, name), 'utf8');
-const up = read('0416_trial_reminder_settled_for.sql');
-const down = read('down/0416_trial_reminder_settled_for.down.sql');
+const up = read('0417_trial_reminder_settled_for.sql');
+const down = read('down/0417_trial_reminder_settled_for.down.sql');
 const service = readFileSync(
   resolve(import.meta.dirname, '../../lib/services/trial-reminder-service.ts'),
   'utf8',
 );
 
-describe('0416 trial reminder settled for', () => {
+describe('0417 trial reminder settled for', () => {
   it('adds the nullable subscription id the reminder reads and writes', () => {
     expect(up).toContain('alter table public.subscriptions');
     expect(up).toContain('add column if not exists trial_reminder_settled_for text;');
@@ -36,7 +36,7 @@ describe('0416 trial reminder settled for', () => {
 
   it('rolls back what it adds', () => {
     expect(down).toContain('drop column if exists trial_reminder_settled_for;');
-    expect(down).toContain("where filename = '0416_trial_reminder_settled_for.sql';");
+    expect(down).toContain("where filename = '0417_trial_reminder_settled_for.sql';");
     expect(down).toContain('WHAT THIS COSTS');
   });
 });

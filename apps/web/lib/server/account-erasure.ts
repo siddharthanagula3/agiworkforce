@@ -369,7 +369,7 @@ export const UNDELETED_USER_TABLES: Readonly<Record<string, string>> = {
   website_auto_economy_trial_usage: 'Cascades from profiles.',
   web_push_subscriptions: 'Cascades from profiles.',
   admin_account_actions:
-    'Cascades from profiles on user_id (0404). requested_by_user_id is the platform operator who acted, not the subject; the action itself stays in security_audit_logs.',
+    'Cascades from profiles on user_id (0405). requested_by_user_id is the platform operator who acted, not the subject; the action itself stays in security_audit_logs.',
   organization_project_access:
     'Cascades from organization_members. Grants this user issued to other members keep granted_by_user_id, which is not nullable.',
   erasure_tombstones:

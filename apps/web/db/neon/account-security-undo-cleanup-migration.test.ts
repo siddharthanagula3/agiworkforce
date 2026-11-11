@@ -8,8 +8,8 @@ const squash = (sql: string) =>
     .replace(/--[^\n]*/g, '')
     .replace(/\s+/g, ' ')
     .trim();
-const up = squash(read('0406_account_security_undo_cleanup.sql'));
-const downSource = read('down/0406_account_security_undo_cleanup.down.sql');
+const up = squash(read('0407_account_security_undo_cleanup.sql'));
+const downSource = read('down/0407_account_security_undo_cleanup.down.sql');
 const down = squash(downSource);
 const store = readFileSync(
   resolve(import.meta.dirname, '../../lib/server/account-security/store.ts'),
@@ -17,9 +17,9 @@ const store = readFileSync(
 );
 
 // These source assertions do not execute PostgreSQL.
-describe('0406 account security undo cleanup', () => {
+describe('0407 account security undo cleanup', () => {
   it('adds only nullable columns to the existing enrollment table in one transaction', () => {
-    expect(read('0406_account_security_undo_cleanup.sql')).toContain('NOT YET APPLIED');
+    expect(read('0407_account_security_undo_cleanup.sql')).toContain('NOT YET APPLIED');
     expect(up).toMatch(/^begin;/);
     expect(up).toMatch(/commit;$/);
     expect(up).toContain(
@@ -69,6 +69,6 @@ describe('0406 account security undo cleanup', () => {
     ]) {
       expect(down).toContain(`drop column if exists ${column}`);
     }
-    expect(down).toContain("where filename = '0406_account_security_undo_cleanup.sql';");
+    expect(down).toContain("where filename = '0407_account_security_undo_cleanup.sql';");
   });
 });

@@ -3,15 +3,15 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const read = (name: string) => readFileSync(resolve(import.meta.dirname, name), 'utf8');
-const up = read('0410_connector_permission_generations.sql');
-const down = read('down/0410_connector_permission_generations.down.sql');
+const up = read('0411_connector_permission_generations.sql');
+const down = read('down/0411_connector_permission_generations.down.sql');
 const lib = (path: string) =>
   readFileSync(
     resolve(import.meta.dirname, '../../app/api/llm/v1/chat/completions/lib', path),
     'utf8',
   );
 
-describe('0410 connector permission generations', () => {
+describe('0411 connector permission generations', () => {
   it('creates one owner-only counter per account and connector', () => {
     expect(up).toContain('NOT YET APPLIED : draft only, pending explicit approval before running.');
     expect(up).toContain('create table if not exists public.connector_permission_generations (');
@@ -54,7 +54,7 @@ describe('0410 connector permission generations', () => {
       'drop trigger if exists set_connector_permission_generations_updated_at',
     );
     expect(down).toContain('drop table if exists public.connector_permission_generations;');
-    expect(down).toContain("where filename = '0410_connector_permission_generations.sql';");
+    expect(down).toContain("where filename = '0411_connector_permission_generations.sql';");
     expect(down).toMatch(/begin;[\s\S]*commit;/);
   });
 });

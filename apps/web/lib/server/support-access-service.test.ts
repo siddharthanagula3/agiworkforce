@@ -72,7 +72,7 @@ interface EventRecord {
 }
 
 // The fake enforces what the schema enforces with check constraints, a second
-// approver, an eight-hour ceiling and the approval lifecycle of 0402, so a pass
+// approver, an eight-hour ceiling and the approval lifecycle of 0403, so a pass
 // here is not a pass bought by a fake more permissive than the database.
 const CONSENT_TICKET = '33333333-3333-4333-8333-333333333333';
 const CONSENTING_MEMBER = 'user_member_1';
@@ -90,7 +90,7 @@ function jsonbRoundTrip(value: unknown): unknown {
   return value;
 }
 
-type ApprovalRule = '0229' | '0402';
+type ApprovalRule = '0229' | '0403';
 
 function approvalIsComplete(grant: GrantRecord, rule: ApprovalRule): boolean {
   const complete =
@@ -110,7 +110,7 @@ function approvalIsComplete(grant: GrantRecord, rule: ApprovalRule): boolean {
 
 function harness(
   startedAt = Date.parse('2026-09-17T09:00:00.000Z'),
-  approvalRule: ApprovalRule = '0402',
+  approvalRule: ApprovalRule = '0403',
 ) {
   const grants: GrantRecord[] = [];
 

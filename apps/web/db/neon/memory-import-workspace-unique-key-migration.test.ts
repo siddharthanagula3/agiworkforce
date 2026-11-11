@@ -3,8 +3,8 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const read = (name: string) => readFileSync(resolve(import.meta.dirname, name), 'utf8');
-const up = read('0408_memory_import_workspace_unique_key.sql');
-const down = read('down/0408_memory_import_workspace_unique_key.down.sql');
+const up = read('0409_memory_import_workspace_unique_key.sql');
+const down = read('down/0409_memory_import_workspace_unique_key.down.sql');
 const store = readFileSync(
   resolve(import.meta.dirname, '../../lib/memory/import-store.ts'),
   'utf8',
@@ -12,7 +12,7 @@ const store = readFileSync(
 
 const SENTINEL = '00000000-0000-0000-0000-000000000000';
 
-describe('0408 memory import workspace unique key', () => {
+describe('0409 memory import workspace unique key', () => {
   it('adds the workspace to the import key and retires the account-wide index', () => {
     expect(up).toMatch(
       /create unique index if not exists ux_user_memories_user_org_import_key\s+on public\.user_memories \(\s*user_id,\s*source,\s*import_key,\s*\(coalesce\(organization_id, '00000000-0000-0000-0000-000000000000'::uuid\)\)\s*\)\s+where import_key is not null;/,
@@ -40,7 +40,7 @@ describe('0408 memory import workspace unique key', () => {
       /create unique index if not exists ux_user_memories_user_import_key\s+on public\.user_memories \(user_id, source, import_key\)\s+where import_key is not null;/,
     );
     expect(down).toContain('drop index if exists public.ux_user_memories_user_org_import_key;');
-    expect(down).toContain("where filename = '0408_memory_import_workspace_unique_key.sql';");
+    expect(down).toContain("where filename = '0409_memory_import_workspace_unique_key.sql';");
     expect(down).toMatch(/WHAT THIS COSTS/);
     expect(down).toMatch(/CAN FAIL/);
     expect(down).not.toMatch(/\bdelete\s+from\s+public\.user_memories/i);

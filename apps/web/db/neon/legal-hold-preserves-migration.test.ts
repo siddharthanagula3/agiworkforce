@@ -3,8 +3,8 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const read = (name: string) => readFileSync(resolve(import.meta.dirname, name), 'utf8');
-const up = read('0415_legal_hold_preserves.sql');
-const down = read('down/0415_legal_hold_preserves.down.sql');
+const up = read('0416_legal_hold_preserves.sql');
+const down = read('down/0416_legal_hold_preserves.down.sql');
 const gate = readFileSync(
   resolve(import.meta.dirname, '../../lib/services/legal-hold-gate.ts'),
   'utf8',
@@ -17,7 +17,7 @@ function functionBody(sql: string): string {
   return sql.slice(start, end);
 }
 
-describe('0415 legal hold preserves', () => {
+describe('0416 legal hold preserves', () => {
   it('is a draft inside one transaction', () => {
     expect(up).toContain(
       '-- NOT YET APPLIED : draft only, pending explicit approval before running.',
@@ -87,7 +87,7 @@ describe('0415 legal hold preserves', () => {
     expect(down).toContain(
       'drop function if exists public.legal_hold_preserves(uuid, text, text);',
     );
-    expect(down).toContain("where filename = '0415_legal_hold_preserves.sql';");
+    expect(down).toContain("where filename = '0416_legal_hold_preserves.sql';");
     expect(down).toMatch(/\nbegin;\n[\s\S]*\ncommit;\s*$/);
   });
 });

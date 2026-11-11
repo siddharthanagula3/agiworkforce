@@ -3,15 +3,15 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const read = (name: string) => readFileSync(resolve(import.meta.dirname, name), 'utf8');
-const up = read('0404_admin_account_actions.sql');
-const down = read('down/0404_admin_account_actions.down.sql');
+const up = read('0405_admin_account_actions.sql');
+const down = read('down/0405_admin_account_actions.down.sql');
 const flat = (sql: string) => sql.replace(/\s+/g, ' ');
 const service = readFileSync(
   resolve(import.meta.dirname, '../../lib/server/admin-account-actions.ts'),
   'utf8',
 );
 
-describe('0404 admin account actions', () => {
+describe('0405 admin account actions', () => {
   it('creates the table the admin route records into, owned by the account it acts on', () => {
     expect(up).toContain('NOT YET APPLIED : draft only');
     expect(up).toContain('create table if not exists public.admin_account_actions (');
@@ -58,6 +58,6 @@ describe('0404 admin account actions', () => {
   it('rolls back what it adds', () => {
     expect(down).toContain('WHAT THIS COSTS');
     expect(down).toContain('drop table if exists public.admin_account_actions;');
-    expect(down).toContain("where filename = '0404_admin_account_actions.sql';");
+    expect(down).toContain("where filename = '0405_admin_account_actions.sql';");
   });
 });

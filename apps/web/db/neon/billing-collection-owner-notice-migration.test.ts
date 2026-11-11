@@ -3,8 +3,8 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const read = (name: string) => readFileSync(resolve(import.meta.dirname, name), 'utf8');
-const up = read('0399_billing_collection_owner_notice_and_review_cursor.sql');
-const down = read('down/0399_billing_collection_owner_notice_and_review_cursor.down.sql');
+const up = read('0400_billing_collection_owner_notice_and_review_cursor.sql');
+const down = read('down/0400_billing_collection_owner_notice_and_review_cursor.down.sql');
 const sweep = readFileSync(
   resolve(import.meta.dirname, '../../app/api/cron/enforce-billing-collection/route.ts'),
   'utf8',
@@ -18,7 +18,7 @@ const COLUMNS = [
   'collection_reviewed_at timestamptz',
 ];
 
-describe('0399 billing collection owner notice and review cursor', () => {
+describe('0400 billing collection owner notice and review cursor', () => {
   it('is marked as an unapplied draft inside one transaction', () => {
     expect(up).toContain(
       '-- NOT YET APPLIED : draft only, pending explicit approval before running.',
@@ -76,7 +76,7 @@ describe('0399 billing collection owner notice and review cursor', () => {
       expect(down).toContain(`drop column if exists ${column.split(' ')[0]}`);
     }
     expect(down).toContain(
-      "where filename = '0399_billing_collection_owner_notice_and_review_cursor.sql';",
+      "where filename = '0400_billing_collection_owner_notice_and_review_cursor.sql';",
     );
   });
 });

@@ -3,14 +3,14 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const read = (name: string) => readFileSync(resolve(import.meta.dirname, name), 'utf8');
-const destinationUp = read('0400_overage_pending_destination.sql');
-const destinationDown = read('down/0400_overage_pending_destination.down.sql');
+const destinationUp = read('0401_overage_pending_destination.sql');
+const destinationDown = read('down/0401_overage_pending_destination.down.sql');
 const reporter = readFileSync(
   resolve(import.meta.dirname, '../../lib/services/enterprise-usage-metering.ts'),
   'utf8',
 );
 
-describe('0400 overage pending destination', () => {
+describe('0401 overage pending destination', () => {
   it('adds the nullable destination the reporter claims with and replays to', () => {
     expect(destinationUp).toContain('NOT YET APPLIED');
     expect(destinationUp).toContain('alter table public.organization_billing_contracts');
@@ -38,6 +38,6 @@ describe('0400 overage pending destination', () => {
     );
     expect(destinationDown).toContain('drop column if exists overage_pending_price_id');
     expect(destinationDown).toContain('drop column if exists overage_pending_customer_id');
-    expect(destinationDown).toContain("where filename = '0400_overage_pending_destination.sql';");
+    expect(destinationDown).toContain("where filename = '0401_overage_pending_destination.sql';");
   });
 });

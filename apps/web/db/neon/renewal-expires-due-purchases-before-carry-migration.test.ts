@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 const DIR = import.meta.dirname;
 const read = (name: string) => fs.readFileSync(path.join(DIR, name), 'utf8');
-const UP_NAME = '0413_renewal_expires_due_purchases_before_carry.sql';
+const UP_NAME = '0414_renewal_expires_due_purchases_before_carry.sql';
 const UP = read(UP_NAME);
 const DOWN = read(`down/${UP_NAME.replace(/\.sql$/, '.down.sql')}`);
 const PRIOR = read('0298_purchased_credit_lifetime.sql');
@@ -39,7 +39,7 @@ function withoutThisMigration(definition: string): string {
   return (definition.slice(0, start) + definition.slice(end)).replace(SOURCE_ACCOUNT_KEY, '');
 }
 
-describe('0413 renewal expires due purchases before carry', () => {
+describe('0414 renewal expires due purchases before carry', () => {
   it('is a draft until someone approves running it', () => {
     expect(UP).toContain(
       '-- NOT YET APPLIED : draft only, pending explicit approval before running.',

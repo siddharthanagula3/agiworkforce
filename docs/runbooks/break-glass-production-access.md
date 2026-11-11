@@ -43,7 +43,7 @@ case the eight-hour ceiling and the one-hour default were sized for.
    is a constraint rather than a code path. Access ends at `expires_at` whether
    or not anything has run; the daily `/api/cron/expire-support-access-grants`
    sweep then marks the grant `expired` and appends its `expired` trail entry,
-   keeping the approval. It needs migration 0402 applied first, and answers 500
+   keeping the approval. It needs migration 0403 applied first, and answers 500
    (with the counts) when a grant could not be closed.
 4. `action: "revoke"` ends a grant early, and `action: "deny"` closes a request
    that should not have been made. Both are recorded.

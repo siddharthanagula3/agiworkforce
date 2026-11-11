@@ -3,14 +3,14 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const read = (name: string) => readFileSync(resolve(import.meta.dirname, name), 'utf8');
-const up = read('0398_stripe_cogs_import_coverage.sql');
-const down = read('down/0398_stripe_cogs_import_coverage.down.sql');
+const up = read('0399_stripe_cogs_import_coverage.sql');
+const down = read('down/0399_stripe_cogs_import_coverage.down.sql');
 const coverage = readFileSync(
   resolve(import.meta.dirname, '../../lib/services/cogs-import-coverage.ts'),
   'utf8',
 );
 
-describe('0398 stripe cogs import coverage', () => {
+describe('0399 stripe cogs import coverage', () => {
   it('is marked as an unapplied draft inside one transaction', () => {
     expect(up).toContain(
       '-- NOT YET APPLIED : draft only, pending explicit approval before running.',
@@ -51,6 +51,6 @@ describe('0398 stripe cogs import coverage', () => {
   it('rolls back what it adds', () => {
     expect(down).toContain('WHAT THIS COSTS');
     expect(down).toContain('drop table if exists public.stripe_cogs_import_coverage;');
-    expect(down).toContain("where filename = '0398_stripe_cogs_import_coverage.sql';");
+    expect(down).toContain("where filename = '0399_stripe_cogs_import_coverage.sql';");
   });
 });

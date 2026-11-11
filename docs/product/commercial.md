@@ -287,7 +287,7 @@ Migration `0127_cogs_ledger.sql` adds the two tables that answer the margin ques
   discounts, support goodwill and tax. Stripe fees, refunds and chargebacks are imported
   from `balanceTransactions.list` by the daily `/api/cron/reconcile-credits` run over a
   three-day trailing window, which is wide enough for late settlement and idempotent
-  enough to overlap safely. `stripe_cogs_import_coverage` (0398) records how far the
+  enough to overlap safely. `stripe_cogs_import_coverage` (0399) records how far the
   import is complete: a run starts at the earlier of that point and its three-day
   window, spans at most seven days, and advances it only after every read and ledger
   write in the window succeeded, so a range a failed run missed is retried however old

@@ -3,11 +3,11 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const read = (name: string) => readFileSync(resolve(import.meta.dirname, name), 'utf8');
-const up = read('0402_support_access_grant_lifecycle.sql');
-const down = read('down/0402_support_access_grant_lifecycle.down.sql');
+const up = read('0403_support_access_grant_lifecycle.sql');
+const down = read('down/0403_support_access_grant_lifecycle.down.sql');
 const flat = (sql: string) => sql.replace(/\s+/g, ' ');
 
-describe('0402 support access grant lifecycle', () => {
+describe('0403 support access grant lifecycle', () => {
   it('replaces the 0229 equivalence under the same constraint name', () => {
     expect(up).toContain('NOT YET APPLIED : draft only');
     expect(flat(up)).toContain(
@@ -44,6 +44,6 @@ describe('0402 support access grant lifecycle', () => {
     expect(flat(down)).toContain(
       "check ( (status = 'approved') = (approved_by_user_id is not null and decided_at is not null and expires_at is not null) );",
     );
-    expect(down).toContain("where filename = '0402_support_access_grant_lifecycle.sql';");
+    expect(down).toContain("where filename = '0403_support_access_grant_lifecycle.sql';");
   });
 });
