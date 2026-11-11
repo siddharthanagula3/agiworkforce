@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 const mockPush = jest.fn();
 const mockBack = jest.fn();
@@ -73,7 +74,6 @@ jest.mock('@/src/ui/theme', () => {
   };
 });
 
-import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { ContinuityOnboardingGate } from '../src/features/continuity/ContinuityOnboardingGate';
 import ContinuityOnboardingScreen from '../src/features/continuity/ContinuityOnboardingScreen';
 import {

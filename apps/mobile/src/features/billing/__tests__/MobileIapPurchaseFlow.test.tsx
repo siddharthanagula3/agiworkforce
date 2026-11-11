@@ -1,3 +1,7 @@
+jest.mock('@/src/features/billing/nativePurchaseAvailability', () => ({
+  NATIVE_PURCHASES_AVAILABLE: true,
+}));
+
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 import { Platform } from 'react-native';
 import { MOBILE_IAP_PRODUCT_DEFINITIONS, type MobileIapCatalogProduct } from '@agiworkforce/types';

@@ -64,8 +64,14 @@ const result = (text: string): TranslateResult => ({
   pairCached: false,
 });
 const options = (index = 0): TranslateOptions => mockTranslate.mock.calls[index][3];
-const pressHandler = (view: ReturnType<typeof render>, label: string): (() => unknown) =>
-  view.UNSAFE_getAllByProps({ accessibilityLabel: label })[0].props.onPress;
+function pressHandlerFor(view: ReturnType<typeof render>, label: string): () => void {
+  const owner = view
+    .UNSAFE_getAllByProps({ accessibilityLabel: label })
+    .find((node) => typeof node.props.onPress === 'function');
+  if (!owner) throw new Error(`No press handler is attached to "${label}"`);
+  return owner.props.onPress as () => void;
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   mockParams = {};
@@ -79,7 +85,7 @@ test('duplicate same-turn submit acquires one operation; edit retires old tokens
   mockTranslate.mockReturnValueOnce(old.promise).mockReturnValueOnce(next.promise);
   const view = render(<TranslateScreen />);
   fireEvent.changeText(view.getByLabelText('Source text input'), 'original');
-  const submit = pressHandler(view, 'Translate');
+  const submit = pressHandlerFor(view, 'Translate');
   act(() => {
     void submit();
     void submit();
@@ -220,8 +226,8 @@ test.each([
 test('back synchronously rejects a captured same-turn submit before navigation cleanup', () => {
   const view = render(<TranslateScreen />);
   fireEvent.changeText(view.getByLabelText('Source text input'), 'original');
-  const submit = pressHandler(view, 'Translate');
-  const back = pressHandler(view, 'Go back');
+  const submit = pressHandlerFor(view, 'Translate');
+  const back = pressHandlerFor(view, 'Go back');
   act(() => {
     back();
     void submit();

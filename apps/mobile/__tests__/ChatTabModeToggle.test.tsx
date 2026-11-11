@@ -1,4 +1,8 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
+jest.mock('@/src/features/billing/nativePurchaseAvailability', () => ({
+  NATIVE_PURCHASES_AVAILABLE: true,
+}));
+
 import React from 'react';
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import { requireAutoMode } from '../test-utils/modelFixtures';

@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
+import { BILLING_PLAN_PRICING } from '@agiworkforce/types';
 import { getAgeThreshold } from '../src/features/auth/services/ageGate';
 
 jest.mock('@/lib/mmkv', () => ({ storage: {} }));
@@ -9,8 +10,18 @@ const appConfig = require('../app.config.js') as {
   expo: { ios?: { infoPlist?: Record<string, unknown> } };
 };
 
+const appConfigSource = readFileSync(join(__dirname, '..', 'app.config.js'), 'utf8');
+
+const storePurchases = require('../src/features/billing/storePurchases.json') as {
+  nativePurchases: boolean;
+};
+
 const listingIos = require('../store-listing/LISTING-METADATA-IOS.json') as {
+  subtitle: string;
+  promotional_text: string;
+  keywords: string;
   description: string;
+  whats_new: string;
   app_review_information: { notes_file: string };
   pricing: {
     in_app_purchases: boolean;
@@ -23,7 +34,9 @@ const listingIos = require('../store-listing/LISTING-METADATA-IOS.json') as {
 };
 
 const listingAndroid = require('../store-listing/LISTING-METADATA-ANDROID.json') as {
+  short_description: string;
   full_description: string;
+  release_notes_v0_0_1: string;
   pricing: { in_app_purchases: boolean };
   content_rating: { questionnaire: { in_app_purchases: boolean } };
   play_console_review_notes_file: string;
@@ -199,23 +212,54 @@ describe('iOS submission config', () => {
   });
 
   it('keeps the residual Guideline 3.1.1 exposure recorded rather than silent', () => {
-    expect(listingIos.pricing.guideline_3_1_1_residual_risk).toMatch(/App Review purchase policy/);
-    expect(listingIos.pricing.guideline_3_1_1_residual_risk).toMatch(/Contact Sales/);
+    const risk = listingIos.pricing.guideline_3_1_1_residual_risk;
+    expect(risk).toMatch(/App Review purchase policy/);
+    expect(risk).toMatch(/Contact Sales/);
+    expect(risk).toMatch(/storePurchases\.json/);
+    expect(risk).toMatch(/no in-app purchases/);
   });
 
-  it('declares in-app purchases on every listing answer, because the build sells them', () => {
-    const screen = readFileSync(
-      join(mobileRoot, 'src/features/settings/cloud-billing/index.tsx'),
+  it('declares no in-app purchases on every listing answer, because the build sells nothing', () => {
+    expect(storePurchases.nativePurchases).toBe(false);
+    const availability = readFileSync(
+      join(mobileRoot, 'src/features/billing/nativePurchaseAvailability.ts'),
       'utf8',
     );
-    expect(screen).toContain('nativeIap.purchase(');
-    expect(listingIos.pricing.in_app_purchases).toBe(true);
-    expect(listingAndroid.pricing.in_app_purchases).toBe(true);
-    expect(listingAndroid.in_app_products.has_in_app_products).toBe(true);
-    expect(listingAndroid.content_rating.questionnaire.in_app_purchases).toBe(true);
+    expect(availability).toContain(
+      'export const NATIVE_PURCHASES_AVAILABLE: boolean = storePurchases.nativePurchases;',
+    );
+    expect(listingIos.pricing.in_app_purchases).toBe(false);
+    expect(listingAndroid.pricing.in_app_purchases).toBe(false);
+    expect(listingAndroid.in_app_products.has_in_app_products).toBe(false);
+    expect(listingAndroid.content_rating.questionnaire.in_app_purchases).toBe(false);
+  });
+
+  it('offers no purchase, plan for sale or paid tier in any public listing copy', () => {
+    const publicCopy: Array<[string, string]> = [
+      ['iOS description', listingIos.description],
+      ['iOS whats_new', listingIos.whats_new],
+      ['iOS promotional_text', listingIos.promotional_text],
+      ['iOS subtitle', listingIos.subtitle],
+      ['iOS keywords', listingIos.keywords],
+      ['Android full_description', listingAndroid.full_description],
+      ['Android short_description', listingAndroid.short_description],
+      ['Android release notes', listingAndroid.release_notes_v0_0_1],
+    ];
+    const paidTierLabels = Object.values(BILLING_PLAN_PRICING)
+      .map((plan) => plan.label)
+      .filter((label) => label !== 'Free');
+    const OFFERS_PURCHASE =
+      /purchas|\bbuy\b|\bsold\b|\bsells?\b|subscri|upgrade|top-?ups?|credits?|\bpaid\b|premium|pricing|\bprices?\b|\bplans\b|\bPro\b|[$€£₹]\s?\d/i;
+    for (const [field, copy] of publicCopy) {
+      const offered = copy.replace(/\bno in-app purchases\b/gi, '');
+      expect([field, OFFERS_PURCHASE.exec(offered)?.[0] ?? null]).toEqual([field, null]);
+      for (const label of paidTierLabels) {
+        const named = new RegExp(`(?<![A-Za-z0-9])${label}(?![A-Za-z0-9])`).test(copy);
+        expect([field, label, named]).toEqual([field, label, false]);
+      }
+    }
     for (const description of [listingIos.description, listingAndroid.full_description]) {
-      expect(description).not.toMatch(/no in-app purchases/i);
-      expect(description).toMatch(/in-app purchases/i);
+      expect(description).toMatch(/no in-app purchases/i);
     }
   });
 
@@ -229,74 +273,132 @@ describe('iOS submission config', () => {
     expect(screen).not.toMatch(/agiworkforce\.com\/pricing/);
   });
 
-  it('pins each billing link the reviewer notes cite to the line that opens it', () => {
-    const lines = readFileSync(
+  it('draws the Plan screen the reviewer notes describe before any purchase or web billing link', () => {
+    const screen = readFileSync(
       join(mobileRoot, 'src/features/settings/cloud-billing/index.tsx'),
       'utf8',
-    ).split('\n');
-    const cited: Array<[number, string]> = [
-      [729, "openExternalUrl('https://agiworkforce.com/billing')"],
-      [451, "openExternalUrl('https://agiworkforce.com/settings/team')"],
-      [258, 'openExternalUrl(managementUrl)'],
-      [740, 'openExternalUrl(PURCHASE_HELP_URL)'],
-    ];
-    for (const [line, call] of cited) {
-      expect([line, lines[line - 1]?.includes(call)]).toEqual([line, true]);
+    );
+    const branchStart = screen.indexOf('if (!NATIVE_PURCHASES_AVAILABLE) {');
+    const purchaseScreen = screen.indexOf('<SettingsScreenShell title="Billing">', branchStart);
+    expect(branchStart).toBeGreaterThan(-1);
+    expect(purchaseScreen).toBeGreaterThan(branchStart);
+    const planBranch = screen.slice(branchStart, purchaseScreen);
+
+    for (const label of [
+      'title="Plan"',
+      'Current plan',
+      'Managed on the web',
+      'By your organization',
+      'What your plan includes',
+      'Usage',
+      'Help with your plan',
+      "'/(app)/support'",
+    ]) {
+      expect([label, planBranch.includes(label)]).toEqual([label, true]);
+    }
+    expect(planBranch).not.toMatch(
+      /openExternalUrl|nativeIap\.|handleUpgrade|handleManageBilling|showSubscriptionOwnerGuard|paywallSheetRef|Upgrade|Adjust plan|Choose plan|Restore purchases|Compare plans|Contact Sales|View invoices/,
+    );
+
+    for (const file of REVIEWER_NOTES) {
+      const notes = surfaceText(file);
+      for (const label of [
+        'Settings → Subscription',
+        '**Plan**',
+        'Current plan',
+        'Managed on the web',
+        'By your organization',
+        'What your plan includes',
+        'Usage',
+        'Help with your plan',
+      ]) {
+        expect([file, label, notes.includes(label)]).toEqual([file, label, true]);
+      }
     }
   });
 
-  it('discloses the native-purchase code that ships in the binary on every claim surface', () => {
-    const NATIVE_BILLING_DISCLOSURE = [
+  it('keeps the chat sheet and web billing links inert in a build without purchases', () => {
+    const sheet = readFileSync(
+      join(mobileRoot, 'src/features/chat/components/PaywallBottomSheet.tsx'),
+      'utf8',
+    );
+    expect(sheet).toMatch(/const hasPrimaryAction =\s*NATIVE_PURCHASES_AVAILABLE &&/);
+    expect(sheet).toMatch(/const showPlanComparison =\s*NATIVE_PURCHASES_AVAILABLE &&/);
+    expect(sheet).toContain('isn’t included in your plan.');
+
+    const service = readFileSync(
+      join(mobileRoot, 'src/features/billing/mobileIapService.ts'),
+      'utf8',
+    );
+    expect(service).toMatch(
+      /export async function readStorefront\(\)[^{]*\{\s*if \(!NATIVE_PURCHASES_AVAILABLE\) return null;/,
+    );
+    expect(service).toMatch(/if \(!NATIVE_PURCHASES_AVAILABLE\) throw new Error\(/);
+
+    const webLinks = readFileSync(
+      join(mobileRoot, 'src/features/billing/webBillingLinks.ts'),
+      'utf8',
+    );
+    expect(webLinks).toContain('readStorefront().then(');
+    expect(webLinks).toMatch(/storefront !== null &&/);
+
+    const workspace = readFileSync(join(mobileRoot, 'app/(app)/settings/workspace.tsx'), 'utf8');
+    expect(workspace).toContain('useWebBillingLinksAllowed()');
+    expect(workspace.match(/openExternalUrl\(WEB_TEAM_URL\)/g)?.length).toBe(
+      workspace.match(/\{webLinksAllowed \? \(/g)?.length,
+    );
+  });
+
+  it('states the no-purchase facts of the binary on every claim surface', () => {
+    const NO_PURCHASE_DISCLOSURE = [
+      /storePurchases\.json/,
       /\bexpo-iap\b/,
+      /still linked/,
+      /nothing calls it/,
       /\bMOBILE_IAP_ENABLED\b/,
       /mobile-iap-catalog\.ts/,
     ];
     for (const file of CLAIM_SURFACES) {
-      const text = surfaceText(file);
-      for (const pattern of NATIVE_BILLING_DISCLOSURE) {
+      const text = collapseWhitespace(surfaceText(file));
+      for (const pattern of NO_PURCHASE_DISCLOSURE) {
         expect([file, String(pattern), pattern.test(text)]).toEqual([file, String(pattern), true]);
       }
-      expect([file, /StoreKit|Play Billing/.test(text)]).toEqual([file, true]);
     }
-  });
-
-  it('quotes each catalog-disabled reason against the branch that returns it', () => {
-    const catalog = readFileSync(
-      join(repoRoot, 'apps/web/lib/server/mobile-iap-catalog.ts'),
-      'utf8',
+    const storeConnection: Record<string, RegExp> = {
+      'LISTING-METADATA-IOS.json': /never opens a StoreKit connection/,
+      'REVIEWER-NOTES-IOS.md': /never opens a StoreKit connection/,
+      'LISTING-METADATA-ANDROID.json': /never opens a Play Billing connection/,
+      'REVIEWER-NOTES-ANDROID.md': /never opens a Play Billing connection/,
+    };
+    for (const [file, pattern] of Object.entries(storeConnection)) {
+      expect([file, pattern.test(collapseWhitespace(surfaceText(file)))]).toEqual([file, true]);
+    }
+    for (const file of ['LISTING-METADATA-ANDROID.json', 'REVIEWER-NOTES-ANDROID.md']) {
+      expect([file, surfaceText(file).includes('com.android.vending.BILLING')]).toEqual([
+        file,
+        true,
+      ]);
+    }
+    expect(appConfigSource).toContain(
+      "...(nativePurchases ? [] : ['com.android.vending.BILLING']),",
     );
-    const reasons = {
-      flagOff: 'Native purchases are not enabled for this deployment.',
-      ios: 'App Store products have not been registered for this build.',
-      android: 'Google Play products have not been registered for this build.',
-    };
-    for (const reason of Object.values(reasons)) {
-      expect([reason, catalog.includes(reason)]).toEqual([reason, true]);
-    }
+  });
 
-    const platformReason = {
-      'LISTING-METADATA-IOS.json': reasons.ios,
-      'REVIEWER-NOTES-IOS.md': reasons.ios,
-      'LISTING-METADATA-ANDROID.json': reasons.android,
-      'REVIEWER-NOTES-ANDROID.md': reasons.android,
-    };
-    for (const [file, reason] of Object.entries(platformReason)) {
-      const text = collapseWhitespace(surfaceText(file));
-      expect([file, text.includes(collapseWhitespace(reasons.flagOff))]).toEqual([file, true]);
-      expect([file, text.includes(collapseWhitespace(reason))]).toEqual([file, true]);
+  it('makes no claim that the app sells, restores or prices a plan on any claim surface', () => {
+    const SALES_CLAIM =
+      /sells (?:four|auto-renewing|subscriptions)|are sold (?:only )?(?:through|as)|How to buy|Restore purchases\*\* is always|App Store's own localized prices|Play's own localized price|Credit top-ups need/i;
+    for (const file of CLAIM_SURFACES) {
+      expect([file, SALES_CLAIM.exec(surfaceText(file))?.[0] ?? null]).toEqual([file, null]);
     }
   });
 
-  it('discloses account and billing links reachable from the current app', () => {
+  it('discloses account and billing links in the current app', () => {
     const CALL_SITES: Array<[string, RegExp]> = [
-      ['cloud-billing invoices', /cloud-billing\/index\.tsx:729/],
-      ['cloud-billing workspace admin', /cloud-billing\/index\.tsx:451/],
-      ['cloud-billing owner-guard alert', /cloud-billing\/index\.tsx:258/],
-      ['paywall contact sales', /PaywallBottomSheet\.tsx:130/],
-      ['purchase help', /cloud-billing\/index\.tsx:740/],
-      ['cloud-account change email', /cloud-account\/index\.tsx:98/],
-      ['workspace empty state', /workspace\.tsx:456/],
-      ['workspace rename or delete', /workspace\.tsx:584/],
+      ['cloud-billing purchase screen', /src\/features\/settings\/cloud-billing\/index\.tsx/],
+      ['paywall contact sales', /PaywallBottomSheet\.tsx/],
+      ['web billing link gate', /webBillingLinks\.ts/],
+      ['cloud-account change email', /cloud-account\/index\.tsx/],
+      ['workspace web links', /app\/\(app\)\/settings\/workspace\.tsx/],
       ['auth legal links', /app\/\(auth\)\/login\.tsx/],
       ['signup legal links', /MobileSignUp\.tsx/],
     ];
@@ -305,6 +407,10 @@ describe('iOS submission config', () => {
       for (const [label, pattern] of CALL_SITES) {
         expect([file, label, pattern.test(text)]).toEqual([file, label, true]);
       }
+      expect([
+        file,
+        /No link in the app opens a page about pricing, billing/.test(collapseWhitespace(text)),
+      ]).toEqual([file, true]);
     }
     expect(listingIos.pricing.guideline_3_1_1_residual_risk).not.toMatch(
       /cloud-usage\/index\.tsx:131/,
@@ -323,27 +429,6 @@ describe('iOS submission config', () => {
       const notes = surfaceText(file);
       for (const owner of owners) {
         expect([file, owner, notes.includes(owner)]).toEqual([file, owner, true]);
-      }
-    }
-  });
-
-  it('discloses the first-paint native-purchase loading block wherever the screen is enumerated', () => {
-    for (const file of [...CLAIM_SURFACES]) {
-      const text = surfaceText(file);
-      expect([file, /Loading native purchases/.test(text)]).toEqual([file, true]);
-      expect([file, /Workspace administration/.test(text)]).toEqual([file, true]);
-    }
-  });
-
-  it('names every plan-change row label the billing screen can render', () => {
-    const screen = readFileSync(
-      join(mobileRoot, 'src/features/settings/cloud-billing/index.tsx'),
-      'utf8',
-    );
-    for (const label of ['Upgrade plan', 'Adjust plan', 'Choose plan']) {
-      expect([label, screen.includes(`'${label}'`)]).toEqual([label, true]);
-      for (const file of REVIEWER_NOTES) {
-        expect([file, label, surfaceText(file).includes(label)]).toEqual([file, label, true]);
       }
     }
   });

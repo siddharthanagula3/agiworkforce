@@ -20,13 +20,16 @@ import { offlineStatusLine } from '@/src/features/companion/components/StatusBan
 import { useConnectionStore, type ConnectionStatus } from '@/stores/connectionStore';
 import { manualReconnect } from '@/services/companion';
 import { useTierStore } from '@/src/features/billing/store';
+import { NATIVE_PURCHASES_AVAILABLE } from '@/src/features/billing/nativePurchaseAvailability';
 import {
   REMOTE_FOLLOW_UP_BEHAVIORS,
   useRemoteCodePreferences,
   type RemoteFollowUpBehavior,
 } from '@/src/features/companion/remote-code/store';
 
-const PAID_PLANS_ONLY = 'Remote Control comes with paid plans.';
+const PAID_PLANS_ONLY = NATIVE_PURCHASES_AVAILABLE
+  ? 'Remote Control comes with paid plans.'
+  : "Remote Control isn't included in your plan.";
 
 const FOLLOW_UP_OPTIONS: Record<RemoteFollowUpBehavior, { label: string; description: string }> = {
   queue: { label: 'Queue', description: 'Send after the current turn finishes.' },
@@ -146,6 +149,8 @@ export default function RemoteControlSettingsScreen() {
   const needsUpgrade =
     tierKnown && !paired && !active && !canUseBillingPlanCapability(tier, 'remote_control');
 
+  const showActionRow = !needsUpgrade || NATIVE_PURCHASES_AVAILABLE;
+
   const openRemote = useCallback(() => {
     router.push('/(app)/companion' as Parameters<typeof router.push>[0]);
   }, [router]);
@@ -179,7 +184,7 @@ export default function RemoteControlSettingsScreen() {
             flexDirection: 'row',
             alignItems: 'center',
             gap: 12,
-            borderBottomWidth: 1,
+            borderBottomWidth: showActionRow ? 1 : 0,
             borderBottomColor: colors.border,
           }}
         >
@@ -215,7 +220,9 @@ export default function RemoteControlSettingsScreen() {
           </View>
         </View>
         {needsUpgrade ? (
-          <SettingsRow label="See plans" icon={Sparkles} onPress={openPlans} isLast />
+          NATIVE_PURCHASES_AVAILABLE ? (
+            <SettingsRow label="See plans" icon={Sparkles} onPress={openPlans} isLast />
+          ) : null
         ) : (
           <SettingsRow
             label={paired || active ? 'Open Remote' : 'Pair a computer'}

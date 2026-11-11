@@ -38,6 +38,11 @@ jest.mock('@/src/features/memory/services/consolidation', () => ({
 }));
 
 jest.mock('../lib/mmkv', () => ({
+  storage: {
+    getString: jest.fn().mockReturnValue(undefined),
+    set: jest.fn(),
+    delete: jest.fn(),
+  },
   whenMmkvReady: jest.fn((cb) => cb()),
   rehydrateWhenMmkvReady: jest.fn((store) => {
     if (store && store.persist && typeof store.persist.rehydrate === 'function') {
@@ -49,7 +54,6 @@ jest.mock('../lib/mmkv', () => ({
     setItem: jest.fn(),
     removeItem: jest.fn(),
   },
-  storage: { getString: jest.fn(), set: jest.fn(), delete: jest.fn() },
 }));
 
 import { useChatStore } from '../stores/chatStore';

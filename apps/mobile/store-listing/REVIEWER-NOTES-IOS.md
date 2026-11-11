@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Mobile lead
-Last updated: 2026-09-26
+Last updated: 2026-11-10
 Applies to: `com.agiworkforce.app`, version 0.0.1
 
 Paste the body of this file into the **App Review Information → Notes** field in
@@ -27,10 +27,10 @@ response leaves the phone. Chats are stored in a local SQLite database that is e
 SQLCipher; the key lives in the iOS Keychain.
 
 **AGI Cloud (optional, requires sign-in).** Signing in with an AGI account
-enables server-side chat, web search, and, on paid plans, image generation.
-Requests go to `https://agiworkforce.com` and `https://api.agiworkforce.com`.
-Its Free plan is open to anyone who signs in. Paid plans and credit top-ups are
-sold only through in-app purchase; see "Purchases: please read" below.
+enables server-side chat and web search on the Free plan, which is open to
+anyone who signs in. Requests go to `https://agiworkforce.com` and
+`https://api.agiworkforce.com`. This version sells nothing and has no in-app
+purchases; see "Purchases: please read" below.
 
 The two modes never mix silently. Local chats are not uploaded, and switching a
 conversation to Cloud is an explicit user action.
@@ -82,111 +82,78 @@ Health connector was removed in July 2026.
 
 ## Purchases: please read
 
-**This build sells auto-renewing subscriptions and consumable credit top-ups
-through StoreKit in-app purchase. There is no other way to pay inside the app.**
+**This version is free and has no in-app purchases. Nothing is sold in the app
+and nothing in the app links to a purchase.**
 
-What ships:
+One build-level value decides it: `src/features/billing/storePurchases.json` sets
+`"nativePurchases": false`, and
+`src/features/billing/nativePurchaseAvailability.ts` exports it as
+`NATIVE_PURCHASES_AVAILABLE`, which every purchase path reads. It is fixed at
+build time; no server response or over-the-air update can turn it on. With it
+false:
 
-- `expo-iap` 5.8.1 is a dependency (`package.json`) and is registered as a config
-  plugin (`app.config.js`), so the StoreKit 2 framework is linked into the app.
-- The purchase flow is `src/features/billing/useMobileIap.ts`, rendered by
-  `src/features/settings/cloud-billing/index.tsx`.
-- Four subscriptions in one subscription group (Basic, Pro, Max 5x, Max 20x,
-  each monthly) and four consumable credit top-ups. The products, their group
-  and their levels are listed in `docs/runbooks/mobile-store-products.md`.
+- The app shows no purchase, upgrade, top-up, restore-purchases,
+  compare-plans or contact-sales control, and no price.
+- The app never opens a StoreKit connection.
+  `src/features/billing/useMobileIap.ts` picks an inert implementation at build
+  time, and `src/features/billing/mobileIapService.ts` refuses catalog and
+  verify calls and never reads the App Store storefront, so the app never calls
+  `/api/mobile/iap/*`.
+- The purchase client library `expo-iap` (5.8.3, `package.json`) is still linked
+  into the binary and its config plugin is still registered in `app.config.js`,
+  so the StoreKit framework is present, but nothing calls it.
+- On the server, the `/api/mobile/iap/*` routes (owner
+  `apps/web/lib/server/mobile-iap-catalog.ts`) stay off unless the deployment
+  sets `MOBILE_IAP_ENABLED`. This version never calls them either way.
 
-How to buy during review:
+What you will see under **Settings → Subscription**: a screen titled **Plan**
+(`src/features/settings/cloud-billing/index.tsx`, the
+`if (!NATIVE_PURCHASES_AVAILABLE)` branch) with:
 
-1. Sign in with the review account supplied in App Store Connect and open
-   Settings → Billing.
-2. Every signed-in account can buy; there is no waitlist or access code in the
-   app. Credit top-ups need an active plan and are not sold in Japan.
-3. The plans appear with the App Store's own localized prices. Tap one; the
-   StoreKit sheet shows the exact charge. The app never shows a price of its
-   own.
-4. After the purchase the app sends the signed transaction to
-   `/api/mobile/iap/verify`. Access is granted only after the server verifies
-   it with Apple, and the transaction is finished only after that.
-5. With a paid plan active, **Usage top-ups** lists the consumables. Purchased
-   credits do not expire.
+- **Current plan**, and the renewal or end date if the plan has one.
+- **Billing**, as plain text with no link, only for an account that already
+  holds a paid plan: **Managed on the web**, **By your organization**, or
+  **Managed where you subscribed**. A Free-plan account gets no Billing row.
+- **What your plan includes**, which lists the current plan's features only.
+- **Usage**, the account's usage, read natively from the usage API.
+- **Help with your plan**, which opens the in-app support screen.
 
-What the Billing screen shows:
+How a locked feature is presented: when something is outside the account's
+plan, the app says it "isn’t included in your plan" (or that the plan's
+allowance is used up for now) and offers **Close**, plus **Choose a standard
+model** when the locked item is a model, with no upgrade button, plan comparison
+or link
+(`src/features/chat/components/PaywallBottomSheet.tsx`). Elsewhere the same rule
+holds: a model the plan does not include is not listed in the model picker, and
+other plan-locked features are described as not included, never as something to
+buy.
 
-- The plan-change row may be labelled **Upgrade plan**, **Adjust plan**, or
-  **Choose plan**, depending on the current subscription. During catalog
-  loading the screen shows **Loading native purchases**; Team and Enterprise
-  accounts may also see **Workspace administration**.
-- **Changing plans.** All four subscriptions are in one group, so a second
-  purchase is a plan change, never a second subscription. The screen marks the
-  current plan, labels every other plan **Upgrade** or **Downgrade**, and says
-  that an upgrade starts right away and a downgrade starts on the next renewal
-  date. A scheduled downgrade is shown as "Changing to … at renewal".
-- **Ask to Buy.** A purchase that needs a family organiser's approval is shown
-  as **Waiting for approval**, not as an error. When it is approved the
-  purchase completes on its own, including when the app was closed: the server
-  grants it from the App Store Server Notification, and the app finishes the
-  transaction the next time Billing opens.
-- **Restore purchases** is always present and re-sends existing transactions
-  for verification. It never charges.
-- A subscription bought on another platform is identified as managed elsewhere
-  and the app does not offer a second recurring purchase. Such an account can
-  still buy credit top-ups here.
-- **Deleting this app does not cancel your plan** is shown to store
-  subscribers, with the route to the App Store's subscription settings once the
-  listing is live.
+Paid plans exist for the AGI Cloud web product. An account that already holds a
+paid plan gets that plan's access after signing in here.
+The app neither sells nor advertises those plans, names no price, and has no
+link to where they are sold.
 
-Every purchase path is behind one server answer. The app asks
-`GET /api/mobile/iap/catalog` and offers nothing unless the response says
-`enabled: true`. The server owner is `apps/web/lib/server/mobile-iap-catalog.ts`,
-which requires the deployment to set `MOBILE_IAP_ENABLED` and to map product
-keys to App Store product IDs in `MOBILE_IAP_APPLE_PRODUCT_IDS_JSON`. If you see
-no products, the screen shows **"Purchases are not available right now"** with
-one of these reasons, quoted exactly:
+The review account needs no purchase setup: there are no sandbox purchases to
+make, no products to load and nothing to restore.
 
-- **"Native purchases are not enabled for this deployment."** The deployment
-  flag is off.
-- **"App Store products have not been registered for this build."** The flag is
-  on but no product is mapped.
-
-Purchases made during review are App Store sandbox purchases and are not
-charged. The production service verifies a sandbox-signed transaction with
-Apple's sandbox certificate chain and grants it to the review account, which has
-been allowed to receive test purchases for this review. For any other account
-the same purchase is refused and the Billing screen says **"This purchase was
-made in the store's test environment, which this account is not set up to use.
-Nothing was charged."** Server-side verification (`/api/mobile/iap/verify`) also
-rejects unregistered products.
-
-Before submitting (operator steps, not for the reviewer): the review account
-must be allowed to receive test purchases (operator dashboard, Flags, Store test
-purchases; `docs/runbooks/mobile-store-products.md` section 4.1). This tree cannot
-confirm that allowance, the live `MOBILE_IAP_ENABLED` state or the App Store
-Connect product records; all three must be in place before this build is
-submitted, and the purchase, restore, renewal, refund, plan-change and Ask to
-Buy paths tested with sandbox accounts.
+Before submitting (operator step, not for the reviewer): do not attach in-app
+purchase products to this version in App Store Connect. Selling in the app needs
+`nativePurchases` set to `true`, a new build and a new review.
 
 ## External links
 
-This section identifies website, store, legal and support destinations in the
+This section identifies website, legal and support destinations in the
 current mobile source. `openExternalUrl` (`lib/safeOpenURL.ts`) accepts only
 reviewed HTTPS hosts; other link handlers are described separately below.
 
-**A. Billing and account-management destinations (the Guideline 3.1.1 surface).**
-The current source exposes the following account and billing links. Their
-availability depends on the signed-in account and plan.
+**A. Account destination.** One account link renders in this version:
 
-| #   | Control                                               | Opens                                                     | Call site                                                 | Who sees it                                                                                                                                                                                                             |
-| --- | ----------------------------------------------------- | --------------------------------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A1  | **View invoices** (Settings → Billing)                | `agiworkforce.com/billing`                                | `src/features/settings/cloud-billing/index.tsx:729`       | Only accounts whose plan is billed on our website. Free and store-billed accounts get no invoice row.                                                                                                                   |
-| A2  | **Workspace administration** (Settings → Billing)     | `agiworkforce.com/settings/team`                          | `src/features/settings/cloud-billing/index.tsx:451`       | Team and Enterprise plans only.                                                                                                                                                                                         |
-| A3  | **Manage on web** (subscription-owner alert)          | `agiworkforce.com/settings/billing`                       | `src/features/settings/cloud-billing/index.tsx:258`       | Accounts whose subscription is recorded as bought on our website or provisioned by an employer. For an Apple- or Google-recorded subscription the same button opens that store's own subscription page instead.         |
-| A4  | **Contact Sales** (chat paywall sheet)                | `agiworkforce.com/contact-sales?plan=…`                   | `src/features/chat/components/PaywallBottomSheet.tsx:130` | Only when the gated feature needs Team or Enterprise. Not reachable from the Billing screen: `getNextUpgradeTier` returns only self-serve individual tiers (`packages/contracts/types/src/billing-catalog.ts:362-375`). |
-| A5  | **Help with a purchase** (Settings → Billing)         | `agiworkforce.com/help?q=purchase+billing+credits+refund` | `src/features/settings/cloud-billing/index.tsx:740`       | Any signed-in Cloud account; this opens support guidance for charges, missing credits and refunds.                                                                                                                      |
-| A6  | **Continue** on the "Change your email" alert         | `agiworkforce.com/settings/account`                       | `src/features/settings/cloud-account/index.tsx:98`        | Any signed-in Cloud account. Email change is not implemented in-app; the alert says so before it opens anything.                                                                                                        |
-| A7  | **Create on web** (Settings → Workspace, empty state) | `agiworkforce.com/settings/team`                          | `app/(app)/settings/workspace.tsx:456`                    | An account with **no workspace at all**, not only Team admins.                                                                                                                                                          |
-| A8  | **Rename or delete this workspace on the web**        | `agiworkforce.com/settings/team`                          | `app/(app)/settings/workspace.tsx:584`                    | Any account that has a workspace loaded.                                                                                                                                                                                |
+| #   | Control                                       | Opens                               | Call site                                       | Who sees it                                                                                                      |
+| --- | --------------------------------------------- | ----------------------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| A1  | **Continue** on the "Change your email" alert | `agiworkforce.com/settings/account` | `src/features/settings/cloud-account/index.tsx` | Any signed-in Cloud account. Email change is not implemented in-app; the alert says so before it opens anything. |
 
-Web billing links (A1 to A5) show only on the US App Store storefront and never on Android; elsewhere they are plain text, and purchase help opens in-app support.
+No link in the app opens a page about pricing, billing, invoices, sales or
+upgrades.
 
 **B. Non-billing destinations.** The sign-in and account-creation flows open
 Terms, Privacy, data-use and acceptable-use pages on `agiworkforce.com`; the
@@ -227,15 +194,28 @@ asks before linking it (`app/(app)/github/installed.tsx`). The legal screen
 `support@agiworkforce.com`, and the iOS/Android device-settings intents, are the
 only other `Linking.openURL` targets in the app.
 
-**E. Present in source but unreachable in this binary.** The Stripe
-billing-portal link (`src/features/settings/cloud-billing/index.tsx:292`), dead
-behind `FEATURES.billing === false`.
+**E. Present in source but not rendered in this version.** These controls
+exist in the source for a build that sells through the App Store. None of them
+renders while `NATIVE_PURCHASES_AVAILABLE` is `false`:
 
-Users who subscribed to AGI on the web see their plan's features unlocked when
-they sign in here (multiplatform service). The app never advertises, prices, or
-initiates that purchase.
+- `src/features/settings/cloud-billing/index.tsx`: **View invoices**
+  (`agiworkforce.com/billing`), **Workspace administration**
+  (`agiworkforce.com/settings/team`), **Manage on web** (the subscription-owner
+  alert), **Help with a purchase** (`agiworkforce.com/help`), the Terms and
+  Privacy links under the purchase list, and the Stripe billing-portal link,
+  which is also dead behind `FEATURES.billing === false`. All of them are on the
+  purchase screen, which this version never draws: Settings → Subscription
+  returns the Plan screen described above first.
+- `src/features/chat/components/PaywallBottomSheet.tsx`: **Contact Sales**
+  (`agiworkforce.com/contact-sales`). The sheet draws no upgrade, plan or sales
+  button while `NATIVE_PURCHASES_AVAILABLE` is `false`.
+- `app/(app)/settings/workspace.tsx`: **Create on web** and **Open workspace
+  settings on the web** (`agiworkforce.com/settings/team`). Both, like the web
+  billing links above, require `useWebBillingLinksAllowed`
+  (`src/features/billing/webBillingLinks.ts`) to read a US App Store storefront,
+  and this version never reads the storefront.
 
-If any link in section A is a problem under Guideline 3.1.1, we will remove or
+If any remaining link is a problem under Guideline 3.1.1, we will remove or
 gate it immediately, please tell us which one rather than rejecting the build,
 and we will turn it around the same day.
 

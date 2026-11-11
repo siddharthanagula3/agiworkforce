@@ -69,7 +69,7 @@ describe('Mobile SendPreview', () => {
     expect(queryByTestId('icon-cloud')).toBeTruthy();
   });
 
-  it('renders Managed gateway + cloud icon for ManagedNative', () => {
+  it('renders Cloud gateway + cloud icon for ManagedNative', () => {
     const presentation = summarizeSendPreview({ providerMode: 'ManagedNative' });
     const { getByText, queryAllByText, queryByTestId } = render(
       <SendPreview presentation={presentation} />,

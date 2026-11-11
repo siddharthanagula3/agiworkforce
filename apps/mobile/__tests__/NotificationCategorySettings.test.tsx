@@ -85,7 +85,7 @@ describe('notification category settings', () => {
     __resetCloudAccountSessionForTests();
     act(() => {
       useChatAppModeStore.setState({ appMode: 'local' });
-      useAuthStore.setState({ isClerkSignedIn: false });
+      useAuthStore.setState({ isClerkSignedIn: false, isClerkLoaded: false, clerkUserId: null });
       useNotificationPrefsStore.setState({
         categoryEnabled: {
           chat_replies: true,

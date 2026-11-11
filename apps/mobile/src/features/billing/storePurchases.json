@@ -1,0 +1,16 @@
+{
+  "nativePurchases": false,
+  "readme": [
+    "Whether this build of the app can sell anything through the App Store or Google Play.",
+    "false: the app shows no purchase, upgrade, top-up or restore control, never opens a",
+    "store connection, and the Android manifest drops the Play Billing permission. The",
+    "store listings then declare no in-app purchases.",
+    "true: the purchase screens and the store connection are compiled in, and both store",
+    "listings must declare in-app purchases with the products attached for review.",
+    "app.config.js, src/features/billing/nativePurchaseAvailability.ts and",
+    "scripts/lib/rollout/store-listing.mjs all read this one value, so the binary, the",
+    "screens and the listing declarations cannot disagree. Changing it needs a new store",
+    "build and a new review; it is never switched by an over-the-air update or the server.",
+    "Selling also needs the server side described in docs/runbooks/mobile-store-products.md."
+  ]
+}

@@ -4,6 +4,7 @@ const clerkPublishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim(
 const hostedOrigin = process.env.EXPO_PUBLIC_API_URL?.trim();
 const easProjectId = '38f0941c-88a7-468a-9750-fcd8b357ff4c';
 const iosShareAppGroupIdentifier = 'group.com.agiworkforce.app.share';
+const { nativePurchases } = require('./src/features/billing/storePurchases.json');
 
 if (
   (appEnv === 'production' || appEnv === 'preview') &&
@@ -179,6 +180,9 @@ const config = {
     },
     package: 'com.agiworkforce.app',
     versionCode: 1,
+    ...(process.env.GOOGLE_SERVICES_JSON
+      ? { googleServicesFile: process.env.GOOGLE_SERVICES_JSON }
+      : {}),
     allowBackup: false,
     permissions: ['RECORD_AUDIO'],
     blockedPermissions: [
@@ -186,6 +190,10 @@ const config = {
       'android.permission.READ_MEDIA_VISUAL_USER_SELECTED',
       'android.permission.ACCESS_MEDIA_LOCATION',
       'android.permission.SYSTEM_ALERT_WINDOW',
+      // The Play Billing library declares this permission whenever it is
+      // linked, and Play labels a listing "In-app purchases" from it. A build
+      // that sells nothing must not carry it.
+      ...(nativePurchases ? [] : ['com.android.vending.BILLING']),
     ],
     intentFilters: [
       {

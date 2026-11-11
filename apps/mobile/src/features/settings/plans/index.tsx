@@ -17,6 +17,7 @@ import { useThemeColors, cardRadius } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { useTierStore } from '@/src/features/billing/store';
 import { SettingsInfo, SettingsScreenShell } from '@/src/features/settings/Common';
+import { NATIVE_PURCHASES_AVAILABLE } from '@/src/features/billing/nativePurchaseAvailability';
 
 const COMPARED_PLANS: readonly BillingPlanTier[] = [
   'free',
@@ -61,15 +62,19 @@ export default function PlansScreen() {
   const colors = useThemeColors();
   const tier = useTierStore((s) => s.tier);
   const current = COMPARED_PLANS.includes(tier) ? tier : null;
+  const shownPlans = NATIVE_PURCHASES_AVAILABLE ? COMPARED_PLANS : [tier];
 
   return (
-    <SettingsScreenShell title="Compare plans" backHref="/(app)/settings/cloud-billing">
+    <SettingsScreenShell
+      title={NATIVE_PURCHASES_AVAILABLE ? 'Compare plans' : 'Your plan'}
+      backHref="/(app)/settings/cloud-billing"
+    >
       <SettingsInfo
-        title="What each plan includes"
+        title={NATIVE_PURCHASES_AVAILABLE ? 'What each plan includes' : 'What your plan includes'}
         body="Usage resets every 5 hours, week and month, and varies by model and task."
       />
-      {COMPARED_PLANS.map((plan) => {
-        const isCurrent = plan === current;
+      {shownPlans.map((plan) => {
+        const isCurrent = NATIVE_PURCHASES_AVAILABLE && plan === current;
         const features = featureLines(plan, current);
         const label = getBillingPlanPricing(plan).label;
         return (

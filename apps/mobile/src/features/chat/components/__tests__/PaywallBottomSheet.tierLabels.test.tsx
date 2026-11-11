@@ -1,3 +1,7 @@
+jest.mock('@/src/features/billing/nativePurchaseAvailability', () => ({
+  NATIVE_PURCHASES_AVAILABLE: true,
+}));
+
 import { fireEvent, render } from '@testing-library/react-native';
 import { getBillingPlanPricing } from '@agiworkforce/types';
 

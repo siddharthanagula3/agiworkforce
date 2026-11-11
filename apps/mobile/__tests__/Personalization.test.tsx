@@ -2,6 +2,7 @@
 
 import { Alert } from 'react-native';
 import { act, render, fireEvent } from '@testing-library/react-native';
+import { PRODUCT_BRAND } from '@agiworkforce/types';
 
 const mockBack = jest.fn();
 const mockReplace = jest.fn();
@@ -73,7 +74,6 @@ jest.mock('../services/authSession', () => ({
 import PersonalizationScreen from '../app/(app)/settings/personalization';
 import { useLocalSettingsStore } from '../stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '../stores/settings/cloudSettingsStore';
-import { PRODUCT_BRAND } from '@agiworkforce/types';
 import { useAuthStore } from '../src/features/auth/store';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { API_URL } from '../lib/constants';

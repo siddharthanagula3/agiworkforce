@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Mobile lead
-Last updated: 2026-09-26
+Last updated: 2026-11-10
 Applies to: `com.agiworkforce.app`, version 0.0.1 (`app.config.js` → `version`,
 `android.package`)
 
@@ -45,12 +45,12 @@ Local Mode does not merely _avoid_ our servers, it is prevented from reaching
 them: `lib/egressGuard.ts` throws `EgressBlockedError` on any outbound request to
 an AGI managed-cloud host while Local Mode is active.
 
-**AGI Cloud (optional, requires sign-in).** Signing in enables server-side chat,
-web search, and image generation (`lib/v1FeatureFlags.ts` → `cloudChat`,
-`webSearch`, `imageGen` are all `true`). Sign-in is Clerk's native `AuthView`
-sheet, not a browser (`app/(auth)/login.tsx` → `<AuthView mode="signInOrUp" />`).
-Its Free plan is open to anyone who signs in. Paid plans and credit top-ups are
-sold only through Google Play Billing.
+**AGI Cloud (optional, requires sign-in).** Signing in enables server-side chat
+and web search on the Free plan, which is open to anyone who signs in
+(`lib/v1FeatureFlags.ts` → `cloudChat`, `webSearch` are `true`). Sign-in is
+Clerk's native `AuthView` sheet, not a browser (`app/(auth)/login.tsx` →
+`<AuthView mode="signInOrUp" />`). This version is free, sells nothing and has
+no in-app products; see **Billing** below.
 
 ## How to review it
 
@@ -62,8 +62,8 @@ Cloud features require sign-in. Before submission, provide an active review
 account (email and password, no one-time code) in Play Console's secure App
 access instructions; do not put credentials in this repository. The Cloud entry path
 includes age confirmation, and a signed-in account must accept the current
-Terms before Cloud unlocks. If Play products are included, the review account
-must be able to see and test those products through Google Play Billing.
+Terms before Cloud unlocks. The review account needs no purchase setup: this
+version has no in-app products.
 
 ## Age gate and minor-safe mode
 
@@ -176,7 +176,10 @@ Merged into the manifest by library config plugins rather than listed above:
 - `READ_CALENDAR` / `WRITE_CALENDAR` from `expo-calendar`, for the optional
   device-calendar context connector. Off by default; the permission strings say
   "only after you enable device calendar context".
-- `com.android.vending.BILLING` from `expo-iap`, see **Billing** below.
+- `com.android.vending.BILLING`, which `expo-iap` would add, is removed from the
+  manifest: `app.config.js` lists it in `android.blockedPermissions` while
+  `src/features/billing/storePurchases.json` sets `"nativePurchases": false`. See **Billing**
+  below.
 - `WRITE_EXTERNAL_STORAGE` (`android:maxSdkVersion="32"`) from `expo-image-picker`'s
   own `AndroidManifest.xml`. It is legacy-only: on Android 13+ it is stripped by
   `maxSdkVersion` and the app never requests it.
@@ -278,92 +281,79 @@ Local Mode is active, verified in `__tests__/egress-guard.test.ts`.
 
 ## Billing: please read
 
-**This build sells auto-renewing subscriptions and consumable credit top-ups
-through Google Play Billing. There is no card-entry form and no other in-app
-checkout.**
+**This version is free and has no in-app products. Nothing is sold in the app,
+there is no card-entry form or other checkout, and nothing in the app links to a
+purchase.**
 
-The `expo-iap` 5.8.1 integration is `src/features/billing/useMobileIap.ts`,
-rendered by `src/features/settings/cloud-billing/index.tsx`. It sells four
-subscriptions (Basic, Pro, Max 5x, Max 20x, each with one monthly base plan) and
-four consumable credit top-ups; the product and base plan IDs are listed in
-`docs/runbooks/mobile-store-products.md`.
+One build-level value decides it: `src/features/billing/storePurchases.json` sets
+`"nativePurchases": false`, and
+`src/features/billing/nativePurchaseAvailability.ts` exports it as
+`NATIVE_PURCHASES_AVAILABLE`, which every purchase path reads. It is fixed at
+build time; no server response or over-the-air update can turn it on. With it
+false:
 
-How to buy during review:
+- The app shows no purchase, upgrade, top-up, restore-purchases,
+  compare-plans or contact-sales control, and no price.
+- The app never opens a Play Billing connection.
+  `src/features/billing/useMobileIap.ts` picks an inert implementation at build
+  time, and `src/features/billing/mobileIapService.ts` refuses catalog and
+  verify calls, so the app never calls `/api/mobile/iap/*`.
+- `app.config.js` removes the permission `com.android.vending.BILLING` from the
+  manifest.
+- The purchase client library `expo-iap` (5.8.3, `package.json`) is still linked
+  into the binary and its config plugin is still registered in `app.config.js`,
+  but nothing calls it.
+- On the server, the `/api/mobile/iap/*` routes (owner
+  `apps/web/lib/server/mobile-iap-catalog.ts`) stay off unless the deployment
+  sets `MOBILE_IAP_ENABLED`. This version never calls them either way.
 
-1. Sign in with the review account and open Settings → Billing.
-2. Every signed-in account can buy; there is no waitlist or access code in the
-   app. Credit top-ups need an active plan and are not sold in Japan.
-3. Plans appear with Play's own localized price for the configured base plan.
-   The Play purchase sheet shows the exact charge.
-4. The app sends the purchase token to `/api/mobile/iap/verify`. Access is
-   granted only after the server verifies it with the Play Developer API. The
-   server then acknowledges the purchase with Play, and the app acknowledges or
-   consumes it on the device.
-5. With a paid plan active, **Usage top-ups** lists the consumables. Purchased
-   credits do not expire.
+What you will see under **Settings → Subscription**: a screen titled **Plan**
+(`src/features/settings/cloud-billing/index.tsx`, the
+`if (!NATIVE_PURCHASES_AVAILABLE)` branch) with:
 
-What the Billing screen shows:
+- **Current plan**, and the renewal or end date if the plan has one.
+- **Billing**, as plain text with no link, only for an account that already
+  holds a paid plan: **Managed on the web**, **By your organization**, or
+  **Managed where you subscribed**. A Free-plan account gets no Billing row.
+- **What your plan includes**, which lists the current plan's features only.
+- **Usage**, the account's usage, read natively from the usage API.
+- **Help with your plan**, which opens the in-app support screen.
 
-- Billing may first show **Loading native purchases**. Its plan-change row can
-  read **Upgrade plan**, **Adjust plan**, or **Choose plan**; Team and
-  Enterprise accounts may also see **Workspace administration**.
-- **Changing plans.** The current plan is marked and every other plan is
-  labelled **Upgrade** or **Downgrade**. An upgrade replaces the subscription
-  at once and charges the prorated difference; a downgrade is deferred to the
-  next renewal. The screen says so before the tap.
-- **Pending payments.** A purchase Play reports as pending is shown as
-  **Waiting for approval** and is never granted early. It completes on its own
-  when Play confirms the payment, including when the app was closed.
-- **Restore purchases** is always present and never charges.
-- A subscription bought on another platform is identified as managed elsewhere
-  and the app does not offer a second recurring purchase. Such an account can
-  still buy credit top-ups here.
+How a locked feature is presented: when something is outside the account's
+plan, the app says it "isn’t included in your plan" (or that the plan's
+allowance is used up for now) and offers **Close**, plus **Choose a standard
+model** when the locked item is a model, with no upgrade button, plan comparison
+or link (`src/features/chat/components/PaywallBottomSheet.tsx`). Elsewhere the
+same rule holds: a model the plan does not include is not listed in the model
+picker, and other plan-locked features are described as not included, never as
+something to buy.
 
-Every purchase path is behind one server answer from the server owner
-`mobile-iap-catalog.ts`, which requires the deployment to set
-`MOBILE_IAP_ENABLED` and to map product keys to Play product IDs. If no products
-appear, the screen shows **"Purchases are not available right now"** with one of
-these reasons: "Native purchases are not enabled for this deployment." when the
-flag is off, "Google Play products have not been registered for this build."
-when the flag is on but the Play product map is empty.
+Paid plans exist for the AGI Cloud web product. An account that already holds a
+paid plan gets that plan's access after signing in here. The app neither sells
+nor advertises those plans, names no price, and has no link to where they are
+sold.
 
-A purchase made with a Play license-tester account is a test purchase and is
-not charged. The production service verifies it with Google Play and grants it
-only to an AGI account that has been allowed to receive test purchases; the
-review account supplied in Play Console is one. For any other account the
-purchase is refused, the Billing screen says **"This purchase was made in the
-store's test environment, which this account is not set up to use. Nothing was
-charged."**, and it is left unacknowledged so Play cancels it.
+The review account needs no purchase setup: there are no test purchases to
+make, no products to load and nothing to restore.
 
-Before submitting (operator steps, not for the reviewer): the review account
-must be allowed to receive test purchases (operator dashboard, Flags, Store test
-purchases; `docs/runbooks/mobile-store-products.md` section 4.1). This tree cannot
-verify that allowance, the live deployment flag or Play Console product
-registration. All three must be in place before this build is submitted, and the
-purchase, restore, renewal, refund, plan-change and pending-payment paths
-validated with Play test purchases.
+Before submitting (operator step, not for the reviewer): do not activate Play
+products for this release. Selling in the app needs `nativePurchases` set to
+`true`, a new build and a new review.
 
 ## External links
 
-This section identifies website, store, legal and support destinations in the
+This section identifies website, legal and support destinations in the
 current mobile source. `openExternalUrl` (`lib/safeOpenURL.ts`) accepts only
 reviewed HTTPS hosts; other link handlers are described separately below.
 
-**A. Billing and account-management destinations.** Availability depends on
-the signed-in account and plan.
+**A. Account destination.** One account link renders in this version:
 
-| #   | Control                                               | Opens                                                     | Call site                                                 | Who sees it                                                                                                                                                                                                             |
-| --- | ----------------------------------------------------- | --------------------------------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A1  | **View invoices** (Settings → Billing)                | `agiworkforce.com/billing`                                | `src/features/settings/cloud-billing/index.tsx:729`       | Only accounts whose plan is billed on our website. Free and store-billed accounts get no invoice row.                                                                                                                   |
-| A2  | **Workspace administration** (Settings → Billing)     | `agiworkforce.com/settings/team`                          | `src/features/settings/cloud-billing/index.tsx:451`       | Team and Enterprise plans only.                                                                                                                                                                                         |
-| A3  | **Manage on web** (subscription-owner alert)          | `agiworkforce.com/settings/billing`                       | `src/features/settings/cloud-billing/index.tsx:258`       | Accounts whose subscription is recorded as bought on our website or provisioned by an employer. For a Google Play-recorded subscription the same button opens Play's own subscription page.                             |
-| A4  | **Contact Sales** (chat paywall sheet)                | `agiworkforce.com/contact-sales?plan=…`                   | `src/features/chat/components/PaywallBottomSheet.tsx:130` | Only when the gated feature needs Team or Enterprise. Not reachable from the Billing screen: `getNextUpgradeTier` returns only self-serve individual tiers (`packages/contracts/types/src/billing-catalog.ts:362-375`). |
-| A5  | **Help with a purchase** (Settings → Billing)         | `agiworkforce.com/help?q=purchase+billing+credits+refund` | `src/features/settings/cloud-billing/index.tsx:740`       | Any signed-in Cloud account; this opens support guidance for charges, missing credits and refunds.                                                                                                                      |
-| A6  | **Continue** on the "Change your email" alert         | `agiworkforce.com/settings/account`                       | `src/features/settings/cloud-account/index.tsx:98`        | Any signed-in Cloud account. Email change is not implemented in-app; the alert says so before it opens anything.                                                                                                        |
-| A7  | **Create on web** (Settings → Workspace, empty state) | `agiworkforce.com/settings/team`                          | `app/(app)/settings/workspace.tsx:456`                    | An account with **no workspace at all**, not only Team admins.                                                                                                                                                          |
-| A8  | **Rename or delete this workspace on the web**        | `agiworkforce.com/settings/team`                          | `app/(app)/settings/workspace.tsx:584`                    | Any account that has a workspace loaded.                                                                                                                                                                                |
+| #   | Control                                       | Opens                               | Call site                                       | Who sees it                                                                                                      |
+| --- | --------------------------------------------- | ----------------------------------- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| A1  | **Continue** on the "Change your email" alert | `agiworkforce.com/settings/account` | `src/features/settings/cloud-account/index.tsx` | Any signed-in Cloud account. Email change is not implemented in-app; the alert says so before it opens anything. |
 
-Web billing links (A1 to A5) show only on the US App Store storefront and never on Android; elsewhere they are plain text, and purchase help opens in-app support.
+No link in the app opens a page about pricing, billing, invoices, sales or
+upgrades.
 
 **B. Non-billing destinations.** The sign-in and account-creation flows open
 Terms, Privacy, data-use and acceptable-use pages on `agiworkforce.com`; the
@@ -404,14 +394,28 @@ asks before linking it (`app/(app)/github/installed.tsx`). The legal screen
 `src/features/edge-cases/components/StorageFullModal.tsx`, are the only other
 `Linking.openURL` targets in the app.
 
-**E. Present in source but unreachable in this binary.** The Stripe
-billing-portal link (`src/features/settings/cloud-billing/index.tsx:292`), dead
-behind `FEATURES.billing === false`.
+**E. Present in source but not rendered in this version.** These controls
+exist in the source for a build that sells through the store. None of them
+renders while `NATIVE_PURCHASES_AVAILABLE` is `false`:
 
-Users who subscribed to AGI on the web see their plan's features unlocked when
-they sign in here. The app never prices or initiates that purchase. **There is no
-alternative in-app payment path**, no web checkout, no UPI sheet, no card form.
-and none of the links above reaches one.
+- `src/features/settings/cloud-billing/index.tsx`: **View invoices**
+  (`agiworkforce.com/billing`), **Workspace administration**
+  (`agiworkforce.com/settings/team`), **Manage on web** (the subscription-owner
+  alert), **Help with a purchase** (`agiworkforce.com/help`), the Terms and
+  Privacy links under the purchase list, and the Stripe billing-portal link,
+  which is also dead behind `FEATURES.billing === false`. All of them are on the
+  purchase screen, which this version never draws: Settings → Subscription
+  returns the Plan screen described above first.
+- `src/features/chat/components/PaywallBottomSheet.tsx`: **Contact Sales**
+  (`agiworkforce.com/contact-sales`). The sheet draws no upgrade, plan or sales
+  button while `NATIVE_PURCHASES_AVAILABLE` is `false`.
+- `app/(app)/settings/workspace.tsx`: **Create on web** and **Open workspace
+  settings on the web** (`agiworkforce.com/settings/team`). Both, like the web
+  billing links above, require `useWebBillingLinksAllowed`
+  (`src/features/billing/webBillingLinks.ts`), which returns false on Android.
+
+**There is no alternative in-app payment path**, no web checkout, no UPI sheet,
+no card form, and none of the links above reaches one.
 
 ## Account deletion and data export
 

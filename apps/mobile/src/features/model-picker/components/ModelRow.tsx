@@ -8,6 +8,7 @@ import { Text } from '@/components/ui/Text';
 import { Badge } from '@/components/ui/Badge';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { CLOUD_LOCK_REASON, type ModelDef } from '@/src/features/model-picker/service';
+import { NATIVE_PURCHASES_AVAILABLE } from '@/src/features/billing/nativePurchaseAvailability';
 import {
   getModelMetadataById,
   getModelReasoning,
@@ -126,13 +127,15 @@ export function ModelRow({
         onLongPress={handleLongPress}
         delayLongPress={400}
         disabled={disabled}
-        accessibilityLabel={`${model.name}${visiblySelected ? ', selected' : ''}${isFavorite ? ', favorite' : ''}${isLocked ? `, ${isSignInLock ? 'sign in required' : 'upgrade required'}, ${model.lockReason ?? ''}` : ''}${isDownloading ? `, downloading ${progressPercent}%` : ''}${isFailed ? ', download failed' : ''}${isUnavailable ? ', unavailable' : ''}${outage ? ', unavailable right now' : ''}${isLocal && isReady ? ', ready' : ''}${isLocal && installStatus.status === 'download_required' ? ', not downloaded' : ''}`}
+        accessibilityLabel={`${model.name}${visiblySelected ? ', selected' : ''}${isFavorite ? ', favorite' : ''}${isLocked ? `, ${isSignInLock ? 'sign in required' : NATIVE_PURCHASES_AVAILABLE ? 'upgrade required' : 'not included in your plan'}, ${model.lockReason ?? ''}` : ''}${isDownloading ? `, downloading ${progressPercent}%` : ''}${isFailed ? ', download failed' : ''}${isUnavailable ? ', unavailable' : ''}${outage ? ', unavailable right now' : ''}${isLocal && isReady ? ', ready' : ''}${isLocal && installStatus.status === 'download_required' ? ', not downloaded' : ''}`}
         accessibilityRole="button"
         accessibilityHint={
           isLocked
             ? isSignInLock
               ? 'Opens AGI Cloud sign-in'
-              : 'Opens plan upgrade options'
+              : NATIVE_PURCHASES_AVAILABLE
+                ? 'Opens plan upgrade options'
+                : "This model isn't included in your plan"
             : isUnavailable
               ? unavailableHint
               : outage
@@ -260,7 +263,12 @@ export function ModelRow({
           {outage ? <Badge label="Unavailable" color="gray" /> : null}
           {isLocked ? (
             <>
-              <Badge label={isSignInLock ? 'Sign in' : 'Upgrade'} color="yellow" />
+              <Badge
+                label={
+                  isSignInLock ? 'Sign in' : NATIVE_PURCHASES_AVAILABLE ? 'Upgrade' : 'Not included'
+                }
+                color="yellow"
+              />
               <Lock size={14} color={colors.agentWarning} />
             </>
           ) : null}

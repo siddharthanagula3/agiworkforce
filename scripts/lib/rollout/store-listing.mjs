@@ -103,6 +103,8 @@ export function appIdentifierFrom(appConfigSource) {
 export const NATIVE_PURCHASE_SOURCE_PATHS = Object.freeze({
   capabilities: 'packages/contracts/types/src/capabilities.ts',
   package: 'apps/mobile/package.json',
+  purchaseSwitch: 'apps/mobile/src/features/billing/storePurchases.json',
+  availability: 'apps/mobile/src/features/billing/nativePurchaseAvailability.ts',
   appConfig: 'apps/mobile/app.config.js',
   screen: 'apps/mobile/src/features/settings/cloud-billing/index.tsx',
   hook: 'apps/mobile/src/features/billing/useMobileIap.ts',
@@ -166,6 +168,95 @@ function callsRoute(source, method, route, prefix = false) {
   );
 }
 
+function literalAfter(source, pattern) {
+  const match = pattern.exec(source.code);
+  return match ? source.literals.get(match[1]) : undefined;
+}
+
+const PURCHASE_SWITCH_MODULE = './src/features/billing/storePurchases.json';
+const PURCHASE_SWITCH_IMPORT = './storePurchases.json';
+const PLAY_BILLING_PERMISSION = 'com.android.vending.BILLING';
+
+/**
+ * The one value that says whether this build sells anything. Everything below
+ * proves the binary, the screens and the service all take their answer from it,
+ * so a listing can be held to the switch instead of to each of them.
+ */
+function purchaseSwitchFrom(sources, code) {
+  let declared;
+  try {
+    declared = JSON.parse(sources.purchaseSwitch)?.nativePurchases;
+  } catch {
+    throw new Error('Native purchase wiring: purchase switch is missing or invalid');
+  }
+  if (typeof declared !== 'boolean')
+    throw new Error('Native purchase wiring: purchase switch must state a boolean nativePurchases');
+
+  if (
+    literalAfter(code.availability, /\bimport storePurchases from (LITERAL_\d+)/) !==
+    PURCHASE_SWITCH_IMPORT
+  )
+    throw new Error('Native purchase wiring: availability no longer reads the purchase switch');
+  requireCode(
+    code.availability,
+    /\bexport const NATIVE_PURCHASES_AVAILABLE : boolean = storePurchases \. nativePurchases ;/,
+    'availability no longer exports the purchase switch unchanged',
+  );
+
+  if (
+    literalAfter(code.appConfig, /\bconst \{ nativePurchases \} = require \( (LITERAL_\d+) \)/) !==
+    PURCHASE_SWITCH_MODULE
+  )
+    throw new Error('Native purchase wiring: app.config.js no longer reads the purchase switch');
+  if (
+    literalAfter(
+      code.appConfig,
+      /\. \. \. \( nativePurchases \? \[ \] : \[ (LITERAL_\d+) \] \)/,
+    ) !== PLAY_BILLING_PERMISSION
+  )
+    throw new Error(
+      'Native purchase wiring: a build without purchases no longer drops the Play Billing permission',
+    );
+
+  for (const [label, source] of [
+    ['native purchase hook', code.hook],
+    ['native purchase service', code.service],
+    ['Billing screen', code.screen],
+  ]) {
+    if (
+      !namedImport(
+        source,
+        'NATIVE_PURCHASES_AVAILABLE',
+        label === 'Billing screen'
+          ? '@/src/features/billing/nativePurchaseAvailability'
+          : './nativePurchaseAvailability',
+      )
+    )
+      throw new Error(`Native purchase wiring: ${label} no longer reads purchase availability`);
+  }
+  requireCode(
+    code.hook,
+    /\bexport const useMobileIap\b[^=]*(?:=>[^=]*)?= NATIVE_PURCHASES_AVAILABLE \? useStoreMobileIap : useUnavailableMobileIap ;/,
+    'native purchase hook is no longer chosen by purchase availability',
+  );
+  requireCode(
+    code.service,
+    /\bexport async function readStorefront \( \)[^{]*\{ if \( ! NATIVE_PURCHASES_AVAILABLE \) return null ;/,
+    'storefront is read from the store in a build without purchases',
+  );
+  requireCode(
+    code.service,
+    /\bif \( ! NATIVE_PURCHASES_AVAILABLE \) throw new Error \(/,
+    'receipt verification is reachable in a build without purchases',
+  );
+  requireCode(
+    code.screen,
+    /\bif \( ! NATIVE_PURCHASES_AVAILABLE \) \{? ?return \(/,
+    'Billing screen draws purchase controls in a build without purchases',
+  );
+  return declared;
+}
+
 function nativePlatformMapped(source, platform) {
   return [
     ...source.code.matchAll(/\bif \( Platform \. OS === (LITERAL_\d+) \) return (LITERAL_\d+) ;/g),
@@ -227,9 +318,10 @@ function pluginRegistered(source, plugin) {
 export function nativePurchaseSupportFrom(sources) {
   const code = Object.fromEntries(
     Object.entries(NATIVE_PURCHASE_SOURCE_PATHS)
-      .filter(([name]) => name !== 'package')
+      .filter(([name]) => name !== 'package' && name !== 'purchaseSwitch')
       .map(([name, file]) => [name, executableSource(sources?.[name], file)]),
   );
+  const sells = purchaseSwitchFrom(sources, code);
   requireCode(
     code.capabilities,
     /\bconst MOBILE\b[^=]*= \{[^}]*\bcanUseBilling : true\b/,
@@ -272,8 +364,8 @@ export function nativePurchaseSupportFrom(sources) {
     throw new Error('Native purchase wiring: native store SDK hook import is missing');
   requireCode(
     code.hook,
-    /\bexport function useMobileIap \(/,
-    'native purchase hook export is missing',
+    /\bfunction useStoreMobileIap \(/,
+    'native purchase hook implementation is missing',
   );
   requireCode(code.hook, /\bconst iap = useIAP \(/, 'native store SDK hook is not called');
   requireCode(
@@ -334,5 +426,5 @@ export function nativePurchaseSupportFrom(sources) {
     /\bawait recordVerifiedMobileIapPurchase \(/,
     'server verified purchase recording is disconnected',
   );
-  return { ios: true, android: true };
+  return { ios: sells, android: sells };
 }

@@ -100,7 +100,13 @@ jest.mock('react-native-reanimated', () => {
   const { View } = require('react-native');
   return {
     __esModule: true,
+    Easing: { linear: (value: number) => value },
+    cancelAnimation: jest.fn(),
+    useAnimatedProps: (factory: () => unknown) => factory(),
+    withRepeat: <T,>(value: T) => value,
+    withTiming: <T,>(value: T) => value,
     default: {
+      createAnimatedComponent: (component: unknown) => component,
       View: ({ children, style }: { children: React.ReactNode; style?: object }) => (
         <View style={style}>{children}</View>
       ),
@@ -126,6 +132,13 @@ jest.mock('react-native-svg', () => {
     Polyline: () => null,
     Line: () => null,
     Circle: () => null,
+    Defs: () => null,
+    FeGaussianBlur: () => null,
+    Filter: () => null,
+    G: () => null,
+    Image: () => null,
+    Mask: () => null,
+    Path: () => null,
     Text: ({ children }: { children: React.ReactNode }) => <Text>{children}</Text>,
   };
 });

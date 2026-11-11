@@ -8,6 +8,7 @@ import test from 'node:test';
 
 import {
   readLegalAttributionBodies,
+  readLegalAttributionFields,
   readProductionOrigins,
   parseHermesStrings,
   scanBundleDirectory as scanDirectory,
@@ -38,9 +39,24 @@ function bundleDirectory(files) {
 }
 
 function bytecodeDirectory(source) {
+  return bytecodeBundles({ 'index.hbc': source });
+}
+
+function bytecodeBundles(bundles) {
   const directory = bundleDirectory({});
+  for (const [name, source] of Object.entries(bundles)) {
+    mkdirSync(dirname(join(directory, name)), { recursive: true });
+    compileBytecode(source, join(directory, name));
+  }
+  return directory;
+}
+
+function findings(directory) {
+  return scanBundleDirectory(directory).problems.map((problem) => problem.finding);
+}
+
+function compileBytecode(source, bytecodePath) {
   const sourcePath = join(mkdtempSync(join(tmpdir(), 'release-bytecode-source-')), 'index.js');
-  const bytecodePath = join(directory, 'index.hbc');
   const reactNativePackage = require.resolve('react-native/package.json');
   const compilerPackage = dirname(
     require.resolve('hermes-compiler/package.json', { paths: [reactNativePackage] }),
@@ -59,7 +75,6 @@ function bytecodeDirectory(source) {
     encoding: 'utf8',
   });
   assert.equal(compiled.status, 0, compiled.stderr);
-  return directory;
 }
 
 test('a production bundle that resolves to the production backend passes', () => {
@@ -210,4 +225,106 @@ test('the production backends come from the app constants, not from this script'
 test('XML namespaces are not mistaken for a cleartext endpoint', () => {
   assert.deepEqual(scanText('xmlns="http://www.w3.org/2000/svg"'), []);
   assert.deepEqual(scanText('"http://schemas.android.com/apk/res/android"'), []);
+});
+
+test('the Word export and media provenance identifiers are accepted, and lookalikes are not', () => {
+  for (const identifier of [
+    'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+    'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink',
+    'http://schemas.microsoft.com/office/word/2010/wordml',
+    'http://purl.org/dc/elements/1.1/',
+    'http://ns.adobe.com/xap/1.0/\0',
+    'http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia',
+  ]) {
+    assert.deepEqual(scanText(identifier), [], identifier);
+  }
+  for (const [endpoint, host] of [
+    ['http://schemas.microsoft.com.evil.example/', 'schemas.microsoft.com.evil.example'],
+    ['http://schemas.microsoft.com/api/upload', 'schemas.microsoft.com'],
+    ['http://schemas.openxmlformats.org.evil.example/x', 'schemas.openxmlformats.org.evil.example'],
+    ['http://purl.org/not-dc/x', 'purl.org'],
+    ['http://purl.org/dcx/x', 'purl.org'],
+    ['http://ns.adobe.com/xap/2.0/', 'ns.adobe.com'],
+    ['http://cv.iptc.org/newscodes/other/', 'cv.iptc.org'],
+    ['http://cv.iptc.org.evil.example/newscodes/digitalsourcetype/', 'cv.iptc.org.evil.example'],
+  ]) {
+    assert.deepEqual(scanText(endpoint), [`a cleartext URL (${host})`], endpoint);
+  }
+});
+
+test('a package link from the generated attribution is data, and a lookalike is not', () => {
+  const fields = readLegalAttributionFields(
+    readFileSync(
+      new URL('../../src/features/legal/licenses.generated.ts', import.meta.url),
+      'utf8',
+    ),
+  );
+  assert.ok(fields.includes('http://github.com/brix/crypto-js'));
+  assert.ok(fields.some((field) => field.includes('http://github.com/productiontype/Newsreader')));
+
+  const attributed = bytecodeDirectory(
+    `${CLEAN_BUNDLE}var LINKS=${JSON.stringify(fields.filter((field) => field.includes('http://')))};`,
+  );
+  assert.deepEqual(scanBundleDirectory(attributed).problems, []);
+
+  for (const lookalike of [
+    'http://github.com/brix/crypto-js/raw/main/payload',
+    'http://github.com/attacker/crypto-js',
+    'see http://github.com/brix/crypto-js',
+  ]) {
+    assert.deepEqual(
+      findings(bytecodeDirectory(`${CLEAN_BUNDLE}var LINK=${JSON.stringify(lookalike)};`)),
+      ['a cleartext URL (github.com)'],
+      lookalike,
+    );
+  }
+});
+
+test('attribution text is exempt from the cleartext check only', () => {
+  assert.deepEqual(scanText('http://localhost:8081/', { includeCleartext: false }), [
+    'a localhost endpoint',
+  ]);
+  assert.deepEqual(scanText('pk_test_abcdefghij http://x.example/', { includeCleartext: false }), [
+    'a Clerk test key',
+  ]);
+});
+
+test('each platform bundle may carry the React Native dev-server fallback once', () => {
+  const fallback = 'var DEV="http://localhost:8081/";';
+  const bothPlatforms = bytecodeBundles({
+    'ios/index.hbc': `${CLEAN_BUNDLE}${fallback}`,
+    'android/index.hbc': `${CLEAN_BUNDLE}${fallback}`,
+  });
+
+  assert.deepEqual(scanBundleDirectory(bothPlatforms).problems, []);
+});
+
+test('a second localhost address beside the fallback in one bundle still fails', () => {
+  const directory = bytecodeBundles({
+    'ios/index.hbc': `${CLEAN_BUNDLE}var DEV="http://localhost:8081/";`,
+    'android/index.hbc': `${CLEAN_BUNDLE}var DEV="http://localhost:8081/";var OTHER="http://localhost:8081/api";`,
+  });
+
+  const { problems } = scanBundleDirectory(directory);
+
+  assert.ok(
+    problems.some(
+      (problem) =>
+        problem.file === join('android', 'index.hbc') && problem.finding === 'a localhost endpoint',
+    ),
+  );
+  assert.ok(!problems.some((problem) => problem.file === join('ios', 'index.hbc')));
+});
+
+test('a Clerk test key or a staging host in Hermes bytecode fails the scan', () => {
+  assert.ok(
+    findings(bytecodeDirectory(`${CLEAN_BUNDLE}var KEY="pk_test_Y2xlcmsuZXhhbXBsZSQ";`)).includes(
+      'a Clerk test key',
+    ),
+  );
+  assert.ok(
+    findings(
+      bytecodeDirectory(`${CLEAN_BUNDLE}var API="https://staging.agiworkforce.com";`),
+    ).includes('a staging or preview backend'),
+  );
 });

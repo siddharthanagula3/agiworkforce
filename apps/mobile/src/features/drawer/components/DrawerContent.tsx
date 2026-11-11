@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { NATIVE_PURCHASES_AVAILABLE } from '@/src/features/billing/nativePurchaseAvailability';
 import { useTranslation } from 'react-i18next';
 import { View, ScrollView } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
@@ -814,11 +815,13 @@ export function DrawerContent(props: DrawerContentComponentProps) {
           />
         ) : null}
         {appMode !== 'cloud' || !isClerkSignedIn || !clerkUserId ? null : isFreePlan ? (
-          <NavRow
-            label={t('navUpgrade')}
-            icon={CircleArrowUp}
-            onPress={() => navigate('/(app)/settings/cloud-billing')}
-          />
+          NATIVE_PURCHASES_AVAILABLE ? (
+            <NavRow
+              label={t('navUpgrade')}
+              icon={CircleArrowUp}
+              onPress={() => navigate('/(app)/settings/cloud-billing')}
+            />
+          ) : null
         ) : (
           <NavRow
             label={`Usage remaining${remainingUsage ? ` · ${remainingUsage}` : usageLoading ? ' · Checking…' : usageError ? ' · Unavailable' : ''}`}

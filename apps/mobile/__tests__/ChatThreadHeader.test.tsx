@@ -5,6 +5,11 @@ import { act, fireEvent, render } from '@testing-library/react-native';
 
 const mockReplace = jest.fn();
 
+jest.mock('@clerk/expo', () => ({
+  ...jest.requireActual('@clerk/expo'),
+  useSession: () => ({ session: null }),
+}));
+
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useRouter: () => ({

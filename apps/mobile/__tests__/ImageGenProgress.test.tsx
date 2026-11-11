@@ -16,9 +16,10 @@ jest.mock('react-native-reanimated', () => {
 
   return {
     __esModule: true,
-    default: {
-      View: mockAnimatedView,
-    },
+    Easing: { linear: (value: number) => value },
+    cancelAnimation: jest.fn(),
+    useAnimatedProps: (factory: () => unknown) => factory(),
+    default: { createAnimatedComponent: (component: unknown) => component, View: mockAnimatedView },
     FadeInDown: {
       duration: jest.fn(() => ({
         springify: jest.fn(() => undefined),

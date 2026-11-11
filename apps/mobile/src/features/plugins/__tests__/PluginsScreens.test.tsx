@@ -1,6 +1,7 @@
 import React from 'react';
 import { Alert } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { PRODUCT_BRAND } from '@agiworkforce/types';
 
 const mockPush = jest.fn();
 const mockConnectorsReleased = jest.fn(() => true);
@@ -104,7 +105,6 @@ import {
   activateCloudAccount,
 } from '@/src/features/auth/services/cloudAccountSession';
 import { useAuthStore } from '@/src/features/auth/store';
-import { PRODUCT_BRAND } from '@agiworkforce/types';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { PluginDetailScreen } from '../PluginDetailScreen';

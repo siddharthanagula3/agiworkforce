@@ -191,7 +191,6 @@ describe('ToolCallTimeline, the seven tool statuses', () => {
   const STATUS_GLYPHS = [
     'icon-Clock',
     'icon-ShieldAlert',
-    'icon-Loader2',
     'icon-CircleDashed',
     'icon-CircleSlash',
     'icon-AlertCircle',

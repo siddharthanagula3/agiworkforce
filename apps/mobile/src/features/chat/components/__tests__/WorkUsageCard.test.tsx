@@ -1,4 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
+jest.mock('@/src/features/billing/nativePurchaseAvailability', () => ({
+  NATIVE_PURCHASES_AVAILABLE: true,
+}));
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 
@@ -51,12 +54,15 @@ jest.mock('@/src/features/chat/draftStore', () => ({
   clearDraft: jest.fn(),
 }));
 
-jest.mock('@/src/features/chat/store/appModeStore', () => ({
-  useChatAppModeStore: Object.assign(
-    (selector: (s: Record<string, unknown>) => unknown) => selector({ appMode: 'cloud' }),
-    { getState: () => ({ appMode: 'cloud' }), subscribe: () => () => undefined },
-  ),
-}));
+jest.mock('@/src/features/chat/store/appModeStore', () => {
+  const state = { appMode: 'cloud' };
+  return {
+    useChatAppModeStore: Object.assign(
+      (selector: (s: Record<string, unknown>) => unknown) => selector(state),
+      { getState: () => state, subscribe: () => () => undefined },
+    ),
+  };
+});
 
 jest.mock('@/src/features/model-picker/store', () => ({
   useModelStore: (selector: (s: Record<string, unknown>) => unknown) =>

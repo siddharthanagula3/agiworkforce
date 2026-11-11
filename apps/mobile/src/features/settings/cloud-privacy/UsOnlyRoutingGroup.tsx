@@ -26,6 +26,7 @@ import {
   type CloudAccountEpoch,
 } from '@/src/features/auth/services/cloudAccountSession';
 import { useTierStore } from '@/src/features/billing/store';
+import { NATIVE_PURCHASES_AVAILABLE } from '@/src/features/billing/nativePurchaseAvailability';
 import { SettingsGroup, SettingsSwitchRow } from '@/src/features/settings/Common';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
@@ -276,7 +277,9 @@ export function UsOnlyRoutingGroup() {
       >
         {eligible
           ? 'Only use models served by US-based providers.'
-          : `Available on ${US_ONLY_PLAN_LABELS}.`}
+          : NATIVE_PURCHASES_AVAILABLE
+            ? `Available on ${US_ONLY_PLAN_LABELS}.`
+            : 'Not included in your plan.'}
       </Text>
       {owner && ownerIsCurrent(owner) && !view.busy && !ready ? (
         <Button

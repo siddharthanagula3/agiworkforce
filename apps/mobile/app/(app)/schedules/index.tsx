@@ -27,6 +27,7 @@ import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { useTierStore } from '@/src/features/billing/store';
+import { NATIVE_PURCHASES_AVAILABLE } from '@/src/features/billing/nativePurchaseAvailability';
 import { getPlanMaxScheduledTasks } from '@agiworkforce/types';
 import { sortSchedules, type ScheduleSort } from '@/src/features/schedules/sort';
 
@@ -37,6 +38,10 @@ const SCHEDULE_FILTERS = [
 ] as const;
 
 type ScheduleFilter = (typeof SCHEDULE_FILTERS)[number]['key'];
+
+const LOCKED_TITLE = NATIVE_PURCHASES_AVAILABLE
+  ? 'Scheduled tasks require Basic'
+  : "Scheduled tasks aren't included in your plan";
 
 export default function SchedulesScreen() {
   const colors = useThemeColors();
@@ -86,7 +91,9 @@ export default function SchedulesScreen() {
   const openCreate = useCallback(
     (templateId?: ScheduleTemplate['id']) => {
       if (!canCreateSchedule) {
-        router.push('/(app)/settings/cloud-billing' as Parameters<typeof router.push>[0]);
+        if (NATIVE_PURCHASES_AVAILABLE) {
+          router.push('/(app)/settings/cloud-billing' as Parameters<typeof router.push>[0]);
+        }
         return;
       }
       if (hapticsEnabled) {
@@ -143,7 +150,11 @@ export default function SchedulesScreen() {
     (id: string) => {
       const schedule = schedules.find((item) => item.id === id);
       if (schedule && !schedule.isActive && !canCreateSchedule) {
-        router.push('/(app)/settings/cloud-billing' as Parameters<typeof router.push>[0]);
+        if (NATIVE_PURCHASES_AVAILABLE) {
+          router.push('/(app)/settings/cloud-billing' as Parameters<typeof router.push>[0]);
+        } else {
+          Alert.alert(LOCKED_TITLE);
+        }
         return;
       }
       toggleSchedule(id);
@@ -221,18 +232,27 @@ export default function SchedulesScreen() {
       />
 
       {!canCreateSchedule ? (
-        <PressableBox
-          onPress={handleCreate}
-          className="mx-4 mb-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3"
-          accessibilityRole="button"
-          accessibilityLabel="View plans for scheduled tasks"
-        >
-          <Text className="text-sm font-medium text-amber-300">Scheduled tasks require Basic</Text>
-          <Text className="mt-1 text-sm leading-5 text-white/50">
-            Upgrade to run unattended Cloud work. Existing tasks remain visible so you can pause or
-            delete them.
-          </Text>
-        </PressableBox>
+        NATIVE_PURCHASES_AVAILABLE ? (
+          <PressableBox
+            onPress={handleCreate}
+            className="mx-4 mb-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3"
+            accessibilityRole="button"
+            accessibilityLabel="View plans for scheduled tasks"
+          >
+            <Text className="text-sm font-medium text-amber-300">{LOCKED_TITLE}</Text>
+            <Text className="mt-1 text-sm leading-5 text-white/50">
+              Upgrade to run unattended Cloud work. Existing tasks remain visible so you can pause
+              or delete them.
+            </Text>
+          </PressableBox>
+        ) : (
+          <View className="mx-4 mb-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
+            <Text className="text-sm font-medium text-amber-300">{LOCKED_TITLE}</Text>
+            <Text className="mt-1 text-sm leading-5 text-white/50">
+              Existing tasks remain visible so you can pause or delete them.
+            </Text>
+          </View>
+        )
       ) : null}
 
       {error && (
@@ -476,21 +496,25 @@ function EmptyState({
         </View>
 
         <Text variant="heading" className="text-center mb-2">
-          {canCreateSchedule ? 'No Schedules' : 'Scheduled tasks require Basic'}
+          {canCreateSchedule ? 'No Schedules' : LOCKED_TITLE}
         </Text>
         <Text className="text-white/50 text-center text-sm mb-6 leading-5">
           {canCreateSchedule
             ? 'Create recurring AI tasks that run during the daily AGI Cloud scheduling window.'
-            : 'Upgrade to create unattended Cloud tasks. Free Cloud chat remains available.'}
+            : NATIVE_PURCHASES_AVAILABLE
+              ? 'Upgrade to create unattended Cloud tasks. Free Cloud chat remains available.'
+              : 'Free Cloud chat remains available.'}
         </Text>
 
-        <Button
-          title={canCreateSchedule ? 'Create Schedule' : 'View Plans'}
-          variant="primary"
-          size="lg"
-          onPress={onCreatePress}
-          className="w-full"
-        />
+        {canCreateSchedule || NATIVE_PURCHASES_AVAILABLE ? (
+          <Button
+            title={canCreateSchedule ? 'Create Schedule' : 'View Plans'}
+            variant="primary"
+            size="lg"
+            onPress={onCreatePress}
+            className="w-full"
+          />
+        ) : null}
       </Animated.View>
 
       {canCreateSchedule ? <TemplateGallery onUseTemplate={onUseTemplate} /> : null}

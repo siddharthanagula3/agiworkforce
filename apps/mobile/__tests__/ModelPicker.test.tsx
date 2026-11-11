@@ -1,4 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
+jest.mock('@/src/features/billing/nativePurchaseAvailability', () => ({
+  NATIVE_PURCHASES_AVAILABLE: true,
+}));
 
 import React from 'react';
 import { act, render, fireEvent, waitFor, within } from '@testing-library/react-native';
@@ -77,10 +80,17 @@ jest.mock('react-native-reanimated', () => ({
   default: {
     View: jest.fn().mockImplementation(({ children }) => children),
     Text: jest.fn().mockImplementation(({ children }) => children),
+    createAnimatedComponent: <T,>(component: T) => component,
   },
   FadeIn: { duration: jest.fn().mockReturnValue({}) },
   FadeOut: { duration: jest.fn().mockReturnValue({}) },
+  Easing: { linear: (value: number) => value },
+  cancelAnimation: jest.fn(),
+  useAnimatedProps: (factory: () => unknown) => factory(),
   useReducedMotion: jest.fn().mockReturnValue(false),
+  useSharedValue: <T,>(value: T) => ({ value }),
+  withRepeat: <T,>(value: T) => value,
+  withTiming: <T,>(value: T) => value,
 }));
 
 const mockPush = jest.fn();

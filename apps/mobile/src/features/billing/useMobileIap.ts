@@ -30,6 +30,7 @@ import {
 } from '@/src/features/auth/services/cloudAccountSession';
 import { ApiHttpError } from '@/services/apiErrors';
 import { canPurchase } from '@/src/features/age-assurance';
+import { NATIVE_PURCHASES_AVAILABLE } from './nativePurchaseAvailability';
 
 type StoreProduct = Product | ProductSubscription;
 type FinishTransaction = (input: { purchase: Purchase; isConsumable?: boolean }) => Promise<void>;
@@ -113,7 +114,7 @@ function verificationFailureMessage(error: unknown): string {
     : UNVERIFIED_PURCHASE_MESSAGE;
 }
 
-export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState {
+function useStoreMobileIap({ enabled }: { enabled: boolean }): MobileIapState {
   const refreshTier = useTierStore((state) => state.refreshTier);
   const [catalog, setCatalog] = useState<MobileIapCatalogResponse | null>(null);
   const [catalogLoading, setCatalogLoading] = useState(true);
@@ -695,3 +696,32 @@ export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState 
     reload,
   };
 }
+
+async function storeUnavailable(): Promise<void> {}
+
+const UNAVAILABLE_MOBILE_IAP: MobileIapState = {
+  connected: false,
+  loading: false,
+  restoring: false,
+  purchasingKey: null,
+  catalog: null,
+  storeProducts: new Map(),
+  priceFor: () => UNPRICED,
+  error: null,
+  lastResult: null,
+  restoreOutcome: null,
+  awaitingApproval: new Set(),
+  scheduledProductKey: null,
+  purchase: storeUnavailable,
+  restore: storeUnavailable,
+  reload: storeUnavailable,
+};
+
+function useUnavailableMobileIap(): MobileIapState {
+  return UNAVAILABLE_MOBILE_IAP;
+}
+
+// A build that sells nothing must never open a store connection, so the choice
+// is made once per build and not inside a hook, where it could only be skipped.
+export const useMobileIap: (input: { enabled: boolean }) => MobileIapState =
+  NATIVE_PURCHASES_AVAILABLE ? useStoreMobileIap : useUnavailableMobileIap;

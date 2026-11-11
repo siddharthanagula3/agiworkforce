@@ -17,7 +17,14 @@ jest.mock('react-native-reanimated', () => {
   const { View } = require('react-native');
   return {
     __esModule: true,
+    Easing: { linear: (value: number) => value },
+    cancelAnimation: jest.fn(),
+    useAnimatedProps: (factory: () => unknown) => factory(),
+    useSharedValue: <T,>(value: T) => ({ value }),
+    withRepeat: <T,>(value: T) => value,
+    withTiming: <T,>(value: T) => value,
     default: {
+      createAnimatedComponent: (component: unknown) => component,
       View: ({ children, ...rest }: { children: React.ReactNode; [key: string]: unknown }) => (
         <View {...rest}>{children}</View>
       ),

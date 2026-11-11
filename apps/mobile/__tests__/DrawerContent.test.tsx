@@ -1,4 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
+jest.mock('@/src/features/billing/nativePurchaseAvailability', () => ({
+  NATIVE_PURCHASES_AVAILABLE: true,
+}));
 import React from 'react';
 import { Modal } from 'react-native';
 import { act, render, fireEvent } from '@testing-library/react-native';

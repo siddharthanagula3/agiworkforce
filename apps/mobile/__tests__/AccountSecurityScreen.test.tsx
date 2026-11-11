@@ -218,8 +218,10 @@ jest.mock('../src/features/settings/Common', () => {
 
 jest.mock('@/src/features/siri', () => ({ AskFromSiriSetting: () => null }));
 
-import AccountSecurityScreen from '../src/features/settings/account-security';
 import { ownerHandler } from '../test-utils/ownerProps';
+
+const AccountSecurityScreen = require('../src/features/settings/account-security')
+  .default as typeof import('../src/features/settings/account-security').default;
 
 describe('Mobile Account Security screen', () => {
   beforeEach(() => {

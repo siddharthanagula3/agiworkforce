@@ -697,6 +697,7 @@ describe('completions stream fallback (RN null response.body)', () => {
       ([, init]) => (init as RequestInit | undefined)?.method === 'POST',
     );
     expect(postCalls).toHaveLength(1);
+    expect(reader.cancel).toHaveBeenCalledTimes(1);
     expect(guardedFetchMock).toHaveBeenNthCalledWith(
       2,
       `https://api.agi.test${runPath}?after=0&limit=100`,

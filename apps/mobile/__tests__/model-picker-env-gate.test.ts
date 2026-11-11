@@ -10,6 +10,9 @@
  *      getModelListForCloudAccess, even when cloudUnlocked:true.
  *  (d) CRITICAL SAFETY: no current catalog model has its availability changed.
  */
+jest.mock('@/src/features/billing/nativePurchaseAvailability', () => ({
+  NATIVE_PURCHASES_AVAILABLE: true,
+}));
 
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),

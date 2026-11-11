@@ -30,6 +30,7 @@ import {
 } from './freeQuotaCatalogue';
 import type { FreeQuotaCatalogue, FreeQuotaModel } from '@agiworkforce/cloud-contracts';
 import { isCloudAccountEpochCurrent } from '@/src/features/auth/services/cloudAccountSession';
+import { NATIVE_PURCHASES_AVAILABLE } from '@/src/features/billing/nativePurchaseAvailability';
 
 export type ModelTier = PickerModelTier;
 export type ModelSurface = 'local' | 'cloud_managed';
@@ -63,6 +64,7 @@ const LOCAL_PROVIDER_ID = 'local';
 export const CLOUD_LOCK_REASON = 'Sign in to use AGI Cloud chat.';
 
 function tierUpgradeLockReason(modelId: string): string {
+  if (!NATIVE_PURCHASES_AVAILABLE) return "This model isn't included in your plan.";
   const required = getMinimumRequiredTier(modelId);
   return required === 'max'
     ? 'Upgrade to Max to use this model.'
@@ -188,6 +190,7 @@ function toCloudModelDef(
     : !tierAccessOk
       ? tierUpgradeLockReason(model.id)
       : undefined;
+  const planLockedDetail = NATIVE_PURCHASES_AVAILABLE ? 'Upgrade required' : 'Not included in plan';
 
   const metadata = getModelMetadataById(model.id);
   const bestFor = metadata?.bestFor?.slice(0, 2).join(', ');
@@ -208,7 +211,7 @@ function toCloudModelDef(
     detailLabel: !cloudUnlocked
       ? 'Sign in required'
       : !tierAccessOk
-        ? 'Upgrade required'
+        ? planLockedDetail
         : `${providerLabel} provider`,
     description: bestFor ? `Best for ${bestFor}` : `${model.name} via ${providerLabel}`,
     lockReason,
@@ -328,12 +331,19 @@ function toFreeQuotaModelDef(model: FreeQuotaModel): ModelDef | undefined {
   };
 }
 
+function withoutPlanLockedModels(models: ModelDef[]): ModelDef[] {
+  if (NATIVE_PURCHASES_AVAILABLE) return models;
+  return models.filter(
+    (model) => model.availability !== 'locked' || model.lockReason === CLOUD_LOCK_REASON,
+  );
+}
+
 export function getModelListForCloudAccess(
   cloudUnlocked: boolean,
   subscriptionTier?: string,
   freeQuotaCatalogue: FreeQuotaCatalogue | null = useFreeQuotaCatalogueStore.getState().catalogue,
 ): ModelDef[] {
-  if (!cloudUnlocked) return MODEL_LIST;
+  if (!cloudUnlocked) return withoutPlanLockedModels(MODEL_LIST);
   const cloudDefs = Array.from(cloudModelSourceMap.values()).map((model) =>
     toCloudModelDef(model, true, subscriptionTier),
   );
@@ -347,7 +357,7 @@ export function getModelListForCloudAccess(
       .filter((model) => model.category === 'chat' && model.status === 'ready')
       .map(toFreeQuotaModelDef)
       .filter((model): model is ModelDef => model !== undefined) ?? [];
-  return [...LOCAL_MODEL_LIST, ...freeOfferings, ...cloudDefs];
+  return withoutPlanLockedModels([...LOCAL_MODEL_LIST, ...freeOfferings, ...cloudDefs]);
 }
 
 export function isAutoMode(id: string): boolean {

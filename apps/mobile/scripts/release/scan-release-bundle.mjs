@@ -31,6 +31,41 @@ export function readLegalAttributionBodies(source) {
   });
 }
 
+/**
+ * The copyright lines and project links the licences screen shows beside each
+ * body. Hermes keeps each one as its own string-table entry, so they are
+ * accounted for by exact value, like the bodies.
+ */
+export function readLegalAttributionFields(source) {
+  const file = ts.createSourceFile('licenses.generated.ts', source, ts.ScriptTarget.Latest, true);
+  const declaration = file.statements
+    .flatMap((statement) =>
+      ts.isVariableStatement(statement) ? [...statement.declarationList.declarations] : [],
+    )
+    .find((entry) => entry.name.getText(file) === 'OSS_PACKAGES');
+  if (!declaration || !ts.isArrayLiteralExpression(declaration.initializer)) {
+    throw new Error('could not read generated legal attribution packages');
+  }
+  const fields = [];
+  for (const element of declaration.initializer.elements) {
+    if (!ts.isObjectLiteralExpression(element)) {
+      throw new Error('generated legal attribution contains an unexpected package');
+    }
+    for (const property of element.properties) {
+      if (!ts.isPropertyAssignment(property)) {
+        throw new Error('generated legal attribution contains an unexpected package field');
+      }
+      if (!['copyright', 'url'].includes(property.name.getText(file))) continue;
+      if (ts.isStringLiteral(property.initializer)) {
+        fields.push(property.initializer.text);
+      } else if (property.initializer.kind !== ts.SyntaxKind.NullKeyword) {
+        throw new Error('generated legal attribution contains an unexpected package field');
+      }
+    }
+  }
+  return fields;
+}
+
 function maskLegalAttribution(text, bodies) {
   let masked = text;
   for (const body of bodies) {
@@ -165,15 +200,20 @@ function readHermesStrings(file) {
   return parseHermesStrings(result.stdout);
 }
 
+// Each exported platform is its own bundle with its own copy of a dependency's
+// fallback, so the one-occurrence rule is per bundle file, not per directory.
 function inspectDevelopmentFallbacks(seenDevelopmentFallbacks) {
   const findings = [];
-  for (const [hash, count] of seenDevelopmentFallbacks) {
-    const [packageName, sourcePath, literal] = HERMES_DEVELOPMENT_FALLBACK_OWNERS.get(hash);
-    const packageRoot = dirname(require.resolve(`${packageName}/package.json`));
-    if (count !== 1 || !readFileSync(join(packageRoot, sourcePath), 'utf8').includes(literal)) {
-      findings.push(
-        `Hermes development fallback ${hash.slice(0, 12)} cannot be attributed to its dependency`,
-      );
+  for (const [file, counts] of seenDevelopmentFallbacks) {
+    for (const [hash, count] of counts) {
+      const [packageName, sourcePath, literal] = HERMES_DEVELOPMENT_FALLBACK_OWNERS.get(hash);
+      const packageRoot = dirname(require.resolve(`${packageName}/package.json`));
+      if (count !== 1 || !readFileSync(join(packageRoot, sourcePath), 'utf8').includes(literal)) {
+        findings.push({
+          file,
+          finding: `Hermes development fallback ${hash.slice(0, 12)} cannot be attributed to its dependency`,
+        });
+      }
     }
   }
   for (const sourceDirectory of ['app', 'src', 'lib', 'services']) {
@@ -189,17 +229,19 @@ function inspectDevelopmentFallbacks(seenDevelopmentFallbacks) {
           readFileSync(file, 'utf8'),
         )
       ) {
-        findings.push(
-          `mobile source contains a cleartext or development endpoint: ${relative(MOBILE_ROOT, file)}`,
-        );
+        findings.push({
+          file: '.',
+          finding: `mobile source contains a cleartext or development endpoint: ${relative(MOBILE_ROOT, file)}`,
+        });
       }
     }
   }
   return findings;
 }
 
-// Namespaces and DTDs are URLs that are never fetched, so a cleartext match on
-// one of them is not a dev server.
+// Namespaces, DTDs and vocabulary terms are URLs that are never fetched, so a
+// cleartext match on one of them is not a dev server. Each prefix ends in '/'
+// so that a lookalike host such as schemas.microsoft.com.example cannot match.
 const CLEARTEXT_ALLOWED = [
   'http://www.w3.org/',
   'http://www.apple.com/DTDs/',
@@ -207,6 +249,13 @@ const CLEARTEXT_ALLOWED = [
   'http://www.google.com/',
   'http://json-schema.org/',
   'http://www.openarchives.org/',
+  // OOXML namespaces written by the Word export (docx).
+  'http://schemas.openxmlformats.org/',
+  'http://schemas.microsoft.com/office/',
+  'http://purl.org/dc/',
+  // XMP and IPTC terms written into generated media by media-provenance.
+  'http://ns.adobe.com/xap/1.0/',
+  'http://cv.iptc.org/newscodes/digitalsourcetype/',
 ];
 
 export const FORBIDDEN_PATTERNS = Object.freeze([
@@ -240,14 +289,17 @@ function cleartextFindings(text) {
   return matches.filter((url) => !CLEARTEXT_ALLOWED.some((allowed) => url.startsWith(allowed)));
 }
 
-export function scanText(text, { includeEndpoints = true } = {}) {
+export function scanText(
+  text,
+  { includeEndpoints = true, includeCleartext = includeEndpoints } = {},
+) {
   const findings = [];
   for (const { name, pattern } of includeEndpoints
     ? FORBIDDEN_PATTERNS
     : FORBIDDEN_PATTERNS.slice(6)) {
     if (pattern.test(text)) findings.push(name);
   }
-  const cleartext = includeEndpoints ? cleartextFindings(text) : [];
+  const cleartext = includeCleartext ? cleartextFindings(text) : [];
   if (cleartext.length > 0) {
     let host = 'unparseable';
     try {
@@ -275,8 +327,9 @@ export function scanBundleDirectory(directory, productionOrigins) {
   const problems = [];
   let scannedFiles = 0;
   let sawProductionOrigin = false;
-  const legalBodies = readLegalAttributionBodies(readFileSync(LEGAL_BODIES_PATH, 'utf8'));
-  const legalBodySet = new Set(legalBodies);
+  const legalSource = readFileSync(LEGAL_BODIES_PATH, 'utf8');
+  const legalBodies = readLegalAttributionBodies(legalSource);
+  const legalAttribution = new Set([...legalBodies, ...readLegalAttributionFields(legalSource)]);
   const seenDevelopmentFallbacks = new Map();
 
   for (const file of walk(directory)) {
@@ -298,16 +351,22 @@ export function scanBundleDirectory(directory, productionOrigins) {
       problems.push({ file: relative(directory, file), finding });
     }
     if (extension !== '.hbc') continue;
+    const bundle = relative(directory, file);
+    const fallbacks = new Map();
+    seenDevelopmentFallbacks.set(bundle, fallbacks);
     try {
       for (const entry of readHermesStrings(file)) {
-        if (legalBodySet.has(entry)) continue;
         const hash = createHash('sha256').update(entry).digest('hex');
         if (HERMES_REFERENCE_HASHES.has(hash)) continue;
         if (HERMES_DEVELOPMENT_FALLBACK_HASHES.has(hash)) {
-          seenDevelopmentFallbacks.set(hash, (seenDevelopmentFallbacks.get(hash) ?? 0) + 1);
+          fallbacks.set(hash, (fallbacks.get(hash) ?? 0) + 1);
           continue;
         }
-        for (const finding of scanText(entry)) {
+        // Attribution text the licences screen shows is exempt from the
+        // cleartext check only; a dev host or secret inside it still fails.
+        for (const finding of scanText(entry, {
+          includeCleartext: !legalAttribution.has(entry),
+        })) {
           problems.push({ file: relative(directory, file), finding });
         }
       }
@@ -316,9 +375,7 @@ export function scanBundleDirectory(directory, productionOrigins) {
     }
   }
 
-  for (const finding of inspectDevelopmentFallbacks(seenDevelopmentFallbacks)) {
-    problems.push({ file: '.', finding });
-  }
+  problems.push(...inspectDevelopmentFallbacks(seenDevelopmentFallbacks));
 
   if (scannedFiles === 0) {
     problems.push({ file: '.', finding: 'no bundle files to scan, so nothing was verified' });
