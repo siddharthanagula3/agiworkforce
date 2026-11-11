@@ -326,14 +326,25 @@ export function manualReconnect(): void {
 
 export type { ConnectionQuality };
 
-export function sendEmergencyStop(): void {
-  const { sendControl, status } = useConnectionStore.getState();
-  if (status !== 'connected' && status !== 'stale') return;
+export const EMERGENCY_STOP_NOT_SENT_MESSAGES: Record<
+  Exclude<AgentCommandResult, 'sent'>,
+  string
+> = {
+  unavailable:
+    'The stop did not reach your computer because it is not connected. Reconnect and try again, or stop the tasks on the computer itself.',
+  rejected:
+    'The stop could not be sent to your computer. Try again, or stop the tasks on the computer itself.',
+};
 
-  void sendControl('cancel', {
+export async function sendEmergencyStop(): Promise<AgentCommandResult> {
+  const { sendControl, status } = useConnectionStore.getState();
+  if (status !== 'connected') return 'unavailable';
+
+  const accepted = await sendControl('cancel', {
     scope: 'all',
     sentAt: new Date().toISOString(),
   });
+  return accepted ? 'sent' : 'rejected';
 }
 
 export function getRiskBadgeColor(level: RiskLevel): 'green' | 'yellow' | 'red' {

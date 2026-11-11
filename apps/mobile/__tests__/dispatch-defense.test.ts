@@ -664,32 +664,30 @@ describe('Connection Store, sendControl delegation', () => {
     expect(mockSendControl).not.toHaveBeenCalled();
   });
 
-  it('sendEmergencyStop fires when connected', () => {
+  it('sendEmergencyStop reports sent when the transport accepted it', async () => {
     setConnectionStatus('connected');
-    sendEmergencyStop();
+    mockSendControl.mockResolvedValueOnce(true);
+    await expect(sendEmergencyStop()).resolves.toBe('sent');
     expect(mockSendControl).toHaveBeenCalledWith(
       'cancel',
       expect.objectContaining({ scope: 'all', sentAt: expect.any(String) }),
     );
   });
 
-  it('sendEmergencyStop fires when status is stale (partial connectivity)', () => {
-    setConnectionStatus('stale');
-    sendEmergencyStop();
-    expect(mockSendControl).toHaveBeenCalledWith('cancel', expect.any(Object));
+  it('sendEmergencyStop reports rejected when the transport refused it', async () => {
+    setConnectionStatus('connected');
+    mockSendControl.mockResolvedValueOnce(false);
+    await expect(sendEmergencyStop()).resolves.toBe('rejected');
   });
 
-  it('sendEmergencyStop is a no-op when disconnected', () => {
-    setConnectionStatus('disconnected');
-    sendEmergencyStop();
-    expect(mockSendControl).not.toHaveBeenCalled();
-  });
-
-  it('sendEmergencyStop is a no-op when error', () => {
-    setConnectionStatus('error');
-    sendEmergencyStop();
-    expect(mockSendControl).not.toHaveBeenCalled();
-  });
+  it.each(['disconnected', 'error', 'stale', 'reconnecting', 'session_expired'])(
+    'sendEmergencyStop reports unavailable and queues nothing when status is %s',
+    async (status) => {
+      setConnectionStatus(status);
+      await expect(sendEmergencyStop()).resolves.toBe('unavailable');
+      expect(mockSendControl).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe('Connection Store, manualReconnect', () => {

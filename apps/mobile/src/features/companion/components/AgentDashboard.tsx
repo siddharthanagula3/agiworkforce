@@ -17,7 +17,6 @@ import {
   Pause,
   Square,
   Play,
-  AlertOctagon,
   Terminal,
   FileX,
   Globe,
@@ -47,8 +46,8 @@ import {
   AGENT_COMMAND_NOT_SENT_MESSAGES,
   requestAgentRefresh,
   sendAgentCommand,
-  sendEmergencyStop,
 } from '@/services/companion';
+import { EmergencyStopButton } from '@/src/features/companion/components/EmergencyStopButton';
 import { ExecutionStream } from '@/src/features/companion/components/ExecutionStream';
 import type { ApprovalRequest, RiskLevel } from '@/types/chat';
 
@@ -899,7 +898,6 @@ export function AgentDashboard() {
     () => allApprovals.filter((request) => request.status === 'pending'),
     [allApprovals],
   );
-  const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const router = useRouter();
 
   const hasRunningAgents = agents.some((a) => a.status === 'running' || a.status === 'waiting');
@@ -922,26 +920,6 @@ export function AgentDashboard() {
     },
     [selectAgent, router],
   );
-
-  const handleEmergencyStop = useCallback(() => {
-    Alert.alert(
-      'Emergency Stop',
-      'This will immediately cancel ALL running tasks on the desktop. This cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Stop Everything',
-          style: 'destructive',
-          onPress: () => {
-            if (hapticsEnabled) {
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-            }
-            sendEmergencyStop();
-          },
-        },
-      ],
-    );
-  }, [hapticsEnabled]);
 
   if (agents.length === 0) {
     return (
@@ -1021,18 +999,7 @@ export function AgentDashboard() {
             right: 16,
           }}
         >
-          <PressableBox
-            onPress={handleEmergencyStop}
-            className="flex-row items-center justify-center gap-2 py-3.5 rounded-2xl active:opacity-80"
-            style={{ backgroundColor: colors.agentError }}
-            accessibilityLabel="Emergency stop, cancel all running tasks"
-            accessibilityRole="button"
-          >
-            <AlertOctagon size={18} color={colors.accentText} />
-            <Text className="text-[15px] font-bold" style={{ color: colors.accentText }}>
-              Emergency Stop
-            </Text>
-          </PressableBox>
+          <EmergencyStopButton />
         </Animated.View>
       )}
     </View>
