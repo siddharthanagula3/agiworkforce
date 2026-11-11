@@ -36,17 +36,8 @@ const EXCLUDE_PREFIX = [
 const EXCLUDE_SUFFIX = ['pnpm-lock.yaml', 'Cargo.lock'];
 const EXCLUDE_BASENAME = new Set(['LICENSE', 'LICENSE.md', 'LICENSE.txt']);
 
-function linksIntoInstalledPackage(rel) {
-  try {
-    return fs.realpathSync(path.join(root, rel)).split(path.sep).includes('node_modules');
-  } catch {
-    return false;
-  }
-}
-
 function isExcluded(rel) {
   if (EXCLUDE_EXACT.has(rel)) return true;
-  if (linksIntoInstalledPackage(rel)) return true;
   for (const prefix of EXCLUDE_PREFIX) if (rel.startsWith(prefix)) return true;
   for (const suffix of EXCLUDE_SUFFIX) if (rel.endsWith(suffix)) return true;
   if (EXCLUDE_BASENAME.has(path.basename(rel))) return true;
