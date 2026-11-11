@@ -18,7 +18,7 @@ export type { PreviewableKind } from './sandboxedArtifactHtml';
 import { isAllowedPreviewNavigation } from './previewNavigationPolicy';
 import { loadMermaidRuntime } from './mermaidRuntime';
 
-type MermaidRuntimeState = { runtime: string } | { failed: string } | null;
+type MermaidRuntimeState = { runtime: string } | { failed: true } | null;
 
 function useMermaidRuntime(enabled: boolean): MermaidRuntimeState {
   const [state, setState] = useState<MermaidRuntimeState>(null);
@@ -29,8 +29,8 @@ function useMermaidRuntime(enabled: boolean): MermaidRuntimeState {
       (runtime) => {
         if (live) setState({ runtime });
       },
-      (error: unknown) => {
-        if (live) setState({ failed: error instanceof Error ? error.message : '' });
+      () => {
+        if (live) setState({ failed: true });
       },
     );
     return () => {
@@ -84,11 +84,10 @@ export function SafeArtifactPreview({
     [onDiagramRendered, onDiagramFailed],
   );
   const handleLoadError = useCallback(() => onDiagramFailed?.(''), [onDiagramFailed]);
-  const runtimeFailure =
-    mermaidRuntime && 'failed' in mermaidRuntime ? mermaidRuntime.failed : null;
+  const runtimeFailed = Boolean(mermaidRuntime && 'failed' in mermaidRuntime);
   useEffect(() => {
-    if (runtimeFailure !== null) onDiagramFailed?.(runtimeFailure);
-  }, [runtimeFailure, onDiagramFailed]);
+    if (runtimeFailed) onDiagramFailed?.('');
+  }, [runtimeFailed, onDiagramFailed]);
   const handleRuntimeMessage = useCallback((event: WebViewMessageEvent) => {
     const report = parseArtifactPreviewError(event.nativeEvent.data);
     if (report) setRuntimeError(report.message);
