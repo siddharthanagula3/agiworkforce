@@ -28,6 +28,7 @@ import {
   type ConversationExecutionMode,
 } from '@/src/features/chat/utils/conversationMode';
 import type { ChatMessage, ConversationSummary, MessageAttachment } from '@/types/chat';
+import { reconcileLoadedCloudMessages } from './reconcileCloudMessages';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import {
   CONVERSATION_TITLE_MAX_LENGTH,
@@ -1678,42 +1679,6 @@ function shouldLoadRemoteMessages(conversation: ConversationSummary | undefined)
   if (!isCloudChatEnabled()) return false;
   if (conversation) return isCloudConversation(conversation);
   return useChatAppModeStore.getState().appMode === 'cloud';
-}
-
-interface ReconcileLoadedCloudMessagesInput {
-  serverMessages: ChatMessage[];
-  requestStartMessages: ChatMessage[];
-  currentMessages: ChatMessage[];
-  dirtyMessageIds: Set<string>;
-}
-
-function reconcileLoadedCloudMessages({
-  serverMessages,
-  requestStartMessages,
-  currentMessages,
-  dirtyMessageIds,
-}: ReconcileLoadedCloudMessagesInput): ChatMessage[] {
-  const requestStartById = new Map(requestStartMessages.map((message) => [message.id, message]));
-  const currentById = new Map(currentMessages.map((message) => [message.id, message]));
-  const reconciled = new Map(serverMessages.map((message) => [message.id, message]));
-
-  for (const message of requestStartMessages) {
-    if (!currentById.has(message.id)) reconciled.delete(message.id);
-  }
-
-  for (const message of currentMessages) {
-    const requestStartMessage = requestStartById.get(message.id);
-    const changedDuringRequest =
-      requestStartMessage === undefined || requestStartMessage !== message;
-    if (changedDuringRequest || message.isStreaming || dirtyMessageIds.has(message.id)) {
-      reconciled.set(message.id, message);
-    }
-  }
-
-  return Array.from(reconciled.values()).sort((a, b) => {
-    const createdAtOrder = a.createdAt.localeCompare(b.createdAt);
-    return createdAtOrder === 0 ? a.id.localeCompare(b.id) : createdAtOrder;
-  });
 }
 
 async function createConversationForMode(
