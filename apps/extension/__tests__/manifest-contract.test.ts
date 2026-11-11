@@ -3,7 +3,11 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-import { SITE_POLICY_CAPABILITIES } from '@agiworkforce/types';
+import {
+  PRODUCT_COPYRIGHT_NAME,
+  PRODUCT_NAMES,
+  SITE_POLICY_CAPABILITIES,
+} from '@agiworkforce/types';
 
 import { GATEWAY_URL_ALLOWLIST_EXACT } from '../src/background/policy';
 import { ARTIFACT_SANDBOX_ORIGIN } from '../src/lib/webOrigin';
@@ -36,6 +40,18 @@ const EXPECTED_PERMISSIONS = [
   'debugger',
   'downloads',
 ];
+
+const STORE_SUMMARY_MAX_CHARACTERS = 132;
+
+function listingShortDescription(): string {
+  const listing = readFileSync(join(APP_ROOT, 'docs/chrome-web-store-listing.md'), 'utf8');
+  const lines = listing.split('\n');
+  const heading = lines.findIndex((line) => line.startsWith('**Short description'));
+  expect(heading, 'the listing has no short description heading').toBeGreaterThan(-1);
+  const quoted = lines.slice(heading + 1).find((line) => line.trim() !== '');
+  expect(quoted?.startsWith('> '), 'the short description must be one quoted line').toBe(true);
+  return (quoted ?? '').slice(2).trim();
+}
 
 const EXPECTED_HOST_PERMISSIONS = [
   'http://localhost/*',
@@ -117,9 +133,26 @@ describe('Chrome manifest trust contract', () => {
     expect(listing).toContain('read and change all your data on all websites');
   });
 
-  it('describes Managed Cloud chat without claiming Desktop owns chat inference', () => {
-    expect(String(manifest['description'])).toContain('Managed Cloud');
-    expect(String(manifest['description'])).not.toMatch(/for AGI Desktop/i);
+  it('names the store item from the product registry, the same name the toolbar shows', () => {
+    const storeName = `${PRODUCT_COPYRIGHT_NAME} ${PRODUCT_NAMES.extension}`;
+    const action = manifest['action'] as { default_title?: unknown };
+
+    expect(manifest['name']).toBe(storeName);
+    expect(action.default_title).toBe(storeName);
+    expect(String(manifest['name']).length).toBeLessThanOrEqual(75);
+  });
+
+  it('uses the store listing short description as the manifest description Chrome shows', () => {
+    const summary = listingShortDescription();
+    const packageJson = JSON.parse(readFileSync(join(APP_ROOT, 'package.json'), 'utf8')) as {
+      description?: unknown;
+    };
+
+    expect(summary.length).toBeGreaterThan(0);
+    expect(summary.length).toBeLessThanOrEqual(STORE_SUMMARY_MAX_CHARACTERS);
+    expect(manifest['description']).toBe(summary);
+    expect(packageJson.description).toBe(summary);
+    expect(summary).not.toMatch(/for AGI Desktop/i);
   });
 
   it('names every gateway origin exactly, with no agiworkforce.com wildcard', () => {

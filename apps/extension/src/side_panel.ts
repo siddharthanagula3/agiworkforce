@@ -4748,8 +4748,7 @@ function injectStyles(): void {
     .sp-model-option { padding: 9px; }
 
     #sp-cloud-gate,
-    #sp-blocked,
-    .sp-agent-approval { border-radius: var(--corner-panel); }
+    #sp-blocked { border-radius: var(--corner-panel); }
     #sp-cloud-gate.visible {
       flex-direction: column;
       align-items: center;

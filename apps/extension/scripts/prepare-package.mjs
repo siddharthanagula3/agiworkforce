@@ -1,12 +1,20 @@
 #!/usr/bin/env node
 
+import console from 'node:console';
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import process from 'node:process';
+import { URL, fileURLToPath } from 'node:url';
 import { loadEnv } from 'vite';
-import { readChromeBuildConfiguration, validateReleaseManifest } from './manifest-config.mjs';
+import {
+  FIRST_DRAFT_ARCHIVE_SUFFIX,
+  readChromeBuildConfiguration,
+  validateReleaseManifest,
+} from './manifest-config.mjs';
 
 const extensionRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const firstDraft = process.argv.slice(2).includes('--first-draft');
+const archiveName = firstDraft ? `extension${FIRST_DRAFT_ARCHIVE_SUFFIX}` : 'extension.zip';
 
 const RELEASE_WEB_HOST = 'agiworkforce.com';
 
@@ -48,9 +56,13 @@ if (chromeManifest.manifest_version !== 3) {
     `Chrome Web Store releases require Manifest V3; got ${chromeManifest.manifest_version}`,
   );
 }
-validateReleaseManifest(chromeManifest, buildConfiguration);
+validateReleaseManifest(chromeManifest, buildConfiguration, { firstDraft });
 validateReleaseWebOrigin(env.VITE_AGI_WEB_API_BASE_URL);
 
-fs.rmSync(path.join(extensionRoot, 'extension.zip'), { force: true });
+fs.rmSync(path.join(extensionRoot, archiveName), { force: true });
 
-console.log(`Preparing clean Chrome Web Store package v${chromeManifest.version}.`);
+console.log(
+  firstDraft
+    ? `Preparing first-draft ${archiveName} v${chromeManifest.version}: upload it once in the Developer Dashboard to create the item, and never submit it for review.`
+    : `Preparing clean Chrome Web Store package v${chromeManifest.version}.`,
+);
