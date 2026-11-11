@@ -482,6 +482,68 @@ describe('ModelPickerSheet', () => {
     expect(useModelStore.getState().selectedModel).toBe(LITE_MODEL_ID);
   });
 
+  it('keeps a newer selection when an earlier download finishes afterwards', async () => {
+    const completions: Array<() => void> = [];
+    const prepareModel = jest.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          completions.push(resolve);
+        }),
+    );
+    useModelInstallStore.setState({
+      installedModelIds: [DEFAULT_LOCAL_MODEL_ID],
+      readySystemModelIds: [],
+      jobs: {},
+      prepareModel,
+    });
+    const { getByLabelText } = renderPicker();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    fireEvent.press(getByLabelText(/AGI Lite/));
+    expect(prepareModel).toHaveBeenCalledTimes(1);
+    useModelStore.setState({ selectedModel: 'newer-selection' });
+    await act(async () => {
+      completions[0]?.();
+    });
+
+    expect(useModelStore.getState().selectedModel).toBe('newer-selection');
+  });
+
+  it('keeps a newer pick made through the same picker when an earlier download finishes', async () => {
+    const completions: Array<() => void> = [];
+    const prepareModel = jest.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          completions.push(resolve);
+        }),
+    );
+    useModelInstallStore.setState({
+      installedModelIds: [DEFAULT_LOCAL_MODEL_ID],
+      readySystemModelIds: [],
+      jobs: {},
+      prepareModel,
+    });
+    const onSelect = jest.fn();
+    const { getByLabelText } = renderPicker({
+      onSelect,
+      selectedModelId: 'conversation-slot-model',
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    fireEvent.press(getByLabelText(/AGI Lite/));
+    fireEvent.press(getByLabelText(/AGI Standard/));
+    await act(async () => {
+      completions[0]?.();
+    });
+
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(onSelect).toHaveBeenCalledWith(DEFAULT_LOCAL_MODEL_ID);
+  });
+
   it('calls onSelect callback instead of store when provided', () => {
     const onSelect = jest.fn();
     const { getByLabelText } = renderPicker({ onSelect });

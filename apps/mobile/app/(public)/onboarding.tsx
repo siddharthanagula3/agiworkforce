@@ -18,7 +18,6 @@ import { useTheme, type ColorScheme, motion } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import {
   assertDownloadAllowed,
-  downloadModel,
   cancelDownload,
   ModelDownloadError,
 } from '@/services/modelDownload';
@@ -48,6 +47,7 @@ import { getAutoRoutingProfiles, type OnDeviceModel } from '@agiworkforce/types'
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useModelInstallStore } from '@/src/features/model-picker/installStore';
+import { getSelectableModelById } from '@/src/features/model-picker/service';
 
 type DeviceTierInfo = {
   tier: LocalRuntimeTier;
@@ -139,7 +139,15 @@ export default function OnboardingScreen() {
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [tier2Loading, setTier2Loading] = useState(false);
   const downloadTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const onboardingOpenRef = useRef(true);
   const modelPickerRef = useRef<BottomSheet>(null);
+
+  useEffect(() => {
+    onboardingOpenRef.current = true;
+    return () => {
+      onboardingOpenRef.current = false;
+    };
+  }, []);
 
   const handlePickModel = useCallback(() => {
     modelPickerRef.current?.snapToIndex(0);
@@ -340,25 +348,24 @@ export default function OnboardingScreen() {
         return;
       }
 
-      if (recommendedModel.downloadUrl && recommendedModel.checksum && recommendedModel.format) {
-        downloadModel({
-          modelId: recommendedModel.id,
-          displayName: recommendedModel.displayName,
-          downloadUrl: recommendedModel.downloadUrl,
-          checksum: recommendedModel.checksum,
-          fileSizeBytes: recommendedModel.fileSizeBytes,
-          runtime: 'local',
-          format: recommendedModel.format,
-          mmprojUrl: recommendedModel.mmprojUrl,
-          mmprojChecksum: recommendedModel.mmprojChecksum,
-          mmprojSizeBytes: recommendedModel.mmprojSizeBytes,
-          wifiOnly: !cellularEnabled,
-          onProgress(downloaded, total, speedBps) {
-            setDownloadProgress((downloaded / total) * 100);
-            setDownloadSpeedMBs(Math.round(speedBps / (1024 * 1024)));
-          },
-        })
-          .then(() => finishOnboarding(recommendedModel.id))
+      const modelDef = getSelectableModelById(recommendedModel.id);
+      if (
+        modelDef &&
+        recommendedModel.downloadUrl &&
+        recommendedModel.checksum &&
+        recommendedModel.format
+      ) {
+        useModelInstallStore
+          .getState()
+          .prepareModel(modelDef, {
+            onProgress(downloaded, total, speedBps) {
+              setDownloadProgress((downloaded / total) * 100);
+              setDownloadSpeedMBs(Math.round(speedBps / (1024 * 1024)));
+            },
+          })
+          .then(() => {
+            if (onboardingOpenRef.current) finishOnboarding(recommendedModel.id);
+          })
           .catch((err: unknown) => {
             const kind = err instanceof ModelDownloadError ? err.kind : 'network_error';
             if (kind === 'cancelled') {
@@ -393,9 +400,9 @@ export default function OnboardingScreen() {
       clearInterval(downloadTimerRef.current);
       downloadTimerRef.current = null;
     }
-    cancelDownload(recommendedModel.id);
+    onboardingOpenRef.current = false;
     finishOnboarding();
-  }, [tier2Loading, recommendedModel.id, finishOnboarding]);
+  }, [tier2Loading, finishOnboarding]);
 
   return (
     <SafeAreaView testID="onboarding-root" style={{ flex: 1, backgroundColor: colors.background }}>

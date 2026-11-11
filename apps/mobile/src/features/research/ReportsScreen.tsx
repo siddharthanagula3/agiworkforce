@@ -18,7 +18,12 @@ import { radii, useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import type { ToolSearchResult } from '@/types/chat';
 import { extractReportSections } from './reportSections';
-import { fetchResearchReports, researchReportLabel, type MobileResearchReport } from './service';
+import {
+  RESEARCH_REPORTS_LIMIT,
+  fetchResearchReports,
+  researchReportLabel,
+  type MobileResearchReport,
+} from './service';
 
 function formatCreatedAt(iso: string): string {
   const date = new Date(iso);
@@ -300,6 +305,11 @@ export function ReportsScreen() {
   const [error, setError] = useState<string | null>(null);
   const [openReport, setOpenReport] = useState<MobileResearchReport | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreFailed, setMoreFailed] = useState(false);
+  const pagesReadRef = useRef(1);
+  const listGenerationRef = useRef(0);
 
   const signedInCloud = appMode === 'cloud' && isClerkSignedIn;
 
@@ -310,7 +320,12 @@ export function ReportsScreen() {
       try {
         const loaded = await fetchResearchReports({ ...(signal ? { signal } : {}) });
         if (signal?.aborted) return;
+        listGenerationRef.current += 1;
+        pagesReadRef.current = 1;
         setReports(loaded);
+        setHasMore(loaded.length >= RESEARCH_REPORTS_LIMIT);
+        setLoadingMore(false);
+        setMoreFailed(false);
         setState('loaded');
       } catch (loadError) {
         if (signal?.aborted) return;
@@ -326,6 +341,29 @@ export function ReportsScreen() {
     void load(controller.signal);
     return () => controller.abort();
   }, [load]);
+
+  const loadMore = useCallback(async () => {
+    if (!signedInCloud || !hasMore || loadingMore) return;
+    const generation = listGenerationRef.current;
+    setLoadingMore(true);
+    setMoreFailed(false);
+    try {
+      const older = await fetchResearchReports({
+        offset: pagesReadRef.current * RESEARCH_REPORTS_LIMIT,
+      });
+      if (generation !== listGenerationRef.current) return;
+      pagesReadRef.current += 1;
+      setReports((current) => {
+        const known = new Set(current.map((report) => report.id));
+        return [...current, ...older.filter((report) => !known.has(report.id))];
+      });
+      setHasMore(older.length >= RESEARCH_REPORTS_LIMIT);
+    } catch {
+      if (generation === listGenerationRef.current) setMoreFailed(true);
+    } finally {
+      if (generation === listGenerationRef.current) setLoadingMore(false);
+    }
+  }, [hasMore, loadingMore, signedInCloud]);
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) router.back();
@@ -402,6 +440,29 @@ export function ReportsScreen() {
           keyExtractor={(report) => report.id}
           contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 24, gap: 8 }}
           renderItem={({ item }) => <ReportRow report={item} onOpen={() => setOpenReport(item)} />}
+          onEndReached={() => {
+            if (!moreFailed) void loadMore();
+          }}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={
+            moreFailed ? (
+              <View style={{ gap: 8, alignItems: 'flex-start', paddingVertical: 8 }}>
+                <Text style={{ fontSize: typeScale.footnote, color: colors.textSecondary }}>
+                  Could not load older reports.
+                </Text>
+                <Button
+                  title="Try again"
+                  size="sm"
+                  onPress={() => void loadMore()}
+                  accessibilityLabel="Try loading older reports again"
+                />
+              </View>
+            ) : loadingMore ? (
+              <View style={{ paddingVertical: 12 }}>
+                <Skeleton height={64} borderRadius={radii.lg} />
+              </View>
+            ) : null
+          }
           refreshControl={
             <RefreshControl
               refreshing={refreshing}

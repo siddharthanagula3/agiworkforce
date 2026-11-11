@@ -43,9 +43,22 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { useThemeColors, motion } from '@/src/ui/theme';
 import { toolStatusColor } from '@/src/features/chat/utils/toolStatusTone';
 import { getDisplayName } from '@/src/features/model-picker/service';
-import { requestAgentRefresh, sendAgentCommand, sendEmergencyStop } from '@/services/companion';
+import {
+  AGENT_COMMAND_NOT_SENT_MESSAGES,
+  requestAgentRefresh,
+  sendAgentCommand,
+  sendEmergencyStop,
+} from '@/services/companion';
 import { ExecutionStream } from '@/src/features/companion/components/ExecutionStream';
 import type { ApprovalRequest, RiskLevel } from '@/types/chat';
+
+async function sendAgentCommandOrExplain(
+  agentId: string,
+  command: Parameters<typeof sendAgentCommand>[1],
+): Promise<void> {
+  const result = await sendAgentCommand(agentId, command);
+  if (result !== 'sent') Alert.alert('Command not sent', AGENT_COMMAND_NOT_SENT_MESSAGES[result]);
+}
 
 function AgentStatusIcon({ status }: { status: Agent['status'] }) {
   const colors = useThemeColors();
@@ -449,7 +462,7 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
       if (hapticsEnabled) {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
-      sendAgentCommand(agent.id, command);
+      void sendAgentCommandOrExplain(agent.id, command);
     },
     [agent.id, hapticsEnabled],
   );
@@ -669,7 +682,7 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
                         {
                           text: 'Stop Agent',
                           style: 'destructive',
-                          onPress: () => sendAgentCommand(agent.id, 'cancel'),
+                          onPress: () => void sendAgentCommandOrExplain(agent.id, 'cancel'),
                         },
                       ]);
                     }}

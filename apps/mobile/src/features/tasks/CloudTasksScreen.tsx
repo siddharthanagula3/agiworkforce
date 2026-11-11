@@ -44,7 +44,7 @@ import {
 } from './runPresentation';
 import { useCloudTaskStore } from './store';
 import { useCloudRunApprovalSignal } from './useApprovalSignal';
-import { rerunGoalFromRun, shareCloudRun } from './taskActions';
+import { canRerunCloudRun, loadRerunGoal, shareCloudRun } from './taskActions';
 
 export const CLOUD_TASK_LIST_POLL_INTERVAL_MS = 15_000;
 
@@ -354,11 +354,12 @@ export function CloudTasksScreen() {
     () => (detail ? runs.find((run) => run.id === detail.runId) : undefined),
     [detail, runs],
   );
-  const rerunGoal = useMemo(() => {
+  const canRerun = useMemo(() => {
     const source = listedRun ?? detail?.run;
-    return source ? rerunGoalFromRun(source) : null;
+    return source ? canRerunCloudRun(source) : false;
   }, [detail, listedRun]);
   const [rerunning, setRerunning] = useState(false);
+  const [rerunGoal, setRerunGoal] = useState<string | undefined>(undefined);
   const routineDraft = useMemo(() => {
     const source = listedRun ?? detail?.run;
     return source ? routineDraftFromRun(source) : null;
@@ -422,6 +423,7 @@ export function CloudTasksScreen() {
   const handleCloseStartWork = useCallback(() => {
     setStartWorkVisible(false);
     setStartWorkError(null);
+    setRerunGoal(undefined);
   }, []);
 
   const handleStartWork = useCallback(
@@ -435,6 +437,7 @@ export function CloudTasksScreen() {
         .then(() => {
           setStartWorkSubmitting(false);
           setStartWorkVisible(false);
+          setRerunGoal(undefined);
           void load('refresh');
         })
         .catch((error: unknown) => {
@@ -454,18 +457,30 @@ export function CloudTasksScreen() {
   );
 
   const handleRerun = useCallback(() => {
-    if (!rerunGoal || rerunning) return;
+    const run = listedRun ?? detail?.run;
+    if (!run || rerunning) return;
+    const runId = run.id;
     setRerunning(true);
-    void startCloudWorkRun({ goal: rerunGoal })
-      .then(({ conversationId }) => {
+    void loadRerunGoal(run)
+      .then((goal) => {
+        if (useCloudTaskStore.getState().detail?.runId !== runId) return;
+        if (!goal) {
+          Alert.alert('Could not run it again', 'The original request could not be found.');
+          return;
+        }
         closeRun();
-        router.push({ pathname: '/(app)/chat/[id]' as const, params: { id: conversationId } });
+        setRerunGoal(goal);
+        setStartWorkError(null);
+        setStartWorkVisible(true);
       })
-      .catch((error: unknown) => {
-        Alert.alert('Could not run it again', startWorkFailureMessage(error));
+      .catch(() => {
+        Alert.alert(
+          'Could not run it again',
+          'The original request could not be loaded. Check your connection and try again.',
+        );
       })
       .finally(() => setRerunning(false));
-  }, [closeRun, rerunGoal, rerunning, router]);
+  }, [closeRun, detail, listedRun, rerunning]);
 
   const handleShareRun = useCallback(() => {
     const run = listedRun ?? detail?.run;
@@ -635,6 +650,7 @@ export function CloudTasksScreen() {
         visible={startWorkVisible}
         submitting={startWorkSubmitting}
         error={startWorkError}
+        initialGoal={rerunGoal}
         onClose={handleCloseStartWork}
         onSubmit={handleStartWork}
       />
@@ -647,14 +663,12 @@ export function CloudTasksScreen() {
         onStop={() => void stopRun()}
         onOpenConversation={handleOpenConversation}
         onMakeRoutine={routineDraft ? handleMakeRoutine : undefined}
-        onRerun={rerunGoal ? handleRerun : undefined}
+        onRerun={canRerun ? handleRerun : undefined}
         rerunning={rerunning}
         onPause={() => void useCloudTaskStore.getState().pauseRun()}
         onResume={() => void useCloudTaskStore.getState().resumeRun()}
         onShare={
-          (listedRun ?? detail?.run)?.conversationId && rerunGoal !== null
-            ? handleShareRun
-            : undefined
+          (listedRun ?? detail?.run)?.conversationId && canRerun ? handleShareRun : undefined
         }
       />
     </SafeAreaView>

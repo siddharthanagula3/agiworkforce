@@ -4,8 +4,13 @@ import {
   deleteAsync,
   getFreeDiskStorageAsync,
   getInfoAsync,
+  readAsStringAsync,
 } from 'expo-file-system/legacy';
-import { getInstalledModel, insertInstalledModel } from '@/storage/installedModels';
+import {
+  getInstalledModel,
+  insertInstalledModel,
+  removeInstalledModel,
+} from '@/storage/installedModels';
 import type { InstalledModel } from '@/storage/types';
 import {
   assertDownloadAllowed,
@@ -38,6 +43,7 @@ jest.mock('@/storage/installedModels', () => ({
   ...jest.requireActual('@/storage/installedModels'),
   getInstalledModel: jest.fn(async () => null),
   insertInstalledModel: jest.fn(async () => undefined),
+  removeInstalledModel: jest.fn(async () => undefined),
 }));
 
 const mockFetch = NetInfo.fetch as jest.Mock;
@@ -284,6 +290,86 @@ describe('cancelling a download', () => {
     await expect(download).rejects.toMatchObject({ kind: 'cancelled' });
     expect(mockCreate).not.toHaveBeenCalled();
     expect(insertInstalledModel).not.toHaveBeenCalled();
+  });
+
+  it('honours a cancel that lands after admission but before the transport starts', async () => {
+    onNetwork('wifi');
+    mockFreeSpace.mockResolvedValue(64 * GB);
+    const mockCreate = createDownloadResumable as jest.Mock;
+    mockCreate.mockClear();
+    (insertInstalledModel as jest.Mock).mockClear();
+    (getInfoAsync as jest.Mock).mockImplementation(async (path: string) => {
+      if (path.endsWith('.partial')) cancelDownload('model-resume');
+      return { exists: false };
+    });
+
+    try {
+      await expect(
+        downloadModel(modelOptions('model-resume', 'a'.repeat(64))),
+      ).rejects.toMatchObject({ kind: 'cancelled' });
+      expect(mockCreate).not.toHaveBeenCalled();
+      expect(insertInstalledModel).not.toHaveBeenCalled();
+    } finally {
+      (getInfoAsync as jest.Mock).mockReset().mockResolvedValue({ exists: false });
+    }
+  });
+
+  it('stops hashing at the next chunk when cancelled mid-verification', async () => {
+    onNetwork('wifi');
+    mockFreeSpace.mockResolvedValue(64 * GB);
+    (insertInstalledModel as jest.Mock).mockClear();
+    const read = readAsStringAsync as jest.Mock;
+    read.mockReset().mockImplementation(async () => {
+      cancelDownload('model-hash');
+      return '';
+    });
+    (createDownloadResumable as jest.Mock).mockReturnValue({
+      downloadAsync: async () => ({ status: 200 }),
+      pauseAsync: jest.fn(async () => ({})),
+      savable: jest.fn(async () => ({})),
+    });
+    (getInfoAsync as jest.Mock).mockImplementation(async (path: string) => ({
+      exists: path.endsWith('/model.gguf'),
+      size: 10 * 1024 * 1024,
+    }));
+
+    try {
+      await expect(downloadModel(modelOptions('model-hash', 'a'.repeat(64)))).rejects.toMatchObject(
+        { kind: 'cancelled' },
+      );
+      expect(read).toHaveBeenCalledTimes(1);
+      expect(insertInstalledModel).not.toHaveBeenCalled();
+    } finally {
+      read.mockReset();
+      (getInfoAsync as jest.Mock).mockReset().mockResolvedValue({ exists: false });
+    }
+  });
+
+  it('removes the record when a cancel lands while it is being written', async () => {
+    onNetwork('wifi');
+    mockFreeSpace.mockResolvedValue(64 * GB);
+    (removeInstalledModel as jest.Mock).mockClear();
+    (insertInstalledModel as jest.Mock).mockImplementationOnce(async () => {
+      cancelDownload('model-insert');
+    });
+    (createDownloadResumable as jest.Mock).mockReturnValue({
+      downloadAsync: async () => ({ status: 200 }),
+      pauseAsync: jest.fn(async () => ({})),
+      savable: jest.fn(async () => ({})),
+    });
+    (getInfoAsync as jest.Mock).mockImplementation(async (path: string) => ({
+      exists: path.endsWith('/model.gguf'),
+      size: 0,
+    }));
+
+    try {
+      await expect(
+        downloadModel(modelOptions('model-insert', EMPTY_FILE_SHA256)),
+      ).rejects.toMatchObject({ kind: 'cancelled' });
+      expect(removeInstalledModel).toHaveBeenCalledWith('model-insert');
+    } finally {
+      (getInfoAsync as jest.Mock).mockReset().mockResolvedValue({ exists: false });
+    }
   });
 
   it('does not record an installation cancelled while the file was being verified', async () => {

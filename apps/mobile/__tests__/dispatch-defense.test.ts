@@ -574,16 +574,30 @@ describe('Connection Store, sendControl delegation', () => {
     );
   });
 
-  it('sendAgentCommand is a no-op when status is disconnected', () => {
+  it('sendAgentCommand reports unavailable and sends nothing when status is disconnected', async () => {
     setConnectionStatus('disconnected');
-    sendAgentCommand('agent-xyz', 'pause');
+    await expect(sendAgentCommand('agent-xyz', 'pause')).resolves.toBe('unavailable');
     expect(mockSendControl).not.toHaveBeenCalled();
   });
 
-  it('sendAgentCommand is a no-op when status is error', () => {
+  it('sendAgentCommand reports unavailable and sends nothing when status is error', async () => {
     setConnectionStatus('error');
-    sendAgentCommand('agent-xyz', 'pause');
+    await expect(sendAgentCommand('agent-xyz', 'pause')).resolves.toBe('unavailable');
     expect(mockSendControl).not.toHaveBeenCalled();
+  });
+
+  it('sendAgentCommand reports unavailable while reconnecting instead of queueing a stale command', async () => {
+    setConnectionStatus('reconnecting');
+    await expect(sendAgentCommand('agent-xyz', 'cancel')).resolves.toBe('unavailable');
+    expect(mockSendControl).not.toHaveBeenCalled();
+  });
+
+  it('sendAgentCommand reports sent only when the transport accepted the command', async () => {
+    setConnectionStatus('connected');
+    mockSendControl.mockResolvedValueOnce(true);
+    await expect(sendAgentCommand('agent-xyz', 'pause')).resolves.toBe('sent');
+    mockSendControl.mockResolvedValueOnce(false);
+    await expect(sendAgentCommand('agent-xyz', 'pause')).resolves.toBe('rejected');
   });
 
   it('sendDispatchTask creates a versioned new-task request while connected', async () => {

@@ -261,7 +261,7 @@ describe('listResearchReports', () => {
 
     const [sql, params] = db.query.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain('and conversation_id = $2');
-    expect(params).toEqual(['user-1', 'conv-1', 100]);
+    expect(params).toEqual(['user-1', 'conv-1', 100, 0]);
   });
 
   it('falls back to the active workspace list with a default limit', async () => {
@@ -272,7 +272,39 @@ describe('listResearchReports', () => {
     const [sql, params] = db.query.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain('conversation.is_temporary');
     expect(sql).toContain('conversation.organization_id is not distinct from $2::uuid');
-    expect(params).toEqual(['user-1', null, 20]);
+    expect(params).toEqual(['user-1', null, 20, 0]);
+  });
+});
+
+describe('listResearchReports paging', () => {
+  it('skips the pages already read, in a stable newest-first order', async () => {
+    const db = database();
+
+    await listResearchReports(db, {
+      userId: 'user-1',
+      organizationId: null,
+      limit: 50,
+      offset: 50,
+    });
+
+    const [sql, params] = db.query.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('order by report.created_at desc, report.id desc');
+    expect(sql).toContain('limit $3 offset $4');
+    expect(params).toEqual(['user-1', null, 50, 50]);
+  });
+
+  it('never reads a negative offset', async () => {
+    const db = database();
+
+    await listResearchReports(db, {
+      userId: 'user-1',
+      organizationId: null,
+      conversationId: 'conv-1',
+      offset: -5,
+    });
+
+    const [, params] = db.query.mock.calls[0] as [string, unknown[]];
+    expect(params).toEqual(['user-1', 'conv-1', 20, 0]);
   });
 });
 

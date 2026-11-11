@@ -1,5 +1,13 @@
-import { mapResearchReport, mapResearchReportsResponse, researchReportLabel } from '../service';
+import { api } from '@/services/api';
+import {
+  fetchResearchReports,
+  mapResearchReport,
+  mapResearchReportsResponse,
+  researchReportLabel,
+} from '../service';
 import { extractReportSections } from '../reportSections';
+
+jest.mock('@/services/api', () => ({ api: { get: jest.fn() } }));
 
 const ROW = {
   id: 'rep-1',
@@ -96,5 +104,23 @@ describe('extractReportSections', () => {
   it('returns nothing for a body with no headings', () => {
     expect(extractReportSections('just prose')).toEqual([]);
     expect(extractReportSections('')).toEqual([]);
+  });
+});
+
+describe('fetchResearchReports paging', () => {
+  beforeEach(() => {
+    (api.get as jest.Mock).mockReset().mockResolvedValue({ reports: [] });
+  });
+
+  it('asks for the newest page by default', async () => {
+    await fetchResearchReports();
+    expect((api.get as jest.Mock).mock.calls[0]?.[0]).toBe('/api/research/reports?limit=50');
+  });
+
+  it('skips the reports already read when given an offset', async () => {
+    await fetchResearchReports({ offset: 50 });
+    expect((api.get as jest.Mock).mock.calls[0]?.[0]).toBe(
+      '/api/research/reports?limit=50&offset=50',
+    );
   });
 });

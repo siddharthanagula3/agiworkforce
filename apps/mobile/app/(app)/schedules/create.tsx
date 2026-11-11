@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 import { Text } from '@/components/ui/Text';
+import { Button } from '@/components/ui/Button';
 import {
   CloudSchedulesGate,
   ScheduleForm,
@@ -200,16 +201,15 @@ export default function CreateScheduleScreen() {
               : 'Free Cloud chat remains available.'}
           </Text>
           {NATIVE_PURCHASES_AVAILABLE ? (
-            <PressableBox
+            <Button
+              title="View Plans"
+              size="lg"
               onPress={() =>
                 router.push('/(app)/settings/cloud-billing' as Parameters<typeof router.push>[0])
               }
-              className="mt-6 min-h-[52px] min-w-[220px] items-center justify-center rounded-2xl bg-white"
-              accessibilityRole="button"
+              className="mt-6 min-w-[220px]"
               accessibilityLabel="View plans for scheduled tasks"
-            >
-              <Text className="font-semibold text-black">View Plans</Text>
-            </PressableBox>
+            />
           ) : null}
         </View>
       </SafeAreaView>
@@ -245,14 +245,12 @@ export default function CreateScheduleScreen() {
               : 'It may have been deleted, or this account may not have access to it.'}
           </Text>
           {error ? (
-            <PressableBox
+            <Button
+              title="Try Again"
               onPress={handleRetryLoad}
-              className="mt-6 min-h-[48px] min-w-[180px] items-center justify-center rounded-xl bg-white"
-              accessibilityRole="button"
+              className="mt-6 min-w-[180px]"
               accessibilityLabel="Retry loading schedule"
-            >
-              <Text className="font-semibold text-black">Try Again</Text>
-            </PressableBox>
+            />
           ) : null}
         </View>
       </SafeAreaView>

@@ -101,6 +101,36 @@ describe('ResearchReportsGallery', () => {
     expect(screen.getByTestId('research-reports-gallery')).toBeInTheDocument();
   });
 
+  it('offers the older reports once a full page came back and appends them', async () => {
+    const firstPage = Array.from({ length: 50 }, (_, index) =>
+      makeReport({ id: `report-${index}`, title: `Report ${index}` }),
+    );
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ reports: firstPage }) })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ reports: [makeReport({ id: 'report-old', title: 'Oldest report' })] }),
+      });
+
+    render(<ResearchReportsGallery />);
+
+    await userEvent.click(await screen.findByText('Load older reports'));
+
+    expect(await screen.findByText('Oldest report')).toBeInTheDocument();
+    expect((fetchMock.mock.calls[1] as [string])[0]).toContain('offset=50');
+    expect(screen.queryByText('Load older reports')).not.toBeInTheDocument();
+  });
+
+  it('does not offer older reports when the first page was not full', async () => {
+    respondWith([makeReport()]);
+
+    render(<ResearchReportsGallery />);
+
+    expect(await screen.findByText('Node.js release status')).toBeInTheDocument();
+    expect(screen.queryByText('Load older reports')).not.toBeInTheDocument();
+  });
+
   it('shows an honest empty state instead of inventing rows', async () => {
     respondWith([]);
 

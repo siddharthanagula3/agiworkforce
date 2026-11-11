@@ -21,6 +21,7 @@ interface StartWorkSheetProps {
   visible: boolean;
   submitting: boolean;
   error: string | null;
+  initialGoal?: string | undefined;
   onClose: () => void;
   onSubmit: (submission: StartWorkSubmission) => void;
 }
@@ -29,6 +30,7 @@ export function StartWorkSheet({
   visible,
   submitting,
   error,
+  initialGoal,
   onClose,
   onSubmit,
 }: StartWorkSheetProps) {
@@ -45,12 +47,15 @@ export function StartWorkSheet({
   );
 
   useEffect(() => {
-    if (visible) return;
+    if (visible) {
+      if (initialGoal) setGoal(initialGoal);
+      return;
+    }
     setGoal('');
     setConstraints('');
     setDeliverable('');
     setProjectId(undefined);
-  }, [visible]);
+  }, [initialGoal, visible]);
 
   const handleClose = useCallback(() => {
     if (submitting) return;

@@ -83,16 +83,31 @@ export function requestAgentRefresh(): void {
   });
 }
 
-export function sendAgentCommand(agentId: string, command: 'pause' | 'resume' | 'cancel'): void {
-  const { sendControl, status } = useConnectionStore.getState();
-  if (status !== 'connected') return;
+export type AgentCommandResult = 'sent' | 'unavailable' | 'rejected';
 
-  void sendControl(command === 'cancel' ? 'cancel' : 'dispatch_request', {
+export const AGENT_COMMAND_NOT_SENT_MESSAGES: Record<
+  Exclude<AgentCommandResult, 'sent'>,
+  string
+> = {
+  unavailable:
+    'Your computer is not connected, so the command was not sent. Reconnect and try again.',
+  rejected: 'The command could not be sent to your computer. Try again.',
+};
+
+export async function sendAgentCommand(
+  agentId: string,
+  command: 'pause' | 'resume' | 'cancel',
+): Promise<AgentCommandResult> {
+  const { sendControl, status } = useConnectionStore.getState();
+  if (status !== 'connected') return 'unavailable';
+
+  const accepted = await sendControl(command === 'cancel' ? 'cancel' : 'dispatch_request', {
     kind: 'agent_command',
     agentId,
     command,
     sentAt: new Date().toISOString(),
   });
+  return accepted ? 'sent' : 'rejected';
 }
 
 export interface NewDispatchTaskInput {

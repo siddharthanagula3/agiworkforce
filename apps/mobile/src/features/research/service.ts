@@ -114,11 +114,12 @@ export function researchReportLabel(report: MobileResearchReport): string {
 }
 
 export async function fetchResearchReports(
-  options: { conversationId?: string; limit?: number; signal?: AbortSignal } = {},
+  options: { conversationId?: string; limit?: number; offset?: number; signal?: AbortSignal } = {},
 ): Promise<MobileResearchReport[]> {
   const params = new URLSearchParams({
     limit: String(options.limit ?? RESEARCH_REPORTS_LIMIT),
   });
+  if (options.offset) params.set('offset', String(options.offset));
   if (options.conversationId) params.set('conversationId', options.conversationId);
   const response = await api.get<unknown>(`/api/research/reports?${params.toString()}`, {
     ...(options.signal ? { signal: options.signal } : {}),

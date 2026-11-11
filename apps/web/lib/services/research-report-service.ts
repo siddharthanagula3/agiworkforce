@@ -312,17 +312,19 @@ export async function listResearchReports(
     organizationId: string | null;
     conversationId?: string | null;
     limit?: number;
+    offset?: number;
   },
 ): Promise<PersistedResearchReport[]> {
   if (!input.userId) return [];
   const limit = Math.min(100, Math.max(1, Math.floor(input.limit ?? 20)));
+  const offset = Math.max(0, Math.floor(input.offset ?? 0));
   const rows = input.conversationId
     ? await db.query<ResearchReportRow>(
         `select * from public.research_reports
           where user_id = $1 and conversation_id = $2
-          order by created_at desc
-          limit $3`,
-        [input.userId, input.conversationId, limit],
+          order by created_at desc, id desc
+          limit $3 offset $4`,
+        [input.userId, input.conversationId, limit, offset],
       )
     : await db.query<ResearchReportRow>(
         `select report.* from public.research_reports report
@@ -333,9 +335,9 @@ export async function listResearchReports(
             and conversation.organization_id is not distinct from $2::uuid
             and not conversation.is_temporary
             and conversation.deleted_at is null
-          order by report.created_at desc
-          limit $3`,
-        [input.userId, input.organizationId, limit],
+          order by report.created_at desc, report.id desc
+          limit $3 offset $4`,
+        [input.userId, input.organizationId, limit, offset],
       );
   return rows.map(rowToReport);
 }

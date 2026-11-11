@@ -18,6 +18,7 @@ const QuerySchema = z.object({
   requestId: z.string().trim().min(1).max(128).optional(),
   conversationId: z.string().trim().uuid().optional(),
   limit: z.coerce.number().int().min(1).max(100).optional(),
+  offset: z.coerce.number().int().min(0).max(10_000).optional(),
 });
 
 async function handleGet(request: NextRequest): Promise<NextResponse> {
@@ -29,6 +30,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     requestId: url.searchParams.get('requestId') ?? undefined,
     conversationId: url.searchParams.get('conversationId') ?? undefined,
     limit: url.searchParams.get('limit') ?? undefined,
+    offset: url.searchParams.get('offset') ?? undefined,
   });
   if (!parsed.success) {
     throw createError.badRequest('Invalid research report query', parsed.error.flatten());
@@ -50,6 +52,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     organizationId,
     conversationId: parsed.data.conversationId ?? null,
     ...(parsed.data.limit !== undefined ? { limit: parsed.data.limit } : {}),
+    ...(parsed.data.offset !== undefined ? { offset: parsed.data.offset } : {}),
   });
   return NextResponse.json({ reports });
 }
