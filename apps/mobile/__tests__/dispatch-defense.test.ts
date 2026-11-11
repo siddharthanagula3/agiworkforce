@@ -303,6 +303,7 @@ import {
   getRiskBadgeColor,
   startHealthChecks,
   stopHealthChecks,
+  stopReconnectRecovery,
 } from '../services/companion';
 
 import {
@@ -389,6 +390,7 @@ beforeEach(() => {
 
 afterEach(() => {
   stopHealthChecks();
+  stopReconnectRecovery();
   jest.useRealTimers();
 });
 
@@ -1340,6 +1342,107 @@ describe('startHealthChecks / stopHealthChecks', () => {
     expect(mockSendControl).not.toHaveBeenCalledWith('heartbeat', expect.any(Object));
 
     stopHealthChecks();
+  });
+});
+
+describe('reconnect countdown ownership', () => {
+  const mocks = connectionMod.__mocks;
+  const state = connectionMod.__state;
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    mocks.markStale.mockImplementation(() => {
+      state.status = 'stale';
+    });
+    mocks.beginReconnecting.mockImplementation((seconds: number) => {
+      state.status = 'reconnecting';
+      state.reconnectCountdown = seconds;
+    });
+    mocks.tickReconnectCountdown.mockImplementation(() => {
+      state.reconnectCountdown = Math.max(0, (state.reconnectCountdown as number) - 1);
+    });
+    state.lastHeartbeatAt = Date.now();
+  });
+
+  afterEach(() => {
+    mocks.markStale.mockReset();
+    mocks.beginReconnecting.mockReset();
+    mocks.tickReconnectCountdown.mockReset();
+  });
+
+  function startCountdown(): void {
+    setConnectionStatus('connected');
+    startHealthChecks();
+    jest.advanceTimersByTime(96_000);
+    expect(mocks.beginReconnecting).toHaveBeenCalledTimes(1);
+    expect(state.status).toBe('reconnecting');
+  }
+
+  it('keeps the countdown running when the health checks stop on the status change', () => {
+    startCountdown();
+    stopHealthChecks();
+
+    jest.advanceTimersByTime(3_000);
+
+    expect(mocks.tickReconnectCountdown).toHaveBeenCalledTimes(3);
+  });
+
+  it('reconnects once after the countdown even though the health checks stopped', () => {
+    startCountdown();
+    stopHealthChecks();
+    stopHealthChecks();
+    startHealthChecks();
+    stopHealthChecks();
+
+    jest.advanceTimersByTime(15_000 + 3_000 + 60_000);
+
+    expect(mockConnect).toHaveBeenCalledTimes(1);
+    expect(mockConnect).toHaveBeenCalledWith('TESTCODE');
+  });
+
+  it('does not reconnect once the owner stops the recovery', () => {
+    startCountdown();
+    stopHealthChecks();
+    stopReconnectRecovery();
+
+    jest.advanceTimersByTime(120_000);
+
+    expect(mockConnect).not.toHaveBeenCalled();
+    expect(mocks.tickReconnectCountdown).not.toHaveBeenCalled();
+  });
+
+  it('does not reconnect after an explicit disconnect clears the pairing', () => {
+    startCountdown();
+    stopHealthChecks();
+    jest.advanceTimersByTime(10_000);
+    setConnectionStatus('disconnected');
+    setConnectionPairingCode(null);
+
+    jest.advanceTimersByTime(120_000);
+
+    expect(mockConnect).not.toHaveBeenCalled();
+  });
+
+  it('does not reconnect when a late heartbeat restores the connection first', () => {
+    startCountdown();
+    stopHealthChecks();
+    jest.advanceTimersByTime(10_000);
+    setConnectionStatus('connected');
+
+    jest.advanceTimersByTime(120_000);
+
+    expect(mockConnect).not.toHaveBeenCalled();
+  });
+
+  it('lets a manual reconnect replace the pending automatic reconnect', () => {
+    startCountdown();
+    stopHealthChecks();
+    jest.advanceTimersByTime(16_000);
+
+    manualReconnect();
+    jest.advanceTimersByTime(120_000);
+
+    expect(mockConnect).toHaveBeenCalledTimes(1);
   });
 });
 

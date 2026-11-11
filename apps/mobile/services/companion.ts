@@ -303,6 +303,9 @@ export function stopHealthChecks(): void {
     clearInterval(staleCheckInterval);
     staleCheckInterval = undefined;
   }
+}
+
+export function stopReconnectRecovery(): void {
   if (countdownInterval !== undefined) {
     clearInterval(countdownInterval);
     countdownInterval = undefined;
@@ -314,10 +317,7 @@ export function stopHealthChecks(): void {
 }
 
 export function manualReconnect(): void {
-  if (reconnectDebounceTimer !== undefined) {
-    clearTimeout(reconnectDebounceTimer);
-    reconnectDebounceTimer = undefined;
-  }
+  stopReconnectRecovery();
   const { pairingCode, connect } = useConnectionStore.getState();
   if (pairingCode) {
     connect(pairingCode);
