@@ -1,9 +1,12 @@
 import { MOBILE_SESSION_TOKEN_TEMPLATE, SURFACE_TOKEN_HEADER } from '@agiworkforce/types';
 import {
+  CLERK_LOAD_SETTLE_MS,
   getClerkSurfaceToken,
   getClerkToken,
+  getClerkTokenFresh,
   getSessionToken,
   getSurfaceToken,
+  holdTokensUntilClerkAnswers,
   setClerkTokenMinter,
 } from '../src/integrations/clerk';
 import { withSurfaceProof } from '../services/surfaceProof';
@@ -62,6 +65,68 @@ describe('mobile Cloud credential', () => {
 
     await expect(getClerkToken()).resolves.toBe('session-token');
     await expect(getClerkSurfaceToken()).resolves.toBe('surface-token');
+  });
+});
+
+describe('credentials asked for before Clerk has answered for the session', () => {
+  async function settledWithin(pending: Promise<unknown>): Promise<boolean> {
+    let settled = false;
+    void pending.then(() => {
+      settled = true;
+    });
+    for (let turn = 0; turn < 5; turn += 1) await Promise.resolve();
+    return settled;
+  }
+
+  it('wait for the signed-in session instead of leaving without a bearer', async () => {
+    holdTokensUntilClerkAnswers();
+    const bearer = getClerkToken();
+    const proof = getClerkSurfaceToken();
+    const refreshed = getClerkTokenFresh();
+
+    expect(await settledWithin(Promise.race([bearer, proof, refreshed]))).toBe(false);
+
+    setClerkTokenMinter(minter(), () => 'user-1');
+
+    await expect(bearer).resolves.toBe('session-token');
+    await expect(proof).resolves.toBe('surface-token');
+    await expect(refreshed).resolves.toBe('session-token');
+  });
+
+  it('get no bearer once Clerk answers signed out', async () => {
+    holdTokensUntilClerkAnswers();
+    const bearer = getClerkToken();
+
+    expect(await settledWithin(bearer)).toBe(false);
+
+    setClerkTokenMinter(null, null);
+
+    await expect(bearer).resolves.toBeNull();
+  });
+
+  it('stop waiting after the settle window and do not hold later callers', async () => {
+    jest.useFakeTimers();
+    try {
+      holdTokensUntilClerkAnswers();
+      const bearer = getClerkToken();
+
+      await jest.advanceTimersByTimeAsync(CLERK_LOAD_SETTLE_MS - 1);
+      expect(await settledWithin(bearer)).toBe(false);
+
+      await jest.advanceTimersByTimeAsync(1);
+      await expect(bearer).resolves.toBeNull();
+      await expect(getClerkToken()).resolves.toBeNull();
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('are not held when a session is already bridged', async () => {
+    setClerkTokenMinter(minter(), () => 'user-1');
+    holdTokensUntilClerkAnswers();
+
+    await expect(getClerkToken()).resolves.toBe('session-token');
   });
 });
 

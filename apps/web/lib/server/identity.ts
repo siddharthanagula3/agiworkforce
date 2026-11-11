@@ -37,7 +37,9 @@ export function getRequestIdentity(): Promise<IdentityRequestAuth> {
 /**
  * Verification always carries the authorized-party allowlist, so no call site
  * can reach the provider without it and accept a token minted for another
- * origin.
+ * origin. A native app's origin-less token is refused here by design: a caller
+ * that holds the request's surface proof admits it through
+ * `native-session-token.ts`, and one that cannot see the proof must not.
  */
 export function verifyIdentitySessionToken(token: string): Promise<IdentityClaims | null> {
   const identity = getIdentityProvider();

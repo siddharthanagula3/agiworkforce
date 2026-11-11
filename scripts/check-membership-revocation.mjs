@@ -46,6 +46,13 @@ export const CREDENTIAL_CLASSES = [
     endedBy: /revokeSession\(/,
   },
   {
+    verifier: 'verifyNativeSessionToken',
+    credential:
+      'a native app provider session token presented as a bearer beside its surface proof',
+    table: null,
+    endedBy: /revokeSession\(/,
+  },
+  {
     verifier: 'getRequestIdentity',
     credential: 'the browser session cookie',
     table: null,

@@ -49,6 +49,8 @@ import {
 import { Alert } from 'react-native';
 import { TERMS_ACCEPTANCE_PATH } from '@agiworkforce/cloud-contracts';
 import { CloudCredentialUnavailableError } from '../services/apiErrors';
+import { invalidateCloudAccount } from '../src/features/auth/services/cloudAccountSession';
+import { clearLocalCloudAccountState } from '../src/features/auth/services/cloudAccountTeardown';
 
 const mockGetAuthToken = getAuthToken as jest.Mock;
 const mockGetAuthHeaders = getAuthHeaders as jest.Mock;
@@ -248,6 +250,57 @@ describe('failed refresh triggers local cloud-session cleanup', () => {
     mockRefreshAuthSession.mockResolvedValueOnce(false);
 
     await expect(api.get('/api/expired')).rejects.toThrow('Session expired');
+  });
+});
+
+describe('a refusal of a request that carried no credential', () => {
+  it('is not an expired session: nothing is torn down and no alert is raised', async () => {
+    mockNoToken();
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(makeResponse(401, {}));
+    mockRefreshAuthSession.mockResolvedValueOnce(false);
+
+    await expect(api.get('/api/connectors')).rejects.toBeInstanceOf(
+      CloudCredentialUnavailableError,
+    );
+
+    expect(Alert.alert).not.toHaveBeenCalled();
+    expect(mockClearAuthSession).not.toHaveBeenCalled();
+    expect(invalidateCloudAccount).not.toHaveBeenCalled();
+    expect(clearLocalCloudAccountState).not.toHaveBeenCalled();
+  });
+
+  it('is retried with the credential once the session can mint one', async () => {
+    const fetchSpy = jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(makeResponse(401, {}))
+      .mockResolvedValueOnce(makeResponse(200, { connectors: [] }));
+    mockGetAuthHeaders
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({ Authorization: 'Bearer minted-after-load' });
+    mockRefreshAuthSession.mockResolvedValueOnce(true);
+
+    await expect(api.get('/api/connectors')).resolves.toEqual({ connectors: [] });
+
+    const retried = (fetchSpy.mock.calls[1]?.[1] as RequestInit).headers as Record<string, string>;
+    expect(retried['Authorization']).toBe('Bearer minted-after-load');
+    expect(Alert.alert).not.toHaveBeenCalled();
+  });
+
+  it('still ends the session when a caller-supplied credential is refused', async () => {
+    mockNoToken();
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(makeResponse(401, {}));
+    mockRefreshAuthSession.mockResolvedValueOnce(false);
+
+    await expect(
+      api.get('/api/expired', { headers: { authorization: 'Bearer caller-token' } }),
+    ).rejects.toThrow('Session expired');
+
+    expect(mockClearAuthSession).toHaveBeenCalledTimes(1);
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'Session Expired',
+      expect.stringContaining('sign in'),
+      expect.any(Array),
+    );
   });
 });
 
