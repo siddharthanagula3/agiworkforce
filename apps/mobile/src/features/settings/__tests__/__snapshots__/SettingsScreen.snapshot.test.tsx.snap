@@ -311,10 +311,12 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
               style={
                 {
                   "color": "#fff",
-                  "flex": 1,
+                  "flexGrow": 1,
+                  "flexShrink": 0,
                   "fontSize": 15,
                 }
               }
+              testID="settings-row-label-account-email"
             >
               Email
             </Text>
@@ -394,10 +396,12 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
               style={
                 {
                   "color": "#fff",
-                  "flex": 1,
+                  "flexGrow": 1,
+                  "flexShrink": 0,
                   "fontSize": 15,
                 }
               }
+              testID="settings-row-label-account-security"
             >
               Account Security
             </Text>
@@ -477,10 +481,12 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
               style={
                 {
                   "color": "#fff",
-                  "flex": 1,
+                  "flexGrow": 1,
+                  "flexShrink": 0,
                   "fontSize": 15,
                 }
               }
+              testID="settings-row-label-account-subscription"
             >
               Subscription
             </Text>
@@ -560,10 +566,12 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
               style={
                 {
                   "color": "#fff",
-                  "flex": 1,
+                  "flexGrow": 1,
+                  "flexShrink": 0,
                   "fontSize": 15,
                 }
               }
+              testID="settings-row-label-account-shared-links"
             >
               Shared Links
             </Text>
@@ -643,10 +651,12 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
               style={
                 {
                   "color": "#fff",
-                  "flex": 1,
+                  "flexGrow": 1,
+                  "flexShrink": 0,
                   "fontSize": 15,
                 }
               }
+              testID="settings-row-label-workspace"
             >
               Workspace
             </Text>
@@ -758,10 +768,12 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
               style={
                 {
                   "color": "#fff",
-                  "flex": 1,
+                  "flexGrow": 1,
+                  "flexShrink": 0,
                   "fontSize": 15,
                 }
               }
+              testID="settings-row-label-appearance"
             >
               Appearance
             </Text>
@@ -841,10 +853,12 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
               style={
                 {
                   "color": "#fff",
-                  "flex": 1,
+                  "flexGrow": 1,
+                  "flexShrink": 0,
                   "fontSize": 15,
                 }
               }
+              testID="settings-row-label-accent-color"
             >
               Accent Color
             </Text>
@@ -924,10 +938,12 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
               style={
                 {
                   "color": "#fff",
-                  "flex": 1,
+                  "flexGrow": 1,
+                  "flexShrink": 0,
                   "fontSize": 15,
                 }
               }
+              testID="settings-row-label-general"
             >
               General
             </Text>
@@ -993,10 +1009,12 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
               style={
                 {
                   "color": "#fff",
-                  "flex": 1,
+                  "flexGrow": 1,
+                  "flexShrink": 0,
                   "fontSize": 15,
                 }
               }
+              testID="settings-row-label-notifications"
             >
               Notifications
             </Text>
@@ -1062,10 +1080,12 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
               style={
                 {
                   "color": "#fff",
-                  "flex": 1,
+                  "flexGrow": 1,
+                  "flexShrink": 0,
                   "fontSize": 15,
                 }
               }
+              testID="settings-row-label-quick-access"
             >
               Quick Access
             </Text>
@@ -1131,10 +1151,12 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
               style={
                 {
                   "color": "#fff",
-                  "flex": 1,
+                  "flexGrow": 1,
+                  "flexShrink": 0,
                   "fontSize": 15,
                 }
               }
+              testID="settings-row-label-voice"
             >
               Voice
             </Text>
@@ -1200,10 +1222,12 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
               style={
                 {
                   "color": "#fff",
-                  "flex": 1,
+                  "flexGrow": 1,
+                  "flexShrink": 0,
                   "fontSize": 15,
                 }
               }
+              testID="settings-row-label-permissions"
             >
               Permissions
             </Text>
@@ -1269,10 +1293,12 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
               style={
                 {
                   "color": "#fff",
-                  "flex": 1,
+                  "flexGrow": 1,
+                  "flexShrink": 0,
                   "fontSize": 15,
                 }
               }
+              testID="settings-row-label-safety-security"
             >
               Safety & Security
             </Text>
@@ -1338,10 +1364,12 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
               style={
                 {
                   "color": "#fff",
-                  "flex": 1,
+                  "flexGrow": 1,
+                  "flexShrink": 0,
                   "fontSize": 15,
                 }
               }
+              testID="settings-row-label-parental-controls"
             >
               Parental Controls
             </Text>
@@ -1407,10 +1435,12 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
               style={
                 {
                   "color": "#fff",
-                  "flex": 1,
+                  "flexGrow": 1,
+                  "flexShrink": 0,
                   "fontSize": 15,
                 }
               }
+              testID="settings-row-label-storage"
             >
               Storage
             </Text>
@@ -1508,10 +1538,12 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
               style={
                 {
                   "color": "#fff",
-                  "flex": 1,
+                  "flexGrow": 1,
+                  "flexShrink": 0,
                   "fontSize": 15,
                 }
               }
+              testID="settings-row-label-personalization"
             >
               Personalization
             </Text>
@@ -1577,10 +1609,12 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
               style={
                 {
                   "color": "#fff",
-                  "flex": 1,
+                  "flexGrow": 1,
+                  "flexShrink": 0,
                   "fontSize": 15,
                 }
               }
+              testID="settings-row-label-memory"
             >
               Memory
             </Text>
@@ -1646,10 +1680,12 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
               style={
                 {
                   "color": "#fff",
-                  "flex": 1,
+                  "flexGrow": 1,
+                  "flexShrink": 0,
                   "fontSize": 15,
                 }
               }
+              testID="settings-row-label-capabilities"
             >
               Capabilities
             </Text>
@@ -1715,10 +1751,12 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
               style={
                 {
                   "color": "#fff",
-                  "flex": 1,
+                  "flexGrow": 1,
+                  "flexShrink": 0,
                   "fontSize": 15,
                 }
               }
+              testID="settings-row-label-data-controls"
             >
               Data Controls
             </Text>
@@ -1816,10 +1854,12 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
               style={
                 {
                   "color": "#fff",
-                  "flex": 1,
+                  "flexGrow": 1,
+                  "flexShrink": 0,
                   "fontSize": 15,
                 }
               }
+              testID="settings-row-label-reflect"
             >
               Reflect
             </Text>
@@ -1909,10 +1949,12 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
               style={
                 {
                   "color": "#fff",
-                  "flex": 1,
+                  "flexGrow": 1,
+                  "flexShrink": 0,
                   "fontSize": 15,
                 }
               }
+              testID="settings-row-label-archived-chats"
             >
               Archived Chats
             </Text>
@@ -2002,10 +2044,12 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
               style={
                 {
                   "color": "#fff",
-                  "flex": 1,
+                  "flexGrow": 1,
+                  "flexShrink": 0,
                   "fontSize": 15,
                 }
               }
+              testID="settings-row-label-privacy"
             >
               Privacy
             </Text>
@@ -2095,10 +2139,12 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
               style={
                 {
                   "color": "#fff",
-                  "flex": 1,
+                  "flexGrow": 1,
+                  "flexShrink": 0,
                   "fontSize": 15,
                 }
               }
+              testID="settings-row-label-usage"
             >
               Usage
             </Text>
@@ -2188,10 +2234,12 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
               style={
                 {
                   "color": "#fff",
-                  "flex": 1,
+                  "flexGrow": 1,
+                  "flexShrink": 0,
                   "fontSize": 15,
                 }
               }
+              testID="settings-row-label-connectors"
             >
               Connectors
             </Text>
@@ -2313,10 +2361,12 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
               style={
                 {
                   "color": "#fff",
-                  "flex": 1,
+                  "flexGrow": 1,
+                  "flexShrink": 0,
                   "fontSize": 15,
                 }
               }
+              testID="settings-row-label-report"
             >
               Report App Issue
             </Text>
@@ -2382,10 +2432,12 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
               style={
                 {
                   "color": "#fff",
-                  "flex": 1,
+                  "flexGrow": 1,
+                  "flexShrink": 0,
                   "fontSize": 15,
                 }
               }
+              testID="settings-row-label-help"
             >
               Help Center
             </Text>
@@ -2451,10 +2503,12 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
               style={
                 {
                   "color": "#fff",
-                  "flex": 1,
+                  "flexGrow": 1,
+                  "flexShrink": 0,
                   "fontSize": 15,
                 }
               }
+              testID="settings-row-label-diagnostics"
             >
               Export Diagnostics
             </Text>
@@ -2520,10 +2574,12 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
               style={
                 {
                   "color": "#fff",
-                  "flex": 1,
+                  "flexGrow": 1,
+                  "flexShrink": 0,
                   "fontSize": 15,
                 }
               }
+              testID="settings-row-label-about"
             >
               About
             </Text>

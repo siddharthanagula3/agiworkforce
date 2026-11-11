@@ -183,9 +183,11 @@ function SettingsListRow({ row, isLast }: { row: SettingsRow; isLast: boolean })
     >
       <Icon size={19} color={tint} strokeWidth={1.8} />
       <Text
+        testID={`settings-row-label-${row.key}`}
         numberOfLines={1}
         style={{
-          flex: 1,
+          flexGrow: 1,
+          flexShrink: 0,
           color: row.tone === 'danger' ? colors.agentError : colors.textPrimary,
           fontSize: typeScale.body,
         }}
