@@ -153,7 +153,7 @@ static ABSOLUTE_URL: Lazy<Regex> =
 /// flips a control.
 static VERBS_BY_LENGTH: Lazy<Vec<(&'static str, IntentOperation)>> = Lazy::new(|| {
     let mut verbs = VERBS.to_vec();
-    verbs.sort_by(|left, right| right.0.len().cmp(&left.0.len()));
+    verbs.sort_by_key(|left| std::cmp::Reverse(left.0.len()));
     verbs
 });
 

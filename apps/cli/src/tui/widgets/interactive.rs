@@ -151,8 +151,8 @@ impl SelectionState {
 
     pub fn set_len(&mut self, len: usize) {
         self.len = len;
-        if self.cursor >= len.saturating_sub(1).max(0) {
-            self.cursor = len.saturating_sub(1).max(0);
+        if self.cursor >= len.saturating_sub(1) {
+            self.cursor = len.saturating_sub(1);
         }
     }
 

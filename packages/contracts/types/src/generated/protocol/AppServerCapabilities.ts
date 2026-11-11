@@ -8,6 +8,10 @@ export type AppServerCapabilities = {
   tools: boolean;
   mcp: boolean;
   checkpoints: boolean;
+  workspaceFiles?: boolean;
+  workspaceFileRecovery?: boolean;
+  workspaceFileRecoveryBrowser?: boolean;
+  workspaceTerminal?: boolean;
   worktrees: boolean;
   models: boolean;
   /**
@@ -16,11 +20,31 @@ export type AppServerCapabilities = {
    * answers "unavailable".
    */
   account?: boolean;
+  accountLoginCancel?: boolean;
+  cloudConversationUpdate?: boolean;
+  cloudDrafts?: boolean;
+  cloudProjects?: boolean;
+  cloudProjectFiles?: boolean;
+  cloudProjectUploads?: boolean;
+  cloudUploads?: boolean;
+  cloudAttachmentRecovery?: boolean;
+  cloudProjectDownloads?: boolean;
+  cloudProjectFileReindex?: boolean;
+  cloudWorkspaces?: boolean;
+  cloudModels?: boolean;
+  cloudHistory?: boolean;
+  cloudHistoryTail?: boolean;
+  cloudTurns?: boolean;
+  cloudTurnResume?: boolean;
+  cloudWork?: boolean;
+  cloudWorkStart?: boolean;
   instructions?: boolean;
   skills?: boolean;
   plugins?: boolean;
   hooks?: boolean;
   settings?: boolean;
+  settingsInstructions?: boolean;
+  worktreeApplyReview?: boolean;
   commands?: boolean;
   /**
    * `thread/delete` removes a thread and everything persisted with it.

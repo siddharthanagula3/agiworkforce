@@ -241,6 +241,13 @@ export function compareWorkspaceScopeToBaseline(
 
 const ALLOWLIST = [
   {
+    match: /lib\/server\/project-knowledge-lifecycle\.ts$/,
+    tables: ['project_knowledge_objects'],
+    functions: ['reconcileProjectKnowledgeObject'],
+    reason:
+      'System deletion worker only: the caller verifies the live job lease and original region before reconciliation and before each removal. The database claim enforces reference counts, legal holds and target identity. This fingerprint read returns state and receipt metadata, including anonymized deleted tombstones that have no subject to constrain by; no request-facing reader calls this function.',
+  },
+  {
     match: /api\/cron\//,
     reason: 'cron routes are platform-scoped by design and run without a user',
   },

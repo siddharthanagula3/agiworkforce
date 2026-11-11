@@ -11,6 +11,8 @@
     "lint": "eslint . --cache --cache-strategy content --cache-location .cache/eslint --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:knowledge-lifecycle": "node --import tsx --conditions=react-server scripts/test-project-knowledge-lifecycle.mjs",
+    "normalize:knowledge-keys": "node --import tsx --conditions=react-server scripts/normalize-project-knowledge-keys.mjs",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",

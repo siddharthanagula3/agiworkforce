@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import console from 'node:console';
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
@@ -11,10 +12,14 @@ const PROJECTS = 'packages/contracts/cloud-contracts/src/projects.ts';
 const MEMORY_WIRE = 'packages/contracts/types/src/memory-wire.ts';
 const MEMORY_RS = 'apps/cli/src/cloud/memory.rs';
 const PROJECTS_RS = 'apps/cli/src/cloud/projects.rs';
+const PROJECTS_API_RS = 'apps/cli/src/cloud/projects/api.rs';
+const PROJECT_CONTRACT = 'packages/contracts/cloud-contracts/src/project-contract.json';
 const CLOUD_RS = 'apps/cli/src/cloud/mod.rs';
 const ARTIFACT_INDEX = 'packages/contracts/cloud-contracts/src/artifact-index.ts';
 const ARTIFACTS_RS = 'apps/cli/src/cloud/artifacts.rs';
 const CONSTANT_SOURCES = [SYNC, PROJECTS, MEMORY_WIRE];
+
+export const PROJECT_LIMIT_SOURCES = [PROJECTS_API_RS, PROJECT_CONTRACT];
 
 /**
  * `sends` holds the CLI to what the server accepts; `reads` holds it to what the
@@ -190,14 +195,20 @@ export const LIMIT_PAIRS = [
   },
   {
     rust: PROJECTS_RS,
-    constant: 'NAME_MAX_CHARS',
+    constant: 'api::contract().name_max_length',
+    projectLimit: { argument: 'name.trim()', field: 'name_max_length', key: 'nameMaxLength' },
     ts: SYNC,
     shape: 'ProjectSyncPushItemSchema',
     key: 'name',
   },
   {
     rust: PROJECTS_RS,
-    constant: 'DESCRIPTION_MAX_CHARS',
+    constant: 'api::contract().description_max_length',
+    projectLimit: {
+      argument: 'value',
+      field: 'description_max_length',
+      key: 'descriptionMaxLength',
+    },
     ts: SYNC,
     shape: 'ProjectSyncPushItemSchema',
     key: 'description',
@@ -455,12 +466,75 @@ export function rustConstant(source, name) {
   return found ? numberLiteral(found[1]) : null;
 }
 
-export function tsConstant(sources, name) {
+export function tsConstant(sources, name, projectContract) {
   for (const source of sources) {
     const found = new RegExp(`export\\s+const\\s+${name}\\s*=\\s*([\\d_]+)\\s*;`).exec(source);
     if (found) return numberLiteral(found[1]);
+    const shared = new RegExp(
+      `export\\s+const\\s+${name}\\s*=\\s*projectContract\\.(\\w+)\\s*;`,
+    ).exec(source);
+    if (
+      shared &&
+      /import\s+projectContract\s+from\s+['"]\.\/project-contract\.json['"]/.test(source)
+    ) {
+      const value = projectContract?.[shared[1]];
+      return Number.isSafeInteger(value) && value > 0 ? value : null;
+    }
   }
   return null;
+}
+
+function projectLimit(read, pair, contract) {
+  const api = read(PROJECTS_API_RS);
+  const loader =
+    /static\s+CONTRACT\s*:\s*LazyLock<ProjectContract>\s*=\s*LazyLock::new\(\s*\|\|\s*\{\s*serde_json::from_str\(include_str!\(\s*"([^"]+)"\s*\)\)/.exec(
+      api,
+    );
+  if (
+    !loader ||
+    path.posix.normalize(path.posix.join(path.posix.dirname(PROJECTS_API_RS), loader[1])) !==
+      PROJECT_CONTRACT ||
+    !/pub\s+fn\s+contract\(\)\s*->\s*&'static\s+ProjectContract\s*\{\s*&CONTRACT\s*\}/.test(api)
+  )
+    return null;
+  const shape = parseRustStructs(api).get('ProjectContract');
+  if (
+    shape?.renameAll !== 'camelCase' ||
+    !shape.fields.some(
+      (field) => field.name === pair.projectLimit.field && field.wire === pair.projectLimit.key,
+    )
+  )
+    return null;
+  const source = read(pair.rust);
+  const header = /pub\s+fn\s+new_project\s*\(/.exec(source);
+  if (!header) return null;
+  const open = source.indexOf('{', header.index);
+  const body = source.slice(open + 1, matchingClose(source, open, true));
+  const active = [];
+  for (let index = 0; index < body.length; index += 1) {
+    const inert = skipInert(body, index, true);
+    if (inert !== -1) {
+      index = inert;
+      active.push(' ');
+    } else active.push(body[index]);
+  }
+  const expression = active.join('');
+  const calls = [...expression.matchAll(/\btruncate\s*\(/g)];
+  const bound = calls.some((call) => {
+    const start = call.index + call[0].length - 1;
+    const args = splitTopLevel(
+      expression.slice(start + 1, matchingClose(expression, start, true)),
+      ',',
+      true,
+    );
+    return (
+      args.length === 2 &&
+      args[0].replace(/\s/g, '') === pair.projectLimit.argument &&
+      args[1].replace(/\s/g, '') === pair.constant
+    );
+  });
+  const value = contract[pair.projectLimit.key];
+  return bound && Number.isSafeInteger(value) && value > 0 ? value : null;
 }
 
 export function compareStruct(pair, rustStruct, tsKeys) {
@@ -551,10 +625,16 @@ export function auditRepository(root = REPO_ROOT) {
     checked += 1;
   }
   const constantSources = CONSTANT_SOURCES.map(read);
+  const projectContract = JSON.parse(read(PROJECT_CONTRACT));
   for (const pair of LIMIT_PAIRS) {
-    const cli = rustConstant(read(pair.rust), pair.constant);
+    const cli = pair.projectLimit
+      ? projectLimit(read, pair, projectContract)
+      : rustConstant(read(pair.rust), pair.constant);
     const max = readTsShape(read(pair.ts), pair.shape)?.get(pair.key)?.max ?? null;
-    const server = max === null ? null : (numberLiteral(max) ?? tsConstant(constantSources, max));
+    const server =
+      max === null
+        ? null
+        : (numberLiteral(max) ?? tsConstant(constantSources, max, projectContract));
     if (cli === null || server === null) {
       problems.push(
         `${pair.rust} ${pair.constant} or ${pair.shape}.${pair.key} has no readable limit`,

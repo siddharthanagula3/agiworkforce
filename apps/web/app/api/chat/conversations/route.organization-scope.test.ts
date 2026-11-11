@@ -6,6 +6,7 @@ const PERSONAL_CONVERSATION_ID = '11111111-1111-4111-8111-111111111111';
 const ORG_CONVERSATION_ID = '22222222-2222-4222-8222-222222222222';
 const CREATED_CONVERSATION_ID = '33333333-3333-4333-8333-333333333333';
 const ORGANIZATION_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const PROJECT_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 
 const mocks = vi.hoisted(() => ({
   activeOrganizationId: null as string | null,
@@ -105,6 +106,11 @@ describe('conversation active-organization isolation', () => {
         return rows.filter((row) => sameScope(row.organization_id, params[1]));
       }
 
+      if (/from user_projects/u.test(sql)) {
+        assertOrganizationPredicate(sql);
+        expect(params).toEqual([PROJECT_ID, 'user-1', mocks.activeOrganizationId]);
+        return mocks.activeOrganizationId === ORGANIZATION_ID ? [{ id: PROJECT_ID }] : [];
+      }
       if (/update web_conversations/u.test(sql)) {
         assertOrganizationPredicate(sql);
         const row = rows.find(
@@ -134,6 +140,47 @@ describe('conversation active-organization isolation', () => {
       }
 
       throw new Error(`Unexpected query: ${sql}`);
+    });
+  });
+
+  it('refuses a project from another workspace before creating or moving a conversation', async () => {
+    const create = await POST(
+      new NextRequest('https://agiworkforce.com/api/chat/conversations', {
+        method: 'POST',
+        body: JSON.stringify({ projectId: PROJECT_ID }),
+      }),
+    );
+    expect(create.status).toBe(404);
+    const move = await PUT(
+      new NextRequest(
+        `https://agiworkforce.com/api/chat/conversations/${PERSONAL_CONVERSATION_ID}`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({ projectId: PROJECT_ID }),
+        },
+      ),
+      { params: Promise.resolve({ id: PERSONAL_CONVERSATION_ID }) },
+    );
+    expect(move.status).toBe(404);
+    expect(
+      mocks.query.mock.calls.some(([sql]) =>
+        /insert into web_conversations|update web_conversations/u.test(String(sql)),
+      ),
+    ).toBe(false);
+  });
+
+  it('creates a conversation with a project only in the explicitly selected workspace', async () => {
+    mocks.activeOrganizationId = ORGANIZATION_ID;
+    const response = await POST(
+      new NextRequest('https://agiworkforce.com/api/chat/conversations', {
+        method: 'POST',
+        body: JSON.stringify({ projectId: PROJECT_ID }),
+      }),
+    );
+    expect(response.status).toBe(201);
+    expect((await response.json()).conversation).toMatchObject({
+      project_id: PROJECT_ID,
+      organization_id: ORGANIZATION_ID,
     });
   });
 

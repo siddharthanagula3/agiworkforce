@@ -12,6 +12,21 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const ACTION = '.github/actions/prepare-runner-memory';
 const workflow = (name) => parse(readFileSync(path.join(ROOT, '.github/workflows', name), 'utf8'));
 
+test('database CI blocks on the isolated project knowledge lifecycle suite', () => {
+  const job = workflow('ci.yml').jobs.database;
+  assert.equal(job.if, undefined);
+  assert.equal(job['continue-on-error'], undefined);
+  const command = 'pnpm --filter @agiworkforce/web test:knowledge-lifecycle';
+  const steps = job.steps.filter((step) =>
+    step.run?.split('\n').some((line) => line.trim() === command),
+  );
+  assert.equal(steps.length, 1);
+  assert.equal(steps[0].if, undefined);
+  assert.equal(steps[0]['continue-on-error'], undefined);
+  assert.equal(steps[0].shell, 'bash');
+  assert.match(steps[0].run, /set -euo pipefail/);
+});
+
 test('repository guard jobs retain the complete blocking chain within a finite runner budget', () => {
   for (const [name, id] of [
     ['ci.yml', 'repo-guards'],

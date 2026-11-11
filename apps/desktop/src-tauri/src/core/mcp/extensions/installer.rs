@@ -397,8 +397,8 @@ impl ExtensionInstaller {
             }
 
             // Emit per-file extraction progress (scaled to 30-50% range)
-            if total_entries > 0 {
-                let pct = 30 + ((i + 1) * 20) / total_entries;
+            if let Some(progress) = ((i + 1) * 20).checked_div(total_entries) {
+                let pct = 30 + progress;
                 // Clamp to u8 range; values are always 30..=50 so this is safe
                 let pct = pct.min(50) as u8;
                 self.emit_progress(InstallProgress {

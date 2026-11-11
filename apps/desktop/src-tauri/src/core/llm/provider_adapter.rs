@@ -2840,16 +2840,14 @@ impl GoogleAdapter {
                 ThinkingParameter::Enabled(true) | ThinkingParameter::Adaptive { .. } => 8192,
                 ThinkingParameter::Enabled(false) => 0,
             }
-        } else if let Some(level) = request.thinking_level {
-            match level {
+        } else {
+            match request.thinking_level? {
                 0 => 0,
                 1 => 2048,
                 2 => 8192,
                 3 => 16384,
                 _ => 32768,
             }
-        } else {
-            return None;
         };
         (budget > 0).then_some(budget)
     }

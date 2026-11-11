@@ -41,6 +41,7 @@ export function containerFiles(root) {
         maxBuffer: GIT_MAX_BUFFER,
         cwd: root,
         encoding: 'utf8',
+        maxBuffer: 64 * 1024 * 1024,
       })
         .split('\0')
         .filter(Boolean)
@@ -312,6 +313,7 @@ export function installSteps(root) {
         maxBuffer: GIT_MAX_BUFFER,
         cwd: root,
         encoding: 'utf8',
+        maxBuffer: 64 * 1024 * 1024,
       })
         .split('\0')
         .filter(Boolean)

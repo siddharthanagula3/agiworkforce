@@ -114,6 +114,7 @@ export const JOB_KINDS = {
   'webhooks.audit-stream-delivery': 'webhooks',
   'webhooks.developer-delivery': 'webhooks',
   'data-deletion.scheduled-account-erasure': 'data-deletion',
+  'data-deletion.project-knowledge-object': 'data-deletion',
   'file-processing.purge-upload-object': 'file-processing',
   'research.settle-report-cost': 'research',
   'event-triggers.fire': 'event-triggers',

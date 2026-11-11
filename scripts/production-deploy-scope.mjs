@@ -83,6 +83,20 @@ const NATIVE_EXECUTION_FILES = new Set([
   'apps/desktop/scripts/verify-windows-manifests.ps1',
 ]);
 
+const NATIVE_BUILD_CONTRACT_FILES = new Set([
+  'packages/contracts/cloud-contracts/src/conversation-contract.json',
+  'packages/contracts/cloud-contracts/src/project-contract.json',
+  'packages/contracts/cloud-contracts/src/upload-contract.json',
+  'packages/contracts/types/src/attachment-policy.json',
+  'packages/contracts/types/src/workspace-contract.json',
+  'packages/contracts/types/src/product-names.ts',
+  'packages/contracts/types/src/runtime.ts',
+  'packages/contracts/types/src/suite-contracts.ts',
+  'packages/contracts/local-runtime/src/developer-sessions.ts',
+  'packages/ui/design-tokens/src/index.ts',
+  'packages/ui/design-tokens/src/foundation.css',
+]);
+
 const SHARED_BUILD_FILES = new Set([
   '.npmrc',
   'package.json',
@@ -185,6 +199,7 @@ export function classifyDeployScope(files, { all = false } = {}) {
 
     if (
       NATIVE_EXECUTION_FILES.has(file) ||
+      NATIVE_BUILD_CONTRACT_FILES.has(file) ||
       isWithin(file, '.cargo') ||
       file === 'Cargo.lock' ||
       file === 'Cargo.toml' ||
@@ -192,6 +207,7 @@ export function classifyDeployScope(files, { all = false } = {}) {
       file.startsWith('rust-toolchain') ||
       isWithin(file, 'apps/cli') ||
       isWithin(file, 'apps/desktop/src-tauri') ||
+      isWithin(file, 'apps/desktop/gpui') ||
       isWithin(file, 'crates')
     ) {
       scope.native = true;

@@ -1,3 +1,6 @@
+type OriginalObjectStorageModule = typeof import('@/lib/server/object-storage');
+type OriginalProjectKnowledgeObjectStorageModule =
+  typeof import('@/lib/server/project-knowledge-object-storage');
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -51,7 +54,10 @@ vi.mock('@/lib/server/media-storage', () => ({
   extForMime: vi.fn(),
   streamStoredMedia: vi.fn(),
 }));
-vi.mock('@/lib/server/object-storage', () => ({
+vi.mock('@/lib/server/object-storage', async (importOriginal) => ({
+  ...(await importOriginal<OriginalObjectStorageModule>()),
+  createPrivateObjectWriter: vi.fn(),
+  createObjectCleanupPlan: vi.fn(),
   copyPrivateObjectIfUnchanged: vi.fn(),
   deleteObject: (...args: unknown[]) => mocks.deleteObject(...args),
   isObjectStorageConfigured: () => mocks.objectStorageConfigured(),
@@ -69,7 +75,8 @@ vi.mock('@/lib/server/object-storage', () => ({
   isPrivateObjectStorageConfigured: () => mocks.privateObjectStorageConfigured(),
   putPrivateObject: vi.fn(),
 }));
-vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
+vi.mock('@/lib/server/project-knowledge-object-storage', async (importOriginal) => ({
+  ...(await importOriginal<OriginalProjectKnowledgeObjectStorageModule>()),
   deleteProjectKnowledgeObject: (...args: unknown[]) => mocks.deleteObject(...args),
   isProjectKnowledgeObjectStorageConfigured: () => mocks.objectStorageConfigured(),
   getProjectKnowledgeObject: vi.fn(),

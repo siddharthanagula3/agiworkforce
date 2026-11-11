@@ -2,7 +2,9 @@ use std::path::{Path, PathBuf};
 use std::sync::{OnceLock, RwLock};
 
 mod file_authority;
-pub(crate) use file_authority::{DirectoryAuthority, WorkspaceFileAuthority};
+pub(crate) use file_authority::{DirectoryAuthority, DownloadDestination, WorkspaceFileAuthority};
+#[cfg(unix)]
+pub(crate) use file_authority::{ReviewedFile, ReviewedFileError};
 
 #[derive(Clone)]
 struct WorkspacePathAuthority {
@@ -378,7 +380,7 @@ pub fn is_protected_path_with_cwd(path: &Path, cwd: &Path) -> bool {
     } else {
         cwd.join(path)
     };
-    if is_checkpoint_internal_path(&absolute) {
+    if is_checkpoint_internal_path(&absolute) || [absolute.clone(), resolve_existing_prefix(&absolute)].iter().any(|path| path.components().any(|part| matches!(part, std::path::Component::Normal(name) if name.to_str().is_some_and(|name| name.eq_ignore_ascii_case(agiworkforce_sandbox_policy::CLOUD_ATTACHMENT_RECOVERY_DIRECTORY))))) {
         return true;
     }
     let Ok(landing) = write_landing(&absolute) else {

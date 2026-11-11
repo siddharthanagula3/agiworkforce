@@ -84,9 +84,10 @@
       "signingIdentity": "Developer ID Application: AGI AUTOMATION LLC (D2PR62RLT4)",
       "infoPlist": "Info.plist"
     },
-    "resources": [
-      "mcp-allowlist.json"
-    ]
+    "resources": {
+      "mcp-allowlist.json": "mcp-allowlist.json",
+      "../../../patches/sqlcipher-src/LICENSE": "licenses/sqlcipher-LICENSE.txt"
+    }
   },
   "plugins": {
     "deep-link": {

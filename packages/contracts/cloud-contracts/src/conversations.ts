@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import conversationContract from './conversation-contract.json';
 import {
   getDefaultAutoRoutingProfile,
   INTERACTIVE_CARDS_MAX_PER_MESSAGE,
@@ -6,15 +7,15 @@ import {
 } from '@agiworkforce/types';
 import { CloudAgentWorkModeSchema, type CloudAgentWorkMode } from './cloud-agent-runs';
 
-export const CONVERSATION_TITLE_MAX_LENGTH = 500;
+export const CONVERSATION_TITLE_MAX_LENGTH = conversationContract.titleMaxLength;
 
 export const CONVERSATION_INSTRUCTIONS_MAX_LENGTH = 4_000;
 
 export const MANAGED_CLOUD_DEFAULT_MODEL_SELECTION = getDefaultAutoRoutingProfile().id;
 
 export const MANAGED_CLOUD_CHAT_BASE_PATH = '/api/chat/conversations';
-export const MANAGED_CLOUD_ORGANIZATION_HEADER = 'x-agi-organization-id';
-export const MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE = 'personal';
+export const MANAGED_CLOUD_ORGANIZATION_HEADER = conversationContract.organizationHeader;
+export const MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE = conversationContract.personalWorkspace;
 export const MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH = 100_000;
 export const MANAGED_CLOUD_CHAT_MAX_STORED_MESSAGE_LENGTH = 1_000_000;
 
@@ -22,7 +23,8 @@ export const MANAGED_CLOUD_CHAT_MAX_STORED_MESSAGE_LENGTH = 1_000_000;
  * A draft is unsent text, so it is capped well below a message: the composer
  * turns anything longer into an attachment before it could reach this.
  */
-export const MANAGED_CLOUD_MAX_DRAFT_LENGTH = 20_000;
+export const MANAGED_CLOUD_MAX_DRAFT_LENGTH = conversationContract.draftMaxLength;
+export const MANAGED_CLOUD_DRAFT_SAVE_DEBOUNCE_MS = conversationContract.draftSaveDebounceMs;
 export const MANAGED_CLOUD_CHAT_MAX_METADATA_LENGTH = 32_000;
 
 export function managedCloudMetadataLength(value: unknown): number {

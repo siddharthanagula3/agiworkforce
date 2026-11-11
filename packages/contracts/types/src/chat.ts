@@ -1,3 +1,4 @@
+import attachmentPolicy from './attachment-policy.json';
 /**
  * Chat Types
  *
@@ -89,68 +90,30 @@ export interface ChatAttachment {
   url?: string;
 }
 
-export const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
+export const MAX_ATTACHMENT_BYTES = attachmentPolicy.maxBytes;
 
 export const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
 
-export const ALLOWED_ATTACHMENT_MIME_PREFIXES: readonly string[] = [
-  'application/pdf',
-  'text/',
-  'application/json',
-  'application/xml',
-];
+export const ALLOWED_ATTACHMENT_MIME_PREFIXES: readonly string[] =
+  attachmentPolicy.allowedMimePrefixes;
 
-export const IMAGE_ATTACHMENT_MIME_TYPES: readonly string[] = [
-  'image/png',
-  'image/jpeg',
-  'image/gif',
-  'image/webp',
-  'image/heic',
-  'image/heif',
-];
+export const IMAGE_ATTACHMENT_MIME_TYPES: readonly string[] = attachmentPolicy.imageMimeTypes;
 
-export const DENIED_ATTACHMENT_MIME_TYPES: readonly string[] = ['image/svg+xml', 'image/svg'];
+export const DENIED_ATTACHMENT_MIME_TYPES: readonly string[] = attachmentPolicy.deniedMimeTypes;
 
-export const DENIED_ATTACHMENT_EXTENSIONS: readonly string[] = ['svg', 'svgz'];
+export const DENIED_ATTACHMENT_EXTENSIONS: readonly string[] = attachmentPolicy.deniedExtensions;
 
-export const IMAGE_ATTACHMENT_EXTENSIONS: readonly string[] = [
-  'png',
-  'jpg',
-  'jpeg',
-  'gif',
-  'webp',
-  'heic',
-];
+export const IMAGE_ATTACHMENT_EXTENSIONS: readonly string[] = attachmentPolicy.imageExtensions;
 
-export const OFFICE_ATTACHMENT_MIME_TYPES: readonly string[] = [
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-];
+export const OFFICE_ATTACHMENT_MIME_TYPES: readonly string[] = attachmentPolicy.officeMimeTypes;
 
-export const OFFICE_ATTACHMENT_EXTENSIONS: readonly string[] = ['docx', 'xlsx', 'pptx'];
+export const OFFICE_ATTACHMENT_EXTENSIONS: readonly string[] = attachmentPolicy.officeExtensions;
 
-export const TEXT_ATTACHMENT_EXTENSIONS: readonly string[] = [
-  'txt',
-  'md',
-  'csv',
-  'json',
-  'xml',
-  'js',
-  'jsx',
-  'ts',
-  'tsx',
-  'py',
-  'rs',
-  'go',
-  'java',
-  'html',
-  'css',
-];
+export const TEXT_ATTACHMENT_EXTENSIONS: readonly string[] = attachmentPolicy.textExtensions;
 
 export const ALLOWED_ATTACHMENT_EXTENSIONS: readonly string[] = [
   ...IMAGE_ATTACHMENT_EXTENSIONS,
-  'pdf',
+  ...attachmentPolicy.fixedExtensions,
   ...TEXT_ATTACHMENT_EXTENSIONS,
   ...OFFICE_ATTACHMENT_EXTENSIONS,
 ];

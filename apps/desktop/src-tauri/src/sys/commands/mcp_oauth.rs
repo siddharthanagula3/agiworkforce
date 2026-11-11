@@ -2076,21 +2076,13 @@ fn resolve_connected_providers(
         }
 
         match mapping {
-            Some(mapping) => {
+            Some(mapping)
                 if configured_servers.contains(mapping.server_name)
-                    && live_connected_servers.contains(mapping.server_name)
-                {
-                    providers.push(provider.to_string());
-                }
-                // Else: credentials/config may exist, but no approved live
-                // connection backs the connector, do not fake-badge it.
+                    && live_connected_servers.contains(mapping.server_name) =>
+            {
+                providers.push(provider.to_string());
             }
-            None => {
-                // No MCP-backed server exists for this id at all. Credential
-                // presence alone can never mean "connected", this is exactly
-                // the structural gap that produced permanent fake-connected
-                // badges for atlassian/google_sheets/context7.
-            }
+            _ => {}
         }
     }
 

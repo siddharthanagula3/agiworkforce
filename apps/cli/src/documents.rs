@@ -849,4 +849,54 @@ mod tests {
         let bytes = spreadsheet_package("<worksheet><broken");
         assert!(extract_bytes(&bytes, DocumentKind::Spreadsheet, None).is_err());
     }
+
+    fn ole_header() -> Vec<u8> {
+        let mut header = vec![0; 512];
+        header[..8].copy_from_slice(b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1");
+        header[26..28].copy_from_slice(&3_u16.to_le_bytes());
+        header[30..32].copy_from_slice(&9_u16.to_le_bytes());
+        header[32..34].copy_from_slice(&6_u16.to_le_bytes());
+        header[68..72].copy_from_slice(&0xFFFF_FFFE_u32.to_le_bytes());
+        header[76..].fill(0xFF);
+        header
+    }
+
+    #[test]
+    fn a_short_ole_directory_is_rejected_without_panicking() {
+        let mut bytes = ole_header();
+        bytes[44..48].copy_from_slice(&1_u32.to_le_bytes());
+        bytes[48..52].copy_from_slice(&1_u32.to_le_bytes());
+        bytes[76..80].copy_from_slice(&0_u32.to_le_bytes());
+        let mut fat = vec![0xFF; 512];
+        fat[4..8].copy_from_slice(&0xFFFF_FFFE_u32.to_le_bytes());
+        bytes.extend(fat);
+        bytes.push(0);
+        let error = match calamine::Xls::new(Cursor::new(&bytes)) {
+            Ok(_) => panic!("short directory accepted"),
+            Err(error) => error,
+        };
+        assert!(
+            error.to_string().contains("Empty Root directory"),
+            "{error}"
+        );
+        assert!(extract_bytes(&bytes, DocumentKind::Spreadsheet, None).is_err());
+    }
+
+    #[test]
+    fn a_cyclic_ole_difat_chain_is_bounded_by_the_file() {
+        let mut bytes = ole_header();
+        bytes[68..72].copy_from_slice(&0_u32.to_le_bytes());
+        bytes.extend(vec![0; 512]);
+        let error = match calamine::Xls::new(Cursor::new(&bytes)) {
+            Ok(_) => panic!("cyclic chain accepted"),
+            Err(error) => error,
+        };
+        assert!(
+            error
+                .to_string()
+                .contains("Sector 0 points past end of file"),
+            "{error}"
+        );
+        assert!(extract_bytes(&bytes, DocumentKind::Spreadsheet, None).is_err());
+    }
 }

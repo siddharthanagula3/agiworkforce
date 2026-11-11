@@ -193,6 +193,7 @@ test('maps a bundled module path to its package root, scoped or not', () => {
 
 test('follows only runtime cargo edges and leaves out workspace crates', () => {
   const metadata = {
+    workspace_members: ['cli', 'proto'],
     packages: [
       { id: 'cli', name: 'agiworkforce-cli', source: null },
       { id: 'proto', name: 'agiworkforce-protocol', source: null },
@@ -223,6 +224,46 @@ test('follows only runtime cargo edges and leaves out workspace crates', () => {
     ['itoa', 'serde'],
   );
   assert.throws(() => cargoRuntimeClosure(metadata, 'missing'), /no workspace package missing/);
+});
+
+test('includes vendored runtime source built by a native dependency', () => {
+  const metadata = {
+    workspace_members: ['app'],
+    packages: [
+      { id: 'app', name: 'app', source: null },
+      { id: 'sys', name: 'sys', source: 'registry' },
+      {
+        id: 'source',
+        name: 'source',
+        source: null,
+        metadata: { agiworkforce: { 'runtime-source': true } },
+      },
+      { id: 'build-helper', name: 'build-helper', source: 'registry' },
+      {
+        id: 'unused-source',
+        name: 'unused-source',
+        source: null,
+        metadata: { agiworkforce: { 'runtime-source': true } },
+      },
+    ],
+    resolve: {
+      nodes: [
+        { id: 'app', deps: [{ pkg: 'sys', dep_kinds: [{ kind: null }] }] },
+        {
+          id: 'sys',
+          deps: [
+            { pkg: 'source', dep_kinds: [{ kind: 'build' }] },
+            { pkg: 'build-helper', dep_kinds: [{ kind: 'build' }] },
+            { pkg: 'unused-source', dep_kinds: [{ kind: 'dev' }] },
+          ],
+        },
+      ],
+    },
+  };
+  assert.deepEqual(
+    cargoRuntimeClosure(metadata, 'app').map((pkg) => pkg.name),
+    ['sys', 'source'],
+  );
 });
 
 test('reads a crate license and notice files from its manifest folder', () => {

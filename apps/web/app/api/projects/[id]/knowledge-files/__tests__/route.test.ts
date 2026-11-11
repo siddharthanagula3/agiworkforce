@@ -1,3 +1,5 @@
+type OriginalProjectKnowledgeObjectStorageModule =
+  typeof import('@/lib/server/project-knowledge-object-storage');
 import { createDatabaseAdapterFake } from '@/test/database-adapter-fake';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
@@ -58,7 +60,8 @@ vi.mock('@/lib/server/project-knowledge-extraction', () => ({
   extractProjectKnowledgeFile: mockExtractProjectKnowledgeFile,
   ProjectKnowledgeExtractionError: MockProjectKnowledgeExtractionError,
 }));
-vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
+vi.mock('@/lib/server/project-knowledge-object-storage', async (importOriginal) => ({
+  ...(await importOriginal<OriginalProjectKnowledgeObjectStorageModule>()),
   getProjectKnowledgeObject: vi.fn(),
   deleteProjectKnowledgeObject: mockDeleteProjectKnowledgeObject,
   sealProjectKnowledgeObject: mockSealProjectKnowledgeObject,
@@ -86,6 +89,7 @@ const KB_FILE_ROW = {
   retention_expires_at: null,
   deleted_at: null,
   storage_uri: 'knowledge-files/projects/proj-1/spec.pdf',
+  storage_targets: { private: 'private-fixture-location' },
 };
 const CHECKSUM = 'a'.repeat(64);
 
@@ -178,6 +182,28 @@ describe('GET /api/projects/[id]/knowledge-files', () => {
     expect(file['byteCount']).toBe(1024);
     expect(file['sourceSurface']).toBe('web');
     expect(file['storageUri']).toBe('/api/projects/proj-1/knowledge-files/file-1');
+    expect(file['textPreviewKind']).toBeNull();
+    expect(file).not.toHaveProperty('storage_targets');
+    expect(file).not.toHaveProperty('storageTargets');
+  });
+
+  it.each([
+    ['notes.md', 'text/markdown', 'text'],
+    ['data.csv', 'text/csv', 'table'],
+    [
+      'document.docx',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'office',
+    ],
+  ])('advertises the server preview kind for %s', async (fileName, mimeType, kind) => {
+    mockNeonQuery
+      .mockResolvedValueOnce([{ id: 'proj-1' }])
+      .mockResolvedValueOnce([{ ...KB_FILE_ROW, file_name: fileName, mime_type: mimeType }]);
+    const res = await GET(makeGetRequest('proj-1'), routeContext('proj-1'));
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.files[0].textPreviewKind).toBe(kind);
+    expect(json.files[0].textPreview).toBe(kind !== 'text');
   });
 
   it('reports a failed source read as a server error, not an unavailable feature', async () => {
@@ -201,7 +227,10 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
       bytes: Buffer.from('inspected'),
       contentType: 'application/pdf',
     });
-    mockSealProjectKnowledgeObject.mockResolvedValue(SEALED_KEY);
+    mockSealProjectKnowledgeObject.mockResolvedValue({
+      key: SEALED_KEY,
+      targets: { private: 'fixture-private' },
+    });
     mockDeleteProjectKnowledgeObject.mockResolvedValue(undefined);
     mockTransaction.mockImplementation(async (run: (tx: unknown) => Promise<unknown>) =>
       run({ query: (...args: unknown[]) => mockNeonQuery(...args), execute: mockTxExecute }),
@@ -504,6 +533,7 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
       String(call?.[0] ?? '').includes('insert into project_knowledge_files'),
     );
     expect(insertCall?.[1]).toContain(SEALED_KEY);
+    expect(insertCall?.[1]?.[10]).toBe(JSON.stringify({ private: 'fixture-private' }));
     expect(insertCall?.[1]).not.toContain(UPLOADED_KEY);
   });
 

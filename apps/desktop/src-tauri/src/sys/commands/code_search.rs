@@ -590,7 +590,7 @@ fn glob_blocking(
     }
 
     // Sort by most-recently modified first.
-    matches.sort_by(|a, b| b.1.cmp(&a.1));
+    matches.sort_by_key(|a| std::cmp::Reverse(a.1));
 
     let total_matches = matches.len();
     let end = offset.saturating_add(limit).min(total_matches);

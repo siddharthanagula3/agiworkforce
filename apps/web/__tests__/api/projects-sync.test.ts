@@ -5,9 +5,13 @@ const { queryMock, getSubscriptionMock } = vi.hoisted(() => ({
   getSubscriptionMock: vi.fn(),
 }));
 
-vi.mock('@/lib/server/rls-db', () => ({
-  getUserScopedDb: vi.fn(async () => ({ db: { query: queryMock }, userId: 'u1' })),
-}));
+vi.mock('@/lib/server/rls-db', () => {
+  const db = {
+    query: queryMock,
+    transaction: async <T>(work: (tx: { query: typeof queryMock }) => Promise<T>) => work(db),
+  };
+  return { getUserScopedDb: vi.fn(async () => ({ db, userId: 'u1' })) };
+});
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => undefined) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => undefined) }));
 vi.mock('@/lib/services/subscription-service', () => ({

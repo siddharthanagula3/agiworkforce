@@ -6,7 +6,8 @@
   "description": "Vendor-neutral database boundary for AGI Workforce: Neon and plain Postgres adapters behind one RLS-aware contract",
   "exports": {
     ".": "./src/index.ts",
-    "./search": "./src/search/index.ts"
+    "./search": "./src/search/index.ts",
+    "./testing": "./src/testing.ts"
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",

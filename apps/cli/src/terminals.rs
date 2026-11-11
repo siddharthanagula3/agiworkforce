@@ -184,6 +184,15 @@ pub(crate) struct BackgroundCommand {
     output: Mutex<OutputLog>,
     tree: Mutex<Option<DetachedProcessTree>>,
     scratch: Mutex<Option<tempfile::TempDir>>,
+    #[cfg(unix)]
+    control: Option<Arc<std::fs::File>>,
+    #[cfg(unix)]
+    process_id: u32,
+    observer: Option<OutputObserver>,
+    #[cfg(unix)]
+    session_quiesced: AtomicBool,
+    #[cfg(unix)]
+    session_error: Mutex<Option<String>>,
 }
 
 pub(crate) struct PreparedCommand {
@@ -197,6 +206,31 @@ struct Spawned {
     outputs: Vec<Box<dyn Read + Send>>,
     terminal: bool,
     scratch: Option<tempfile::TempDir>,
+    #[cfg(unix)]
+    control: Option<Arc<std::fs::File>>,
+}
+type OutputObserver = Arc<dyn Fn(&[u8]) + Send + Sync>;
+#[cfg(unix)]
+pub(crate) struct OwnedTerminal {
+    command: Arc<BackgroundCommand>,
+    adopted: bool,
+}
+#[cfg(unix)]
+impl OwnedTerminal {
+    pub(crate) fn command(&self) -> &Arc<BackgroundCommand> {
+        &self.command
+    }
+    pub(crate) fn adopt(mut self) {
+        self.adopted = true;
+    }
+}
+#[cfg(unix)]
+impl Drop for OwnedTerminal {
+    fn drop(&mut self) {
+        if !self.adopted {
+            self.command.kill();
+        }
+    }
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -210,6 +244,44 @@ fn commands() -> MutexGuard<'static, Vec<Arc<BackgroundCommand>>> {
 }
 
 impl BackgroundCommand {
+    #[cfg(unix)]
+    pub(crate) fn terminal_cleanup_error(&self) -> Option<String> {
+        lock(&self.session_error).clone()
+    }
+    #[cfg(unix)]
+    pub(crate) fn terminal_quiesced(&self) -> bool {
+        self.session_quiesced.load(Ordering::SeqCst)
+    }
+    #[cfg(unix)]
+    pub(crate) fn request_terminal_stop(&self) {
+        self.kill();
+    }
+
+    #[cfg(unix)]
+    #[allow(unsafe_code)]
+    pub(crate) fn resize_terminal(&self, rows: u16, cols: u16) -> Result<()> {
+        use std::os::fd::AsRawFd;
+        anyhow::ensure!(
+            self.state() == CommandState::Running,
+            "The terminal is no longer running"
+        );
+        let master = self
+            .control
+            .as_ref()
+            .context("The command has no terminal control handle")?;
+        let size = nix::pty::Winsize {
+            ws_row: rows,
+            ws_col: cols,
+            ws_xpixel: 0,
+            ws_ypixel: 0,
+        };
+        // SAFETY: this held PTY master and Winsize remain live for the ioctl.
+        if unsafe { nix::libc::ioctl(master.as_raw_fd(), nix::libc::TIOCSWINSZ as _, &size) } == -1
+        {
+            return Err(std::io::Error::last_os_error().into());
+        }
+        Ok(())
+    }
     pub(crate) fn state(&self) -> CommandState {
         self.status.borrow().state
     }
@@ -221,6 +293,9 @@ impl BackgroundCommand {
     }
 
     fn record(&self, bytes: &[u8]) {
+        if let Some(observer) = &self.observer {
+            observer(bytes);
+        }
         let mut output = lock(&self.output);
         output.total += bytes.len() as u64;
         output.kept.extend(bytes);
@@ -244,6 +319,16 @@ impl BackgroundCommand {
     }
 
     fn finish(&self, code: Option<i32>) {
+        let tree = lock(&self.tree).take();
+        #[cfg(unix)]
+        if self.terminal {
+            let result = tree.map_or(Ok(()), |tree| tree.finish_terminal(STOP_TIMEOUT));
+            self.session_quiesced
+                .store(result.is_ok(), Ordering::SeqCst);
+            *lock(&self.session_error) = result.err().map(|error| error.to_string());
+        }
+        #[cfg(not(unix))]
+        drop(tree);
         let state = if self.stop_requested.load(Ordering::SeqCst) {
             CommandState::Stopped
         } else {
@@ -251,7 +336,6 @@ impl BackgroundCommand {
         };
         lock(&self.input).take();
         *lock(&self.input_state) = InputState::default();
-        lock(&self.tree).take();
         lock(&self.scratch).take();
         self.status.send_modify(|status| status.state = state);
     }
@@ -279,7 +363,32 @@ pub(crate) fn start(
     command_line: &str,
     build: impl FnOnce(Option<&Path>) -> Result<PreparedCommand>,
 ) -> Result<Arc<BackgroundCommand>> {
-    let spawned = spawn(build)?;
+    start_owned(command_line, build, None, None, true)
+}
+
+#[cfg(unix)]
+pub(crate) fn start_terminal(
+    command_line: &str,
+    size: (u16, u16),
+    observer: OutputObserver,
+    build: impl FnOnce(Option<&Path>) -> Result<PreparedCommand>,
+) -> Result<OwnedTerminal> {
+    start_owned(command_line, build, Some(size), Some(observer), false).map(|command| {
+        OwnedTerminal {
+            command,
+            adopted: false,
+        }
+    })
+}
+
+fn start_owned(
+    command_line: &str,
+    build: impl FnOnce(Option<&Path>) -> Result<PreparedCommand>,
+    size: Option<(u16, u16)>,
+    observer: Option<OutputObserver>,
+    register: bool,
+) -> Result<Arc<BackgroundCommand>> {
+    let spawned = spawn(build, size, register)?;
     let mut child = spawned.child;
     let (status, _) = watch::channel(Status {
         state: CommandState::Running,
@@ -297,8 +406,30 @@ pub(crate) fn start(
         input_transaction: Arc::new(tokio::sync::Mutex::new(())),
         input_state: Mutex::new(InputState::default()),
         output: Mutex::new(OutputLog::default()),
-        tree: Mutex::new(Some(DetachedProcessTree::track(Some(child.id())))),
+        tree: Mutex::new(Some({
+            #[cfg(unix)]
+            {
+                if spawned.terminal {
+                    DetachedProcessTree::track_terminal(child.id())
+                } else {
+                    DetachedProcessTree::track(Some(child.id()))
+                }
+            }
+            #[cfg(not(unix))]
+            {
+                DetachedProcessTree::track(Some(child.id()))
+            }
+        })),
         scratch: Mutex::new(spawned.scratch),
+        #[cfg(unix)]
+        control: spawned.control,
+        #[cfg(unix)]
+        process_id: child.id(),
+        observer,
+        #[cfg(unix)]
+        session_quiesced: AtomicBool::new(false),
+        #[cfg(unix)]
+        session_error: Mutex::new(None),
     });
     for mut source in spawned.outputs {
         let owner = Arc::clone(&command);
@@ -322,6 +453,9 @@ pub(crate) fn start(
         let code = child.wait().ok().and_then(|status| status.code());
         owner.finish(code);
     });
+    if !register {
+        return Ok(command);
+    }
     let mut commands = commands();
     let finished = commands
         .iter()
@@ -340,13 +474,17 @@ pub(crate) fn start(
 }
 
 #[cfg(unix)]
-fn spawn(build: impl FnOnce(Option<&Path>) -> Result<PreparedCommand>) -> Result<Spawned> {
+fn spawn(
+    build: impl FnOnce(Option<&Path>) -> Result<PreparedCommand>,
+    size: Option<(u16, u16)>,
+    agent_command: bool,
+) -> Result<Spawned> {
     use nix::fcntl::{fcntl, FcntlArg, FdFlag};
     use std::process::Stdio;
 
     let size = nix::pty::Winsize {
-        ws_row: TERMINAL_ROWS,
-        ws_col: TERMINAL_COLUMNS,
+        ws_row: size.map_or(TERMINAL_ROWS, |size| size.0),
+        ws_col: size.map_or(TERMINAL_COLUMNS, |size| size.1),
         ws_xpixel: 0,
         ws_ypixel: 0,
     };
@@ -364,17 +502,20 @@ fn spawn(build: impl FnOnce(Option<&Path>) -> Result<PreparedCommand>) -> Result
         .stdin(Stdio::from(pty.slave.try_clone()?))
         .stdout(Stdio::from(pty.slave.try_clone()?))
         .stderr(Stdio::from(pty.slave))
-        .env("TERM", "xterm-256color")
-        .env("PAGER", "cat")
-        .env("GIT_PAGER", "cat");
+        .env("TERM", "xterm-256color");
+    if agent_command {
+        command.env("PAGER", "cat").env("GIT_PAGER", "cat");
+    }
     attach_terminal(&mut command);
     let master = std::fs::File::from(pty.master);
     let reader = master.try_clone().context("reading the pseudo-terminal")?;
+    let writer = master.try_clone().context("writing the pseudo-terminal")?;
     let child = command.spawn().context("starting the command")?;
     drop(command);
     Ok(Spawned {
         child,
-        input: Some(Box::new(master)),
+        input: Some(Box::new(writer)),
+        control: Some(Arc::new(master)),
         outputs: vec![Box::new(reader)],
         terminal: true,
         scratch,
@@ -398,7 +539,11 @@ fn attach_terminal(command: &mut std::process::Command) {
 }
 
 #[cfg(not(unix))]
-fn spawn(build: impl FnOnce(Option<&Path>) -> Result<PreparedCommand>) -> Result<Spawned> {
+fn spawn(
+    build: impl FnOnce(Option<&Path>) -> Result<PreparedCommand>,
+    _size: Option<(u16, u16)>,
+    _agent_command: bool,
+) -> Result<Spawned> {
     use std::process::Stdio;
 
     let PreparedCommand {
@@ -501,6 +646,71 @@ pub(crate) async fn stop(command: &BackgroundCommand) -> CommandState {
         command.settle(STOP_TIMEOUT).await;
     }
     command.state()
+}
+
+#[cfg(unix)]
+pub(crate) async fn write_terminal(command: Arc<BackgroundCommand>, text: &str) -> Result<()> {
+    let _transaction = command.input_transaction.clone().lock_owned().await;
+    anyhow::ensure!(
+        command.terminal && command.state() == CommandState::Running,
+        "The terminal is no longer taking input"
+    );
+    {
+        let mut input = lock(&command.input_state);
+        anyhow::ensure!(
+            !input.uncertain,
+            "Terminal input delivery is uncertain; close this terminal before typing again"
+        );
+        input.uncertain = true;
+    }
+    struct Delivery {
+        command: Arc<BackgroundCommand>,
+        confirmed: bool,
+    }
+    impl Drop for Delivery {
+        fn drop(&mut self) {
+            if !self.confirmed {
+                self.command.kill();
+            }
+        }
+    }
+    let mut delivery = Delivery {
+        command: command.clone(),
+        confirmed: false,
+    };
+    deliver_input(&command, text).await?;
+    lock(&command.input_state).uncertain = false;
+    delivery.confirmed = true;
+    Ok(())
+}
+
+#[cfg(unix)]
+pub(crate) async fn stop_terminal(command: &BackgroundCommand, timeout: Duration) -> Result<()> {
+    if command.state() != CommandState::Running {
+        anyhow::ensure!(
+            command.session_quiesced.load(Ordering::SeqCst),
+            "{}",
+            lock(&command.session_error)
+                .as_deref()
+                .unwrap_or("The terminal process session could not be confirmed stopped")
+        );
+        return Ok(());
+    }
+    let deadline = tokio::time::Instant::now() + timeout;
+    command.kill();
+    crate::process_tree::wait_session_stopped(command.process_id, timeout).await?;
+    command
+        .settle(deadline.saturating_duration_since(tokio::time::Instant::now()))
+        .await;
+    anyhow::ensure!(
+        command.state() != CommandState::Running,
+        "The terminal shell has not exited"
+    );
+    anyhow::ensure!(
+        command.session_quiesced.load(Ordering::SeqCst),
+        "The terminal process session could not be confirmed stopped"
+    );
+    Ok(())
 }
 
 pub(crate) fn stop_all() {
@@ -629,12 +839,16 @@ mod input_tests {
     fn a_failed_background_spawn_releases_its_owned_scratch() {
         let scratch = tempfile::tempdir().expect("owned scratch");
         let path = scratch.path().to_path_buf();
-        let outcome = spawn(|_| {
-            Ok(PreparedCommand {
-                command: std::process::Command::new(path.join("missing-fixture-program")),
-                scratch: Some(scratch),
-            })
-        });
+        let outcome = spawn(
+            |_| {
+                Ok(PreparedCommand {
+                    command: std::process::Command::new(path.join("missing-fixture-program")),
+                    scratch: Some(scratch),
+                })
+            },
+            None,
+            true,
+        );
         let error = match outcome {
             Err(error) => error,
             Ok(mut unexpected) => {
@@ -666,6 +880,15 @@ mod input_tests {
             output: Mutex::new(OutputLog::default()),
             tree: Mutex::new(None),
             scratch: Mutex::new(None),
+            #[cfg(unix)]
+            control: None,
+            #[cfg(unix)]
+            process_id: 0,
+            observer: None,
+            #[cfg(unix)]
+            session_quiesced: AtomicBool::new(false),
+            #[cfg(unix)]
+            session_error: Mutex::new(None),
         })
     }
 
@@ -771,6 +994,15 @@ mod input_tests {
             output: Mutex::new(OutputLog::default()),
             tree: Mutex::new(None),
             scratch: Mutex::new(None),
+            #[cfg(unix)]
+            control: None,
+            #[cfg(unix)]
+            process_id: 0,
+            observer: None,
+            #[cfg(unix)]
+            session_quiesced: AtomicBool::new(false),
+            #[cfg(unix)]
+            session_error: Mutex::new(None),
         });
         commands().push(Arc::clone(&command));
         command
@@ -807,5 +1039,117 @@ mod input_tests {
 
         commands()
             .retain(|command| !Arc::ptr_eq(command, &first) && !Arc::ptr_eq(command, &second));
+    }
+}
+
+#[cfg(all(test, unix))]
+mod native_terminal_tests {
+    use super::*;
+    #[tokio::test]
+    async fn scoped_pty_resizes_accepts_controls_hides_manual_input_and_stops_every_job_group() {
+        let _children = crate::process_tree::CHILD_SPAWNING_TESTS.lock().await;
+        let root = tempfile::tempdir().unwrap();
+        let owned = start_terminal("operator test", (24, 80), Arc::new(|_| {}), |_| {
+            let mut command = std::process::Command::new(crate::process_tree::HOST_SHELL);
+            command
+                .env_clear()
+                .env("PATH", "/usr/bin:/bin")
+                .args(["-i"])
+                .current_dir(root.path());
+            Ok(PreparedCommand {
+                command,
+                scratch: None,
+            })
+        })
+        .unwrap();
+        let command = owned.command().clone();
+        owned.adopt();
+        assert!(find(&command.id).is_none());
+        command.resize_terminal(38, 109).unwrap();
+        write_terminal(
+            command.clone(),
+            "stty size > dimensions; sleep 60 & echo $! > background; sleep 60\r",
+        )
+        .await
+        .unwrap();
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(3);
+        while !root.path().join("background").exists() {
+            assert!(tokio::time::Instant::now() < deadline);
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        assert_eq!(
+            std::fs::read_to_string(root.path().join("dimensions"))
+                .unwrap()
+                .trim(),
+            "38 109"
+        );
+        let background: i32 = std::fs::read_to_string(root.path().join("background"))
+            .unwrap()
+            .trim()
+            .parse()
+            .unwrap();
+        assert_eq!(
+            nix::unistd::getsid(Some(nix::unistd::Pid::from_raw(background)))
+                .unwrap()
+                .as_raw(),
+            command.process_id as i32
+        );
+        assert_ne!(
+            nix::unistd::getpgid(Some(nix::unistd::Pid::from_raw(background)))
+                .unwrap()
+                .as_raw(),
+            command.process_id as i32
+        );
+        assert!(lock(&command.input_state).history.is_empty());
+        write_terminal(command.clone(), "\x03").await.unwrap();
+        write_terminal(command.clone(), "printf alive > interrupted\r")
+            .await
+            .unwrap();
+        while !root.path().join("interrupted").exists() {
+            assert!(tokio::time::Instant::now() < deadline);
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        write_terminal(
+            command.clone(),
+            "sh -c 'echo $$ > foreground2; exec sleep 60'\r",
+        )
+        .await
+        .unwrap();
+        let foreground_deadline = tokio::time::Instant::now() + Duration::from_secs(3);
+        while !root.path().join("foreground2").exists() {
+            assert!(tokio::time::Instant::now() < foreground_deadline);
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        let foreground: i32 = std::fs::read_to_string(root.path().join("foreground2"))
+            .unwrap()
+            .trim()
+            .parse()
+            .unwrap();
+        let foreground_group =
+            nix::unistd::getpgid(Some(nix::unistd::Pid::from_raw(foreground))).unwrap();
+        assert_ne!(foreground_group.as_raw(), command.process_id as i32);
+        assert_ne!(
+            foreground_group,
+            nix::unistd::getpgid(Some(nix::unistd::Pid::from_raw(background))).unwrap()
+        );
+        assert_eq!(
+            nix::unistd::getsid(Some(nix::unistd::Pid::from_raw(background)))
+                .unwrap()
+                .as_raw(),
+            command.process_id as i32
+        );
+        stop_terminal(&command, Duration::from_secs(3))
+            .await
+            .unwrap();
+        assert!(command.terminal_quiesced());
+        assert!(matches!(
+            nix::unistd::getsid(Some(nix::unistd::Pid::from_raw(foreground))),
+            Err(nix::errno::Errno::ESRCH)
+        ));
+        assert!(matches!(
+            nix::unistd::getsid(Some(nix::unistd::Pid::from_raw(background))),
+            Err(nix::errno::Errno::ESRCH)
+        ));
+        assert!(lock(&command.input_state).history.is_empty());
     }
 }

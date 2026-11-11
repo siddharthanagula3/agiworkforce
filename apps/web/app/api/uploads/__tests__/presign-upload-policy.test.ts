@@ -1,3 +1,4 @@
+type OriginalObjectStorageModule = typeof import('@/lib/server/object-storage');
 import { createHash } from 'node:crypto';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
@@ -40,7 +41,10 @@ vi.mock('@/lib/server/rls-db', () => ({
     organizationId: await mockResolveActiveOrganizationId(),
   })),
 }));
-vi.mock('@/lib/server/object-storage', () => ({
+vi.mock('@/lib/server/object-storage', async (importOriginal) => ({
+  ...(await importOriginal<OriginalObjectStorageModule>()),
+  createPrivateObjectWriter: vi.fn(),
+  createObjectCleanupPlan: vi.fn(),
   putPrivateObject: vi.fn(async ({ key }: { key: string }) => ({ key })),
   copyPrivateObjectIfUnchanged: vi.fn(),
   isObjectStorageConfigured: vi.fn(() => true),
