@@ -582,9 +582,16 @@ async function continueCliSessionHere(
     CONTINUE_HANDOFF_HERE,
   );
   if (choice !== CONTINUE_HANDOFF_HERE) return;
+  try {
+    await runtime.acceptHandoff(handoff);
+    await openHere(newest.id);
+  } catch (error) {
+    await vscode.window.showErrorMessage(
+      `${PRODUCT_NAMES.code}: could not continue that session here. ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return;
+  }
   accepted.add(outcome.receipt);
-  await runtime.acceptHandoff(handoff);
-  await openHere(newest.id);
 }
 
 async function runUnreachableOffer(unreachable: HostModelUnreachable): Promise<void> {

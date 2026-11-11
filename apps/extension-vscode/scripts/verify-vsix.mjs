@@ -8,20 +8,38 @@ import { fileURLToPath } from 'node:url';
 
 const extensionRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
-const { PACKAGED_RUNTIME_OUTPUT_ALLOWLIST } = require('./vsce-package.js');
+const {
+  PACKAGED_RUNTIME_OUTPUT_ALLOWLIST,
+  vsixManifestDeclaresPreRelease,
+} = require('./vsce-package.js');
 const { inspectVsixArchive } = require('./vsix-zip.js');
 const sourceManifest = JSON.parse(
   fs.readFileSync(path.join(extensionRoot, 'package.json'), 'utf8'),
 );
 const expectedFilename = `${sourceManifest.name}-${sourceManifest.version}.vsix`;
-const requestedPath = process.argv[2];
-const extractFlagIndex = process.argv.indexOf('--extract');
+const args = process.argv.slice(2).filter((arg) => arg !== '--');
+const extractFlagIndex = args.indexOf('--extract');
 const extractTo =
   extractFlagIndex < 0
     ? undefined
-    : process.argv[extractFlagIndex + 1] === undefined
+    : args[extractFlagIndex + 1] === undefined
       ? fail('--extract requires a destination directory')
-      : path.resolve(process.cwd(), process.argv[extractFlagIndex + 1]);
+      : path.resolve(process.cwd(), args[extractFlagIndex + 1]);
+const requestedPath = args.find(
+  (arg, index) => !arg.startsWith('--') && (extractFlagIndex < 0 || index !== extractFlagIndex + 1),
+);
+const unknownFlags = args.filter(
+  (arg) => arg.startsWith('--') && !['--extract', '--pre-release', '--stable'].includes(arg),
+);
+if (unknownFlags.length > 0) fail(`unknown option ${unknownFlags.join(', ')}`);
+if (args.includes('--pre-release') && args.includes('--stable')) {
+  fail('--pre-release and --stable are mutually exclusive');
+}
+const expectedChannel = args.includes('--pre-release')
+  ? 'pre-release'
+  : args.includes('--stable')
+    ? 'stable'
+    : undefined;
 const vsixPath = requestedPath
   ? path.resolve(process.cwd(), requestedPath)
   : path.join(extensionRoot, expectedFilename);
@@ -118,6 +136,24 @@ if (!mainEntry || !entries.includes(`extension/${mainEntry}`)) {
   fail(`packaged extension entry point is missing: ${packagedManifest.main ?? '<unset>'}`);
 }
 
+for (const listingFile of [packagedManifest.icon, 'readme.md', 'LICENSE.txt']) {
+  const relative = listingFile?.replace(/^\.\//u, '');
+  if (
+    !relative ||
+    !entries.some((entry) => entry.toLowerCase() === `extension/${relative}`.toLowerCase())
+  ) {
+    fail(`packaged listing file is missing: ${listingFile ?? '<icon unset>'}`);
+  }
+}
+
+if (archive.vsixManifest === undefined) fail('extension.vsixmanifest is missing');
+const packagedChannel = vsixManifestDeclaresPreRelease(archive.vsixManifest.toString('utf8'))
+  ? 'pre-release'
+  : 'stable';
+if (expectedChannel !== undefined && packagedChannel !== expectedChannel) {
+  fail(`VSIX is packaged for the ${packagedChannel} channel, expected ${expectedChannel}`);
+}
+
 console.log(
-  `Verified ${path.basename(vsixPath)}: ${sourceManifest.publisher}.${sourceManifest.name} ${sourceManifest.version}, ${entries.length} archive entries.`,
+  `Verified ${path.basename(vsixPath)}: ${sourceManifest.publisher}.${sourceManifest.name} ${sourceManifest.version} (${packagedChannel}), ${entries.length} archive entries.`,
 );

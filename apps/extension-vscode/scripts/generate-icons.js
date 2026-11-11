@@ -6,29 +6,21 @@ const path = require('path');
 const TAURI_ICONS = path.resolve(__dirname, '../../../apps/desktop/src-tauri/icons');
 const MEDIA_DIR = path.resolve(__dirname, '../media');
 
-fs.mkdirSync(MEDIA_DIR, { recursive: true });
-
 const copies = [
   { src: '128x128.png', dest: 'icon.png' },
   { src: '32x32.png', dest: 'icon-chat.png' },
 ];
 
-for (const { src, dest } of copies) {
-  const srcPath = path.join(TAURI_ICONS, src);
-  const destPath = path.join(MEDIA_DIR, dest);
-
-  if (fs.existsSync(srcPath)) {
-    fs.copyFileSync(srcPath, destPath);
-    console.log(`Copied ${src} -> media/${dest}`);
-  } else {
-    console.warn(`Warning: ${srcPath} not found, creating 1x1 placeholder`);
-    const placeholder = Buffer.from(
-      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
-      'base64',
-    );
-    fs.writeFileSync(destPath, placeholder);
-    console.log(`Created 1x1 placeholder -> media/${dest}`);
-  }
+const missing = copies
+  .map(({ src }) => path.join(TAURI_ICONS, src))
+  .filter((srcPath) => !fs.existsSync(srcPath));
+if (missing.length > 0) {
+  console.error(`Brand icon source missing, media/ left unchanged:\n${missing.join('\n')}`);
+  process.exit(1);
 }
 
-console.log('Done.');
+fs.mkdirSync(MEDIA_DIR, { recursive: true });
+for (const { src, dest } of copies) {
+  fs.copyFileSync(path.join(TAURI_ICONS, src), path.join(MEDIA_DIR, dest));
+  console.log(`Copied ${src} -> media/${dest}`);
+}
