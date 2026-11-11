@@ -264,6 +264,7 @@
 {"path":"audit/partial/108-specialist-workspaces.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/partial/109-optional-native-and-ambient-extensions.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/partial/110-cross-product-experiences-to-include-in-the-product-map.md","unit":"audit","role":"doc","unparsed":"notCode"}
+{"path":"audit/plan/desktop-gpui-migration.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/plan/first-customer-validation.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/plan/waves.md","unit":"audit","role":"doc","unparsed":"notCode"}
 {"path":"audit/prior-audits/active-issues-register.md","unit":"audit","role":"doc","unparsed":"oversize"}
