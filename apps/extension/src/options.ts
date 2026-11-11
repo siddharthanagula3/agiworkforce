@@ -60,6 +60,7 @@ import {
 import {
   AUTOFILL_PROFILE_STORAGE_KEY as AUTOFILL_PROFILE_KEY,
   clearAutofillProfile,
+  saveAutofillProfile,
 } from './features/content/autofill/profile-storage';
 
 const DEV_BEARER_KEY = 'agi_dev_bearer_token';
@@ -1834,7 +1835,7 @@ function buildPage(): void {
   });
 
   saveProfileBtn.addEventListener('click', async () => {
-    const profile: Record<string, string> = {};
+    const profile: Partial<Record<ProfileKey, string>> = {};
     for (const field of PROFILE_FIELDS) {
       const input = profileInputs[field.key];
       if (input?.value.trim()) profile[field.key] = input.value.trim();
@@ -1847,7 +1848,7 @@ function buildPage(): void {
     saveStatus.textContent = 'Saving…';
     saveStatus.className = 'opt-save-status';
     try {
-      await chrome.storage.local.set({ [AUTOFILL_PROFILE_KEY]: profile });
+      await saveAutofillProfile(profile);
       saveStatus.textContent = 'Saved';
       saveStatus.className = 'opt-save-status saved';
       profileStatusTimer = setTimeout(() => {
