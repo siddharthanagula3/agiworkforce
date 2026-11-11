@@ -4,6 +4,7 @@ import path from 'node:path';
 import process from 'node:process';
 import { spawnSync } from 'node:child_process';
 import { GIT_MAX_BUFFER } from './lib/git-output.mjs';
+import { tauriCargoFeatureMismatches } from './lib/tauri-cargo-features.mjs';
 
 const root = process.cwd();
 const errors = [];
@@ -735,6 +736,19 @@ if (!exists(tauriConfigPath)) {
     errors.push(
       `${tauriConfigPath} must route IPC through the compile-time Tauri isolation pattern`,
     );
+  }
+  const desktopManifestPath = 'apps/desktop/src-tauri/Cargo.toml';
+  if (!exists(desktopManifestPath)) {
+    errors.push(`Missing required desktop manifest: ${desktopManifestPath}`);
+  } else {
+    for (const mismatch of tauriCargoFeatureMismatches(
+      readText(desktopManifestPath),
+      tauriConfig,
+    )) {
+      errors.push(
+        `${desktopManifestPath}: ${mismatch}; tauri-build's build script rejects a manifest whose features differ from ${tauriConfigPath}`,
+      );
+    }
   }
 }
 requireIncludes(

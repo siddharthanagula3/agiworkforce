@@ -251,11 +251,7 @@ mod tests {
         let mut stmt = conn
             .prepare("SELECT * FROM chat_turns_in_flight")
             .expect("prepare");
-        let columns: Vec<String> = stmt
-            .column_names()
-            .iter()
-            .map(|name| name.to_string())
-            .collect();
+        let columns: Vec<String> = stmt.column_names().map(str::to_string).collect();
         assert!(!columns.iter().any(|column| column == "content"));
         let stored: Vec<String> = stmt
             .query_map([], |row| {

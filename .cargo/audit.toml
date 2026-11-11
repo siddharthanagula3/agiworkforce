@@ -1,7 +1,8 @@
 # Security audit configuration for cargo-audit
-# All vulnerabilities have been fixed. The following are warnings for unmaintained/unsound
-# crates that are transitive dependencies from upstream projects (Tauri, async-imap, etc.)
-# and cannot be resolved by updating our direct dependencies.
+# Every entry below is an informational advisory (unmaintained, unsound or notice)
+# on a transitive dependency. No vulnerability is ignored: a vulnerability in
+# Cargo.lock fails the Rust Security job. Unmaintained warnings that are not
+# listed here are reported by that job without failing it.
 
 [advisories]
 # Warnings are informational - we want to see new ones but ignore known ones
@@ -78,26 +79,17 @@ ignore = [
 
     # COVERAGE BOUNDARY, read this before trusting the CI advisory gate.
     #
-    # The three entries above are VULNERABILITY class, not maintenance warnings,
-    # and they are suppressed on provenance ("optional feature, off by default")
-    #, the same shape of reasoning that hid the rustls-webpki line for months
-    # under a claim about Tauri that turned out to be false. The difference is
-    # that this one is checkable, and on checking it, it was WRONG in the way
-    # that matters. `remote-databases` is indeed absent from the default feature
-    # set, so a stock build cannot reach mongodb or mysql_async. The Windows
-    # release build passes it explicitly, so the binary users install can and
-    # does. "Off by default" was answering a question nobody asked; the question
-    # is what ships.
+    # `remote-databases` is absent from the default feature set, but the
+    # Windows release build passes it, so the shipped binary does reach mongodb
+    # and mysql_async. cargo audit reads Cargo.lock, which lists the crates of
+    # every optional feature, so this file covers that graph.
     #
-    # The part that is NOT covered, stated plainly: `deny.toml` sets
-    # `[graph] all-features = false`, so the blocking CI step never walks the
-    # remote-databases, ocr, local-llm, webrtc-support or local-whisper edges at
-    # all. Anyone who ships with one of those features enabled is building
-    # against an unaudited graph, and these ignores are not what protects them.
-    # nothing does. Turning `all-features` on is the fix and is tracked
-    # separately, because it surfaces a backlog that has to be triaged rather
-    # than bulk-ignored, and bulk-ignoring it here is precisely how this file
-    # got into the state the rustls entry describes.
+    # The part that is NOT covered: `deny.toml` sets
+    # `[graph] all-features = false`, so the blocking cargo-deny step never
+    # walks the remote-databases, ocr, local-llm, webrtc-support or
+    # local-whisper edges. Turning `all-features` on there is the fix and is
+    # tracked separately, because it surfaces a backlog that has to be triaged
+    # rather than bulk-ignored.
 
     # No rustls-webpki entry: the 0.101.x line (RUSTSEC-2026-0049/0098/0099/0104)
     # was never pinned by Tauri as this list used to claim, it came in through
