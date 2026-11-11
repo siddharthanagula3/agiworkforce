@@ -143,6 +143,10 @@
       "reason": "OIDC authenticates the marketplace publish"
     },
     {
+      "id": "release-vscode-extension.yml:publish-open-vsx:id-token",
+      "reason": "Open VSX trusted publishing exchanges the job's OIDC token for a short-lived publish token, so no access token is stored"
+    },
+    {
       "id": "test-l1.yml:upload-coverage:id-token",
       "reason": "OIDC authenticates the coverage upload"
     },

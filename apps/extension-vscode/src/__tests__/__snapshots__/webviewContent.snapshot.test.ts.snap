@@ -815,7 +815,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       display: block;
       width: 1em;
       height: 1em;
-      background: url("https://mock///mock/extension/media/agi-symbol.png") center / contain no-repeat;
+      background-image: url("https://mock///mock/extension/media/agi-symbol.png"); background-position: center; background-size: contain; background-repeat: no-repeat;
     }
 
     /* ── Input area / composer (design-spec §7) ── */
@@ -9176,7 +9176,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       display: block;
       width: 1em;
       height: 1em;
-      background: url("https://mock///mock/extension/media/agi-symbol.png") center / contain no-repeat;
+      background-image: url("https://mock///mock/extension/media/agi-symbol.png"); background-position: center; background-size: contain; background-repeat: no-repeat;
     }
 
     /* ── Input area / composer (design-spec §7) ── */
@@ -17537,7 +17537,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       display: block;
       width: 1em;
       height: 1em;
-      background: url("https://mock///mock/extension/media/agi-symbol.png") center / contain no-repeat;
+      background-image: url("https://mock///mock/extension/media/agi-symbol.png"); background-position: center; background-size: contain; background-repeat: no-repeat;
     }
 
     /* ── Input area / composer (design-spec §7) ── */

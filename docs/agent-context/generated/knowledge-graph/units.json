@@ -2473,7 +2473,7 @@
       "path": "apps/extension-vscode",
       "name": "agi-workforce",
       "kind": "app",
-      "purpose": "Multi-provider AI coding assistant for VS Code",
+      "purpose": "AI pair programming in VS Code, run by the AGI CLI on your machine with local models, your own provider keys, or AGI Cloud.",
       "owner": "Extension lead",
       "trustBoundary": null,
       "status": null,

@@ -7,9 +7,11 @@ const require = createRequire(import.meta.url);
 const {
   PACKAGED_RUNTIME_OUTPUT_ALLOWLIST,
   validatePackagedRuntimeOutput,
+  vsixManifestDeclaresPreRelease,
 }: {
   PACKAGED_RUNTIME_OUTPUT_ALLOWLIST: readonly string[];
   validatePackagedRuntimeOutput: (files: string[], options?: { requireAll?: boolean }) => void;
+  vsixManifestDeclaresPreRelease: (vsixManifestXml: string) => boolean;
 } = require('../../scripts/vsce-package.js');
 
 const EXPECTED_RUNTIME_OUTPUT = [
@@ -69,6 +71,29 @@ describe('VSIX package hygiene', () => {
         'out/features/stale.js',
       ]),
     ).toThrow(/out\/features\/stale\.js/u);
+  });
+
+  it('reads the release channel the Marketplace sees from the packaged VSIX manifest', () => {
+    const properties = (inner: string) =>
+      `<PackageManifest><Metadata><Properties>${inner}</Properties></Metadata></PackageManifest>`;
+
+    expect(
+      vsixManifestDeclaresPreRelease(
+        properties(
+          '<Property Id="Microsoft.VisualStudio.Code.Engine" Value="^1.100.0" /><Property Id="Microsoft.VisualStudio.Code.PreRelease" Value="true" />',
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      vsixManifestDeclaresPreRelease(
+        properties('<Property Id="Microsoft.VisualStudio.Code.PreRelease" Value="false" />'),
+      ),
+    ).toBe(false);
+    expect(
+      vsixManifestDeclaresPreRelease(
+        properties('<Property Id="Microsoft.VisualStudio.Code.Engine" Value="^1.100.0" />'),
+      ),
+    ).toBe(false);
   });
 
   it('requires every runtime asset when creating a release package', () => {

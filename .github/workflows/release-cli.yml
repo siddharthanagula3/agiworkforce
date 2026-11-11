@@ -36,7 +36,7 @@ jobs:
   validate-version:
     name: Validate CLI release version
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 20
     outputs:
       version: ${{ steps.release-metadata.outputs.version }}
       prerelease: ${{ steps.release-metadata.outputs.prerelease }}
@@ -56,6 +56,20 @@ jobs:
       - name: Require a pinned release signing key
         if: github.event_name == 'push'
         run: node scripts/release/check-pinned-release-key.mjs
+
+      # The migration guard reads the route table through the TypeScript
+      # compiler, so it needs the workspace's installed packages.
+      - name: Setup pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       # A migration that cannot be reversed, or destroys rows without saying
       # so, must not reach a released version number.
@@ -157,9 +171,12 @@ jobs:
           CARGO_INCREMENTAL: '0'
         run: xvfb-run --auto-servernum cargo test --locked -p agiworkforce-cli
 
+  # A tag builds only source that passed validation. A manual run builds
+  # either way, so a red test never hides whether the six archives compile.
   build:
     name: Build ${{ matrix.target }}
     needs: [validate-version, validate]
+    if: ${{ !cancelled() && needs.validate-version.result == 'success' && (needs.validate.result == 'success' || github.event_name == 'workflow_dispatch') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     strategy:
