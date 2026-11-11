@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
+import { decodeKeysetCursor, isTimestampUuidCursor } from '@/lib/identity/pagination';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import {
@@ -18,7 +19,7 @@ const QuerySchema = z.object({
   requestId: z.string().trim().min(1).max(128).optional(),
   conversationId: z.string().trim().uuid().optional(),
   limit: z.coerce.number().int().min(1).max(100).optional(),
-  offset: z.coerce.number().int().min(0).max(10_000).optional(),
+  cursor: z.string().trim().min(1).max(512).optional(),
 });
 
 async function handleGet(request: NextRequest): Promise<NextResponse> {
@@ -30,10 +31,15 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     requestId: url.searchParams.get('requestId') ?? undefined,
     conversationId: url.searchParams.get('conversationId') ?? undefined,
     limit: url.searchParams.get('limit') ?? undefined,
-    offset: url.searchParams.get('offset') ?? undefined,
+    cursor: url.searchParams.get('cursor') ?? undefined,
   });
   if (!parsed.success) {
     throw createError.badRequest('Invalid research report query', parsed.error.flatten());
+  }
+
+  const cursor = parsed.data.cursor ? decodeKeysetCursor(parsed.data.cursor) : null;
+  if (parsed.data.cursor && (!cursor || !isTimestampUuidCursor(cursor))) {
+    throw createError.badRequest('Invalid research report cursor');
   }
 
   const { db, userId, organizationId } = await getUserScopedDb(request);
@@ -47,14 +53,14 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ report });
   }
 
-  const reports = await listResearchReports(db, {
+  const page = await listResearchReports(db, {
     userId,
     organizationId,
     conversationId: parsed.data.conversationId ?? null,
     ...(parsed.data.limit !== undefined ? { limit: parsed.data.limit } : {}),
-    ...(parsed.data.offset !== undefined ? { offset: parsed.data.offset } : {}),
+    cursor,
   });
-  return NextResponse.json({ reports });
+  return NextResponse.json({ reports: page.reports, nextCursor: page.nextCursor });
 }
 
 export const GET = withCorsRoute(withErrorHandler(handleGet));

@@ -11,6 +11,12 @@ import {
   type ResearchStep,
 } from '@agiworkforce/types';
 
+import {
+  MICROSECOND_SORT_KEY_FORMAT,
+  buildPage,
+  keysetSql,
+  type KeysetCursor,
+} from '@/lib/identity/pagination';
 import { trackProductAnalyticsEvent } from '@/lib/server/product-analytics';
 
 const MAX_CONTENT_CHARS = 400_000;
@@ -45,6 +51,7 @@ interface ResearchReportRow {
   updated_at: string | Date;
   completed_at: string | Date | null;
   settled_cost_microusd?: number | string | null;
+  page_sort_key?: string;
 }
 
 export interface SaveResearchReportInput {
@@ -305,6 +312,11 @@ export async function getResearchReportByRequestId(
   return row ? rowToReport(row) : null;
 }
 
+export interface ResearchReportPage {
+  reports: PersistedResearchReport[];
+  nextCursor: string | null;
+}
+
 export async function listResearchReports(
   db: DatabaseAdapter,
   input: {
@@ -312,32 +324,61 @@ export async function listResearchReports(
     organizationId: string | null;
     conversationId?: string | null;
     limit?: number;
-    offset?: number;
+    cursor?: KeysetCursor | null;
   },
-): Promise<PersistedResearchReport[]> {
-  if (!input.userId) return [];
+): Promise<ResearchReportPage> {
+  if (!input.userId) return { reports: [], nextCursor: null };
   const limit = Math.min(100, Math.max(1, Math.floor(input.limit ?? 20)));
-  const offset = Math.max(0, Math.floor(input.offset ?? 0));
+  const params: unknown[] = input.conversationId
+    ? [input.userId, input.conversationId]
+    : [input.userId, input.organizationId];
+  const keyset = keysetSql({
+    sortColumn: 'created_at',
+    idColumn: 'id',
+    ...(input.cursor ? { cursor: input.cursor } : {}),
+    firstParamIndex: params.length + 1,
+  });
+  let startClause = '';
+  if (keyset.where) {
+    params.push(...keyset.params);
+    startClause = `and ${keyset.where}`;
+  }
+  params.push(limit + 1);
+  const sortKey = `to_char(report.created_at at time zone 'utc', ${MICROSECOND_SORT_KEY_FORMAT}) as page_sort_key`;
   const rows = input.conversationId
     ? await db.query<ResearchReportRow>(
-        `select * from public.research_reports
-          where user_id = $1 and conversation_id = $2
-          order by created_at desc, id desc
-          limit $3 offset $4`,
-        [input.userId, input.conversationId, limit, offset],
+        `select * from (
+           select report.*, ${sortKey}
+             from public.research_reports report
+            where report.user_id = $1 and report.conversation_id = $2
+         ) reports
+          where true
+            ${startClause}
+          ${keyset.orderBy}
+          limit $${params.length}`,
+        params,
       )
     : await db.query<ResearchReportRow>(
-        `select report.* from public.research_reports report
-           join public.web_conversations conversation
-             on conversation.id = report.conversation_id
-          where report.user_id = $1
-            and conversation.user_id = $1
-            and conversation.organization_id is not distinct from $2::uuid
-            and not conversation.is_temporary
-            and conversation.deleted_at is null
-          order by report.created_at desc, report.id desc
-          limit $3 offset $4`,
-        [input.userId, input.organizationId, limit, offset],
+        `select * from (
+           select report.*, ${sortKey}
+             from public.research_reports report
+             join public.web_conversations conversation
+               on conversation.id = report.conversation_id
+            where report.user_id = $1
+              and conversation.user_id = $1
+              and conversation.organization_id is not distinct from $2::uuid
+              and not conversation.is_temporary
+              and conversation.deleted_at is null
+         ) reports
+          where true
+            ${startClause}
+          ${keyset.orderBy}
+          limit $${params.length}`,
+        params,
       );
-  return rows.map(rowToReport);
+  const page = buildPage(rows, limit, (row) => ({
+    sortValue: row.page_sort_key ?? '',
+    id: row.id,
+  }));
+  return { reports: page.items.map(rowToReport), nextCursor: page.nextCursor };
 }

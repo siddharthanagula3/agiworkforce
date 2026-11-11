@@ -19,7 +19,7 @@
  * request.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ChevronLeft, Telescope, TriangleAlert } from 'lucide-react';
 import { isPausedResearchReport, type ResearchReport } from '@agiworkforce/types';
 import { translateUiPlural } from '@agiworkforce/ui';
@@ -37,6 +37,11 @@ const GALLERY_LIMIT = 50;
  * `server-only` and cannot be imported into a client component.
  */
 type GalleryReport = ResearchReport & { query?: string; model?: string; provider?: string };
+
+interface ReportsPage {
+  reports?: GalleryReport[];
+  nextCursor?: string | null;
+}
 
 /** Short absolute date; a research report is an artifact, not a live feed. */
 function formatCreatedAt(iso: string): string {
@@ -102,34 +107,33 @@ export function ResearchReportsGallery({ onAskFollowUp }: ResearchReportsGallery
   const [state, setState] = useState<'loading' | 'loaded' | 'error'>('loading');
   const [error, setError] = useState<string | null>(null);
   const [openReport, setOpenReport] = useState<GalleryReport | null>(null);
-  const [hasMore, setHasMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [moreError, setMoreError] = useState<string | null>(null);
-  const pagesRead = useRef(1);
 
   const loadMore = useCallback(async () => {
+    if (!nextCursor) return;
     setLoadingMore(true);
     setMoreError(null);
     try {
       const response = await fetch(
-        `/api/research/reports?limit=${GALLERY_LIMIT}&offset=${pagesRead.current * GALLERY_LIMIT}`,
+        `/api/research/reports?limit=${GALLERY_LIMIT}&cursor=${encodeURIComponent(nextCursor)}`,
         { credentials: 'same-origin' },
       );
       if (!response.ok) throw new Error(`Could not load reports (${response.status})`);
-      const body = (await response.json()) as { reports?: GalleryReport[] };
+      const body = (await response.json()) as ReportsPage;
       const older = body.reports ?? [];
-      pagesRead.current += 1;
       setReports((current) => {
         const known = new Set(current.map((report) => report.id));
         return [...current, ...older.filter((report) => !known.has(report.id))];
       });
-      setHasMore(older.length >= GALLERY_LIMIT);
+      setNextCursor(body.nextCursor ?? null);
     } catch (fetchError) {
       setMoreError(toUserMessage(fetchError, 'Could not load older reports'));
     } finally {
       setLoadingMore(false);
     }
-  }, []);
+  }, [nextCursor]);
 
   const load = useCallback(async (signal: AbortSignal) => {
     setState('loading');
@@ -140,11 +144,9 @@ export function ResearchReportsGallery({ onAskFollowUp }: ResearchReportsGallery
         credentials: 'same-origin',
       });
       if (!response.ok) throw new Error(`Could not load reports (${response.status})`);
-      const body = (await response.json()) as { reports?: GalleryReport[] };
-      const first = body.reports ?? [];
-      pagesRead.current = 1;
-      setReports(first);
-      setHasMore(first.length >= GALLERY_LIMIT);
+      const body = (await response.json()) as ReportsPage;
+      setReports(body.reports ?? []);
+      setNextCursor(body.nextCursor ?? null);
       setState('loaded');
     } catch (fetchError) {
       if (signal.aborted) return;
@@ -216,7 +218,7 @@ export function ResearchReportsGallery({ onAskFollowUp }: ResearchReportsGallery
           {moreError}
         </li>
       ) : null}
-      {hasMore ? (
+      {nextCursor ? (
         <li className="flex justify-center py-2">
           <button
             type="button"

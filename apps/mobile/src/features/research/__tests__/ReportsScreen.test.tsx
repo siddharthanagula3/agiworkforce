@@ -76,6 +76,10 @@ function reports(from: number, count: number) {
   }));
 }
 
+function page(from: number, count: number, nextCursor: string | null) {
+  return { reports: reports(from, count), nextCursor };
+}
+
 describe('Reports list paging', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -83,10 +87,10 @@ describe('Reports list paging', () => {
     useChatAppModeStore.setState({ appMode: 'cloud' });
   });
 
-  it('reads the next page of older reports when the list reaches its end', async () => {
+  it('reads the next page of older reports from the cursor when the list reaches its end', async () => {
     mockFetchResearchReports
-      .mockResolvedValueOnce(reports(0, RESEARCH_REPORTS_LIMIT))
-      .mockResolvedValueOnce(reports(RESEARCH_REPORTS_LIMIT, 3));
+      .mockResolvedValueOnce(page(0, RESEARCH_REPORTS_LIMIT, 'cursor-after-49'))
+      .mockResolvedValueOnce(page(RESEARCH_REPORTS_LIMIT, 3, null));
     const { findByText, UNSAFE_getByType } = render(<ReportsScreen />);
 
     await findByText('Report 0');
@@ -94,17 +98,15 @@ describe('Reports list paging', () => {
     fireEvent(UNSAFE_getByType(FlatList), 'endReached');
 
     await waitFor(() =>
-      expect(mockFetchResearchReports).toHaveBeenLastCalledWith({
-        offset: RESEARCH_REPORTS_LIMIT,
-      }),
+      expect(mockFetchResearchReports).toHaveBeenLastCalledWith({ cursor: 'cursor-after-49' }),
     );
     await waitFor(() =>
       expect(UNSAFE_getByType(FlatList).props.data).toHaveLength(RESEARCH_REPORTS_LIMIT + 3),
     );
   });
 
-  it('stops asking for more once a page comes back short', async () => {
-    mockFetchResearchReports.mockResolvedValueOnce(reports(0, 3));
+  it('stops asking for more once the server sends no cursor, whatever the page size', async () => {
+    mockFetchResearchReports.mockResolvedValueOnce(page(0, RESEARCH_REPORTS_LIMIT, null));
     const { findByText, UNSAFE_getByType } = render(<ReportsScreen />);
 
     await findByText('Report 0');
@@ -113,19 +115,39 @@ describe('Reports list paging', () => {
     expect(mockFetchResearchReports).toHaveBeenCalledTimes(1);
   });
 
-  it('says older reports could not be loaded and retries on request', async () => {
+  it('keeps asking for older reports while the server sends a cursor, even for a short page', async () => {
     mockFetchResearchReports
-      .mockResolvedValueOnce(reports(0, RESEARCH_REPORTS_LIMIT))
+      .mockResolvedValueOnce(page(0, 3, 'cursor-1'))
+      .mockResolvedValueOnce(page(3, 1, null));
+    const { findByText, UNSAFE_getByType } = render(<ReportsScreen />);
+
+    await findByText('Report 0');
+    fireEvent(UNSAFE_getByType(FlatList), 'endReached');
+
+    await waitFor(() =>
+      expect(mockFetchResearchReports).toHaveBeenLastCalledWith({ cursor: 'cursor-1' }),
+    );
+  });
+
+  it('says older reports could not be loaded, keeps the list and retries from the same cursor', async () => {
+    mockFetchResearchReports
+      .mockResolvedValueOnce(page(0, RESEARCH_REPORTS_LIMIT, 'cursor-after-49'))
       .mockRejectedValueOnce(new Error('offline'))
-      .mockResolvedValueOnce(reports(RESEARCH_REPORTS_LIMIT, 1));
+      .mockResolvedValueOnce(page(RESEARCH_REPORTS_LIMIT, 1, null));
     const { findByText, findByLabelText, UNSAFE_getByType } = render(<ReportsScreen />);
 
     await findByText('Report 0');
     fireEvent(UNSAFE_getByType(FlatList), 'endReached');
 
     expect(await findByText('Could not load older reports.')).toBeTruthy();
+    expect(UNSAFE_getByType(FlatList).props.data).toHaveLength(RESEARCH_REPORTS_LIMIT);
     fireEvent.press(await findByLabelText('Try loading older reports again'));
 
     await waitFor(() => expect(mockFetchResearchReports).toHaveBeenCalledTimes(3));
+    expect(mockFetchResearchReports).toHaveBeenNthCalledWith(2, { cursor: 'cursor-after-49' });
+    expect(mockFetchResearchReports).toHaveBeenNthCalledWith(3, { cursor: 'cursor-after-49' });
+    await waitFor(() =>
+      expect(UNSAFE_getByType(FlatList).props.data).toHaveLength(RESEARCH_REPORTS_LIMIT + 1),
+    );
   });
 });

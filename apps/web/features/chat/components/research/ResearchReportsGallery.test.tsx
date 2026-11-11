@@ -101,16 +101,23 @@ describe('ResearchReportsGallery', () => {
     expect(screen.getByTestId('research-reports-gallery')).toBeInTheDocument();
   });
 
-  it('offers the older reports once a full page came back and appends them', async () => {
+  it('follows the cursor the server returned to load older reports and appends them', async () => {
     const firstPage = Array.from({ length: 50 }, (_, index) =>
       makeReport({ id: `report-${index}`, title: `Report ${index}` }),
     );
     fetchMock
-      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ reports: firstPage }) })
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
-        json: async () => ({ reports: [makeReport({ id: 'report-old', title: 'Oldest report' })] }),
+        json: async () => ({ reports: firstPage, nextCursor: 'cursor-after-49' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          reports: [makeReport({ id: 'report-old', title: 'Oldest report' })],
+          nextCursor: null,
+        }),
       });
 
     render(<ResearchReportsGallery />);
@@ -118,11 +125,58 @@ describe('ResearchReportsGallery', () => {
     await userEvent.click(await screen.findByText('Load older reports'));
 
     expect(await screen.findByText('Oldest report')).toBeInTheDocument();
-    expect((fetchMock.mock.calls[1] as [string])[0]).toContain('offset=50');
+    const olderUrl = (fetchMock.mock.calls[1] as [string])[0];
+    expect(olderUrl).toContain('cursor=cursor-after-49');
+    expect(olderUrl).not.toContain('offset');
+    expect(screen.getByText('Report 0')).toBeInTheDocument();
     expect(screen.queryByText('Load older reports')).not.toBeInTheDocument();
   });
 
-  it('does not offer older reports when the first page was not full', async () => {
+  it('offers older reports whenever the server returns a cursor, even for a short page', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ reports: [makeReport()], nextCursor: 'cursor-1' }),
+    });
+
+    render(<ResearchReportsGallery />);
+
+    expect(await screen.findByText('Load older reports')).toBeInTheDocument();
+  });
+
+  it('keeps the reports on screen when loading older ones fails and retries from the same cursor', async () => {
+    fetchMock
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ reports: [makeReport()], nextCursor: 'cursor-1' }),
+      })
+      .mockResolvedValueOnce({ ok: false, status: 503, json: async () => ({}) })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          reports: [makeReport({ id: 'report-old', title: 'Oldest report' })],
+          nextCursor: null,
+        }),
+      });
+
+    render(<ResearchReportsGallery />);
+
+    await userEvent.click(await screen.findByText('Load older reports'));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not load reports (503)');
+    expect(screen.getByText('Node.js release status')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByText('Load older reports'));
+
+    expect(await screen.findByText('Oldest report')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect((fetchMock.mock.calls[2] as [string])[0]).toContain('cursor=cursor-1');
+    expect(screen.getByText('Node.js release status')).toBeInTheDocument();
+  });
+
+  it('does not offer older reports when the server returned no cursor', async () => {
     respondWith([makeReport()]);
 
     render(<ResearchReportsGallery />);

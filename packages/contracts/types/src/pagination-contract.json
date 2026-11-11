@@ -146,10 +146,6 @@
       "why": "The connector call log is capped at a recent window; the limit caps one screen."
     },
     {
-      "route": "apps/web/app/api/research/reports/route.ts",
-      "why": "A reader's own reports, bounded by how many one account produces."
-    },
-    {
       "route": "apps/web/app/api/llm/v1/chat/completions/runs/route.ts",
       "why": "The public API returns a bounded run window; the limit caps one response."
     },

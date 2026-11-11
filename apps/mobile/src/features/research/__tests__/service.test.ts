@@ -113,14 +113,28 @@ describe('fetchResearchReports paging', () => {
   });
 
   it('asks for the newest page by default', async () => {
-    await fetchResearchReports();
+    const page = await fetchResearchReports();
     expect((api.get as jest.Mock).mock.calls[0]?.[0]).toBe('/api/research/reports?limit=50');
+    expect(page).toEqual({ reports: [], nextCursor: null });
   });
 
-  it('skips the reports already read when given an offset', async () => {
-    await fetchResearchReports({ offset: 50 });
+  it('resumes after the cursor it was given and never sends an offset', async () => {
+    await fetchResearchReports({ cursor: 'cursor-1' });
     expect((api.get as jest.Mock).mock.calls[0]?.[0]).toBe(
-      '/api/research/reports?limit=50&offset=50',
+      '/api/research/reports?limit=50&cursor=cursor-1',
     );
+  });
+
+  it('returns the cursor for the next page and no cursor when the server sends none', async () => {
+    (api.get as jest.Mock).mockResolvedValueOnce({ reports: [ROW], nextCursor: 'cursor-2' });
+    const first = await fetchResearchReports();
+    expect(first.reports).toHaveLength(1);
+    expect(first.nextCursor).toBe('cursor-2');
+
+    (api.get as jest.Mock).mockResolvedValueOnce({ reports: [ROW], nextCursor: null });
+    expect((await fetchResearchReports()).nextCursor).toBeNull();
+
+    (api.get as jest.Mock).mockResolvedValueOnce({ reports: [ROW], nextCursor: '' });
+    expect((await fetchResearchReports()).nextCursor).toBeNull();
   });
 });
