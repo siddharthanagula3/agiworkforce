@@ -1422,7 +1422,7 @@
         "windows"
       ],
       "description": "How to get the CLI binary, run it for the first time and work with sessions and trust boundaries.",
-      "updated": "2026-10-12",
+      "updated": "2026-11-11",
       "source": "content/support/install-the-cli.md",
       "chunks": [
         {
@@ -1451,7 +1451,7 @@
           "ordinal": 3,
           "heading": "Running work",
           "headingPath": "Install and set up the CLI › Running work",
-          "text": "`agi exec` runs a one-shot prompt and is the form to use in CI. `agi review`\nreviews changes, `agi apply` applies the latest diff as a git patch, and\n`agi sandbox` runs work under the platform sandbox (Seatbelt, bubblewrap,\nLandlock or a Windows restricted token, depending on the OS).\n\nA fallback chain is a comma-separated model list, tried in order, so a cloud\nmodel can fall back to a local one."
+          "text": "`agi exec` runs a one-shot prompt and is the form to use in CI. `agi review`\nreviews changes, `agi apply` applies the latest diff as a git patch, and\n`agi sandbox` runs a command under the operating system's sandbox: Seatbelt on\nmacOS, and bubblewrap on Linux, where the `bubblewrap` package must be\ninstalled. Without that sandbox it refuses to run the command, and `agi doctor`\nsays what to install. Windows has no sandbox, so commands the agent runs there\nhave your full user rights: approve each one, or use the CLI inside WSL.\n\nA fallback chain is a comma-separated model list, tried in order, so a cloud\nmodel can fall back to a local one."
         },
         {
           "id": "install-the-cli#4",

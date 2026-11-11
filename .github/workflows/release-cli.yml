@@ -36,6 +36,7 @@ jobs:
   validate-version:
     name: Validate CLI release version
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     outputs:
       version: ${{ steps.release-metadata.outputs.version }}
       prerelease: ${{ steps.release-metadata.outputs.prerelease }}
@@ -160,6 +161,7 @@ jobs:
     name: Build ${{ matrix.target }}
     needs: [validate-version, validate]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -327,6 +329,7 @@ jobs:
     needs: build
     if: github.event_name == 'push'
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     permissions:
       contents: read
       id-token: write
@@ -403,6 +406,7 @@ jobs:
     name: Create GitHub Release
     needs: [validate-version, sign-release-assets]
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     permissions:
       contents: write
     steps:

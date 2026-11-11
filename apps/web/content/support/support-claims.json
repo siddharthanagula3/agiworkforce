@@ -6149,6 +6149,53 @@
       ]
     },
     {
+      "id": "cli-sandbox-uses-seatbelt-or-bubblewrap",
+      "doc": "install-the-cli",
+      "section": "Running work",
+      "kind": "prose",
+      "sentence": "`agi review` reviews changes, `agi apply` applies the latest diff as a git patch, and `agi sandbox` runs a command under the operating system's sandbox: Seatbelt on macOS, and bubblewrap on Linux, where the `bubblewrap` package must be installed.",
+      "implementation": [
+        "apps/cli/src/sandbox.rs#SandboxType::MacosSeatbelt",
+        "apps/cli/src/sandbox.rs#SandboxType::LinuxBubblewrap",
+        "apps/cli/src/sandbox.rs#missing_sandbox_message"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/cli/src/sandbox.rs",
+          "name": "missing_linux_sandbox_message_names_bubblewrap_and_how_to_install_it"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/cli/src/sandbox.rs",
+          "text": "Sandboxed exec is unsupported on Windows"
+        }
+      ]
+    },
+    {
+      "id": "cli-sandbox-refuses-without-a-backend",
+      "doc": "install-the-cli",
+      "section": "Running work",
+      "kind": "prose",
+      "sentence": "Without that sandbox it refuses to run the command, and `agi doctor` says what to install.",
+      "implementation": [
+        "apps/cli/src/sandbox.rs#missing_sandbox_message",
+        "apps/cli/src/doctor.rs#crate::sandbox::missing_sandbox_message(std::env::consts::OS)"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/cli/src/sandbox.rs",
+          "name": "exec_without_a_detected_sandbox_tells_the_user_what_to_install"
+        },
+        {
+          "kind": "test",
+          "file": "apps/cli/src/sandbox.rs",
+          "name": "a_wrapped_program_refuses_an_unavailable_backend"
+        }
+      ]
+    },
+    {
       "id": "cli-install-command-needs-a-signed-release",
       "doc": "install-the-cli",
       "section": "Getting the binary",

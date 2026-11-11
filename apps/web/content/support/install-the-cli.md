@@ -5,7 +5,7 @@ path: /cli
 category: surfaces
 tags: cli, install cli, install.sh, agi command, terminal, agi login, auth-status, list-models, exec, resume, fork, sandbox, update, checksum, signature
 platforms: cli, macos, windows, linux
-updated: 2026-10-12
+updated: 2026-11-11
 description: How to get the CLI binary, run it for the first time and work with sessions and trust boundaries.
 scope: public
 ---
@@ -59,8 +59,11 @@ sessions. Local sessions never silently leave your device.
 
 `agi exec` runs a one-shot prompt and is the form to use in CI. `agi review`
 reviews changes, `agi apply` applies the latest diff as a git patch, and
-`agi sandbox` runs work under the platform sandbox (Seatbelt, bubblewrap,
-Landlock or a Windows restricted token, depending on the OS).
+`agi sandbox` runs a command under the operating system's sandbox: Seatbelt on
+macOS, and bubblewrap on Linux, where the `bubblewrap` package must be
+installed. Without that sandbox it refuses to run the command, and `agi doctor`
+says what to install. Windows has no sandbox, so commands the agent runs there
+have your full user rights: approve each one, or use the CLI inside WSL.
 
 A fallback chain is a comma-separated model list, tried in order, so a cloud
 model can fall back to a local one.
