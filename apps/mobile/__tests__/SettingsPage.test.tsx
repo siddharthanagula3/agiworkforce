@@ -320,7 +320,7 @@ describe('Settings page', () => {
 
     fireEvent.press(getByLabelText('Personalization'));
     fireEvent.press(getByLabelText('Memory'));
-    fireEvent.press(getByLabelText('Account Security. Signed in'));
+    fireEvent.press(getByLabelText('Account Security'));
 
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/personalization');
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/memory');
@@ -358,7 +358,7 @@ describe('Settings page', () => {
     useAuthStore.setState({ isClerkSignedIn: true });
     const { getByLabelText } = render(<SettingsTabScreen />);
 
-    fireEvent.press(getByLabelText('Shared Links. Signed in'));
+    fireEvent.press(getByLabelText('Shared Links'));
     fireEvent.press(getByLabelText('Device Integrations'));
 
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/shared-links');
@@ -499,6 +499,21 @@ describe('Settings page', () => {
 
     expect(loaded.queryByTestId('settings-row-loading-account-subscription')).toBeNull();
     expect(loaded.getByLabelText(/^Subscription\. /)).toBeTruthy();
+  });
+
+  it('never names a plan the account was not confirmed to hold', () => {
+    useAuthStore.setState({ isClerkSignedIn: true });
+    useTierStore.setState({ isRefreshing: false, lastRefreshedAt: null } as never);
+    const unconfirmed = render(<SettingsTabScreen />);
+
+    expect(unconfirmed.getByLabelText('Subscription. Not confirmed')).toBeTruthy();
+    expect(unconfirmed.queryByLabelText('Subscription. Free')).toBeNull();
+    unconfirmed.unmount();
+
+    useTierStore.setState({ lastRefreshedAt: '2026-11-11T00:00:00.000Z' } as never);
+    const confirmed = render(<SettingsTabScreen />);
+
+    expect(confirmed.getByLabelText('Subscription. Free')).toBeTruthy();
   });
 
   it('renders version in About row', () => {

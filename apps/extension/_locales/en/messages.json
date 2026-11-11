@@ -1355,6 +1355,10 @@
     "message": "The images or page from this message are no longer attached. Attach them again, then send.",
     "description": "Shown when a message is sent again after its images or page were cleared by a reload"
   },
+  "spStoredReplyFailed": {
+    "message": "This reply did not finish. Retry to run it again.",
+    "description": "Failed turn text restored from account history when the original error text was not saved"
+  },
   "spEmptyResponse": {
     "message": "No response was returned. Try again.",
     "description": "Failed turn text when the model returned nothing"
@@ -3790,6 +3794,10 @@
     "message": "AGI could not finish your task. Select to see why.",
     "description": "Chrome notification body when a browser task fails."
   },
+  "notifyBrowserStepWaiting": {
+    "message": "Open the AGI side panel to finish the browser step this reply is waiting on.",
+    "description": "Notification body when the side panel closed while a reply waited on a browser step"
+  },
   "notifyTaskInputTitle": {
     "message": "AGI needs your input",
     "description": "Chrome notification title when a task waits for approval."
@@ -4095,7 +4103,7 @@
     "description": "Body of the site access card when AGI only reads"
   },
   "spBrowserAccessActBody": {
-    "message": "AGI can act on this page for this task through Chrome's debugger. Chrome shows a banner during control. Auto asks before crucial actions; Ask first confirms every action. Full access still asks before protected actions. One-time access ends with the task or when you close this panel.",
+    "message": "AGI can act on this page for this task through Chrome's debugger. Chrome shows a banner during control. Screenshots and text from this page are sent to AGI Cloud during the task. Auto asks before crucial actions; Ask first confirms every action. Full access still asks before protected actions. One-time access ends with the task or when you close this panel.",
     "description": "Body of the site access card when AGI acts on the page"
   },
   "spBrowserAccessOnce": {
@@ -4725,7 +4733,7 @@
     "description": "One-line description of the Auto permission mode"
   },
   "spAutonomyAutoTooltip": {
-    "message": "AGI acts on the sites of this task without asking. It stops and asks before it buys or pays, sends or posts, submits personal details, deletes, enters credentials, accepts terms, grants access or downloads a file.",
+    "message": "AGI acts on the sites of this task without asking. It stops and asks before it buys or pays, sends or posts, submits personal details, deletes, enters credentials, accepts terms, grants access, downloads a file, closes a tab or runs a tool the website supplies.",
     "description": "Autonomy chip tooltip in Auto mode"
   },
   "spAutonomyAutoAria": {

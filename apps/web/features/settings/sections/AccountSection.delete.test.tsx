@@ -292,6 +292,34 @@ describe('AccountSection · delete account (useDeleteAccount, real hook)', () =>
     expect(await screen.findByText(/went wrong on our side/i)).toBeInTheDocument();
     expect(screen.queryByText(/0xdeadbeef/i)).not.toBeInTheDocument();
   });
+
+  it('says before confirming that what the law or a legal hold requires is kept', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url === '/api/settings/sessions' && init?.method === 'GET') {
+        return jsonResponse({ sessions: [], totalCount: 0 });
+      }
+      if (url === '/api/user/delete-account' && init?.method === 'GET') {
+        return jsonResponse({
+          pending: false,
+          canCancel: false,
+          requestedAt: null,
+          scheduledFor: null,
+        });
+      }
+      throw new Error(`Unexpected request: ${url} ${init?.method ?? 'GET'}`);
+    });
+
+    renderAccountSection();
+    await waitFor(() => expect(screen.getByTestId('delete-account-trigger')).toBeEnabled());
+    fireEvent.click(screen.getByTestId('delete-account-trigger'));
+
+    expect(
+      await screen.findByText(
+        /Anything the law or an active legal hold requires us to keep is kept\./,
+      ),
+    ).toBeInTheDocument();
+  });
 });
 
 type ImportedModule0 = typeof import('@/lib/identity/useSessionSnapshot');

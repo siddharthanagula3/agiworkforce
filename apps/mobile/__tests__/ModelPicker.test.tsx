@@ -300,6 +300,26 @@ describe('ModelPickerSheet', () => {
     ).toBeNull();
   });
 
+  it('keeps the Free catalogue notices away from a paid plan', () => {
+    activateCloudAccount('account-a');
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    useTierStore.setState({ tier: 'max' } as never);
+    useFreeQuotaCatalogueStore.setState({
+      account: captureCloudAccountEpoch(),
+      catalogue: null,
+      loading: false,
+      error: 'Sign in again to check provider-funded Free models.',
+    });
+
+    try {
+      const screen = renderPicker({ modelScope: 'cloud' });
+      expect(screen.queryByText(/provider-funded Free/)).toBeNull();
+      expect(screen.queryByLabelText('Retry loading provider-funded Free models')).toBeNull();
+    } finally {
+      useTierStore.setState({ tier: 'free' } as never);
+    }
+  });
+
   it('explains a checked catalogue whose chat offers are all unavailable', () => {
     const chatOffering = Object.entries(getProviderOfferings()).find(
       ([, offering]) => offering.category === 'chat' && offering.quotaProbeProtocol === 'chat',
@@ -480,6 +500,68 @@ describe('ModelPickerSheet', () => {
       completePreparation?.();
     });
     expect(useModelStore.getState().selectedModel).toBe(LITE_MODEL_ID);
+  });
+
+  it('keeps a newer selection when an earlier download finishes afterwards', async () => {
+    const completions: Array<() => void> = [];
+    const prepareModel = jest.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          completions.push(resolve);
+        }),
+    );
+    useModelInstallStore.setState({
+      installedModelIds: [DEFAULT_LOCAL_MODEL_ID],
+      readySystemModelIds: [],
+      jobs: {},
+      prepareModel,
+    });
+    const { getByLabelText } = renderPicker();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    fireEvent.press(getByLabelText(/AGI Lite/));
+    expect(prepareModel).toHaveBeenCalledTimes(1);
+    useModelStore.setState({ selectedModel: 'newer-selection' });
+    await act(async () => {
+      completions[0]?.();
+    });
+
+    expect(useModelStore.getState().selectedModel).toBe('newer-selection');
+  });
+
+  it('keeps a newer pick made through the same picker when an earlier download finishes', async () => {
+    const completions: Array<() => void> = [];
+    const prepareModel = jest.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          completions.push(resolve);
+        }),
+    );
+    useModelInstallStore.setState({
+      installedModelIds: [DEFAULT_LOCAL_MODEL_ID],
+      readySystemModelIds: [],
+      jobs: {},
+      prepareModel,
+    });
+    const onSelect = jest.fn();
+    const { getByLabelText } = renderPicker({
+      onSelect,
+      selectedModelId: 'conversation-slot-model',
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    fireEvent.press(getByLabelText(/AGI Lite/));
+    fireEvent.press(getByLabelText(/AGI Standard/));
+    await act(async () => {
+      completions[0]?.();
+    });
+
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(onSelect).toHaveBeenCalledWith(DEFAULT_LOCAL_MODEL_ID);
   });
 
   it('calls onSelect callback instead of store when provided', () => {

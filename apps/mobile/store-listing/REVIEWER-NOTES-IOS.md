@@ -215,22 +215,54 @@ renders while `NATIVE_PURCHASES_AVAILABLE` is `false`:
   (`src/features/billing/webBillingLinks.ts`) to read a US App Store storefront,
   and this version never reads the storefront.
 
-If any remaining link is a problem under Guideline 3.1.1, we will remove or
-gate it immediately, please tell us which one rather than rejecting the build,
-and we will turn it around the same day.
+If any remaining link is a problem under Guideline 3.1.1, please tell us which
+one and we will remove or gate it.
 
 ## Account deletion
 
-Required by Guideline 5.1.1(v) and implemented in-app, no support ticket and no
-website visit:
+Required by Guideline 5.1.1(v). Deletion is requested in the app and needs no
+support ticket.
 
-**Settings → Account → Delete Account** → confirmation alert → `DELETE
-/api/user/delete-account`. This permanently deletes the AGI Cloud account and
-all cloud data. Local on-device data is cleared separately from Settings → Data
-Controls, which also offers a full local export (chats, memory, settings,
-installed models) that runs entirely on the device.
+**Settings → Account → Delete Account** → confirmation alert → identity check →
+`DELETE /api/user/delete-account`. Sources:
+`src/features/settings/cloud-account/index.tsx` (screen),
+`src/features/settings/cloud-account/deleteAccountConfirmation.ts` (the
+confirmation text) and `apps/web/app/api/user/delete-account/route.ts` (server).
 
-Source: `src/features/settings/cloud-account/index.tsx`.
+What the request does:
+
+- It schedules deletion of the AGI Cloud account and its cloud data and returns
+  a cancellation deadline 24 hours later. The app shows the deadline and signs
+  out. Signing back in before the deadline lets the person cancel it from the
+  same screen.
+- After the deadline a daily job ends any Stripe billing still live, erases the
+  account's data and stored files, and deletes the sign-in identity, so erasure
+  can finish later than the deadline. The scheduling receipt says this and does
+  not claim that erasure is complete.
+- Data under an active legal hold, and the records the privacy policy lists as
+  kept after deletion (https://agiworkforce.com/privacy), are kept. The
+  confirmation says so before the person confirms.
+- On-device Local Mode data is not touched. It is cleared separately from
+  Settings → Data Controls, which also offers a full local export (chats,
+  memory, settings, installed models) that runs entirely on the device.
+
+A Free-plan account is scheduled straight away. When the server refuses, nothing
+is scheduled and the app shows the server's reason:
+
+- **A paid plan that still renews.** This version sells nothing, so such a plan
+  was bought on the web (or, for an older store purchase, through Apple or
+  Google). The message tells the person to cancel it there first, so that a
+  renewal cannot charge after the account is gone, and names where. The app does
+  not link to the web billing page, in line with the link policy above. Once the
+  plan is cancelled, Delete Account schedules deletion straight away; there is
+  no wait for the paid period to end.
+- **A paid plan already cancelled** is not a refusal: deletion is scheduled
+  straight away, and the remaining paid time ends when erasure runs. The
+  confirmation and the receipt both say that the unused time is not refunded.
+- **A payment still being collected** on a cancelled plan: deletion is refused
+  until it is settled.
+- **The only owner of a workspace**: the message names the workspace and asks
+  for another owner or for the workspace to be deleted first.
 
 ## Privacy and data collection
 

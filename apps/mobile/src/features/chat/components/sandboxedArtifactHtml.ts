@@ -27,31 +27,35 @@ const MAX_FAILURE_REASON_LENGTH = 200;
 const PREVIEW_SURFACE = lightColors.background;
 const PREVIEW_TEXT = lightColors.textPrimary;
 
-const MERMAID_CDN = 'https://cdn.jsdelivr.net';
-const MERMAID_SRC_URL = `${MERMAID_CDN}/npm/mermaid@11.17.2/dist/mermaid.min.js`;
+const MERMAID_CONTENT_SECURITY_POLICY =
+  "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:;";
 
-export function buildMermaidPreviewHtml(source: string, appearance?: MermaidAppearance): string {
+export function buildMermaidPreviewHtml(
+  source: string,
+  runtime: string,
+  appearance?: MermaidAppearance,
+): string {
   const encoded = JSON.stringify(source).replace(/</g, '\\u003c');
   const background = appearance?.background ?? PREVIEW_SURFACE;
   const theme = appearance?.dark ? 'dark' : 'default';
-  const csp = `default-src 'none'; script-src ${MERMAID_CDN} 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:;`;
+  const csp = MERMAID_CONTENT_SECURITY_POLICY;
   return [
     '<!DOCTYPE html>',
     '<html><head>',
     '<meta charset="utf-8">',
     '<meta name="viewport" content="width=device-width, initial-scale=1">',
     `<meta http-equiv="Content-Security-Policy" content="${csp}">`,
-    `<style>html,body{margin:0;padding:12px;background:${background};}#c{display:flex;justify-content:center;}</style>`,
+    `<style>html{margin:0;padding:0;background:${background};}body{margin:0;padding:12px;background:${background};}#c{display:flex;justify-content:center;}</style>`,
     '</head><body>',
     '<div id="c"></div>',
-    `<script src="${MERMAID_SRC_URL}"></script>`,
+    `<script>${runtime}</script>`,
     '<script>',
     `var src = ${encoded};`,
     'function post(m){ if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify(m)); }',
     "function fail(e){ document.getElementById('c').textContent = 'Could not render this diagram.'; post({ type: 'failed', reason: String((e && e.message) || e || '') }); }",
     'try {',
     `  mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: '${theme}' });`,
-    "  mermaid.render('d', src).then(function(r){ document.getElementById('c').innerHTML = r.svg; post({ type: 'rendered', height: Math.ceil(document.documentElement.scrollHeight) }); })",
+    "  mermaid.render('d', src).then(function(r){ document.getElementById('c').innerHTML = r.svg; post({ type: 'rendered', height: Math.ceil(document.body.getBoundingClientRect().height) }); })",
     '    .catch(fail);',
     '} catch (e) { fail(e); }',
     '</script>',

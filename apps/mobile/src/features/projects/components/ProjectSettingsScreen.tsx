@@ -95,7 +95,12 @@ export function ProjectSettingsScreen({ projectId }: { projectId: string }) {
     (patch: CloudProjectDetailsPatch) => {
       setError(null);
       void updateCloudProjectDetails(projectId, patch).catch((cause: unknown) => {
-        setError(toUserMessage(cause, 'Could not save that change. It has been undone.'));
+        setError(
+          toUserMessage(
+            cause,
+            'Could not confirm that change, so the switch shows its previous setting.',
+          ),
+        );
       });
     },
     [projectId],

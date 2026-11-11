@@ -30,7 +30,7 @@ const PRIVACY_ITEMS = [
   {
     key: 'retention',
     label: 'Data retention',
-    body: 'Deleted and temporary chats are erased for good after 30 days.',
+    body: 'Deleted and temporary chats are normally deleted for good after 30 days. A workspace legal hold can keep them longer.',
   },
 ] as const;
 

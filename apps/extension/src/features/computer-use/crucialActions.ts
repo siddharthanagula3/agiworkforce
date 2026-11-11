@@ -1,7 +1,12 @@
 import type { ActionApprovalRequirement, AlwaysAskReason } from './approvalPolicy';
 
 export type CrucialActionCategory =
-  'destructive' | 'money' | 'speaking_for_user' | 'secrets' | 'leaving_workspace';
+  | 'destructive'
+  | 'money'
+  | 'speaking_for_user'
+  | 'secrets'
+  | 'leaving_workspace'
+  | 'unverified_effect';
 
 const CRUCIAL_CATEGORY: Readonly<Record<AlwaysAskReason, CrucialActionCategory | null>> = {
   purchase: 'money',
@@ -18,9 +23,9 @@ const CRUCIAL_CATEGORY: Readonly<Record<AlwaysAskReason, CrucialActionCategory |
   selection: null,
   history_navigation: null,
   reload: null,
-  tab_management: null,
+  tab_management: 'destructive',
   window_resize: null,
-  site_tool: null,
+  site_tool: 'unverified_effect',
   unidentified_input: null,
 };
 

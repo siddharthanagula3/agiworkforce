@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { View, Linking, ScrollView, Alert, type LayoutChangeEvent } from 'react-native';
+import { View, ScrollView, Alert, StyleSheet, type LayoutChangeEvent } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
 import { CodeBlockCopyButton } from './CodeBlockCopyButton';
@@ -10,26 +10,21 @@ import { parseMermaidChart } from '@/src/features/chat/utils/mermaidChart';
 import { colors as defaultColors, type ColorScheme } from '@/src/ui/theme';
 import { chatTypography, typeScale } from '@/src/ui/theme/tokens';
 import {
-  classifyExternalLink,
-  getSystemIntentPrompt,
-} from '@/src/features/chat/utils/externalUrls';
-import {
   tokenizeCode,
   syntaxTokenColor,
   type SyntaxToken,
 } from '@/src/features/chat/utils/syntaxHighlight';
-import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import { normalizeMarkdownSource } from '@agiworkforce/utils/markdown-source';
 import { classifyAssistantFence } from '@agiworkforce/unified-chat/assistant-fence';
 import { AssistantSurface, canRenderAssistantSurface } from './AssistantSurface';
-import { canPreviewCitation, previewCitation, type CitationSource } from './CitationChip';
+import type { CitationSource } from './CitationChip';
+import { protectEscapes, renderInlineMarkdown, restoreEscapes } from './MarkdownInline';
+import { MarkdownImage } from './MarkdownImage';
 import { createReportSectionIds } from '@/src/features/research/reportSections';
 import { useResponsiveLayout } from '@/src/shared/hooks/useResponsiveLayout';
-import { Download } from 'lucide-react-native';
+import { Download, Square, SquareCheck } from 'lucide-react-native';
 import { exportSourceFile, shareFile } from '@/services/fileCreation';
 import { markdownTableToCsv } from '@/src/features/chat/utils/tableCsv';
-import { resolveGeneratedImageUri } from '@/src/features/image/services/imagegen';
-import { GeneratedImage } from './GeneratedImage';
 
 const MIN_TABLE_COLUMN_WIDTH = 120;
 const MAX_TABLE_COLUMN_WIDTH = 260;
@@ -47,209 +42,25 @@ export function wideTableOverflow(input: {
 }
 const TABLE_COLUMN_CHARACTER_WIDTH = 8;
 const TABLE_COLUMN_PADDING = 16;
-const ESCAPABLE_PUNCTUATION = /[!-/:-@[-`{-~]/;
-const ESCAPE_SENTINEL_BASE = 0xe000;
-const ESCAPE_SENTINELS = /[\ue021-\ue07e]/g;
-const INLINE_MATH = /(?<![\\$])\$(?!\$)([^$\n]+?)(?<!\\)\$(?!\$)/g;
+const FOOTNOTE_LINE_HEIGHT = 20;
+const TASK_MARKER_SIZE = 16;
+const listItemPattern = /^(\s*)(?:([-*+])|(\d{1,9})([.)]))\s+(.+)$/;
+const taskItemPattern = /^\[([ xX])\]\s+(.*)$/;
+const quoteLinePattern = /^ {0,3}>[ \t]?/;
+const footnoteDefinitionPattern = /^\[\^([^\]\s]+)\]:\s?(.*)$/;
+const thematicBreakPattern = /^ {0,3}(?:(?:-[ \t]*){3,}|(?:\*[ \t]*){3,}|(?:_[ \t]*){3,})$/;
+const continuationIndentPattern = /^(?: {2,}|\t)\S/;
+const fullLineImagePattern = /^!\[([^\]]*)\]\(\s*<?([^()<>\s]+)>?(?:\s+"[^"]*")?\s*\)$/;
+const nestedBullets = ['\u2022', '\u25E6', '\u25AA\uFE0E'];
 
-function codeSpanEnd(text: string, open: number): number {
-  const close = text.indexOf('`', open + 1);
-  return close === -1 || text.slice(open + 1, close).includes('\n') ? -1 : close;
-}
-
-function inlineMathEnd(text: string, open: number): number {
-  if (text[open - 1] === '$' || text[open + 1] === '$') return -1;
-  const close = text.indexOf('$', open + 1);
-  if (close <= open + 1 || text.slice(open + 1, close).includes('\n')) return -1;
-  return text[close - 1] === '\\' || text[close + 1] === '$' ? -1 : close;
-}
-
-function protectEscapes(text: string): string {
-  let out = '';
-  let idx = 0;
-  while (idx < text.length) {
-    const ch = text[idx]!;
-    const next = text[idx + 1];
-    if (ch === '\\' && next !== undefined && ESCAPABLE_PUNCTUATION.test(next)) {
-      out += String.fromCharCode(ESCAPE_SENTINEL_BASE + next.charCodeAt(0));
-      idx += 2;
-      continue;
-    }
-    const spanEnd =
-      ch === '`' ? codeSpanEnd(text, idx) : ch === '$' ? inlineMathEnd(text, idx) : -1;
-    if (spanEnd !== -1) {
-      out += text.slice(idx, spanEnd + 1);
-      idx = spanEnd + 1;
-      continue;
-    }
-    out += ch;
-    idx += 1;
-  }
-  return out;
-}
-
-function restoreEscapes(text: string, keepBackslash = false): string {
-  return text.replace(ESCAPE_SENTINELS, (sentinel) => {
-    const literal = String.fromCharCode(sentinel.charCodeAt(0) - ESCAPE_SENTINEL_BASE);
-    return keepBackslash ? `\\${literal}` : literal;
-  });
-}
-
-function openAssistantLink(url: string): void {
-  const kind = classifyExternalLink(url);
-  if (kind === 'http') {
-    void openUntrustedUrlInAppBrowser(url);
-    return;
-  }
-  if (kind !== 'system-intent') return;
-  const prompt = getSystemIntentPrompt(url);
-  if (!prompt) return;
-  Alert.alert(prompt.title, prompt.message, [
-    { text: 'Cancel', style: 'cancel' },
-    { text: 'Open', onPress: () => Linking.openURL(url).catch(() => undefined) },
-  ]);
-}
-
-export function renderInlineMath(text: string, keyBase: string): React.ReactNode[] {
-  const parts: React.ReactNode[] = [];
-  const mathRegex = new RegExp(INLINE_MATH);
-  let lastIdx = 0;
-  let keyCounter = 0;
-  let match: RegExpExecArray | null;
-
-  while ((match = mathRegex.exec(text)) !== null) {
-    if (match.index > lastIdx) {
-      parts.push(restoreEscapes(text.slice(lastIdx, match.index)));
-    }
-    parts.push(
-      <MathBlock
-        key={`${keyBase}-imath-${keyCounter++}`}
-        latex={restoreEscapes(match[1]!.trim(), true)}
-        display={false}
-      />,
-    );
-    lastIdx = match.index + match[0].length;
-  }
-
-  if (lastIdx < text.length) {
-    parts.push(restoreEscapes(text.slice(lastIdx)));
-  }
-  return parts;
-}
-
-export function renderInlineMarkdown(
-  source: string,
-  keyBase = 'inline',
-  renderColors: ColorScheme = defaultColors,
-  citations: readonly CitationSource[] = [],
-): React.ReactNode[] {
-  const text = protectEscapes(source);
-  const parts: React.ReactNode[] = [];
-  const inlineRegex =
-    /(\*\*(.+?)\*\*|\*(.+?)\*|~~(.+?)~~|`([^`]+)`|\[([^\]]+)\]\(([^)]+)\)|\[(\d{1,3})\](?!\())/g;
-  let lastIdx = 0;
-  let inlineMatch: RegExpExecArray | null;
-  let inlineKey = 0;
-
-  while ((inlineMatch = inlineRegex.exec(text)) !== null) {
-    if (inlineMatch.index > lastIdx) {
-      const plain = text.slice(lastIdx, inlineMatch.index);
-      parts.push(...renderInlineMath(plain, `${keyBase}-pre-${inlineKey}`));
-    }
-
-    if (inlineMatch[2]) {
-      parts.push(
-        <Text
-          key={`bold-${keyBase}-${inlineKey++}`}
-          style={{ color: renderColors.textPrimary, fontWeight: '700' }}
-        >
-          {restoreEscapes(inlineMatch[2])}
-        </Text>,
-      );
-    } else if (inlineMatch[3]) {
-      parts.push(
-        <Text
-          key={`italic-${keyBase}-${inlineKey++}`}
-          style={{ color: renderColors.textPrimary, fontStyle: 'italic' }}
-        >
-          {restoreEscapes(inlineMatch[3])}
-        </Text>,
-      );
-    } else if (inlineMatch[4]) {
-      parts.push(
-        <Text
-          key={`strike-${keyBase}-${inlineKey++}`}
-          style={{ textDecorationLine: 'line-through', color: renderColors.textMuted }}
-        >
-          {restoreEscapes(inlineMatch[4])}
-        </Text>,
-      );
-    } else if (inlineMatch[5]) {
-      parts.push(
-        <Text
-          key={`code-${keyBase}-${inlineKey++}`}
-          style={{
-            fontFamily: 'Menlo',
-            fontSize: typeScale.footnote,
-            backgroundColor: renderColors.surfaceHover,
-            color: renderColors.textPrimary,
-          }}
-        >
-          {` ${restoreEscapes(inlineMatch[5], true)} `}
-        </Text>,
-      );
-    } else if (inlineMatch[6] && inlineMatch[7]) {
-      const linkText = restoreEscapes(inlineMatch[6]);
-      const linkUrl = restoreEscapes(inlineMatch[7]);
-      parts.push(
-        <Text
-          key={`link-${keyBase}-${inlineKey++}`}
-          style={{
-            color: renderColors.teal,
-            textDecorationLine: 'underline',
-          }}
-          onPress={() => openAssistantLink(linkUrl)}
-          accessibilityRole="link"
-          accessibilityLabel={linkText}
-        >
-          {linkText}
-        </Text>,
-      );
-    } else if (inlineMatch[8]) {
-      const marker = Number(inlineMatch[8]);
-      const citation = citations[marker - 1];
-      if (citation && canPreviewCitation(citation)) {
-        parts.push(
-          <Text
-            key={`cite-${keyBase}-${inlineKey++}`}
-            style={{ color: renderColors.teal, fontWeight: '600' }}
-            onPress={() => previewCitation(citation)}
-            accessibilityRole="link"
-            accessibilityLabel={`Citation ${marker}: ${citation.title || citation.url}`}
-          >
-            {`[${marker}]`}
-          </Text>,
-        );
-      } else {
-        parts.push(inlineMatch[0]);
-      }
-    }
-
-    lastIdx = inlineMatch.index + inlineMatch[0].length;
-  }
-
-  if (lastIdx < text.length) {
-    parts.push(...renderInlineMath(text.slice(lastIdx), `${keyBase}-post`));
-  }
-
-  return parts;
-}
-
-const listItemPattern = /^(\s*)(?:([-*])|(\d+)\.)\s+(.+)$/;
-const accountImagePattern = /^!\[([^\]]*)\]\(<?([^()<>\s]+)>?\)$/;
-const nestedBullets = ['•', '◦', '▪'];
-
-type ParsedListItem = { depth: number; marker: string; ordered: boolean; text: string };
+type ParsedListItem = {
+  depth: number;
+  marker: string;
+  ordered: boolean;
+  text: string;
+  task: 'done' | 'open' | null;
+};
+type TableAlignment = 'left' | 'center' | 'right' | undefined;
 
 const TABLE_SORT_COLLATOR = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 
@@ -273,12 +84,14 @@ type TableSort = { column: number; direction: 'ascending' | 'descending' } | nul
 function MarkdownTable({
   rows,
   columnWidths,
+  alignments,
   keyBase,
   renderColors,
   citations,
 }: {
   rows: string[][];
   columnWidths: number[];
+  alignments: readonly TableAlignment[];
   keyBase: string;
   renderColors: ColorScheme;
   citations: readonly CitationSource[];
@@ -345,6 +158,7 @@ function MarkdownTable({
                   color: renderColors.textPrimary,
                   fontWeight: '500',
                   lineHeight: 19,
+                  textAlign: alignments[colIdx] ?? 'left',
                 }}
               >
                 {renderInlineMarkdown(label, `${keyBase}-th-${colIdx}`, renderColors, citations)}
@@ -379,6 +193,7 @@ function MarkdownTable({
                     color: renderColors.textSecondary,
                     fontWeight: '400',
                     lineHeight: 19,
+                    textAlign: alignments[colIdx] ?? 'left',
                   }}
                   selectable
                 >
@@ -429,8 +244,21 @@ function collectListItems(
   let idx = start;
 
   while (idx < lines.length) {
-    const match = lines[idx]!.match(listItemPattern);
-    if (!match) break;
+    const line = lines[idx]!;
+    const previous = items[items.length - 1];
+    if (previous && !listItemPattern.test(line) && !thematicBreakPattern.test(line)) {
+      const continuation =
+        continuationIndentPattern.test(line) ||
+        (line.trim() === '' &&
+          continuationIndentPattern.test(lines[idx + 1] ?? '') &&
+          !listItemPattern.test(lines[idx + 1] ?? ''));
+      if (!continuation) break;
+      if (line.trim()) previous.text += `\n${line.trim()}`;
+      idx++;
+      continue;
+    }
+    const match = line.match(listItemPattern);
+    if (!match || thematicBreakPattern.test(line)) break;
 
     const indent = match[1]!.replace(/\t/g, '  ').length;
     while (indentStack.length > 0 && indent < indentStack[indentStack.length - 1]!) {
@@ -442,11 +270,15 @@ function collectListItems(
 
     const depth = indentStack.length - 1;
     const ordered = match[3] !== undefined;
+    const task = ordered ? null : taskItemPattern.exec(match[5]!);
     items.push({
       depth,
       ordered,
-      marker: ordered ? `${match[3]}.` : nestedBullets[Math.min(depth, nestedBullets.length - 1)]!,
-      text: match[4]!,
+      marker: ordered
+        ? `${match[3]}${match[4]}`
+        : nestedBullets[Math.min(depth, nestedBullets.length - 1)]!,
+      text: task ? task[2]! : match[5]!,
+      task: task ? (task[1] === ' ' ? 'open' : 'done') : null,
     });
     idx++;
   }
@@ -474,22 +306,22 @@ function renderTextSegment(
   while (idx < lines.length) {
     const line = lines[idx]!;
 
-    const imageMatch = accountImagePattern.exec(restoreEscapes(line).trim());
-    if (imageMatch && resolveGeneratedImageUri(imageMatch[2]!)) {
+    const imageMatch = fullLineImagePattern.exec(restoreEscapes(line).trim());
+    if (imageMatch) {
       nodes.push(
         <View key={`${keyBase}-img-${idx}`} style={{ marginVertical: 6 }}>
-          <GeneratedImage imageUrl={imageMatch[2]!} revisedPrompt={imageMatch[1] || undefined} />
+          <MarkdownImage src={imageMatch[2]!} alt={imageMatch[1]!.trim()} colors={renderColors} />
         </View>,
       );
       idx++;
       continue;
     }
 
-    const headerMatch = line.match(/^(#{1,6})\s+(.+)$/);
+    const headerMatch = line.match(/^ {0,3}(#{1,6})\s+(.+)$/);
     if (headerMatch) {
       const level = headerMatch[1]!.length;
-      const headerText = headerMatch[2]!;
-      const sectionId = context.sectionId?.(headerText.replace(/\s+#+\s*$/, ''), level) ?? null;
+      const headerText = headerMatch[2]!.replace(/\s+#+\s*$/, '');
+      const sectionId = context.sectionId?.(headerText, level) ?? null;
       const onHeadingLayout = context.onHeadingLayout;
       const headingTypography =
         level === 1
@@ -527,45 +359,108 @@ function renderTextSegment(
       continue;
     }
 
-    if (line.startsWith('> ')) {
+    if (quoteLinePattern.test(line)) {
+      const start = idx;
       const quoteLines: string[] = [];
-      while (idx < lines.length && lines[idx]!.startsWith('> ')) {
-        const body = lines[idx]!.slice(2);
-        if (body.trim().length > 0) {
-          quoteLines.push(body);
+      while (idx < lines.length && quoteLinePattern.test(lines[idx]!)) {
+        quoteLines.push(lines[idx]!.replace(quoteLinePattern, ''));
+        idx++;
+      }
+      nodes.push(
+        <View
+          key={`${keyBase}-bq-${start}`}
+          testID="markdown-blockquote"
+          style={{
+            borderLeftWidth: 2,
+            borderLeftColor: renderColors.border,
+            paddingLeft: 12,
+            marginVertical: 4,
+          }}
+        >
+          {renderTextSegment(
+            quoteLines.join('\n'),
+            `${keyBase}-bq${start}`,
+            { ...renderColors, textPrimary: renderColors.textSecondary },
+            { citations },
+          )}
+        </View>,
+      );
+      continue;
+    }
+
+    if (footnoteDefinitionPattern.test(line)) {
+      const start = idx;
+      const notes: { label: string; text: string }[] = [];
+      while (idx < lines.length) {
+        const current = lines[idx]!;
+        const definition = footnoteDefinitionPattern.exec(current);
+        if (definition) {
+          notes.push({ label: restoreEscapes(definition[1]!), text: definition[2]! });
+        } else if (continuationIndentPattern.test(current) && notes.length > 0) {
+          notes[notes.length - 1]!.text += `\n${current.trim()}`;
+        } else if (!(
+          current.trim() === '' && footnoteDefinitionPattern.test(lines[idx + 1] ?? '')
+        )) {
+          break;
         }
         idx++;
       }
       nodes.push(
         <View
-          key={`${keyBase}-bq-${idx}`}
+          key={`${keyBase}-fn-${start}`}
+          accessibilityLabel="Footnotes"
           style={{
-            borderLeftWidth: 3,
-            borderLeftColor: renderColors.teal,
-            paddingLeft: 10,
-            paddingVertical: 4,
-            marginVertical: 4,
-            backgroundColor: renderColors.surfaceBase,
-            borderRadius: 4,
+            marginTop: 8,
+            paddingTop: 8,
+            gap: 4,
+            borderTopWidth: StyleSheet.hairlineWidth,
+            borderTopColor: renderColors.border,
           }}
         >
-          <Text
-            style={{
-              ...chatTypography.body,
-              fontStyle: 'italic',
-              color: renderColors.textSecondary,
-            }}
-            selectable
-          >
-            {renderInlineMarkdown(
-              quoteLines.join('\n'),
-              `${keyBase}-bqil-${idx}`,
-              renderColors,
-              citations,
-            )}
-          </Text>
+          {notes.map((note, i) => (
+            <View key={`${keyBase}-fn-${start}-${i}`} style={{ flexDirection: 'row', gap: 6 }}>
+              <Text
+                style={{
+                  fontSize: typeScale.footnote,
+                  lineHeight: FOOTNOTE_LINE_HEIGHT,
+                  color: renderColors.textSecondary,
+                }}
+              >{`${note.label}.`}</Text>
+              <Text
+                selectable
+                style={{
+                  fontSize: typeScale.footnote,
+                  lineHeight: FOOTNOTE_LINE_HEIGHT,
+                  flex: 1,
+                  color: renderColors.textSecondary,
+                }}
+              >
+                {renderInlineMarkdown(
+                  note.text,
+                  `${keyBase}-fnil-${start}-${i}`,
+                  renderColors,
+                  citations,
+                )}
+              </Text>
+            </View>
+          ))}
         </View>,
       );
+      continue;
+    }
+
+    if (thematicBreakPattern.test(line)) {
+      nodes.push(
+        <View
+          key={`${keyBase}-hr-${idx}`}
+          style={{
+            height: 1,
+            backgroundColor: renderColors.border,
+            marginVertical: 8,
+          }}
+        />,
+      );
+      idx++;
       continue;
     }
 
@@ -579,17 +474,35 @@ function renderTextSegment(
               key={`${keyBase}-li-${idx}-${i}`}
               style={{ flexDirection: 'row', gap: 8, paddingLeft: 4 + item.depth * 16 }}
             >
-              <Text
-                style={{
-                  ...chatTypography.body,
-                  color: renderColors.teal,
-                  ...(item.ordered
-                    ? { minWidth: 18, textAlign: 'right' as const }
-                    : { width: 12, textAlign: 'center' as const }),
-                }}
-              >
-                {item.marker}
-              </Text>
+              {item.task ? (
+                <View
+                  accessible
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: item.task === 'done', disabled: true }}
+                  style={{
+                    height: chatTypography.body.lineHeight,
+                    justifyContent: 'center',
+                  }}
+                >
+                  {item.task === 'done' ? (
+                    <SquareCheck size={TASK_MARKER_SIZE} color={renderColors.textPrimary} />
+                  ) : (
+                    <Square size={TASK_MARKER_SIZE} color={renderColors.textSecondary} />
+                  )}
+                </View>
+              ) : (
+                <Text
+                  style={{
+                    ...chatTypography.body,
+                    color: renderColors.textPrimary,
+                    ...(item.ordered
+                      ? { minWidth: 18, textAlign: 'right' as const }
+                      : { width: 12, textAlign: 'center' as const }),
+                  }}
+                >
+                  {item.marker}
+                </Text>
+              )}
               <Text
                 style={{
                   ...chatTypography.body,
@@ -636,6 +549,11 @@ function renderTextSegment(
           separatorLine.includes('-')
         ) {
           const tableRows: string[][] = [];
+          const alignments: TableAlignment[] = parseTableRow(separatorLine).map((cell) => {
+            const left = cell.startsWith(':');
+            const right = cell.endsWith(':');
+            return left && right ? 'center' : right ? 'right' : left ? 'left' : undefined;
+          });
 
           const headerRow = parseTableRow(line);
           tableRows.push(headerRow);
@@ -669,6 +587,7 @@ function renderTextSegment(
                 key={`${keyBase}-table-${idx}`}
                 rows={tableRows}
                 columnWidths={columnWidths}
+                alignments={alignments}
                 keyBase={`${keyBase}-t${idx}`}
                 renderColors={renderColors}
                 citations={citations}
@@ -680,21 +599,6 @@ function renderTextSegment(
       }
     }
 
-    if (/^(---|\*\*\*|___)$/.test(line.trim())) {
-      nodes.push(
-        <View
-          key={`${keyBase}-hr-${idx}`}
-          style={{
-            height: 1,
-            backgroundColor: renderColors.border,
-            marginVertical: 8,
-          }}
-        />,
-      );
-      idx++;
-      continue;
-    }
-
     if (line.trim()) {
       nodes.push(
         <Text
@@ -702,7 +606,12 @@ function renderTextSegment(
           style={{ ...chatTypography.body, color: renderColors.textPrimary }}
           selectable
         >
-          {renderInlineMarkdown(line, `${keyBase}-pil-${idx}`, renderColors, citations)}
+          {renderInlineMarkdown(
+            line.replace(/(?:\\| {2,})$/, ''),
+            `${keyBase}-pil-${idx}`,
+            renderColors,
+            citations,
+          )}
         </Text>,
       );
     } else if (idx > 0 && idx < lines.length - 1) {
@@ -862,6 +771,13 @@ export function renderMarkdownContent(
             fence={classified}
             colors={renderColors}
             onFollowUp={options.onFollowUp}
+            streaming={!highlightCode}
+            renderBody={(body) =>
+              renderMarkdownContent(body, renderColors, {
+                highlightCode,
+                ...(options.onFollowUp ? { onFollowUp: options.onFollowUp } : {}),
+              })
+            }
           />,
         );
         lastIndex = match.index + match[0].length;

@@ -203,6 +203,35 @@ describe('Library reads the account library, not the local transcript', () => {
     });
   });
 
+  it('says a Library search failed and retries it instead of reporting no matches', async () => {
+    const screen = render(<LibraryScreen />);
+    await waitFor(() => {
+      expect(screen.getAllByText('launch-plan.pdf').length).toBeGreaterThan(0);
+    });
+
+    mockApi.get.mockImplementation(async (path: string) => {
+      if (new URL(`http://localhost${path}`).searchParams.get('q')) throw new Error('offline');
+      return { items: [HOSTED_DOCUMENT], has_more: false, next_offset: null };
+    });
+    fireEvent.changeText(screen.getByLabelText('Search library'), 'launch');
+    await waitFor(() => {
+      expect(screen.getByText('Search could not be completed')).toBeTruthy();
+    });
+    expect(screen.queryByText(/matches/)).toBeNull();
+    expect(screen.queryByTestId('library-empty-state')).toBeNull();
+
+    mockApi.get.mockImplementation(async () => ({
+      items: [HOSTED_DOCUMENT],
+      has_more: false,
+      next_offset: null,
+    }));
+    fireEvent.press(screen.getByTestId('library-retry'));
+    await waitFor(() => {
+      expect(screen.getAllByText('launch-plan.pdf').length).toBeGreaterThan(0);
+    });
+    expect(screen.queryByText('Search could not be completed')).toBeNull();
+  });
+
   it('renders a hosted document, filters it by the search field, and shares it on press', async () => {
     const screen = render(<LibraryScreen />);
 

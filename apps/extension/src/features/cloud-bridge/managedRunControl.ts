@@ -26,6 +26,8 @@ import {
 const UNCONFIRMED_CANCELLATION_MESSAGE =
   'Cancellation has not been confirmed. The run may still be working.';
 const MAX_VISIBLE_TEXT_CHARACTERS = 512_000;
+export const RESUMED_RUN_BROWSER_STEP_MESSAGE =
+  'This reply stopped while it waited on a browser step. Retry to run it again.';
 export const MANAGED_RUN_CANCELLATION_TIMEOUT_MS = 15_000;
 export const ALL_MANAGED_RUN_STATES = AgentTaskStateSchema.options;
 export const MANAGED_RUN_CANCELLATION_CONFIRMATION_TIMEOUT_MS = 15_000;
@@ -51,7 +53,7 @@ export type ChromeManagedRunControlResult =
   | { status: 'success' }
   | {
       status: 'error';
-      code: 'invalid_request' | 'auth_required' | 'cancelled' | 'server_error';
+      code: 'invalid_request' | 'auth_required' | 'cancelled' | 'server_error' | 'protocol_error';
       message: string;
     };
 type ChromeManagedRunControlError = Extract<ChromeManagedRunControlResult, { status: 'error' }>;
@@ -271,9 +273,8 @@ export async function resumeChromeManagedRun(
       }
       return {
         status: 'error',
-        code: 'server_error',
-        message:
-          'This run is waiting for browser results. Its original browser context must be recovered before continuing.',
+        code: 'protocol_error',
+        message: RESUMED_RUN_BROWSER_STEP_MESSAGE,
       };
     }
     return { status: 'success' };

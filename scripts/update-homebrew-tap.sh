@@ -9,7 +9,10 @@
 #   - HOMEBREW_TAP_DIR env var points to a local clone of the tap repo (default: ~/code/homebrew-tap)
 #
 # Usage:
-#   ./scripts/update-homebrew-tap.sh 1.0.0
+#   ./scripts/update-homebrew-tap.sh 0.0.1
+#
+# Homebrew is not an advertised install route (docs/runbooks/cli-release.md): run this only
+# once the owner makes the tap public and the runbook and install docs list it.
 
 set -euo pipefail
 
@@ -110,7 +113,7 @@ cat > "$TAP_DIR/Formula/agiworkforce.rb" <<EOF
 # Source: https://github.com/siddharthanagula3/agiworkforce/blob/main/scripts/homebrew/agiworkforce.rb
 
 class Agiworkforce < Formula
-  desc "Multi-model AI agent for your terminal, BYOK, 25 providers, MCP, computer-use"
+  desc "Multi-model AI coding agent for your terminal"
   homepage "https://agiworkforce.com"
   license "Proprietary"
   version "$VERSION"

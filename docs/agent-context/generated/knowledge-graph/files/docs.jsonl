@@ -38,6 +38,8 @@
 {"path":"docs/agent-context/generated/knowledge-graph/files/tools.jsonl","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
 {"path":"docs/agent-context/generated/knowledge-graph/guards.json","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
 {"path":"docs/agent-context/generated/knowledge-graph/manifest.json","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
+{"path":"docs/agent-context/generated/knowledge-graph/manifest.json","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
+{"path":"docs/agent-context/generated/knowledge-graph/manifest.json","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
 {"path":"docs/agent-context/generated/knowledge-graph/migrations.json","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
 {"path":"docs/agent-context/generated/knowledge-graph/routes.json","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
 {"path":"docs/agent-context/generated/knowledge-graph/skills.json","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
@@ -161,6 +163,7 @@
 {"path":"docs/runbooks/business-continuity.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/runbooks/capacity-and-load-testing.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/runbooks/chrome-web-store-publish.md","unit":"docs","role":"doc","unparsed":"notCode"}
+{"path":"docs/runbooks/cli-release.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/runbooks/connector-oauth-apps.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/runbooks/database-backup-restore.md","unit":"docs","role":"doc","unparsed":"notCode"}
 {"path":"docs/runbooks/desktop-electron-macos-release.md","unit":"docs","role":"doc","unparsed":"notCode"}

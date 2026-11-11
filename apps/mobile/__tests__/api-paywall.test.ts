@@ -79,6 +79,7 @@ import {
   resetApiAccountState,
   recoverStreamSession,
 } from '../services/api';
+import { CloudCredentialUnavailableError } from '../services/apiErrors';
 import { Alert } from 'react-native';
 import { registerAppTransactionForAccount } from '../src/features/age-assurance/appTransaction';
 import {
@@ -306,7 +307,7 @@ describe('explicit caller-owned 401 recovery', () => {
     expect(mockClearAuthSession).not.toHaveBeenCalled();
   });
 
-  it('does not change ambient refresh and terminal logout for ordinary custom headers', async () => {
+  it('does not change ambient refresh for ordinary custom headers', async () => {
     const fetch = jest
       .spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(makeResponse(401, {}))
@@ -314,10 +315,10 @@ describe('explicit caller-owned 401 recovery', () => {
     mockRefreshAuthSession.mockResolvedValueOnce(true);
     await expect(
       api.get('/api/default-recovery', { headers: { 'Idempotency-Key': 'same-request' } }),
-    ).rejects.toThrow('Session expired');
+    ).rejects.toBeInstanceOf(CloudCredentialUnavailableError);
     expect(fetch).toHaveBeenCalledTimes(2);
     expect(mockRefreshAuthSession).toHaveBeenCalledTimes(1);
-    expect(mockClearAuthSession).toHaveBeenCalledTimes(1);
+    expect(mockClearAuthSession).not.toHaveBeenCalled();
   });
 
   it('does not suppress passkey refusals with the 401-only option', async () => {
@@ -573,17 +574,17 @@ describe('Cloud account request isolation', () => {
     await expect(api.get('/api/account-scoped')).resolves.toEqual({ owner: 'account-b' });
   });
 
-  it('invalidates and clears Cloud account state synchronously on terminal 401', async () => {
-    mockClearLocalCloudAccountState.mockImplementationOnce(resetApiAccountState);
+  it('keeps the Cloud account when a refusal outlasts the refresh', async () => {
     mockRefreshAuthSession.mockResolvedValueOnce(false);
     jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(makeResponse(401, { error: 'expired' }));
 
     const request = api.get('/api/account-scoped');
-    await expect(request).rejects.toThrow('Session expired');
+    await expect(request).rejects.toBeInstanceOf(CloudCredentialUnavailableError);
 
-    expect(mockInvalidateCloudAccount).toHaveBeenCalledTimes(1);
-    expect(mockClearLocalCloudAccountState).toHaveBeenCalledTimes(1);
-    expect(mockClearAuthSession).toHaveBeenCalledTimes(1);
+    expect(mockInvalidateCloudAccount).not.toHaveBeenCalled();
+    expect(mockClearLocalCloudAccountState).not.toHaveBeenCalled();
+    expect(mockClearAuthSession).not.toHaveBeenCalled();
+    expect(Alert.alert).not.toHaveBeenCalled();
   });
 
   it('cancels an in-flight direct-to-storage upload on account teardown', async () => {
@@ -686,7 +687,7 @@ describe('Cloud account request isolation', () => {
     expect(mockCreateUploadTask).not.toHaveBeenCalled();
   });
 
-  it('ends the session when a refreshed attachment presign is still unauthorized', async () => {
+  it('keeps the session when a refreshed attachment presign is still unauthorized', async () => {
     mockRefreshAuthSession.mockResolvedValueOnce(true);
     const fetchMock = jest
       .spyOn(globalThis, 'fetch')
@@ -695,12 +696,34 @@ describe('Cloud account request isolation', () => {
 
     await expect(
       api.uploadFile({ name: 'attachment.txt', type: 'text/plain', uri: 'file:///attachment.txt' }),
-    ).rejects.toThrow('session expired');
+    ).rejects.toBeInstanceOf(CloudCredentialUnavailableError);
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(mockRefreshAuthSession).toHaveBeenCalledTimes(1);
     expect(mockCreateUploadTask).not.toHaveBeenCalled();
-    expect(mockInvalidateCloudAccount).toHaveBeenCalledTimes(1);
+    expect(mockInvalidateCloudAccount).not.toHaveBeenCalled();
+    expect(mockClearAuthSession).not.toHaveBeenCalled();
+  });
+
+  it('starts no second presign when the upload is canceled while the session refreshes', async () => {
+    const controller = new AbortController();
+    mockRefreshAuthSession.mockImplementationOnce(async () => {
+      controller.abort();
+      return true;
+    });
+    const fetchMock = jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(makeResponse(401, { error: 'expired' }));
+
+    await expect(
+      api.uploadFile(
+        { name: 'attachment.txt', type: 'text/plain', uri: 'file:///attachment.txt' },
+        { signal: controller.signal },
+      ),
+    ).rejects.toThrow('Upload timed out');
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(mockCreateUploadTask).not.toHaveBeenCalled();
   });
 
   it('refreshes an expired session at attachment completion without uploading the file again', async () => {
@@ -749,7 +772,7 @@ describe('Cloud account request isolation', () => {
     });
   });
 
-  it('clears a terminal session failure at attachment completion', async () => {
+  it('keeps the session when attachment completion is refused past the refresh', async () => {
     mockUploadAsync.mockResolvedValueOnce({ status: 200, body: '', headers: {} });
     const fetchMock = jest
       .spyOn(globalThis, 'fetch')
@@ -765,12 +788,12 @@ describe('Cloud account request isolation', () => {
 
     await expect(
       api.uploadFile({ name: 'attachment.txt', type: 'text/plain', uri: 'file:///attachment.txt' }),
-    ).rejects.toThrow('session expired');
+    ).rejects.toBeInstanceOf(CloudCredentialUnavailableError);
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(mockUploadAsync).toHaveBeenCalledTimes(1);
-    expect(mockInvalidateCloudAccount).toHaveBeenCalledTimes(1);
-    expect(mockClearLocalCloudAccountState).toHaveBeenCalledTimes(1);
+    expect(mockInvalidateCloudAccount).not.toHaveBeenCalled();
+    expect(mockClearLocalCloudAccountState).not.toHaveBeenCalled();
   });
 });
 

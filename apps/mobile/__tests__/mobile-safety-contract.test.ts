@@ -125,6 +125,12 @@ describe('deleting an account', () => {
       /in 24 hours|cancel before erasure begins/,
     );
     expect(DELETE_ACCOUNT_CONFIRMATION.message).toMatch(/cannot be undone/);
+    expect(DELETE_ACCOUNT_CONFIRMATION.message).toMatch(
+      /Anything the law or an active legal hold requires us to keep is kept/,
+    );
+    expect(DELETE_ACCOUNT_CONFIRMATION.message).toMatch(
+      /already cancelled ends when erasure runs, and its unused time is not refunded/,
+    );
     expect(DELETE_ACCOUNT_CONFIRMATION.message).toMatch(/signed out/);
     expect(DELETE_ACCOUNT_CONFIRMATION.message).toMatch(/Local Mode data stays on this device/);
     expect(DELETE_ACCOUNT_CONFIRMATION.message).toMatch(/Export your Cloud data above first/);

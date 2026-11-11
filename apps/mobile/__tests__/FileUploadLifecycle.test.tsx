@@ -55,6 +55,7 @@ jest.mock('../src/features/auth/services/cloudAccountSession', () => ({
 }));
 
 import { api } from '@/services/api';
+import { CloudCredentialUnavailableError } from '@/services/apiErrors';
 import {
   AttachmentPreview,
   type Attachment,
@@ -105,6 +106,10 @@ function abortError(): Error {
   const error = new Error('Attachment upload aborted');
   error.name = 'AbortError';
   return error;
+}
+
+function flushMicrotasks(): Promise<void> {
+  return new Promise<void>((resolve) => setTimeout(resolve, 0));
 }
 
 function entry(id: string) {
@@ -278,6 +283,94 @@ describe('resume and retry', () => {
     expect(entry(ROWS_CSV.id)?.phase).toBe('canceled');
   });
 
+  it('keeps a cancel pressed during the second backoff final too', async () => {
+    jest.useFakeTimers();
+    mockUploadFile.mockRejectedValue(new Error('Network request failed'));
+
+    const pending = uploadWithRetry(fileInputFor(ROWS_CSV), ROWS_CSV.fileName, ROWS_CSV.id);
+    await jest.advanceTimersByTimeAsync(1000);
+    expect(mockUploadFile).toHaveBeenCalledTimes(2);
+    useUploadLifecycleStore.getState().cancel(ROWS_CSV.id);
+    await jest.advanceTimersByTimeAsync(10000);
+
+    expect(await pending).toBeNull();
+    expect(mockUploadFile).toHaveBeenCalledTimes(2);
+    expect(entry(ROWS_CSV.id)?.phase).toBe('canceled');
+  });
+
+  it('starts no request when the upload is canceled while consent is still being asked', async () => {
+    let allow: () => void = () => undefined;
+    mockEnsureCloudSendConsent.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        allow = resolve;
+      }),
+    );
+
+    const pending = uploadWithRetry(fileInputFor(ROWS_CSV), ROWS_CSV.fileName, ROWS_CSV.id);
+    expect(entry(ROWS_CSV.id)?.phase).toBe('uploading');
+    useUploadLifecycleStore.getState().cancel(ROWS_CSV.id);
+    allow();
+
+    expect(await pending).toBeNull();
+    expect(mockUploadFile).not.toHaveBeenCalled();
+    expect(entry(ROWS_CSV.id)?.phase).toBe('canceled');
+  });
+
+  it('starts no request for a file removed while consent is still being asked', async () => {
+    let allow: () => void = () => undefined;
+    mockEnsureCloudSendConsent.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        allow = resolve;
+      }),
+    );
+
+    const pending = uploadWithRetry(fileInputFor(ROWS_CSV), ROWS_CSV.fileName, ROWS_CSV.id);
+    useUploadLifecycleStore.getState().clear(ROWS_CSV.id);
+    allow();
+
+    expect(await pending).toBeNull();
+    expect(mockUploadFile).not.toHaveBeenCalled();
+    expect(entry(ROWS_CSV.id)).toBeUndefined();
+  });
+
+  it('drops a result that arrives after the person canceled', async () => {
+    let finish: (value: ReturnType<typeof uploadResultFor>) => void = () => undefined;
+    mockUploadFile.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
+
+    const pending = uploadWithRetry(fileInputFor(ROWS_CSV), ROWS_CSV.fileName, ROWS_CSV.id);
+    await flushMicrotasks();
+    useUploadLifecycleStore.getState().cancel(ROWS_CSV.id);
+    finish(uploadResultFor(ROWS_CSV));
+
+    expect(await pending).toBeNull();
+    expect(entry(ROWS_CSV.id)?.phase).toBe('canceled');
+  });
+
+  it('does not let a canceled request that fails late overwrite the retry that replaced it', async () => {
+    let failFirst: (error: Error) => void = () => undefined;
+    mockUploadFile
+      .mockReturnValueOnce(
+        new Promise((_resolve, reject) => {
+          failFirst = reject;
+        }),
+      )
+      .mockResolvedValueOnce(uploadResultFor(ROWS_CSV));
+
+    const first = uploadWithRetry(fileInputFor(ROWS_CSV), ROWS_CSV.fileName, ROWS_CSV.id);
+    await flushMicrotasks();
+    useUploadLifecycleStore.getState().cancel(ROWS_CSV.id);
+    const second = uploadWithRetry(fileInputFor(ROWS_CSV), ROWS_CSV.fileName, ROWS_CSV.id);
+    expect(await second).toEqual(uploadResultFor(ROWS_CSV));
+    failFirst(abortError());
+
+    expect(await first).toBeNull();
+    expect(entry(ROWS_CSV.id)?.phase).toBe('done');
+  });
+
   it('does not revive a file removed during backoff', async () => {
     jest.useFakeTimers();
     mockUploadFile.mockRejectedValueOnce(new Error('Network request failed'));
@@ -329,16 +422,16 @@ describe('resume and retry', () => {
     expect(uploadStatusLabel(entry(NOTES_TXT.id))).toBe('Upload failed');
   });
 
-  it('stops on an expired session rather than burning the budget on a retry that cannot work', async () => {
-    mockUploadFile.mockRejectedValue(new Error('Upload failed: session expired.'));
+  it('stops when the account cannot be confirmed rather than burning the budget on a retry', async () => {
+    mockUploadFile.mockRejectedValue(new CloudCredentialUnavailableError());
 
     await expect(
       uploadWithRetry(fileInputFor(NOTES_TXT), NOTES_TXT.fileName, NOTES_TXT.id),
-    ).rejects.toThrow('session expired');
+    ).rejects.toBeInstanceOf(CloudCredentialUnavailableError);
     expect(mockUploadFile).toHaveBeenCalledTimes(1);
     expect(entry(NOTES_TXT.id)).toMatchObject({
       phase: 'failed',
-      error: 'Your session expired. Sign in again to upload files.',
+      error: 'Could not confirm your account to upload files. Try again.',
     });
   });
 

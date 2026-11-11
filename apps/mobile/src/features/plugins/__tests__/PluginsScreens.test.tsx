@@ -1,6 +1,6 @@
 import React from 'react';
 import { Alert } from 'react-native';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { PRODUCT_BRAND } from '@agiworkforce/types';
 
 const mockPush = jest.fn();
@@ -172,6 +172,41 @@ describe('mobile plugins', () => {
     );
   });
 
+  it('discards a Show more page that resolves after the search changed', async () => {
+    const STALE = entry({ id: 'stale', name: 'Stale plugin' });
+    let resolveOlderPage: (page: unknown) => void = () => undefined;
+    const olderPage = new Promise((resolve) => {
+      resolveOlderPage = resolve;
+    });
+    mockDirectory.mockImplementation((query: { cursor?: string; search?: string }) => {
+      if (query.cursor) return olderPage;
+      if (query.search) return Promise.resolve({ entries: [DOCS], total: 1, nextCursor: null });
+      return Promise.resolve({ entries: [MAIL], total: 2, nextCursor: 'cursor-a' });
+    });
+    const { findByText, findAllByLabelText, getByLabelText, queryByText, queryAllByLabelText } =
+      render(<PluginsScreen />);
+
+    fireEvent.press(await findByText('Show more'));
+    await waitFor(() =>
+      expect(mockDirectory).toHaveBeenCalledWith(
+        expect.objectContaining({ cursor: 'cursor-a' }),
+        expect.anything(),
+      ),
+    );
+
+    fireEvent.changeText(getByLabelText('Search plugins'), 'docs');
+    expect((await findAllByLabelText(/^Docs kit by AGI Workforce/)).length).toBeGreaterThan(0);
+
+    await act(async () => {
+      resolveOlderPage({ entries: [STALE], total: 3, nextCursor: 'cursor-stale' });
+      await olderPage;
+    });
+
+    expect(queryAllByLabelText(/^Stale plugin by AGI Workforce/)).toHaveLength(0);
+    expect(queryAllByLabelText(/^Mail helper by AGI Workforce/)).toHaveLength(0);
+    expect(queryByText('Show more')).toBeNull();
+  });
+
   it('titles sections in title case and lists installed plugins once under Installed', async () => {
     mockInstallations.mockResolvedValue([
       {
@@ -283,6 +318,76 @@ describe('mobile plugins', () => {
 
     await waitFor(() => expect(mockMove).toHaveBeenCalledWith('mail', '1.1.0', ['send mail']));
     expect(alert.mock.calls[0]?.[0]).toBe('Switch to version 1.1.0?');
+    expect(alert.mock.calls[0]?.[1]).toContain('It also asks for: send mail.');
+    alert.mockRestore();
+  });
+
+  it('submits nothing when the person cancels a version change that adds a permission', async () => {
+    mockParams.id = 'mail';
+    mockPlugin.mockResolvedValue(MAIL);
+    mockInstallations.mockResolvedValue([
+      {
+        pluginId: 'mail',
+        installedVersion: '1.0.0',
+        enabled: true,
+        installedAt: '2026-10-01T00:00:00.000Z',
+        updatedAt: '2026-10-01T00:00:00.000Z',
+      },
+    ]);
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation((_title, _body, buttons) => {
+      buttons?.find((button) => button.style === 'cancel')?.onPress?.();
+    });
+
+    const { findByText, getByText } = render(<PluginDetailScreen />);
+    fireEvent.press(await findByText('1.1.0'));
+    fireEvent.press(getByText('Switch version'));
+
+    await waitFor(() => expect(alert).toHaveBeenCalledTimes(1));
+    expect(alert.mock.calls[0]?.[1]).toContain('It also asks for: send mail.');
+    expect(mockMove).not.toHaveBeenCalled();
+    alert.mockRestore();
+  });
+
+  it('acknowledges exactly the permissions the update confirmation names', async () => {
+    mockParams.id = 'mail';
+    mockPlugin.mockResolvedValue(MAIL);
+    mockInstallations.mockResolvedValue([
+      {
+        pluginId: 'mail',
+        installedVersion: '1.0.0',
+        enabled: true,
+        installedAt: '2026-10-01T00:00:00.000Z',
+        updatedAt: '2026-10-01T00:00:00.000Z',
+      },
+    ]);
+    mockUpdates.mockResolvedValue([
+      {
+        pluginId: 'mail',
+        installedVersion: '1.0.0',
+        latestVersion: '1.1.0',
+        installedVersionStopped: false,
+        diff: {
+          pluginId: 'mail',
+          from: '1.0.0',
+          to: '1.1.0',
+          changelog: '',
+          addedSkills: [],
+          removedSkills: [],
+          addedPermissions: [],
+          removedPermissions: [],
+          requiresPermissionReview: false,
+        },
+      },
+    ]);
+    mockMove.mockResolvedValue(undefined);
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation((_title, _body, buttons) => {
+      buttons?.find((button) => button.style === 'destructive')?.onPress?.();
+    });
+
+    const { findByText } = render(<PluginDetailScreen />);
+    fireEvent.press(await findByText('Update to 1.1.0'));
+
+    await waitFor(() => expect(mockMove).toHaveBeenCalledWith('mail', '1.1.0', ['send mail']));
     expect(alert.mock.calls[0]?.[1]).toContain('It also asks for: send mail.');
     alert.mockRestore();
   });

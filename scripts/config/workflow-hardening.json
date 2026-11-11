@@ -175,26 +175,6 @@
         "fix": "timeout-minutes: 60"
       },
       {
-        "id": "release-cli.yml:validate-version",
-        "reason": "a tag validation step should never outlive a few minutes",
-        "fix": "timeout-minutes: 10"
-      },
-      {
-        "id": "release-cli.yml:build",
-        "reason": "a cross platform cargo release build; the matrix runs five of them at once",
-        "fix": "timeout-minutes: 90"
-      },
-      {
-        "id": "release-cli.yml:sign-release-assets",
-        "reason": "signing reaches an external OIDC issuer that can stall",
-        "fix": "timeout-minutes: 20"
-      },
-      {
-        "id": "release-cli.yml:github-release",
-        "reason": "it uploads every built binary to the release",
-        "fix": "timeout-minutes: 30"
-      },
-      {
         "id": "release-desktop.yml:prepare-release",
         "reason": "it only creates the draft release",
         "fix": "timeout-minutes: 10"

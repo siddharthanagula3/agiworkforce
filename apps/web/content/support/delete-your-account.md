@@ -4,7 +4,7 @@ title: Delete your account, or cancel a scheduled deletion
 path: /privacy
 category: account
 tags: delete account, close account, erase, deletion, cancel deletion, undo deletion, permanently delete, account erasure, remove my data
-updated: 2026-09-19
+updated: 2026-11-11
 description: How account deletion works, how to cancel a scheduled deletion and how to delete conversations without deleting the account.
 scope: public
 ---
@@ -13,8 +13,9 @@ scope: public
 
 Settings, Account carries **Delete account**, marked "This cannot be undone."
 Confirming requires typing `DELETE` into the dialog. The dialog states what
-happens: your account and all associated data are permanently deleted, you are
-signed out now, and erasure runs 24 hours after you confirm.
+happens: your account and its Cloud data are scheduled for permanent deletion,
+and erasure starts after a cancellation deadline 24 hours later. It also says
+that anything the law or an active legal hold requires us to keep is kept.
 
 In the AGI Mobile app for iPhone and Android, Settings, Cloud Account carries
 **Delete Account**.
@@ -23,6 +24,9 @@ After you confirm, the dialog shows the date and time the 24 hours are up, and
 you are signed out when you continue. That is the earliest moment erasure can
 begin, not the moment it finishes: the job that erases accounts runs once a day,
 so the work starts on the first daily run after that deadline passes.
+
+If an active legal hold covers your account, for example one your workspace has
+placed, nothing is erased until the hold is released.
 
 ## Changing your mind
 
@@ -39,8 +43,11 @@ window has closed and erasure is already underway.
 Export your conversations first. The export is a self-service download from
 Settings, Privacy, and it cannot be run once the account is gone.
 
-If a paid subscription is attached, cancel or let it lapse separately; billing
-is handled in the billing portal, not by the deletion flow.
+If your paid plan still renews, the request is refused and nothing is
+scheduled. Cancel the plan first, on the web in Settings, Billing, or with Apple
+or Google if you bought it there, and then you can delete your account straight
+away, without waiting for the plan to end. A plan you have already cancelled does not block deletion: it ends when
+erasure runs, and its unused time is not refunded.
 
 If you are the only owner of a workspace, the request is refused and nothing is
 scheduled. The message names every workspace you own alone, so hand each one to

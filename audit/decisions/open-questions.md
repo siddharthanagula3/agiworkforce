@@ -140,8 +140,8 @@ are in [`founder-actions.md`](founder-actions.md).
 - **What a downgrade removes.** Confirm that the BYOK and local-only tiers also lose managed connectors
   and Remote Control, and that a phone paired before a downgrade keeps working until it re-pairs.
 - **Chrome history search.** Built opt-in (an optional permission, a confirmation on every search, at
-  most 20 results, blocked sites excluded), but `/privacy` and `/agent-permissions` do not mention it.
-  Keep it and send the wording to counsel, or remove the history half.
+  most 20 results, blocked sites excluded). `/privacy` and `/agent-permissions` describe it as of
+  2026-11-11. Keep it and send that wording to counsel, or remove the history half and both sentences.
 - **Always-allowed apps for computer use.** Application control is session-only by design
   (`normalizeGrantDuration` in the permission core); ChatGPT keeps a persistent list. Keep session-only
   with a persistent "Never allow" list, or add a persistent allow list.

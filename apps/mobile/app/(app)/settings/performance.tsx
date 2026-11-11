@@ -468,8 +468,14 @@ export default function PerformanceScreen() {
     }
   }, [selectedModelId]);
 
-  const toksData = useMemo(() => toksEvents.map((e) => e.tokensPerSecond), [toksEvents]);
-  const ttftData = useMemo(() => ttftEvents.map((e) => e.firstTokenLatencyMs), [ttftEvents]);
+  const toksData = useMemo(
+    () => [...toksEvents].reverse().map((e) => e.tokensPerSecond),
+    [toksEvents],
+  );
+  const ttftData = useMemo(
+    () => [...ttftEvents].reverse().map((e) => e.firstTokenLatencyMs),
+    [ttftEvents],
+  );
 
   const tierInfo = useMemo(() => {
     if (!caps) return null;

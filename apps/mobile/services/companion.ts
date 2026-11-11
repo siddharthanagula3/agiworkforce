@@ -83,16 +83,31 @@ export function requestAgentRefresh(): void {
   });
 }
 
-export function sendAgentCommand(agentId: string, command: 'pause' | 'resume' | 'cancel'): void {
-  const { sendControl, status } = useConnectionStore.getState();
-  if (status !== 'connected') return;
+export type AgentCommandResult = 'sent' | 'unavailable' | 'rejected';
 
-  void sendControl(command === 'cancel' ? 'cancel' : 'dispatch_request', {
+export const AGENT_COMMAND_NOT_SENT_MESSAGES: Record<
+  Exclude<AgentCommandResult, 'sent'>,
+  string
+> = {
+  unavailable:
+    'Your computer is not connected, so the command was not sent. Reconnect and try again.',
+  rejected: 'The command could not be sent to your computer. Try again.',
+};
+
+export async function sendAgentCommand(
+  agentId: string,
+  command: 'pause' | 'resume' | 'cancel',
+): Promise<AgentCommandResult> {
+  const { sendControl, status } = useConnectionStore.getState();
+  if (status !== 'connected') return 'unavailable';
+
+  const accepted = await sendControl(command === 'cancel' ? 'cancel' : 'dispatch_request', {
     kind: 'agent_command',
     agentId,
     command,
     sentAt: new Date().toISOString(),
   });
+  return accepted ? 'sent' : 'rejected';
 }
 
 export interface NewDispatchTaskInput {
@@ -288,6 +303,9 @@ export function stopHealthChecks(): void {
     clearInterval(staleCheckInterval);
     staleCheckInterval = undefined;
   }
+}
+
+export function stopReconnectRecovery(): void {
   if (countdownInterval !== undefined) {
     clearInterval(countdownInterval);
     countdownInterval = undefined;
@@ -299,10 +317,7 @@ export function stopHealthChecks(): void {
 }
 
 export function manualReconnect(): void {
-  if (reconnectDebounceTimer !== undefined) {
-    clearTimeout(reconnectDebounceTimer);
-    reconnectDebounceTimer = undefined;
-  }
+  stopReconnectRecovery();
   const { pairingCode, connect } = useConnectionStore.getState();
   if (pairingCode) {
     connect(pairingCode);
@@ -311,14 +326,25 @@ export function manualReconnect(): void {
 
 export type { ConnectionQuality };
 
-export function sendEmergencyStop(): void {
-  const { sendControl, status } = useConnectionStore.getState();
-  if (status !== 'connected' && status !== 'stale') return;
+export const EMERGENCY_STOP_NOT_SENT_MESSAGES: Record<
+  Exclude<AgentCommandResult, 'sent'>,
+  string
+> = {
+  unavailable:
+    'The stop did not reach your computer because it is not connected. Reconnect and try again, or stop the tasks on the computer itself.',
+  rejected:
+    'The stop could not be sent to your computer. Try again, or stop the tasks on the computer itself.',
+};
 
-  void sendControl('cancel', {
+export async function sendEmergencyStop(): Promise<AgentCommandResult> {
+  const { sendControl, status } = useConnectionStore.getState();
+  if (status !== 'connected') return 'unavailable';
+
+  const accepted = await sendControl('cancel', {
     scope: 'all',
     sentAt: new Date().toISOString(),
   });
+  return accepted ? 'sent' : 'rejected';
 }
 
 export function getRiskBadgeColor(level: RiskLevel): 'green' | 'yellow' | 'red' {

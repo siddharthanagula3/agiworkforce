@@ -17,7 +17,6 @@ import {
   Pause,
   Square,
   Play,
-  AlertOctagon,
   Terminal,
   FileX,
   Globe,
@@ -43,9 +42,22 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { useThemeColors, motion } from '@/src/ui/theme';
 import { toolStatusColor } from '@/src/features/chat/utils/toolStatusTone';
 import { getDisplayName } from '@/src/features/model-picker/service';
-import { requestAgentRefresh, sendAgentCommand, sendEmergencyStop } from '@/services/companion';
+import {
+  AGENT_COMMAND_NOT_SENT_MESSAGES,
+  requestAgentRefresh,
+  sendAgentCommand,
+} from '@/services/companion';
+import { EmergencyStopButton } from '@/src/features/companion/components/EmergencyStopButton';
 import { ExecutionStream } from '@/src/features/companion/components/ExecutionStream';
 import type { ApprovalRequest, RiskLevel } from '@/types/chat';
+
+async function sendAgentCommandOrExplain(
+  agentId: string,
+  command: Parameters<typeof sendAgentCommand>[1],
+): Promise<void> {
+  const result = await sendAgentCommand(agentId, command);
+  if (result !== 'sent') Alert.alert('Command not sent', AGENT_COMMAND_NOT_SENT_MESSAGES[result]);
+}
 
 function AgentStatusIcon({ status }: { status: Agent['status'] }) {
   const colors = useThemeColors();
@@ -449,7 +461,7 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
       if (hapticsEnabled) {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
-      sendAgentCommand(agent.id, command);
+      void sendAgentCommandOrExplain(agent.id, command);
     },
     [agent.id, hapticsEnabled],
   );
@@ -669,7 +681,7 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
                         {
                           text: 'Stop Agent',
                           style: 'destructive',
-                          onPress: () => sendAgentCommand(agent.id, 'cancel'),
+                          onPress: () => void sendAgentCommandOrExplain(agent.id, 'cancel'),
                         },
                       ]);
                     }}
@@ -886,7 +898,6 @@ export function AgentDashboard() {
     () => allApprovals.filter((request) => request.status === 'pending'),
     [allApprovals],
   );
-  const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const router = useRouter();
 
   const hasRunningAgents = agents.some((a) => a.status === 'running' || a.status === 'waiting');
@@ -909,26 +920,6 @@ export function AgentDashboard() {
     },
     [selectAgent, router],
   );
-
-  const handleEmergencyStop = useCallback(() => {
-    Alert.alert(
-      'Emergency Stop',
-      'This will immediately cancel ALL running tasks on the desktop. This cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Stop Everything',
-          style: 'destructive',
-          onPress: () => {
-            if (hapticsEnabled) {
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-            }
-            sendEmergencyStop();
-          },
-        },
-      ],
-    );
-  }, [hapticsEnabled]);
 
   if (agents.length === 0) {
     return (
@@ -1008,18 +999,7 @@ export function AgentDashboard() {
             right: 16,
           }}
         >
-          <PressableBox
-            onPress={handleEmergencyStop}
-            className="flex-row items-center justify-center gap-2 py-3.5 rounded-2xl active:opacity-80"
-            style={{ backgroundColor: colors.agentError }}
-            accessibilityLabel="Emergency stop, cancel all running tasks"
-            accessibilityRole="button"
-          >
-            <AlertOctagon size={18} color={colors.accentText} />
-            <Text className="text-[15px] font-bold" style={{ color: colors.accentText }}>
-              Emergency Stop
-            </Text>
-          </PressableBox>
+          <EmergencyStopButton />
         </Animated.View>
       )}
     </View>

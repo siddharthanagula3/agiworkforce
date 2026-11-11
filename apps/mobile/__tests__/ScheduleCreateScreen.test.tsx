@@ -1,6 +1,6 @@
 import React from 'react';
-import { Alert } from 'react-native';
-import { render } from '@testing-library/react-native';
+import { Alert, StyleSheet } from 'react-native';
+import { render, within } from '@testing-library/react-native';
 
 const mockBack = jest.fn();
 const mockPush = jest.fn();
@@ -157,6 +157,31 @@ describe('Create schedule template handoff', () => {
         initialData: existingSchedule,
       }),
     );
+  });
+
+  it('draws the load-failure retry from theme colours so its label stays readable in every theme', async () => {
+    mockSearchParams = { id: 'missing-schedule' };
+    const fetchSchedules = useScheduleStore.getState().fetchSchedules;
+    useScheduleStore.setState({
+      fetchSchedules: jest.fn(async () => {
+        useScheduleStore.setState({ error: 'offline' });
+      }),
+    });
+
+    try {
+      const { findByLabelText } = render(<CreateScheduleScreen />);
+      const retry = await findByLabelText('Retry loading schedule');
+      const label = within(retry).getByText('Try Again');
+      const buttonStyle = StyleSheet.flatten(retry.props.style);
+      const labelStyle = StyleSheet.flatten(label.props.style);
+
+      expect(buttonStyle.backgroundColor).toBeTruthy();
+      expect(labelStyle.color).toBeTruthy();
+      expect(labelStyle.color).not.toBe(buttonStyle.backgroundColor);
+      expect(String(label.props.className ?? '')).not.toContain('text-black');
+    } finally {
+      useScheduleStore.setState({ fetchSchedules });
+    }
   });
 
   it('keeps the edit screen open when deletion fails', async () => {

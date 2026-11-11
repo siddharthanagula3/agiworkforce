@@ -10060,7 +10060,8 @@ mod tests {
 
         let mut app = minimal_app();
         handle_key_event(&mut app, make_key(KeyCode::Esc));
-        app.rewind_armed_at = Some(Instant::now() - REWIND_CONFIRM_WINDOW - Duration::from_secs(1));
+        app.rewind_armed_at =
+            Instant::now().checked_sub(REWIND_CONFIRM_WINDOW + Duration::from_secs(1));
 
         let action = handle_key_event(&mut app, make_key(KeyCode::Esc));
         assert!(matches!(action, InputAction::None));

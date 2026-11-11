@@ -306,7 +306,8 @@ mod tests {
             home_receipt(home.path()),
             format!("Initialized {} directory structure.", home.path().display())
         );
-        assert!(!home_receipt(home.path()).contains('~'));
+        assert!(!home_receipt(home.path()).starts_with("Initialized ~"));
+        assert!(!global_line.starts_with("# Global: ~"));
     }
 
     #[test]

@@ -207,5 +207,32 @@
       "dismiss": "App-Vorschläge ausblenden",
       "optionalLink": "Apps verbinden (optional)"
     }
+  },
+  "drawer": {
+    "publishedSites": "Veröffentlichte Websites",
+    "schedules": "Zeitpläne",
+    "reports": "Berichte",
+    "customize": "Anpassen",
+    "organizeChats": "Chats organisieren",
+    "newChat": "Neuer Chat",
+    "openProfile": "Profil öffnen",
+    "inOneList": "In einer Liste",
+    "byProject": "Nach Projekt",
+    "recents": "Zuletzt",
+    "noRecentChats": "Keine letzten Chats",
+    "seeAllChats": "Alle Chats anzeigen",
+    "seeAll": "Alle anzeigen",
+    "seeAllChatsIn": "Alle Chats in {{name}} anzeigen",
+    "openProject": "Projekt öffnen: {{name}}",
+    "openConversation": "Chat öffnen: {{title}}",
+    "openConversationUnread": "Chat öffnen: {{title}}, ungelesen",
+    "showChatsIn": "Chats in {{name}} anzeigen",
+    "hideChatsIn": "Chats in {{name}} ausblenden",
+    "notifications": "Benachrichtigungen",
+    "helpAndAbout": "Hilfe & Info",
+    "usageRemaining": "Verbleibende Nutzung",
+    "usageRemainingValue": "Verbleibende Nutzung · {{value}}",
+    "usageRemainingChecking": "Verbleibende Nutzung · Wird geprüft…",
+    "usageRemainingUnavailable": "Verbleibende Nutzung · Nicht verfügbar"
   }
 }

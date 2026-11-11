@@ -32,7 +32,7 @@ export default function ParentalControlsScreen() {
         <SettingsInfo
           testID="parental-controls-minor-lock"
           title="Minor-safe mode cannot be turned off here"
-          body="An adult can lift it only by reinstalling AGI, which erases its data."
+          body="An adult can lift it only by erasing AGI’s data on this device."
           icon={Lock}
         />
       ) : (

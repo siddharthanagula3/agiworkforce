@@ -25,6 +25,7 @@ import { useFreeQuotaCatalogueStore } from '@/src/features/model-picker/freeQuot
 import { isCloudAccountEpochCurrent } from '@/src/features/auth/services/cloudAccountSession';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { useModelInstallStore } from '@/src/features/model-picker/installStore';
+import { claimModelSelection } from '@/src/features/model-picker/selectionIntent';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useTierStore } from '@/src/features/billing/store';
 import { NATIVE_PURCHASES_AVAILABLE } from '@/src/features/billing/nativePurchaseAvailability';
@@ -274,6 +275,7 @@ export function ModelPickerSheet({
   const freeQuotaError = useFreeQuotaCatalogueStore((s) => s.error);
   const refreshFreeQuotaCatalogue = useFreeQuotaCatalogueStore((s) => s.refresh);
   const subscriptionTier = useTierStore((s) => s.tier);
+  const showsFreeCatalogue = cloudUnlocked && modelScope !== 'local' && subscriptionTier === 'free';
   const setModel = useModelStore((s) => s.setModel);
   const toggleFavorite = useModelStore((s) => s.toggleFavorite);
   const toggleThinkingForModel = useModelStore((s) => s.toggleThinkingForModel);
@@ -420,6 +422,7 @@ export function ModelPickerSheet({
 
   const selectAndClose = useCallback(
     (id: string) => {
+      claimModelSelection();
       setExpandedModelId(null);
       if (onSelect) onSelect(id);
       else setModel(id);
@@ -488,13 +491,17 @@ export function ModelPickerSheet({
       if (installStatus.status === 'downloading' || installStatus.status === 'unavailable') return;
 
       if (installStatus.status === 'download_required' || installStatus.status === 'failed') {
+        const stillWanted = claimModelSelection();
         void prepareModel(chosenModel)
-          .then(() => selectAndClose(id))
+          .then(() => {
+            if (stillWanted()) selectAndClose(id);
+          })
           .catch(() => undefined);
         return;
       }
 
       if (id === rowSelectedModel && !isAutoMode(id)) {
+        claimModelSelection();
         if (chosenModel.surface === 'cloud_managed' && chosenModel.supportsThinking) {
           setExpandedModelId((prev) => (prev === id ? null : id));
           return;
@@ -521,6 +528,7 @@ export function ModelPickerSheet({
 
   const handleSelectAutoMode = useCallback(
     (id: string, profile: RoutingProfileChoice = 'auto') => {
+      claimModelSelection();
       setExpandedModelId(null);
       if (showRoutingProfiles || !onSelect) setRoutingProfile(profile);
       if (onSelect) onSelect(id);
@@ -650,12 +658,12 @@ export function ModelPickerSheet({
                 ? 'Local and AGI Cloud models are shown in separate groups.'
                 : 'Local models run on this device. AGI Cloud is managed separately.'}
           </Text>
-          {cloudUnlocked && modelScope !== 'local' && freeQuotaLoading ? (
+          {showsFreeCatalogue && freeQuotaLoading ? (
             <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, marginTop: 6 }}>
               Checking provider-funded Free models…
             </Text>
           ) : null}
-          {cloudUnlocked && modelScope !== 'local' && freeQuotaError ? (
+          {showsFreeCatalogue && freeQuotaError ? (
             <View style={{ marginTop: 6 }}>
               <Text style={{ color: colors.textSecondary, fontSize: typeScale.caption }}>
                 {freeQuotaError}
@@ -672,8 +680,7 @@ export function ModelPickerSheet({
               </PressableBox>
             </View>
           ) : null}
-          {cloudUnlocked &&
-          modelScope !== 'local' &&
+          {showsFreeCatalogue &&
           isCloudAccountEpochCurrent(freeQuotaAccount) &&
           !freeQuotaLoading &&
           !freeQuotaError &&

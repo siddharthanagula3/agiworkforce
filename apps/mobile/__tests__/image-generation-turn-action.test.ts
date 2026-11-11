@@ -376,6 +376,173 @@ describe('runImageGenerationTurn', () => {
     expect(outcome).toEqual({ status: 'failed', assistantMessageId: 'assistant-1' });
   });
 
+  describe('stopping before the job is admitted', () => {
+    const referenceEdit = {
+      conversationId: 'conversation-1',
+      displayText: 'make it a poster',
+      prompt: 'make it a poster',
+      model: 'registry-image-route',
+      operation: 'edit' as const,
+      sourceImage: { uri: 'file:///photo.jpg', mimeType: 'image/jpeg', fileName: 'photo.jpg' },
+      referenceImages: [
+        { uri: 'file:///guide.jpg', mimeType: 'image/jpeg', fileName: 'guide.jpg' },
+      ],
+      ownerId: 'default-test-account',
+    };
+
+    beforeEach(() => {
+      clearCloudImageGenerationState();
+    });
+
+    it('submits nothing when Stop lands while the reference image is being read', async () => {
+      const callbacks = { ...createCallbacks(), onUnexpectedError: jest.fn() };
+      let stopped = false;
+      const generate = jest.fn();
+      const readReferenceImage = jest.fn(async () => {
+        stopped = true;
+        return 'cmVmZXJlbmNl';
+      });
+
+      const outcome = await runImageGenerationTurn(
+        { ...referenceEdit, ...callbacks },
+        { generate, getUri: () => null, readReferenceImage, isStopped: () => stopped },
+      );
+
+      expect(generate).not.toHaveBeenCalled();
+      expect(callbacks.fail).not.toHaveBeenCalled();
+      expect(callbacks.complete).not.toHaveBeenCalled();
+      expect(callbacks.onUnexpectedError).not.toHaveBeenCalled();
+      expect(outcome).toEqual({
+        status: 'cancelled',
+        assistantMessageId: 'assistant-1',
+        stopped: true,
+      });
+    });
+
+    it('submits nothing when Stop lands while a guide image is being read', async () => {
+      const callbacks = createCallbacks();
+      let stopped = false;
+      const generate = jest.fn();
+      const readReferenceImage = jest.fn(async (uri: string) => {
+        if (uri === 'file:///guide.jpg') stopped = true;
+        return 'Ynl0ZXM=';
+      });
+
+      await runImageGenerationTurn(
+        { ...referenceEdit, ...callbacks },
+        { generate, getUri: () => null, readReferenceImage, isStopped: () => stopped },
+      );
+
+      expect(readReferenceImage).toHaveBeenCalledTimes(2);
+      expect(generate).not.toHaveBeenCalled();
+    });
+
+    it('does not report a failed read as a failure once the user has stopped', async () => {
+      const callbacks = { ...createCallbacks(), onUnexpectedError: jest.fn() };
+      let stopped = false;
+
+      const outcome = await runImageGenerationTurn(
+        { ...referenceEdit, ...callbacks },
+        {
+          generate: jest.fn(),
+          getUri: () => null,
+          readReferenceImage: async () => {
+            stopped = true;
+            throw new Error('read failed');
+          },
+          isStopped: () => stopped,
+        },
+      );
+
+      expect(callbacks.fail).not.toHaveBeenCalled();
+      expect(callbacks.onUnexpectedError).not.toHaveBeenCalled();
+      expect(outcome.stopped).toBe(true);
+    });
+
+    it('does not present a result that lands after Stop', async () => {
+      const callbacks = createCallbacks();
+      let stopped = false;
+      const generate = jest.fn(async () => {
+        stopped = true;
+        return {
+          success: true,
+          persisted: true,
+          images: [{ url: '/api/files/00000000-0000-0000-0000-000000000005' }],
+          model: 'registry-image-route',
+        };
+      });
+
+      const outcome = await runImageGenerationTurn(
+        { ...referenceEdit, ...callbacks },
+        {
+          generate,
+          getUri: (image) => image?.url ?? null,
+          readReferenceImage: async () => 'Ynl0ZXM=',
+          isStopped: () => stopped,
+        },
+      );
+
+      expect(callbacks.complete).not.toHaveBeenCalled();
+      expect(outcome.stopped).toBe(true);
+    });
+
+    it('keeps the exact request, reference included, so Retry after Stop replays it', async () => {
+      let stopped = false;
+      await runImageGenerationTurn(
+        { ...referenceEdit, ...createCallbacks() },
+        {
+          generate: jest.fn(),
+          getUri: () => null,
+          readReferenceImage: async () => {
+            stopped = true;
+            return 'Ynl0ZXM=';
+          },
+          isStopped: () => stopped,
+        },
+      );
+
+      expect(takeImageEditRetry('assistant-1', 'default-test-account')).toEqual(referenceEdit);
+    });
+
+    it('does not remember a stopped plain generation as an edit', async () => {
+      await runImageGenerationTurn(
+        {
+          conversationId: 'conversation-1',
+          displayText: 'a cat',
+          prompt: 'a cat',
+          model: 'registry-image-route',
+          ownerId: 'default-test-account',
+          ...createCallbacks(),
+        },
+        { generate: jest.fn(), getUri: () => null, isStopped: () => true },
+      );
+
+      expect(takeImageEditRetry('assistant-1', 'default-test-account')).toBeNull();
+    });
+
+    it('still submits when nobody stopped the turn', async () => {
+      const generate = jest.fn(async () => ({
+        success: true,
+        persisted: true,
+        images: [{ url: '/api/files/00000000-0000-0000-0000-000000000006' }],
+        model: 'registry-image-route',
+      }));
+
+      const outcome = await runImageGenerationTurn(
+        { ...referenceEdit, ...createCallbacks() },
+        {
+          generate,
+          getUri: (image) => image?.url ?? null,
+          readReferenceImage: async () => 'Ynl0ZXM=',
+          isStopped: () => false,
+        },
+      );
+
+      expect(generate).toHaveBeenCalledTimes(1);
+      expect(outcome).toEqual({ status: 'completed', assistantMessageId: 'assistant-1' });
+    });
+  });
+
   describe('retrying a failed edit', () => {
     const areaEdit = {
       conversationId: 'conversation-1',

@@ -90,7 +90,7 @@ import { copyControlLabel, useCopyAction } from '@/src/shared/hooks/useCopyActio
 import { storage } from '@/lib/mmkv';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useThemeColors, radii } from '@/src/ui/theme';
-import { motion, typeScale } from '@/src/ui/theme/tokens';
+import { chatTypography, motion, typeScale } from '@/src/ui/theme/tokens';
 import { getDisplayName, getModelById, isAutoMode } from '@/src/features/model-picker/service';
 import {
   hasMessageStreamError,
@@ -444,20 +444,28 @@ function modelSupportsThinking(modelId?: string): boolean {
   return def?.supportsThinking !== false;
 }
 
-function getProvenance(model?: string): { provider?: string; model?: string } | null {
+function getProvenance(message: ChatMessage): { provider?: string; model?: string } | null {
+  const { model, metadata } = message;
   if (!model) return null;
-  if (isAutoMode(model)) {
-    return { provider: 'Local Mode', model: 'Auto' };
+  const cloudTurn =
+    typeof metadata?.requestedModel === 'string' || typeof metadata?.resolvedModel === 'string';
+  const resolved =
+    typeof metadata?.resolvedModel === 'string' && !isAutoMode(metadata.resolvedModel)
+      ? metadata.resolvedModel
+      : undefined;
+  const answeredBy = resolved ?? model;
+  if (isAutoMode(answeredBy)) {
+    return cloudTurn ? { provider: 'AGI Cloud' } : { provider: 'Local Mode', model: 'Auto' };
   }
 
-  const def = getModelById(model);
-  if (!def) return null;
+  const def = getModelById(answeredBy);
+  if (!def) return cloudTurn ? { provider: 'AGI Cloud' } : null;
 
   if (def.surface === 'local') {
     return { provider: 'Local Mode', model: def.name };
   }
 
-  return { provider: 'AGI Cloud' };
+  return { provider: 'AGI Cloud', model: def.name };
 }
 
 function autoRouteReceipt(metadata: ChatMessage['metadata']): string | null {
@@ -629,7 +637,7 @@ export const MessageBubble = memo(function MessageBubble({
     );
     return reference.success ? reference.data.runId : undefined;
   }, [message.metadata?.cloudAgentRun]);
-  const assistantProvenance = isAssistant ? getProvenance(message.model) : null;
+  const assistantProvenance = isAssistant ? getProvenance(message) : null;
   const provenance = isAssistant && !message.isStreaming ? assistantProvenance : null;
   const routeReceipt =
     isAssistant && !message.isStreaming ? autoRouteReceipt(message.metadata) : null;
@@ -1192,15 +1200,27 @@ export const MessageBubble = memo(function MessageBubble({
   const skillUsed = isUser ? sentSkillName(message.metadata) : null;
   const bodyContent = quotedReply ? quotedReply.body : displayContent;
   const inlineCitations = research ? researchSources : message.citations;
-  const contentElements = useMemo(
-    () =>
-      renderMarkdownContent(bodyContent, themeColors, {
-        highlightCode: !isStreamingRow,
-        ...(inlineCitations ? { citations: inlineCitations } : {}),
-        ...(onFollowUp ? { onFollowUp } : {}),
-      }),
-    [bodyContent, themeColors, isStreamingRow, inlineCitations, onFollowUp],
-  );
+  const contentElements = useMemo(() => {
+    if (isUser) {
+      return bodyContent
+        ? [
+            <Text
+              key="user-text"
+              testID="user-message-text"
+              selectable
+              style={{ ...chatTypography.body, color: themeColors.textPrimary }}
+            >
+              {bodyContent}
+            </Text>,
+          ]
+        : [];
+    }
+    return renderMarkdownContent(bodyContent, themeColors, {
+      highlightCode: !isStreamingRow,
+      ...(inlineCitations ? { citations: inlineCitations } : {}),
+      ...(onFollowUp ? { onFollowUp } : {}),
+    });
+  }, [isUser, bodyContent, themeColors, isStreamingRow, inlineCitations, onFollowUp]);
 
   const imageWidth = Math.min(width - 80, 320);
   const isGroupedMessage = !isAssistant && !canonicalActivity;

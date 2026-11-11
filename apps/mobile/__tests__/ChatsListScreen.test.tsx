@@ -67,6 +67,7 @@ const mockViewState = {
   searchConversations: mockSearchConversations,
   searchQuery: 'launch',
   searchResults: [{ conversationId: 'chat-4', messageId: 'message-4', snippet: 'launch detail' }],
+  searchFailed: false,
 };
 const mockLocalProjects = [
   { id: 'project-1', name: 'Launch project', description: 'Release planning' },
@@ -228,7 +229,61 @@ describe('ChatsListScreen', () => {
     mockChatState.isLoadingMoreConversations = false;
     mockChatState.hasMoreCloudConversations = false;
     mockChatState.conversationLoadError = null;
+    mockViewState.searchQuery = 'launch';
+    mockViewState.searchFailed = false;
     jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+  });
+
+  describe('when the Cloud search cannot be completed', () => {
+    const searchLabel = 'Search chats, projects, files, library, and artifacts';
+
+    beforeEach(() => {
+      mockAppMode = 'cloud';
+      mockViewState.searchQuery = 'zzzunmatched';
+      mockViewState.searchResults = [];
+    });
+
+    afterEach(() => {
+      mockViewState.searchResults = [
+        { conversationId: 'chat-4', messageId: 'message-4', snippet: 'launch detail' },
+      ];
+    });
+
+    it('says the search failed and offers Retry instead of reporting no matches', () => {
+      mockViewState.searchFailed = true;
+      const screen = render(<ChatsListScreen />);
+      fireEvent.changeText(screen.getByLabelText(searchLabel), 'zzzunmatched');
+
+      expect(
+        screen.getByText('Search could not be completed. Check your connection and try again.'),
+      ).toBeTruthy();
+      expect(screen.queryByText('No matches')).toBeNull();
+      expect(screen.queryByText(/Nothing in/)).toBeNull();
+      mockSearchConversations.mockClear();
+      fireEvent.press(screen.getByLabelText('Retry search'));
+      expect(mockSearchConversations).toHaveBeenCalledWith('zzzunmatched');
+    });
+
+    it('reports no matches only when the search succeeded and found nothing', () => {
+      const screen = render(<ChatsListScreen />);
+      fireEvent.changeText(screen.getByLabelText(searchLabel), 'zzzunmatched');
+
+      expect(screen.getByText('No matches')).toBeTruthy();
+      expect(screen.queryByLabelText('Retry search')).toBeNull();
+    });
+
+    it('keeps device matches visible and labels them when the Cloud search failed', () => {
+      mockViewState.searchFailed = true;
+      mockViewState.searchQuery = 'connectors';
+      const screen = render(<ChatsListScreen />);
+      fireEvent.changeText(screen.getByLabelText(searchLabel), 'connectors');
+
+      expect(screen.getByText('Connectors')).toBeTruthy();
+      expect(
+        screen.getByText('Search could not be completed. Showing matches already on this device.'),
+      ).toBeTruthy();
+      expect(screen.getByLabelText('Retry search')).toBeTruthy();
+    });
   });
 
   it('paints the pure black background token on the dark page root and keeps surfaceBase in light', () => {

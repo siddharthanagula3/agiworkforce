@@ -285,6 +285,104 @@ describe('stopping a mobile video generation', () => {
       );
     });
 
+    it('shows the video when the server had already finished it before Stop', async () => {
+      seedGeneratingVideoMessage();
+      mockPost.mockResolvedValue({
+        success: true,
+        task_id: TASK_ID,
+        status: 'completed',
+        cancel_requested: false,
+        message: 'This video job is already terminal and cannot be cancelled.',
+      });
+      mockGet.mockResolvedValue({
+        task_id: TASK_ID,
+        status: 'completed',
+        video_url: '/api/files/22222222-2222-4222-8222-222222222222',
+        thumbnail_url: '/api/files/33333333-3333-4333-8333-333333333333',
+      });
+
+      await useChatMessageStore
+        .getState()
+        .stopVideoGeneration(CONVERSATION_ID, ASSISTANT_MESSAGE_ID);
+
+      expect(mockGet).toHaveBeenCalledWith(`/api/media/video/status?task_id=${TASK_ID}`);
+      expect(assistantMessage()).toEqual(
+        expect.objectContaining({
+          type: 'video',
+          isGeneratingVideo: false,
+          videoGenStatus: 'completed',
+          videoUrl: expect.stringContaining('22222222-2222-4222-8222-222222222222'),
+          content: 'Generated video',
+        }),
+      );
+    });
+
+    it('shows the failure when the server had already failed it before Stop', async () => {
+      seedGeneratingVideoMessage();
+      mockPost.mockResolvedValue({
+        success: true,
+        task_id: TASK_ID,
+        status: 'failed',
+        cancel_requested: false,
+      });
+      mockGet.mockResolvedValue({
+        task_id: TASK_ID,
+        status: 'failed',
+        error: 'The provider refused this prompt.',
+      });
+
+      await useChatMessageStore
+        .getState()
+        .stopVideoGeneration(CONVERSATION_ID, ASSISTANT_MESSAGE_ID);
+
+      expect(assistantMessage()).toEqual(
+        expect.objectContaining({ isGeneratingVideo: false, videoGenStatus: 'failed' }),
+      );
+    });
+
+    it('keeps a recorded cancellation as cancelled even when the job reads as terminal', async () => {
+      seedGeneratingVideoMessage();
+      mockPost.mockResolvedValue({
+        success: true,
+        task_id: TASK_ID,
+        status: 'failed',
+        cancel_requested: true,
+        message: 'Cancelled. The result will not be delivered and you will not be charged for it.',
+      });
+
+      await useChatMessageStore
+        .getState()
+        .stopVideoGeneration(CONVERSATION_ID, ASSISTANT_MESSAGE_ID);
+
+      expect(mockGet).not.toHaveBeenCalled();
+      expect(assistantMessage()).toEqual(
+        expect.objectContaining({ isGeneratingVideo: false, videoGenStatus: 'cancelled' }),
+      );
+    });
+
+    it('lets polling resume and says why when the finished video cannot be fetched', async () => {
+      seedGeneratingVideoMessage();
+      mockPost.mockResolvedValue({
+        success: true,
+        task_id: TASK_ID,
+        status: 'completed',
+        cancel_requested: false,
+      });
+      mockGet.mockRejectedValue(new Error('HTTP 503'));
+
+      await useChatMessageStore
+        .getState()
+        .stopVideoGeneration(CONVERSATION_ID, ASSISTANT_MESSAGE_ID);
+
+      expect(assistantMessage()).toEqual(
+        expect.objectContaining({
+          isGeneratingVideo: true,
+          videoGenCancelRequested: false,
+          videoGenCancelError: 'HTTP 503',
+        }),
+      );
+    });
+
     it('tells the polling turn to stop', async () => {
       seedGeneratingVideoMessage();
       mockPost.mockResolvedValue({ success: true, task_id: TASK_ID, status: 'processing' });

@@ -36,7 +36,7 @@ export default defineConfig(({ mode }) => {
         emptyOutDir: false, // preserve the main pass's output
         minify: 'terser',
         terserOptions,
-        sourcemap: mode !== 'production',
+        sourcemap: mode === 'production' ? 'hidden' : true,
         rollupOptions: {
           input: { content: resolve(__dirname, 'src/content.ts') },
           output: {
@@ -67,7 +67,7 @@ export default defineConfig(({ mode }) => {
       assetsInlineLimit: (filePath: string) => (filePath.endsWith('.woff2') ? false : undefined),
       minify: 'terser',
       terserOptions,
-      sourcemap: mode !== 'production',
+      sourcemap: mode === 'production' ? 'hidden' : true,
       rollupOptions: {
         input: {
           background: resolve(__dirname, 'src/background.ts'),

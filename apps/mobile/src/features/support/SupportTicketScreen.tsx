@@ -5,7 +5,12 @@ import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
-import { CloudAccountRequired, SettingsScreenShell } from '@/src/features/settings/Common';
+import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
+import {
+  CloudAccountRequired,
+  CloudSyncBlockedBanner,
+  SettingsScreenShell,
+} from '@/src/features/settings/Common';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import {
@@ -35,13 +40,25 @@ export function SupportTicketScreen({ ticketId }: { ticketId: string }) {
   const isClerkSignedIn = useAuthStore((state) => state.isClerkSignedIn);
   const clerkUserId = useAuthStore((state) => state.clerkUserId);
   const appMode = useChatAppModeStore((state) => state.appMode);
+  const setAppMode = useChatAppModeStore((state) => state.setAppMode);
 
-  if (!isClerkLoaded || !isClerkSignedIn || appMode !== 'cloud') {
+  if (!isClerkLoaded || !isClerkSignedIn) {
     return (
       <SettingsScreenShell title="Ticket" backHref="/(app)/support">
         <CloudAccountRequired
           isLoading={!isClerkLoaded}
-          onSignIn={() => router.push('/(auth)/login' as Parameters<typeof router.push>[0])}
+          onSignIn={() => router.push(beginCloudPostAuthIntent('cloud-support'))}
+        />
+      </SettingsScreenShell>
+    );
+  }
+
+  if (appMode !== 'cloud') {
+    return (
+      <SettingsScreenShell title="Ticket" backHref="/(app)/support">
+        <CloudSyncBlockedBanner
+          message="Support tickets are kept in your Cloud account."
+          onSwitchToCloud={() => setAppMode('cloud')}
         />
       </SettingsScreenShell>
     );

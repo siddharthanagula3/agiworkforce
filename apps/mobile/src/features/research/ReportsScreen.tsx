@@ -300,6 +300,10 @@ export function ReportsScreen() {
   const [error, setError] = useState<string | null>(null);
   const [openReport, setOpenReport] = useState<MobileResearchReport | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreFailed, setMoreFailed] = useState(false);
+  const listGenerationRef = useRef(0);
 
   const signedInCloud = appMode === 'cloud' && isClerkSignedIn;
 
@@ -310,7 +314,11 @@ export function ReportsScreen() {
       try {
         const loaded = await fetchResearchReports({ ...(signal ? { signal } : {}) });
         if (signal?.aborted) return;
-        setReports(loaded);
+        listGenerationRef.current += 1;
+        setReports(loaded.reports);
+        setNextCursor(loaded.nextCursor);
+        setLoadingMore(false);
+        setMoreFailed(false);
         setState('loaded');
       } catch (loadError) {
         if (signal?.aborted) return;
@@ -326,6 +334,26 @@ export function ReportsScreen() {
     void load(controller.signal);
     return () => controller.abort();
   }, [load]);
+
+  const loadMore = useCallback(async () => {
+    if (!signedInCloud || !nextCursor || loadingMore) return;
+    const generation = listGenerationRef.current;
+    setLoadingMore(true);
+    setMoreFailed(false);
+    try {
+      const older = await fetchResearchReports({ cursor: nextCursor });
+      if (generation !== listGenerationRef.current) return;
+      setReports((current) => {
+        const known = new Set(current.map((report) => report.id));
+        return [...current, ...older.reports.filter((report) => !known.has(report.id))];
+      });
+      setNextCursor(older.nextCursor);
+    } catch {
+      if (generation === listGenerationRef.current) setMoreFailed(true);
+    } finally {
+      if (generation === listGenerationRef.current) setLoadingMore(false);
+    }
+  }, [loadingMore, nextCursor, signedInCloud]);
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) router.back();
@@ -402,6 +430,29 @@ export function ReportsScreen() {
           keyExtractor={(report) => report.id}
           contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 24, gap: 8 }}
           renderItem={({ item }) => <ReportRow report={item} onOpen={() => setOpenReport(item)} />}
+          onEndReached={() => {
+            if (!moreFailed) void loadMore();
+          }}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={
+            moreFailed ? (
+              <View style={{ gap: 8, alignItems: 'flex-start', paddingVertical: 8 }}>
+                <Text style={{ fontSize: typeScale.footnote, color: colors.textSecondary }}>
+                  Could not load older reports.
+                </Text>
+                <Button
+                  title="Try again"
+                  size="sm"
+                  onPress={() => void loadMore()}
+                  accessibilityLabel="Try loading older reports again"
+                />
+              </View>
+            ) : loadingMore ? (
+              <View style={{ paddingVertical: 12 }}>
+                <Skeleton height={64} borderRadius={radii.lg} />
+              </View>
+            ) : null
+          }
           refreshControl={
             <RefreshControl
               refreshing={refreshing}

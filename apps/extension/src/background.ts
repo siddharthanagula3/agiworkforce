@@ -441,6 +441,7 @@ interface PendingChatToolHandoff {
   owner: ManagedCloudOwner;
   clientInstanceId: string;
   streamId: string;
+  handoff: import('./types').AdoptedChatToolHandoff;
   callIds: readonly string[];
   callNames: readonly string[];
   signal: AbortSignal;
@@ -629,16 +630,6 @@ function requestChatToolHandoff(
       onAbort();
       return;
     }
-    pendingChatToolHandoffs.set(handoffId, {
-      owner: active.owner,
-      clientInstanceId: active.clientInstanceId,
-      streamId,
-      callIds: calls.map((call) => call.id),
-      callNames: calls.map((call) => call.function.name),
-      signal,
-      ...(callerCheckpoint ? { callerCheckpoint } : {}),
-      finish,
-    });
     const handoff: import('./types').ChatToolHandoffMessage = {
       type: 'CHAT_TOOL_HANDOFF',
       owner: active.owner,
@@ -649,6 +640,22 @@ function requestChatToolHandoff(
       ...(callerCheckpoint ? { callerCheckpoint } : {}),
       ...(recoveryContext ? { recoveryContext } : {}),
     };
+    pendingChatToolHandoffs.set(handoffId, {
+      owner: active.owner,
+      clientInstanceId: active.clientInstanceId,
+      streamId,
+      handoff: {
+        handoffId,
+        calls,
+        ...(callerCheckpoint ? { callerCheckpoint } : {}),
+        ...(recoveryContext ? { recoveryContext } : {}),
+      },
+      callIds: calls.map((call) => call.id),
+      callNames: calls.map((call) => call.function.name),
+      signal,
+      ...(callerCheckpoint ? { callerCheckpoint } : {}),
+      finish,
+    });
     void chrome.runtime.sendMessage(handoff).catch(() =>
       finish(
         callerCheckpoint
@@ -663,6 +670,39 @@ function requestChatToolHandoff(
       ),
     );
   });
+}
+
+function waitingChatToolHandoffs(active: ActiveChatStream, streamId: string) {
+  return [...pendingChatToolHandoffs.values()].filter(
+    (pending) =>
+      pending.streamId === streamId &&
+      pending.clientInstanceId === active.clientInstanceId &&
+      !pending.nativeTask &&
+      !pending.signal.aborted &&
+      sameManagedCloudOwner(pending.owner, active.owner),
+  );
+}
+
+function adoptPendingChatToolHandoffs(
+  active: ActiveChatStream,
+  streamId: string,
+  clientInstanceId: string,
+): import('./types').AdoptedChatToolHandoff[] {
+  return waitingChatToolHandoffs(active, streamId).map((pending) => {
+    pending.clientInstanceId = clientInstanceId;
+    return structuredClone(pending.handoff);
+  });
+}
+
+async function notifyWaitingBrowserStep(active: ActiveChatStream): Promise<void> {
+  if (!active.streamId || waitingChatToolHandoffs(active, active.streamId).length === 0) return;
+  if (!(await taskNotificationsEnabled())) return;
+  showNotification(
+    t('notifyTaskInputTitle'),
+    t('notifyBrowserStepWaiting'),
+    active.historyConversationId,
+    active.owner,
+  );
 }
 
 function resolveChatToolHandoff(message: import('./types').ResolveChatToolsMessage): boolean {
@@ -1578,7 +1618,9 @@ function handleManagedChatKeepalivePort(port: chrome.runtime.Port): void {
   });
   port.onDisconnect.addListener(() => {
     for (const active of activeChatStreams.values()) {
-      if (active.clientInstanceId === clientInstanceId) active.panelDetached = true;
+      if (active.clientInstanceId !== clientInstanceId) continue;
+      active.panelDetached = true;
+      void notifyWaitingBrowserStep(active);
     }
     syncDetachedChatHeartbeat();
   });
@@ -2050,7 +2092,7 @@ function showNotification(
     notifId,
     {
       type: 'basic',
-      iconUrl: 'icons/icon128.png',
+      iconUrl: chrome.runtime.getURL('icons/icon128.png'),
       title,
       message,
     },
@@ -2097,7 +2139,7 @@ async function notifyScheduledTaskRunning(
       publish: () => {
         chrome.notifications.create(`agi_task_notif_${crypto.randomUUID()}`, {
           type: 'basic',
-          iconUrl: 'icons/icon48.png',
+          iconUrl: chrome.runtime.getURL('icons/icon48.png'),
           title: t('notifyScheduledTaskRunningTitle'),
           message: taskName,
           priority: 0,
@@ -4831,6 +4873,11 @@ async function handleMessageAsync(
           await active.settlement;
           return { success: true } as ExtensionResponse;
         }
+        const toolHandoffs = adoptPendingChatToolHandoffs(
+          active,
+          active.streamId,
+          adoptMsg.clientInstanceId,
+        );
         active.clientInstanceId = adoptMsg.clientInstanceId;
         active.panelDetached = false;
         adoptedChatStreamKeys.set(adoptedKey, streamKey);
@@ -4842,6 +4889,7 @@ async function handleMessageAsync(
             text: active.visibleText ?? '',
             ...(active.cloudRun ? { cloudRun: { ...active.cloudRun } } : {}),
             ...(active.assistantMessageId ? { assistantMessageId: active.assistantMessageId } : {}),
+            ...(toolHandoffs.length > 0 ? { toolHandoffs } : {}),
           },
         } as ExtensionResponse;
       }
@@ -7268,6 +7316,13 @@ async function handleChatMessage(
         ...(message.memoryCommand ? { memoryCommand: message.memoryCommand } : {}),
         ...(message.skillName !== undefined ? { skillName: message.skillName } : {}),
         ...(!delivery && chatTools.length ? { tools: chatTools } : {}),
+        ...(!delivery &&
+        chatTools.length &&
+        conversationContext &&
+        browserContext?.documentId &&
+        message.historyConversationId
+          ? { callerToolContinuation: true }
+          : {}),
         idempotencyKey: delivery?.requestId,
         completionMode: delivery ? 'unattended' : 'interactive',
         signal: activeStream.controller.signal,
@@ -7545,6 +7600,10 @@ async function handleResumeChatRun(message: import('./types').ResumeChatRunMessa
     cancelRequested: false,
     cancelNotified: false,
     cloudRun: { ...message.cloudRun },
+    streamId: id,
+    ...(message.historyConversationId
+      ? { historyConversationId: message.historyConversationId }
+      : {}),
   };
   activeChatStreams.set(streamKey, activeStream);
 
@@ -7976,6 +8035,10 @@ async function handleResolveChatApproval(
     cancelRequested: false,
     cancelNotified: false,
     cloudRun: { ...message.cloudRun },
+    streamId: id,
+    ...(message.historyConversationId
+      ? { historyConversationId: message.historyConversationId }
+      : {}),
   };
   activeChatStreams.set(streamKey, activeStream);
 

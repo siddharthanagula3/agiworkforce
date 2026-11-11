@@ -41,49 +41,56 @@ export function CloudSyncErrorBanner() {
     <View
       accessibilityRole="alert"
       accessibilityLabel="Cloud changes have not synced"
+      testID="cloud-sync-error-banner"
       style={{
         position: 'absolute',
         top: 0,
         left: 0,
         right: 0,
         zIndex: zIndex.notification,
-        paddingTop: insets.top + 8,
-        paddingBottom: 10,
-        paddingHorizontal: 16,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-        backgroundColor: colors.dangerSurface,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.dangerBorder,
+        backgroundColor: colors.background,
       }}
     >
-      <Text
+      <View
         style={{
-          color: colors.agentError,
-          fontSize: typeScale.caption,
-          fontWeight: '600',
-          flex: 1,
+          paddingTop: insets.top + 8,
+          paddingBottom: 10,
+          paddingHorizontal: 16,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 10,
+          backgroundColor: colors.dangerSurface,
+          borderBottomWidth: 1,
+          borderBottomColor: colors.dangerBorder,
         }}
       >
-        Cloud changes haven’t synced. Check your connection and retry.
-      </Text>
-      <PressableBox
-        accessibilityRole="button"
-        accessibilityLabel="Retry Cloud sync"
-        onPress={() => void syncNow()}
-        hitSlop={8}
-      >
-        <RefreshCw size={18} color={colors.agentError} />
-      </PressableBox>
-      <PressableBox
-        accessibilityRole="button"
-        accessibilityLabel="Dismiss Cloud sync error"
-        onPress={() => setDismissedError(errorKey)}
-        hitSlop={8}
-      >
-        <X size={18} color={colors.agentError} />
-      </PressableBox>
+        <Text
+          style={{
+            color: colors.agentError,
+            fontSize: typeScale.caption,
+            fontWeight: '600',
+            flex: 1,
+          }}
+        >
+          Cloud changes haven’t synced. Check your connection and retry.
+        </Text>
+        <PressableBox
+          accessibilityRole="button"
+          accessibilityLabel="Retry Cloud sync"
+          onPress={() => void syncNow()}
+          hitSlop={8}
+        >
+          <RefreshCw size={18} color={colors.agentError} />
+        </PressableBox>
+        <PressableBox
+          accessibilityRole="button"
+          accessibilityLabel="Dismiss Cloud sync error"
+          onPress={() => setDismissedError(errorKey)}
+          hitSlop={8}
+        >
+          <X size={18} color={colors.agentError} />
+        </PressableBox>
+      </View>
     </View>
   );
 }

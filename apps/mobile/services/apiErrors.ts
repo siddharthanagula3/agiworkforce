@@ -6,9 +6,13 @@ import {
 
 export type ApiPaywallRecoveryAction = 'upgrade' | 'subscribe' | 'manage_billing';
 
+export const ACCOUNT_UNCONFIRMED_MESSAGE = 'Could not confirm your account. Try again.';
+export const UPLOAD_ACCOUNT_UNCONFIRMED_MESSAGE =
+  'Could not confirm your account to upload files. Try again.';
+
 export class CloudCredentialUnavailableError extends Error {
   constructor() {
-    super('The mobile Cloud credential is unavailable.');
+    super(ACCOUNT_UNCONFIRMED_MESSAGE);
     this.name = 'CloudCredentialUnavailableError';
   }
 }

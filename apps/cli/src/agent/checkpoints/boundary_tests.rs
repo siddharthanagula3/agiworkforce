@@ -1077,7 +1077,13 @@ fn checkpoint_restore_keeps_the_earliest_image_of_one_destination_named_two_ways
     let nested = fixture.workspace.join("nested");
     std::fs::create_dir(&nested).unwrap();
     let path = fixture.workspace.join("aliased.txt");
-    let alias = nested.join("..").join("aliased.txt");
+    let mut spelled = fixture.workspace.clone().into_os_string();
+    for part in ["nested", "..", "aliased.txt"] {
+        spelled.push(std::path::MAIN_SEPARATOR_STR);
+        spelled.push(part);
+    }
+    let alias = PathBuf::from(spelled);
+    assert_ne!(alias, path);
     std::fs::write(&path, b"original bytes").unwrap();
     fixture.in_workspace(|| {
         let authority = fixture.authority();

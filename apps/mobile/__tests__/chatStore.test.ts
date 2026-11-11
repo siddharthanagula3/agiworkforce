@@ -170,7 +170,8 @@ import {
   activateCloudAccount,
 } from '../src/features/auth/services/cloudAccountSession';
 import { storage } from '../lib/mmkv';
-import { MINOR_SAFE_REFUSAL } from '../lib/contentFilter';
+import { MINOR_SAFE_REFUSAL, REDUCED_SENSITIVE_CONTENT_REFUSAL } from '../lib/contentFilter';
+import { streamFailureNoticeText } from '../src/features/chat/utils/messageStreamError';
 
 const AUTO_MODEL_ID = requireAutoMode().id;
 const mockStreamChat = streamChat as jest.MockedFunction<typeof streamChat>;
@@ -2255,6 +2256,121 @@ describe('chatStore, streaming state', () => {
       });
     });
 
+    describe('editing a Local message', () => {
+      const stamp = new Date().toISOString();
+      const original = [
+        { id: 'edit-u1', role: 'user' as const, content: 'first question' },
+        { id: 'edit-a1', role: 'assistant' as const, content: 'first answer' },
+        { id: 'edit-u2', role: 'user' as const, content: 'second question' },
+        { id: 'edit-a2', role: 'assistant' as const, content: 'second answer' },
+      ].map((row) => ({
+        ...row,
+        conversationId: CONV_ID,
+        createdAt: stamp,
+        isStreaming: false,
+      }));
+
+      const contents = () => (getState().messages[CONV_ID] ?? []).map((row) => row.content);
+
+      beforeEach(() => {
+        useChatStore.setState({
+          conversations: [
+            {
+              id: CONV_ID,
+              title: 'Local edit chat',
+              updatedAt: stamp,
+              createdAt: stamp,
+              messageCount: original.length,
+              pinned: false,
+              model: LOCAL_MODEL,
+              provider: 'local',
+              executionMode: 'local',
+            },
+          ],
+          messages: { [CONV_ID]: original },
+        });
+        mockRemoteDisabledReason.mockReturnValue('mobile-local-only');
+        mockListInstalledModels.mockResolvedValue([
+          {
+            id: LOCAL_MODEL,
+            display_name: 'AGI Lite',
+            runtime: 'local',
+            format: 'pte',
+            size_bytes: 1_181_116_006,
+            sha256: null,
+            local_path: null,
+            installed_at: 1,
+            last_used_at: null,
+            capabilities: null,
+          },
+        ]);
+        mockLocalGenerate.mockImplementation(async () => ({
+          text: 'edited answer',
+          runtime: 'executorch',
+          aborted: false,
+        }));
+      });
+
+      it('keeps the original question and everything after it when the replacement is refused', async () => {
+        useSettingsStore.setState({ reduceSensitiveContent: true });
+        const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+
+        try {
+          act(() => {
+            expect(getState().editMessage(CONV_ID, 'edit-u2', 'What does NSFW stand for?')).toBe(
+              true,
+            );
+          });
+          await waitFor(() => expect(getState().isEditing).toBe(false));
+
+          expect(alertSpy).toHaveBeenCalledWith(
+            'Content not available',
+            REDUCED_SENSITIVE_CONTENT_REFUSAL,
+          );
+          expect(getState().messages[CONV_ID]).toEqual(original);
+          expect(mockLocalGenerate).not.toHaveBeenCalled();
+        } finally {
+          alertSpy.mockRestore();
+        }
+      });
+
+      it('restores the removed turns in place and never reaches Cloud when the Local chat holds a Cloud model', async () => {
+        const withCloudModel = original.map((row) =>
+          row.id === 'edit-u1' ? { ...row, model: CLOUD_MODEL } : row,
+        );
+        useChatStore.setState({ messages: { [CONV_ID]: withCloudModel } });
+
+        act(() => {
+          getState().editMessage(CONV_ID, 'edit-u1', 'rewritten opening');
+        });
+        await waitFor(() => expect(getState().isEditing).toBe(false));
+
+        expect(getState().error).toBe(
+          'This is a Local Mode chat. Start a separate AGI Cloud chat to use Cloud models.',
+        );
+        expect(getState().messages[CONV_ID]).toEqual(withCloudModel);
+        expect(mockStreamChat).not.toHaveBeenCalled();
+        expect(mockLocalGenerate).not.toHaveBeenCalled();
+      });
+
+      it('replaces the edited question and the turns after it once the replacement is accepted', async () => {
+        act(() => {
+          getState().editMessage(CONV_ID, 'edit-u2', 'revised second question');
+        });
+        await waitFor(() => {
+          expect(getState().isEditing).toBe(false);
+          expect(contents()).toContain('edited answer');
+        });
+
+        expect(contents()).toEqual([
+          'first question',
+          'first answer',
+          'revised second question',
+          'edited answer',
+        ]);
+      });
+    });
+
     it('leaves Cloud project instructions to the server, which loads them from the conversation', async () => {
       useChatStore.setState({
         conversations: [
@@ -2699,7 +2815,11 @@ describe('chatStore, streaming state', () => {
       const assistantMsg = msgs.find((m) => m.role === 'assistant');
       expect(assistantMsg).toBeDefined();
       expect(assistantMsg?.isStreaming).toBe(false);
-      expect(assistantMsg?.content).toBe('Something went wrong. Please try again.');
+      expect(assistantMsg?.content).toBe('');
+      expect(assistantMsg?.metadata?.streamError).toEqual({
+        message: 'Something went wrong. Please try again.',
+      });
+      expect(streamFailureNoticeText(assistantMsg)).toBe('Something went wrong. Please try again.');
       expect(getState().error).toBe('Something went wrong. Please try again.');
     });
 

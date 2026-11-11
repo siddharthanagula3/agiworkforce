@@ -51,6 +51,10 @@ export function installFailureMessage(error: unknown): string {
 
 const installAttempts = new Map<string, symbol>();
 
+export interface ModelInstallObserver {
+  onProgress?: (downloaded: number, total: number, speedBps: number) => void;
+}
+
 export interface ModelInstallJob {
   status: ModelInstallStatus;
   progress: number;
@@ -66,7 +70,7 @@ interface ModelInstallState {
   jobs: Record<string, ModelInstallJob>;
   setAllowCellularDownloads: (allowed: boolean) => void;
   hydrateInstalledModels: () => Promise<void>;
-  prepareModel: (model: ModelDef) => Promise<void>;
+  prepareModel: (model: ModelDef, observer?: ModelInstallObserver) => Promise<void>;
   cancelModelDownload: (modelId: string) => void;
   forgetInstalledModel: (modelId: string) => void;
   statusForModel: (model: ModelDef) => ModelInstallJob;
@@ -146,6 +150,7 @@ async function installGgufModel(
   catalogModel: OnDeviceModel,
   onProgress: (fraction: number) => void,
   wifiOnly: boolean,
+  observeBytes?: ModelInstallObserver['onProgress'],
 ): Promise<void> {
   await downloadModel({
     wifiOnly,
@@ -164,8 +169,9 @@ async function installGgufModel(
       supportedRuntimes: catalogModel.supportedRuntimes,
       managedBy: 'llama.rn',
     }),
-    onProgress: (downloaded, total) => {
+    onProgress: (downloaded, total, speedBps) => {
       onProgress(total > 0 ? downloaded / total : 0);
+      observeBytes?.(downloaded, total, speedBps);
     },
   });
 }
@@ -268,7 +274,7 @@ export const useModelInstallStore = create<ModelInstallState>()(
         activateReadyLocalModel(installedModelIds, readySystemModelIds, get().jobs);
       },
 
-      prepareModel: async (model) => {
+      prepareModel: async (model, observer) => {
         if (getCatalogModelById(model.id) && isMultimodalModel(getCatalogModelById(model.id)!)) {
           const caps = await getCapabilities().catch(() => null);
           const ramLock = multimodalRamLock(model, caps?.totalRAMMB ?? get().totalRAMMB);
@@ -372,7 +378,15 @@ export const useModelInstallStore = create<ModelInstallState>()(
             const record = installedRecordFor(model);
             await recordInstalledModel(record);
           } else {
-            await installGgufModel(catalogModel!, reportProgress, wifiOnly);
+            await installGgufModel(
+              catalogModel!,
+              reportProgress,
+              wifiOnly,
+              observer?.onProgress &&
+                ((downloaded, total, speedBps) => {
+                  if (ownsJob()) observer.onProgress?.(downloaded, total, speedBps);
+                }),
+            );
           }
 
           if (!ownsJob()) {

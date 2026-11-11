@@ -40,6 +40,7 @@ const LOCALIZED_SOURCES = [
   'src/features/side-panel/tasksSheet.ts',
   'src/features/side-panel/phoneSheet.ts',
   'src/features/computer-use/browserTurnActivity.ts',
+  'src/features/cloud-bridge/conversationHistoryPull.ts',
   'src/features/options/destinations.ts',
   'src/features/options/desktop-pairing-rows.ts',
   'src/features/options/keyboard-shortcut-rows.ts',

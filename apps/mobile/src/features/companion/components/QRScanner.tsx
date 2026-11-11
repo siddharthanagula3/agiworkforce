@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { View, StyleSheet, Linking, TextInput, Dimensions } from 'react-native';
+import { View, StyleSheet, Linking, Dimensions } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
-import * as Clipboard from 'expo-clipboard';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -10,13 +9,12 @@ import Animated, {
   withTiming,
   Easing,
 } from 'react-native-reanimated';
-import { Zap, ZapOff, Keyboard, X } from 'lucide-react-native';
+import { Zap, ZapOff, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
 import { useTheme } from '@/src/ui/theme';
-import { motion, typeScale } from '@/src/ui/theme/tokens';
+import { motion } from '@/src/ui/theme/tokens';
 import { isValidPairingCode } from '@/services/companion';
-import { PAIRING_SECRET_REQUIRED_MESSAGE, parsePairingPayload } from '@/services/manualPairing';
 
 interface QRScannerProps {
   onScan: (code: string) => void;
@@ -31,9 +29,6 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
   const pageBackground = isDark ? colors.background : colors.surfaceBase;
   const [permission, requestPermission] = useCameraPermissions();
   const [flashEnabled, setFlashEnabled] = useState(false);
-  const [showManualEntry, setShowManualEntry] = useState(false);
-  const [manualCode, setManualCode] = useState('');
-  const [manualError, setManualError] = useState<string | null>(null);
   const hasScanned = useRef(false);
 
   const scanLineY = useSharedValue(0);
@@ -66,42 +61,7 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
     [onScan],
   );
 
-  const handleManualSubmit = useCallback(() => {
-    const trimmed = manualCode.trim();
-    if (!trimmed) {
-      setManualError('Paste the pairing link from Desktop.');
-      return;
-    }
-    if (!isValidPairingCode(trimmed)) {
-      setManualError(
-        'That is not a pairing link from Desktop. Copy it again, or scan the QR code.',
-      );
-      return;
-    }
-    const parsed = parsePairingPayload(trimmed);
-    if (!parsed.pairingSecret && !parsed.legacyPayload) {
-      setManualError(PAIRING_SECRET_REQUIRED_MESSAGE);
-      return;
-    }
-    setManualError(null);
-    onScan(trimmed);
-  }, [manualCode, onScan]);
-
-  const handlePaste = useCallback(async () => {
-    try {
-      const pasted = (await Clipboard.getStringAsync()).trim();
-      if (!pasted) {
-        setManualError('Clipboard is empty. Copy the pairing link from Desktop first.');
-        return;
-      }
-      setManualCode(pasted);
-      setManualError(null);
-    } catch {
-      setManualError('Could not read the clipboard. Paste the link into the field instead.');
-    }
-  }, []);
-
-  if (!permission && !showManualEntry) {
+  if (!permission) {
     return (
       <View
         className="flex-1 items-center justify-center"
@@ -112,7 +72,7 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
     );
   }
 
-  if (!permission?.granted && !showManualEntry) {
+  if (!permission.granted) {
     return (
       <View
         className="flex-1 items-center justify-center px-8 gap-6"
@@ -128,102 +88,14 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
           Camera access is required to scan QR codes
         </Text>
         <Text className="text-center text-sm" style={{ color: colors.textSecondary }}>
-          Enable camera access in your device settings, or paste the pairing link from Desktop
-          below.
+          Pairing needs the QR code in the pairing window on Desktop. Enable camera access in your
+          device settings, then scan it.
         </Text>
         <View className="gap-3 w-full">
           <Button title="Open Settings" variant="primary" onPress={() => Linking.openSettings()} />
           <Button title="Request Permission" variant="outline" onPress={requestPermission} />
-          <Button
-            title="Enter Code Manually"
-            variant="ghost"
-            onPress={() => setShowManualEntry(true)}
-          />
           <Button title="Close" variant="ghost" onPress={onClose} />
         </View>
-      </View>
-    );
-  }
-
-  if (showManualEntry) {
-    return (
-      <View className="flex-1 px-6 pt-16 gap-6" style={{ backgroundColor: pageBackground }}>
-        <View className="flex-row items-center justify-between">
-          <Text variant="subheading">Enter Pairing Link</Text>
-          <PressableBox
-            onPress={() => {
-              setShowManualEntry(false);
-              setManualError(null);
-              setManualCode('');
-            }}
-            className="p-2 rounded-lg"
-            accessibilityLabel="Close manual entry"
-            accessibilityRole="button"
-          >
-            <X size={22} color={colors.textSecondary} />
-          </PressableBox>
-        </View>
-
-        <Text className="text-sm" style={{ color: colors.textSecondary }}>
-          Open AGI Desktop, go to Settings → Capabilities → Remote Control, choose Pair a phone,
-          then copy the pairing link and paste it here. The 12-character code shown below the QR
-          code is only for checking that Desktop and this phone match; it cannot pair on its own.
-        </Text>
-
-        <View className="gap-3">
-          <TextInput
-            value={manualCode}
-            onChangeText={(text) => {
-              setManualCode(text);
-              setManualError(null);
-            }}
-            placeholder="Paste the pairing link"
-            placeholderTextColor={colors.textMuted}
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoFocus
-            maxLength={96}
-            returnKeyType="done"
-            onSubmitEditing={handleManualSubmit}
-            style={{
-              backgroundColor: colors.surfaceElevated,
-              borderWidth: 1,
-              borderColor: manualError ? colors.agentError : colors.border,
-              borderRadius: 12,
-              paddingHorizontal: 16,
-              paddingVertical: 14,
-              color: colors.textPrimary,
-              fontSize: typeScale.headline,
-              fontFamily: 'Menlo',
-            }}
-          />
-          <Button title="Paste pairing link" variant="outline" onPress={handlePaste} />
-          {manualError && <Text className="text-red-400 text-sm text-center">{manualError}</Text>}
-        </View>
-
-        <Button
-          title="Connect"
-          variant="primary"
-          size="lg"
-          onPress={handleManualSubmit}
-          disabled={!manualCode.trim()}
-          className="mt-2"
-        />
-
-        <PressableBox
-          onPress={() => {
-            setShowManualEntry(false);
-            setManualError(null);
-            setManualCode('');
-          }}
-          className="items-center py-3"
-          accessibilityLabel={permission?.granted ? 'Back to QR Scanner' : 'Back to camera options'}
-          accessibilityRole="button"
-        >
-          <Text className="text-sm" style={{ color: colors.teal }}>
-            {permission?.granted ? 'Back to QR Scanner' : 'Back to camera options'}
-          </Text>
-        </PressableBox>
       </View>
     );
   }
@@ -312,21 +184,6 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
           ) : (
             <Zap size={20} color={colors.white} />
           )}
-        </PressableBox>
-      </View>
-
-      <View className="absolute bottom-12 left-0 right-0 items-center gap-3">
-        <PressableBox
-          onPress={() => setShowManualEntry(true)}
-          className="flex-row items-center gap-2 px-5 py-3 rounded-full bg-black/60"
-          accessibilityLabel="Enter code manually"
-          accessibilityRole="button"
-        >
-          {/* Also on the camera feed, overlay palette, not the accent token. */}
-          <Keyboard size={16} color={colors.cameraOverlayText} />
-          <Text className="text-sm font-medium" style={{ color: colors.cameraOverlayText }}>
-            Enter code manually
-          </Text>
         </PressableBox>
       </View>
     </View>

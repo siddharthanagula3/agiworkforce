@@ -140,6 +140,8 @@ export default function AccountSecurityScreen() {
     savingLockdown,
   } = preferences;
   const [auditEntries, setAuditEntries] = useState<AuditLogEntry[] | null>(null);
+  const [auditFailed, setAuditFailed] = useState(false);
+  const auditRequest = useRef(0);
   const [changingPassword, setChangingPassword] = useState(false);
   const [passwordAccount, setPasswordAccount] = useState<CloudAccountEpoch | null>(null);
   const [accountRevision, setAccountRevision] = useState(0);
@@ -201,13 +203,9 @@ export default function AccountSecurityScreen() {
       setLoading(true);
       setError(null);
       try {
-        const [nextStatus, entries] = await Promise.all([
-          fetchAccountSecurityStatus(signal),
-          fetchAuditLog(20, signal).catch(() => [] as AuditLogEntry[]),
-        ]);
+        const nextStatus = await fetchAccountSecurityStatus(signal);
         if (!isCloudAccountEpochCurrent(account)) return;
         setOwnedStatus({ account, value: nextStatus });
-        setAuditEntries(entries);
       } catch {
         if (signal?.aborted) return;
         if (!isCloudAccountEpochCurrent(account)) return;
@@ -218,6 +216,30 @@ export default function AccountSecurityScreen() {
     },
     [clerkUserId],
   );
+
+  const loadAudit = useCallback(
+    async (signal?: AbortSignal) => {
+      const account = captureCloudAccountEpoch();
+      if (!account || account.ownerId !== clerkUserId) return;
+      const request = ++auditRequest.current;
+      const current = () =>
+        request === auditRequest.current && !signal?.aborted && isCloudAccountEpochCurrent(account);
+      setAuditEntries(null);
+      setAuditFailed(false);
+      try {
+        const entries = await fetchAuditLog(20, signal);
+        if (current()) setAuditEntries(entries);
+      } catch {
+        if (current()) setAuditFailed(true);
+      }
+    },
+    [clerkUserId],
+  );
+
+  const reloadSecurity = useCallback(() => {
+    void loadStatus();
+    void loadAudit();
+  }, [loadAudit, loadStatus]);
 
   const loadSessions = useCallback(
     async (signal?: AbortSignal) => {
@@ -389,7 +411,9 @@ export default function AccountSecurityScreen() {
     setOwnedStatus(null);
     setLoading(false);
     setError(null);
+    auditRequest.current += 1;
     setAuditEntries(null);
+    setAuditFailed(false);
     setOwnedSessions(null);
     setSessionsError(null);
     setRevokingSessionId(null);
@@ -402,6 +426,7 @@ export default function AccountSecurityScreen() {
     if (!isClerkSignedIn || appMode !== 'cloud') return;
     const controller = new AbortController();
     void loadStatus(controller.signal);
+    void loadAudit(controller.signal);
     void loadSessions(controller.signal);
     setSignInMethods(null);
     setSignInMethodsError(false);
@@ -413,7 +438,7 @@ export default function AccountSecurityScreen() {
         if (!controller.signal.aborted) setSignInMethodsError(true);
       });
     return () => controller.abort();
-  }, [accountRevision, appMode, isClerkSignedIn, loadSessions, loadStatus]);
+  }, [accountRevision, appMode, isClerkSignedIn, loadAudit, loadSessions, loadStatus]);
 
   const groupedAuditEntries = useMemo(
     () => (auditEntries ? groupAuditEntries(auditEntries) : []),
@@ -478,7 +503,7 @@ export default function AccountSecurityScreen() {
         status={appMode === 'cloud' ? status : null}
         statusLabel={twoFactorValue}
         withStepUp={withStepUp}
-        onChanged={() => void loadStatus()}
+        onChanged={reloadSecurity}
       />
       <SettingsGroup>
         <SettingsRow
@@ -682,6 +707,14 @@ export default function AccountSecurityScreen() {
       <SettingsGroup>
         {appMode !== 'cloud' ? (
           <SettingsRow label="Activity" icon={History} value="Cloud mode required" isLast />
+        ) : auditFailed ? (
+          <SettingsRow
+            label="Activity"
+            icon={History}
+            value="Unavailable · Retry"
+            onPress={() => void loadAudit()}
+            isLast
+          />
         ) : auditEntries === null ? (
           <SettingsRow label="Activity" icon={History} value="Checking…" isLast />
         ) : auditEntries.length === 0 ? (

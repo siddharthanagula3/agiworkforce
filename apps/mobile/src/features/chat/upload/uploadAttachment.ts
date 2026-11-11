@@ -1,5 +1,9 @@
 import { api, type UploadFileInput, type UploadFileResult } from '@/services/api';
-import { ApiHttpError } from '@/services/apiErrors';
+import {
+  ApiHttpError,
+  CloudCredentialUnavailableError,
+  UPLOAD_ACCOUNT_UNCONFIRMED_MESSAGE,
+} from '@/services/apiErrors';
 import { ensureCloudSendConsent } from '@/services/llmGate';
 import {
   captureCloudAccountEpoch,
@@ -60,19 +64,20 @@ export async function uploadWithRetry(
   let lastError: Error | null = null;
   const accountEpoch = captureCloudAccountEpoch();
   if (!isCloudAccountEpochCurrent(accountEpoch)) return null;
+  let signal = useUploadLifecycleStore.getState().begin(attachmentId);
   try {
     await ensureCloudSendConsent();
   } catch (error) {
+    if (signal.aborted) return null;
     const message = error instanceof Error ? error.message : String(error);
-    const lifecycle = useUploadLifecycleStore.getState();
-    lifecycle.begin(attachmentId);
-    lifecycle.settle(attachmentId, 'failed', message);
+    useUploadLifecycleStore.getState().settle(attachmentId, 'failed', message);
     return null;
   }
+  if (signal.aborted) return null;
 
   for (let attempt = 0; attempt <= MAX_UPLOAD_RETRIES; attempt++) {
     if (!isCloudAccountEpochCurrent(accountEpoch)) return null;
-    const signal = useUploadLifecycleStore.getState().begin(attachmentId);
+    if (attempt > 0) signal = useUploadLifecycleStore.getState().begin(attachmentId);
     try {
       const result = await api.uploadFile(file, {
         signal,
@@ -81,22 +86,23 @@ export async function uploadWithRetry(
         onProgress: (sent, total) =>
           useUploadLifecycleStore.getState().reportProgress(attachmentId, sent, total),
       });
-      if (!isCloudAccountEpochCurrent(accountEpoch)) return null;
+      if (!isCloudAccountEpochCurrent(accountEpoch) || signal.aborted) return null;
       useUploadLifecycleStore.getState().settle(attachmentId, 'done');
       return result;
     } catch (err) {
       if (!isCloudAccountEpochCurrent(accountEpoch)) return null;
       lastError = err instanceof Error ? err : new Error(String(err));
-      // A cancel and a backgrounded upload both abort the signal; neither is a
-      // transient failure, so neither is retried behind the user's back.
-      if (signal.aborted || lastError.name === 'AbortError') {
+      // Whatever aborted the signal (cancel, remove, a newer attempt) already
+      // owns the lifecycle entry, so settling here would overwrite its state.
+      if (signal.aborted) return null;
+      if (lastError.name === 'AbortError') {
         useUploadLifecycleStore.getState().settle(attachmentId, 'canceled');
         return null;
       }
-      if (lastError.message.includes('session expired') || lastError.message.includes('401')) {
+      if (lastError instanceof CloudCredentialUnavailableError) {
         useUploadLifecycleStore
           .getState()
-          .settle(attachmentId, 'failed', 'Your session expired. Sign in again to upload files.');
+          .settle(attachmentId, 'failed', UPLOAD_ACCOUNT_UNCONFIRMED_MESSAGE);
         throw lastError;
       }
       if (isRefusal(lastError)) {

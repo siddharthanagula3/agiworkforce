@@ -4,6 +4,12 @@ import { NOTIFICATION_FEED_MAX_LIMIT } from '@agiworkforce/cloud-contracts';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
 import {
+  MICROSECOND_SORT_KEY_FORMAT,
+  buildPage,
+  keysetSql,
+  type KeysetCursor,
+} from '@/lib/identity/pagination';
+import {
   isNotificationCategory,
   isNotificationSeverity,
   notificationTargetHref,
@@ -39,6 +45,7 @@ interface NotificationRow {
   target_id: string | null;
   is_read: boolean;
   created_at: string | Date;
+  page_sort_key?: string;
 }
 
 function clamp(value: string, max: number): string {
@@ -119,28 +126,48 @@ function toFeedItem(row: NotificationRow): NotificationFeedItem {
 export async function listNotifications(
   db: DatabaseAdapter,
   userId: string,
-  options: { limit?: number; before?: string | null; unreadOnly?: boolean } = {},
-): Promise<{ notifications: NotificationFeedItem[]; unreadCount: number }> {
+  options: {
+    limit?: number;
+    cursor?: KeysetCursor | null;
+    before?: string | null;
+    unreadOnly?: boolean;
+  } = {},
+): Promise<{
+  notifications: NotificationFeedItem[];
+  unreadCount: number;
+  nextCursor: string | null;
+}> {
   const limit = Math.min(
     MAX_FEED_LIMIT,
     Math.max(1, Math.floor(options.limit ?? DEFAULT_FEED_LIMIT)),
   );
   const params: unknown[] = [userId];
   const clauses: string[] = [];
-  if (options.before) {
+  const cursor = options.cursor ?? null;
+  const keyset = keysetSql({
+    sortColumn: 'created_at',
+    idColumn: 'id',
+    ...(cursor ? { cursor } : {}),
+    firstParamIndex: params.length + 1,
+  });
+  if (keyset.where) {
+    params.push(...keyset.params);
+    clauses.push(`and ${keyset.where}`);
+  } else if (options.before) {
     params.push(options.before);
-    clauses.push(`and created_at < $${params.length}::timestamptz`);
+    clauses.push(`and created_at < $${params.length}::timestamptz + interval '1 millisecond'`);
   }
   if (options.unreadOnly) clauses.push('and is_read = false');
-  params.push(limit);
+  params.push(limit + 1);
 
   const [rows, counts] = await Promise.all([
     db.query<NotificationRow>(
-      `select id, category, type, title, message, target_kind, target_id, is_read, created_at
+      `select id, category, type, title, message, target_kind, target_id, is_read, created_at,
+              to_char(created_at at time zone 'utc', ${MICROSECOND_SORT_KEY_FORMAT}) as page_sort_key
          from public.notifications
         where user_id = $1
           ${clauses.join('\n          ')}
-        order by created_at desc, id desc
+        ${keyset.orderBy}
         limit $${params.length}`,
       params,
     ),
@@ -152,9 +179,15 @@ export async function listNotifications(
     ),
   ]);
 
+  const page = buildPage(rows, limit, (row) => ({
+    sortValue: row.page_sort_key ?? '',
+    id: row.id,
+  }));
+
   return {
-    notifications: rows.map(toFeedItem),
+    notifications: page.items.map(toFeedItem),
     unreadCount: Number(counts[0]?.unread ?? 0),
+    nextCursor: page.nextCursor,
   };
 }
 

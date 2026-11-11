@@ -47,6 +47,7 @@ import {
   type PostAuthDestination,
 } from '@/src/features/auth/services/postAuthIntent';
 import { useTierStore } from '@/src/features/billing/store';
+import { planCheckOf } from '@/src/features/billing/planCheck';
 import { getBillingPlanPricing } from '@agiworkforce/types';
 import { UserAvatar } from '@/src/shared/components/UserAvatar';
 import { openInAppBrowser } from '@/lib/safeOpenURL';
@@ -390,7 +391,10 @@ export default function SettingsTabScreen() {
   const cloudAccentColor = useCloudSettingsStore((s) => s.accentColor);
   const accentColor = isCloud ? cloudAccentColor : localAccentColor;
   const billingTier = useTierStore((s) => s.billingTier);
-  const billingLoading = useTierStore((s) => s.isRefreshing && s.lastRefreshedAt === null);
+  const planCheck = useTierStore(planCheckOf);
+  const billingLoading = planCheck === 'checking';
+  const planValue =
+    planCheck === 'confirmed' ? getBillingPlanPricing(billingTier).label : 'Not confirmed';
   const remoteStatus = useConnectionStore((s) => s.status);
   const remoteDesktopName = useConnectionStore((s) => s.desktopName);
   const { user: clerkUser } = useUser();
@@ -448,7 +452,6 @@ export default function SettingsTabScreen() {
 
   const cloudAccessTag = !isClerkLoaded ? 'Checking' : isClerkSignedIn ? 'Cloud' : 'Sign in';
   const accountValue = !isClerkLoaded ? 'Checking…' : isClerkSignedIn ? undefined : 'Sign in';
-  const accountStateValue = accountValue ?? 'Signed in';
 
   const sections = useMemo<SettingsSection[]>(
     () => [
@@ -468,14 +471,14 @@ export default function SettingsTabScreen() {
             key: 'account-security',
             label: 'Account Security',
             icon: Shield,
-            value: accountStateValue,
+            value: accountValue,
             onPress: openCloudRoute('/(app)/settings/account-security'),
           },
           {
             key: 'account-subscription',
             label: 'Subscription',
             icon: CreditCard,
-            value: accountValue ?? getBillingPlanPricing(billingTier).label,
+            value: accountValue ?? planValue,
             loading: accountValue === undefined && billingLoading,
             onPress: openCloudRoute('/(app)/settings/cloud-billing'),
           },
@@ -483,14 +486,14 @@ export default function SettingsTabScreen() {
             key: 'account-shared-links',
             label: 'Shared Links',
             icon: Share2,
-            value: accountStateValue,
+            value: accountValue,
             onPress: openCloudRoute('/(app)/settings/shared-links'),
           },
           {
             key: 'workspace',
             label: 'Workspace',
             icon: Users,
-            value: accountStateValue,
+            value: accountValue,
             onPress: openCloudRoute('/(app)/settings/workspace'),
           },
         ],
@@ -725,7 +728,6 @@ export default function SettingsTabScreen() {
     ],
     [
       accentColor,
-      accountStateValue,
       accountValue,
       appVersion,
       cloudAccessTag,
@@ -741,7 +743,7 @@ export default function SettingsTabScreen() {
       remoteDesktopName,
       themeMode,
       billingLoading,
-      billingTier,
+      planValue,
       clerkUser,
     ],
   );

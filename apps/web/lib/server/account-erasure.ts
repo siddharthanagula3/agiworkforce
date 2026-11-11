@@ -200,6 +200,7 @@ export const EMAIL_SCOPED_USER_TABLES: ReadonlyArray<{
 ];
 
 const PROFILE_TABLE = 'profiles';
+const TOMBSTONE_TABLE = 'erasure_tombstones';
 const ORGANIZATION_USAGE_LEDGER_TABLE = 'organization_usage_ledger';
 
 async function anonymizeUserReference(
@@ -449,9 +450,11 @@ export interface AccountErasureReport {
   profileRetained: boolean;
 }
 
+export type ErasureScope = 'account' | 'data' | 'tombstone';
+
 export interface EraseUserAccountOptions {
   retainProfile?: boolean;
-  scope?: 'account' | 'data';
+  scope?: ErasureScope;
 }
 
 async function releaseDataVideoErasureFence(userId: string, fenceToken: string): Promise<void> {
@@ -493,9 +496,31 @@ const IMAGE_JOB_BLOCKING = `
               )
          )`;
 
+/**
+ * An erased subject has no profile row to seal, so its fence is the tombstone
+ * itself, read together with the absence of a profile: a tombstoned subject is
+ * refused at authentication, video admission writes to the profile row and
+ * cannot start without one, and a profile that is back belongs to the
+ * resurrected-account path, which erases it as an account.
+ */
+const TOMBSTONED_SUBJECT_FENCE = `
+  select tombstone.user_id as id
+    from public.${TOMBSTONE_TABLE} as tombstone
+   where tombstone.user_id = $1
+     and not exists (
+       select 1 from public.${PROFILE_TABLE} as profile where profile.id = tombstone.user_id
+     )`;
+
+const FENCE_REFUSALS: Record<ErasureScope, string> = {
+  account: 'The profile deletion fence matched no account row.',
+  data: 'The data-erasure fence could not be acquired without changing account-deletion state.',
+  tombstone:
+    'The tombstone fence matched no erased subject: no tombstone records it, or a profile row exists under it.',
+};
+
 async function sealAndCheckMediaJobsForErasure(
   userId: string,
-  scope: 'account' | 'data',
+  scope: ErasureScope,
 ): Promise<{
   blocked: boolean;
   blockedBy?: string;
@@ -506,9 +531,11 @@ async function sealAndCheckMediaJobsForErasure(
   let dataFenceToken: string | undefined;
   try {
     const fenced =
-      scope === 'account'
-        ? await db.query<{ id: string }>(
-            `update public.profiles
+      scope === 'tombstone'
+        ? await db.query<{ id: string }>(TOMBSTONED_SUBJECT_FENCE, [userId])
+        : scope === 'account'
+          ? await db.query<{ id: string }>(
+              `update public.profiles
                 set deletion_requested_at = coalesce(deletion_requested_at, now()),
                     deletion_scheduled_for = coalesce(deletion_scheduled_for, now())
               where id = $1
@@ -521,12 +548,12 @@ async function sealAndCheckMediaJobsForErasure(
                   or video_generation_erasure_fence_expires_at <= now()
                 )
             returning id`,
-            [userId],
-          )
-        : await (async () => {
-            dataFenceToken = randomUUID();
-            return db.query<{ id: string }>(
-              `update public.profiles
+              [userId],
+            )
+          : await (async () => {
+              dataFenceToken = randomUUID();
+              return db.query<{ id: string }>(
+                `update public.profiles
                   set video_generation_erasure_fence_token = $2,
                       video_generation_erasure_fence_expires_at = now() + interval '1 hour'
                 where id = $1
@@ -540,16 +567,14 @@ async function sealAndCheckMediaJobsForErasure(
                     or video_generation_erasure_fence_expires_at <= now()
                   )
               returning id`,
-              [userId, dataFenceToken],
-            );
-          })();
+                [userId, dataFenceToken],
+              );
+            })();
     if (!fenced[0]) {
       return {
         blocked: true,
-        error:
-          scope === 'account'
-            ? 'The profile deletion fence matched no account row.'
-            : 'The data-erasure fence could not be acquired without changing account-deletion state.',
+        ...(scope === 'tombstone' ? { blockedBy: TOMBSTONE_TABLE } : {}),
+        error: FENCE_REFUSALS[scope],
       };
     }
 
@@ -1087,8 +1112,6 @@ export async function eraseProfileRow(userId: string): Promise<void> {
   await db.execute(`delete from public.${PROFILE_TABLE} where id = $1`, [userId]);
 }
 
-const TOMBSTONE_TABLE = 'erasure_tombstones';
-
 export interface ErasureTombstoneResult {
   recorded: boolean;
   error?: string;
@@ -1108,6 +1131,30 @@ export async function openErasureTombstone(userId: string): Promise<ErasureTombs
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     logger.error({ userId, error: message }, 'Failed to record the erasure tombstone');
+    return { recorded: false, error: message };
+  }
+}
+
+/**
+ * A resweep only moves an existing tombstone. Creating one here would let a
+ * stray job manufacture the record the tombstone fence trusts as proof that
+ * this subject was erased.
+ */
+export async function advanceErasureTombstone(userId: string): Promise<ErasureTombstoneResult> {
+  const db = getNeonDb();
+  try {
+    const advanced = await db.query<{ user_id: string }>(
+      `update public.${TOMBSTONE_TABLE}
+          set last_swept_at = now()
+        where user_id = $1
+        returning user_id`,
+      [userId],
+    );
+    if (advanced[0]) return { recorded: true };
+    return { recorded: false, error: 'No erasure tombstone records this subject' };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logger.error({ userId, error: message }, 'Failed to advance the erasure tombstone');
     return { recorded: false, error: message };
   }
 }

@@ -283,8 +283,15 @@ const COLLECT_LEDGER: readonly LedgerRow[] = [
         <Link href={CANONICAL_POLICY_ROUTES.agentPermissions} className="agi-ds-link">
           /agent-permissions
         </Link>
-        . The use of information the Chrome extension receives, including page text, addresses and
-        screenshots of the tabs you choose, will adhere to the{' '}
+        . When you turn on Browsing history in the Chrome extension and allow a search, it sends the
+        titles, addresses and last visit times of at most 20 matching pages for that answer, with
+        sign-in details and secret-looking parts of each address removed; during browser control on
+        a site you have allowed, the assistant can also read that tab&rsquo;s console messages and
+        the address, method, status, type, timing and size of its network requests, never their
+        bodies or headers; and the extension records in your account each action it takes, when it
+        took it, whether it worked and the website it acted on, but not the page. The use of
+        information the Chrome extension receives, including page text, addresses and screenshots of
+        the tabs you choose, will adhere to the{' '}
         <a
           href="https://developer.chrome.com/docs/webstore/program-policies/policies"
           className="agi-ds-link"
@@ -659,12 +666,14 @@ const RETENTION_LEDGER: readonly LedgerRow[] = [
     label: 'Account and its content',
     value: (
       <>
-        <strong>Retention:</strong> kept while your account is active. Permanently erased 24 hours
-        after a deletion request.
+        <strong>Retention:</strong> kept while your account is active. A deletion request schedules
+        erasure 24 hours later, and a daily job then carries it out. If an active legal hold covers
+        your account, erasure waits until the hold is released.
         <br />
         <strong>Enforced by:</strong> the request records a deletion timestamp and schedules erasure
         24 hours out; a daily scheduled job then erases your user-scoped records and stored objects
-        and deletes your identity at our authentication provider.
+        and deletes your identity at our authentication provider. The job checks for a legal hold
+        first and erases nothing while one covers the account.
       </>
     ),
   },
@@ -874,7 +883,7 @@ const CONTROLS_LEDGER: readonly LedgerRow[] = [
   {
     label: 'Delete your account',
     value:
-      'Account settings. Erasure is scheduled 24 hours out, then performed by a daily job that also deletes your identity at our authentication provider. Read the survivors table in section 05 first. Cancellation is self-serve: sign back in and cancel from Settings > Account any time before the 24 hours are up.',
+      'Account settings. Erasure is scheduled 24 hours out, then carried out by a daily job that also deletes your identity at our authentication provider. If an active legal hold covers your account, erasure waits until the hold is released. Read the survivors table in section 05 first. Cancellation is self-serve: sign back in and cancel from Settings > Account any time before the 24 hours are up.',
   },
   {
     label: 'Withdraw a consent',
@@ -1434,7 +1443,7 @@ export default function PrivacyPage() {
                       {
                         label: 'Deletion',
                         value:
-                          'Request account deletion from the product. Erasure is scheduled 24 hours later and then performed. You get no confirmation email. Cancellation is self-serve: sign back in and cancel from Settings > Account any time before the 24 hours are up, and the request is discarded without touching your data. Once that window has closed the product refuses to cancel, so the request cannot be revived after erasure begins.',
+                          'Request account deletion from the product. Erasure is scheduled 24 hours later and then carried out by a daily job, unless an active legal hold covers your account, in which case it waits until the hold is released. You get no confirmation email. Cancellation is self-serve: sign back in and cancel from Settings > Account any time before the 24 hours are up, and the request is discarded without touching your data. Once that window has closed the product refuses to cancel, so the request cannot be revived after erasure begins.',
                       },
                       {
                         label: 'Everything else',

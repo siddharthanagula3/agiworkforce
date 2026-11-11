@@ -35,6 +35,7 @@ import { useAgentStore } from '@/stores/agentStore';
 import {
   startHealthChecks,
   stopHealthChecks,
+  stopReconnectRecovery,
   requestAgentRefresh,
   manualReconnect,
 } from '@/services/companion';
@@ -122,6 +123,8 @@ export default function CompanionScreen() {
       stopHealthChecks();
     };
   }, [status, hasSeenDemo]);
+
+  useEffect(() => stopReconnectRecovery, []);
 
   const handleScan = useCallback(
     (code: string) => {

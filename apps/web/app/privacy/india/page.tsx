@@ -159,7 +159,7 @@ const RETENTION: readonly LedgerRow[] = [
   {
     label: 'Account and its content',
     value:
-      'Kept while your account is active. Permanently erased 24 hours after a deletion request, by a daily scheduled job that also deletes your identity at our authentication provider.',
+      'Kept while your account is active. A deletion request schedules erasure 24 hours later, and a daily scheduled job then carries it out and deletes your identity at our authentication provider. If an active legal hold covers your account, erasure waits until the hold is released.',
   },
   {
     label: 'Conversations (Cloud)',
@@ -222,7 +222,7 @@ const RIGHTS: readonly LedgerRow[] = [
   {
     label: 'Erasure',
     value:
-      'Request account deletion in the product. Erasure is scheduled 24 hours later and then performed. You get no confirmation email. Cancellation is self-serve: sign back in and cancel from Settings > Account any time before erasure begins.',
+      'Request account deletion in the product. Erasure is scheduled 24 hours later and then carried out by a daily job, unless an active legal hold covers your account, in which case it waits until the hold is released. You get no confirmation email. Cancellation is self-serve: sign back in and cancel from Settings > Account any time before erasure begins.',
   },
   {
     label: 'Withdraw consent',

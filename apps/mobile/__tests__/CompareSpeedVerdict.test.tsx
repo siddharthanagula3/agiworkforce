@@ -196,6 +196,20 @@ describe('CompareScreen speed verdict', () => {
     expect(screen.queryByText('tie')).toBeNull();
   });
 
+  it('promises simultaneous answers only on a plan that runs them together', () => {
+    const { unmount } = render(<CompareScreen />);
+    expect(screen.getByText(/to both models simultaneously/)).toBeTruthy();
+    unmount();
+
+    act(() => {
+      useTierStore.setState({ tier: 'basic' });
+    });
+    render(<CompareScreen />);
+
+    expect(screen.queryByText(/simultaneously/)).toBeNull();
+    expect(screen.getByText(/Your plan runs one answer at a time/)).toBeTruthy();
+  });
+
   it('reports a tie only for two completed answers with equal durations', () => {
     render(<CompareScreen />);
     const now = jest.spyOn(Date, 'now');

@@ -56,6 +56,7 @@ interface ViewState {
   searchResults: ConversationSearchResult[];
   remoteSearchChats: RemoteSearchMatch[];
   remoteSearchProjects: RemoteSearchMatch[];
+  searchFailed: boolean;
   isSearching: boolean;
   chatMode: ChatMode;
   workMode: CloudWorkMode;
@@ -138,6 +139,7 @@ interface ServerProjectRow {
 const EMPTY_REMOTE_MATCHES = {
   remoteSearchChats: [] as RemoteSearchMatch[],
   remoteSearchProjects: [] as RemoteSearchMatch[],
+  searchFailed: false,
 };
 
 function remoteChatMatches(rows: ServerSearchRow[]): RemoteSearchMatch[] {
@@ -187,6 +189,7 @@ async function runSearch(
     return;
   }
 
+  let cloudSearchFailed = false;
   if (isCloud) {
     try {
       if (useAuthStore.getState().isClerkSignedIn) {
@@ -217,6 +220,7 @@ async function runSearch(
       }
     } catch {
       if (!isCurrent()) return;
+      cloudSearchFailed = true;
     }
   }
 
@@ -268,7 +272,14 @@ async function runSearch(
     }
   }
 
-  if (isCurrent()) set({ searchResults: results, ...EMPTY_REMOTE_MATCHES, isSearching: false });
+  if (isCurrent()) {
+    set({
+      searchResults: results,
+      ...EMPTY_REMOTE_MATCHES,
+      searchFailed: cloudSearchFailed,
+      isSearching: false,
+    });
+  }
 }
 
 export function styleForConversation(

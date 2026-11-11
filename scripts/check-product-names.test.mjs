@@ -7,6 +7,7 @@ import test from 'node:test';
 import {
   MANIFEST_FIELDS,
   REGISTRY_PATH,
+  readCopyrightName,
   readRegistry,
   runProductNamesCheck,
 } from './check-product-names.mjs';
@@ -21,8 +22,12 @@ const NAMES = {
   work: 'Work',
 };
 
+const COPYRIGHT_NAME = 'AGI';
+
 function registrySource(names) {
-  return `export const PRODUCT_NAMES = {\n${Object.entries(names)
+  return `export const PRODUCT_COPYRIGHT_NAME = '${COPYRIGHT_NAME}';\n\nexport const PRODUCT_NAMES = {\n${Object.entries(
+    names,
+  )
     .map(([key, value]) => `  ${key}: '${value}',`)
     .join('\n')}\n} as const;\n`;
 }
@@ -36,7 +41,10 @@ function fixture({ desktop = NAMES.desktop, source = '', names = NAMES } = {}) {
   write(REGISTRY_PATH, registrySource(names));
   write('apps/mobile/app.config.js', `const config = {\n  name: '${NAMES.mobile}',\n};\n`);
   write('apps/desktop/electron-builder.yml', `appId: x\nproductName: ${desktop}\n`);
-  write('apps/extension/manifest.json', JSON.stringify({ name: NAMES.extension }));
+  write(
+    'apps/extension/manifest.json',
+    JSON.stringify({ name: `${COPYRIGHT_NAME} ${names.extension}` }),
+  );
   write('apps/extension-vscode/package.json', JSON.stringify({ displayName: NAMES.code }));
   write('apps/web/app/page.tsx', source);
   return root;
@@ -52,6 +60,21 @@ test('checks one display field per app that cannot import the registry', () => {
     'desktop',
     'extension',
     'mobile',
+  ]);
+});
+
+test('reads the copyright name from the registry', () => {
+  assert.equal(readCopyrightName(fixture()), COPYRIGHT_NAME);
+});
+
+test('fails when the extension manifest shows the bare product name', () => {
+  const root = fixture();
+  fs.writeFileSync(
+    path.join(root, 'apps/extension/manifest.json'),
+    JSON.stringify({ name: NAMES.extension }),
+  );
+  assert.deepEqual(runProductNamesCheck(root), [
+    'apps/extension/manifest.json: shows "Extension", the registry names this app "AGI Extension"',
   ]);
 });
 

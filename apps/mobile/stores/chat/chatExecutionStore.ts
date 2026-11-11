@@ -11,7 +11,12 @@ import {
 import { localGenerate } from '@agiworkforce/local-llm';
 import { getMobileSendQueue } from '@/lib/sendQueue';
 import { api, ApiPaywallError } from '@/services/api';
-import { ApiFreeCapacityError, ApiHttpError } from '@/services/apiErrors';
+import {
+  ApiFreeCapacityError,
+  ApiHttpError,
+  CloudCredentialUnavailableError,
+  UPLOAD_ACCOUNT_UNCONFIRMED_MESSAGE,
+} from '@/services/apiErrors';
 import { withFailureReference } from '@/services/failureCopy';
 import {
   buildAttachedDocumentContext,
@@ -974,6 +979,8 @@ function sanitizeLocalOutput(raw: string): string {
 // Every local failure leaves through here, so a runtime exception string never
 // reaches the transcript. A raw `FoundationModels.LanguageModelSession.\
 // GenerationError error -1.` told the user nothing and read as a crash.
+const GENERIC_TURN_FAILURE = 'Something went wrong. Please try again.';
+
 function localSetupMessage(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error);
   if (raw) console.warn('[chat] local inference failed:', raw);
@@ -1323,6 +1330,19 @@ export function captureArtifactsFromMessage(
   } catch (err) {
     console.warn('[chatExecutionStore] Failed to capture message artifacts:', err);
   }
+}
+
+function reinsertRemovedTail(
+  current: ChatMessage[],
+  keptPrefix: ChatMessage[],
+  removedTail: ChatMessage[],
+): ChatMessage[] {
+  const removedIds = new Set(removedTail.map((message) => message.id));
+  const remaining = current.filter((message) => !removedIds.has(message.id));
+  const lastKept = keptPrefix[keptPrefix.length - 1];
+  const keptIndex = lastKept ? remaining.findIndex((message) => message.id === lastKept.id) : -1;
+  const insertAt = lastKept ? (keptIndex < 0 ? remaining.length : keptIndex + 1) : 0;
+  return [...remaining.slice(0, insertAt), ...removedTail, ...remaining.slice(insertAt)];
 }
 
 function flushDeferredSend(conversationId: string): void {
@@ -1689,9 +1709,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         } catch (err) {
           if (!isTurnAccountCurrent()) return false;
           const error = err instanceof Error ? err : new Error(String(err));
-          if (error.message.includes('session expired') || error.message.includes('401')) {
+          if (error instanceof CloudCredentialUnavailableError) {
             set({
-              error: 'Session expired. Please sign in again to upload files.',
+              error: UPLOAD_ACCOUNT_UNCONFIRMED_MESSAGE,
               paywallError: null,
               ...streamingFlags(),
             });
@@ -3014,7 +3034,18 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                     message: withFailureReference(error.message, error.requestId),
                     code: error.code,
                   }
-                : { message: 'Something went wrong. Please try again.', code: null };
+                : { message: GENERIC_TURN_FAILURE, code: null };
+            const turnFailure: StreamFailure =
+              error instanceof ApiHttpError
+                ? {
+                    message: error.message,
+                    ...(error.code ? { code: error.code } : {}),
+                    ...(error.retryAfterSeconds !== undefined
+                      ? { retryAfterSeconds: error.retryAfterSeconds }
+                      : {}),
+                    ...(error.requestId ? { requestId: error.requestId } : {}),
+                  }
+                : { message: GENERIC_TURN_FAILURE };
             if (agentActivity) {
               agentActivity = finishAgentActivityLocally(agentActivity, {
                 status: 'failed',
@@ -3029,19 +3060,16 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               const toolCalls = settleToolCalls(m.toolCalls, 'failed');
               return {
                 ...m,
-                content: currentContent || failure.message,
+                content: currentContent,
                 isStreaming: false,
                 ...(toolCalls === m.toolCalls ? {} : { toolCalls }),
-                ...(agentActivity || cloudAgentRun || turnResearch
-                  ? {
-                      metadata: {
-                        ...m.metadata,
-                        ...(agentActivity ? { agentActivity } : {}),
-                        ...(cloudAgentRun ? { cloudAgentRun: { ...cloudAgentRun } } : {}),
-                        ...(turnResearch ? { research: { ...turnResearch } } : {}),
-                      },
-                    }
-                  : {}),
+                metadata: {
+                  ...m.metadata,
+                  streamError: turnFailure,
+                  ...(agentActivity ? { agentActivity } : {}),
+                  ...(cloudAgentRun ? { cloudAgentRun: { ...cloudAgentRun } } : {}),
+                  ...(turnResearch ? { research: { ...turnResearch } } : {}),
+                },
               };
             });
             currentMsgStore.setState((s) => ({
@@ -3072,7 +3100,11 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             ...state.messages,
             [conversationId]: (state.messages[conversationId] ?? []).map((candidate) =>
               candidate.id === assistantMessageId
-                ? { ...candidate, content: candidate.content || message, isStreaming: false }
+                ? {
+                    ...candidate,
+                    isStreaming: false,
+                    metadata: { ...candidate.metadata, streamError: { message } },
+                  }
                 : candidate,
             ),
           },
@@ -3210,9 +3242,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                     { ...m, isStreaming: false },
                     controller.signal.aborted ? 'cancelled' : 'failed',
                     completedAtMs,
-                    controller.signal.aborted
-                      ? undefined
-                      : 'Something went wrong. Please try again.',
+                    controller.signal.aborted ? undefined : GENERIC_TURN_FAILURE,
                   )
                 : m,
             );
@@ -3708,7 +3738,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               error:
                 error instanceof ApiHttpError
                   ? withFailureReference(error.message, error.requestId)
-                  : 'Something went wrong. Please try again.',
+                  : GENERIC_TURN_FAILURE,
             });
           },
         },
@@ -3782,7 +3812,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                   { ...m, isStreaming: false },
                   controller.signal.aborted ? 'cancelled' : 'failed',
                   completedAtMs,
-                  controller.signal.aborted ? undefined : 'Something went wrong. Please try again.',
+                  controller.signal.aborted ? undefined : GENERIC_TURN_FAILURE,
                 )
               : m,
           );
@@ -4477,18 +4507,44 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         return;
       }
 
-      if (isCloudEdit) {
-        await deleteCloudMessagesRemote(
-          conversationId,
-          msgs.slice(msgIndex).map((message) => message.id),
-          accountEpoch,
-        );
-      }
-      if (!isEditCurrent()) return;
+      const removedTail = msgs.slice(msgIndex);
       msgStore.setState((s) => ({
         messages: { ...s.messages, [conversationId]: trimmedMsgs },
       }));
-      await get().sendMessage(conversationId, newContent, userModel, editedAttachments);
+      let accepted = false;
+      try {
+        await get().sendMessage(conversationId, newContent, userModel, editedAttachments, {
+          onAccepted: () => {
+            accepted = true;
+            if (!isCloudEdit) return;
+            void deleteCloudMessagesRemote(
+              conversationId,
+              removedTail.map((message) => message.id),
+              accountEpoch,
+            ).catch(() => {
+              if (isEditCurrent()) {
+                set({
+                  error:
+                    'The earlier Cloud messages could not be removed. They may reappear after the next sync.',
+                });
+              }
+            });
+          },
+        });
+      } finally {
+        if (!accepted && isEditCurrent()) {
+          msgStore.setState((s) => ({
+            messages: {
+              ...s.messages,
+              [conversationId]: reinsertRemovedTail(
+                s.messages[conversationId] ?? [],
+                trimmedMsgs,
+                removedTail,
+              ),
+            },
+          }));
+        }
+      }
     })()
       .catch((err) => {
         if (!isEditCurrent()) return;

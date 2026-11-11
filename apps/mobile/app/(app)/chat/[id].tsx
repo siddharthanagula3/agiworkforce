@@ -66,7 +66,7 @@ import {
   RenameConversationModal,
   useConversationActions,
 } from '@/src/features/conversation-actions';
-import { takeConversationSend } from '@agiworkforce/client-runtime';
+import { peekConversationSend, takeConversationSend } from '@agiworkforce/client-runtime';
 import {
   useVoiceConversation,
   voiceCaptureErrorMessage,
@@ -91,6 +91,7 @@ import { TemporaryChatBanner } from '@/src/features/chat/components/TemporaryCha
 import { SendErrorBanner } from '@/src/features/chat/components/SendErrorBanner';
 import { ProviderConsentBanner } from '@/src/features/chat/components/ProviderConsentBanner';
 import { MessageSkeleton } from '@/src/features/chat/components/MessageSkeleton';
+import { PendingSendBubble } from '@/src/features/chat/components/PendingSendBubble';
 import {
   classifyManagedQuotaErrorCode,
   formatUsageResetIn,
@@ -143,6 +144,7 @@ import { offlineQueue } from '@/services/offlineQueue';
 import { createMobileCloudAgentRunClient } from '@/services/streaming';
 import { ManagedCloudAgentRunReferenceSchema } from '@agiworkforce/cloud-contracts';
 import { CLOUD_SIGN_IN_MESSAGE, offersModelSwitch } from '@/services/apiErrors';
+import { getMessageStreamErrorMessage } from '@/src/features/chat/utils/messageStreamError';
 import { pickableDocumentMimeTypes } from '@/services/docParser';
 import {
   runImageGenerationTurn,
@@ -150,6 +152,7 @@ import {
   type ImageEditTurnRequest,
 } from '@/src/features/chat/actions/runImageGenerationTurn';
 import { runVideoGenerationTurn } from '@/src/features/chat/actions/runVideoGenerationTurn';
+import { resolveImageRetryFallback } from '@/src/features/chat/actions/imageRetryFallback';
 import {
   MediaGenerationAdmissionError,
   mediaGenerationFailureMessage,
@@ -752,6 +755,8 @@ export default function ChatScreen() {
     ],
   );
 
+  const pendingSendText = id && isLoadingMessages ? peekConversationSend(id) : null;
+
   useEffect(() => {
     if (!id || isStreaming || isLoadingMessages) return;
     const handedOff = takeConversationSend(id);
@@ -921,6 +926,14 @@ export default function ChatScreen() {
   const handleOpenCloudSignIn = useCallback(() => {
     router.push(beginCloudPostAuthIntent());
   }, [router]);
+
+  const failureShownInTurn = useMemo(() => {
+    if (!sendError) return false;
+    const lastAssistant = [...conversationMessages].reverse().find((m) => m.role === 'assistant');
+    if (!lastAssistant || lastAssistant.isStreaming) return false;
+    const turnFailure = getMessageStreamErrorMessage(lastAssistant);
+    return Boolean(turnFailure && sendError.startsWith(turnFailure));
+  }, [conversationMessages, sendError]);
 
   const sendRecoveryAction = useMemo(() => {
     if (localRecoveryAction) return localRecoveryAction;
@@ -1241,8 +1254,11 @@ export default function ChatScreen() {
   );
 
   const handleOpenSkills = useCallback(() => {
-    router.push('/(app)/skills?returnTo=composer' as Parameters<typeof router.push>[0]);
-  }, [router]);
+    router.push({
+      pathname: '/(app)/skills',
+      params: { returnTo: 'composer', ...(id ? { conversationId: id } : {}) },
+    } as Parameters<typeof router.push>[0]);
+  }, [id, router]);
 
   const handleAttachFromLibrary = useCallback((attachment: Attachment) => {
     chatInputAttachRef.current?.addAttachments([attachment]);
@@ -1504,7 +1520,12 @@ export default function ChatScreen() {
         }
         const original = conversationMessages[messageIndex - 1];
         if (original?.role === 'user') {
-          void Promise.resolve(handleSend(original.content));
+          const fallback = resolveImageRetryFallback(original);
+          if (fallback.kind === 'reference_unavailable') {
+            setSendError(fallback.message);
+            return;
+          }
+          void Promise.resolve(handleSend(fallback.text));
           return;
         }
       }
@@ -1900,9 +1921,16 @@ export default function ChatScreen() {
           onDismiss={clearMessageLoadError}
         />
 
-        <View style={liveVoiceVisible ? { display: 'none' } : { flex: 1 }}>
+        <View
+          testID="chat.thread-frame"
+          style={liveVoiceVisible ? { display: 'none' } : { flex: 1, overflow: 'hidden' }}
+        >
           {isLoadingMessages && conversationMessages.length === 0 ? (
-            <MessageSkeleton />
+            pendingSendText ? (
+              <PendingSendBubble text={pendingSendText} />
+            ) : (
+              <MessageSkeleton />
+            )
           ) : (
             <MessageList
               messages={conversationMessages}
@@ -2003,6 +2031,7 @@ export default function ChatScreen() {
           error={providerConsentError ? null : sendError}
           freeCapacity={providerConsentError ? null : freeCapacityError}
           action={sendRecoveryAction}
+          detailShownInTurn={failureShownInTurn}
           onRetry={
             sendError !== CLOUD_SIGN_IN_MESSAGE &&
             !sendError?.startsWith('The active AGI Cloud account changed') &&

@@ -21,6 +21,8 @@ const CLOUD_DESTINATIONS = {
   'cloud-privacy': '/(app)/settings/cloud-privacy',
   'cloud-usage': '/(app)/settings/cloud-usage',
   'cloud-connectors': '/(app)/settings/cloud-connectors',
+  'cloud-support': '/(app)/support',
+  'cloud-code': '/(app)/cloud-code',
 } as const;
 
 export type PostAuthIntent = keyof typeof CLOUD_DESTINATIONS;

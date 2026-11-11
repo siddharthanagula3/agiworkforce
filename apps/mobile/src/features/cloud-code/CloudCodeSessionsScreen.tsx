@@ -150,6 +150,10 @@ function SessionList({ onBack }: { onBack: () => void }) {
     [load, router],
   );
 
+  const handleCreatedInBackground = useCallback(() => {
+    void load('background');
+  }, [load]);
+
   const handleOpenRemote = useCallback(() => {
     router.push('/(app)/companion' as Parameters<typeof router.push>[0]);
   }, [router]);
@@ -163,6 +167,7 @@ function SessionList({ onBack }: { onBack: () => void }) {
         runtimes={runtimes}
         onClose={() => setNewSessionOpen(false)}
         onCreated={handleCreated}
+        onCreatedInBackground={handleCreatedInBackground}
       />
 
       <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingBottom: 12 }}>

@@ -113,18 +113,11 @@ async function officeParts(data: Buffer, requiredPart: string): Promise<Map<stri
   return parts;
 }
 
+const DISALLOWED_XML_TEXT = /[^\t\n\r\u0020-\uD7FF\uE000-\uFFFD\u{10000}-\u{10FFFF}]/u;
+
 function assertXmlText(value: string): void {
-  for (const character of value) {
-    const code = character.codePointAt(0) ?? 0;
-    if (
-      (code < 32 && code !== 9 && code !== 10 && code !== 13) ||
-      (code >= 0xd800 && code <= 0xdfff) ||
-      code === 0xfffe ||
-      code === 0xffff
-    ) {
-      throw new ManagedOfficeProcessingError('The edit contains unsupported XML characters.');
-    }
-  }
+  if (DISALLOWED_XML_TEXT.test(value))
+    throw new ManagedOfficeProcessingError('The edit contains unsupported XML characters.');
 }
 
 function xmlText(value: string): string {

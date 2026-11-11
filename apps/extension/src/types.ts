@@ -559,11 +559,17 @@ export interface AdoptChatTurnMessage extends BaseMessage {
   historyConversationId: string;
 }
 
+export type AdoptedChatToolHandoff = Pick<
+  ChatToolHandoffMessage,
+  'handoffId' | 'calls' | 'callerCheckpoint' | 'recoveryContext'
+>;
+
 export interface AdoptedChatTurn {
   id: string;
   text: string;
   cloudRun?: ManagedCloudAgentRunReference;
   assistantMessageId?: string;
+  toolHandoffs?: AdoptedChatToolHandoff[];
 }
 
 export interface ResolveChatApprovalMessage extends BaseMessage {

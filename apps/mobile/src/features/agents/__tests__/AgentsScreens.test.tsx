@@ -247,14 +247,67 @@ describe('mobile agents', () => {
       },
     ]);
     mockRestoreAgentVersion.mockResolvedValue({ ...AGENT, instructions: 'Older instructions' });
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     const { findByLabelText, getByLabelText } = render(<AgentEditorScreen />);
 
     fireEvent.changeText(await findByLabelText('Instructions'), 'Unsaved instructions');
     fireEvent.press(await findByLabelText('Restore version 1 as the draft'));
 
+    await waitFor(() => expect(alert).toHaveBeenCalledTimes(1));
+    expect(alert.mock.calls[0]?.[0]).toBe('Replace your unsaved changes?');
+    expect(mockRestoreAgentVersion).not.toHaveBeenCalled();
+
+    pressAlertButton(alert, 'Restore');
+
     await waitFor(() =>
       expect(getByLabelText('Instructions').props.value).toBe('Older instructions'),
     );
+    alert.mockRestore();
+  });
+
+  it('keeps unsaved edits when the person declines to restore over them', async () => {
+    mockParams.id = AGENT.id;
+    mockGetAgent.mockResolvedValue({ ...AGENT, instructions: 'Saved instructions' });
+    mockListAgentVersions.mockResolvedValue([
+      { version: 1, note: '', publishedAt: '2026-10-02T00:00:00.000Z', publishedByName: 'Ana' },
+    ]);
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    const { findByLabelText, getByLabelText } = render(<AgentEditorScreen />);
+
+    fireEvent.changeText(await findByLabelText('Instructions'), 'Unsaved instructions');
+    fireEvent.press(await findByLabelText('Restore version 1 as the draft'));
+    await waitFor(() => expect(alert).toHaveBeenCalledTimes(1));
+    pressAlertButton(alert, 'Cancel');
+
+    expect(mockRestoreAgentVersion).not.toHaveBeenCalled();
+    expect(getByLabelText('Instructions').props.value).toBe('Unsaved instructions');
+    alert.mockRestore();
+  });
+
+  it('says when sharing, files and version history could not be read, and retries each', async () => {
+    mockParams.id = AGENT.id;
+    mockGetAgent.mockResolvedValue(AGENT);
+    const service = jest.requireMock('../service');
+    service.getAgentShare.mockRejectedValueOnce(new Error('share down'));
+    service.listAgentFiles.mockRejectedValueOnce(new Error('files down'));
+    mockListAgentVersions.mockRejectedValueOnce(new Error('versions down'));
+    const { findByText, queryByText, getAllByLabelText, getByText } = render(<AgentEditorScreen />);
+
+    expect(await findByText('Could not load who can use this agent.')).toBeTruthy();
+    expect(getByText('Could not load the files.')).toBeTruthy();
+    expect(getByText('Could not load the version history.')).toBeTruthy();
+    expect(queryByText('Loading sharing…')).toBeNull();
+    expect(queryByText('No files yet.')).toBeNull();
+
+    mockListAgentVersions.mockResolvedValue([
+      { version: 1, note: '', publishedAt: '2026-10-02T00:00:00.000Z', publishedByName: 'Ana' },
+    ]);
+    for (const banner of getAllByLabelText('Try again')) fireEvent.press(banner);
+
+    expect(await findByText('Version 1')).toBeTruthy();
+    expect(queryByText('Could not load who can use this agent.')).toBeNull();
+    expect(queryByText('Could not load the files.')).toBeNull();
+    expect(getByText('No files yet.')).toBeTruthy();
   });
 
   it('keeps a recipient read only', async () => {
