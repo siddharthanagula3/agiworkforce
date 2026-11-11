@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+type ObjectBackupModule = typeof import('../object-backup');
+type IdentityModule = typeof import('../identity');
+type RequestContextCacheModule = typeof import('../request-context-cache');
+type StripeProviderModule = typeof import('../payments/stripe-provider');
+
 interface TombstoneRow {
   erasedAt: Date | null;
   sweeps: number;
@@ -124,19 +129,19 @@ vi.mock('@/lib/connectors/oauth-access', () => ({
   revokeAllConnectorTokensAtProviders: vi.fn(async () => ({ attempted: 0, revoked: 0 })),
 }));
 vi.mock('@/lib/server/object-backup', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../object-backup')>()),
+  ...(await importOriginal<ObjectBackupModule>()),
   resolveObjectBackupTarget: () => null,
 }));
 vi.mock('@/lib/server/identity', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../identity')>()),
+  ...(await importOriginal<IdentityModule>()),
   getIdentityProvider: () => ({ name: 'clerk', deleteUser: world.deleteUser }),
 }));
 vi.mock('@/lib/server/request-context-cache', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../request-context-cache')>()),
+  ...(await importOriginal<RequestContextCacheModule>()),
   invalidateAccountStatusCache: vi.fn(async () => undefined),
 }));
 vi.mock('@/lib/server/payments/stripe-provider', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../payments/stripe-provider')>()),
+  ...(await importOriginal<StripeProviderModule>()),
   cancelLiveStripeSubscriptionsNow: vi.fn(async () => []),
 }));
 

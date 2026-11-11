@@ -3,6 +3,9 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+type UtilsModule = typeof import('../src/utils');
+type WebMcpModule = typeof import('../src/webmcp');
+
 if (typeof globalThis.CSS === 'undefined') {
   (globalThis as Record<string, unknown>).CSS = {};
 }
@@ -28,7 +31,7 @@ vi.hoisted(() => {
 });
 
 vi.mock('../src/utils', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../src/utils')>()),
+  ...(await importOriginal<UtilsModule>()),
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
   sleep: vi.fn().mockResolvedValue(undefined),
   domUtils: {
@@ -60,7 +63,7 @@ vi.mock('../src/jobAutofill', () => ({
 }));
 
 vi.mock('../src/webmcp', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../src/webmcp')>()),
+  ...(await importOriginal<WebMcpModule>()),
   discoverAllTools: vi.fn(() => ({ supported: false, tools: [], url: '', timestamp: 0 })),
   callTool: vi.fn().mockResolvedValue({ success: true }),
   startToolChangeReporting: vi.fn(),
