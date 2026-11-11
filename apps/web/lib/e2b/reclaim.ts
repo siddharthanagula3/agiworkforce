@@ -3,6 +3,7 @@ import 'server-only';
 import { logger } from '@/lib/logger';
 import { e2bExecutionEnabled } from './gate';
 import { meterSandboxComputeInterval } from './compute-metering';
+import { PAUSED_SANDBOX_MAX_AGE_MS, SANDBOX_MAX_AGE_MS } from './reclaim-schedule';
 import { templateComputeShape } from './templates';
 import {
   MANAGED_CLOUD_E2B_TENANT_ID,
@@ -10,15 +11,6 @@ import {
   deleteE2BSession,
   type E2BSessionScope,
 } from './session-store';
-
-export const SANDBOX_MAX_AGE_MS = 24 * 60 * 60 * 1000;
-
-/**
- * A paused sandbox is a warm cache, not the conversation: its state can be
- * rebuilt on the next run. It still holds a slot against the per-user cap, so
- * it gives that slot up long before a running one would.
- */
-export const PAUSED_SANDBOX_MAX_AGE_MS = 2 * 60 * 60 * 1000;
 
 const MAX_RECLAIMED_PER_RUN = 200;
 

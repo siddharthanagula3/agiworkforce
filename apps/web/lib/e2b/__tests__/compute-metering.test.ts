@@ -543,6 +543,43 @@ describe('reserveSandboxComputeInterval', () => {
     expect(reserveManagedUsageRequest).not.toHaveBeenCalled();
   });
 
+  it('keeps a short hold reserved until the reclaim sweep can bill the interval its caller left open', async () => {
+    const mod = await loadModule();
+    const { PAUSED_SANDBOX_MAX_AGE_MS, RECLAIM_SWEEP_INTERVAL_MS } =
+      await import('../reclaim-schedule');
+    const rerunTtlMs = 300_000;
+    const reclaimedWithinMs = PAUSED_SANDBOX_MAX_AGE_MS + RECLAIM_SWEEP_INTERVAL_MS;
+
+    await mod.reserveSandboxComputeInterval({ ...reserveInput, ttlMs: rerunTtlMs });
+    const paid = reserveManagedUsageRequest.mock.calls[0]?.[0] as {
+      leaseSeconds: number;
+      estimatedCostMicrousd: number;
+    };
+    expect(paid.estimatedCostMicrousd).toBe(
+      chargeMicrousdForProviderCost(300 * DEFAULT_SHAPE_RATE),
+    );
+    expect(paid.leaseSeconds * 1_000).toBeGreaterThan(reclaimedWithinMs);
+
+    await mod.reserveSandboxComputeInterval({
+      ...reserveInput,
+      planTier: 'free',
+      ttlMs: rerunTtlMs,
+    });
+    const free = beginFreeTrialRequest.mock.calls[0]?.[0] as { leaseSeconds: number };
+    expect(free.leaseSeconds * 1_000).toBeGreaterThan(reclaimedWithinMs);
+  });
+
+  it('keeps a hold past the paused age cap reserved until the sweep after its sandbox times out', async () => {
+    const mod = await loadModule();
+    const { PAUSED_SANDBOX_MAX_AGE_MS, RECLAIM_SWEEP_INTERVAL_MS } =
+      await import('../reclaim-schedule');
+    const ttlMs = PAUSED_SANDBOX_MAX_AGE_MS + 3_600_000;
+
+    await mod.reserveSandboxComputeInterval({ ...reserveInput, ttlMs });
+    const held = reserveManagedUsageRequest.mock.calls[0]?.[0] as { leaseSeconds: number };
+    expect(held.leaseSeconds * 1_000).toBeGreaterThan(ttlMs + RECLAIM_SWEEP_INTERVAL_MS);
+  });
+
   it('refuses Free compute the Free usage windows cannot fund, with the upgrade code', async () => {
     const mod = await loadModule();
     beginFreeTrialRequest.mockResolvedValue({ ok: false, code: 'budget_reached', resetAt: null });
