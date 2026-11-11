@@ -347,7 +347,9 @@ Found while bringing the documentation up to date on 2026-11-11. Each entry need
 - **Source:** `apps/web/app/privacy/page.tsx:716` (a deleted conversation "can be restored for 30 days, then a daily job permanently deletes it").
 - **Code shows:** `apps/web/app/api/cron/purge-soft-deleted-resources/route.ts:15` runs the purge only when `SOFT_DELETED_RESOURCE_PURGE_ENABLED` is `true`. It is unset by default, and `docs/compliance/soc2-controls.json` already records that production does not set it.
 - **Verdict:** Contradicted. This is a privacy commitment.
-- **Doc to update:** none until the owner decides: either enable the purge in production, or change the policy text (legal text, written by Opus and reviewed by counsel).
+- **Owner decision 2026-11-11:** turn the purge on, not change the text.
+- **Verified 2026-11-11 on a throwaway local database migrated to 0418:** main's purge (`apps/web/lib/resources/purge-soft-deleted.ts`) removed a personal conversation 31 days after deletion with its messages and artifact, a message deleted 31 days ago, and an organization member's deleted conversation; it kept a conversation deleted 5 days ago, live rows, and the deleted conversation of a member under a message-scoped legal hold, then removed that one once the hold was released. Production's code (`a8e278c62e`) on the same data deleted the held conversation and its held message on the first run: it lacks the cascade-hold fix of `6b138b7f50` (WEB-CONVERSATION-CASCADE-HOLD-PRESERVATION-01).
+- **Doc to update:** none; the privacy text stays. Set `SOFT_DELETED_RESOURCE_PURGE_ENABLED=true` in the Vercel production environment only with the first production release from main, after migrations 0392 to 0418 (draft 0416 `legal_hold_preserves` included, which main's purge calls) are applied. The cron then runs daily at 04:10 UTC (`vercel.json`). Remove this entry when production runs it.
 
 #### CR-050 · Production shows the old plan names
 
