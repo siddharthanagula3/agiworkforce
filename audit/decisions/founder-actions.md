@@ -150,7 +150,10 @@ Each line is one approval; engineering edits the page and its claim test after i
   `apps/web/app/acceptable-use/page.tsx` (about line 118) says connector tools are "capped by plan",
   while Free now has none.
 - Chrome extension history search is built opt-in (`apps/extension/src/features/computer-use/historySearch.ts`)
-  and neither `/privacy` nor `/agent-permissions` mentions it; whether it stays is in `open-questions.md`.
+  and both policy pages now describe it: `/privacy` since commit `6ade64b7b9` (with the console and
+  network lines the extension reads during browser control), and `/agent-permissions` in a Browsing
+  history row of "Computer use in Chrome" dated 2026-11-11. Approve that wording or send it to counsel;
+  whether the feature stays is in `open-questions.md`.
 
 ## [Release] GitHub environments and variables the release workflows read (F3, F4, F6 to F10)
 
