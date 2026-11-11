@@ -884,9 +884,11 @@ export const getE2BExecutor = tracedCodeAction(
 
     // A reconnect restarts the provider's timeout, so a resumed interval may only
     // run for what its hold still funds. One that funds less than a minimum run,
-    // or ends before this caller releases the sandbox, is settled here and the
-    // sandbox is admitted again below: an interval a short caller left open must
-    // not time the sandbox out under a longer one.
+    // or ends before this caller releases the sandbox, is replaced: an interval a
+    // short caller left open must not time the sandbox out under a longer one.
+    // The replacement is admitted before the open interval is settled, so a
+    // refusal leaves the sandbox running only on the hold that already funds it.
+    let supersededInterval: E2BSession | null = null;
     const resumed = existingSession;
     if (scope && resumed?.activeSinceMs !== undefined && resumed.computeReservation) {
       const rate = resumed.computeMicrousdPerSecond ?? provisioningRate;
@@ -900,8 +902,7 @@ export const getE2BExecutor = tracedCodeAction(
       const neededMs =
         scope.releaseByMs === undefined ? SANDBOX_MINIMUM_FUNDED_RUN_MS : plannedTimeoutMs;
       if (leftMs < neededMs) {
-        await closeBillableInterval(scope, resumed, 'pause');
-        existingSession = await getE2BSession(scope);
+        supersededInterval = resumed;
       } else {
         sandboxTimeoutMs = Math.min(planLifetimeMs, leftMs);
       }
@@ -910,7 +911,9 @@ export const getE2BExecutor = tracedCodeAction(
     // Each active interval is admitted before create or reconnect. Pause settles
     // that interval, so a later resume needs a new hold even for the same sandbox.
     let computeReservation: SandboxComputeReservationRecord | undefined =
-      existingSession?.activeSinceMs === undefined ? undefined : existingSession.computeReservation;
+      supersededInterval || existingSession?.activeSinceMs === undefined
+        ? undefined
+        : existingSession.computeReservation;
     let reservationAdmittedForThisAttempt = false;
     const holdSandboxLifetime = async (): Promise<E2BUnavailableCause | null> => {
       const tier = planTier;
@@ -957,6 +960,10 @@ export const getE2BExecutor = tracedCodeAction(
       }
       return null;
     };
+    if (scope && supersededInterval) {
+      await closeBillableInterval(scope, supersededInterval, 'pause');
+      existingSession = await getE2BSession(scope);
+    }
 
     const harnessEnvs = resolveHarnessEnvs(scope, template, sandboxTimeoutMs);
     const extraHosts = scope?.extraHosts ?? existingSession?.extraHosts;

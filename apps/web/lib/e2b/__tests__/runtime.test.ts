@@ -1296,6 +1296,9 @@ describe('getE2BExecutor, per-user sandbox quota', () => {
       expect.objectContaining({ sandboxId: 'sbx-rerun-then-turn', reason: 'pause' }),
     );
     expect(reserveSandboxComputeInterval).toHaveBeenCalledTimes(1);
+    expect(reserveSandboxComputeInterval.mock.invocationCallOrder[0]!).toBeLessThan(
+      meterSandboxComputeInterval.mock.invocationCallOrder[0]!,
+    );
     const held = (reserveSandboxComputeInterval.mock.calls[0] as unknown[])[0] as {
       ttlMs: number;
     };
@@ -1303,6 +1306,37 @@ describe('getE2BExecutor, per-user sandbox quota', () => {
     expect(held.ttlMs).toBeGreaterThan(turnLeftMs - 5_000);
     const opts = (connect.mock.calls[0] as unknown[])[1] as { timeoutMs: number };
     expect(opts.timeoutMs).toBe(held.ttlMs);
+  });
+
+  it('leaves an open interval on the hold that funds it when its replacement is refused', async () => {
+    const conversation = scope('conv-rerun-then-refused', 'user-rerun-then-refused', 'team');
+    const rate = getSandboxComputeMicrousdPerSecond();
+    const openInterval = {
+      sandboxId: 'sbx-rerun-then-refused',
+      contexts: {},
+      activeSinceMs: Date.now() - 60_000,
+      computeMicrousdPerSecond: rate,
+      computeReservation: { ...COMPUTE_RESERVATION, estimatedCostMicrousd: rate * 300 },
+    };
+    sessions.set(scopeKey(conversation), openInterval);
+    reserveSandboxComputeInterval.mockResolvedValueOnce({
+      outcome: 'refused',
+      error: { status: 429, code: 'rolling_five_hour_limit_reached' },
+    } as never);
+    const causes: string[] = [];
+    const { getE2BExecutor } = await import('../runtime');
+
+    await expect(
+      getE2BExecutor({ ...conversation, releaseByMs: Date.now() + 6 * 60_000 }, (cause) =>
+        causes.push(cause),
+      ),
+    ).resolves.toBeNull();
+
+    expect(causes).toEqual(['over-quota']);
+    expect(meterSandboxComputeInterval).not.toHaveBeenCalled();
+    expect(sessions.get(scopeKey(conversation))).toEqual(openInterval);
+    expect(connect).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
   });
 
   it('continues an open interval a later caller reuses, so its earlier seconds are billed', async () => {
