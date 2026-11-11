@@ -1520,7 +1520,7 @@
           "ordinal": 2,
           "heading": "In a local Code session",
           "headingPath": "Keyboard shortcuts › In a local Code session",
-          "text": "This one works in a local AGI Code session and uses the Control key on a Mac too.\n\n| Shortcut | What it does              |\n| -------- | ------------------------- |\n| Ctrl+`   | Show or hide the terminal |"
+          "text": "This one works in a local Code session and uses the Control key on a Mac too.\n\n| Shortcut | What it does              |\n| -------- | ------------------------- |\n| Ctrl+`   | Show or hide the terminal |"
         },
         {
           "id": "keyboard-shortcuts#3",
