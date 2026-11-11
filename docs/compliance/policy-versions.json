@@ -37,6 +37,12 @@
       "served": "4eb9c07140e18e5758c28bf47013002d4843e4fb",
       "main": "167e4b019c23961c2c8801c42a153b0e05a38218",
       "note": "No-cache production reads on 10 November 2026 returned application commit a8e278c62ec39ae410c070a190a63ac60507c10d from /api/version and 2026-10-15 as the visible /subprocessors Last updated date, with the Model providers (Managed Cloud) row. That native-session hotfix is on a separate branch; every canonical policy page and legal-constants blob is byte-identical at 4eb9c07140e18e5758c28bf47013002d4843e4fb, retained on main, so that commit is the policy-source representative used here. 167e4b019c23961c2c8801c42a153b0e05a38218 is the held candidate that records the repository's display-name edits and moves only the subprocessor recipient-group announcement date. No deployment, email notice or production mutation is asserted."
+    },
+    {
+      "checkedOn": "2026-11-11",
+      "served": "4eb9c07140e18e5758c28bf47013002d4843e4fb",
+      "main": "d7b10dd830783c5979a305839f15bdaa3343a34a",
+      "note": "Production read on 11 November 2026: /api/version returned a8e278c62ec39ae410c070a190a63ac60507c10d, and /privacy, /privacy/india, /data-use, /terms, /dpa and /privacy/requests printed Last updated 2026-10-18, 2026-10-15, 2026-10-15, 2026-10-08, 2026-10-08 and 2026-10-08, the dates POLICY_LAST_UPDATED gives at 4eb9c07140e18e5758c28bf47013002d4843e4fb. d7b10dd830783c5979a305839f15bdaa3343a34a moves those six dates to 2026-11-11, so the 2026-11-10 privacy, India notice and data-use versions were replaced before this site published them."
     }
   ],
   "documents": {

@@ -65,7 +65,11 @@ describe('/legal/archive', () => {
       screen
         .getAllByRole('link', { name: 'Read this version' })
         .map((link) => link.getAttribute('href')),
-    ).toEqual(['/legal/archive/terms/2026-09-23', '/legal/archive/terms/2026-08-11']);
+    ).toEqual([
+      '/legal/archive/terms/2026-10-08',
+      '/legal/archive/terms/2026-09-23',
+      '/legal/archive/terms/2026-08-11',
+    ]);
     expect(document.body.textContent).toContain('The full text of this version was not kept.');
   });
 
