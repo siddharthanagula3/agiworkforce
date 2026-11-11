@@ -12,6 +12,7 @@ import type { InteractiveCard } from '@agiworkforce/types';
 import { FREE_TRIAL_GATEWAY, getManagedCloudAuthContext } from './freeTrialClient';
 import { sameManagedCloudOwner, type ManagedCloudOwner } from './managedCloudAuthority';
 import { platformRequestHeaders } from '../../platformHeaders';
+import { MAX_HISTORY_ERROR_TEXT_CHARS } from '../background/conversation-history';
 
 export class ManagedCloudOwnerChangedError extends Error {
   constructor(message = 'The Managed Cloud account changed while this request was in progress.') {
@@ -70,6 +71,7 @@ export interface ExtensionCloudMessageMetadataInput {
   interactiveCards?: InteractiveCard[];
   attachments?: readonly SidePanelMessageAttachment[];
   error?: boolean;
+  errorText?: string;
   agiWorkPlanDeclined?: boolean;
 }
 
@@ -85,6 +87,9 @@ export function buildExtensionCloudMessageMetadata(
     ...(input.model ? { model: input.model.slice(0, 200) } : {}),
     ...(input.provider ? { provider: input.provider.slice(0, 100) } : {}),
     ...(input.error ? { error: true } : {}),
+    ...(input.error && input.errorText?.trim()
+      ? { errorText: input.errorText.slice(0, MAX_HISTORY_ERROR_TEXT_CHARS) }
+      : {}),
     ...(input.agiWorkPlanDeclined ? { agiWorkPlanDeclined: true } : {}),
   };
 

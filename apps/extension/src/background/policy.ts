@@ -2,6 +2,7 @@ import type { RunPageAction, ScheduledTask, WebMCPToolInfo } from '../types';
 import { redactSecrets } from '@agiworkforce/utils/logger';
 import { configuredAgiWebOrigin } from '../lib/webOrigin';
 import {
+  BROWSER_BRIDGE_DEFAULT_PORT,
   evaluateSitePolicy,
   selectBrowser,
   sitePolicyDenialMessage,
@@ -301,7 +302,7 @@ export function normalizeWebMCPToolsUpdate(
 
 export const ALLOWED_BRIDGE_HOSTS = new Set<string>(['localhost', '127.0.0.1', '[::1]']);
 
-export const DEFAULT_AGI_BRIDGE_URL = 'http://localhost:8787';
+export const DEFAULT_AGI_BRIDGE_URL = `http://localhost:${BROWSER_BRIDGE_DEFAULT_PORT}`;
 
 export function validateBridgeUrl(raw: string): string | null {
   if (!raw) return null;

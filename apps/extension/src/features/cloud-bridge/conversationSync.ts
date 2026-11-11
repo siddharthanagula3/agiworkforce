@@ -425,7 +425,9 @@ async function flushEligibleConversation(
           metadata: buildExtensionCloudMessageMetadata({
             localConversationId: conversationId,
             runtime: 'managed-cloud',
-            ...(message.error ? { error: true } : {}),
+            ...(message.error
+              ? { error: true, ...(message.errorText ? { errorText: message.errorText } : {}) }
+              : {}),
             ...(message.role === 'user' && message.attachments
               ? { attachments: message.attachments }
               : {}),

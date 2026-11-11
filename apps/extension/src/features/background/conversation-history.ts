@@ -66,7 +66,7 @@ export const BACKGROUND_ANSWER_TRUNCATION_NOTICE =
   '\n\n[Answer truncated because it exceeded the browser-local history limit.]';
 
 const MAX_CLOUD_SYNC_ERROR_CHARS = 200;
-const MAX_HISTORY_ERROR_TEXT_CHARS = 1_000;
+export const MAX_HISTORY_ERROR_TEXT_CHARS = 1_000;
 const MAX_STORED_MESSAGE_ATTACHMENTS = 20;
 const MAX_STORED_MESSAGE_PAGES = 8;
 const MAX_STORED_MESSAGE_SOURCES = 40;
@@ -1942,6 +1942,7 @@ export function cloudMessageSyncFingerprint(message: HistoryMessage): string {
     generatedFiles: message.generatedFiles,
     interactiveCards: message.interactiveCards,
     ...(message.agiWorkPlanDeclined ? { agiWorkPlanDeclined: true } : {}),
+    ...(message.error ? { error: true, errorText: message.errorText } : {}),
   });
   let first = 0x811c9dc5;
   let second = 0x9e3779b9;

@@ -1,37 +1,18 @@
 import { DEFAULT_GATEWAY_BASE } from '../src/features/computer-use/cloudAgentClient';
 /**
- * autofill-escalation-agent-integration.test.ts
- *
- * END-TO-END integration test for the autofill + escalation + agent loop spine.
- *
- * Chain under test:
- *   1. AGI_RUN_AUTOFILL content-script handler
- *      → detectJobApplication() (real, jsdom DOM)
- *      → autofillGreenhouse() (real)
- *      → makeEscalationDecision() (real)
- *      → returns escalation decision with shouldEscalate=true
- *
- *   2. AGI_START_COMPUTER_USE background handler
- *      → validates tabId origin against siteAllowlistCache
- *      → calls runAgentLoop() (real, with mocked chrome.debugger + network)
- *      → runAgentLoop fires onProgress → background sends AGI_CU_STEP
- *
- * Mocks:
- *   - chrome.debugger (attach/sendCommand/detach)
- *   - chrome.storage.local
- *   - chrome.tabs.get
- *   - chrome.runtime.sendMessage (to capture AGI_CU_STEP broadcasts)
- *   - global fetch (SSE responses for the cloud gateway)
- *
- * What is NOT mocked:
- *   - handleRunAutofill() logic in content.ts (exercised directly)
- *   - makeEscalationDecision() from escalationEngine.ts
- *   - runAgentLoop() from agentLoop.ts
- *   - cdpDriver.ts (screenshot, read_dom paths, via mocked chrome.debugger)
+ * The autofill helpers, the escalation owner and the browser agent loop, joined
+ * the way a run joins them. AGI_RUN_AUTOFILL through the mounted content
+ * handler is covered by autofill-origin-gate.test.ts; here the AGI_CU_STEP
+ * broadcast comes from the service worker's own onProgress callback, read out
+ * of background.ts, not from a callback this file writes.
  *
  * @vitest-environment jsdom
  */
 
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const chromeMock = vi.hoisted(() => {
@@ -230,6 +211,47 @@ import { createCdpInspectionFixture } from './fixtures/cdp-inspection';
 
 const inspection = createCdpInspectionFixture('https://boards.greenhouse.io/acmecorp/jobs/123');
 
+const RUN_LEASE = { runId: 'run-integration', generation: 7, tabId: 99 };
+
+function workerProgressCallback(current: { value: boolean }) {
+  const source = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), '../src/background.ts'),
+    'utf8',
+  );
+  const program = ts.createSourceFile('background.ts', source, ts.ScriptTarget.Latest, true);
+  let broadcast: ts.FunctionDeclaration | undefined;
+  let onProgress: ts.PropertyAssignment | undefined;
+  const visit = (node: ts.Node): void => {
+    if (ts.isFunctionDeclaration(node) && node.name?.text === 'broadcastComputerUseForCurrentRun')
+      broadcast = node;
+    if (
+      ts.isPropertyAssignment(node) &&
+      ts.isIdentifier(node.name) &&
+      node.name.text === 'onProgress' &&
+      node.initializer.getText(program).includes("type: 'AGI_CU_STEP'")
+    )
+      onProgress = node;
+    ts.forEachChild(node, visit);
+  };
+  visit(program);
+  if (!broadcast || !onProgress) throw new Error('The worker progress broadcast was not found.');
+  const compiled = ts.transpileModule(
+    `${broadcast.getText(program)}\nreturn (${onProgress.initializer.getText(program)});`,
+    { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } },
+  );
+  const dependencies = {
+    lease: RUN_LEASE,
+    computerUseRuns: { isCurrent: () => current.value },
+    sendComputerUseLifecycle: (message: unknown) => {
+      void chrome.runtime.sendMessage(message);
+    },
+  };
+  // llm-guardrail-allow: executes repository-owned worker code inside this isolated test fixture.
+  return new Function(...Object.keys(dependencies), compiled.outputText)(
+    ...Object.values(dependencies),
+  ) as (step: unknown) => void;
+}
+
 function buildGreenhouseDom(): void {
   document.body.innerHTML = `
     <form id="application_form">
@@ -294,7 +316,7 @@ describe('autofill never overwrites text already on the page', () => {
   });
 });
 
-describe('AGI_RUN_AUTOFILL content handler → escalation decision', () => {
+describe('autofill helpers → escalation decision', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     buildGreenhouseDom();
@@ -450,7 +472,7 @@ describe('AGI_RUN_AUTOFILL content handler → escalation decision', () => {
   });
 });
 
-describe('AGI_START_COMPUTER_USE background handler → runAgentLoop', () => {
+describe('runAgentLoop progress → service-worker AGI_CU_STEP broadcast', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     chromeMock.runtime.lastError = null;
@@ -490,6 +512,7 @@ describe('AGI_START_COMPUTER_USE background handler → runAgentLoop', () => {
 
   it('runAgentLoop emits progress events and returns final message', async () => {
     const progressSteps: string[] = [];
+    const broadcast = workerProgressCallback({ value: true });
 
     const result = await runAgentLoop(
       'Complete the Greenhouse job application form.',
@@ -498,7 +521,7 @@ describe('AGI_START_COMPUTER_USE background handler → runAgentLoop', () => {
         maxSteps: 10,
         onProgress: (step) => {
           progressSteps.push(step.kind);
-          void chrome.runtime.sendMessage({ type: 'AGI_CU_STEP', step });
+          broadcast(step);
         },
       },
     );
@@ -529,28 +552,49 @@ describe('AGI_START_COMPUTER_USE background handler → runAgentLoop', () => {
     expect(JSON.stringify(firstBody.messages)).toContain('Greenhouse job application');
   });
 
-  it('AGI_CU_STEP messages carry AgentLoopStep structure', async () => {
+  it('AGI_CU_STEP messages carry AgentLoopStep structure and the run identity', async () => {
     await runAgentLoop('Fill the form', 99, {
       maxSteps: 10,
-      onProgress: (step) => {
-        void chrome.runtime.sendMessage({ type: 'AGI_CU_STEP', step });
-      },
+      onProgress: workerProgressCallback({ value: true }),
     });
 
     const cuStepMsgs = chromeMock.sentMessages.filter(
       (m) => (m as Record<string, unknown>)?.['type'] === 'AGI_CU_STEP',
-    ) as Array<{ type: string; step: { kind: string; stepNumber: number } }>;
+    ) as Array<{
+      type: string;
+      runId: string;
+      runGeneration: number;
+      tabId: number;
+      step: { kind: string; stepNumber: number };
+    }>;
 
     expect(cuStepMsgs.length).toBeGreaterThan(0);
     for (const msg of cuStepMsgs) {
-      expect(typeof msg.step).toBe('object');
+      expect(msg).toMatchObject({
+        runId: RUN_LEASE.runId,
+        runGeneration: RUN_LEASE.generation,
+        tabId: RUN_LEASE.tabId,
+      });
       expect(typeof msg.step.kind).toBe('string');
       expect(typeof msg.step.stepNumber).toBe('number');
     }
   });
+
+  it('broadcasts nothing for a run that is no longer the current one', async () => {
+    await runAgentLoop('Fill the form', 99, {
+      maxSteps: 10,
+      onProgress: workerProgressCallback({ value: false }),
+    });
+
+    expect(
+      chromeMock.sentMessages.filter(
+        (m) => (m as Record<string, unknown>)?.['type'] === 'AGI_CU_STEP',
+      ),
+    ).toHaveLength(0);
+  });
 });
 
-describe('Full chain: AGI_RUN_AUTOFILL → shouldEscalate → AGI_START_COMPUTER_USE → AGI_CU_STEP', () => {
+describe('Full chain: autofill helpers → shouldEscalate → runAgentLoop → AGI_CU_STEP', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     buildGreenhouseDom();
@@ -621,12 +665,13 @@ describe('Full chain: AGI_RUN_AUTOFILL → shouldEscalate → AGI_START_COMPUTER
     );
 
     const cuStepKinds: string[] = [];
+    const broadcast = workerProgressCallback({ value: true });
 
     const loopResult = await runAgentLoop(escalation.agentGoal, 99, {
       maxSteps: 5,
       onProgress: (step) => {
         cuStepKinds.push(step.kind);
-        void chrome.runtime.sendMessage({ type: 'AGI_CU_STEP', step });
+        broadcast(step);
       },
     });
 
