@@ -46,7 +46,7 @@ import { CommandPalette, type ChatCommand } from './CommandPalette';
 import { FileMentionPalette } from './FileMentionPalette';
 import { trailingMention, withoutTrailingMention } from '@/src/features/chat/utils/fileMention';
 import { MediaModeChip } from './MediaModeChip';
-import { useChatViewStore } from '@/stores/chat/chatViewStore';
+import { NEW_CHAT_STYLE_KEY, useChatViewStore } from '@/stores/chat/chatViewStore';
 import { uploadWithRetry } from '@/src/features/chat/upload/uploadAttachment';
 import { resolveUploadContext } from '@/src/features/chat/upload/uploadContext';
 import { useUploadLifecycleStore } from '@/src/features/chat/upload/uploadLifecycle';
@@ -243,6 +243,9 @@ export function ChatInput({
     attachments.some((attachment) => attachment.mimeType.startsWith('image/'));
   const mediaMode = useChatViewStore((s) => s.mediaMode);
   const workMode = useChatViewStore((s) => s.workMode);
+  const runCodeOn = useChatViewStore(
+    (s) => s.runCodeByConversation[s.styleConversationId ?? NEW_CHAT_STYLE_KEY] === true,
+  );
   const mediaModelId = mediaModelIdForMode(mediaMode);
   const mediaModelName = mediaModelId
     ? (getModelMetadataById(mediaModelId)?.name ?? mediaModelId)
@@ -270,6 +273,7 @@ export function ChatInput({
     isSignedInCloudChat &&
     FEATURES.codeExecution &&
     chatFeatures.codeExecution &&
+    runCodeOn &&
     selectedModelMetadata?.capabilities.codeExecution === true &&
     codeExecutionAvailable &&
     grantedCapabilities.includes('canUseCloudExecution');
@@ -288,8 +292,8 @@ export function ChatInput({
       ? [
           {
             key: 'code',
-            label: 'Code',
-            accessibilityLabel: 'Code execution active',
+            label: 'Run code',
+            accessibilityLabel: 'Run code on',
             Icon: Terminal,
           },
         ]
