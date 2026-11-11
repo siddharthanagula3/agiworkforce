@@ -34,6 +34,7 @@ function seed() {
     store.upsertArtifact({
       id: ARTIFACT_ID,
       type: 'mermaid',
+      language: 'mermaid',
       title: 'Flow',
       content,
       messageId: 'msg-1',

@@ -23,7 +23,7 @@ vi.mock('@/lib/security-audit', async () => ({
   BLOCK_APPEAL_PATH: '/support',
 }));
 vi.mock('@/lib/services/organization-policy-gate', async () => ({
-  ...(await vi.importActual<typeof import('@/lib/services/organization-policy-gate')>(
+  ...(await vi.importActual<OrganizationPolicyGateModule>(
     '@/lib/services/organization-policy-gate',
   )),
 
@@ -43,6 +43,8 @@ import {
   readStoredToolResult,
   referenceOversizedToolResult,
 } from './tool-result-store';
+
+type OrganizationPolicyGateModule = typeof import('@/lib/services/organization-policy-gate');
 
 const OWNER = { userId: 'secret-policy-fixture-user', conversationId: 'fixture-conversation' };
 const TOKEN = `ghp_${'a'.repeat(36)}`;
