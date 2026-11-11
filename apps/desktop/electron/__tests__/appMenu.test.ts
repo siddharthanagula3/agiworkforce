@@ -7,18 +7,56 @@ vi.mock('electron', () => ({
   Menu: { buildFromTemplate: vi.fn((template: unknown) => template), setApplicationMenu: vi.fn() },
   app: { name: 'AGI Desktop', isPackaged: true },
 }));
+const launchAtLogin = vi.hoisted(() => ({ setLaunchAtLogin: vi.fn() }));
 vi.mock('../launchAtLogin', () => ({
   isLaunchAtLoginEnabled: () => false,
-  setLaunchAtLogin: vi.fn(),
+  setLaunchAtLogin: launchAtLogin.setLaunchAtLogin,
 }));
 
-const { appMenuTemplate, dockMenuTemplate } = await import('../appMenu');
+type MenuPlatform = 'darwin' | 'linux' | 'win32';
+const MENU_PLATFORMS: MenuPlatform[] = ['darwin', 'linux', 'win32'];
 
-const isMac = process.platform === 'darwin';
-const SETTINGS_MENU = isMac ? 'AGI Desktop' : 'File';
-const SETTINGS_LABEL = isMac ? 'Settings…' : 'Settings';
-const UPDATES_MENU = isMac ? 'AGI Desktop' : 'Help';
-const UPDATES_LABEL = isMac ? 'Check for Updates…' : 'Check for Updates';
+// The menu reads the platform once, when appMenu is imported, so each platform
+// gets its own import with process.platform forced for that moment only.
+async function loadMenuFor(platform: MenuPlatform) {
+  const host = Object.getOwnPropertyDescriptor(process, 'platform');
+  vi.resetModules();
+  Object.defineProperty(process, 'platform', { value: platform, configurable: true });
+  try {
+    return await import('../appMenu');
+  } finally {
+    if (host) Object.defineProperty(process, 'platform', host);
+  }
+}
+
+const menuModules = {
+  darwin: await loadMenuFor('darwin'),
+  linux: await loadMenuFor('linux'),
+  win32: await loadMenuFor('win32'),
+};
+const { dockMenuTemplate } = menuModules.darwin;
+
+const hostMenuPlatform: MenuPlatform =
+  process.platform === 'win32' ? 'win32' : process.platform === 'darwin' ? 'darwin' : 'linux';
+
+const { appMenuTemplate } = menuModules[hostMenuPlatform];
+
+function platformPlaces(platform: MenuPlatform) {
+  const isMac = platform === 'darwin';
+  return {
+    settingsMenu: isMac ? 'AGI Desktop' : 'File',
+    settingsLabel: isMac ? 'Settings…' : 'Settings',
+    updatesMenu: isMac ? 'AGI Desktop' : 'Help',
+    updatesLabel: isMac ? 'Check for Updates…' : 'Check for Updates',
+  };
+}
+
+const {
+  settingsMenu: SETTINGS_MENU,
+  settingsLabel: SETTINGS_LABEL,
+  updatesMenu: UPDATES_MENU,
+  updatesLabel: UPDATES_LABEL,
+} = platformPlaces(hostMenuPlatform);
 
 function actions() {
   return {
@@ -77,8 +115,11 @@ function contractAccelerator(id: string): string {
   return shortcut.accelerator;
 }
 
-function template(overrides = actions()) {
-  return { menu: appMenuTemplate(overrides, ACCELERATORS), actions: overrides };
+function template(overrides = actions(), platform: MenuPlatform = hostMenuPlatform) {
+  return {
+    menu: menuModules[platform].appMenuTemplate(overrides, ACCELERATORS),
+    actions: overrides,
+  };
 }
 
 function submenu(menu: MenuItemConstructorOptions[], label: string): MenuItemConstructorOptions[] {
@@ -542,15 +583,15 @@ describe('the application menu', () => {
     expect(close?.accelerator).toBe(contractAccelerator('host-close-window'));
   });
 
-  it('pastes and matches style from the public window Edit menu', () => {
-    const { menu } = template();
+  it('pastes and matches style from the public window Edit menu on macOS', () => {
+    const { menu } = template(actions(), 'darwin');
     const edit = submenu(menu, 'Edit');
 
     expect(edit.some((entry) => entry.role === 'pasteAndMatchStyle')).toBe(true);
   });
 
-  it('deletes from the public window Edit menu', () => {
-    const { menu } = template();
+  it('deletes from the public window Edit menu on macOS', () => {
+    const { menu } = template(actions(), 'darwin');
     const edit = submenu(menu, 'Edit');
 
     expect(edit.some((entry) => entry.role === 'delete')).toBe(true);
@@ -591,62 +632,46 @@ describe('the application menu', () => {
     expect(edit.some((entry) => entry.role === 'copy')).toBe(true);
   });
 
-  it('opens About from the public window application menu', () => {
-    const { menu } = template();
+  it('opens About from the public window application menu on macOS', () => {
+    const { menu } = template(actions(), 'darwin');
     const application = submenu(menu, 'AGI Desktop');
 
     expect(application.some((entry) => entry.role === 'about')).toBe(true);
   });
 
-  it('opens Services from the public window application menu', () => {
-    const { menu } = template();
+  it('opens Services from the public window application menu on macOS', () => {
+    const { menu } = template(actions(), 'darwin');
     const application = submenu(menu, 'AGI Desktop');
 
     expect(application.some((entry) => entry.role === 'services')).toBe(true);
   });
 
-  it('puts Hide on the public window application menu', () => {
-    const { menu } = template();
+  it('puts Hide on the public window application menu on macOS', () => {
+    const { menu } = template(actions(), 'darwin');
     const application = submenu(menu, 'AGI Desktop');
 
     expect(application.some((entry) => entry.role === 'hide')).toBe(true);
   });
 
-  it('puts Hide Others on the public window application menu', () => {
-    const { menu } = template();
+  it('puts Hide Others on the public window application menu on macOS', () => {
+    const { menu } = template(actions(), 'darwin');
     const application = submenu(menu, 'AGI Desktop');
 
     expect(application.some((entry) => entry.role === 'hideOthers')).toBe(true);
   });
 
-  it('puts Show All on the public window application menu', () => {
-    const { menu } = template();
+  it('puts Show All on the public window application menu on macOS', () => {
+    const { menu } = template(actions(), 'darwin');
     const application = submenu(menu, 'AGI Desktop');
 
     expect(application.some((entry) => entry.role === 'unhide')).toBe(true);
   });
 
-  it('puts Quit on the public window application menu', () => {
-    const { menu } = template();
+  it('puts Quit on the public window application menu on macOS', () => {
+    const { menu } = template(actions(), 'darwin');
     const application = submenu(menu, 'AGI Desktop');
 
     expect(application.some((entry) => entry.role === 'quit')).toBe(true);
-  });
-
-  it('checks for updates from the public window application menu', () => {
-    const { menu, actions: spies } = template();
-
-    (item(menu, UPDATES_MENU, UPDATES_LABEL).click as () => void)();
-
-    expect(spies.checkForUpdates).toHaveBeenCalledTimes(1);
-  });
-
-  it('opens settings from the public window application menu', () => {
-    const { menu, actions: spies } = template();
-
-    (item(menu, SETTINGS_MENU, SETTINGS_LABEL).click as () => void)();
-
-    expect(spies.openSettings).toHaveBeenCalledTimes(1);
   });
 
   it('pastes from the public window Edit menu', () => {
@@ -681,8 +706,8 @@ describe('the application menu', () => {
     expect(windowItems.some((entry) => entry.role === 'minimize')).toBe(true);
   });
 
-  it('puts Minimize All on the public window Window menu', () => {
-    const { menu, actions: spies } = template();
+  it('puts Minimize All on the public window Window menu on macOS', () => {
+    const { menu, actions: spies } = template(actions(), 'darwin');
     const entry = item(menu, 'Window', 'Minimize All');
 
     (entry.click as () => void)();
@@ -840,25 +865,25 @@ describe('the application menu', () => {
     ]);
   });
 
-  it('puts Bring All to Front on the public window Window menu', () => {
-    const { menu } = template();
+  it('puts Bring All to Front on the public window Window menu on macOS', () => {
+    const { menu } = template(actions(), 'darwin');
     const windowItems = submenu(menu, 'Window');
 
     expect(windowItems.some((entry) => entry.role === 'front')).toBe(true);
   });
 
-  it('arranges windows in front from the public Window menu', () => {
-    const { menu, actions: spies } = template();
+  it('arranges windows in front from the public Window menu on macOS', () => {
+    const { menu, actions: spies } = template(actions(), 'darwin');
 
     (item(menu, 'Window', 'Arrange in Front').click as () => void)();
 
     expect(spies.arrangeInFront).toHaveBeenCalledTimes(1);
   });
 
-  it('removes the front window from its set on the public Window menu', () => {
+  it('removes the front window from its set on the public Window menu on macOS', () => {
     const spies = actions();
     spies.frontWindowIsInSet.mockReturnValue(true);
-    const { menu } = template(spies);
+    const { menu } = template(spies, 'darwin');
     const entry = item(menu, 'Window', 'Remove Window from Set');
 
     expect(entry.enabled).toBe(true);
@@ -867,13 +892,13 @@ describe('the application menu', () => {
     expect(spies.removeWindowFromSet).toHaveBeenCalledTimes(1);
   });
 
-  it('lists the open windows on the public Window menu and focuses the one that was chosen', () => {
+  it('lists the open windows on the public Window menu and focuses the one that was chosen on macOS', () => {
     const spies = actions();
     spies.shellWindows.mockReturnValue([
       { id: 4, title: 'AGI Desktop', focused: true },
       { id: 9, title: 'AGI Desktop', focused: false },
     ]);
-    const { menu } = template(spies);
+    const { menu } = template(spies, 'darwin');
     const entries = submenu(menu, 'Window').filter((entry) => entry.label === 'AGI Desktop');
 
     expect(entries).toHaveLength(2);
@@ -884,8 +909,8 @@ describe('the application menu', () => {
     expect(spies.focusShellWindow).toHaveBeenCalledWith(9);
   });
 
-  it('leaves Remove Window from Set disabled until the front window is in a set', () => {
-    const { menu } = template();
+  it('leaves Remove Window from Set disabled until the front window is in a set on macOS', () => {
+    const { menu } = template(actions(), 'darwin');
 
     expect(item(menu, 'Window', 'Remove Window from Set').enabled).toBe(false);
   });
@@ -901,8 +926,8 @@ describe('the application menu', () => {
     expect(spies.moveWindow).toHaveBeenCalledWith('left');
   });
 
-  it('puts Zoom All on the public window Window menu', () => {
-    const { menu, actions: spies } = template();
+  it('puts Zoom All on the public window Window menu on macOS', () => {
+    const { menu, actions: spies } = template(actions(), 'darwin');
     const entry = item(menu, 'Window', 'Zoom All');
 
     (entry.click as () => void)();
@@ -1096,35 +1121,86 @@ describe('the application menu', () => {
     expect(spies.newChat).toHaveBeenCalledTimes(1);
     expect(spies.sendHostCommand).not.toHaveBeenCalled();
   });
+});
+
+describe.each(MENU_PLATFORMS)('the application menu on %s', (platform) => {
+  const { settingsMenu, settingsLabel, updatesMenu, updatesLabel } = platformPlaces(platform);
+  const isMac = platform === 'darwin';
+
+  it('checks for updates from the menu the platform puts it in', () => {
+    const { menu, actions: spies } = template(actions(), platform);
+
+    (item(menu, updatesMenu, updatesLabel).click as () => void)();
+
+    expect(spies.checkForUpdates).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens settings from the menu the platform puts it in', () => {
+    const { menu, actions: spies } = template(actions(), platform);
+
+    (item(menu, settingsMenu, settingsLabel).click as () => void)();
+
+    expect(spies.openSettings).toHaveBeenCalledTimes(1);
+  });
 
   it('keeps Settings and updates where the platform puts them, once each', () => {
-    const { menu } = template();
+    const { menu } = template(actions(), platform);
     const labels = menu.flatMap((entry) =>
       ((entry.submenu as MenuItemConstructorOptions[] | undefined) ?? []).map(
         (child) => child.label,
       ),
     );
 
-    expect(labels.filter((label) => label === SETTINGS_LABEL)).toHaveLength(1);
-    expect(labels.filter((label) => label === UPDATES_LABEL)).toHaveLength(1);
+    expect(labels.filter((label) => label === settingsLabel)).toHaveLength(1);
+    expect(labels.filter((label) => label === updatesLabel)).toHaveLength(1);
   });
 
-  it('puts the Launch at Login box back when the choice could not be saved', async () => {
-    const { setLaunchAtLogin } = await import('../launchAtLogin');
-    vi.mocked(setLaunchAtLogin).mockImplementationOnce(() => {
+  it('puts the Launch at Login box back when the choice could not be saved', () => {
+    launchAtLogin.setLaunchAtLogin.mockImplementationOnce(() => {
       throw new Error('The setting could not be saved on this computer, so it was not changed.');
     });
     vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const { menu } = template();
-    const launchItem = item(menu, SETTINGS_MENU, 'Launch at Login');
+    const { menu } = template(actions(), platform);
+    const launchItem = item(menu, settingsMenu, 'Launch at Login');
     const clicked = { checked: true };
 
     expect(() =>
       (launchItem.click as (menuItem: { checked: boolean }) => void)(clicked),
     ).not.toThrow();
 
-    expect(setLaunchAtLogin).toHaveBeenCalledWith(true);
+    expect(launchAtLogin.setLaunchAtLogin).toHaveBeenCalledWith(true);
     expect(clicked.checked).toBe(false);
+  });
+
+  it(`${isMac ? 'has' : 'has no'} application menu`, () => {
+    const { menu } = template(actions(), platform);
+
+    expect(menu.some((entry) => entry.label === 'AGI Desktop')).toBe(isMac);
+  });
+
+  it(`${isMac ? 'offers' : 'leaves out'} the macOS-only Edit, Window and application roles`, () => {
+    const { menu } = template(actions(), platform);
+    const edit = submenu(menu, 'Edit').map((entry) => entry.role);
+    const windowItems = submenu(menu, 'Window');
+    const windowRoles = windowItems.map((entry) => entry.role);
+    const windowLabels = windowItems.map((entry) => entry.label);
+
+    expect(edit.includes('pasteAndMatchStyle')).toBe(isMac);
+    expect(edit.includes('delete')).toBe(isMac);
+    expect(windowRoles.includes('front')).toBe(isMac);
+    expect(windowLabels.includes('Minimize All')).toBe(isMac);
+    expect(windowLabels.includes('Zoom All')).toBe(isMac);
+    expect(windowLabels.includes('Arrange in Front')).toBe(isMac);
+    expect(windowLabels.includes('Remove Window from Set')).toBe(isMac);
+  });
+
+  it(`${isMac ? 'lists' : 'does not list'} the open windows on the Window menu`, () => {
+    const spies = actions();
+    spies.shellWindows.mockReturnValue([{ id: 4, title: 'Open window title', focused: true }]);
+    const { menu } = template(spies, platform);
+    const listed = submenu(menu, 'Window').some((entry) => entry.label === 'Open window title');
+
+    expect(listed).toBe(isMac);
   });
 });
 
