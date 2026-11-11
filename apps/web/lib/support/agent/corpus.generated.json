@@ -1274,7 +1274,7 @@
         "windows"
       ],
       "description": "Definitions of the terms AGI uses for trust modes, usage and billing, chat, tools, connectors and surfaces.",
-      "updated": "2026-10-12",
+      "updated": "2026-11-11",
       "source": "content/support/glossary.md",
       "chunks": [
         {
@@ -1317,7 +1317,7 @@
           "ordinal": 5,
           "heading": "Platform and surface names",
           "headingPath": "Glossary of AGI terms › Platform and surface names",
-          "text": "**Surface** is one of the places AGI is built to run: {{SURFACES.names}}. A\nfeature can be available on one surface and not another, so articles name the\nsurface rather than assuming it.\n\n{{AVAILABILITY.summary}}\n\n**Web** is agiworkforce.com in a browser.\n\n**Desktop** is the installable desktop app, published for macOS, Windows and\nLinux as those releases become available.\n\n**CLI** is the `agi` command, a Rust-native developer agent that runs in a\nterminal on macOS, Windows and Linux.\n\n**Mobile** is the phone app, for iOS and Android.\n\n**VS Code** and **Chrome** are the editor extension and the browser extension.\n\n**macOS**, **Windows** and **Linux** are the desktop operating systems;\n**iOS** and **Android** are the mobile ones. Support articles tag the platforms\nthey apply to."
+          "text": "**Surface** is one of the places AGI is built to run: {{SURFACES.names}}. A\nfeature can be available on one surface and not another, so articles name the\nsurface rather than assuming it.\n\n{{AVAILABILITY.summary}}\n\n**Web** is agiworkforce.com in a browser.\n\n**Desktop** is the installable desktop app for macOS. Windows and Linux\ninstallers have not been published.\n\n**CLI** is the `agi` command, a Rust-native developer agent that runs in a\nterminal on macOS, Windows and Linux.\n\n**Mobile** is the phone app, for iOS and Android.\n\n**VS Code** and **Chrome** are the editor extension and the browser extension.\n\n**macOS**, **Windows** and **Linux** are the desktop operating systems;\n**iOS** and **Android** are the mobile ones. Support articles tag the platforms\nthey apply to."
         }
       ]
     },

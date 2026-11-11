@@ -3639,6 +3639,29 @@
       ]
     },
     {
+      "id": "glossary-desktop-windows-linux-not-published",
+      "doc": "glossary",
+      "section": "Platform and surface names",
+      "kind": "prose",
+      "sentence": "Windows and Linux installers have not been published.",
+      "implementation": [
+        "apps/web/lib/surface-status.ts#SURFACE_PLATFORMS",
+        "apps/web/app/download/DesktopDownloadAvailability.tsx"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/download/__tests__/DesktopDownloadSurface.test.tsx",
+          "name": "names Windows and Linux as unavailable rather than leaving them out"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/__tests__/surface-status.test.ts",
+          "name": "adds a platform only when a surface that runs on it is released"
+        }
+      ]
+    },
+    {
       "id": "glossary-three-trust-modes-never-loosened-unasked",
       "doc": "glossary",
       "section": "Trust modes",
