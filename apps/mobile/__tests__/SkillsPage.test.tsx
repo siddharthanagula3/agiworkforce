@@ -238,6 +238,17 @@ describe('Mobile Skills screen', () => {
     expect(screen.queryByLabelText('Use Release helper in chat')).toBeNull();
   });
 
+  it('keeps each card compact: a clamped description, its status on its own line, wrapping actions', async () => {
+    const screen = render(<SkillsScreen />);
+
+    expect(await screen.findByText('Documents')).toBeTruthy();
+    expect(screen.getByTestId('skill-description-Documents').props.numberOfLines).toBe(3);
+    expect(
+      StyleSheet.flatten(screen.getByLabelText('Documents status: Installed').props.style),
+    ).not.toHaveProperty('flex');
+    expect(screen.getByTestId('skill-actions-Documents')).toHaveStyle({ flexWrap: 'wrap' });
+  });
+
   it('renders the real catalog with source badges and filters across metadata', async () => {
     const screen = render(<SkillsScreen />);
 

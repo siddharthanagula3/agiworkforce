@@ -241,6 +241,8 @@ function SearchField({ value, onChange }: { value: string; onChange: (value: str
   );
 }
 
+const SKILL_DESCRIPTION_LINES = 3;
+
 function SkillRow({
   skill,
   installed,
@@ -323,7 +325,8 @@ function SkillRow({
             </View>
           </View>
           <Text
-            selectable
+            testID={`skill-description-${skill.name}`}
+            numberOfLines={SKILL_DESCRIPTION_LINES}
             style={{ color: colors.textSecondary, fontSize: typeScale.footnote, lineHeight: 19 }}
           >
             {skill.description || 'No description provided.'}
@@ -341,26 +344,21 @@ function SkillRow({
               {pluginOwnedNote(skill)}
             </Text>
           ) : null}
-          <View
+          <Text
+            accessibilityLabel={`${skill.name} status: ${statusLabel}`}
             style={{
               marginTop: 3,
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 10,
+              color: installed ? colors.textSecondary : colors.textMuted,
+              fontSize: typeScale.caption,
+              fontWeight: '600',
             }}
           >
-            <Text
-              accessibilityLabel={`${skill.name} status: ${statusLabel}`}
-              style={{
-                flex: 1,
-                color: installed ? colors.textSecondary : colors.textMuted,
-                fontSize: typeScale.caption,
-                fontWeight: '600',
-              }}
-            >
-              {statusLabel}
-            </Text>
+            {statusLabel}
+          </Text>
+          <View
+            testID={`skill-actions-${skill.name}`}
+            style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}
+          >
             {canToggle ? (
               <Button
                 title={installed ? 'Uninstall' : 'Install'}
