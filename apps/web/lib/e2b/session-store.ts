@@ -48,6 +48,12 @@ export interface E2BSessionScope {
   extraHosts?: readonly string[];
   /** The Free chat turn whose window hold a new sandbox lifetime is taken from. */
   freeTurnHold?: FreeTurnSandboxHold;
+  /**
+   * When the caller pauses or releases this sandbox, as epoch milliseconds. A
+   * chat turn pauses its sandbox when it ends, so the interval it admits is
+   * funded and timed out to that moment rather than to the plan's longest run.
+   */
+  releaseByMs?: number;
 }
 
 export const MANAGED_CLOUD_E2B_TENANT_ID = 'managed-cloud';

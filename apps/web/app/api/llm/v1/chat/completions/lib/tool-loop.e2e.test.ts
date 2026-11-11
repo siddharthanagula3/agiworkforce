@@ -83,6 +83,7 @@ import { runToolLoop, type ToolLoopProviderExecutor } from './tool-loop';
 import type { ProcessedRequest } from './request-processor';
 import type { E2BExecutor } from '@/lib/e2b/types';
 import { EXECUTE_CODE_TOOL, e2bExecutionToolDefs } from '@/lib/e2b/execution-tools';
+import { CHAT_TOOL_LOOP_BUDGET_MS, FUNCTION_TEARDOWN_RESERVE_MS } from '@/lib/deadline-policy';
 
 function sseStreamFrom(lines: string[]): ReadableStream {
   const encoder = new TextEncoder();
@@ -1086,7 +1087,9 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
     mockGetE2BExecutor.mockResolvedValue(executor);
 
     const processed = makeProcessed('conv-123');
+    const turnStartedMs = Date.now();
     await drain(runToolLoop(processed, { approvalMode: 'auto', userId: 'user-123' }));
+    const turnEndedMs = Date.now();
 
     expect(mockGetE2BExecutor).toHaveBeenCalledTimes(1);
     expect(mockGetE2BExecutor).toHaveBeenCalledWith(
@@ -1094,13 +1097,19 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
         tenantId: 'managed-cloud',
         userId: 'user-123',
         conversationId: 'conv-123',
+        releaseByMs: expect.any(Number),
       },
       expect.any(Function),
     );
+    const { releaseByMs } = mockGetE2BExecutor.mock.calls[0]![0] as { releaseByMs: number };
+    const turnRelease = CHAT_TOOL_LOOP_BUDGET_MS + FUNCTION_TEARDOWN_RESERVE_MS;
+    expect(releaseByMs).toBeGreaterThanOrEqual(turnStartedMs + turnRelease);
+    expect(releaseByMs).toBeLessThanOrEqual(turnEndedMs + turnRelease);
     expect(mockPauseE2BSession).toHaveBeenCalledWith({
       tenantId: 'managed-cloud',
       userId: 'user-123',
       conversationId: 'conv-123',
+      releaseByMs,
     });
     expect(dispose).not.toHaveBeenCalled();
   });

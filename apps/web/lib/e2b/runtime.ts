@@ -72,6 +72,7 @@ import { invalidateCachedProviderProxyAccess } from './provider-proxy-access-cac
 import { mintProviderProxyToken } from './provider-proxy-token';
 import type { ManagedUsageRequestError } from '@/lib/services/managed-usage-request-service';
 import {
+  admittedSandboxLifetimeMs,
   getSandboxComputeMicrousdPerSecond,
   markSandboxComputeStarted,
   meterSandboxComputeInterval,
@@ -844,7 +845,7 @@ export const getE2BExecutor = tracedCodeAction(
     }
 
     const plannedTimeoutMs = scope
-      ? planTtlMs || E2B_CONVERSATION_TIMEOUT_MS
+      ? admittedSandboxLifetimeMs(planTtlMs || E2B_CONVERSATION_TIMEOUT_MS, scope.releaseByMs)
       : E2B_SANDBOX_TIMEOUT_MS;
     let sandboxTimeoutMs = plannedTimeoutMs;
     let lifetimeNotice: string | null = null;

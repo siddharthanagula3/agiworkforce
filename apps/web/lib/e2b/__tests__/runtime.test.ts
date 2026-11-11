@@ -92,6 +92,7 @@ interface TestScope {
   planTier?: string;
   templateId?: string | null;
   explicitCredential?: { envVar: string; value: string } | null;
+  releaseByMs?: number;
 }
 
 function scope(conversationId: string, userId = 'user-1', planTier = 'pro'): TestScope {
@@ -1198,6 +1199,24 @@ describe('getE2BExecutor, per-user sandbox quota', () => {
     await getE2BExecutor(scope('conv-ttl', 'user-ttl', 'max'));
     const opts = (create.mock.calls[0] as unknown[])[0] as { timeoutMs?: number };
     expect(opts.timeoutMs).toBe(getPlanSandboxTtlMs('max'));
+  });
+
+  it('holds and times out a chat turn sandbox only until the turn releases it', async () => {
+    const turnLeftMs = 5 * 60_000;
+    const { getE2BExecutor } = await import('../runtime');
+    await getE2BExecutor({
+      ...scope('conv-turn', 'user-turn', 'team'),
+      releaseByMs: Date.now() + turnLeftMs,
+    });
+
+    const held = (reserveSandboxComputeInterval.mock.calls[0] as unknown[])[0] as {
+      ttlMs: number;
+    };
+    expect(held.ttlMs).toBeLessThanOrEqual(turnLeftMs);
+    expect(held.ttlMs).toBeGreaterThan(turnLeftMs - 5_000);
+    expect(held.ttlMs).toBeLessThan(getPlanSandboxTtlMs('team'));
+    const opts = (create.mock.calls[0] as unknown[])[0] as { timeoutMs?: number };
+    expect(opts.timeoutMs).toBe(held.ttlMs);
   });
 
   it('gives a Free sandbox only the lifetime its window funded, and says so on the first run', async () => {

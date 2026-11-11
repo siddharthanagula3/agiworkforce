@@ -168,6 +168,33 @@ function interval(overrides: Record<string, unknown> = {}) {
   };
 }
 
+describe('admittedSandboxLifetimeMs', () => {
+  const NOW = 1_800_000_000_000;
+  const DAY_MS = 24 * 60 * 60_000;
+
+  it('keeps the plan lifetime for a sandbox no caller releases', async () => {
+    const mod = await loadModule();
+    expect(mod.admittedSandboxLifetimeMs(DAY_MS, undefined, NOW)).toBe(DAY_MS);
+    expect(mod.admittedSandboxLifetimeMs(DAY_MS, Number.POSITIVE_INFINITY, NOW)).toBe(DAY_MS);
+  });
+
+  it('holds a chat turn sandbox only until the turn releases it', async () => {
+    const mod = await loadModule();
+    expect(mod.admittedSandboxLifetimeMs(DAY_MS, NOW + 300_000, NOW)).toBe(300_000);
+  });
+
+  it('never admits less than the minimum funded run or more than the plan allows', async () => {
+    const mod = await loadModule();
+    expect(mod.admittedSandboxLifetimeMs(DAY_MS, NOW + 5_000, NOW)).toBe(
+      SANDBOX_MINIMUM_FUNDED_RUN_MS,
+    );
+    expect(mod.admittedSandboxLifetimeMs(DAY_MS, NOW - 60_000, NOW)).toBe(
+      SANDBOX_MINIMUM_FUNDED_RUN_MS,
+    );
+    expect(mod.admittedSandboxLifetimeMs(600_000, NOW + DAY_MS, NOW)).toBe(600_000);
+  });
+});
+
 describe('sandboxComputeIsPriceable, the provisioning gate', () => {
   beforeEach(() => {
     clearScopedEnv();

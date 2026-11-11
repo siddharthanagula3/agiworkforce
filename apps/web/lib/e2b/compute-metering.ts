@@ -82,6 +82,21 @@ export function sandboxComputeIsPriceable(): boolean {
 }
 
 /**
+ * The lifetime one sandbox interval is admitted for. Every second of it is
+ * held against the plan windows until the interval settles, so an interval
+ * whose caller releases it sooner is held only until then, never under the
+ * minimum funded run and never past the plan's own lifetime.
+ */
+export function admittedSandboxLifetimeMs(
+  planLifetimeMs: number,
+  releaseByMs: number | undefined,
+  nowMs: number = Date.now(),
+): number {
+  if (releaseByMs === undefined || !Number.isFinite(releaseByMs)) return planLifetimeMs;
+  return Math.min(planLifetimeMs, Math.max(SANDBOX_MINIMUM_FUNDED_RUN_MS, releaseByMs - nowMs));
+}
+
+/**
  * The rate a sandbox of this shape is billed at, in microUSD per second of
  * sandbox life: vCPU seconds and memory seconds are separate published rates
  * and a sandbox pays both for as long as it exists.
