@@ -241,6 +241,48 @@ const ID_B = '0190a000-0000-7000-8000-000000000052';
 const ID_C = '0190a000-0000-7000-8000-000000000053';
 
 describe('account notification feed read-state ownership', () => {
+  it('releases pagination when a refresh retires an older-page request', async () => {
+    const firstPage = Array.from({ length: 30 }, (_, index) =>
+      feedItem({
+        id: `0190a000-0000-7000-8000-0000000002${String(index).padStart(2, '0')}`,
+        createdAt: `2026-09-29T10:${String(59 - index).padStart(2, '0')}:00.000Z`,
+      }),
+    );
+    mockGet.mockResolvedValue({ notifications: firstPage, unreadCount: 30 });
+    await act(async () => {
+      await useAccountNotificationFeed.getState().refresh();
+    });
+    const olderPage = deferred();
+    mockGet.mockReturnValueOnce(olderPage.promise);
+    let stalePage: Promise<void> = Promise.resolve();
+    act(() => {
+      stalePage = useAccountNotificationFeed.getState().loadMore();
+    });
+    expect(useAccountNotificationFeed.getState().loadingMore).toBe(true);
+
+    await act(async () => {
+      await useAccountNotificationFeed.getState().refresh();
+    });
+    expect(useAccountNotificationFeed.getState().loadingMore).toBe(false);
+
+    await act(async () => {
+      olderPage.reject(new Error('offline'));
+      await stalePage;
+    });
+    const state = useAccountNotificationFeed.getState();
+    expect(state.loadingMore).toBe(false);
+    expect(state.error).toBeNull();
+
+    mockGet.mockResolvedValueOnce({
+      notifications: [feedItem({ id: ID_C, createdAt: '2026-09-29T09:00:00.000Z' })],
+      unreadCount: 30,
+    });
+    await act(async () => {
+      await useAccountNotificationFeed.getState().loadMore();
+    });
+    expect(useAccountNotificationFeed.getState().items.at(-1)?.id).toBe(ID_C);
+  });
+
   it('does not restore a retired account feed when its mark-all request fails late', async () => {
     mockGet.mockResolvedValue({
       notifications: [feedItem({ id: ID_A, title: 'Account A notice' })],

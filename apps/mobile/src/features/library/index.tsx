@@ -383,6 +383,12 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
   }, []);
 
   const router = useRouter();
+  const handleOpenArtifact = useCallback(
+    (artifact: MobileArtifact) => {
+      router.push({ pathname: '/(app)/artifacts', params: { artifactId: artifact.id } });
+    },
+    [router],
+  );
   const handleAddToChat = useCallback(
     (asset: LibraryAsset) => {
       stageComposerAttachments('new-chat', [
@@ -585,7 +591,14 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
     ({ item, index }: { item: LibraryRow; index: number }) => {
       const style = index % gridColumns !== 0 ? { marginLeft: CARD_GAP } : undefined;
       if (item.row === 'artifact') {
-        return <LibraryArtifactCard artifact={item.artifact} width={cardWidth} style={style} />;
+        return (
+          <LibraryArtifactCard
+            artifact={item.artifact}
+            width={cardWidth}
+            style={style}
+            onPress={handleOpenArtifact}
+          />
+        );
       }
       const asset = item.asset;
       const onLongPress = () =>
@@ -639,6 +652,7 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
       cardWidth,
       gridColumns,
       handleAssetActions,
+      handleOpenArtifact,
       handleOpenImage,
       handlePlayVideo,
       handleShareAsset,
@@ -1269,18 +1283,23 @@ function LibraryArtifactCard({
   artifact,
   width,
   style,
+  onPress,
 }: {
   artifact: MobileArtifact;
   width: number;
   style?: object;
+  onPress: (artifact: MobileArtifact) => void;
 }) {
   const c = useThemeColors();
   const previewHeight = Math.max(120, Math.round(width * 0.72));
   return (
-    <View
+    <Pressable
       testID={`library-artifact-card-${artifact.id}`}
+      onPress={() => onPress(artifact)}
+      className="active:opacity-80"
       style={[{ width, marginBottom: 20 }, style]}
-      accessibilityLabel={`Artifact ${artifact.title}`}
+      accessibilityLabel={`Open artifact ${artifact.title}, ${artifact.ageLabel}`}
+      accessibilityRole="button"
     >
       <View
         className="rounded-2xl border overflow-hidden justify-end px-3 pb-3 pt-10"
@@ -1314,7 +1333,7 @@ function LibraryArtifactCard({
       <Text className="text-sm mt-1" style={{ color: c.textMuted }} numberOfLines={1}>
         {artifact.ageLabel}
       </Text>
-    </View>
+    </Pressable>
   );
 }
 

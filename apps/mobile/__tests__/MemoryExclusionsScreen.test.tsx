@@ -100,6 +100,22 @@ describe('Never remember exclusions baseline', () => {
     expect(mockFetchNamespace).toHaveBeenCalledWith('memory', { strictSettings: true });
   });
 
+  it('keeps the typed term when the save fails so it can be tried again', async () => {
+    mockFetchNamespace.mockResolvedValueOnce({ excludedTerms: ['orchid'] });
+    mockPatchNamespace.mockRejectedValueOnce(new Error('offline'));
+    render(<MemoryExclusionsScreen />);
+    await waitFor(() => expect(screen.getByText('orchid')).toBeTruthy());
+
+    fireEvent.changeText(screen.getByLabelText('Term to never remember'), 'cobalt');
+    await act(async () => {
+      fireEvent.press(screen.getByLabelText('Add term'));
+    });
+
+    expect(screen.getByRole('alert')).toBeTruthy();
+    expect(screen.getByLabelText('Term to never remember').props.value).toBe('cobalt');
+    expect(screen.queryByText('cobalt')).toBeNull();
+  });
+
   it('opens editing on a genuinely empty stored namespace', async () => {
     mockFetchNamespace.mockResolvedValueOnce({});
     render(<MemoryExclusionsScreen />);

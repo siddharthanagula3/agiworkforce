@@ -134,7 +134,7 @@ export const useAccountNotificationFeed = create<AccountFeedState>()((set, get) 
 
     refresh: async () => {
       const generation = ++feedGeneration;
-      set({ loading: true, error: null });
+      set({ loading: true, loadingMore: false, error: null });
       try {
         const page = await fetchAccountNotifications();
         if (generation !== feedGeneration) return;
@@ -156,7 +156,7 @@ export const useAccountNotificationFeed = create<AccountFeedState>()((set, get) 
       const last = items.at(-1);
       if (!hasMore || loading || loadingMore || !last) return;
       const generation = feedGeneration;
-      set({ loadingMore: true });
+      set({ loadingMore: true, error: null });
       try {
         const page = await fetchAccountNotifications(last.createdAt);
         if (generation !== feedGeneration) return;

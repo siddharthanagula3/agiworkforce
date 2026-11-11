@@ -7,6 +7,7 @@ import { managedCloudProjects } from '@/services/managedCloudProjects';
 import {
   assertCloudAccountEpochCurrent,
   captureCloudAccountEpoch,
+  type CloudAccountEpoch,
 } from '@/src/features/auth/services/cloudAccountSession';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import {
@@ -80,6 +81,15 @@ interface ProjectDetailsEdits {
 
 const projectDetailsEdits = new Map<string, ProjectDetailsEdits>();
 
+function accountEpochIsCurrent(account: CloudAccountEpoch) {
+  try {
+    assertCloudAccountEpochCurrent(account);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function updateCloudProjectDetails(
   projectId: string,
   patch: CloudProjectDetailsPatch,
@@ -118,7 +128,7 @@ export async function updateCloudProjectDetails(
           .map((key) => [key, edits.baseline?.[key as keyof CloudProjectDetails]]),
       ) as Partial<CloudProjectDetails>;
       const current = useCloudProjectStore.getState();
-      if (edits.baseline && current.details[projectId]) {
+      if (edits.baseline && current.details[projectId] && accountEpochIsCurrent(account)) {
         current.patchCloudProjectDetails(projectId, restore);
       }
       throw error;

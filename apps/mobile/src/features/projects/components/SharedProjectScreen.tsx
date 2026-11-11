@@ -7,6 +7,7 @@ import type {
   ManagedCloudProject,
   ManagedCloudProjectKnowledgeFile,
 } from '@agiworkforce/cloud-contracts';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
 import { hiddenSharerIds } from '@/src/features/shared-with-you/hiddenSharers';
 import { SharedItemSafetyActions } from '@/src/features/shared-with-you/SharedItemSafetyActions';
@@ -33,14 +34,20 @@ interface SharedProjectView {
   project: ManagedCloudProject;
   ownerName: string | null;
   accountId: string | null;
-  files: ManagedCloudProjectKnowledgeFile[];
 }
+
+type SharedProjectFiles =
+  | { status: 'loading' }
+  | { status: 'failed' }
+  | { status: 'ready'; files: ManagedCloudProjectKnowledgeFile[] };
 
 export function SharedProjectScreen({ projectId }: { projectId: string }) {
   const colors = useThemeColors();
   const [view, setView] = useState<SharedProjectView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [hidden, setHidden] = useState(false);
+  const [filesState, setFilesState] = useState<SharedProjectFiles>({ status: 'loading' });
+  const [filesAttempt, setFilesAttempt] = useState(0);
   const router = useRouter();
 
   useEffect(() => {
@@ -49,9 +56,8 @@ export function SharedProjectScreen({ projectId }: { projectId: string }) {
     void Promise.all([
       managedCloudProjects.getProject(projectId, { signal: controller.signal }),
       fetchProjectSharing(controller.signal).catch(() => null),
-      cloudProjectSources.list(projectId).catch(() => []),
     ])
-      .then(([project, overview, files]) => {
+      .then(([project, overview]) => {
         if (controller.signal.aborted) return;
         const owner = overview?.members.find((member) => member.userId === project.ownerUserId);
         const accountId = overview?.currentUserId ?? account?.ownerId ?? null;
@@ -60,7 +66,7 @@ export function SharedProjectScreen({ projectId }: { projectId: string }) {
           return;
         }
         setHidden(hiddenSharerIds(accountId).has(project.ownerUserId));
-        setView({ project, ownerName: owner ? memberName(owner) : null, accountId, files });
+        setView({ project, ownerName: owner ? memberName(owner) : null, accountId });
       })
       .catch((cause: unknown) => {
         if (!controller.signal.aborted) {
@@ -69,6 +75,24 @@ export function SharedProjectScreen({ projectId }: { projectId: string }) {
       });
     return () => controller.abort();
   }, [projectId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const account = captureCloudAccountEpoch();
+    const isCurrent = () => !cancelled && (!account || isCloudAccountEpochCurrent(account));
+    setFilesState({ status: 'loading' });
+    cloudProjectSources
+      .list(projectId)
+      .then((files) => {
+        if (isCurrent()) setFilesState({ status: 'ready', files });
+      })
+      .catch(() => {
+        if (isCurrent()) setFilesState({ status: 'failed' });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, filesAttempt]);
 
   if (error) {
     return (
@@ -94,7 +118,7 @@ export function SharedProjectScreen({ projectId }: { projectId: string }) {
     );
   }
 
-  const { project, ownerName, accountId, files } = view;
+  const { project, ownerName, accountId } = view;
   const access = project.sharedAccess === 'write' ? ACCESS_LABELS.write : ACCESS_LABELS.read;
   return (
     <SettingsScreenShell
@@ -158,13 +182,32 @@ export function SharedProjectScreen({ projectId }: { projectId: string }) {
       >
         FILES
       </Text>
-      {files.length === 0 ? (
+      {filesState.status === 'loading' ? (
+        <LoadingIndicator accessibilityLabel="Loading project files" />
+      ) : filesState.status === 'failed' ? (
+        <View style={{ marginBottom: 24 }}>
+          <Text
+            accessibilityRole="alert"
+            style={{ color: colors.agentError, fontSize: typeScale.footnote, marginBottom: 8 }}
+          >
+            Could not load this project’s files.
+          </Text>
+          <Pressable
+            onPress={() => setFilesAttempt((attempt) => attempt + 1)}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading project files"
+            style={{ minHeight: 44, justifyContent: 'center' }}
+          >
+            <Text style={{ color: colors.textPrimary, fontSize: typeScale.body }}>Retry</Text>
+          </Pressable>
+        </View>
+      ) : filesState.files.length === 0 ? (
         <Text style={{ color: colors.textMuted, fontSize: typeScale.footnote, marginBottom: 24 }}>
           No files in this project.
         </Text>
       ) : (
         <SettingsGroup>
-          {files.map((file, index) => (
+          {filesState.files.map((file, index) => (
             <View
               key={file.id}
               style={{
@@ -173,7 +216,7 @@ export function SharedProjectScreen({ projectId }: { projectId: string }) {
                 flexDirection: 'row',
                 alignItems: 'center',
                 gap: 10,
-                borderBottomWidth: index === files.length - 1 ? 0 : 1,
+                borderBottomWidth: index === filesState.files.length - 1 ? 0 : 1,
                 borderBottomColor: colors.border,
               }}
             >

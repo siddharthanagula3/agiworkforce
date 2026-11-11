@@ -174,6 +174,30 @@ describe('ProjectSettingsScreen', () => {
     });
   });
 
+  it('does not write an earlier snapshot into state after the account changed during a save', async () => {
+    const { assertCloudAccountEpochCurrent } = jest.requireMock(
+      '@/src/features/auth/services/cloudAccountSession',
+    ) as { assertCloudAccountEpochCurrent: jest.Mock };
+    let failSave: (error: Error) => void = () => undefined;
+    (managedCloudProjects.updateProject as jest.Mock).mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          failSave = reject;
+        }),
+    );
+    render(<ProjectSettingsScreen projectId={PROJECT_ID} />);
+
+    fireEvent(screen.getByTestId('project-settings-account-style'), 'valueChange', false);
+    assertCloudAccountEpochCurrent.mockImplementation(() => {
+      throw new Error('account changed');
+    });
+    failSave(new Error('HTTP 500'));
+
+    await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy());
+    expect(useCloudProjectStore.getState().details[PROJECT_ID]?.usesAccountStyle).toBe(false);
+    assertCloudAccountEpochCurrent.mockReset();
+  });
+
   it('lists only memories saved to this project', () => {
     useCloudMemoryStore.setState({
       entries: [
