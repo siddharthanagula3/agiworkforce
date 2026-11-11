@@ -96,8 +96,11 @@ jest.mock('../services/api', () => ({
 }));
 
 const mockExportCloudUserData = jest.fn();
+const mockShareCloudDataExport = jest.fn();
 jest.mock('../services/cloudDataExport', () => ({
+  ...jest.requireActual('../services/cloudDataExport'),
   exportCloudUserData: (...args: unknown[]) => mockExportCloudUserData(...args),
+  shareCloudDataExport: (...args: unknown[]) => mockShareCloudDataExport(...args),
 }));
 
 const mockSyncNow = jest.fn().mockResolvedValue(undefined);
@@ -359,6 +362,57 @@ describe('Cloud Account destructive action ownership', () => {
         ownerId: 'account-a',
         epoch: 1,
       }),
+    );
+  });
+
+  it('explains a partial export and saves it only when asked, never as a connection retry', async () => {
+    const { PartialCloudDataExportError } = jest.requireActual('../services/cloudDataExport');
+    const completeness = {
+      status: 'partial',
+      unavailable_sections: [],
+      skipped_rows: [],
+      truncated_sections: [{ section: 'security_audit_logs', limit: 1000 }],
+      retry: 'repeating this bounded export does not retrieve the omitted rows',
+    };
+    const document = { export_metadata: { completeness } };
+    mockExportCloudUserData.mockRejectedValueOnce(
+      new PartialCloudDataExportError(completeness, document),
+    );
+    mockShareCloudDataExport.mockResolvedValue(undefined);
+    render(<CloudAccountScreen />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    fireEvent.press(screen.getByLabelText('Export Cloud Data'));
+
+    await waitFor(() =>
+      expect(Alert.alert).toHaveBeenCalledWith(
+        'Your export is incomplete',
+        expect.stringContaining('security audit logs'),
+        expect.any(Array),
+      ),
+    );
+    expect(Alert.alert).not.toHaveBeenCalledWith('Export failed', expect.anything());
+    expect(mockShareCloudDataExport).not.toHaveBeenCalled();
+
+    const call = (Alert.alert as jest.Mock).mock.calls.findLast(
+      ([title]) => title === 'Your export is incomplete',
+    );
+    const buttons = call?.[2] as Array<{ text: string; onPress?: () => void }>;
+    expect(buttons.map((button) => button.text)).toEqual([
+      'Cancel',
+      'Get help',
+      'Save what’s included',
+    ]);
+    await act(async () => {
+      buttons.find((button) => button.text === 'Save what’s included')?.onPress?.();
+    });
+
+    expect(mockShareCloudDataExport).toHaveBeenCalledWith(
+      { ownerId: 'account-a', epoch: 1 },
+      document,
+      'partial',
     );
   });
 

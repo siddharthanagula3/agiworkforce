@@ -9,7 +9,8 @@ import {
 const reservedDirectories = new Set<string>();
 
 export async function withDsarTemporaryFile(
-  fileName: 'agi_data_export.json' | 'agi_cloud_data_export.json',
+  fileName:
+    'agi_data_export.json' | 'agi_cloud_data_export.json' | 'agi_cloud_data_export_partial.json',
   assertActive: () => void,
   handleFile: (uri: string) => Promise<void>,
 ): Promise<void> {

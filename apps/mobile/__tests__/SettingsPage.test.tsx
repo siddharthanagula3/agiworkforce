@@ -501,6 +501,21 @@ describe('Settings page', () => {
     expect(loaded.getByLabelText(/^Subscription\. /)).toBeTruthy();
   });
 
+  it('never names a plan the account was not confirmed to hold', () => {
+    useAuthStore.setState({ isClerkSignedIn: true });
+    useTierStore.setState({ isRefreshing: false, lastRefreshedAt: null } as never);
+    const unconfirmed = render(<SettingsTabScreen />);
+
+    expect(unconfirmed.getByLabelText('Subscription. Not confirmed')).toBeTruthy();
+    expect(unconfirmed.queryByLabelText('Subscription. Free')).toBeNull();
+    unconfirmed.unmount();
+
+    useTierStore.setState({ lastRefreshedAt: '2026-11-11T00:00:00.000Z' } as never);
+    const confirmed = render(<SettingsTabScreen />);
+
+    expect(confirmed.getByLabelText('Subscription. Free')).toBeTruthy();
+  });
+
   it('renders version in About row', () => {
     const { getByText } = render(<SettingsTabScreen />);
     expect(getByText('v2.1.0')).toBeTruthy();
