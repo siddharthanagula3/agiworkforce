@@ -23,6 +23,8 @@ import {
   BookOpen,
   Globe,
   ClipboardPaste,
+  MonitorPlay,
+  FileSpreadsheet,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import {
@@ -42,6 +44,7 @@ import {
   CHAT_OUTPUT_FORMATS,
   CHAT_OUTPUT_FORMAT_LABEL,
   ManagedMediaVideoGenerationRequestSchema,
+  type ChatOutputFormat,
   supportsManagedMediaImageEdit,
 } from '@agiworkforce/cloud-contracts';
 import { supportedVideoDurationSecs } from '@/src/features/video/services/videogen';
@@ -116,6 +119,12 @@ type CloudLibraryState =
   | { status: 'loading'; scope: LibraryPickerScope }
   | { status: 'ready'; scope: LibraryPickerScope; request: number; picks: LibraryPick[] }
   | { status: 'error'; scope: LibraryPickerScope };
+
+const OUTPUT_FORMAT_ICON: Readonly<Record<ChatOutputFormat, typeof FileText>> = {
+  docx: FileText,
+  pptx: MonitorPlay,
+  xlsx: FileSpreadsheet,
+};
 
 export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(function AddToChatSheet(
   {
@@ -1108,20 +1117,30 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
               >
                 Output
               </Text>
-              {CHAT_OUTPUT_FORMATS.map((format) => (
-                <MediaOptionRow
-                  key={format}
-                  label={CHAT_OUTPUT_FORMAT_LABEL[format]}
-                  selected={outputFormat === format}
-                  onPress={() => {
-                    haptic();
-                    setOutputFormat(outputFormat === format ? null : format);
-                  }}
-                  textColor={themeColors.textPrimary}
-                  mutedColor={themeColors.textMuted}
-                  activeColor={themeColors.teal}
-                />
-              ))}
+              {CHAT_OUTPUT_FORMATS.map((format) => {
+                const FormatIcon = OUTPUT_FORMAT_ICON[format];
+                const selected = outputFormat === format;
+                return (
+                  <MediaOptionRow
+                    key={format}
+                    icon={
+                      <FormatIcon
+                        size={18}
+                        color={selected ? themeColors.teal : themeColors.textMuted}
+                      />
+                    }
+                    label={CHAT_OUTPUT_FORMAT_LABEL[format]}
+                    selected={selected}
+                    onPress={() => {
+                      haptic();
+                      setOutputFormat(selected ? null : format);
+                    }}
+                    textColor={themeColors.textPrimary}
+                    mutedColor={themeColors.textMuted}
+                    activeColor={themeColors.teal}
+                  />
+                );
+              })}
             </View>
             <View style={{ height: 1, backgroundColor: dividerColor, marginHorizontal: 20 }} />
           </>
@@ -1587,6 +1606,7 @@ function ConfigLink({
 }
 
 function MediaOptionRow({
+  icon,
   label,
   hint,
   selected,
@@ -1595,6 +1615,7 @@ function MediaOptionRow({
   mutedColor,
   activeColor,
 }: {
+  icon?: React.ReactNode;
   label: string;
   hint?: string;
   selected: boolean;
@@ -1616,10 +1637,12 @@ function MediaOptionRow({
         justifyContent: 'space-between',
         paddingVertical: 8,
         paddingHorizontal: 4,
-        paddingLeft: 28,
+        paddingLeft: icon ? 4 : 28,
         minHeight: 44,
+        gap: 10,
       }}
     >
+      {icon}
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text style={{ fontSize: typeScale.subhead, color: selected ? activeColor : textColor }}>
           {label}

@@ -66,7 +66,7 @@ import {
   RenameConversationModal,
   useConversationActions,
 } from '@/src/features/conversation-actions';
-import { takeConversationSend } from '@agiworkforce/client-runtime';
+import { peekConversationSend, takeConversationSend } from '@agiworkforce/client-runtime';
 import {
   useVoiceConversation,
   voiceCaptureErrorMessage,
@@ -91,6 +91,7 @@ import { TemporaryChatBanner } from '@/src/features/chat/components/TemporaryCha
 import { SendErrorBanner } from '@/src/features/chat/components/SendErrorBanner';
 import { ProviderConsentBanner } from '@/src/features/chat/components/ProviderConsentBanner';
 import { MessageSkeleton } from '@/src/features/chat/components/MessageSkeleton';
+import { PendingSendBubble } from '@/src/features/chat/components/PendingSendBubble';
 import {
   classifyManagedQuotaErrorCode,
   formatUsageResetIn,
@@ -753,6 +754,8 @@ export default function ChatScreen() {
     ],
   );
 
+  const pendingSendText = id && isLoadingMessages ? peekConversationSend(id) : null;
+
   useEffect(() => {
     if (!id || isStreaming || isLoadingMessages) return;
     const handedOff = takeConversationSend(id);
@@ -1250,8 +1253,11 @@ export default function ChatScreen() {
   );
 
   const handleOpenSkills = useCallback(() => {
-    router.push('/(app)/skills?returnTo=composer' as Parameters<typeof router.push>[0]);
-  }, [router]);
+    router.push({
+      pathname: '/(app)/skills',
+      params: { returnTo: 'composer', ...(id ? { conversationId: id } : {}) },
+    } as Parameters<typeof router.push>[0]);
+  }, [id, router]);
 
   const handleAttachFromLibrary = useCallback((attachment: Attachment) => {
     chatInputAttachRef.current?.addAttachments([attachment]);
@@ -1909,9 +1915,16 @@ export default function ChatScreen() {
           onDismiss={clearMessageLoadError}
         />
 
-        <View style={liveVoiceVisible ? { display: 'none' } : { flex: 1 }}>
+        <View
+          testID="chat.thread-frame"
+          style={liveVoiceVisible ? { display: 'none' } : { flex: 1, overflow: 'hidden' }}
+        >
           {isLoadingMessages && conversationMessages.length === 0 ? (
-            <MessageSkeleton />
+            pendingSendText ? (
+              <PendingSendBubble text={pendingSendText} />
+            ) : (
+              <MessageSkeleton />
+            )
           ) : (
             <MessageList
               messages={conversationMessages}

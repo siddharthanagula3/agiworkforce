@@ -320,7 +320,7 @@ describe('Settings page', () => {
 
     fireEvent.press(getByLabelText('Personalization'));
     fireEvent.press(getByLabelText('Memory'));
-    fireEvent.press(getByLabelText('Account Security. Signed in'));
+    fireEvent.press(getByLabelText('Account Security'));
 
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/personalization');
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/memory');
@@ -358,7 +358,7 @@ describe('Settings page', () => {
     useAuthStore.setState({ isClerkSignedIn: true });
     const { getByLabelText } = render(<SettingsTabScreen />);
 
-    fireEvent.press(getByLabelText('Shared Links. Signed in'));
+    fireEvent.press(getByLabelText('Shared Links'));
     fireEvent.press(getByLabelText('Device Integrations'));
 
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/shared-links');

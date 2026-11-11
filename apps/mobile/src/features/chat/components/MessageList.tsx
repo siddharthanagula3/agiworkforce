@@ -200,7 +200,11 @@ export function MessageList({
     ({ item, index }: { item: ChatMessage; index: number }) => (
       // The column is on the row, not on the list, so a swipe anywhere in the
       // pane still scrolls the thread on a tablet.
-      <MessageListRow messageId={item.id} style={contentColumn('reading')}>
+      <MessageListRow
+        messageId={item.id}
+        streaming={item.isStreaming === true}
+        style={contentColumn('reading')}
+      >
         {shouldShowTimeDivider(messages[index - 1]?.createdAt, item.createdAt) ? (
           <TimeDivider createdAt={item.createdAt} />
         ) : null}

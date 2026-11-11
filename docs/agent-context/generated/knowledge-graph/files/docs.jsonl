@@ -26,7 +26,7 @@
 {"path":"docs/agent-context/generated/knowledge-graph/files/infrastructure.jsonl","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
 {"path":"docs/agent-context/generated/knowledge-graph/files/packages__ai.jsonl","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
 {"path":"docs/agent-context/generated/knowledge-graph/files/packages__client.jsonl","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
-{"path":"docs/agent-context/generated/knowledge-graph/files/packages__contracts.jsonl","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
+{"path":"docs/agent-context/generated/knowledge-graph/files/packages__contracts.jsonl","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"oversize"}
 {"path":"docs/agent-context/generated/knowledge-graph/files/packages__guardian.jsonl","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
 {"path":"docs/agent-context/generated/knowledge-graph/files/packages__platform.jsonl","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
 {"path":"docs/agent-context/generated/knowledge-graph/files/packages__tools.jsonl","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
@@ -37,6 +37,8 @@
 {"path":"docs/agent-context/generated/knowledge-graph/files/services.jsonl","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
 {"path":"docs/agent-context/generated/knowledge-graph/files/tools.jsonl","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
 {"path":"docs/agent-context/generated/knowledge-graph/guards.json","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
+{"path":"docs/agent-context/generated/knowledge-graph/manifest.json","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
+{"path":"docs/agent-context/generated/knowledge-graph/manifest.json","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
 {"path":"docs/agent-context/generated/knowledge-graph/manifest.json","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
 {"path":"docs/agent-context/generated/knowledge-graph/migrations.json","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}
 {"path":"docs/agent-context/generated/knowledge-graph/routes.json","unit":"docs","role":"generated","lanes":["repo-operability"],"unparsed":"notCode"}

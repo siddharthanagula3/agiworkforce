@@ -177,7 +177,12 @@ import { MessageBubble } from '@/src/features/chat/components/MessageBubble';
 import { lightColors } from '@/src/ui/theme/tokens';
 import { useArtifactStore } from '@/src/features/artifacts/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
-import { DEFAULT_LOCAL_MODEL_ID, getShortDisplayName } from '@/src/features/model-picker/service';
+import {
+  DEFAULT_LOCAL_MODEL_ID,
+  getModelById,
+  getShortDisplayName,
+} from '@/src/features/model-picker/service';
+import { requireAutoMode, requireMobileCloudModel } from '../test-utils/modelFixtures';
 
 const LOCAL_MODEL_LABEL = getShortDisplayName(DEFAULT_LOCAL_MODEL_ID);
 const SYNTHETIC_CLOUD_MODEL_ID = 'fixture-cloud-model';
@@ -267,6 +272,24 @@ describe('MessageBubble model label', () => {
     expect(getByText(new RegExp(LOCAL_MODEL_LABEL))).toBeTruthy();
     expect(queryByText(DEFAULT_LOCAL_MODEL_ID)).toBeNull();
     expect(getByLabelText(`More message actions for ${LOCAL_MODEL_LABEL}`)).toBeTruthy();
+  });
+
+  it('names the Cloud model that answered, even when the turn asked for Auto', () => {
+    const cloudModel = requireMobileCloudModel();
+    const autoModeId = requireAutoMode().id;
+    const message: ChatMessage = {
+      id: 'm-cloud',
+      role: 'assistant',
+      content: 'Answered in Cloud.',
+      createdAt: new Date().toISOString(),
+      model: autoModeId,
+      metadata: { requestedModel: autoModeId, resolvedModel: cloudModel.id },
+    };
+
+    const { getByText, queryByText } = render(<MessageBubble message={message} />);
+
+    expect(getByText(`AGI Cloud · ${getModelById(cloudModel.id)?.name}`)).toBeTruthy();
+    expect(queryByText(/Local Mode/)).toBeNull();
   });
 
   it('renders canonical Cloud activity once and suppresses duplicate legacy step/tool rows', () => {

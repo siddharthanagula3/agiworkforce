@@ -51,7 +51,7 @@ const footnoteDefinitionPattern = /^\[\^([^\]\s]+)\]:\s?(.*)$/;
 const thematicBreakPattern = /^ {0,3}(?:(?:-[ \t]*){3,}|(?:\*[ \t]*){3,}|(?:_[ \t]*){3,})$/;
 const continuationIndentPattern = /^(?: {2,}|\t)\S/;
 const fullLineImagePattern = /^!\[([^\]]*)\]\(\s*<?([^()<>\s]+)>?(?:\s+"[^"]*")?\s*\)$/;
-const nestedBullets = ['•', '◦', '▪'];
+const nestedBullets = ['\u2022', '\u25E6', '\u25AA\uFE0E'];
 
 type ParsedListItem = {
   depth: number;
@@ -494,7 +494,7 @@ function renderTextSegment(
                 <Text
                   style={{
                     ...chatTypography.body,
-                    color: renderColors.teal,
+                    color: renderColors.textPrimary,
                     ...(item.ordered
                       ? { minWidth: 18, textAlign: 'right' as const }
                       : { width: 12, textAlign: 'center' as const }),

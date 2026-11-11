@@ -347,7 +347,7 @@ export function renderInlineMarkdown(
     <Text
       variant="inline"
       key={`${keyBase}-link-${inlineKey++}`}
-      style={{ color: renderColors.teal, textDecorationLine: 'underline' }}
+      style={{ color: renderColors.textPrimary, textDecorationLine: 'underline' }}
       onPress={() => openAssistantLink(url)}
       accessibilityRole="link"
       accessibilityLabel={label}
