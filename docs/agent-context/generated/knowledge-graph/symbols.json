@@ -51486,6 +51486,9 @@
     "generate_markdown": [
       "packages/tools/skills/reference-bundles/skill-creator/scripts/aggregate_benchmark.py"
     ],
+    "generate_notification_icon": [
+      "apps/mobile/scripts/generate_logo_assets.py"
+    ],
     "generate_pkce": [
       "crates/agiworkforce-mcp/src/oauth/pkce.rs"
     ],
@@ -82130,6 +82133,12 @@
     "NATIVE_PURCHASE_SOURCE_PATHS": [
       "scripts/lib/rollout/store-listing.mjs"
     ],
+    "NATIVE_PURCHASES_AVAILABLE": [
+      "apps/mobile/src/features/billing/nativePurchaseAvailability.ts"
+    ],
+    "NATIVE_PURCHASES_NOT_IN_THIS_VERSION": [
+      "apps/mobile/src/features/billing/mobileIapService.ts"
+    ],
     "NATIVE_RECONNECT_BASE_DELAY_MS": [
       "apps/extension/src/features/native-bridge/reconnect.ts"
     ],
@@ -100972,6 +100981,9 @@
     "readLegalAttributionBodies": [
       "apps/mobile/scripts/release/scan-release-bundle.mjs"
     ],
+    "readLegalAttributionFields": [
+      "apps/mobile/scripts/release/scan-release-bundle.mjs"
+    ],
     "readLegalHold": [
       "apps/web/lib/services/ediscovery-export-service.ts"
     ],
@@ -101847,6 +101859,7 @@
       "apps/web/app/api/llm/v1/chat/completions/lib/tool-result-store.ts"
     ],
     "readStorefront": [
+      "apps/mobile/__tests__/ios-store-submission-config.test.ts",
       "apps/mobile/src/features/billing/mobileIapService.ts"
     ],
     "readStoreTestPurchasesAllowed": [
