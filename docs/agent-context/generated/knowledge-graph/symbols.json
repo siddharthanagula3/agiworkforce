@@ -970,6 +970,9 @@
     "ACCOUNT_TOKEN": [
       "crates/agiworkforce-protocol/src/developer_session.rs"
     ],
+    "ACCOUNT_UNCONFIRMED_MESSAGE": [
+      "apps/mobile/services/apiErrors.ts"
+    ],
     "ACCOUNT_URL_CONNECTORS": [
       "apps/web/lib/connectors/account-url-connectors.ts"
     ],
@@ -57131,6 +57134,9 @@
     "hasClerkSessionCookie": [
       "apps/web/lib/clerk-session.ts"
     ],
+    "hasCloudAccountOwner": [
+      "apps/mobile/src/features/auth/services/cloudAccountSession.ts"
+    ],
     "hasCompatibleFreeErrorRecoveryModel": [
       "apps/web/features/chat/lib/free-error-model-recovery.ts"
     ],
@@ -65060,6 +65066,9 @@
     ],
     "isSignInEntryPath": [
       "packages/contracts/types/src/product-routes.ts"
+    ],
+    "isSignInOwedForEndedSession": [
+      "apps/mobile/src/features/auth/services/endedSession.ts"
     ],
     "isSingleUse": [
       "apps/desktop/electron/runtime/permissionCore.ts"
@@ -87695,6 +87704,9 @@
     ],
     "overwriteNeedsAudit": [
       "packages/contracts/types/src/resource-metadata-contract.ts"
+    ],
+    "oweSignInForEndedSession": [
+      "apps/mobile/src/features/auth/services/endedSession.ts"
     ],
     "OWN_ROW_OPERATIONS": [
       "scripts/check-entitlement-entry-point.mjs"
@@ -120983,6 +120995,9 @@
     "settleSearchCall": [
       "apps/web/lib/web-search/search-budget.ts"
     ],
+    "settleSignInForEndedSession": [
+      "apps/mobile/src/features/auth/services/endedSession.ts"
+    ],
     "settleSlackRun": [
       "apps/web/lib/slack/slack-runs.ts"
     ],
@@ -137436,6 +137451,9 @@
     ],
     "Upload": [
       "packages/ui/icons/src/glyphs/Actions.tsx"
+    ],
+    "UPLOAD_ACCOUNT_UNCONFIRMED_MESSAGE": [
+      "apps/mobile/services/apiErrors.ts"
     ],
     "UPLOAD_BUSY_LABEL": [
       "packages/ui/ui/src/directory/constants.ts"
