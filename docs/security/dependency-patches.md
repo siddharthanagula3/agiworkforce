@@ -2,18 +2,22 @@
 
 Status: Current
 Owner: Platform + security
-Last updated: 2026-11-01
+Last updated: 2026-11-11
 
 GitHub withdrew the http-cache-semantics advisory on 2026-10-28 and the braces
 advisory on 2026-10-23. Their audit ignores and policy exceptions are removed.
 The source patches below remain as tested defensive behavior; this cleanup does
 not remove those protections or change package versions.
 
-The installed `node-forge@1.4.1` is outside the published affected range
-(`<= 1.4.0`) of
-[GHSA-86w9-cpqp-85rv](https://github.com/advisories/GHSA-86w9-cpqp-85rv).
-Its obsolete audit ignore and exception are removed too. No exception deadline
-was extended.
+`node-forge` is held at `>=1.4.3` by the root override. That release is outside
+the affected range (`<= 1.4.0`) of
+[GHSA-86w9-cpqp-85rv](https://github.com/advisories/GHSA-86w9-cpqp-85rv) and
+carries the fixes for the four advisories GitHub published against `<= 1.4.2`
+(TLS client crashes on a record without a session and on an unsupported
+compression method, a regular-expression denial of service in header and cookie
+trimming, and Ed25519 verification that accepted small-order keys). It was
+installed after its seventh day, so the release-age exclusion for `1.4.1` is
+removed. No audit ignore or exception exists for the package.
 
 | Advisory                                                                 | Package                      | Repair and compatibility                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | ------------------------------------------------------------------------ | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
