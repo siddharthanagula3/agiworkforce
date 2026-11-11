@@ -59,7 +59,8 @@ if (chromeManifest.manifest_version !== 3) {
 validateReleaseManifest(chromeManifest, buildConfiguration, { firstDraft });
 validateReleaseWebOrigin(env.VITE_AGI_WEB_API_BASE_URL);
 
-fs.rmSync(path.join(extensionRoot, archiveName), { force: true });
+fs.rmSync(path.join(extensionRoot, 'extension.zip'), { force: true });
+fs.rmSync(path.join(extensionRoot, `extension${FIRST_DRAFT_ARCHIVE_SUFFIX}`), { force: true });
 
 console.log(
   firstDraft

@@ -168,7 +168,8 @@ function cancellationPlace(subscription: SubscriptionInfo): string {
   if (subscription.apple_original_transaction_id) {
     return 'in the subscription settings of your Apple account';
   }
-  if (subscription.google_purchase_token) return 'in your Google Play subscriptions';
+  if (subscription.google_purchase_token)
+    return 'in the subscription settings of your Google Play account';
   return 'on the web in Settings > Billing';
 }
 
