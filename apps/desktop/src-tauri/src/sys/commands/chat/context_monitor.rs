@@ -413,8 +413,8 @@ mod tests {
     fn should_auto_compact_respects_cooldown() {
         let config = CompactionConfig::default(); // cooldown = 120s
         let max_tokens = 128_000;
-        // Just compacted 1 second ago, cooldown not elapsed
-        let recent = Instant::now() - std::time::Duration::from_secs(1);
+        // Just compacted, cooldown not elapsed
+        let recent = Instant::now();
         assert!(!should_auto_compact(
             128_000,
             max_tokens,
@@ -422,7 +422,7 @@ mod tests {
             Some(recent)
         ));
         // Compacted 200 seconds ago, cooldown elapsed
-        let old = Instant::now() - std::time::Duration::from_secs(200);
-        assert!(should_auto_compact(128_000, max_tokens, &config, Some(old)));
+        let old = Instant::now().checked_sub(std::time::Duration::from_secs(200));
+        assert!(should_auto_compact(128_000, max_tokens, &config, old));
     }
 }
