@@ -18,6 +18,8 @@ import {
 import {
   detectFileDiff,
   getToolDisplayLabel,
+  PRODUCT_NAMES,
+  productNameWithArticle,
   TOOL_APPROVAL_ACTION_LABELS,
 } from '@agiworkforce/types';
 import { AGI_WORK_LABEL } from '@/features/chat/lib/agi-work';
@@ -190,7 +192,7 @@ export function AgentRunScenePreview({ className }: { className?: string }) {
   return (
     <WorkShell
       scene="work-run"
-      label="Authored example of an Work run in Chat"
+      label={`Authored example of ${productNameWithArticle('work')} run in ${PRODUCT_NAMES.chat}`}
       className={className}
       chats={RUN_SIDEBAR_CHATS}
       composer={<WorkComposer />}

@@ -3143,7 +3143,7 @@
   color: var(--agi-ink-2);
 }
 [data-design='agi'] .agi-ds-provider-default {
-  font-family: var(--public-label-font);
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
   font-size: var(--public-label-size);
   line-height: var(--type-body-height);
   color: var(--agi-ink);

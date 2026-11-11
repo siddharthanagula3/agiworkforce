@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
+import { HERO } from '../features/marketing/components/landing/landing-content';
 import { measurePublicFontProof } from './lib/public-page-readiness';
 
 for (const viewport of [
@@ -76,11 +77,9 @@ for (const viewport of [
             const panel = nav.locator('.agi-ds-navpanel:not([hidden])');
             await expect(panel).toHaveCount(1);
             await page.evaluate(() => document.fonts.ready);
-            const fonts = [{ cssVariable: '--font-geist-sans' }];
-            if ((await panel.locator('.agi-ds-navpanel-footer').count()) > 0) {
-              fonts.push({ cssVariable: '--font-geist-mono' });
-            }
-            const font = await measurePublicFontProof(page, panel, fonts);
+            const font = await measurePublicFontProof(page, panel, [
+              { cssVariable: '--font-geist-sans' },
+            ]);
             expect(font.fontCoverageGaps).toEqual([]);
             const state = await panel.evaluate((root) => {
               const rect = root.getBoundingClientRect();
@@ -121,7 +120,7 @@ for (const viewport of [
             for (const row of state.rows) {
               expect(row.text).toBeTruthy();
               expect(row.size).toBeGreaterThanOrEqual(row.footer ? 15 : 17);
-              expect(row.font).toMatch(row.footer ? /^"?Geist Mono/ : /^"?Geist,/);
+              expect(row.font).toMatch(/^"?Geist,/);
               expect(row.painted).toBe(true);
               expect(row.fits, row.text).toBe(true);
             }
@@ -143,7 +142,9 @@ for (const viewport of [
         const edge = surface.locator(':scope > .agi-ds-header-edge');
         await expect(edge).toHaveCount(1);
         await expect(edge).toHaveAttribute('aria-hidden', 'true');
-        await expect(header.getByRole('link', { name: 'Try AGI Chat', exact: true })).toBeVisible();
+        await expect(
+          header.getByRole('link', { name: HERO.primary.label, exact: true }),
+        ).toBeVisible();
         const records: unknown[] = [];
         for (const scroll of [0, 600, 0]) {
           await page.evaluate((top) => scrollTo({ top, behavior: 'instant' }), scroll);
@@ -227,7 +228,7 @@ for (const viewport of [
         expect((await page.goto('/pricing'))?.status()).toBe(200);
         const header = page.locator('header.agi-ds-header');
         const surface = header.locator('.agi-ds-header-surface');
-        const action = header.getByRole('link', { name: 'Try AGI Chat', exact: true });
+        const action = header.getByRole('link', { name: HERO.primary.label, exact: true });
         await expect(action).toBeVisible();
         await page.evaluate(() => document.fonts.ready);
         await expect(header).not.toHaveAttribute('data-scrolled');
