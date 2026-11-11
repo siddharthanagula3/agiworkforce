@@ -1909,7 +1909,10 @@ export default function ChatScreen() {
           onDismiss={clearMessageLoadError}
         />
 
-        <View style={liveVoiceVisible ? { display: 'none' } : { flex: 1 }}>
+        <View
+          testID="chat.thread-frame"
+          style={liveVoiceVisible ? { display: 'none' } : { flex: 1, overflow: 'hidden' }}
+        >
           {isLoadingMessages && conversationMessages.length === 0 ? (
             <MessageSkeleton />
           ) : (

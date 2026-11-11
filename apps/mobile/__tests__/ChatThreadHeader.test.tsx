@@ -154,6 +154,13 @@ describe('Thread header', () => {
     ).toHaveStyle({ minWidth: 44, minHeight: 44 });
   });
 
+  it('clips the thread to its own frame so a reply never draws over the composer controls', () => {
+    seedThread();
+    const screen = render(<ChatScreen />);
+
+    expect(screen.getByTestId('chat.thread-frame')).toHaveStyle({ flex: 1, overflow: 'hidden' });
+  });
+
   it('shows the conversation title and opens the conversation menu from it', () => {
     seedThread();
     const screen = render(<ChatScreen />);
