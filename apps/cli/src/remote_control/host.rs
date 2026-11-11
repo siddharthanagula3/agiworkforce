@@ -4,7 +4,8 @@ use std::sync::Arc;
 use agiworkforce_app_server::DeveloperSessionHost;
 use agiworkforce_protocol::developer_session::{
     AppServerClientInfo, AppServerNotification, DeveloperFileChangeKind, DeveloperSessionSource,
-    ThreadIdParams, ThreadListParams, ThreadLocation, ThreadStartParams, ThreadStatus,
+    DeveloperSessionTrustMode, ThreadIdParams, ThreadListParams, ThreadLocation, ThreadStartParams,
+    ThreadStatus, ThreadSummary,
 };
 use serde_json::{json, Value};
 
@@ -41,6 +42,7 @@ const TOO_MANY_RUNNING: &str =
     "Several sessions started from the phone are still running. Stop one, or wait for one to finish.";
 const RUNTIME_STOPPED: &str = "AGI Code stopped in this terminal. Start it there again.";
 const TASK_FAILED: &str = "The task failed in this terminal. Open it there to see why.";
+const NOT_SHARED: &str = "This folder starts Local or Your key sessions, and Remote Control shares only Managed ones. Start it in the terminal.";
 
 pub type Outgoing = (String, Value);
 
@@ -128,6 +130,18 @@ fn origin_name(source: DeveloperSessionSource) -> Option<&'static str> {
         DeveloperSessionSource::Desktop => Some("desktop"),
         DeveloperSessionSource::Unknown => None,
     }
+}
+
+fn relayable(thread: &ThreadSummary) -> bool {
+    matches!(thread.trust_mode, DeveloperSessionTrustMode::Managed)
+}
+
+pub async fn relayable_thread<H: DeveloperSessionHost>(host: &H, thread_id: &str) -> bool {
+    host.read_thread(ThreadIdParams {
+        thread_id: thread_id.to_string(),
+    })
+    .await
+    .is_ok_and(|read| relayable(&read.thread))
 }
 
 fn user_text(text: &str) -> Value {
@@ -247,7 +261,14 @@ impl<H: DeveloperSessionHost> CodeHost<H> {
             })
             .await;
         let (threads, unavailable) = match listed {
-            Ok(response) => (response.threads, Vec::new()),
+            Ok(response) => (
+                response
+                    .threads
+                    .into_iter()
+                    .filter(|thread| relayable(thread))
+                    .collect::<Vec<_>>(),
+                Vec::new(),
+            ),
             Err(error) => {
                 tracing::warn!("[remote-control] sessions could not be listed: {error}");
                 (
@@ -320,6 +341,10 @@ impl<H: DeveloperSessionHost> CodeHost<H> {
                     .collect();
             }
         };
+        if !relayable(&read.thread) {
+            self.threads.remove(thread_id);
+            return Vec::new();
+        }
         let mut out = Vec::new();
         match self.host.reconnect_thread(params).await {
             Ok(reconnected) => {
@@ -429,6 +454,9 @@ impl<H: DeveloperSessionHost> CodeHost<H> {
         else {
             return Vec::new();
         };
+        if !relayable(&read.thread) {
+            return Vec::new();
+        }
         let eligible: Vec<Value> = read
             .messages
             .iter()
@@ -489,7 +517,7 @@ impl<H: DeveloperSessionHost> CodeHost<H> {
         Ok(turn.id)
     }
 
-    async fn start_thread(&self, title: &str) -> anyhow::Result<String> {
+    async fn start_thread(&self, title: &str) -> anyhow::Result<Option<String>> {
         let thread = self
             .host
             .start_thread(
@@ -502,7 +530,7 @@ impl<H: DeveloperSessionHost> CodeHost<H> {
             )
             .await
             .map_err(|error| anyhow::anyhow!(error.to_string()))?;
-        Ok(thread.id)
+        Ok(relayable(&thread).then_some(thread.id))
     }
 
     async fn interrupt(&self, thread_id: &str, turn_id: &str) {
@@ -580,13 +608,15 @@ impl<H: DeveloperSessionHost> CodeHost<H> {
             .map(str::to_string)
             .unwrap_or_else(|| clip_head(text, TITLE_LENGTH));
         let started = async {
-            let thread_id = self.start_thread(&title).await?;
+            let Some(thread_id) = self.start_thread(&title).await? else {
+                return anyhow::Ok(None);
+            };
             let turn_id = self.start_turn(&thread_id, text).await?;
-            anyhow::Ok((thread_id, turn_id))
+            anyhow::Ok(Some((thread_id, turn_id)))
         }
         .await;
         match started {
-            Ok((thread_id, turn_id)) => {
+            Ok(Some((thread_id, turn_id))) => {
                 self.threads
                     .entry(thread_id.clone())
                     .or_default()
@@ -596,6 +626,7 @@ impl<H: DeveloperSessionHost> CodeHost<H> {
                 out.extend(self.sessions().await);
                 out
             }
+            Ok(None) => vec![reply(None, Some(NOT_SHARED.to_string()))],
             Err(error) => {
                 tracing::warn!("[remote-control] session start failed: {error}");
                 vec![reply(None, Some(START_FAILED.to_string()))]
@@ -620,13 +651,20 @@ impl<H: DeveloperSessionHost> CodeHost<H> {
             .map(str::to_string)
             .unwrap_or_else(|| clip_head(prompt, TITLE_LENGTH));
         let started = async {
-            let thread_id = self.start_thread(&title).await?;
+            let Some(thread_id) = self.start_thread(&title).await? else {
+                return anyhow::Ok(None);
+            };
             let turn_id = self.start_turn(&thread_id, prompt).await?;
-            anyhow::Ok((thread_id, turn_id))
+            anyhow::Ok(Some((thread_id, turn_id)))
         }
         .await;
         match started {
-            Ok((thread_id, turn_id)) => {
+            Ok(None) => vec![Self::task_status(
+                request_id,
+                "rejected",
+                json!({ "error": NOT_SHARED }),
+            )],
+            Ok(Some((thread_id, turn_id))) => {
                 self.threads
                     .entry(thread_id.clone())
                     .or_default()
@@ -776,7 +814,7 @@ impl<H: DeveloperSessionHost> CodeHost<H> {
         ) else {
             return Vec::new();
         };
-        if root_id != self.root_id {
+        if root_id != self.root_id || !relayable_thread(&*self.host, &thread_id).await {
             return Vec::new();
         }
         match action {
@@ -1147,14 +1185,15 @@ mod tests {
 
     use agiworkforce_app_server::{DeveloperConnectionTrust, DeveloperSessionHostError};
     use agiworkforce_protocol::developer_session::{
-        ActiveTurnSnapshot, ApprovalResponseParams, DeveloperSessionTrustMode,
-        LocalModelListResponse, ModelListParams, PendingApprovalSnapshot, ThreadForkParams,
-        ThreadListResponse, ThreadReadResponse, ThreadReconnectResponse, ThreadSummary,
-        TurnInterruptParams, TurnStartParams, TurnStatus, TurnSteerParams, TurnSummary,
+        ActiveTurnSnapshot, ApprovalResponseParams, DeveloperMessage, LocalModelListResponse,
+        ModelListParams, PendingApprovalSnapshot, ThreadForkParams, ThreadListResponse,
+        ThreadReadResponse, ThreadReconnectResponse, TurnInterruptParams, TurnStartParams,
+        TurnStatus, TurnSteerParams, TurnSummary,
     };
     use std::sync::Mutex;
 
     const THREAD: &str = "thread-1";
+    const LOCAL_THREAD: &str = "thread-local";
 
     struct IdleAfterAbsence {
         running: Mutex<Option<String>>,
@@ -1182,14 +1221,18 @@ mod tests {
         }
     }
 
-    fn summary() -> ThreadSummary {
+    fn summary(id: &str) -> ThreadSummary {
         ThreadSummary {
-            id: THREAD.to_string(),
-            title: "Phone session".to_string(),
+            id: id.to_string(),
+            title: format!("Session {id}"),
             model: None,
             cwd: Some("/work".to_string()),
             provider: None,
-            trust_mode: DeveloperSessionTrustMode::Local,
+            trust_mode: if id == LOCAL_THREAD {
+                DeveloperSessionTrustMode::Local
+            } else {
+                DeveloperSessionTrustMode::Managed
+            },
             git_branch: None,
             worktree_root: None,
             client: None,
@@ -1214,14 +1257,17 @@ mod tests {
             _params: ThreadStartParams,
             _client: AppServerClientInfo,
         ) -> Result<ThreadSummary, DeveloperSessionHostError> {
-            Err(unused())
+            Ok(summary(LOCAL_THREAD))
         }
 
         async fn list_threads(
             &self,
             _params: ThreadListParams,
         ) -> Result<ThreadListResponse, DeveloperSessionHostError> {
-            Err(unused())
+            Ok(ThreadListResponse {
+                threads: vec![summary(LOCAL_THREAD), summary(THREAD)],
+                next_cursor: None,
+            })
         }
 
         async fn list_local_models(
@@ -1241,12 +1287,20 @@ mod tests {
 
         async fn read_thread(
             &self,
-            _params: ThreadIdParams,
+            params: ThreadIdParams,
         ) -> Result<ThreadReadResponse, DeveloperSessionHostError> {
             Ok(ThreadReadResponse {
                 child_tasks: None,
-                thread: summary(),
-                messages: Vec::new(),
+                thread: summary(&params.thread_id),
+                messages: ["user", "assistant"]
+                    .into_iter()
+                    .map(|role| DeveloperMessage {
+                        role: role.to_string(),
+                        text: format!("{role} text in {}", params.thread_id),
+                        index: None,
+                        turn_id: None,
+                    })
+                    .collect(),
                 transcript_truncated: false,
                 approvals: Vec::new(),
                 file_changes: Vec::new(),
@@ -1257,7 +1311,7 @@ mod tests {
 
         async fn reconnect_thread(
             &self,
-            _params: ThreadIdParams,
+            params: ThreadIdParams,
         ) -> Result<ThreadReconnectResponse, DeveloperSessionHostError> {
             if *self.reconnect_fails.lock().expect("reconnect") {
                 return Err(DeveloperSessionHostError::internal("runtime busy"));
@@ -1284,7 +1338,7 @@ mod tests {
                     pending_user_inputs: Vec::new(),
                 });
             Ok(ThreadReconnectResponse {
-                thread: summary(),
+                thread: summary(&params.thread_id),
                 active_turn,
             })
         }
@@ -1465,5 +1519,89 @@ mod tests {
             .handle_control("code.session.attach", &control("r2", json!({})))
             .await;
         assert_eq!(snapshot_of(&again)["activeTurnId"], "turn-a");
+    }
+
+    #[tokio::test]
+    async fn only_managed_sessions_in_the_folder_are_listed_to_the_phone() {
+        let host = IdleAfterAbsence::running("turn-a");
+        let code = code_host(&host);
+
+        let out = code.sessions().await;
+        let listed: Vec<&str> = out[0].1["sessions"]
+            .as_array()
+            .expect("sessions")
+            .iter()
+            .filter_map(|session| session["threadId"].as_str())
+            .collect();
+        assert_eq!(listed, vec![THREAD]);
+        assert!(!out[0].1.to_string().contains(LOCAL_THREAD));
+    }
+
+    #[tokio::test]
+    async fn a_local_session_cannot_be_read_attached_or_steered_from_the_phone() {
+        let host = IdleAfterAbsence::running("turn-a");
+        let mut code = code_host(&host);
+        let local = |request_id: &str, extra: Value| {
+            let mut payload = control(request_id, extra);
+            payload["threadId"] = json!(LOCAL_THREAD);
+            payload
+        };
+
+        let managed_history = code
+            .handle_control("code.session.history", &control("r1", json!({})))
+            .await;
+        assert_eq!(managed_history[0].0, "code.session.transcript");
+
+        let history = code
+            .handle_control("code.session.history", &local("r2", json!({})))
+            .await;
+        assert!(history.is_empty());
+
+        let attached = code
+            .handle_control("code.session.attach", &local("r3", json!({})))
+            .await;
+        assert!(attached.is_empty());
+
+        let steered = code
+            .handle_control(
+                "code.session.steer",
+                &local("r4", json!({ "text": "keep going" })),
+            )
+            .await;
+        assert!(steered.is_empty());
+        assert!(host.started().is_empty());
+
+        let delta = AppServerNotification::new(
+            "turn/output_delta",
+            json!({ "threadId": LOCAL_THREAD, "turnId": "turn-l", "delta": "local output" }),
+        )
+        .expect("notification");
+        assert!(code.handle_notification(&delta).await.is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_new_session_that_would_not_be_managed_is_refused_before_any_turn() {
+        let host = IdleAfterAbsence::running("turn-a");
+        let mut code = code_host(&host);
+
+        let started = code
+            .handle_control(
+                "code.session.start",
+                &control("r1", json!({ "text": "write the parser" })),
+            )
+            .await;
+        assert_eq!(started.len(), 1);
+        assert_eq!(started[0].1["error"], NOT_SHARED);
+        assert_eq!(started[0].1["threadId"], Value::Null);
+
+        let dispatched = code
+            .handle_control(
+                "dispatch.task.create",
+                &control("r2", json!({ "prompt": "write the parser" })),
+            )
+            .await;
+        assert_eq!(dispatched.len(), 1);
+        assert_eq!(dispatched[0].1["status"], "rejected");
+        assert!(host.started().is_empty());
     }
 }
