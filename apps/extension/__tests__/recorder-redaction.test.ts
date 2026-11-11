@@ -27,7 +27,8 @@ vi.hoisted(() => {
   };
 });
 
-vi.mock('../src/utils', () => ({
+vi.mock('../src/utils', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/utils')>()),
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
   sleep: vi.fn().mockResolvedValue(undefined),
   domUtils: {
@@ -58,7 +59,8 @@ vi.mock('../src/jobAutofill', () => ({
   runPlatformJobAutofill: vi.fn().mockResolvedValue({ success: true, filledCount: 0 }),
 }));
 
-vi.mock('../src/webmcp', () => ({
+vi.mock('../src/webmcp', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/webmcp')>()),
   discoverAllTools: vi.fn(() => ({ supported: false, tools: [], url: '', timestamp: 0 })),
   callTool: vi.fn().mockResolvedValue({ success: true }),
   startToolChangeReporting: vi.fn(),

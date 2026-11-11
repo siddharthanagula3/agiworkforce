@@ -92,6 +92,13 @@ vi.mock('../src/features/cloud-bridge/freeTrialClient', async (importOriginal) =
 vi.mock('../src/features/cloud-bridge/clerkAuth', () => ({
   isClerkExtensionAuthConfigured: () => true,
   openClerkSignIn: clerkOpenSignIn,
+  getFreshClerkAuthContext: vi.fn().mockResolvedValue(null),
+  getFreshClerkToken: vi.fn().mockResolvedValue(null),
+  signOutClerk: vi.fn().mockResolvedValue(undefined),
+  revokeSyncedWebSession: vi.fn().mockResolvedValue(undefined),
+  syncHostSessionCookieState: vi.fn().mockResolvedValue('unknown'),
+  watchSyncHostSession: vi.fn(() => () => undefined),
+  observeClerkAuth: vi.fn().mockResolvedValue(() => undefined),
 }));
 
 vi.mock('../src/features/options/account-state', () => ({
