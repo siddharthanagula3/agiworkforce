@@ -26,7 +26,7 @@
     },
     "notifications": {
       "route": "apps/web/app/api/notifications/route.ts",
-      "why": "Bounded to the unread window a reader can act on, so the route returns one page and no cursor."
+      "why": "Keyset paged on created_at with the id as the tiebreaker; the old timestamp-only before parameter is still accepted and re-reads its whole millisecond so a tied row is never skipped."
     },
     "audit": {
       "route": "apps/web/app/api/settings/audit-logs/route.ts",

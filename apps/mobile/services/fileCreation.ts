@@ -270,6 +270,12 @@ export async function shareFile(
     mp4: 'public.mpeg-4',
     mov: 'com.apple.quicktime-movie',
     webm: 'public.movie',
+    gif: 'com.compuserve.gif',
+    webp: 'org.webmproject.webp',
+    mp3: 'public.mp3',
+    wav: 'com.microsoft.waveform-audio',
+    m4a: 'public.mpeg-4-audio',
+    txt: 'public.plain-text',
   };
   const mimeMap: Record<string, string> = {
     pdf: 'application/pdf',
@@ -288,11 +294,19 @@ export async function shareFile(
     mp4: 'video/mp4',
     mov: 'video/quicktime',
     webm: 'video/webm',
+    gif: 'image/gif',
+    webp: 'image/webp',
+    mp3: 'audio/mpeg',
+    wav: 'audio/wav',
+    m4a: 'audio/mp4',
+    txt: 'text/plain',
   };
   if (options.isCurrent?.() === false) return;
+  const uti = utiMap[ext ?? ''];
+  const mimeType = mimeMap[ext ?? ''];
   await Sharing.shareAsync(uri, {
-    UTI: utiMap[ext ?? ''] ?? 'public.plain-text',
-    mimeType: mimeMap[ext ?? ''] ?? 'text/plain',
+    ...(uti ? { UTI: uti } : {}),
+    ...(mimeType ? { mimeType } : {}),
   });
 }
 

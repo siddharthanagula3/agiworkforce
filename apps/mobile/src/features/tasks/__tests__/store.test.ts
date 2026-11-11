@@ -31,6 +31,7 @@ jest.mock('@/services/streaming', () => ({
 
 import {
   ManagedCloudAgentRunApprovalExpiredError,
+  ManagedCloudAgentRunHttpError,
   type CloudAgentRun,
   type CloudAgentRunSnapshotPage,
   AGENT_EVENT_SCHEMA_VERSION,
@@ -251,6 +252,19 @@ describe('following one cloud run', () => {
     expect(useCloudTaskStore.getState().detail?.status).toBe('error');
     expect(useCloudTaskStore.getState().detail?.error).toBe('This task could not be opened');
   });
+
+  it.each([403, 404, 410])(
+    'says plainly that a run answering %i is no longer available',
+    async (status) => {
+      activateCloudAccount('user_1');
+      mockFollowRun.mockRejectedValueOnce(new ManagedCloudAgentRunHttpError('gone', status));
+
+      await useCloudTaskStore.getState().openRun(RUN_ID);
+
+      expect(useCloudTaskStore.getState().detail?.status).toBe('error');
+      expect(useCloudTaskStore.getState().detail?.error).toBe('This task is no longer available');
+    },
+  );
 });
 
 describe('resolving the approval blocking a run', () => {
