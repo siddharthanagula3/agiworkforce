@@ -974,6 +974,8 @@ function sanitizeLocalOutput(raw: string): string {
 // Every local failure leaves through here, so a runtime exception string never
 // reaches the transcript. A raw `FoundationModels.LanguageModelSession.\
 // GenerationError error -1.` told the user nothing and read as a crash.
+const GENERIC_TURN_FAILURE = 'Something went wrong. Please try again.';
+
 function localSetupMessage(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error);
   if (raw) console.warn('[chat] local inference failed:', raw);
@@ -3005,7 +3007,18 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                     message: withFailureReference(error.message, error.requestId),
                     code: error.code,
                   }
-                : { message: 'Something went wrong. Please try again.', code: null };
+                : { message: GENERIC_TURN_FAILURE, code: null };
+            const turnFailure: StreamFailure =
+              error instanceof ApiHttpError
+                ? {
+                    message: error.message,
+                    ...(error.code ? { code: error.code } : {}),
+                    ...(error.retryAfterSeconds !== undefined
+                      ? { retryAfterSeconds: error.retryAfterSeconds }
+                      : {}),
+                    ...(error.requestId ? { requestId: error.requestId } : {}),
+                  }
+                : { message: GENERIC_TURN_FAILURE };
             if (agentActivity) {
               agentActivity = finishAgentActivityLocally(agentActivity, {
                 status: 'failed',
@@ -3020,19 +3033,16 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               const toolCalls = settleToolCalls(m.toolCalls, 'failed');
               return {
                 ...m,
-                content: currentContent || failure.message,
+                content: currentContent,
                 isStreaming: false,
                 ...(toolCalls === m.toolCalls ? {} : { toolCalls }),
-                ...(agentActivity || cloudAgentRun || turnResearch
-                  ? {
-                      metadata: {
-                        ...m.metadata,
-                        ...(agentActivity ? { agentActivity } : {}),
-                        ...(cloudAgentRun ? { cloudAgentRun: { ...cloudAgentRun } } : {}),
-                        ...(turnResearch ? { research: { ...turnResearch } } : {}),
-                      },
-                    }
-                  : {}),
+                metadata: {
+                  ...m.metadata,
+                  streamError: turnFailure,
+                  ...(agentActivity ? { agentActivity } : {}),
+                  ...(cloudAgentRun ? { cloudAgentRun: { ...cloudAgentRun } } : {}),
+                  ...(turnResearch ? { research: { ...turnResearch } } : {}),
+                },
               };
             });
             currentMsgStore.setState((s) => ({
@@ -3063,7 +3073,11 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             ...state.messages,
             [conversationId]: (state.messages[conversationId] ?? []).map((candidate) =>
               candidate.id === assistantMessageId
-                ? { ...candidate, content: candidate.content || message, isStreaming: false }
+                ? {
+                    ...candidate,
+                    isStreaming: false,
+                    metadata: { ...candidate.metadata, streamError: { message } },
+                  }
                 : candidate,
             ),
           },
@@ -3201,9 +3215,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                     { ...m, isStreaming: false },
                     controller.signal.aborted ? 'cancelled' : 'failed',
                     completedAtMs,
-                    controller.signal.aborted
-                      ? undefined
-                      : 'Something went wrong. Please try again.',
+                    controller.signal.aborted ? undefined : GENERIC_TURN_FAILURE,
                   )
                 : m,
             );
@@ -3699,7 +3711,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               error:
                 error instanceof ApiHttpError
                   ? withFailureReference(error.message, error.requestId)
-                  : 'Something went wrong. Please try again.',
+                  : GENERIC_TURN_FAILURE,
             });
           },
         },
@@ -3773,7 +3785,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                   { ...m, isStreaming: false },
                   controller.signal.aborted ? 'cancelled' : 'failed',
                   completedAtMs,
-                  controller.signal.aborted ? undefined : 'Something went wrong. Please try again.',
+                  controller.signal.aborted ? undefined : GENERIC_TURN_FAILURE,
                 )
               : m,
           );

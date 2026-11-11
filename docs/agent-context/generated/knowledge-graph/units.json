@@ -2552,7 +2552,7 @@
       ],
       "dependents": [],
       "lanes": [],
-      "files": 1648,
+      "files": 1649,
       "roles": {
         "asset": 4,
         "config": 11,
@@ -2561,7 +2561,7 @@
         "other": 46,
         "source": 899,
         "style": 1,
-        "test": 682
+        "test": 683
       }
     },
     {
@@ -4985,12 +4985,12 @@
       "lanes": [
         "chat-artifacts"
       ],
-      "files": 449,
+      "files": 450,
       "roles": {
         "config": 3,
         "source": 208,
         "style": 3,
-        "test": 235
+        "test": 236
       }
     },
     {

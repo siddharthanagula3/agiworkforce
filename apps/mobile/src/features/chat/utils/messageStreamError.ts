@@ -7,6 +7,7 @@ import {
 interface StreamErrorLikeMetadata {
   streamError?: unknown;
   finishReason?: unknown;
+  agentActivity?: unknown;
 }
 
 interface MessageStreamErrorLike {
@@ -63,17 +64,31 @@ export const EMPTY_RESPONSE_FAILURE: StreamFailure = {
 const NO_FAILURE_NAMED = "This turn didn't complete. No response was received.";
 const PARTIAL_PREFIX = 'Response may be incomplete';
 
+function failedActivityMessage(meta: StreamErrorLikeMetadata | undefined): string | undefined {
+  const activity = meta?.agentActivity;
+  if (!activity || typeof activity !== 'object') return undefined;
+  const { status, entries } = activity as { status?: unknown; entries?: unknown };
+  if (status !== 'failed' || !Array.isArray(entries)) return undefined;
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry = entries[index] as { kind?: unknown; message?: unknown } | null;
+    if (entry?.kind === 'error' && typeof entry.message === 'string' && entry.message.trim()) {
+      return entry.message.trim();
+    }
+  }
+  return undefined;
+}
+
 export function hasMessageStreamError(message: MessageStreamErrorLike | undefined | null): boolean {
   if (!message) return false;
   const meta = message.metadata as StreamErrorLikeMetadata | undefined;
   if (meta?.finishReason === 'error') return true;
   const streamError = meta?.streamError;
-  if (typeof streamError === 'string') return streamError.length > 0;
+  if (typeof streamError === 'string' && streamError.length > 0) return true;
   if (streamError && typeof streamError === 'object') {
     const msg = (streamError as { message?: unknown }).message;
-    return typeof msg === 'string' && msg.length > 0;
+    if (typeof msg === 'string' && msg.length > 0) return true;
   }
-  return false;
+  return failedActivityMessage(meta) !== undefined;
 }
 
 export function getMessageStreamErrorMessage(
@@ -87,7 +102,7 @@ export function getMessageStreamErrorMessage(
     const msg = (streamError as { message?: unknown }).message;
     if (typeof msg === 'string' && msg.length > 0) return msg;
   }
-  return undefined;
+  return failedActivityMessage(meta);
 }
 
 export interface TurnOutputSignals {

@@ -1,4 +1,6 @@
+import { StyleSheet } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
+import { colors, lightColors } from '@/src/ui/theme';
 import { CloudSyncErrorBanner } from '../CloudSyncErrorBanner';
 
 const mockSyncNow = jest.fn().mockResolvedValue(undefined);
@@ -51,6 +53,16 @@ describe('CloudSyncErrorBanner', () => {
 
     fireEvent.press(screen.getByLabelText('Dismiss Cloud sync error'));
     expect(screen.queryByLabelText('Retry Cloud sync')).toBeNull();
+  });
+
+  it('floats on an opaque layer so the header beneath never shows through its text', () => {
+    const screen = render(<CloudSyncErrorBanner />);
+    const background = StyleSheet.flatten(
+      screen.getByTestId('cloud-sync-error-banner').props.style,
+    ).backgroundColor;
+
+    expect([colors.background, lightColors.background]).toContain(background);
+    expect(String(background)).toMatch(/^#[0-9a-f]{6}$/i);
   });
 
   it('does not show the Cloud error over Local Mode or the offline banner', () => {

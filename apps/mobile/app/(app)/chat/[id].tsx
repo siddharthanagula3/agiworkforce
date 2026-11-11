@@ -143,6 +143,7 @@ import { offlineQueue } from '@/services/offlineQueue';
 import { createMobileCloudAgentRunClient } from '@/services/streaming';
 import { ManagedCloudAgentRunReferenceSchema } from '@agiworkforce/cloud-contracts';
 import { CLOUD_SIGN_IN_MESSAGE, offersModelSwitch } from '@/services/apiErrors';
+import { getMessageStreamErrorMessage } from '@/src/features/chat/utils/messageStreamError';
 import { pickableDocumentMimeTypes } from '@/services/docParser';
 import {
   runImageGenerationTurn,
@@ -921,6 +922,14 @@ export default function ChatScreen() {
   const handleOpenCloudSignIn = useCallback(() => {
     router.push(beginCloudPostAuthIntent());
   }, [router]);
+
+  const failureShownInTurn = useMemo(() => {
+    if (!sendError) return false;
+    const lastAssistant = [...conversationMessages].reverse().find((m) => m.role === 'assistant');
+    if (!lastAssistant || lastAssistant.isStreaming) return false;
+    const turnFailure = getMessageStreamErrorMessage(lastAssistant);
+    return Boolean(turnFailure && sendError.startsWith(turnFailure));
+  }, [conversationMessages, sendError]);
 
   const sendRecoveryAction = useMemo(() => {
     if (localRecoveryAction) return localRecoveryAction;
@@ -2003,6 +2012,7 @@ export default function ChatScreen() {
           error={providerConsentError ? null : sendError}
           freeCapacity={providerConsentError ? null : freeCapacityError}
           action={sendRecoveryAction}
+          detailShownInTurn={failureShownInTurn}
           onRetry={
             sendError !== CLOUD_SIGN_IN_MESSAGE &&
             !sendError?.startsWith('The active AGI Cloud account changed') &&

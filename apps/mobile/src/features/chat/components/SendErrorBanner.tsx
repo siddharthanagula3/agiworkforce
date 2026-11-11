@@ -17,14 +17,18 @@ interface SendErrorBannerProps {
   error: string | null;
   freeCapacity?: FreeCapacityErrorState | null;
   action?: { label: string; onPress: () => void } | null;
+  detailShownInTurn?: boolean;
   onRetry?: () => void;
   onDismiss: () => void;
 }
+
+const FAILED_TURN_LABEL = 'Reply failed';
 
 export function SendErrorBanner({
   error,
   freeCapacity = null,
   action = null,
+  detailShownInTurn = false,
   onRetry,
   onDismiss,
 }: SendErrorBannerProps) {
@@ -44,11 +48,16 @@ export function SendErrorBanner({
     return () => clearInterval(timer);
   }, [retryAtMs]);
 
-  if (!error) return null;
+  if (!error || (detailShownInTurn && !action)) return null;
 
   const retrySeconds = freeCapacityRetrySeconds(retryAtMs, nowMs);
   const waitingForCapacity = retrySeconds > 0;
-  const message = waitingForCapacity ? freeCapacityCountdownMessage(retrySeconds) : error;
+  const message = waitingForCapacity
+    ? freeCapacityCountdownMessage(retrySeconds)
+    : detailShownInTurn
+      ? FAILED_TURN_LABEL
+      : error;
+  const showRetry = Boolean(onRetry) && !detailShownInTurn;
   const retryColor = waitingForCapacity ? colors.textMuted : colors.agentError;
 
   return (
@@ -64,7 +73,9 @@ export function SendErrorBanner({
         gap: 8,
       }}
       accessibilityRole="alert"
-      accessibilityLabel={`Message failed to send: ${message}`}
+      accessibilityLabel={
+        detailShownInTurn ? FAILED_TURN_LABEL : `Message failed to send: ${message}`
+      }
     >
       <AlertTriangle size={14} color={colors.agentError} strokeWidth={2} />
       <Text
@@ -94,7 +105,7 @@ export function SendErrorBanner({
           </Text>
         </PressableBox>
       ) : null}
-      {onRetry && (
+      {showRetry && (
         <PressableBox
           onPress={onRetry}
           disabled={waitingForCapacity}
