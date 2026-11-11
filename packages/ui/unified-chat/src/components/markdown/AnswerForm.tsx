@@ -1,46 +1,16 @@
 import { useId, useRef, useState } from 'react';
 import { Button, Checkbox, Input, Label, Textarea, useUiTranslation } from '@agiworkforce/ui';
 import { useFollowUpAction } from './FollowUpAction';
-import type { FormField, FormSpec } from './answerSurfaces';
-
-type FormValue = string | string[];
+import type { FormSpec } from './answerSurfaces';
+import {
+  formFieldErrors,
+  formSubmissionText,
+  initialFormValue,
+  type FormValue,
+} from './answerFormModel';
 
 const INPUT_CLASS =
   'h-auto min-h-11 w-full rounded-md border border-[var(--chat-border)] bg-[var(--chat-bg)] px-3 py-2 text-base leading-6 text-[var(--chat-text-primary)] shadow-none aria-invalid:border-[var(--chat-destructive-text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)] focus-visible:ring-offset-0';
-
-function initialValue(field: FormField): FormValue {
-  if (field.kind === 'checks')
-    return field.options.filter((option) => option.selected).map((option) => option.label);
-  if (field.kind === 'select' || field.kind === 'radio')
-    return field.options.find((option) => option.selected)?.label ?? '';
-  return 'value' in field ? String(field.value) : '';
-}
-
-function fieldError(field: FormField, value: FormValue): boolean {
-  if (field.required && (Array.isArray(value) ? value.length === 0 : value.trim() === ''))
-    return true;
-  if (field.kind === 'checks')
-    return (
-      !Array.isArray(value) ||
-      value.some((choice) => !field.options.some((option) => option.label === choice))
-    );
-  if (Array.isArray(value)) return true;
-  if (field.kind === 'select' || field.kind === 'radio')
-    return value !== '' && !field.options.some((option) => option.label === value);
-  if (field.kind === 'slider')
-    return (
-      !Number.isFinite(Number(value)) || Number(value) < field.min || Number(value) > field.max
-    );
-  if (field.kind === 'date' && value !== '') {
-    const date = new Date(`${value}T00:00:00Z`);
-    return (
-      !/^\d{4}-\d{2}-\d{2}$/.test(value) ||
-      !Number.isFinite(date.getTime()) ||
-      date.toISOString().slice(0, 10) !== value
-    );
-  }
-  return false;
-}
 
 export function AnswerForm({
   spec,
@@ -55,7 +25,7 @@ export function AnswerForm({
   const id = useId();
   const formRef = useRef<HTMLFormElement>(null);
   const onFollowUp = useFollowUpAction();
-  const [values, setValues] = useState<FormValue[]>(() => spec.fields.map(initialValue));
+  const [values, setValues] = useState<FormValue[]>(() => spec.fields.map(initialFormValue));
   const [invalid, setInvalid] = useState<number[]>([]);
   const [applied, setApplied] = useState<FormValue[] | null>(null);
   const change = (index: number, value: FormValue) => {
@@ -72,9 +42,7 @@ export function AnswerForm({
       onSubmit={(event) => {
         event.preventDefault();
         if (streaming) return;
-        const errors = spec.fields.flatMap((field, index) =>
-          fieldError(field, values[index] ?? '') ? [index] : [],
-        );
+        const errors = formFieldErrors(spec, values);
         setInvalid(errors);
         if (errors.length > 0) {
           formRef.current
@@ -86,12 +54,7 @@ export function AnswerForm({
           return;
         }
         if (spec.send && !onFollowUp) return;
-        const result = spec.fields.map((field, index) => {
-          const value = values[index] ?? '';
-          const rendered = Array.isArray(value) ? value.join(', ') : value;
-          return `${field.label}: ${rendered}${field.kind === 'slider' && field.unit ? ` ${field.unit}` : ''}`;
-        });
-        if (spec.send) onFollowUp?.([spec.title, ...result].join('\n'));
+        if (spec.send) onFollowUp?.(formSubmissionText(spec, values));
         setApplied(values.map((value) => (Array.isArray(value) ? [...value] : value)));
       }}
     >

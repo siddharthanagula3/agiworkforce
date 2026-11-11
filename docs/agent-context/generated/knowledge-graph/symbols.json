@@ -4929,6 +4929,9 @@
       "packages/ai/routing/src/index.ts",
       "packages/ai/routing/src/response-budget.ts"
     ],
+    "AnswerFormSurface": [
+      "apps/mobile/src/features/chat/components/AnswerFormSurface.tsx"
+    ],
     "AnswerGallery": [
       "packages/ui/unified-chat/src/components/markdown/AnswerGallery.tsx"
     ],
@@ -15473,6 +15476,12 @@
     "cargoRuntimeClosure": [
       "scripts/lib/third-party-notices.mjs"
     ],
+    "CarouselSpec": [
+      "packages/ui/unified-chat/src/components/markdown/assistantFence.ts"
+    ],
+    "CarouselSurface": [
+      "apps/mobile/src/features/chat/components/AnswerMediaSurfaces.tsx"
+    ],
     "carriedChoiceMustBeAskedAgain": [
       "apps/web/app/signup/signupAttemptMarkers.ts"
     ],
@@ -17769,6 +17778,9 @@
     ],
     "Choice": [
       "apps/desktop/src-tauri/src/integrations/api_integrations/perplexity.rs"
+    ],
+    "ChoiceRow": [
+      "apps/mobile/src/features/chat/components/AnswerSurfaceKit.tsx"
     ],
     "choose_image_model": [
       "apps/cli/src/cloud/image.rs"
@@ -48772,6 +48784,9 @@
     "footerSourceSnapshot": [
       "apps/web/e2e/lib/public-footer-capture.ts"
     ],
+    "footnoteMarker": [
+      "apps/mobile/src/features/chat/components/MarkdownInline.tsx"
+    ],
     "for_account": [
       "crates/agiworkforce-protocol/src/developer_session.rs"
     ],
@@ -49669,10 +49684,18 @@
       "apps/cli/src/tui/widgets/elicitation_overlay.rs",
       "apps/desktop/src-tauri/src/automation/browser/advanced.rs",
       "apps/extension/src/types.ts",
-      "apps/web/shared/ui/Form.tsx"
+      "apps/web/shared/ui/Form.tsx",
+      "packages/ui/unified-chat/src/components/markdown/assistantFence.ts"
     ],
     "FormFieldContext": [
       "apps/web/shared/ui/form-hooks.ts"
+    ],
+    "formFieldError": [
+      "packages/ui/unified-chat/src/components/markdown/answerFormModel.ts"
+    ],
+    "formFieldErrors": [
+      "packages/ui/unified-chat/src/components/markdown/answerFormModel.ts",
+      "packages/ui/unified-chat/src/components/markdown/assistantFence.ts"
     ],
     "FormFieldType": [
       "apps/desktop/src-tauri/src/automation/browser/advanced.rs"
@@ -49704,8 +49727,23 @@
     "FormObservationReference": [
       "apps/extension/src/features/browser-tools/documentBridge.ts"
     ],
+    "FormSpec": [
+      "packages/ui/unified-chat/src/components/markdown/assistantFence.ts"
+    ],
+    "formSubmissionText": [
+      "packages/ui/unified-chat/src/components/markdown/answerFormModel.ts",
+      "packages/ui/unified-chat/src/components/markdown/assistantFence.ts"
+    ],
     "formUtils": [
       "apps/extension/src/utils.ts"
+    ],
+    "FormValue": [
+      "packages/ui/unified-chat/src/components/markdown/answerFormModel.ts",
+      "packages/ui/unified-chat/src/components/markdown/assistantFence.ts"
+    ],
+    "formValueText": [
+      "packages/ui/unified-chat/src/components/markdown/answerFormModel.ts",
+      "packages/ui/unified-chat/src/components/markdown/assistantFence.ts"
     ],
     "FORTHCOMING": [
       "apps/web/app/release-notes/release-notes-data.ts"
@@ -51158,6 +51196,9 @@
     ],
     "GalleryPage": [
       "apps/web/app/gallery/page.tsx"
+    ],
+    "GallerySurface": [
+      "apps/mobile/src/features/chat/components/AnswerMediaSurfaces.tsx"
     ],
     "GalleryTemplateLoading": [
       "apps/web/app/gallery/[templateId]/loading.tsx"
@@ -60331,6 +60372,10 @@
     "initialConnectorSection": [
       "apps/web/features/directory/services/connectors-directory.ts"
     ],
+    "initialFormValue": [
+      "packages/ui/unified-chat/src/components/markdown/answerFormModel.ts",
+      "packages/ui/unified-chat/src/components/markdown/assistantFence.ts"
+    ],
     "InitialHistory": [
       "crates/agiworkforce-protocol/src/protocol.rs"
     ],
@@ -60506,6 +60551,9 @@
     ],
     "InlineChart": [
       "packages/ui/unified-chat/src/components/markdown/AnswerSurface.tsx"
+    ],
+    "inlineCodeStyle": [
+      "apps/mobile/src/features/chat/components/MarkdownInline.tsx"
     ],
     "InlineCommand": [
       "apps/extension-vscode/src/core/runInlineCommand.ts"
@@ -74825,6 +74873,9 @@
       "packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx",
       "packages/ui/unified-chat/src/index.ts"
     ],
+    "MarkdownImage": [
+      "apps/mobile/src/features/chat/components/MarkdownImage.tsx"
+    ],
     "markdownImageSource": [
       "packages/ui/unified-chat/src/components/markdown/markdownImageSources.ts"
     ],
@@ -74849,6 +74900,9 @@
     ],
     "MarkdownRenderer": [
       "apps/cli/src/markdown.rs"
+    ],
+    "MarkdownRenderOptions": [
+      "apps/mobile/src/features/chat/components/MessageContentRenderer.tsx"
     ],
     "MarkdownString": [
       "apps/extension-vscode/src/__tests__/__mocks__/vscode.ts"
@@ -85997,6 +86051,9 @@
     "openArtifactsSurface": [
       "apps/extension-vscode/src/features/surfaces/index.ts"
     ],
+    "openAssistantLink": [
+      "apps/mobile/src/features/chat/components/MarkdownInline.tsx"
+    ],
     "openAssistantPanel": [
       "apps/extension/src/features/surface/assistantPanel.ts"
     ],
@@ -88226,6 +88283,9 @@
     "PanelAggregation": [
       "apps/web/lib/observability/dashboards.ts"
     ],
+    "PanelHeader": [
+      "apps/mobile/src/features/chat/components/AnswerSurfaceKit.tsx"
+    ],
     "PanelLeft": [
       "packages/ui/icons/src/glyphs/Actions.tsx"
     ],
@@ -88234,6 +88294,9 @@
     ],
     "panelQuery": [
       "apps/web/lib/observability/dashboards.ts"
+    ],
+    "PanelSection": [
+      "apps/mobile/src/features/chat/components/AnswerSurfaceKit.tsx"
     ],
     "PanelsTopLeft": [
       "packages/ui/icons/src/glyphs/Account.tsx"
@@ -97431,6 +97494,9 @@
     "ProtectedResourceMetadata": [
       "crates/agiworkforce-mcp/src/oauth/flow.rs"
     ],
+    "protectEscapes": [
+      "apps/mobile/src/features/chat/components/MarkdownInline.tsx"
+    ],
     "protocol": [
       "apps/cli/src/features/a2a/mod.rs",
       "apps/cli/src/sdk_io/mod.rs",
@@ -106121,10 +106187,10 @@
       "scripts/generate-agent-context-indexes.mjs"
     ],
     "renderInlineMarkdown": [
-      "apps/mobile/src/features/chat/components/MessageContentRenderer.tsx"
+      "apps/mobile/src/features/chat/components/MarkdownInline.tsx"
     ],
     "renderInlineMath": [
-      "apps/mobile/src/features/chat/components/MessageContentRenderer.tsx"
+      "apps/mobile/src/features/chat/components/MarkdownInline.tsx"
     ],
     "renderKnowledgeGraph": [
       "scripts/knowledge-graph.mjs"
@@ -106140,6 +106206,9 @@
     ],
     "renderMarkdown": [
       "apps/extension/src/features/side-panel/markdown.ts"
+    ],
+    "renderMarkdownContent": [
+      "apps/mobile/src/features/chat/components/MessageContentRenderer.tsx"
     ],
     "renderMarkdownInto": [
       "apps/extension/src/features/side-panel/markdown.ts"
@@ -110716,6 +110785,9 @@
     "restoreDeletedConversation": [
       "apps/web/features/settings/services/conversation-data-service.ts"
     ],
+    "restoreEscapes": [
+      "apps/mobile/src/features/chat/components/MarkdownInline.tsx"
+    ],
     "restoreFlagDefinition": [
       "apps/web/lib/feature-flags/flag-store.ts"
     ],
@@ -111898,6 +111970,9 @@
     ],
     "RichBlocksProbe": [
       "apps/web/app/dev/rich-blocks-probe/page.tsx"
+    ],
+    "RichCardSpec": [
+      "packages/ui/unified-chat/src/components/markdown/assistantFence.ts"
     ],
     "right": [
       "apps/desktop/src-tauri/src/automation/computer_use/types.rs"
@@ -117952,6 +118027,9 @@
       "packages/ui/ui/src/index.ts",
       "packages/ui/ui/src/primitives/index.ts",
       "packages/ui/ui/src/primitives/Select.tsx"
+    ],
+    "SelectControl": [
+      "apps/mobile/src/features/chat/components/AnswerSurfaceKit.tsx"
     ],
     "selectConversationAllRows": [
       "apps/web/shared/stores/web-chat-store.ts"
@@ -124443,6 +124521,9 @@
       "packages/ui/ui/src/primitives/index.ts",
       "packages/ui/ui/src/primitives/Slider.tsx"
     ],
+    "SliderControl": [
+      "apps/mobile/src/features/chat/components/AnswerSurfaceKit.tsx"
+    ],
     "SlidersHorizontal": [
       "packages/ui/icons/src/glyphs/Actions.tsx"
     ],
@@ -126202,6 +126283,9 @@
     "stats": [
       "apps/desktop/src-tauri/src/data/cache/llm_responses.rs"
     ],
+    "StatsSpec": [
+      "packages/ui/unified-chat/src/components/markdown/assistantFence.ts"
+    ],
     "status": [
       "apps/cli/src/platform/runtime/git.rs",
       "apps/cli/src/sync.rs",
@@ -126280,6 +126364,9 @@
     ],
     "StatusPage": [
       "apps/web/app/status/page.tsx"
+    ],
+    "StatusPill": [
+      "apps/mobile/src/features/chat/components/AnswerSurfaceKit.tsx"
     ],
     "StatusStep": [
       "apps/mobile/src/features/chat/components/StatusStep.tsx",
@@ -129128,6 +129215,9 @@
     "SurfaceName": [
       "apps/web/features/marketing/components/landing/landing-content.ts"
     ],
+    "SurfacePanel": [
+      "apps/mobile/src/features/chat/components/AnswerSurfaceKit.tsx"
+    ],
     "surfaceQuickAsk": [
       "apps/desktop/electron/quickAsk.ts"
     ],
@@ -129219,6 +129309,9 @@
     ],
     "SurfaceTitleAction": [
       "apps/extension-vscode/src/features/surfaces/treeQuickPick.ts"
+    ],
+    "SurfaceTone": [
+      "apps/mobile/src/features/chat/components/AnswerSurfaceKit.tsx"
     ],
     "SurfaceTreeSource": [
       "apps/extension-vscode/src/features/surfaces/treeQuickPick.ts"
